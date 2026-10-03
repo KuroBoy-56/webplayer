@@ -144,3 +144,26 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - Si no aparece, se intenta sin año, con el título antes de ":" y como serie o película. Si el `tmdb_id` del servidor está mal, se busca por nombre.
 - Los "no encontrado" se vuelven a intentar a los 2 días (antes quedaban 30). Si TMDB no respondió, no se guarda nada.
 - Descripción en español de México, luego de España y luego en inglés. Elenco también para series.
+
+## Actualización 3 de octubre (reproducir siempre en el navegador)
+
+**Navegador primero, VLC como último recurso**
+- Antes de mostrar un error, el reproductor prueba en orden: formato directo, conversión del audio, conversión completa a H.264 720p y un **modo seguro** a 480p con audio resincronizado, pensado para archivos dañados o con tiempos rotos.
+- Todas las conversiones ignoran los paquetes dañados del archivo en vez de detenerse.
+- Si todo eso falla, se busca una solución automáticamente ("Buscando una solución…"). Si la encuentra, muestra "Posible solución a la reproducción o el audio" con **▶ Volver a reproducir**, y si no lo tocas reproduce solo a los 4 segundos.
+- Si vuelve a fallar, ese contenido ya no muestra la opción de solucionar. Quedan solo Reintentar, Abrir en VLC y Descargar.
+- El botón Diagnóstico ya no aparece en el reproductor. En el menú ⋮ está "¿Sin audio o no carga? Solucionar", que hace lo mismo sin salir del video. `diag.php` sigue disponible por URL para el administrador.
+
+**Idioma del audio**
+- Si el contenido trae varios idiomas, se elige el del navegador (español si el navegador está en español). Si no está, se usa la pista predeterminada del archivo.
+- Si eliges otro idioma a mano, se recuerda para los siguientes contenidos.
+- Se reconocen spa, es, es-419, lat, "Español latino", "Castellano", etc.
+
+**Pistas en Chrome**
+- Chrome no muestra las pistas de los archivos por sí mismo, Safari sí. Ahora, si al abrir Audio y subtítulos todavía no se conocen las pistas, el reproductor las busca.
+- Si el servidor IPTV rechaza la consulta porque el video ya ocupa la conexión, el reproductor suelta la conexión un segundo, lee las pistas y retoma en el mismo punto.
+
+**Abrir en VLC**
+- **iPhone / Android:** abre la app VLC directamente. Si no está instalada, aparece una ventana con los botones de App Store y Google Play; el de tu equipo va primero. En Android, si falta VLC, se abre la Play Store sola.
+- **Computadora:** intenta abrir VLC. Si no responde, se descarga una lista de reproducción que se abre con VLC, junto con botones para descargar VLC (Microsoft Store en Windows o videolan.org).
+- Funciona igual desde la guía de TV y en pantalla completa.

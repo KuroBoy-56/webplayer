@@ -122,7 +122,7 @@ $sources = wp_play_sources($kind, $id, $exts);
 $media_cfg = null;
 if (wp_bin('ffprobe') && wp_bin('ffmpeg')) {
     $mb = wp_proxy_url($raw_url, 'media.php');
-    $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'sub' => $mb . '&do=sub'];
+    $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
     // pistas ya conocidas (caché): el reproductor decide al instante si necesita convertir el audio
     $pc = wp_cache_get('probe|' . md5($raw_url), 604800);
     if (is_array($pc)) $media_cfg['info'] = wp_probe_labels($pc);
@@ -134,7 +134,7 @@ $extra = [['label' => 'Descargar contenido', 'href' => $download_url]];
 if ($has_prev) $extra[] = ['label' => 'Capítulo anterior', 'href' => $prev_url];
 if ($slug === 'series') $extra[] = ['label' => 'Ver episodios', 'href' => $back_url . '#episodios'];
 $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext) . ($series_id_get ? '&series_id=' . rawurlencode($series_id_get) : '');
-$extra[] = ['label' => '¿Sin audio o no carga? Diagnóstico', 'href' => $diag_url];
+if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'act' => 'fix'];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -146,7 +146,7 @@ $extra[] = ['label' => '¿Sin audio o no carga? Diagnóstico', 'href' => $diag_u
     <title><?php echo e($content_name ?: 'Reproductor'); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/nf/app.css?v=4">
-    <link rel="stylesheet" href="assets/nf/player.css?v=4">
+    <link rel="stylesheet" href="assets/nf/player.css?v=5">
     <style>
         html, body { height: 100%; overflow: hidden; background: #000; }
         #player-container { position: fixed; inset: 0; }
@@ -166,7 +166,7 @@ $extra[] = ['label' => '¿Sin audio o no carga? Diagnóstico', 'href' => $diag_u
 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
-    <script src="assets/nf/player.js?v=4" defer></script>
+    <script src="assets/nf/player.js?v=5" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -192,8 +192,9 @@ $extra[] = ['label' => '¿Sin audio o no carga? Diagnóstico', 'href' => $diag_u
         var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
         if (isMobile && cfg.useVlc) {
             document.getElementById('vlc-overlay').style.display = 'flex';
-            var vl = NFPlayer.vlc(cfg);
-            if (vl) { document.querySelector('#vlc-overlay a.nf-btn').href = vl.href; window.location.href = vl.href; }
+            var vb = document.querySelector('#vlc-overlay a.nf-btn');
+            vb.addEventListener('click', function (e) { e.preventDefault(); NFPlayer.openVlc(cfg); });
+            NFPlayer.openVlc(cfg);
             return;
         }
 
@@ -212,7 +213,6 @@ $extra[] = ['label' => '¿Sin audio o no carga? Diagnóstico', 'href' => $diag_u
             fetch('save_progress.php', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true }).catch(function () {});
         }
 
-        cfg.defaultSecondAudio = true;
         cfg.onTime = function (v) {
             var now = Date.now();
             if (now - lastSave > 10000) { lastSave = now; save(v); }

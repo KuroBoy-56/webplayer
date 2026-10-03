@@ -66,6 +66,26 @@ $sess = wp_session_read_close();
 $who = md5((string)($sess['username'] ?? '') . '|' . ($_SERVER['REMOTE_ADDR'] ?? ''));
 $pidFile = wp_cache_dir() . '/ff_' . $who . '.pid';
 
+if ($do === 'check') {
+    // "Solucionar" del reproductor: comprueba si ffmpeg puede leer y convertir este contenido
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+    @set_time_limit(120);
+    $base = [$ff, '-nostdin', '-hide_banner', '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', '20000000', '-fflags', '+genpts+discardcorrupt', '-err_detect', 'ignore_err'];
+    $r = wp_exec(array_merge($base, ['-t', '8', '-i', $url, '-map', '0:v:0?', '-map', '0:a:0?', '-c:v', 'copy', '-c:a', 'aac', '-ac', '2',
+        '-f', 'mp4', '-movflags', 'frag_keyframe+empty_moov', '-y', '/dev/null']), 45);
+    if ($r['ok']) { echo json_encode(['ok' => true, 'mode' => 'audio', 'speed' => $r['ms'] ? round(8000 / $r['ms'], 1) : 0]); exit; }
+    $r2 = wp_exec(array_merge($base, ['-t', '5', '-i', $url, '-map', '0:v:0?', '-map', '0:a:0?', '-c:v', 'libx264', '-preset', 'ultrafast', '-vf', "scale='min(1280,iw)':-2",
+        '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ac', '2', '-f', 'mp4', '-movflags', 'frag_keyframe+empty_moov', '-y', '/dev/null']), 60);
+    if ($r2['ok']) { echo json_encode(['ok' => true, 'mode' => 'video', 'speed' => $r2['ms'] ? round(5000 / $r2['ms'], 1) : 0]); exit; }
+    // archivo dañado o con marcas de tiempo rotas: modo seguro a 480p con audio resincronizado
+    $r3 = wp_exec(array_merge($base, ['-t', '5', '-i', $url, '-map', '0:v:0?', '-map', '0:a:0?', '-max_muxing_queue_size', '2048', '-c:v', 'libx264', '-preset', 'ultrafast',
+        '-vf', "scale='min(854,iw)':-2,fps=30", '-pix_fmt', 'yuv420p', '-af', 'aresample=async=1000', '-c:a', 'aac', '-ac', '2', '-f', 'mp4', '-movflags', 'frag_keyframe+empty_moov', '-y', '/dev/null']), 60);
+    if ($r3['ok']) { echo json_encode(['ok' => true, 'mode' => 'safe', 'speed' => $r3['ms'] ? round(5000 / $r3['ms'], 1) : 0]); exit; }
+    echo json_encode(['ok' => false, 'err' => mb_substr($r3['err'] ?: ($r2['err'] ?: $r['err']), -300, null, 'UTF-8')], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($do === 'sub') {
     $i = max(0, (int)($_GET['i'] ?? 0));
     $ck = wp_cache_dir() . '/sub_' . md5($url . '|' . $i) . '.vtt';
@@ -100,14 +120,21 @@ if ($do !== 'tc') {
 $t = max(0, (int)($_GET['t'] ?? 0));
 $a = max(0, (int)($_GET['a'] ?? 0));
 $vtc = !empty($_GET['v']);
+$vsafe = ($_GET['v'] ?? '') === '2';
 $probe = wp_probe($url);
 $vcodec = $probe['video'] ?? '';
 
 $cmd = [$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'];
 // con video copiado ffmpeg arranca en el fotograma clave anterior a t; el reproductor pide ese segundo exacto (do=kf) para cuadrar el tiempo
 if ($t > 0) array_push($cmd, '-ss', (string)$t);
-array_push($cmd, '-i', $url, '-map', '0:v:0?', '-map', '0:a:' . $a . '?', '-sn', '-dn');
-if ($vtc) {
+// archivos dañados o con marcas de tiempo rotas: se ignoran los paquetes corruptos en vez de detener la conversión
+array_push($cmd, '-fflags', '+genpts+discardcorrupt', '-err_detect', 'ignore_err');
+array_push($cmd, '-i', $url, '-map', '0:v:0?', '-map', '0:a:' . $a . '?', '-sn', '-dn', '-max_muxing_queue_size', '2048', '-avoid_negative_ts', 'make_zero');
+if ($vtc && $vsafe) {
+    // modo seguro (último recurso del navegador): 480p, cuadros constantes y audio resincronizado
+    array_push($cmd, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '27', '-g', '48', '-vf', "scale='min(854,iw)':-2,fps=30", '-pix_fmt', 'yuv420p',
+        '-profile:v', 'main', '-af', 'aresample=async=1000');
+} elseif ($vtc) {
     // formatos antiguos (XviD, MPEG-2, WMV...): se convierte el video a H.264 a 720p (rápido para que el hosting alcance a convertir en tiempo real)
     array_push($cmd, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '25', '-g', '48', '-vf', "scale='min(1280,iw)':-2", '-pix_fmt', 'yuv420p');
 } else {

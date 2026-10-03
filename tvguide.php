@@ -128,7 +128,7 @@ $use_vlc = isset($_COOKIE["use_vlc"]) ? $_COOKIE["use_vlc"] : "0";
 
 $page_title = 'TV en vivo';
 $body_class = 'nf-solid nf-live';
-$wp_head_extra = '<link rel="stylesheet" href="assets/nf/player.css?v=4">';
+$wp_head_extra = '<link rel="stylesheet" href="assets/nf/player.css?v=5">';
 include "header.php";
 ?>
 <style>
@@ -225,7 +225,7 @@ include "header.php";
 
 <script src="assets/vendor/hls.min.js" defer></script>
 <script src="assets/vendor/mpegts.min.js" defer></script>
-<script src="assets/nf/player.js?v=4" defer></script>
+<script src="assets/nf/player.js?v=5" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [] };
@@ -280,7 +280,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (state.cat === 'favorites') setTimeout(function () { loadChannels('favorites'); }, 400);
         };
         renderEpg(data.epg);
-        if (isMobile && useVLC) { var vl = NFPlayer.vlc({ streamUrl: data.stream }); if (vl) window.location.href = vl.href; return; }
+        if (isMobile && useVLC) { NFPlayer.openVlc({ live: true, vlcUrl: data.vlc, streamUrl: data.stream, vlcPc: data.vlcPc }); return; }
         var box = document.getElementById('tvPlayer');
         if (state.player) state.player.destroy();
         state.player = new NFPlayer(box, { live: true, title: data.name, sources: data.sources, vlcUrl: data.vlc, streamUrl: data.stream, vlcPc: data.vlcPc, diagUrl: data.diag });

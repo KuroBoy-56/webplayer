@@ -43,6 +43,8 @@
         if (!(this instanceof NFPlayer)) return new NFPlayer(root, opts);
         this.root = root;
         this.o = opts;
+        this._media0 = opts.media || null; // copia: si una conversión falla, "Solucionar" la vuelve a usar
+        this.fixKey = 'nfp_nofix|' + (opts.slug || '') + '|' + (opts.id || location.search);
         this.idx = -1;
         this.hls = null;
         this.ts = null;
@@ -208,6 +210,8 @@
                 if (self.tc.played && (self.tc.retries || 0) < 6) { self.tc.retries = (self.tc.retries || 0) + 1; var r = self.tc.retries; self.startTc(self.T(), self.tc.a, self.tc.vt); self.tc.retries = r; return; }
                 // el navegador no pudo con el video copiado (HEVC/10 bits en equipos sin soporte): se intenta convertir también el video
                 if (!self.tc.vt && !self._fullTried) { self._fullTried = true; self.toastMsg('Adaptando el video para este navegador…'); self.startTc(self.T(), self.tc.a, true); return; }
+                // archivo dañado o con marcas de tiempo rotas: modo seguro (480p, audio resincronizado)
+                if (self.tc.vt !== 2 && !self._safeTried) { self._safeTried = true; self.toastMsg('Probando un modo de reproducción más compatible…'); self.startTc(self.T(), self.tc.a, 2); return; }
                 self.tc = null; self.o.media = null; self.toastMsg('No se pudo convertir este contenido'); self.idx--; self.next(); return;
             }
             // el navegador no abre el archivo (MKV/AVI, audio Dolby, HEVC...): se intenta la conversión del servidor antes de cambiar de formato
@@ -328,6 +332,11 @@
 
     /* tiempo virtual: en modo conversión el video empieza en "tc.off" segundos */
     NFPlayer.prototype.T = function () { return (this.tc ? this.tc.off : 0) + (this.v.currentTime || 0); };
+    /* tiempo actual, o el punto donde se va a retomar si el video recién se está abriendo */
+    NFPlayer.prototype.curT = function () {
+        var x = this.T();
+        return (x < 1 && !this.tc && !this.resumed && this.o.resume > 5) ? this.o.resume : x;
+    };
     NFPlayer.prototype.D = function () { return this.tc ? this.tc.dur : this.v.duration; };
     NFPlayer.prototype.seekAbs = function (t) {
         if (this.tc) { this.startTc(Math.max(0, t), this.tc.a, this.tc.vt); return; }
@@ -394,6 +403,13 @@
                 this.idx = list.length - 1;
                 this.toastMsg('Adaptando el formato de este contenido…');
                 this.startTc(this.lastTime || this.o.resume || 0, this.info ? this.prefAudioIndex() : 0, true);
+                return;
+            }
+            if (this.o.media && !this.live && !this._safeTried) {
+                this._safeTried = true;
+                this.idx = list.length - 1;
+                this.toastMsg('Probando un modo de reproducción más compatible…');
+                this.startTc(this.lastTime || this.o.resume || 0, this.info ? this.prefAudioIndex() : 0, 2);
                 return;
             }
             this.showError(); return;
@@ -530,18 +546,69 @@
 
     NFPlayer.prototype.showError = function () {
         this.root.classList.remove('buffering');
-        var o = this.o, h = '<h3>No se pudo reproducir este contenido</h3><p>El formato o el servidor no respondió en el navegador. Puedes reintentar o abrirlo en VLC.</p><div class="acts">';
-        h += '<button type="button" class="nf-btn nf-btn-white" data-act="retry">Reintentar</button>';
-        var vl = NFPlayer.vlc(o);
-        if (vl) h += '<a class="nf-btn nf-btn-gray" href="' + NF_esc(vl.href) + '">' + vl.label + '</a>';
-        if (vl && vl.get) h += '<a class="nf-btn nf-btn-gray" href="' + vl.get.href + '" target="_blank" rel="noopener">' + vl.get.label + '</a>';
+        var o = this.o, self = this;
+        // si "Solucionar" ya se intentó y volvió a fallar, el botón ya no se muestra para este contenido
+        if (this._fixTried) store(this.fixKey, '1');
+        var canFix = this._media0 && !this.live && !store(this.fixKey);
+        // antes de mostrar el error se busca una solución automáticamente (VLC queda como último recurso)
+        if (canFix && !this._fixTried && !this._autoFixed) { this._autoFixed = true; this.fix(true); return; }
+        var h = '<h3>No se pudo reproducir este contenido</h3><p>' + (canFix ? 'Toca Solucionar para adaptar el audio y el formato, o ábrelo en VLC.' : 'Puedes reintentar o abrirlo en VLC.') + '</p><div class="acts">';
+        if (canFix) h += '<button type="button" class="nf-btn nf-btn-white" data-act="fix">Solucionar</button>';
+        h += '<button type="button" class="nf-btn ' + (canFix ? 'nf-btn-gray' : 'nf-btn-white') + '" data-act="retry">Reintentar</button>';
+        if (NFPlayer.canVlc(o)) h += '<button type="button" class="nf-btn nf-btn-gray" data-act="vlc">Abrir en VLC</button>';
         if (o.downloadUrl) h += '<a class="nf-btn nf-btn-gray" href="' + o.downloadUrl + '">Descargar</a>';
-        if (o.diagUrl) h += '<a class="nf-btn nf-btn-gray" href="' + o.diagUrl + '">Diagnóstico</a>';
         h += '</div>';
         this.msg.innerHTML = h;
         this.msg.classList.add('show');
-        var self = this;
-        this.msg.querySelector('[data-act=retry]').addEventListener('click', function () { self.hideMsg(); self.idx = -1; self.next(); });
+        this.msg.querySelector('[data-act=retry]').addEventListener('click', function () { self.hideMsg(); self._rescued = self._fullTried = self._safeTried = false; if (self._media0) self.o.media = self._media0; self.idx = -1; self.next(); });
+        var f = this.msg.querySelector('[data-act=fix]');
+        if (f) f.addEventListener('click', function () { self.fix(); });
+        var vb = this.msg.querySelector('[data-act=vlc]');
+        if (vb) vb.addEventListener('click', function () { NFPlayer.openVlc(o); });
+    };
+
+    /* Solucionar: comprueba en el servidor si el contenido se puede adaptar y, si se puede, lo reproduce convertido */
+    NFPlayer.prototype.fix = function (auto) {
+        var self = this, m = this._media0;
+        if (!m || !m.check) return;
+        this.closePop && this.closePop();
+        try { this.v.pause(); } catch (e) {}
+        var t = this.T() > 5 ? this.T() : (this.lastTime || this.o.resume || 0);
+        this.msg.innerHTML = '<div class="nfp-spin"></div><h3>Buscando una solución…</h3><p>Estamos adaptando el audio y el formato de este contenido. Puede tardar unos segundos.</p>';
+        this.msg.classList.add('show');
+        fetch(m.check, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+            if (!j || !j.ok) throw 0;
+            var mode = j.mode === 'safe' ? 2 : (j.mode === 'video' ? 1 : 0);
+            self.msg.innerHTML = '<h3>Posible solución a la reproducción o el audio</h3><p>' + (mode ? 'Se adaptó el video y el audio de este contenido para tu navegador.' : 'Se adaptó el audio de este contenido para tu navegador.')
+                + (j.speed && j.speed < 1.2 ? ' Tu servidor convierte lento, puede que tenga pausas.' : '') + '</p><div class="acts"><button type="button" class="nf-btn nf-btn-white" data-act="play">&#9654; Volver a reproducir</button></div>'
+                + (auto ? '<p class="nfp-count">Reproduciendo en <b>4</b>…</p>' : '');
+            var played = false, cd = 4, b = self.msg.querySelector('.nfp-count b');
+            var play = function () {
+                if (played) return;
+                played = true;
+                clearInterval(tk);
+                self.hideMsg();
+                self._fixTried = true;
+                self._rescued = true;
+                self._fullTried = mode >= 1;
+                self._safeTried = mode === 2;
+                self.o.media = m;
+                self.idx = Math.max(0, self.idx);
+                self.startTc(t, self.info ? self.prefAudioIndex() : 0, mode);
+                self.autoplay();
+            };
+            var tk = auto ? setInterval(function () { if (--cd <= 0) play(); else if (b) b.textContent = cd; }, 1000) : 0;
+            self.msg.querySelector('[data-act=play]').addEventListener('click', play);
+        }).catch(function () {
+            store(self.fixKey, '1');
+            self._fixTried = true;
+            self.msg.innerHTML = '<h3>No fue posible adaptar este contenido</h3><p>Es posible que el archivo esté dañado o que el servidor no lo entregue completo. Prueba abrirlo en VLC.</p><div class="acts">'
+                + '<button type="button" class="nf-btn nf-btn-white" data-act="retry">Reintentar</button>'
+                + (NFPlayer.canVlc(self.o) ? '<button type="button" class="nf-btn nf-btn-gray" data-act="vlc">Abrir en VLC</button>' : '') + '</div>';
+            self.msg.querySelector('[data-act=retry]').addEventListener('click', function () { self.hideMsg(); self.idx = -1; self.next(); });
+            var vb = self.msg.querySelector('[data-act=vlc]');
+            if (vb) vb.addEventListener('click', function () { NFPlayer.openVlc(self.o); });
+        });
     };
     NFPlayer.prototype.hideMsg = function () { this.msg.classList.remove('show'); };
 
@@ -558,10 +625,10 @@
         var out = [], self = this;
         if (this.hls && this.hls.audioTracks && this.hls.audioTracks.length) {
             this.hls.audioTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || ('Audio ' + (i + 1)), lang: t.lang || '', on: self.hls.audioTrack === i, set: function () { self.hls.audioTrack = i; } }); });
-        } else if (this.info && this.info.audio && this.info.audio.length && this.o.media && !(this.v.audioTracks && this.v.audioTracks.length > 1)) {
+        } else if (this.info && this.info.audio && this.info.audio.length && this._media0 && !(this.v.audioTracks && this.v.audioTracks.length > 1)) {
             var cur = this.tc ? this.tc.a : 0;
             this.info.audio.forEach(function (t) {
-                out.push({ label: t.label, lang: t.lang, on: cur === t.i, set: function () { if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
+                out.push({ label: t.label, lang: t.lang, on: cur === t.i, set: function () { if (!self.o.media) self.o.media = self._media0; if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
             });
         } else if (this.v.audioTracks && this.v.audioTracks.length) {
             var at = this.v.audioTracks;
@@ -573,14 +640,15 @@
     };
 
     NFPlayer.prototype.applyAudioPref = function () {
+        // solo pistas que el navegador cambia por sí mismo (Safari / HLS); con las del servidor lo hace afterProbe
+        if (!this.hls && !(this.v.audioTracks && this.v.audioTracks.length > 1)) return;
         var list = this.audioList();
         if (list.length < 2) return;
         var pref = store('nfp_audio');
-        if (pref) {
-            for (var i = 0; i < list.length; i++) if ((list[i].lang + '|' + list[i].label) === pref) { if (!list[i].on) list[i].set(); return; }
-        } else if (this.o.defaultSecondAudio && !this.hls) {
-            list[1].set(); // comportamiento anterior: segunda pista de audio por defecto
-        }
+        if (pref) for (var i = 0; i < list.length; i++) if ((list[i].lang + '|' + list[i].label) === pref) { if (!list[i].on) list[i].set(); return; }
+        // pistas nativas (Safari / HLS): la del idioma del navegador
+        var w = pickLang(list.map(function (t) { return { lang: t.lang, label: t.label, def: t.on }; }));
+        if (!list[w].on) list[w].set();
     };
 
     NFPlayer.prototype.subList = function () {
@@ -588,7 +656,7 @@
         if (this.hls && this.hls.subtitleTracks && this.hls.subtitleTracks.length) {
             this.hls.subtitleTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || ('Subtítulo ' + (i + 1)), on: self.hls.subtitleTrack === i, set: function () { self.hls.subtitleTrack = i; self.hls.subtitleDisplay = true; } }); });
             out.off = function () { self.hls.subtitleTrack = -1; };
-        } else if (this.info && this.info.subs && this.info.subs.length && this.o.media) {
+        } else if (this.info && this.info.subs && this.info.subs.length && this._media0) {
             this.info.subs.forEach(function (t) {
                 if (!t.text) {
                     // subtítulos de imagen (PGS/VobSub de los Blu-ray 4K): el navegador no los puede mostrar como texto
@@ -615,6 +683,7 @@
         var h = '';
         if (kind === 'tracks') {
             var a = this.audioList(), s = this.subList();
+            if (!this.info && this._media0 && !this.live && !this.hls) this.findTracks();
             h += '<div class="col"><h4>Audio</h4>';
             if (a.length) a.forEach(function (t, i) { h += '<button type="button" data-a="' + i + '" class="' + (t.on ? 'on' : '') + '">' + NF_esc(t.label) + '</button>'; });
             else h += '<span class="na">' + (this._probing ? 'Buscando pistas…' : 'Audio predeterminado') + '</span>';
@@ -641,11 +710,16 @@
             });
         } else if (kind === 'extra') {
             h = '<div class="col"><h4>Opciones</h4>';
-            this.o.extraMenu.forEach(function (m) { h += '<a href="' + NF_esc(m.href) + '"' + (m.attrs || '') + '>' + NF_esc(m.label) + '</a>'; });
-            var vl = NFPlayer.vlc(this.o);
-            if (vl) h += '<a href="' + NF_esc(vl.href) + '">' + vl.label + '</a>';
-            if (vl && vl.get) h += '<a href="' + vl.get.href + '" target="_blank" rel="noopener">' + vl.get.label + '</a>';
+            var fixOk = this._media0 && !store(this.fixKey);
+            this.o.extraMenu.forEach(function (m) {
+                if (m.act === 'fix') { if (fixOk) h += '<button type="button" data-x="fix">' + NF_esc(m.label) + '</button>'; return; }
+                h += '<a href="' + NF_esc(m.href) + '"' + (m.attrs || '') + '>' + NF_esc(m.label) + '</a>';
+            });
+            if (NFPlayer.canVlc(this.o)) h += '<button type="button" data-x="vlc">Abrir en VLC</button>';
             pop.innerHTML = h + '</div>';
+            var fx = pop.querySelector('[data-x=fix]'), vx = pop.querySelector('[data-x=vlc]');
+            if (fx) fx.addEventListener('click', function () { self.closePop(); self.fix(); });
+            if (vx) vx.addEventListener('click', function () { self.closePop(); NFPlayer.openVlc(self.o); });
         }
         pop.classList.add('open');
         this.wake();
@@ -719,6 +793,36 @@
         });
     };
 
+    /* el usuario abrió Audio y subtítulos y aún no se conocen las pistas (Chrome no las expone por sí mismo).
+       Si la consulta normal ya falló, el servidor IPTV probablemente rechaza la conexión extra mientras el video
+       se reproduce: se suelta un momento la conexión directa, se leen las pistas y se retoma en el mismo punto. */
+    NFPlayer.prototype.findTracks = function () {
+        var self = this, m = this._media0, v = this.v;
+        if (!m || this._probing || this.info || this._deepTried) return;
+        if (!this._probeTries) { this._probeTries = 0; this.probe(); return; }
+        var direct = !this.tc && v.getAttribute('src');
+        var t = this.curT(), wasPaused = v.paused;
+        this._probing = true;
+        if (direct) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} this.root.classList.add('buffering'); }
+        var done = function (j) {
+            self._probing = false;
+            if (j && j.ok) self.info = j; else self._deepTried = true;
+            if (direct) {
+                var a = self.info && self.info.audio && self.info.audio[0];
+                if (self.info && ((a && !canAudio(a.codec)) || self.prefAudioIndex() > 0)) self.startTc(t, self.prefAudioIndex(), self.info.video && !videoOk(self.info.video));
+                else {
+                    // se retoma la reproducción directa donde iba
+                    self.o.resume = self.lastTime = t; self.resumed = false; self.idx--; self.next();
+                    if (wasPaused) setTimeout(function () { try { v.pause(); } catch (e) {} }, 800);
+                }
+            } else if (self.info) self.afterProbe();
+            if (self.pop && self.pop.classList.contains('open') && self.pop._kind === 'tracks') { self.pop.classList.remove('open'); self.menu('tracks'); }
+        };
+        setTimeout(function () {
+            fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(done).catch(function () { done(null); });
+        }, direct ? 1200 : 0);
+    };
+
     /* con las pistas conocidas: audio Dolby → conversión; idioma preferido que no es la primera pista → conversión con esa pista */
     NFPlayer.prototype.afterProbe = function () {
         var j = this.info;
@@ -726,10 +830,10 @@
         var cur = j.audio && j.audio[0];
         if (cur && !canAudio(cur.codec) && !this.hls) {
             this.toastMsg('Convirtiendo audio ' + cur.codec.toUpperCase() + ' para este navegador');
-            this.startTc(this.T(), this.prefAudioIndex(), j.video && !videoOk(j.video));
+            this.startTc(this.curT(), this.prefAudioIndex(), j.video && !videoOk(j.video));
         } else if (j.audio && j.audio.length > 1) {
             var w = this.prefAudioIndex();
-            if (w > 0 && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !this.hls) this.startTc(this.T(), w, false);
+            if (w > 0 && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !this.hls) this.startTc(this.curT(), w, false);
         }
         if (this.pop && this.pop.classList.contains('open') && this.pop._kind === 'tracks') { this.pop.classList.remove('open'); this.menu('tracks'); }
     };
@@ -756,11 +860,41 @@
         fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(go).catch(function () { go(null); });
     };
 
-    NFPlayer.prototype.prefAudioIndex = function () {
-        var list = (this.info && this.info.audio) || [], pref = store('nfp_audio_lang') || 'spa';
-        for (var i = 0; i < list.length; i++) if (list[i].lang && pref.indexOf(list[i].lang) === 0) return i;
-        if (this.o.defaultSecondAudio && list.length > 1 && !store('nfp_audio_lang')) return 1;
+    /* idioma de una pista normalizado a 2 letras ("spa", "es-419", "lat", "Español latino" → "es") */
+    var LANG2 = { spa: 'es', esp: 'es', lat: 'es', cas: 'es', eng: 'en', por: 'pt', pob: 'pt', fre: 'fr', fra: 'fr', ger: 'de', deu: 'de', ita: 'it',
+        jpn: 'ja', kor: 'ko', chi: 'zh', zho: 'zh', rus: 'ru', ara: 'ar', hin: 'hi', tur: 'tr', pol: 'pl', dut: 'nl', nld: 'nl', cat: 'ca' };
+    function lang2(t) {
+        var c = String((t && (t.lang || t.language)) || '').toLowerCase().split(/[-_]/)[0];
+        if (LANG2[c]) return LANG2[c];
+        if (c.length === 2) return c;
+        var l = String((t && (t.title || t.label || t.name)) || '').toLowerCase();
+        if (/espa[nñ]ol|spanish|latino|castellano|\blat\b/.test(l)) return 'es';
+        if (/english|ingl[eé]s/.test(l)) return 'en';
+        if (/portugu/.test(l)) return 'pt';
+        if (/fran[cç]/.test(l)) return 'fr';
+        return '';
+    }
+    /* idiomas preferidos: el que el usuario eligió antes y luego los del navegador (navigator.languages) */
+    function langPrefs() {
+        var out = [], add = function (x) { x = lang2({ lang: x }); if (x && out.indexOf(x) < 0) out.push(x); };
+        add(store('nfp_audio_lang'));
+        (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || navigator.userLanguage || '']).forEach(add);
+        return out;
+    }
+    /* índice de la pista que corresponde al idioma del navegador; si no hay, la pista predeterminada del archivo */
+    function pickLang(list) {
+        var prefs = langPrefs();
+        for (var p = 0; p < prefs.length; p++) for (var i = 0; i < list.length; i++) if (lang2(list[i]) === prefs[p]) return i;
+        for (var k = 0; k < list.length; k++) if (list[k].def) return k;
         return 0;
+    }
+    NFPlayer.pickLang = pickLang;
+
+    NFPlayer.prototype.prefAudioIndex = function () {
+        var list = (this.info && this.info.audio) || [];
+        if (!list.length) return 0;
+        var k = pickLang(list);
+        return list[k].i != null ? list[k].i : k;
     };
 
     NFPlayer.prototype.startTc = function (t, a, vt) {
@@ -772,9 +906,9 @@
         if (this.ts) { try { this.ts.destroy(); } catch (e) {} this.ts = null; }
         clearTimeout(this.loadTimer);
         var hadDirect = !this.tc && v.getAttribute('src') && v.getAttribute('src').indexOf('media.php') < 0;
-        this.tc = { off: t, dur: dur, a: a || 0, vt: !!vt };
+        this.tc = { off: t, dur: dur, a: a || 0, vt: vt === 2 ? 2 : (vt ? 1 : 0) };
         this.root.classList.add('buffering');
-        var src = m.tc + '&t=' + Math.floor(t) + '&a=' + (a || 0) + (vt ? '&v=1' : ''), tc0 = this.tc;
+        var src = m.tc + '&t=' + Math.floor(t) + '&a=' + (a || 0) + (this.tc.vt ? '&v=' + this.tc.vt : ''), tc0 = this.tc;
         // se cierra primero la conexión directa: muchas cuentas IPTV permiten una sola conexión a la vez
         try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
         setTimeout(function () {
@@ -790,7 +924,7 @@
                 .then(function (j) { if (self.tc === tc && j && isFinite(j.k)) { tc.off = +j.k; self.applySub(); self.updTime && self.updTime(); } })
                 .catch(function () {});
         }
-        this.loadTimer = setTimeout(function () { if (v.readyState < 2 && self.tc) { self.tc = null; self.o.media = null; self.toastMsg('La conversión tardó demasiado'); self.idx--; self.next(); } }, 45000);
+        this.loadTimer = setTimeout(function () { if (v.readyState < 2 && self.tc) { if (self.tc.vt !== 2 && !self._safeTried) { self._safeTried = true; self.toastMsg('Probando un modo de reproducción más compatible…'); self.startTc(self.T(), self.tc.a, 2); return; } self.tc = null; self.o.media = null; self.toastMsg('La conversión tardó demasiado'); self.idx--; self.next(); } }, 45000);
     };
 
     /* detecta video sin sonido (códec de audio no compatible) */
@@ -889,23 +1023,87 @@
 
     function NF_esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
-    /* VLC: en el celular abre la app; en la computadora descarga una lista .m3u que VLC abre al hacer clic */
-    NFPlayer.vlc = function (o) {
-        var raw = o.streamUrl || (o.vlcUrl ? o.vlcUrl.replace(/^vlc:\/\//, '') : '');
-        if (!raw) return null;
+    /* ---------- VLC: abre la app según el equipo; si no está instalada, ofrece descargarla ---------- */
+    var VLC_STORE = {
+        android: 'https://play.google.com/store/apps/details?id=org.videolan.vlc',
+        ios: 'https://apps.apple.com/app/vlc-media-player/id650377962',
+        win: 'https://apps.microsoft.com/detail/9nblggh4vvnh',
+        mac: 'https://www.videolan.org/vlc/download-macosx.html',
+        pc: 'https://www.videolan.org/vlc/'
+    };
+    function vlcRaw(o) { return o.streamUrl || (o.vlcUrl ? o.vlcUrl.replace(/^vlc:\/\//, '') : ''); }
+    function devKind() {
         var ua = navigator.userAgent;
-        if (/Android/i.test(ua)) {
-            var m = raw.match(/^(https?):\/\/(.*)$/);
-            return { label: 'Abrir en VLC', href: m ? 'intent://' + m[2] + '#Intent;scheme=' + m[1] + ';package=org.videolan.vlc;type=video/*;end' : 'vlc://' + raw };
+        if (/Android/i.test(ua)) return 'android';
+        if (/iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios';
+        return /Windows/i.test(ua) ? 'win' : (/Mac/i.test(ua) ? 'mac' : 'pc');
+    }
+    NFPlayer.canVlc = function (o) { return !!(vlcRaw(o) || o.vlcPc); };
+
+    /* compatibilidad con código anterior */
+    NFPlayer.vlc = function (o) {
+        var raw = vlcRaw(o), k = devKind();
+        if (!raw) return null;
+        if (k === 'android') { var m = raw.match(/^(https?):\/\/(.*)$/); return { label: 'Abrir en VLC', href: m ? 'intent://' + m[2] + '#Intent;scheme=' + m[1] + ';package=org.videolan.vlc;type=video/*;S.browser_fallback_url=' + encodeURIComponent(VLC_STORE.android) + ';end' : 'vlc://' + raw }; }
+        if (k === 'ios') return { label: 'Abrir en VLC', href: 'vlc-x-callback://x-callback-url/stream?url=' + encodeURIComponent(raw) };
+        return o.vlcPc ? { label: 'Abrir en VLC', href: o.vlcPc } : null;
+    };
+
+    NFPlayer.vlcModal = function (title, text, kinds, extra) {
+        var old = document.querySelector('.nfv-modal');
+        if (old) old.remove();
+        var names = { android: 'Descargar para Android', ios: 'Descargar para iPhone / iPad', win: 'Descargar para Windows (Microsoft Store)', mac: 'Descargar para Mac', pc: 'Descargar VLC' };
+        var h = '<div class="nfv-box"><button type="button" class="nfv-x" aria-label="Cerrar">×</button><div class="nfv-ico">&#9654;</div><h3>' + title + '</h3><p>' + text + '</p><div class="nfv-acts">';
+        if (extra) h += extra;
+        kinds.forEach(function (k, i) { h += '<a class="nf-btn ' + (i === 0 && !extra ? 'nf-btn-white' : 'nf-btn-gray') + '" href="' + VLC_STORE[k] + '" target="_blank" rel="noopener">' + names[k] + '</a>'; });
+        h += '</div></div>';
+        var m = document.createElement('div');
+        m.className = 'nfv-modal';
+        m.innerHTML = h;
+        // en pantalla completa solo se ve lo que está dentro del elemento a pantalla completa
+        (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(m);
+        var close = function () { m.remove(); };
+        m.querySelector('.nfv-x').onclick = close;
+        m.addEventListener('click', function (e) { if (e.target === m) close(); });
+        return m;
+    };
+
+    NFPlayer.openVlc = function (o) {
+        var raw = vlcRaw(o), k = devKind(), left = false;
+        var onHide = function () { if (document.hidden) left = true; };
+        var onBlur = function () { left = true; };
+        document.addEventListener('visibilitychange', onHide);
+        window.addEventListener('blur', onBlur);
+        var done = function () { document.removeEventListener('visibilitychange', onHide); window.removeEventListener('blur', onBlur); };
+        if (k === 'android' || k === 'ios') {
+            var vl = NFPlayer.vlc(o);
+            if (!vl) return;
+            window.location.href = vl.href;
+            // si la app abrió, la página pasa a segundo plano; si no, VLC no está instalado
+            setTimeout(function () {
+                done();
+                if (left) return;
+                NFPlayer.vlcModal('No encontramos VLC en tu celular', 'Instala VLC (es gratis) y vuelve a tocar "Abrir en VLC": el contenido se abrirá directo en la app.',
+                    k === 'ios' ? ['ios', 'android'] : ['android', 'ios']);
+            }, 2500);
+            return;
         }
-        if (/iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
-            return { label: 'Abrir en VLC', href: 'vlc-x-callback://x-callback-url/stream?url=' + encodeURIComponent(raw) };
+        // PC: se intenta abrir VLC directamente; si no responde, se descarga la lista .m3u que VLC abre al hacer clic
+        if (raw) {
+            var fr = document.createElement('iframe');
+            fr.style.display = 'none';
+            fr.src = 'vlc://' + raw;
+            document.body.appendChild(fr);
+            setTimeout(function () { fr.remove(); }, 3000);
         }
-        if (!o.vlcPc) return null;
-        var get = /Windows/i.test(ua) ? { label: 'Descargar VLC (Microsoft Store)', href: 'https://apps.microsoft.com/detail/9nblggh4vvnh' }
-            : /Mac/i.test(ua) ? { label: 'Descargar VLC para Mac', href: 'https://www.videolan.org/vlc/download-macosx.html' }
-            : { label: 'Descargar VLC', href: 'https://www.videolan.org/vlc/' };
-        return { label: 'Abrir en VLC (descarga lista .m3u)', href: o.vlcPc, get: get };
+        setTimeout(function () {
+            done();
+            if (left) return;
+            var dl = o.vlcPc ? '<a class="nf-btn nf-btn-white" href="' + NF_esc(o.vlcPc) + '" download>Descargar lista para VLC</a>' : '';
+            if (o.vlcPc) { var a = document.createElement('a'); a.href = o.vlcPc; a.setAttribute('download', ''); document.body.appendChild(a); a.click(); a.remove(); }
+            NFPlayer.vlcModal('Abrir en VLC', 'Se descargó una lista de reproducción. Ábrela y se reproducirá en VLC. Si no tienes VLC instalado, descárgalo aquí (es gratis) y vuelve a tocar "Abrir en VLC".',
+                [k, k === 'win' ? 'pc' : (k === 'mac' ? 'pc' : 'win')].filter(function (x, i, arr) { return arr.indexOf(x) === i; }), dl);
+        }, 1800);
     };
 
     window.NFPlayer = NFPlayer;
