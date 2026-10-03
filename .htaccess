@@ -1,0 +1,60 @@
+# ==========================================================
+#  WebPlayer - seguridad, velocidad y URLs sin .php
+# ==========================================================
+# (Sólo directivas permitidas con AllowOverride habitual, para no provocar error 500)
+
+# --- Bloquear archivos de datos y configuración (dns.json, admin.json,
+#     progress.json, userdata.sqlite, caché, etc.) ---
+<FilesMatch "(?i)\.(json|sqlite|sqlite3|db|txt|log|lock|tmp|bak|old|phpx|ini|sh|sql|map|md)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+RewriteEngine on
+
+# --- Archivos internos que nunca se abren desde el navegador ---
+RewriteRule ^includes/(cache/|core\.php|ui\.php|ondemand\.php|admin_guard\.php|functions\.php) - [F,L,NC]
+RewriteRule ^api/ - [F,L,NC]
+
+# --- Rewrite so that php extentions are not shown ---
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^(.*)$ $1.php [L]
+
+# --- Cabeceras de seguridad ---
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always unset X-Powered-By
+    Header unset X-Powered-By
+</IfModule>
+
+# --- Compresión (no se aplica al video del proxy) ---
+<IfModule mod_setenvif.c>
+    SetEnvIfNoCase Request_URI "proxy(\.php)?" no-gzip dont-vary
+</IfModule>
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/plain application/javascript text/javascript application/json image/svg+xml
+</IfModule>
+
+# --- Caché del navegador para archivos estáticos (carga instantánea) ---
+<IfModule mod_headers.c>
+    <FilesMatch "(?i)\.(css|js|png|webp|jpe?g|gif|svg|ico|woff2?|ttf)$">
+        Header set Cache-Control "public, max-age=604800"
+    </FilesMatch>
+</IfModule>

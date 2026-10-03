@@ -1,0 +1,150 @@
+<?php
+/**
+ * Proxy de video seguro.
+ * - Sólo acepta URLs firmadas por el propio servidor (no es un proxy abierto)
+ * - Requiere sesión iniciada
+ * - Soporta saltos en el video (Range) y listas HLS (.m3u8) reescribiendo segmentos,
+ *   para reproducir servidores http dentro de un sitio https sin errores de contenido mixto.
+ */
+require_once __DIR__ . '/includes/core.php';
+
+$sess = wp_session_read_close();
+if (empty($sess['username'])) {
+    http_response_code(403);
+    exit;
+}
+
+$url = null;
+if (!wp_verify_signed($url)) {
+    // compatibilidad con enlaces antiguos ?url=base64, sólo hacia las DNS configuradas
+    $legacy = isset($_GET['url']) ? base64_decode((string)$_GET['url'], true) : false;
+    $ok = false;
+    if ($legacy && preg_match('~^https?://~i', $legacy)) {
+        $h = strtolower((string)parse_url($legacy, PHP_URL_HOST));
+        foreach (wp_dns_list() as $srv) {
+            if ($h !== '' && $h === strtolower((string)parse_url($srv['url'], PHP_URL_HOST))) { $ok = true; break; }
+        }
+    }
+    if (!$ok) {
+        http_response_code(403);
+        exit;
+    }
+    $url = $legacy;
+}
+
+@set_time_limit(0);
+@ignore_user_abort(false);
+@ini_set('zlib.output_compression', '0');
+if (function_exists('apache_setenv')) @apache_setenv('no-gzip', '1');
+while (ob_get_level() > 0) @ob_end_clean();
+
+function wp_resolve_url($base, $rel)
+{
+    $rel = trim($rel);
+    if (preg_match('~^[a-z][a-z0-9+.-]*://~i', $rel)) return $rel;
+    $p = parse_url($base);
+    $scheme = $p['scheme'] ?? 'http';
+    $auth = $scheme . '://' . ($p['host'] ?? '') . (isset($p['port']) ? ':' . $p['port'] : '');
+    if (strpos($rel, '//') === 0) return $scheme . ':' . $rel;
+    if ($rel !== '' && $rel[0] === '/') return $auth . $rel;
+    $path = $p['path'] ?? '/';
+    $dir = substr($path, 0, strrpos($path, '/') + 1);
+    $full = $dir . $rel;
+    // normaliza ./ y ../
+    $parts = [];
+    foreach (explode('/', $full) as $seg) {
+        if ($seg === '..') { array_pop($parts); } elseif ($seg !== '.') { $parts[] = $seg; }
+    }
+    return $auth . implode('/', $parts);
+}
+
+function wp_rewrite_m3u8($body, $base)
+{
+    $out = [];
+    foreach (preg_split('/\r\n|\n|\r/', $body) as $line) {
+        $t = trim($line);
+        if ($t === '') { $out[] = $line; continue; }
+        if ($t[0] === '#') {
+            $out[] = preg_replace_callback('/URI="([^"]+)"/', function ($m) use ($base) {
+                return 'URI="' . wp_proxy_url(wp_resolve_url($base, $m[1])) . '"';
+            }, $line);
+            continue;
+        }
+        $out[] = wp_proxy_url(wp_resolve_url($base, $t));
+    }
+    return implode("\n", $out);
+}
+
+$path = (string)parse_url($url, PHP_URL_PATH);
+$isPlaylist = (bool)preg_match('/\.m3u8?$/i', $path);
+$state = ['code' => 200, 'headers' => [], 'mode' => null, 'buf' => '', 'sent' => false];
+
+$fwd = [];
+if (!empty($_SERVER['HTTP_RANGE'])) $fwd[] = 'Range: ' . $_SERVER['HTTP_RANGE'];
+if (!empty($_SERVER['HTTP_IF_RANGE'])) $fwd[] = 'If-Range: ' . $_SERVER['HTTP_IF_RANGE'];
+
+$ch = curl_init($url);
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => false,
+    CURLOPT_HEADER => false,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_MAXREDIRS => 8,
+    CURLOPT_CONNECTTIMEOUT => 12,
+    CURLOPT_SSL_VERIFYPEER => false,
+    CURLOPT_SSL_VERIFYHOST => 0,
+    CURLOPT_USERAGENT => WP_UA,
+    CURLOPT_HTTPHEADER => $fwd,
+    CURLOPT_BUFFERSIZE => 256 * 1024,
+    CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$state) {
+        $len = strlen($h);
+        $h = trim($h);
+        if ($h === '') return $len;
+        if (preg_match('~^HTTP/\S+\s+(\d{3})~', $h, $m)) {
+            $state['code'] = (int)$m[1];
+            $state['headers'] = [];
+            return $len;
+        }
+        $pos = strpos($h, ':');
+        if ($pos !== false) $state['headers'][strtolower(trim(substr($h, 0, $pos)))] = trim(substr($h, $pos + 1));
+        return $len;
+    },
+    CURLOPT_WRITEFUNCTION => function ($c, $chunk) use (&$state, $isPlaylist) {
+        if ($state['mode'] === null) {
+            $ct = strtolower($state['headers']['content-type'] ?? '');
+            $state['mode'] = ($isPlaylist || strpos($ct, 'mpegurl') !== false || strncmp(ltrim($chunk), '#EXTM3U', 7) === 0) ? 'playlist' : 'stream';
+            if ($state['mode'] === 'stream') {
+                http_response_code($state['code']);
+                foreach (['content-type', 'content-length', 'content-range', 'accept-ranges', 'last-modified', 'etag'] as $k) {
+                    if (isset($state['headers'][$k])) header(ucwords($k, '-') . ': ' . $state['headers'][$k]);
+                }
+                if (!isset($state['headers']['accept-ranges'])) header('Accept-Ranges: bytes');
+                header('Cache-Control: no-store');
+                header('X-Accel-Buffering: no');
+                $state['sent'] = true;
+            }
+        }
+        if ($state['mode'] === 'playlist') {
+            $state['buf'] .= $chunk;
+            return strlen($chunk);
+        }
+        echo $chunk;
+        @flush();
+        if (connection_aborted()) return -1;
+        return strlen($chunk);
+    },
+]);
+
+curl_exec($ch);
+$err = curl_errno($ch);
+$final = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $url;
+curl_close($ch);
+
+if ($state['mode'] === 'playlist') {
+    header('Content-Type: application/vnd.apple.mpegurl');
+    header('Cache-Control: no-store');
+    echo wp_rewrite_m3u8($state['buf'], $final);
+    exit;
+}
+if (!$state['sent']) {
+    http_response_code($err ? 502 : ($state['code'] ?: 502));
+}

@@ -1,0 +1,5 @@
+AddType application/x-httpd-php .html .htm
+<Files "admin.json">
+Order Allow,Deny
+Deny from all
+</Files>

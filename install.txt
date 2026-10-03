@@ -1,0 +1,20 @@
+===========INSTALL PHP7.1========
+# apt-get install apt-transport-https lsb-release ca-certificates
+# wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+# sh -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+# apt-get update
+# apt-get install php7.1-common libapache2-mod-php7.1 php7.1-cgi php7.1-cli php7.1-phpdbg php7.1-fpm libphp7.1-embed php7.1-dev php7.1-curl php7.1-gd php7.1-imap php7.1-interbase php7.1-intl php7.1-ldap php7.1-readline php7.1-odbc php7.1-pgsql php7.1-pspell php7.1-recode php7.1-tidy php7.1-xmlrpc php7.1 php7.1-json php-all-dev php7.1-sybase php7.1-sqlite3 php7.1-mysql php7.1-opcache php7.1-bz2 libapache2-mod-php7.1 php7.1-mbstring php7.1-pdo php7.1-dom php7.1-enchant php7.1-gmp php7.1-soap php7.1-zip
+# a2dismod php5 (can be different depends on your php)
+# a2enmod php7.1
+# sudo service apache2 restart
+
+===========INSTALL IONCUBE========
+# cd /home/admin/web/stock.ovh/public_html (your install location)
+# wget http://downloads3.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.tar.gz
+# tar xvfz ioncube_loaders_lin_x86-64.tar.gz
+# Open wizard & do like instruction : http://IP/ioncube/loader-wizard.php
+# sudo service apache2 restart
+============ Configure Player=========
+# Edit config file
+# Add your dns to 1.txt inside includes/dns/
+# Change logo from assets/img

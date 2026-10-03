@@ -1,0 +1,160 @@
+@media (max-width: 767px) { 
+.topmoviestext p {
+    width: 100%;
+}
+.buttonbottm {
+    width: 100% !important;
+    align-items: center  !important;
+    justify-content: center  !important;
+	    left: 0 !important;
+}
+ .modal-content.animate input {
+    width: 100% !important;
+}
+.bully {
+    width: 100% !important;
+}
+
+
+.sidenav {
+   
+    width: 80% !important;
+}
+.item.rightimgsec {
+     display: none !important;
+}
+.item.bully img {
+    display: none !important;
+}
+
+table.tvProgramsContainer {
+   display: none !important;
+}
+.customModalContainerBox {
+    min-width: 320px !important;
+    padding: 15px 10px !important;
+    max-height: 530px !important;
+    min-height: 361px !important;
+}
+.notification-heading {
+    font-size: 22px !important;
+}
+.frame_scroller>iframe {
+    padding: 56px 0 !important;
+}
+
+.setitem {
+    width: 96% !important;
+    margin: 25px auto !important;
+}
+.login_box input {
+    width: 100% !important;
+}
+.category-title {
+    padding: 3px !important;
+     font-size: 10px !important;
+}
+.channel-title {
+    padding: 3px !important;
+     font-size: 10px !important;
+}
+ul.channel-shows-container li {
+    padding: 3px !important;
+     font-size: 10px !important;
+}
+.category-fixed-sec {
+padding: 3px !important;
+}
+.tvguide-main-sec {
+padding: 3px !important;
+}
+.channel-fixed-sec {
+    position: absolute;
+    width: 20%;
+    overflow-y: scroll;
+    height: 400px;
+    padding: 3px;
+    left: 21%;
+}
+.icon_sec11 {
+    display: block !important;
+    padding: 15px !important;
+}
+.topmoviestext2 {
+    padding: 50px 10px !important;
+}
+
+}
+
+@media (min-width: 1600px) and (max-width: 3000px) {  
+ .sidenav {
+ 
+   background-size: 100% 100%;
+} 
+.tvguide-main-sec {
+     height: 100vh !important;
+}
+.tvguide-main-sec {
+    
+    width: 100%;
+    height: 100vh !important;
+  }
+  .channel-fixed-sec {
+    height: 95vh !important;
+
+	}
+	.category-fixed-sec {
+		height: 95vh !important;
+	}
+.programs-fixed-sec {
+    height: 95vh !important;
+}
+.owl-wrapper-outer {
+      /*height: 227px !important;*/
+}
+
+}
+
+@media (min-width: 767px) and (max-width: 1025px) {  
+
+.topmoviestext2 p {
+    width: 100% !important;
+}
+.category-title {
+    padding: 3px !important;
+     font-size: 10px !important;
+}
+.channel-title {
+    padding: 3px !important;
+     font-size: 10px !important;
+}
+ul.channel-shows-container li {
+    padding: 3px !important;
+     font-size: 10px !important;
+}
+.category-fixed-sec {
+padding: 3px !important;
+}
+.item.rightimgsec {
+     display: none !important;
+}
+
+table.tvProgramsContainer {
+   display: none !important;
+}
+}
+
+@media (min-width: 767px) and (max-width: 1200px) {  
+.sidebar-logosec {
+    display: block !important;
+}
+.sidebar-logosec a {
+    width: 100% !important;
+}
+.time_sec {
+    text-align: center !important;
+}
+.owl-wrapper-outer {
+      height: 227px !important;
+}
+}

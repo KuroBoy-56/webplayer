@@ -1,0 +1,60 @@
+.top_backgrund_sec {
+    background: url(../images/red/ba1.png) no-repeat center center;
+    width: 100%;
+    min-height: 100vh;
+    background-size: cover;
+    float: right;
+}
+
+.customModalContainerBox {
+    background: #b01a0d !important;
+}
+
+.sidenav {
+    background: url(../images/red/sidemenu-body-back.png) no-repeat center center !important;
+}
+
+.page-heading-sec {
+    background: url(../images/red/sidebar-background.png) no-repeat center center !important;
+}
+
+.sidebar-logosec {
+    background: #b01a0d !important;
+}
+
+.toggle-icon {
+    background: #b21b0d !important;
+    border: 1px solid #b21b0d !important;
+}
+
+.sidenav .active_menu {
+    background: #c82215 !important;
+}
+
+.tvguide-main-sec {
+    background: #b21b0d !important;
+}
+
+.channel-active {
+    background: #c82215 !important;
+    background-color: white;
+}
+
+.category-fixed-sec::-webkit-scrollbar-track {
+    background: #b21b0d !important;
+}
+
+.channel-fixed-sec::-webkit-scrollbar-track {
+    background: #b21b0d !important;
+}
+
+.programs-fixed-sec::-webkit-scrollbar-track {
+    background: #b21b0d !important;
+}
+.sports-sec {
+    background: #b21b0d !important;
+}
+
+.setitem {
+    background: #c82215  !important;
+}
