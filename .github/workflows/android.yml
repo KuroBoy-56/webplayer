@@ -12,9 +12,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -31,7 +31,14 @@ jobs:
       - name: Compilar APK
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease
+          set -o pipefail
+          ./gradlew --no-daemon assembleRelease 2>&1 | tee build.log
+      # resumen de errores como anotación (visible sin descargar el registro completo)
+      - name: Resumen de errores
+        if: failure()
+        run: |
+          msg=$(grep -E "^e: |error:|What went wrong|Could not (resolve|find)|> " build.log | head -60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Errores de compilación::$msg"
 
       - name: Renombrar
         run: cp app/build/outputs/apk/release/app-release.apk LatMpx.apk
