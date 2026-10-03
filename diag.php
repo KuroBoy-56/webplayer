@@ -52,7 +52,8 @@ foreach ($exts as $x) {
 $https_base = wp_server_https_base();
 
 /* Motor de conversión: prueba real en este hosting */
-$ff = ['proc' => function_exists('proc_open') && !in_array('proc_open', array_map('trim', explode(',', (string)ini_get('disable_functions'))), true)];
+$ff = ['proc' => (bool)wp_exec_mode(), 'fns' => []];
+foreach (['proc_open', 'popen', 'exec', 'shell_exec'] as $fn) $ff['fns'][$fn] = wp_fn_ok($fn);
 $ff['files'] = [];
 foreach (['ffmpeg', 'ffprobe'] as $b) {
     $f = WP_ROOT . '/bin/' . $b;
@@ -105,7 +106,9 @@ include "header.php";
     <?php endif; ?>
     <h2 style="font-size:18px;margin:22px 0 8px">Conversión de audio (ffmpeg)</h2>
     <p style="color:#ccc;font-size:14px;line-height:1.8">
-        Ejecutar programas (proc_open): <b style="color:<?php echo $ff['proc'] ? '#46d369' : '#e87c03'; ?>"><?php echo $ff['proc'] ? 'permitido' : 'BLOQUEADO por el hosting'; ?></b><br>
+        Ejecutar programas: <b style="color:<?php echo $ff['proc'] ? '#46d369' : '#e87c03'; ?>"><?php echo $ff['proc'] ? 'permitido' : 'BLOQUEADO por el hosting'; ?></b>
+        <span style="color:#999">(<?php foreach ($ff['fns'] as $fn => $ok) echo e($fn) . ': ' . ($ok ? 'sí' : 'no') . ' &nbsp;'; ?>)</span><br>
+        <?php if (!$ff['proc']): ?><span style="color:#e87c03">Tu hosting bloquea las cuatro formas de ejecutar programas desde PHP. Activa al menos una (proc_open o popen) en el panel del hosting o pídeselo al soporte.</span><br><?php endif; ?>
         ffmpeg: <b><?php echo e($ff['files']['ffmpeg']); ?></b> · ffprobe: <b><?php echo e($ff['files']['ffprobe']); ?></b><br>
         <?php if ($ff['ver'] !== null): ?>Versión: <b><?php echo e($ff['ver']); ?></b><br><?php endif; ?>
         <?php if ($ff['test']): $tt = $ff['test']; $sp = $tt['ms'] > 0 ? round(15000 / $tt['ms'], 1) : 0; ?>

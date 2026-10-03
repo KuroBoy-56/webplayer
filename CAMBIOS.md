@@ -117,3 +117,8 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - Los títulos de la guía del servidor se decodifican aunque vengan con saltos de línea.
 - En el diagnóstico de un canal se ve si el servidor envía guía, si hay guía de respaldo y el resultado de cada fuente pública.
 - **Top 10:** el ancho del 10 se mide con la fuente real del equipo, así el 0 nunca queda debajo de la carátula.
+
+## Actualización 3 de octubre (hosting sin proc_open)
+
+- Si el hosting bloquea `proc_open` (como Hostinger), la conversión con ffmpeg prueba sola las otras formas que tiene PHP para ejecutar programas: `popen`, `exec` o `shell_exec`. Basta con que una esté permitida. Se probaron las cuatro: pistas, conversión de audio y subtítulos funcionan con cualquiera de ellas.
+- El diagnóstico muestra cuáles de esas cuatro funciones permite tu hosting.

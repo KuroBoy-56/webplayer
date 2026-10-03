@@ -107,9 +107,11 @@ array_push($cmd, '-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-ar', '48000',
     '-f', 'mp4', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-frag_duration', '2000000', 'pipe:1');
 
 // detiene la conversión anterior de este usuario
-if (is_file($pidFile) && function_exists('posix_kill')) {
+if (is_file($pidFile)) {
     $old = (int)@file_get_contents($pidFile);
-    if ($old > 1) @posix_kill($old, 15);
+    if ($old > 1 && function_exists('posix_kill')) @posix_kill($old, 15);
+    elseif ($old > 1 && wp_fn_ok('exec')) @exec('kill ' . $old);
+    usleep(300000);
 }
 
 header('Content-Type: video/mp4');
@@ -120,29 +122,30 @@ header('Accept-Ranges: none');
 @ini_set('output_buffering', '0');
 @ini_set('implicit_flush', '1');
 
-$line = 'exec ' . implode(' ', array_map('escapeshellarg', $cmd));
 $sent = 0;
 $errFile = wp_cache_dir() . '/ff_' . $who . '.err';
 // hasta 3 intentos: si el servidor IPTV todavía cuenta la conexión anterior del navegador, rechaza la primera
 for ($try = 0; $try < 3 && $sent === 0; $try++) {
     if ($try > 0) { sleep(2); if (connection_aborted()) break; }
-    $proc = @proc_open($line, [1 => ['pipe', 'w'], 2 => ['file', $errFile, 'w']], $pipes);
-    if (!is_resource($proc)) break;
-    $st = proc_get_status($proc);
-    @file_put_contents($pidFile, (string)$st['pid']);
-    while (!feof($pipes[1])) {
-        $chunk = fread($pipes[1], 65536);
+    $pr = wp_spawn_stream($cmd, $errFile, $pidFile);
+    if (!$pr) break;
+    $myPid = (int)@file_get_contents($pidFile);
+    $idle = 0;
+    while (true) {
+        $chunk = @fread($pr['h'], 65536);
         if ($chunk === false) break;
-        if ($chunk === '') { usleep(20000); if (!proc_get_status($proc)['running']) { $chunk = (string)stream_get_contents($pipes[1]); if ($chunk === '') break; } else continue; }
+        if ($chunk === '') {
+            if (feof($pr['h'])) break;
+            if (!$pr['alive']()) { $chunk = (string)@stream_get_contents($pr['h']); if ($chunk === '') break; }
+            else { usleep(20000); if (++$idle > 3000) break; continue; } // 60 s sin datos
+        }
+        $idle = 0;
         echo $chunk;
         @flush();
         $sent += strlen($chunk);
         if (connection_aborted()) break;
     }
-    @fclose($pipes[1]);
-    $st = proc_get_status($proc);
-    if ($st['running']) @proc_terminate($proc, 15);
-    @proc_close($proc);
-    if ((int)@file_get_contents($pidFile) === (int)$st['pid']) @unlink($pidFile);
+    $pr['stop']();
+    if ((int)@file_get_contents($pidFile) === $myPid) @unlink($pidFile);
 }
 if ($sent === 0 && !headers_sent()) http_response_code(502);

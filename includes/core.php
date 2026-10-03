@@ -1000,8 +1000,7 @@ function wp_bin($name)
 {
     static $memo = [];
     if (array_key_exists($name, $memo)) return $memo[$name];
-    $disabled = array_map('trim', explode(',', (string)ini_get('disable_functions')));
-    if (!function_exists('proc_open') || in_array('proc_open', $disabled, true)) return $memo[$name] = null;
+    if (!wp_exec_mode()) return $memo[$name] = null;
     $const = 'WP_' . strtoupper($name);
     $cands = [];
     if (defined($const)) $cands[] = constant($const);
@@ -1073,65 +1072,158 @@ function wp_probe_labels(array $p)
     return $p;
 }
 
-/** Ejecuta un comando sin shell y devuelve stdout (o null). */
-function wp_run(array $cmd, $timeout = 20)
+/** ¿El hosting permite esta función de PHP? */
+function wp_fn_ok($f)
 {
-    $line = implode(' ', array_map('escapeshellarg', $cmd));
-    $p = @proc_open($line, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-    if (!is_resource($p)) return null;
-    stream_set_blocking($pipes[1], false);
-    stream_set_blocking($pipes[2], false);
-    $out = '';
-    $end = microtime(true) + $timeout;
-    while (microtime(true) < $end) {
-        $r = [$pipes[1], $pipes[2]]; $w = null; $x = null;
-        if (@stream_select($r, $w, $x, 1) === false) break;
-        foreach ($r as $fh) {
-            $chunk = fread($fh, 65536);
-            if ($fh === $pipes[1] && $chunk !== false) $out .= $chunk;
-        }
-        $st = proc_get_status($p);
-        if (!$st['running']) { $out .= stream_get_contents($pipes[1]); break; }
-    }
-    @fclose($pipes[1]); @fclose($pipes[2]);
-    $st = proc_get_status($p);
-    if ($st['running']) @proc_terminate($p, 9);
-    @proc_close($p);
-    return $out !== '' ? $out : null;
+    static $dis = null;
+    if ($dis === null) $dis = array_map('strtolower', array_map('trim', explode(',', (string)ini_get('disable_functions'))));
+    return function_exists($f) && !in_array(strtolower($f), $dis, true);
 }
 
-/** Ejecuta un comando y devuelve código de salida, salida, errores y duración (para el diagnóstico). */
+/** Forma de ejecutar programas que permite el hosting: proc_open, popen, exec o shell_exec (o null si todas están bloqueadas). */
+function wp_exec_mode()
+{
+    static $m = false;
+    if ($m !== false) return $m;
+    foreach (['proc_open' => 'proc', 'popen' => 'popen', 'exec' => 'exec', 'shell_exec' => 'shell'] as $f => $k) {
+        if (wp_fn_ok($f)) return $m = $k;
+    }
+    return $m = null;
+}
+
+function wp_cmd_line(array $cmd)
+{
+    return implode(' ', array_map('escapeshellarg', $cmd));
+}
+
+/** Ejecuta un comando y devuelve código de salida, salida, errores y duración. */
 function wp_exec(array $cmd, $timeout = 20)
 {
     $res = ['ok' => false, 'code' => -1, 'out' => '', 'err' => '', 'ms' => 0];
     $t = microtime(true);
-    $line = implode(' ', array_map('escapeshellarg', $cmd));
-    $p = @proc_open($line, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-    if (!is_resource($p)) { $res['err'] = 'proc_open no pudo iniciar el programa'; return $res; }
-    stream_set_blocking($pipes[1], false);
-    stream_set_blocking($pipes[2], false);
+    $mode = wp_exec_mode();
+    if (!$mode) { $res['err'] = 'el hosting bloquea la ejecución de programas'; return $res; }
+    $line = wp_cmd_line($cmd);
     $end = $t + $timeout;
-    $code = null;
-    while (microtime(true) < $end) {
-        $r = [$pipes[1], $pipes[2]]; $w = null; $x = null;
-        if (@stream_select($r, $w, $x, 1) === false) break;
-        foreach ($r as $fh) {
-            $c = fread($fh, 65536);
-            if ($c === false) continue;
-            if ($fh === $pipes[1]) { if (strlen($res['out']) < 200000) $res['out'] .= $c; } else { $res['err'] .= $c; }
+    if ($mode === 'proc') {
+        $p = @proc_open($line, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        if (!is_resource($p)) { $res['err'] = 'proc_open no pudo iniciar el programa'; return $res; }
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        $code = null;
+        while (microtime(true) < $end) {
+            $r = [$pipes[1], $pipes[2]]; $w = null; $x = null;
+            if (@stream_select($r, $w, $x, 1) === false) break;
+            foreach ($r as $fh) {
+                $c = fread($fh, 65536);
+                if ($c === false) continue;
+                if ($fh === $pipes[1]) { if (strlen($res['out']) < 2000000) $res['out'] .= $c; } else { $res['err'] .= $c; }
+            }
+            $st = proc_get_status($p);
+            if (!$st['running']) { $code = $st['exitcode']; $res['out'] .= (string)stream_get_contents($pipes[1]); $res['err'] .= (string)stream_get_contents($pipes[2]); break; }
         }
+        @fclose($pipes[1]); @fclose($pipes[2]);
         $st = proc_get_status($p);
-        if (!$st['running']) { $code = $st['exitcode']; $res['out'] .= (string)stream_get_contents($pipes[1]); $res['err'] .= (string)stream_get_contents($pipes[2]); break; }
+        if ($st['running']) { @proc_terminate($p, 9); $res['err'] .= "\n(tiempo agotado)"; }
+        @proc_close($p);
+        $res['code'] = $code === null ? -1 : (int)$code;
+    } else {
+        // popen / exec / shell_exec pasan por la shell: errores a un archivo y límite de tiempo con "timeout"
+        $errFile = wp_cache_dir() . '/exec_' . md5(uniqid('', true)) . '.err';
+        $sh = (@is_executable('/usr/bin/timeout') ? 'timeout -k 2 ' . (int)$timeout . ' ' : '') . $line . ' 2>' . escapeshellarg($errFile);
+        if ($mode === 'popen') {
+            $h = @popen($sh . '; echo "__RC=$?"', 'r');
+            if (!$h) { $res['err'] = 'popen no pudo iniciar el programa'; return $res; }
+            while (!feof($h) && microtime(true) < $end + 3) {
+                $c = fread($h, 65536);
+                if ($c === false) break;
+                if (strlen($res['out']) < 2000000) $res['out'] .= $c;
+            }
+            @pclose($h);
+        } elseif ($mode === 'exec') {
+            $lines = [];
+            @exec($sh . '; echo "__RC=$?"', $lines);
+            $res['out'] = implode("\n", $lines);
+        } else {
+            $res['out'] = (string)@shell_exec($sh . '; echo "__RC=$?"');
+        }
+        if (preg_match('/__RC=(\d+)\s*$/', $res['out'], $m)) {
+            $res['code'] = (int)$m[1];
+            $res['out'] = substr($res['out'], 0, -strlen($m[0]));
+        }
+        if ($res['code'] === 124) $res['err'] .= "(tiempo agotado)\n";
+        $res['err'] .= (string)@file_get_contents($errFile);
+        @unlink($errFile);
     }
-    @fclose($pipes[1]); @fclose($pipes[2]);
-    $st = proc_get_status($p);
-    if ($st['running']) { @proc_terminate($p, 9); $res['err'] .= "\n(tiempo agotado)"; }
-    @proc_close($p);
-    $res['code'] = $code === null ? -1 : (int)$code;
     $res['ok'] = $res['code'] === 0;
     $res['ms'] = (int)round((microtime(true) - $t) * 1000);
     $res['err'] = trim(substr($res['err'], -1500));
     return $res;
+}
+
+/** Ejecuta un comando y devuelve stdout (o null). */
+function wp_run(array $cmd, $timeout = 20)
+{
+    $r = wp_exec($cmd, $timeout);
+    return $r['out'] !== '' ? $r['out'] : null;
+}
+
+/**
+ * Inicia un programa que escribe un flujo largo (la conversión de video) y devuelve
+ * ['h' => stream de lectura, 'alive' => fn, 'stop' => fn], según lo que permita el hosting.
+ */
+function wp_spawn_stream(array $cmd, $errFile, $pidFile)
+{
+    $mode = wp_exec_mode();
+    $line = wp_cmd_line($cmd);
+    if ($mode === 'proc') {
+        $p = @proc_open('exec ' . $line, [1 => ['pipe', 'w'], 2 => ['file', $errFile, 'w']], $pipes);
+        if (!is_resource($p)) return null;
+        @file_put_contents($pidFile, (string)proc_get_status($p)['pid']);
+        return ['h' => $pipes[1],
+            'alive' => function () use ($p) { return proc_get_status($p)['running']; },
+            'stop' => function () use ($p, $pipes, $pidFile) { @fclose($pipes[1]); if (proc_get_status($p)['running']) @proc_terminate($p, 15); @proc_close($p); @unlink($pidFile); }];
+    }
+    $alive = function () use ($pidFile) {
+        $pid = (int)@file_get_contents($pidFile);
+        if ($pid < 2) return false;
+        if (function_exists('posix_kill')) return @posix_kill($pid, 0);
+        return @is_dir('/proc/' . $pid);
+    };
+    if ($mode === 'popen') {
+        $h = @popen('echo $$ > ' . escapeshellarg($pidFile) . '; exec ' . $line . ' 2>' . escapeshellarg($errFile), 'r');
+        if (!$h) return null;
+        return ['h' => $h, 'alive' => $alive, 'stop' => function () use ($h, $pidFile) {
+            $pid = (int)@file_get_contents($pidFile);
+            if ($pid > 1 && function_exists('posix_kill')) @posix_kill($pid, 15);
+            @pclose($h);
+            @unlink($pidFile);
+        }];
+    }
+    if ($mode === 'exec' || $mode === 'shell') {
+        // ffmpeg en segundo plano escribiendo a un "fifo" (tubería con nombre) que PHP va leyendo
+        $fifo = substr($pidFile, 0, -4) . '.fifo';
+        if (end($cmd) === 'pipe:1') { array_pop($cmd); $line = wp_cmd_line($cmd); }
+        @unlink($fifo);
+        if (function_exists('posix_mkfifo')) @posix_mkfifo($fifo, 0600);
+        $mk = is_file($fifo) || @filetype($fifo) === 'fifo' ? '' : 'mkfifo ' . escapeshellarg($fifo) . '; ';
+        $bg = $mk . $line . ' -y ' . escapeshellarg($fifo) . ' </dev/null >/dev/null 2>' . escapeshellarg($errFile) . ' & echo $! > ' . escapeshellarg($pidFile);
+        if ($mode === 'exec') @exec($bg); else @shell_exec($bg);
+        usleep(100000);
+        if (@filetype($fifo) !== 'fifo') return null;
+        $h = @fopen($fifo, 'r+'); // r+ no se bloquea si ffmpeg falla antes de abrir la salida
+        if (!$h) return null;
+        stream_set_blocking($h, false);
+        return ['h' => $h, 'alive' => $alive, 'stop' => function () use ($h, $pidFile, $fifo) {
+            $pid = (int)@file_get_contents($pidFile);
+            if ($pid > 1 && function_exists('posix_kill')) @posix_kill($pid, 15);
+            elseif ($pid > 1) { if (wp_exec_mode() === 'exec') @exec('kill ' . $pid); else @shell_exec('kill ' . $pid); }
+            @fclose($h);
+            @unlink($fifo);
+            @unlink($pidFile);
+        }];
+    }
+    return null;
 }
 
 /** Nombre legible de idioma ISO 639. */
