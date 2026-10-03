@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,7 +9,7 @@ plugins {
 // Dirección del panel administrativo. Se puede cambiar aquí o en local.properties (panel.url=https://...)
 val panelUrl: String = run {
     val f = rootProject.file("local.properties")
-    val p = java.util.Properties()
+    val p = Properties()
     if (f.exists()) f.inputStream().use { p.load(it) }
     p.getProperty("panel.url") ?: "https://tu-dominio.com/webplayer"
 }
