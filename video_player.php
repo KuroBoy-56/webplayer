@@ -123,6 +123,9 @@ $media_cfg = null;
 if (wp_bin('ffprobe') && wp_bin('ffmpeg')) {
     $mb = wp_proxy_url($raw_url, 'media.php');
     $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'sub' => $mb . '&do=sub'];
+    // pistas ya conocidas (caché): el reproductor decide al instante si necesita convertir el audio
+    $pc = wp_cache_get('probe|' . md5($raw_url), 604800);
+    if (is_array($pc)) $media_cfg['info'] = wp_probe_labels($pc);
 }
 
 $back_url = ($slug == 'movie') ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get;
@@ -130,6 +133,7 @@ $download_url = '?' . http_build_query(array_merge($_GET, ['action' => 'download
 $extra = [['label' => 'Descargar contenido', 'href' => $download_url]];
 if ($has_prev) $extra[] = ['label' => 'Capítulo anterior', 'href' => $prev_url];
 if ($slug === 'series') $extra[] = ['label' => 'Ver episodios', 'href' => $back_url . '#episodios'];
+$extra[] = ['label' => '¿Sin audio o no carga? Diagnóstico', 'href' => 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext)];
 ?>
 <!DOCTYPE html>
 <html lang="es">

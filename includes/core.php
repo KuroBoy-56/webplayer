@@ -1028,7 +1028,13 @@ function wp_probe($url)
         '-of', 'json', $url];
     $out = wp_run($cmd, 25);
     $j = $out ? json_decode($out, true) : null;
-    if (!is_array($j)) return null;
+    if (!is_array($j) || empty($j['streams'])) {
+        // el servidor IPTV a veces rechaza una conexión extra mientras el navegador está leyendo el video
+        sleep(2);
+        $out = wp_run($cmd, 25);
+        $j = $out ? json_decode($out, true) : null;
+    }
+    if (!is_array($j) || empty($j['streams'])) return null;
     $res = ['dur' => (float)($j['format']['duration'] ?? 0), 'video' => '', 'audio' => [], 'subs' => []];
     $ai = 0; $si = 0;
     foreach ($j['streams'] ?? [] as $st) {
@@ -1048,6 +1054,23 @@ function wp_probe($url)
     }
     wp_cache_set($ck, $res);
     return $res;
+}
+
+/** Agrega nombres legibles a las pistas ("Español (E-AC3 5.1)") y marca ok. */
+function wp_probe_labels(array $p)
+{
+    foreach ($p['audio'] as &$a) {
+        $ln = wp_lang_name($a['lang']);
+        $a['label'] = trim(($ln ?: 'Audio ' . ($a['i'] + 1)) . ($a['title'] !== '' && ($ln === '' || stripos($a['title'], $ln) === false) ? ' · ' . $a['title'] : '')
+            . ' (' . strtoupper(str_replace(['eac3', 'truehd'], ['E-AC3', 'TrueHD'], $a['codec'])) . ($a['ch'] >= 6 ? ' 5.1' : '') . ')');
+    }
+    unset($a);
+    foreach ($p['subs'] as &$s) {
+        $s['label'] = trim((wp_lang_name($s['lang']) ?: 'Subtítulo ' . ($s['i'] + 1)) . ($s['title'] !== '' ? ' · ' . $s['title'] : '') . ($s['forced'] ? ' (forzado)' : ''));
+    }
+    unset($s);
+    $p['ok'] = true;
+    return $p;
 }
 
 /** Ejecuta un comando sin shell y devuelve stdout (o null). */
@@ -1075,6 +1098,40 @@ function wp_run(array $cmd, $timeout = 20)
     if ($st['running']) @proc_terminate($p, 9);
     @proc_close($p);
     return $out !== '' ? $out : null;
+}
+
+/** Ejecuta un comando y devuelve código de salida, salida, errores y duración (para el diagnóstico). */
+function wp_exec(array $cmd, $timeout = 20)
+{
+    $res = ['ok' => false, 'code' => -1, 'out' => '', 'err' => '', 'ms' => 0];
+    $t = microtime(true);
+    $line = implode(' ', array_map('escapeshellarg', $cmd));
+    $p = @proc_open($line, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    if (!is_resource($p)) { $res['err'] = 'proc_open no pudo iniciar el programa'; return $res; }
+    stream_set_blocking($pipes[1], false);
+    stream_set_blocking($pipes[2], false);
+    $end = $t + $timeout;
+    $code = null;
+    while (microtime(true) < $end) {
+        $r = [$pipes[1], $pipes[2]]; $w = null; $x = null;
+        if (@stream_select($r, $w, $x, 1) === false) break;
+        foreach ($r as $fh) {
+            $c = fread($fh, 65536);
+            if ($c === false) continue;
+            if ($fh === $pipes[1]) { if (strlen($res['out']) < 200000) $res['out'] .= $c; } else { $res['err'] .= $c; }
+        }
+        $st = proc_get_status($p);
+        if (!$st['running']) { $code = $st['exitcode']; $res['out'] .= (string)stream_get_contents($pipes[1]); $res['err'] .= (string)stream_get_contents($pipes[2]); break; }
+    }
+    @fclose($pipes[1]); @fclose($pipes[2]);
+    $st = proc_get_status($p);
+    if ($st['running']) { @proc_terminate($p, 9); $res['err'] .= "\n(tiempo agotado)"; }
+    @proc_close($p);
+    $res['code'] = $code === null ? -1 : (int)$code;
+    $res['ok'] = $res['code'] === 0;
+    $res['ms'] = (int)round((microtime(true) - $t) * 1000);
+    $res['err'] = trim(substr($res['err'], -1500));
+    return $res;
 }
 
 /** Nombre legible de idioma ISO 639. */

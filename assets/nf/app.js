@@ -69,6 +69,23 @@
         })(keys.slice(i, i + 40));
     };
 
+    /* Top 10: el número 10 se mide con la fuente real del equipo para que el 0 nunca quede debajo de la carátula */
+    NF.fitTop = function (slider) {
+        var fit = function () {
+            slider.querySelectorAll('.nf-topitem.ten').forEach(function (it) {
+                var num = it.querySelector('.num');
+                if (!num) return;
+                it.style.paddingLeft = '';
+                var need = Math.ceil(num.getBoundingClientRect().width) + 4;
+                var have = parseFloat(getComputedStyle(it).paddingLeft) || 0;
+                if (need > have) it.style.paddingLeft = need + 'px';
+            });
+        };
+        fit();
+        if (d.fonts && d.fonts.ready) d.fonts.ready.then(fit);
+        if (!slider._fitBound) { slider._fitBound = 1; window.addEventListener('resize', function () { clearTimeout(slider._fitT); slider._fitT = setTimeout(fit, 150); }); }
+    };
+
     NF.toast = function (msg) {
         var t = $('#nfToast');
         if (!t) { t = d.createElement('div'); t.id = 'nfToast'; t.className = 'nf-toast'; d.body.appendChild(t); }
@@ -135,6 +152,7 @@
                 }
                 if (slider.getAttribute('data-variant') === 'top') {
                     slider.innerHTML = items.map(function (c, i) { return '<div class="nf-topitem' + (i === 9 ? ' ten' : '') + '"><span class="num">' + (i + 1) + '</span>' + NF.card(c) + '</div>'; }).join('');
+                    NF.fitTop(slider);
                 } else {
                     slider.innerHTML = items.map(function (c) { return NF.card(c); }).join('');
                 }

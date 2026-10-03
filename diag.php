@@ -50,6 +50,28 @@ foreach ($exts as $x) {
     $rows[] = ['ext' => $x, 'r' => diag_probe(wp_stream_url($kind, $id, $x))];
 }
 $https_base = wp_server_https_base();
+
+/* Motor de conversión: prueba real en este hosting */
+$ff = ['proc' => function_exists('proc_open') && !in_array('proc_open', array_map('trim', explode(',', (string)ini_get('disable_functions'))), true)];
+$ff['files'] = [];
+foreach (['ffmpeg', 'ffprobe'] as $b) {
+    $f = WP_ROOT . '/bin/' . $b;
+    $ff['files'][$b] = is_file($f) ? (is_executable($f) ? 'subido, con permiso de ejecución' : 'subido, SIN permiso de ejecución (pon 755)') : (wp_bin($b) ? 'el del hosting' : 'no está en bin/');
+}
+$ff['bin'] = wp_bin('ffmpeg');
+$ff['ver'] = null;
+$ff['test'] = null;
+if ($ff['proc'] && $ff['bin']) {
+    $v = wp_exec([$ff['bin'], '-hide_banner', '-version'], 15);
+    $ff['ver'] = $v['ok'] ? strtok($v['out'], "\n") : ('no arranca: ' . ($v['err'] ?: 'código ' . $v['code']));
+    if ($v['ok'] && $slug !== 'live' && isset($_GET['test'])) {
+        // convierte 15 segundos del contenido como lo haría el reproductor y mide la velocidad
+        $src = wp_stream_url($slug === 'series' ? 'series' : 'movie', $id, $ext);
+        $ff['test'] = wp_exec([$ff['bin'], '-nostdin', '-hide_banner', '-v', 'error', '-user_agent', WP_UA, '-t', '15', '-i', $src,
+            '-map', '0:v:0?', '-map', '0:a:0?', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-f', 'mp4', '-movflags', 'frag_keyframe+empty_moov', '-y', '/dev/null'], 60);
+    }
+}
+$ff_err = @file_get_contents(wp_cache_dir() . '/ff_' . md5((string)(wp_user()['username'] ?? '') . '|' . ($_SERVER['REMOTE_ADDR'] ?? '')) . '.err');
 $page_title = 'Diagnóstico';
 include "header.php";
 ?>
@@ -80,6 +102,32 @@ include "header.php";
     </p>
     <?php if (!(wp_bin('ffmpeg') && wp_bin('ffprobe'))): ?>
     <p style="color:#aaa;font-size:14px;max-width:760px">Sin ffmpeg, el audio Dolby (AC3/E-AC3/DTS) de algunos contenidos 4K no se escucha en Chrome. Puedes subir los archivos <b>ffmpeg</b> y <b>ffprobe</b> estáticos para Linux a la carpeta <b>bin/</b> de tu web player (con permiso de ejecución 755), o abrir ese contenido en Safari, Microsoft Edge o VLC.</p>
+    <?php endif; ?>
+    <h2 style="font-size:18px;margin:22px 0 8px">Conversión de audio (ffmpeg)</h2>
+    <p style="color:#ccc;font-size:14px;line-height:1.8">
+        Ejecutar programas (proc_open): <b style="color:<?php echo $ff['proc'] ? '#46d369' : '#e87c03'; ?>"><?php echo $ff['proc'] ? 'permitido' : 'BLOQUEADO por el hosting'; ?></b><br>
+        ffmpeg: <b><?php echo e($ff['files']['ffmpeg']); ?></b> · ffprobe: <b><?php echo e($ff['files']['ffprobe']); ?></b><br>
+        <?php if ($ff['ver'] !== null): ?>Versión: <b><?php echo e($ff['ver']); ?></b><br><?php endif; ?>
+        <?php if ($ff['test']): $tt = $ff['test']; $sp = $tt['ms'] > 0 ? round(15000 / $tt['ms'], 1) : 0; ?>
+        Prueba de 15 s de este contenido: <b style="color:<?php echo $tt['ok'] && $sp >= 1.2 ? '#46d369' : '#e87c03'; ?>"><?php echo $tt['ok'] ? 'correcta en ' . round($tt['ms'] / 1000, 1) . ' s (' . $sp . 'x tiempo real' . ($sp < 1.2 ? ', demasiado lento: se cortará' : '') . ')' : 'falló'; ?></b><br>
+        <?php if (!$tt['ok'] && $tt['err']): ?><code style="display:block;white-space:pre-wrap;color:#e87c03;font-size:12px"><?php echo e($tt['err']); ?></code><?php endif; ?>
+        <?php elseif ($slug !== 'live' && $ff['ver'] && strpos($ff['ver'], 'no arranca') !== 0): ?>
+        <a class="nf-btn nf-btn-gray" style="margin-top:6px;display:inline-flex" href="diag.php?<?php echo e(http_build_query(['id' => $id, 'slug' => $slug, 'ext' => $ext, 'test' => 1])); ?>">Probar conversión con este contenido</a><br>
+        <?php endif; ?>
+        <?php if ($ff_err): ?>Último error del reproductor: <code style="color:#e87c03;font-size:12px"><?php echo e(substr($ff_err, -400)); ?></code><?php endif; ?>
+    </p>
+    <?php if ($slug === 'live'): require_once __DIR__ . '/includes/epg.php';
+        $sepg = xt_get('get_short_epg', ['stream_id' => $id, 'limit' => 5], 60, 8);
+        $nsrv = count((array)($sepg['epg_listings'] ?? []));
+        $alt = wp_epg_for($id);
+        $est = wp_epg_status(); ?>
+    <h2 style="font-size:18px;margin:22px 0 8px">Guía de programas (EPG)</h2>
+    <p style="color:#ccc;font-size:14px;line-height:1.8">
+        Guía del servidor IPTV para este canal: <b><?php echo $nsrv ? $nsrv . ' programas' : 'no envía'; ?></b><br>
+        Guía pública de respaldo para este canal: <b><?php echo $alt ? count($alt) . ' programas' : 'sin coincidencia'; ?></b><br>
+        Respaldo actualizado: <b><?php echo $est && $est['t'] ? e(date('d/m H:i', $est['t'])) . ' · ' . (int)$est['channels'] . ' canales con guía' : 'todavía no (se genera en segundo plano, vuelve en unos minutos)'; ?></b><br>
+        <?php foreach (($est['log'] ?? []) as $lg): ?><span style="color:#999;font-size:12px"><?php echo e(basename((string)$lg[0]) . ': ' . $lg[1] . (isset($lg[2]) ? ' · ' . (int)$lg[2] . ' canales' : '')); ?></span><br><?php endforeach; ?>
+    </p>
     <?php endif; ?>
     <?php if ($slug !== 'live' && wp_bin('ffprobe') && ($pi = wp_probe(wp_stream_url($slug === 'series' ? 'series' : 'movie', $id, $ext)))): ?>
     <h2 style="font-size:18px;margin:22px 0 8px">Pistas del archivo</h2>

@@ -56,10 +56,21 @@ function wp_epg_schedule()
     static $done = false;
     if ($done) return;
     $done = true;
-    register_shutdown_function(function () {
-        if (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
-        wp_epg_build();
-    });
+    if (function_exists('fastcgi_finish_request') || function_exists('litespeed_finish_request')) {
+        register_shutdown_function(function () {
+            if (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
+            else @litespeed_finish_request();
+            wp_epg_build();
+        });
+        return;
+    }
+    // sin forma de terminar la respuesta antes: se lanza una petición aparte para no hacer esperar al usuario
+    $self = (wp_is_https() ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/') . '/epgjob.php';
+    $ch = curl_init($self);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT_MS => 900, CURLOPT_NOSIGNAL => 1, CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_HTTPHEADER => ['Cookie: ' . session_name() . '=' . session_id()]]);
+    @curl_exec($ch);
+    curl_close($ch);
 }
 
 function wp_epg_build()
@@ -83,9 +94,10 @@ function wp_epg_build()
         $nn = wp_epg_norm($st['name'] ?? '');
         if ($nn !== '' && strlen($nn) >= 2) $byName[$nn][] = $sid;
     }
-    if (!$byId && !$byName) { flock($lock, LOCK_UN); return false; }
+    if (!$byId && !$byName) { flock($lock, LOCK_UN); fclose($lock); return false; }
 
     $result = [];
+    $log = [];
     $from = time() - 3 * 3600;
     $to = time() + 36 * 3600;
     $tmp = wp_cache_dir() . '/epg_src.tmp';
@@ -101,10 +113,12 @@ function wp_epg_build()
         $okDl = !curl_errno($ch) && (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE) === 200;
         curl_close($ch);
         fclose($fp);
-        if (!$okDl || filesize($tmp) < 200) continue;
+        $size = (int)@filesize($tmp);
+        if (!$okDl || $size < 200) { $log[] = [$src, 'no se pudo descargar', 0]; continue; }
+        $before = count($result);
 
         $r = new XMLReader();
-        if (!@$r->open('compress.zlib://' . $tmp, null, LIBXML_NONET | LIBXML_COMPACT | LIBXML_PARSEHUGE)) continue;
+        if (!@$r->open('compress.zlib://' . $tmp, null, LIBXML_NONET | LIBXML_COMPACT | LIBXML_PARSEHUGE)) { $log[] = [$src, 'archivo no válido', 0]; continue; }
         $map = [];     // id xmltv → [stream ids]
         $mapped = false;
         while (@$r->read()) {
@@ -142,13 +156,14 @@ function wp_epg_build()
             }
         }
         $r->close();
+        $log[] = [$src, 'ok (' . round($size / 1048576, 1) . ' MB)', count($result) - $before];
     }
     @unlink($tmp);
     foreach ($result as &$progs) {
         usort($progs, function ($a, $b) { return $a[0] - $b[0]; });
     }
     unset($progs);
-    wp_cache_set(wp_epg_store_key(), ['_t' => time(), 'c' => $result]);
+    wp_cache_set(wp_epg_store_key(), ['_t' => time(), 'c' => $result, 'log' => $log, 'n' => count($byId) + count($byName)]);
     flock($lock, LOCK_UN);
     fclose($lock);
     return count($result);
@@ -161,4 +176,13 @@ function wp_epg_time($v)
     if (!preg_match('/^(\d{14})\s*([+-]\d{4})?/', $v, $m)) return 0;
     $d = DateTime::createFromFormat('YmdHis O', $m[1] . ' ' . ($m[2] ?? '+0000'));
     return $d ? $d->getTimestamp() : 0;
+}
+
+/** Estado de la guía de respaldo (para el diagnóstico). */
+function wp_epg_status()
+{
+    $data = wp_cache_get(wp_epg_store_key(), 86400 * 30, $stale);
+    if ($data === null) $data = $stale;
+    if (!is_array($data)) return null;
+    return ['t' => (int)($data['_t'] ?? 0), 'channels' => count((array)($data['c'] ?? [])), 'log' => (array)($data['log'] ?? [])];
 }

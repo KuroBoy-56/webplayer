@@ -50,8 +50,37 @@
         this.live = !!opts.live;
         this.build();
         this.bind();
-        this.next();
+        this.boot();
     }
+
+    /* antes de abrir el video se revisan sus pistas: si el audio no es compatible (Dolby/DTS) se arranca directo con la conversión,
+       sin abrir una conexión directa que el servidor IPTV podría contar como una pantalla más */
+    NFPlayer.prototype.boot = function () {
+        var self = this, m = this.o.media;
+        if (!m || this.live) { this.next(); return; }
+        var started = false;
+        var go = function (j) {
+            if (started) return;
+            started = true;
+            clearTimeout(tm);
+            if (j && j.ok) {
+                self.info = j;
+                var a = j.audio && j.audio[0];
+                var needV = j.video && !videoOk(j.video);
+                if ((a && !canAudio(a.codec)) || needV) {
+                    self.idx = 0;
+                    if (self.o.resume > 5) self.resumed = true;
+                    self.startTc(self.o.resume > 5 ? self.o.resume : 0, self.prefAudioIndex(), needV);
+                    return;
+                }
+            }
+            self.next();
+        };
+        var tm = setTimeout(function () { go(null); }, m.info ? 0 : 6000);
+        if (m.info) { go(m.info); return; }
+        this.root.classList.add('buffering');
+        fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(go).catch(function () { go(null); });
+    };
 
     NFPlayer.prototype.build = function () {
         var o = this.o, r = this.root;
@@ -160,10 +189,19 @@
             self.volRange.value = v.muted ? 0 : v.volume;
             store('nfp_vol', v.volume);
         });
-        v.addEventListener('ended', function () { self.emit('ended'); self.onEnded(); });
+        v.addEventListener('ended', function () {
+            // en conversión, un final antes de tiempo es un corte de la conexión: se retoma
+            if (self.tc && self.tc.dur && self.T() < self.tc.dur - 20 && (self.tc.retries || 0) < 6) { var r = (self.tc.retries || 0) + 1; self.startTc(self.T(), self.tc.a, self.tc.vt); self.tc.retries = r; return; }
+            self.emit('ended'); self.onEnded();
+        });
+        v.addEventListener('timeupdate', function () { if (self.tc && !self.tc.played && v.currentTime > 2) self.tc.played = true; });
         v.addEventListener('error', function () {
             if (self.hls || self.ts || !v.getAttribute('src')) return;
-            if (self.tc) { self.tc = null; self.o.media = null; self.toastMsg('No se pudo convertir el audio de este contenido'); self.idx--; self.next(); return; }
+            if (self.tc) {
+                // la conversión se cortó a mitad de la película (límite del hosting o del servidor IPTV): se retoma donde iba
+                if (self.tc.played && (self.tc.retries || 0) < 6) { self.tc.retries = (self.tc.retries || 0) + 1; var r = self.tc.retries; self.startTc(self.T(), self.tc.a, self.tc.vt); self.tc.retries = r; return; }
+                self.tc = null; self.o.media = null; self.toastMsg('No se pudo convertir el audio de este contenido'); self.idx--; self.next(); return;
+            }
             // el navegador no abre el archivo (MKV/AVI, audio Dolby, HEVC...): se intenta la conversión del servidor antes de cambiar de formato
             if (self.o.media && !self.live && !self._rescued) { self._rescued = true; self.rescueTc(); return; }
             self.fail('native ' + (v.error ? v.error.code : ''));
@@ -700,10 +738,17 @@
         if (this.hls) { try { this.hls.destroy(); } catch (e) {} this.hls = null; }
         if (this.ts) { try { this.ts.destroy(); } catch (e) {} this.ts = null; }
         clearTimeout(this.loadTimer);
+        var hadDirect = !this.tc && v.getAttribute('src') && v.getAttribute('src').indexOf('media.php') < 0;
         this.tc = { off: t, dur: dur, a: a || 0, vt: !!vt };
         this.root.classList.add('buffering');
-        v.src = m.tc + '&t=' + Math.floor(t) + '&a=' + (a || 0) + (vt ? '&v=1' : '');
-        if (!wasPaused) this.autoplay();
+        var src = m.tc + '&t=' + Math.floor(t) + '&a=' + (a || 0) + (vt ? '&v=1' : ''), tc0 = this.tc;
+        // se cierra primero la conexión directa: muchas cuentas IPTV permiten una sola conexión a la vez
+        try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
+        setTimeout(function () {
+            if (self.tc !== tc0) return;
+            v.src = src;
+            if (!wasPaused) self.autoplay();
+        }, hadDirect ? 1200 : 50);
         // el video copiado arranca en el fotograma clave anterior: se ajusta el tiempo real
         if (t >= 1) {
             var tc = this.tc;
@@ -719,11 +764,15 @@
     NFPlayer.prototype.watchAudio = function () {
         var self = this, v = this.v;
         if (this.live || this.tc || this._aw) return;
-        this._aw = setTimeout(function () {
+        var tries = 0;
+        var check = function () {
             self._aw = null;
-            if (v.paused || v.muted || self.tc || self.hls) return;
+            if (self.tc || self.hls) return;
+            // se espera a que el video avance de verdad (no cuenta si está en pausa o cargando)
+            if (v.paused || v.readyState < 3 || v.currentTime < 3 || (v.muted && !self.info)) { if (++tries < 40) self._aw = setTimeout(check, 3000); return; }
             var silent = (typeof v.webkitAudioDecodedByteCount === 'number' && v.webkitAudioDecodedByteCount === 0) ||
-                (typeof v.mozHasAudio === 'boolean' && !v.mozHasAudio);
+                (typeof v.mozHasAudio === 'boolean' && !v.mozHasAudio) ||
+                (self.info && self.info.audio && self.info.audio[0] && !canAudio(self.info.audio[0].codec));
             if (!silent) return;
             if (self.o.media) {
                 self.toastMsg('Activando audio compatible…');
@@ -731,7 +780,8 @@
             } else {
                 self.showNote('Este contenido tiene audio Dolby (AC3/E-AC3) o DTS, que este navegador no reproduce. Ábrelo en Safari o Microsoft Edge, o usa VLC.');
             }
-        }, 4000);
+        };
+        this._aw = setTimeout(check, 4000);
     };
 
     NFPlayer.prototype.showNote = function (t) {

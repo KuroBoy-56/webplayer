@@ -106,3 +106,14 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 **Otros**
 - Top 10: el número 10 ya se ve completo.
 - Logos de canales: pasan por el servidor con caché, así cargan también los de servidores que bloquean el enlace directo. Si el logo no existe, se muestra el logo del webplayer.
+
+## Actualización 3 de octubre (audio 4K y diagnóstico)
+
+- **Audio 4K:** antes de abrir el video, el reproductor revisa sus pistas. Si el audio es Dolby o DTS, arranca directo con la conversión, sin abrir antes una conexión directa. Muchas cuentas IPTV permiten una sola conexión, y esa conexión extra hacía que el servidor rechazara la conversión, que es la causa más probable de que no se escuchara.
+- La conversión reintenta sola si el servidor IPTV la rechaza al principio. Si se corta a mitad de la película, se retoma donde iba.
+- Ya no importa si la reproducción arrancó en silencio por el bloqueo de sonido automático: el reproductor sigue revisando si el audio realmente suena.
+- **Diagnóstico:** nueva sección "Conversión de audio (ffmpeg)". Muestra si el hosting permite ejecutar programas, si los archivos de `bin/` tienen permiso y qué versión de ffmpeg arranca. El botón **Probar conversión con este contenido** convierte 15 segundos y mide la velocidad. También aparece el último error del reproductor. Se abre desde el menú ⋯ del reproductor: "¿Sin audio o no carga? Diagnóstico".
+- **EPG:** en hostings con LiteSpeed (como Hostinger), la actualización de la guía de respaldo hacía esperar a la página del canal. Ahora corre aparte (`epgjob.php`).
+- Los títulos de la guía del servidor se decodifican aunque vengan con saltos de línea.
+- En el diagnóstico de un canal se ve si el servidor envía guía, si hay guía de respaldo y el resultado de cada fuente pública.
+- **Top 10:** el ancho del 10 se mide con la fuente real del equipo, así el 0 nunca queda debajo de la carátula.

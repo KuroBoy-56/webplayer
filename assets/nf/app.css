@@ -285,7 +285,7 @@ button { font-family: inherit; }
 .nf-top .nf-topitem { flex: 0 0 auto; display: flex; align-items: flex-end; position: relative; padding-left: calc(var(--card-w) * .55); }
 .nf-top .nf-topitem .num {
     position: absolute; left: 0; bottom: -.12em; font-size: calc(var(--card-w) * 1.05); font-weight: 900; line-height: 1;
-    color: var(--nf-bg); -webkit-text-stroke: 3px #595959; letter-spacing: -.08em; font-family: Arial Black, Arial, sans-serif;
+    color: var(--nf-bg); -webkit-text-stroke: 3px #595959; letter-spacing: -.08em; font-family: Arial Black, Arial, sans-serif; white-space: nowrap;
 }
 .nf-top .nf-topitem .nf-card { z-index: 1; }
 /* el 10 ocupa dos cifras: más espacio y cifras juntas para que el 0 no quede bajo la carátula */

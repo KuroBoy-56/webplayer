@@ -25,8 +25,13 @@ function tv_channels($category_id, $username, $fav_file)
 
 function tv_decode($t)
 {
-    $d = base64_decode((string)$t, true);
-    return ($d !== false && base64_encode($d) === $t && mb_check_encoding($d, 'UTF-8')) ? $d : (string)$t;
+    $t = (string)$t;
+    $c = preg_replace('/\s+/', '', $t);
+    if ($c === '' || !preg_match('~^[A-Za-z0-9+/]+={0,2}$~', $c) || strlen($c) % 4 === 1) return $t;
+    $d = base64_decode($c, true);
+    // texto en base64 (lo normal en Xtream); si no decodifica a texto legible, se deja tal cual
+    if ($d === false || !mb_check_encoding($d, 'UTF-8') || preg_match('/[\x00-\x08\x0E-\x1F\x7F]/', $d)) return $t;
+    return trim($d);
 }
 
 function tv_ts($v)

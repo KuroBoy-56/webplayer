@@ -21,15 +21,7 @@ if ($do === 'probe') {
     header('Cache-Control: private, max-age=600');
     $p = wp_probe($url);
     if (!$p) { echo json_encode(['ok' => false]); exit; }
-    foreach ($p['audio'] as &$a) {
-        $a['label'] = trim((wp_lang_name($a['lang']) ?: 'Audio ' . ($a['i'] + 1)) . ($a['title'] !== '' && stripos($a['title'], wp_lang_name($a['lang'])) === false ? ' · ' . $a['title'] : '')
-            . ' (' . strtoupper(str_replace(['eac3', 'truehd'], ['E-AC3', 'TrueHD'], $a['codec'])) . ($a['ch'] >= 6 ? ' 5.1' : '') . ')');
-    }
-    unset($a);
-    foreach ($p['subs'] as &$s) {
-        $s['label'] = trim((wp_lang_name($s['lang']) ?: 'Subtítulo ' . ($s['i'] + 1)) . ($s['title'] !== '' ? ' · ' . $s['title'] : '') . ($s['forced'] ? ' (forzado)' : ''));
-    }
-    unset($s);
+    $p = wp_probe_labels($p);
     $p['ok'] = true;
     echo json_encode($p, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
@@ -101,8 +93,8 @@ $probe = wp_probe($url);
 $vcodec = $probe['video'] ?? '';
 
 $cmd = [$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'];
-// con video copiado se arranca justo en el fotograma clave, así audio, video y subtítulos quedan sincronizados
-if ($t > 0) array_push($cmd, '-ss', (string)($vtc ? $t : wp_media_kf($url, (int)$t)));
+// con video copiado ffmpeg arranca en el fotograma clave anterior a t; el reproductor pide ese segundo exacto (do=kf) para cuadrar el tiempo
+if ($t > 0) array_push($cmd, '-ss', (string)$t);
 array_push($cmd, '-i', $url, '-map', '0:v:0?', '-map', '0:a:' . $a . '?', '-sn', '-dn');
 if ($vtc) {
     // formatos antiguos (XviD, MPEG-2, WMV...): se convierte el video a H.264 hasta 1080p
@@ -120,33 +112,37 @@ if (is_file($pidFile) && function_exists('posix_kill')) {
     if ($old > 1) @posix_kill($old, 15);
 }
 
-$line = 'exec ' . implode(' ', array_map('escapeshellarg', $cmd));
-$proc = @proc_open($line, [1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
-if (!is_resource($proc)) {
-    http_response_code(500);
-    exit;
-}
-$st = proc_get_status($proc);
-@file_put_contents($pidFile, (string)$st['pid']);
-
 header('Content-Type: video/mp4');
 header('Cache-Control: no-store');
-header('X-Accel-Buffering: no');
+header('X-Accel-Buffering: no');           // nginx
+header('X-LiteSpeed-Cache-Control: no-cache'); // LiteSpeed (Hostinger)
 header('Accept-Ranges: none');
+@ini_set('output_buffering', '0');
+@ini_set('implicit_flush', '1');
 
+$line = 'exec ' . implode(' ', array_map('escapeshellarg', $cmd));
 $sent = 0;
-while (!feof($pipes[1])) {
-    $chunk = fread($pipes[1], 65536);
-    if ($chunk === false) break;
-    if ($chunk === '') { usleep(20000); if (!proc_get_status($proc)['running']) break; continue; }
-    echo $chunk;
-    @flush();
-    $sent += strlen($chunk);
-    if (connection_aborted()) break;
+$errFile = wp_cache_dir() . '/ff_' . $who . '.err';
+// hasta 3 intentos: si el servidor IPTV todavía cuenta la conexión anterior del navegador, rechaza la primera
+for ($try = 0; $try < 3 && $sent === 0; $try++) {
+    if ($try > 0) { sleep(2); if (connection_aborted()) break; }
+    $proc = @proc_open($line, [1 => ['pipe', 'w'], 2 => ['file', $errFile, 'w']], $pipes);
+    if (!is_resource($proc)) break;
+    $st = proc_get_status($proc);
+    @file_put_contents($pidFile, (string)$st['pid']);
+    while (!feof($pipes[1])) {
+        $chunk = fread($pipes[1], 65536);
+        if ($chunk === false) break;
+        if ($chunk === '') { usleep(20000); if (!proc_get_status($proc)['running']) { $chunk = (string)stream_get_contents($pipes[1]); if ($chunk === '') break; } else continue; }
+        echo $chunk;
+        @flush();
+        $sent += strlen($chunk);
+        if (connection_aborted()) break;
+    }
+    @fclose($pipes[1]);
+    $st = proc_get_status($proc);
+    if ($st['running']) @proc_terminate($proc, 15);
+    @proc_close($proc);
+    if ((int)@file_get_contents($pidFile) === (int)$st['pid']) @unlink($pidFile);
 }
-@fclose($pipes[1]);
-$st = proc_get_status($proc);
-if ($st['running']) @proc_terminate($proc, 15);
-@proc_close($proc);
-if ((int)@file_get_contents($pidFile) === (int)$st['pid']) @unlink($pidFile);
 if ($sent === 0 && !headers_sent()) http_response_code(502);
