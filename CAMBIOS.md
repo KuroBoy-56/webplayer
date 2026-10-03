@@ -81,3 +81,28 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 
 **Deportes**
 - La página es nueva: partidos de hoy y mañana en tu hora local, sección "En vivo ahora" con marcador, filtros por deporte, buscador y tarjetas por liga. En PC se ve en cuadrícula y en el celular en tarjetas compactas. Los datos vienen de TheSportsDB con 15 minutos de caché. Si no hay datos, se muestran las tablas de antes.
+
+## Actualización 3 de octubre (pulido final)
+
+**Reproducción**
+- El diagnóstico mostró que tu servidor anuncia HTTPS en el puerto 443, pero desde una IP sin certificado válido. Ahora el reproductor solo usa la conexión HTTPS directa cuando el certificado es válido, y si no, va directo al proxy seguro sin esperar 9 segundos. Las películas de tu servidor no existen en formato m3u8, así que el diagnóstico lo muestra como "No disponible en este formato" y el reproductor lo descarta enseguida.
+- **Audio e idiomas:** en el menú de audio aparecen todas las pistas del archivo (Español, Inglés...) y en el de subtítulos los subtítulos internos. Se recuerda el idioma que elijas.
+- **Audio Dolby en 4K:** cuando el navegador no decodifica el audio (AC3, E-AC3, DTS), el servidor lo convierte al vuelo a AAC estéreo sin tocar el video, así el 4K se escucha en Chrome. Si el archivo no abre en el navegador (MKV, HEVC en equipos sin soporte), también se intenta la conversión antes de dar error.
+- Esto necesita **ffmpeg** en el hosting. En `diag.php` aparece si está disponible. Si no lo está, sube los archivos `ffmpeg` y `ffprobe` estáticos para Linux a la carpeta `bin/` con permiso 755. Sin ffmpeg, el reproductor avisa que ese contenido se escucha en Safari, Edge o VLC.
+
+**VLC**
+- En el celular, "Abrir en VLC" abre la app directamente (Android e iPhone).
+- En la PC se descarga una lista `.m3u` que abre VLC, y el botón de descarga lleva a la Microsoft Store en Windows o a videolan.org en Mac y Linux.
+
+**Guía de TV (EPG)**
+- Tu repositorio `KuroBoy-56/epg` es una copia de las herramientas de iptv-org, pero no tiene ningún archivo de guía. Por eso se integraron guías XMLTV públicas (epgshare01 y epg.pw) como respaldo automático.
+- Los canales sin guía del servidor la toman de ahí, emparejados por id o por nombre. Se actualiza sola cada 12 horas en segundo plano.
+- Puedes cambiar las fuentes en `includes/admin/epg_sources.json`, con una lista de URLs.
+
+**Deportes**
+- El botón **TV en vivo** de cada partido busca el canal que lo transmite, primero en las carpetas de eventos (EVENTOS, PPV, etc.), y abre el canal con más coincidencias.
+- Si el partido no es de hoy, muestra "El evento no está en línea". Si ya terminó, avisa que el evento terminó.
+
+**Otros**
+- Top 10: el número 10 ya se ve completo.
+- Logos de canales: pasan por el servidor con caché, así cargan también los de servidores que bloquean el enlace directo. Si el logo no existe, se muestra el logo del webplayer.

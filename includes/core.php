@@ -14,6 +14,7 @@ define('WP_CORE_LOADED', true);
 define('WP_ROOT', dirname(__DIR__));
 define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36');
 define('WP_NOIMG', 'assets/nf/noposter.svg');
+define('WP_LOGO', 'assets/img/Logo.png');
 
 // true = todo el video pasa por el servidor (oculta la DNS al navegador, consume más ancho de banda)
 if (!defined('WP_FORCE_PROXY')) {
@@ -395,7 +396,7 @@ function wp_sign($url)
  */
 function wp_proxy_url($url, $script = 'proxy.php')
 {
-    if ($script === 'proxy.php') {
+    if ($script !== 'img.php') {
         $exp = (int)(ceil((time() + WP_SIGN_TTL) / 600) * 600); // redondeado: el navegador puede reutilizar caché
         return $script . '?u=' . wp_b64u_enc($url) . '&e=' . $exp . '&s=' . wp_sign($url . '|' . $exp);
     }
@@ -433,7 +434,21 @@ function wp_server_https_base()
     $si = is_array($info['server_info'] ?? null) ? $info['server_info'] : [];
     $hp = (int)($si['https_port'] ?? 0);
     if ($hp <= 0) return $memo = null;
-    return $memo = 'https://' . $p['host'] . ($hp === 443 ? '' : ':' . $hp);
+    $base = 'https://' . $p['host'] . ($hp === 443 ? '' : ':' . $hp);
+    // Sólo sirve si el navegador acepta el certificado: una IP o un certificado vencido harían fallar el video.
+    if (filter_var($p['host'], FILTER_VALIDATE_IP)) return $memo = null;
+    $ck = 'httpsok|' . $base;
+    $ok = wp_cache_get($ck, 21600);
+    if ($ok === null) {
+        $ch = curl_init($base . '/player_api.php');
+        curl_setopt_array($ch, [CURLOPT_NOBODY => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 6,
+            CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2, CURLOPT_USERAGENT => WP_UA]);
+        curl_exec($ch);
+        $ok = curl_errno($ch) === 0 && (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE) > 0 ? 1 : 0;
+        curl_close($ch);
+        wp_cache_set($ck, $ok);
+    }
+    return $memo = ($ok ? $base : null);
 }
 
 /**
@@ -471,6 +486,18 @@ function wp_img($url, $fallback = WP_NOIMG)
         return wp_proxy_url($url, 'img.php');
     }
     return $url;
+}
+
+/**
+ * Logo de canal: siempre pasa por img.php (caché 7 días). Así cargan también los logos
+ * de servidores que bloquean el enlace directo, con certificado vencido o en http.
+ * Si el logo no existe o falla, se muestra el logo del webplayer.
+ */
+function wp_logo($url)
+{
+    $url = trim((string)$url);
+    if ($url === '' || !preg_match('~^https?://[^/\s]+~i', $url)) return WP_LOGO;
+    return wp_proxy_url($url, 'img.php') . '&fb=1';
 }
 
 /* ------------------------------------------------------------------ */
@@ -961,4 +988,102 @@ function wp_tmdb_posters(array $items)
         }
     }
     return $out;
+}
+
+
+/* ------------------------------------------------------------------ */
+/* FFmpeg opcional: audio Dolby (AC3/E-AC3/DTS), pistas y subtítulos   */
+/* ------------------------------------------------------------------ */
+
+/** Ruta de un binario (ffmpeg|ffprobe) o null. Se puede subir un ffmpeg estático a la carpeta bin/. */
+function wp_bin($name)
+{
+    static $memo = [];
+    if (array_key_exists($name, $memo)) return $memo[$name];
+    $disabled = array_map('trim', explode(',', (string)ini_get('disable_functions')));
+    if (!function_exists('proc_open') || in_array('proc_open', $disabled, true)) return $memo[$name] = null;
+    $const = 'WP_' . strtoupper($name);
+    $cands = [];
+    if (defined($const)) $cands[] = constant($const);
+    $cands[] = WP_ROOT . '/bin/' . $name;
+    $cands[] = '/usr/bin/' . $name;
+    $cands[] = '/usr/local/bin/' . $name;
+    $cands[] = '/opt/homebrew/bin/' . $name;
+    foreach ($cands as $c) {
+        if ($c && @is_file($c) && @is_executable($c)) return $memo[$name] = $c;
+    }
+    return $memo[$name] = null;
+}
+
+/** Información de pistas (ffprobe) con caché de 7 días. */
+function wp_probe($url)
+{
+    $ck = 'probe|' . md5($url);
+    $hit = wp_cache_get($ck, 604800);
+    if (is_array($hit)) return $hit;
+    $bin = wp_bin('ffprobe');
+    if (!$bin) return null;
+    $cmd = [$bin, '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', '15000000', '-show_entries',
+        'format=duration:stream=index,codec_type,codec_name,channels,profile:stream_tags=language,title:stream_disposition=default,forced',
+        '-of', 'json', $url];
+    $out = wp_run($cmd, 25);
+    $j = $out ? json_decode($out, true) : null;
+    if (!is_array($j)) return null;
+    $res = ['dur' => (float)($j['format']['duration'] ?? 0), 'video' => '', 'audio' => [], 'subs' => []];
+    $ai = 0; $si = 0;
+    foreach ($j['streams'] ?? [] as $st) {
+        $type = $st['codec_type'] ?? '';
+        $lang = strtolower((string)($st['tags']['language'] ?? ''));
+        $title = (string)($st['tags']['title'] ?? '');
+        if ($type === 'video' && $res['video'] === '' && ($st['codec_name'] ?? '') !== 'mjpeg' && ($st['codec_name'] ?? '') !== 'png') {
+            $res['video'] = (string)($st['codec_name'] ?? '');
+        } elseif ($type === 'audio') {
+            $res['audio'][] = ['i' => $ai++, 'codec' => (string)($st['codec_name'] ?? ''), 'ch' => (int)($st['channels'] ?? 0),
+                'lang' => $lang, 'title' => $title, 'def' => !empty($st['disposition']['default'])];
+        } elseif ($type === 'subtitle') {
+            $c = (string)($st['codec_name'] ?? '');
+            $res['subs'][] = ['i' => $si++, 'codec' => $c, 'lang' => $lang, 'title' => $title, 'forced' => !empty($st['disposition']['forced']),
+                'text' => in_array($c, ['subrip', 'ass', 'ssa', 'mov_text', 'webvtt', 'text', 'srt'], true)];
+        }
+    }
+    wp_cache_set($ck, $res);
+    return $res;
+}
+
+/** Ejecuta un comando sin shell y devuelve stdout (o null). */
+function wp_run(array $cmd, $timeout = 20)
+{
+    $line = implode(' ', array_map('escapeshellarg', $cmd));
+    $p = @proc_open($line, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    if (!is_resource($p)) return null;
+    stream_set_blocking($pipes[1], false);
+    stream_set_blocking($pipes[2], false);
+    $out = '';
+    $end = microtime(true) + $timeout;
+    while (microtime(true) < $end) {
+        $r = [$pipes[1], $pipes[2]]; $w = null; $x = null;
+        if (@stream_select($r, $w, $x, 1) === false) break;
+        foreach ($r as $fh) {
+            $chunk = fread($fh, 65536);
+            if ($fh === $pipes[1] && $chunk !== false) $out .= $chunk;
+        }
+        $st = proc_get_status($p);
+        if (!$st['running']) { $out .= stream_get_contents($pipes[1]); break; }
+    }
+    @fclose($pipes[1]); @fclose($pipes[2]);
+    $st = proc_get_status($p);
+    if ($st['running']) @proc_terminate($p, 9);
+    @proc_close($p);
+    return $out !== '' ? $out : null;
+}
+
+/** Nombre legible de idioma ISO 639. */
+function wp_lang_name($code)
+{
+    $m = ['spa' => 'Español', 'es' => 'Español', 'esp' => 'Español', 'lat' => 'Español latino', 'eng' => 'Inglés', 'en' => 'Inglés',
+        'por' => 'Portugués', 'pt' => 'Portugués', 'fre' => 'Francés', 'fra' => 'Francés', 'fr' => 'Francés', 'ger' => 'Alemán', 'deu' => 'Alemán',
+        'de' => 'Alemán', 'ita' => 'Italiano', 'it' => 'Italiano', 'jpn' => 'Japonés', 'ja' => 'Japonés', 'kor' => 'Coreano', 'ko' => 'Coreano',
+        'chi' => 'Chino', 'zho' => 'Chino', 'rus' => 'Ruso', 'ara' => 'Árabe', 'hin' => 'Hindi', 'tur' => 'Turco', 'pol' => 'Polaco', 'dut' => 'Neerlandés', 'nld' => 'Neerlandés'];
+    $c = strtolower((string)$code);
+    return $m[$c] ?? ($c !== '' && $c !== 'und' ? strtoupper($c) : '');
 }

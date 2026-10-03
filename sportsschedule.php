@@ -2,6 +2,97 @@
 include "session.php";
 include "config.php";
 
+/* ---- "TV en vivo": busca el canal que transmite el partido ---- */
+function sp_tokens($s)
+{
+    $s = preg_replace('/[^a-z0-9]+/', ' ', wp_norm($s));
+    $stop = ['fc', 'cf', 'sc', 'ac', 'cd', 'ca', 'club', 'de', 'del', 'la', 'el', 'los', 'las', 'the', 'and', 'vs', 'v', 'city', 'united', 'real', 'sporting', 'atletico', 'deportivo', 'union', 'women', 'femenil', 'w', 'u20', 'u21', 'u23', 'sub'];
+    $out = [];
+    foreach (explode(' ', trim($s)) as $t) if (strlen($t) >= 3 && !in_array($t, $stop, true)) $out[] = $t;
+    return $out;
+}
+
+/** nombres en inglés de TheSportsDB → como suelen escribirse en los canales en español */
+function sp_alias($name)
+{
+    static $map = ['spain' => 'espana', 'germany' => 'alemania', 'england' => 'inglaterra', 'france' => 'francia', 'brazil' => 'brasil', 'italy' => 'italia',
+        'netherlands' => 'holanda', 'united states' => 'estados unidos', 'usa' => 'estados unidos', 'mexico' => 'mexico', 'argentina' => 'argentina', 'portugal' => 'portugal',
+        'colombia' => 'colombia', 'belgium' => 'belgica', 'switzerland' => 'suiza', 'croatia' => 'croacia', 'japan' => 'japon', 'south korea' => 'corea', 'peru' => 'peru',
+        'bayern munich' => 'bayern', 'inter milan' => 'inter', 'atletico madrid' => 'atletico madrid', 'paris sg' => 'psg', 'paris saint germain' => 'psg',
+        'manchester united' => 'man united', 'manchester city' => 'man city', 'tottenham hotspur' => 'tottenham', 'wolverhampton wanderers' => 'wolves',
+        'america' => 'america', 'club america' => 'america', 'guadalajara' => 'chivas', 'unam' => 'pumas', 'uanl' => 'tigres'];
+    $n = trim(preg_replace('/[^a-z0-9]+/', ' ', wp_norm($name)));
+    return isset($map[$n]) ? [$n, $map[$n]] : [$n];
+}
+
+/** 0 = no aparece, 1 = coincide una palabra distintiva, 2 = nombre completo */
+function sp_team_score($chan, $team)
+{
+    if (trim($team) === '') return 0;
+    $best = 0;
+    foreach (sp_alias($team) as $n) {
+        if ($n !== '' && strlen($n) >= 3 && preg_match('/(^| )' . preg_quote($n, '/') . '( |$)/', $chan)) return 2;
+        foreach (sp_tokens($n) as $t) if (strlen($t) >= 4 && preg_match('/(^| )' . preg_quote($t, '/') . '( |$)/', $chan)) $best = 1;
+    }
+    return $best;
+}
+
+function sp_find_channel($h, $a, $lg, $ev)
+{
+    $cats = wp_category_names('live');
+    $eventCats = [];
+    foreach ($cats as $cid => $cn) if (preg_match('/event|ppv|pay per view|deportes? en vivo|live sport|partidos? (de )?hoy/i', wp_norm($cn))) $eventCats[$cid] = $cn;
+    $streams = xt_get('get_live_streams', [], 1800, 30);
+    $leagueToks = sp_tokens($lg);
+    $single = sp_tokens($h === '' && $a === '' ? $ev : '');
+    $best = null;
+    foreach ((array)$streams as $st) {
+        if (!is_array($st) || empty($st['stream_id'])) continue;
+        $cid = (string)($st['category_id'] ?? '');
+        $isEv = isset($eventCats[$cid]);
+        $chan = trim(preg_replace('/[^a-z0-9]+/', ' ', wp_norm($st['name'] ?? '')));
+        if ($h !== '' || $a !== '') {
+            $hs = sp_team_score($chan, $h);
+            $as = sp_team_score($chan, $a);
+            if (!$hs && !$as) continue;
+            // fuera de las carpetas de eventos solo cuenta si aparecen los dos equipos (evita "Real Madrid TV")
+            if (!$isEv && !($hs && $as)) continue;
+            // "Real Madrid vs Barcelona" no sirve para "Real Madrid vs Getafe"
+            if (!($hs && $as) && preg_match('/ (vs|v|x) /', ' ' . $chan . ' ')) continue;
+            $score = $hs * 10 + $as * 10 + ($hs && $as ? 15 : 0);
+        } else {
+            $hit = 0;
+            foreach ($single as $t) if (strlen($t) >= 3 && preg_match('/(^| )' . preg_quote($t, '/') . '( |$)/', $chan)) $hit++;
+            if (!$hit || (!$isEv && $hit < 2)) continue;
+            $score = $hit * 8;
+        }
+        foreach ($leagueToks as $t) if (preg_match('/(^| )' . preg_quote($t, '/') . '( |$)/', $chan)) { $score += 3; break; }
+        if ($isEv) $score += 6;
+        if (!$best || $score > $best['score']) $best = ['score' => $score, 'id' => (string)$st['stream_id'], 'cat' => $cid, 'name' => (string)($st['name'] ?? '')];
+    }
+    if ($best) return ['ok' => true, 'url' => 'tvguide.php?id=' . rawurlencode($best['id']) . '&slug=live&category_id=' . rawurlencode($best['cat']), 'name' => $best['name']];
+    if ($eventCats) {
+        $cid = (string)array_key_first_compat($eventCats);
+        return ['ok' => true, 'partial' => true, 'url' => 'tvguide.php?category_id=' . rawurlencode($cid), 'name' => $eventCats[$cid]];
+    }
+    return ['ok' => false];
+}
+
+function array_key_first_compat(array $a)
+{
+    foreach ($a as $k => $_) return $k;
+    return null;
+}
+
+if (($_GET['ajax'] ?? '') === 'channel') {
+    wp_session_read_close();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: private, max-age=300');
+    $g = function ($k) { return mb_substr(trim((string)($_GET[$k] ?? '')), 0, 120, 'UTF-8'); };
+    echo json_encode(sp_find_channel($g('h'), $g('a'), $g('lg'), $g('ev')), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 /* Respaldo: extrae tablas limpias de la web de TheSportsDB */
 function fetchAndProcessContent($target_url) {
     $content = wp_http_get($target_url, 12);
@@ -160,6 +251,7 @@ include "header.php";
 .sp-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .sp-head h1 { margin: 0; font-size: clamp(28px, 3.4vw, 44px); font-weight: 800; letter-spacing: -.5px; }
 .sp-head p { margin: 4px 0 0; color: var(--sp-mute); font-size: 15px; }
+.sp-livecount[hidden], .sp-livewrap[hidden] { display: none !important; }
 .sp-livecount { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: rgba(229,9,20,.14); color: #fff; font-weight: 700; font-size: 14px; }
 .sp-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sp-live); box-shadow: 0 0 0 0 rgba(229,9,20,.7); animation: spPulse 1.6s infinite; flex: none; }
 @keyframes spPulse { 70% { box-shadow: 0 0 0 9px rgba(229,9,20,0); } 100% { box-shadow: 0 0 0 0 rgba(229,9,20,0); } }
@@ -341,7 +433,7 @@ include "header.php";
         return '<article class="sp-card' + (st === 'live' ? ' live' : '') + '">' +
             '<div class="sp-top"><span class="lg">' + esc(m.i + ' ' + (e.lg || m.n)) + '</span>' + pill + '</div>' + mid +
             '<div class="sp-foot"><span class="v">' + esc(e.v || (st === 'soon' ? fmtT.format(e.t) : '')) + '</span>' +
-            '<a href="tvguide.php">TV en vivo</a></div></article>';
+            '<a href="tvguide.php" class="sp-tv" data-i="' + EV.indexOf(e) + '">TV en vivo</a></div></article>';
     }
 
     var today = new Date(), tomorrow = new Date(Date.now() + 86400000);
@@ -405,6 +497,27 @@ include "header.php";
     });
     var qi = document.getElementById('spQ'), qt;
     qi.addEventListener('input', function () { clearTimeout(qt); qt = setTimeout(function () { state.q = qi.value.trim(); render(); }, 150); });
+
+
+    // TV en vivo: abre el canal de eventos que transmite el partido
+    document.addEventListener('click', function (ev) {
+        var b = ev.target.closest('.sp-tv'); if (!b) return;
+        ev.preventDefault();
+        var e = EV[+b.getAttribute('data-i')]; if (!e) return;
+        var st = status(e);
+        if (e.dk !== keys[0] || st === 'fin' || st === 'pp') { NF.toast(st === 'fin' && e.dk === keys[0] ? 'Este evento ya terminó' : 'El evento no está en línea'); return; }
+        if (b.classList.contains('busy')) return;
+        b.classList.add('busy'); var txt = b.textContent; b.textContent = 'Buscando canal…';
+        fetch('sportsschedule.php?ajax=channel&h=' + encodeURIComponent(e.h || '') + '&a=' + encodeURIComponent(e.a || '') + '&lg=' + encodeURIComponent(e.lg || '') + '&ev=' + encodeURIComponent(e.ev || ''), { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (!j.ok) { NF.toast('No encontramos un canal para este evento'); return; }
+                if (j.partial) { NF.toast('Aún no aparece el canal exacto, te mostramos ' + j.name); setTimeout(function () { location.href = j.url; }, 900); return; }
+                location.href = j.url;
+            })
+            .catch(function () { location.href = 'tvguide.php'; })
+            .then(function () { b.classList.remove('busy'); b.textContent = txt; });
+    });
 
     // si hoy no queda nada, se abre mañana
     if (!EV.some(function (e) { return e.dk === keys[0]; })) document.querySelector('.sp-days [data-day="1"]').click();

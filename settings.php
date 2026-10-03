@@ -56,8 +56,8 @@ function opt($name, $value, $label, $desc, $current)
                 <h3><i class="fa fa-list-alt"></i> Guía de programas (EPG)</h3>
                 <p>Origen de la guía de programación de los canales.</p>
                 <div class="st-opts">
-                    <?php echo opt('epg_source', 'server', 'Servidor', 'Guía que envía tu proveedor', $epg_source); ?>
-                    <?php echo opt('epg_source', 'custom', 'Personalizada (GitHub)', 'Guía alternativa actualizada a diario', $epg_source); ?>
+                    <?php echo opt('epg_source', 'server', 'Servidor primero', 'Guía de tu proveedor; si un canal no tiene, se usa la guía pública', $epg_source); ?>
+                    <?php echo opt('epg_source', 'custom', 'Guía pública primero', 'Usa primero las guías públicas (México, Colombia, Argentina, Chile, Perú, España y EE. UU.)', $epg_source); ?>
                 </div>
             </div>
             <div class="st-card">

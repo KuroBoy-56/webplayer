@@ -97,3 +97,6 @@
 @keyframes nfpPulse { 50% { box-shadow: 0 0 0 8px rgba(255,255,255,.12); } }
 .nfp.needtap .nfp-mid { display: flex; }
 @media (max-width: 700px) { .nfp-unmute { bottom: auto; top: 70px; right: 12px; padding: 9px 13px; font-size: 14px; } }
+.nfp-note { position: absolute; z-index: 7; left: 50%; top: 76px; transform: translateX(-50%); width: min(92%, 560px); display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 6px; background: rgba(20,20,20,.92); border-left: 4px solid var(--nf-red, #e50914); color: #eee; font-size: 14px; line-height: 1.45; }
+.nfp-note span { flex: 1; min-width: 0; }
+.nfp-note button { flex: none; background: none; border: 0; color: #aaa; font-size: 22px; line-height: 1; cursor: pointer; }

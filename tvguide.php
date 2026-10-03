@@ -36,58 +36,23 @@ function tv_ts($v)
     return $t ?: 0;
 }
 
-/** Guía de programas (servidor o EPG personalizada de GitHub). Devuelve [ ['s'=>epoch,'e'=>epoch,'t'=>título], ... ] */
+/** Guía de programas: la del servidor IPTV y, si no tiene, la guía pública de respaldo. Devuelve [ ['s','e','t','d'], ... ] */
 function tv_epg($id, $name)
 {
-    $epg_source = $_COOKIE['epg_source'] ?? 'server';
-    $out = [];
-    if ($epg_source === 'custom') {
-        $custom_epg_file = __DIR__ . '/api/custom_epg.json';
-        if (!is_file($custom_epg_file) || (time() - filemtime($custom_epg_file) > 86400)) {
-            $xml_content = wp_http_get("https://raw.githubusercontent.com/KuroBoy-56/epg/main/guide.xml", 20)
-                ?: wp_http_get("https://raw.githubusercontent.com/KuroBoy-56/epg/main/epg.xml", 20);
-            $xml = $xml_content ? @simplexml_load_string($xml_content) : null;
-            if ($xml) {
-                $epg_array = [];
-                $channel_map = [];
-                foreach ($xml->channel as $ch) {
-                    $channel_map[(string)$ch['id']] = strtolower(trim((string)$ch->{'display-name'}));
-                }
-                foreach ($xml->programme as $prog) {
-                    $c_id = (string)$prog['channel'];
-                    if (!isset($channel_map[$c_id])) continue;
-                    $sd = DateTime::createFromFormat('YmdHis O', substr((string)$prog['start'], 0, 20)) ?: DateTime::createFromFormat('YmdHis', substr((string)$prog['start'], 0, 14));
-                    $ed = DateTime::createFromFormat('YmdHis O', substr((string)$prog['stop'], 0, 20)) ?: DateTime::createFromFormat('YmdHis', substr((string)$prog['stop'], 0, 14));
-                    $epg_array[$channel_map[$c_id]][] = [
-                        'start' => $sd ? $sd->getTimestamp() : time(),
-                        'end' => $ed ? $ed->getTimestamp() : time(),
-                        'title' => base64_encode((string)$prog->title),
-                    ];
-                }
-                if (!is_dir(__DIR__ . '/api')) @mkdir(__DIR__ . '/api', 0775, true);
-                @file_put_contents($custom_epg_file, json_encode($epg_array));
-            }
-        }
-        $cached = wp_json_file($custom_epg_file);
-        $search = strtolower(trim($name));
-        $found = $cached[$search] ?? null;
-        if (!$found && $search !== '') {
-            foreach ($cached as $cn => $progs) {
-                if ($cn !== '' && (strpos($search, $cn) !== false || strpos($cn, $search) !== false)) { $found = $progs; break; }
-            }
-        }
-        $now = time();
-        foreach ((array)$found as $p) {
-            if ($p['end'] > $now - 3600 && $p['start'] < $now + 86400) $out[] = ['s' => (int)$p['start'], 'e' => (int)$p['end'], 't' => tv_decode($p['title'])];
-        }
-    } else {
+    require_once __DIR__ . '/includes/epg.php';
+    $prefer_alt = ($_COOKIE['epg_source'] ?? 'server') === 'custom';
+    $server = function () use ($id) {
+        $out = [];
         $epg = xt_get('get_short_epg', ['stream_id' => $id, 'limit' => 12], 600, 8);
         foreach (($epg['epg_listings'] ?? []) as $p) {
             $s = isset($p['start_timestamp']) ? (int)$p['start_timestamp'] : tv_ts($p['start'] ?? 0);
             $e = isset($p['stop_timestamp']) ? (int)$p['stop_timestamp'] : tv_ts($p['end'] ?? ($p['stop'] ?? 0));
-            $out[] = ['s' => $s, 'e' => $e, 't' => tv_decode($p['title'] ?? ''), 'd' => tv_decode($p['description'] ?? '')];
+            if ($e > time() - 1800) $out[] = ['s' => $s, 'e' => $e, 't' => tv_decode($p['title'] ?? ''), 'd' => tv_decode($p['description'] ?? '')];
         }
-    }
+        return $out;
+    };
+    $out = $prefer_alt ? wp_epg_for($id) : $server();
+    if (!$out) $out = $prefer_alt ? $server() : wp_epg_for($id);
     usort($out, function ($a, $b) { return $a['s'] - $b['s']; });
     return array_slice($out, 0, 15);
 }
@@ -113,10 +78,12 @@ function tv_channel_data($id, $username, $fav_file)
     return [
         'id' => (string)$id,
         'name' => $name,
-        'logo' => wp_img($info['stream_icon'] ?? '', 'assets/img/Logo.png'),
+        'logo' => wp_logo($info['stream_icon'] ?? ''),
         'poster' => (string)($info['stream_icon'] ?? ''),
         'sources' => $sources,
         'vlc' => 'vlc://' . wp_stream_url('live', $id, $pref),
+        'stream' => wp_stream_url('live', $id, $pref),
+        'vlcPc' => 'playlist.php?' . http_build_query(['id' => (string)$id, 'slug' => 'live', 'ext' => $pref, 'title' => $name]),
         'diag' => 'diag.php?slug=live&id=' . rawurlencode((string)$id),
         'fav' => isset($fav[$username][(string)$id]),
         'epg' => tv_epg($id, $name),
@@ -130,7 +97,7 @@ if (isset($_GET['ajax'])) {
         $out = [];
         foreach (tv_channels((string)($_GET['category_id'] ?? ''), $username, $fav_file) as $c) {
             if (!is_array($c)) continue;
-            $out[] = ['id' => (string)$c['stream_id'], 'n' => (string)$c['name'], 'i' => wp_img($c['stream_icon'] ?? '', 'assets/img/Logo.png')];
+            $out[] = ['id' => (string)$c['stream_id'], 'n' => (string)$c['name'], 'i' => wp_logo($c['stream_icon'] ?? '')];
         }
         echo json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     } elseif ($_GET['ajax'] === 'channel') {
@@ -142,7 +109,7 @@ if (isset($_GET['ajax'])) {
 /* compatibilidad: ?category_id=X devolvía el HTML de canales */
 if (isset($_GET['category_id']) && !isset($_GET['slug']) && isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
     foreach (tv_channels((string)$_GET['category_id'], $username, $fav_file) as $c) {
-        echo "<div class='channel-item' data-id='" . e($c['stream_id']) . "'><img src='" . e(wp_img($c['stream_icon'] ?? '', 'assets/img/Logo.png')) . "' alt=''><p>" . e($c['name']) . "</p></div>";
+        echo "<div class='channel-item' data-id='" . e($c['stream_id']) . "'><img src='" . e(wp_logo($c['stream_icon'] ?? '')) . "' alt=''><p>" . e($c['name']) . "</p></div>";
     }
     exit;
 }
@@ -240,7 +207,7 @@ include "header.php";
             <div class="ph"><?php echo wp_icon('tv'); ?><span>Selecciona un canal para comenzar a ver</span></div>
         </div>
         <div class="tv-info" id="tvInfo" style="display:none">
-            <img id="tvLogo" src="" alt="" onerror="this.src='assets/img/Logo.png'">
+            <img id="tvLogo" src="" alt="" onerror="this.onerror=null;this.src='assets/img/Logo.png'">
             <h2 id="tvName"></h2>
             <button type="button" class="nf-btn-circle" id="toggleLiveFav" title="Favorito"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 17.3 18.2 21l-1.6-7L22 9.2l-7.2-.6L12 2 9.2 8.6 2 9.2 7.4 14l-1.6 7z"/></svg></button>
         </div>
@@ -308,10 +275,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (state.cat === 'favorites') setTimeout(function () { loadChannels('favorites'); }, 400);
         };
         renderEpg(data.epg);
-        if (isMobile && useVLC) { window.location.href = data.vlc; return; }
+        if (isMobile && useVLC) { var vl = NFPlayer.vlc({ streamUrl: data.stream }); if (vl) window.location.href = vl.href; return; }
         var box = document.getElementById('tvPlayer');
         if (state.player) state.player.destroy();
-        state.player = new NFPlayer(box, { live: true, title: data.name, sources: data.sources, vlcUrl: data.vlc, diagUrl: data.diag });
+        state.player = new NFPlayer(box, { live: true, title: data.name, sources: data.sources, vlcUrl: data.vlc, streamUrl: data.stream, vlcPc: data.vlcPc, diagUrl: data.diag });
     }
 
     function openChannel(id, push) {

@@ -118,12 +118,18 @@ $exts = array_values(array_unique($exts));
 
 $sources = wp_play_sources($kind, $id, $exts);
 
+/* Motor multimedia (ffmpeg en el hosting): audio Dolby, pistas de idioma y subtítulos internos */
+$media_cfg = null;
+if (wp_bin('ffprobe') && wp_bin('ffmpeg')) {
+    $mb = wp_proxy_url($raw_url, 'media.php');
+    $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'sub' => $mb . '&do=sub'];
+}
+
 $back_url = ($slug == 'movie') ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get;
 $download_url = '?' . http_build_query(array_merge($_GET, ['action' => 'download_file']));
 $extra = [['label' => 'Descargar contenido', 'href' => $download_url]];
 if ($has_prev) $extra[] = ['label' => 'Capítulo anterior', 'href' => $prev_url];
 if ($slug === 'series') $extra[] = ['label' => 'Ver episodios', 'href' => $back_url . '#episodios'];
-$extra[] = ['label' => 'Abrir en VLC', 'href' => 'vlc://' . $raw_url];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -166,7 +172,10 @@ $extra[] = ['label' => 'Abrir en VLC', 'href' => 'vlc://' . $raw_url];
             'backUrl' => $back_url,
             'nextUrl' => $has_next ? $next_url : '',
             'vlcUrl' => 'vlc://' . $raw_url,
+            'streamUrl' => $raw_url,
+            'vlcPc' => 'playlist.php?' . http_build_query(['id' => $id, 'slug' => $slug, 'ext' => $ext, 'title' => trim($content_name . ' ' . $episode_label)]),
             'downloadUrl' => $download_url,
+            'media' => $media_cfg,
             'diagUrl' => 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext),
             'extraMenu' => $extra,
             'id' => $id,
@@ -178,7 +187,8 @@ $extra[] = ['label' => 'Abrir en VLC', 'href' => 'vlc://' . $raw_url];
         var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
         if (isMobile && cfg.useVlc) {
             document.getElementById('vlc-overlay').style.display = 'flex';
-            window.location.href = cfg.vlcUrl;
+            var vl = NFPlayer.vlc(cfg);
+            if (vl) { document.querySelector('#vlc-overlay a.nf-btn').href = vl.href; window.location.href = vl.href; }
             return;
         }
 
@@ -207,8 +217,8 @@ $extra[] = ['label' => 'Abrir en VLC', 'href' => 'vlc://' . $raw_url];
         cfg.onBeforeNext = function (v) { save(v, true); };
 
         var player = new NFPlayer(document.getElementById('player-container'), cfg);
-        window.addEventListener('pagehide', function () { save(player.v, true); });
-        document.addEventListener('visibilitychange', function () { if (document.hidden) save(player.v, true); });
+        window.addEventListener('pagehide', function () { save(player.timeInfo(), true); });
+        document.addEventListener('visibilitychange', function () { if (document.hidden) save(player.timeInfo(), true); });
     });
     </script>
 </body>

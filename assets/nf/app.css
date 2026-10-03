@@ -288,6 +288,9 @@ button { font-family: inherit; }
     color: var(--nf-bg); -webkit-text-stroke: 3px #595959; letter-spacing: -.08em; font-family: Arial Black, Arial, sans-serif;
 }
 .nf-top .nf-topitem .nf-card { z-index: 1; }
+/* el 10 ocupa dos cifras: más espacio y cifras juntas para que el 0 no quede bajo la carátula */
+.nf-top .nf-topitem.ten { padding-left: calc(var(--card-w) * 1.2); }
+.nf-top .nf-topitem.ten .num { letter-spacing: -.02em; font-size: calc(var(--card-w) * .9); }
 
 /* ---------- REJILLA ---------- */
 .nf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 8px; }
@@ -510,6 +513,7 @@ button:disabled { cursor: progress; opacity: .85; }
     .nf-grid { grid-template-columns: repeat(3, 1fr); gap: 8px 6px; }
     .nf-top .nf-topitem { padding-left: calc(var(--card-w) * .5); }
     .nf-top .nf-topitem .num { -webkit-text-stroke: 2px #595959; }
+    .nf-top .nf-topitem.ten { padding-left: calc(var(--card-w) * 1.12); }
 
     .nf-page { padding-top: calc(var(--nf-header) + 54px); }
     .nf-browse-head { padding-top: calc(var(--nf-header) + 56px); }

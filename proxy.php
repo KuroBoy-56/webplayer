@@ -161,6 +161,11 @@ $final = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $url;
 curl_close($ch);
 
 if ($state['mode'] === 'playlist') {
+    // el servidor respondió una página (no una lista HLS): se avisa al reproductor para que pruebe otro formato
+    if (strncmp(ltrim($state['buf']), '#EXTM3U', 7) !== 0) {
+        http_response_code(415);
+        exit;
+    }
     header('Content-Type: application/vnd.apple.mpegurl');
     header('Cache-Control: no-store');
     echo wp_rewrite_m3u8($state['buf'], $final);

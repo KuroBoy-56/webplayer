@@ -134,7 +134,7 @@
                     return;
                 }
                 if (slider.getAttribute('data-variant') === 'top') {
-                    slider.innerHTML = items.map(function (c, i) { return '<div class="nf-topitem"><span class="num">' + (i + 1) + '</span>' + NF.card(c) + '</div>'; }).join('');
+                    slider.innerHTML = items.map(function (c, i) { return '<div class="nf-topitem' + (i === 9 ? ' ten' : '') + '"><span class="num">' + (i + 1) + '</span>' + NF.card(c) + '</div>'; }).join('');
                 } else {
                     slider.innerHTML = items.map(function (c) { return NF.card(c); }).join('');
                 }

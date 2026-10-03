@@ -40,6 +40,7 @@ function diag_probe($url)
     $r['len'] = $hdr['content-range'] ?? ($hdr['content-length'] ?? '');
     $r['range'] = $r['code'] === 206 ? 'sí' : 'no';
     if (is_string($body) && strncmp(ltrim($body), '#EXTM3U', 7) === 0) $r['type'] .= ' (lista HLS)';
+    elseif (stripos($r['type'], 'text/html') !== false) { $r['type'] = 'No disponible en este formato'; $r['bad'] = true; }
     return $r;
 }
 
@@ -58,7 +59,7 @@ include "header.php";
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums">
         <tr style="text-align:left;color:#aaa;border-bottom:1px solid #333"><th style="padding:8px">Formato</th><th>Código</th><th>Tipo</th><th>Tamaño</th><th>Saltos (Range)</th><th>Servidor final</th><th>Tiempo</th></tr>
-        <?php foreach ($rows as $row): $r = $row['r']; $ok = $r['code'] >= 200 && $r['code'] < 300; ?>
+        <?php foreach ($rows as $row): $r = $row['r']; $ok = $r['code'] >= 200 && $r['code'] < 300 && empty($r['bad']); ?>
         <tr style="border-bottom:1px solid #222">
             <td style="padding:8px"><b>.<?php echo e($row['ext']); ?></b></td>
             <td style="color:<?php echo $ok ? '#46d369' : '#e87c03'; ?>"><?php echo $r['code'] ?: '—'; ?><?php echo $r['err'] ? ' · ' . e($r['err']) : ''; ?></td>
@@ -73,8 +74,20 @@ include "header.php";
     </div>
     <p style="color:#aaa;margin-top:18px;font-size:14px">
         Página en HTTPS: <b><?php echo wp_is_https() ? 'sí' : 'no'; ?></b> ·
-        HTTPS del servidor IPTV: <b><?php echo $https_base ? e(parse_url($https_base, PHP_URL_PORT) ?: '443') : 'no disponible (se usa el proxy)'; ?></b> ·
-        PHP <?php echo e(PHP_VERSION); ?>
+        Conexión directa HTTPS al servidor IPTV: <b><?php echo $https_base ? 'sí (puerto ' . e(parse_url($https_base, PHP_URL_PORT) ?: '443') . ')' : 'no (el video pasa por el proxy seguro)'; ?></b> ·
+        PHP <?php echo e(PHP_VERSION); ?> ·
+        Conversión de audio Dolby (ffmpeg): <b><?php echo wp_bin('ffmpeg') && wp_bin('ffprobe') ? 'disponible' : 'no disponible'; ?></b>
     </p>
+    <?php if (!(wp_bin('ffmpeg') && wp_bin('ffprobe'))): ?>
+    <p style="color:#aaa;font-size:14px;max-width:760px">Sin ffmpeg, el audio Dolby (AC3/E-AC3/DTS) de algunos contenidos 4K no se escucha en Chrome. Puedes subir los archivos <b>ffmpeg</b> y <b>ffprobe</b> estáticos para Linux a la carpeta <b>bin/</b> de tu web player (con permiso de ejecución 755), o abrir ese contenido en Safari, Microsoft Edge o VLC.</p>
+    <?php endif; ?>
+    <?php if ($slug !== 'live' && wp_bin('ffprobe') && ($pi = wp_probe(wp_stream_url($slug === 'series' ? 'series' : 'movie', $id, $ext)))): ?>
+    <h2 style="font-size:18px;margin:22px 0 8px">Pistas del archivo</h2>
+    <p style="color:#ccc;font-size:14px;line-height:1.7">
+        Video: <b><?php echo e(strtoupper($pi['video'] ?: '—')); ?></b><br>
+        Audio: <?php foreach ($pi['audio'] as $a) echo '<b>' . e((wp_lang_name($a['lang']) ?: 'Pista ' . ($a['i'] + 1)) . ' ' . strtoupper($a['codec']) . ($a['ch'] >= 6 ? ' 5.1' : '')) . '</b> &nbsp; '; ?><br>
+        Subtítulos: <?php echo $pi['subs'] ? implode(', ', array_map(function ($x) { return e(wp_lang_name($x['lang']) ?: 'Pista ' . ($x['i'] + 1)); }, $pi['subs'])) : 'ninguno'; ?>
+    </p>
+    <?php endif; ?>
 </section>
 <?php include "footer.php"; ?>
