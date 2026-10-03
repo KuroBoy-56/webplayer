@@ -3,6 +3,12 @@ require_once __DIR__ . '/includes/core.php';
 include "config.php";
 wp_security_headers();
 
+// Sin administrador creado todavía: ir a la configuración inicial
+if ($adminU === '' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Location: setup.php');
+    exit;
+}
+
 /* ---------- Fondo de pósters (TMDB) con caché, sin bloquear el login ---------- */
 function getMoviesFromEndpoint($api_key, $pages = 4)
 {
