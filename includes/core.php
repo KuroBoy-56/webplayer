@@ -885,28 +885,111 @@ function wp_json_update($path, callable $fn, $flags = JSON_PRETTY_PRINT)
 
 function wp_tmdb_clean_title($title)
 {
-    $t = preg_replace('/\([^)]*\)|\[[^\]]*\]/', '', (string)$title);
-    $t = preg_replace('/^\s*(?:[A-Z]{2,3}|4K|HD|FHD|LAT|SUB|ES|VOSE)\s*[-|:]\s*/u', '', $t); // prefijos "LAT - ", "4K | "
-    $t = preg_replace('/\b(?:19|20)\d{2}\b\s*$/', '', $t);
-    return trim(preg_replace('/\s+/', ' ', $t), " -|:");
+    return wp_tmdb_parse($title)[0];
 }
 
-/** Busca el id de TMDB por título (+ año) sin pedir más datos. */
+/**
+ * Limpia el nombre que usa el servidor IPTV y separa el año:
+ * "ES - Avatar: El camino del agua (2022) [4K HDR] LAT" → ["Avatar: El camino del agua", "2022"]
+ */
+function wp_tmdb_parse($title)
+{
+    $t = (string)$title;
+    $year = '';
+    if (preg_match('/[\(\[\s\.\-](19[2-9]\d|20[0-2]\d)(?=[\)\]\s\.\-]|$)/', ' ' . $t, $m)) $year = $m[1];
+    $t = preg_replace('/\([^)]*\)|\[[^\]]*\]|\{[^}]*\}|【[^】]*】/u', ' ', $t);
+    $t = preg_replace('/[★☆✪●♦►▶◆|_]+/u', ' | ', $t);
+    // prefijos de país/idioma/calidad: "ES - ", "LAT: ", "4K | ", "|MX| ", "VIP - "
+    for ($i = 0; $i < 3; $i++) {
+        $t = preg_replace('/^\s*\|?\s*(?:ES|ESP|SPA|LAT|LA|MX|MEX|US|USA|UK|AR|CO|CL|PE|VE|EC|UY|PY|BO|CR|GT|DO|PR|EN|ENG|SUB|VOSE|CAST|TOP|VIP|NEW|4K|8K|UHD|FHD|HD|SD|HDR|DV|LATINO|CASTELLANO|SUBTITULADO|NUEVO|ESTRENO|PPV|NF|NETFLIX|AMZ|DSNP|HBO|MAX|4K-ES|4K-LAT)\s*[\-|:–—»]\s*/iu', '', $t);
+    }
+    $tags = '4k|8k|uhd|2160p|1080p|720p|480p|fhd|hd|sd|hdr10\+?|hdr|dv|dolby\s*vision|dolby|atmos|hevc|x265|x264|h\.?265|h\.?264|10bit|remux|bluray|blu-ray|bdrip|brrip|web-?dl|webrip|dvdrip|hdrip|'
+        . 'lat|latino|castellano|esp|espanol|español|spa|subt|subtitulado|vose|dual|multi|eng|ingles|inglés|extendida|imax';
+    $t = preg_replace('/(?<![\p{L}\d])(?:' . $tags . ')(?![\p{L}\d])/iu', ' ', $t);
+    $t = preg_replace('/(?<![\p{L}\d])(?:19[2-9]\d|20[0-2]\d)\s*$/u', ' ', trim($t));
+    $t = trim(preg_replace('/\s+/u', ' ', $t), " -|:.–—_,");
+    if ($t === '') $t = trim((string)$title);
+    return [$t, $year];
+}
+
+/** Elige el mejor resultado de TMDB: parecido del título, año y popularidad; prefiere los que tienen póster. */
+function wp_tmdb_pick(array $results, $q, $year)
+{
+    $nq = wp_norm_title($q);
+    $best = null;
+    $bestScore = -1e9;
+    foreach (array_slice($results, 0, 10) as $i => $r) {
+        if (!is_array($r) || empty($r['id'])) continue;
+        $names = [$r['title'] ?? '', $r['name'] ?? '', $r['original_title'] ?? '', $r['original_name'] ?? ''];
+        $sim = 0;
+        foreach ($names as $n) {
+            if ($n === '') continue;
+            $nn = wp_norm_title($n);
+            if ($nn === $nq) { $sim = 100; break; }
+            similar_text($nn, $nq, $pct);
+            $sim = max($sim, $pct);
+        }
+        $ry = substr((string)($r['release_date'] ?? ($r['first_air_date'] ?? '')), 0, 4);
+        $score = $sim - $i * 2 + min(10, log10(1 + (float)($r['popularity'] ?? 0)) * 3) + (!empty($r['poster_path']) ? 15 : -30);
+        if ($year && $ry) $score += $ry === (string)$year ? 25 : (abs((int)$ry - (int)$year) <= 1 ? 10 : -15);
+        if ($score > $bestScore) { $bestScore = $score; $best = $r; }
+    }
+    // con un título muy distinto es mejor no mostrar nada que mostrar otra película
+    return $best && $bestScore > 35 ? $best : null;
+}
+
+/**
+ * Busca en TMDB de forma rigurosa (caché: 30 días si encuentra, 2 días si no).
+ * Orden: tmdb_id del servidor → búsqueda con año → sin año → título antes de ":" o " - " → el otro tipo (película/serie).
+ * Devuelve el resultado de TMDB (id, poster_path, backdrop_path, overview...) o null.
+ */
+function wp_tmdb_find($type, $name, $year = '', $tmdbId = '')
+{
+    if (!WP_TMDB_KEY) return null;
+    list($q, $y2) = wp_tmdb_parse($name);
+    $year = preg_replace('/\D/', '', (string)$year) ?: $y2;
+    $tmdbId = preg_replace('/\D/', '', (string)$tmdbId);
+    $ck = 'tmdbf2|' . $type . '|' . ($tmdbId ? 'id' . $tmdbId : wp_norm_title($q) . '|' . $year);
+    $hit = wp_cache_get($ck, 2592000);
+    if (is_array($hit) && ($hit['r'] || time() - (int)($hit['t'] ?? 0) < 172800)) return $hit['r'];
+    $base = 'https://api.themoviedb.org/3/';
+    $key = 'api_key=' . WP_TMDB_KEY;
+    $r = null;
+    $netOk = false;
+    if ($tmdbId) {
+        $body = wp_http_get($base . $type . '/' . $tmdbId . '?' . $key . '&language=es-MX', 6);
+        $netOk = $body !== null;
+        $j = $body ? json_decode($body, true) : null;
+        if (is_array($j) && !empty($j['id'])) $r = $j;
+    }
+    if (!$r && $q !== '') {
+        $tries = [];
+        if ($year) $tries[] = [$type, $q, $year];
+        $tries[] = [$type, $q, ''];
+        foreach ([':', ' - ', ' – '] as $sep) {
+            if (strpos($q, $sep) !== false) { $short = trim(explode($sep, $q)[0]); if (mb_strlen($short) >= 3) $tries[] = [$type, $short, $year]; }
+        }
+        $tries[] = [$type === 'tv' ? 'movie' : 'tv', $q, ''];
+        foreach ($tries as $tr) {
+            $url = $base . 'search/' . $tr[0] . '?' . $key . '&language=es-MX&include_adult=false&query=' . urlencode($tr[1])
+                . ($tr[2] ? ($tr[0] === 'tv' ? '&first_air_date_year=' : '&primary_release_year=') . (int)$tr[2] : '');
+            $body = wp_http_get($url, 6);
+            if ($body === null) continue;
+            $netOk = true;
+            $s = json_decode($body, true);
+            $r = wp_tmdb_pick((array)($s['results'] ?? []), $tr[1], $year);
+            if ($r) { $r['_type'] = $tr[0]; break; }
+        }
+    }
+    if ($r && !isset($r['_type'])) $r['_type'] = $type;
+    if ($netOk) wp_cache_set($ck, ['r' => $r, 't' => time()]); // sin conexión a TMDB no se guarda el "no encontrado"
+    return $r;
+}
+
+/** Compatibilidad: id y datos básicos por título. */
 function wp_tmdb_search($type, $title, $year = '')
 {
-    $q = wp_tmdb_clean_title($title);
-    if ($q === '' || !WP_TMDB_KEY) return null;
-    $ck = 'tmdbs|' . $type . '|' . wp_norm_title($q) . '|' . $year;
-    $hit = wp_cache_get($ck, 2592000);
-    if (is_array($hit)) return $hit['r'];
-    $url = 'https://api.themoviedb.org/3/search/' . $type . '?api_key=' . WP_TMDB_KEY . '&language=es-ES&include_adult=false&query=' . urlencode($q);
-    if ($year) $url .= ($type === 'tv' ? '&first_air_date_year=' : '&year=') . (int)$year;
-    $body = wp_http_get($url, 5);
-    $s = $body ? json_decode($body, true) : null;
-    $r = !empty($s['results'][0]['id']) ? $s['results'][0] : null;
-    if (!$r && $year && is_array($s)) return wp_tmdb_search($type, $title, '');
-    if ($body !== null) wp_cache_set($ck, ['r' => $r]);
-    return $r;
+    return wp_tmdb_find($type, $title, $year);
 }
 
 /**
@@ -915,41 +998,53 @@ function wp_tmdb_search($type, $title, $year = '')
  */
 function wp_tmdb_details($type, $tmdbId, $title, $year = '')
 {
-    $tmdbId = preg_replace('/\D/', '', (string)$tmdbId);
-    $ck = 'tmdbd|' . $type . '|' . ($tmdbId ?: wp_norm_title($title) . '|' . $year);
+    $ck = 'tmdbd2|' . $type . '|' . (preg_replace('/\D/', '', (string)$tmdbId) ?: wp_norm_title(wp_tmdb_clean_title($title)) . '|' . $year);
     $d = wp_cache_get($ck, 604800);
-    if (is_array($d)) return $d;
-    $d = ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => ''];
+    if (is_array($d) && ($d['id'] || time() - (int)($d['_t'] ?? 0) < 172800)) return $d;
+    $d = ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', '_t' => time()];
     if (!WP_TMDB_KEY) return $d;
-    if (!$tmdbId) {
-        $r = wp_tmdb_search($type, $title, $year);
-        $tmdbId = $r['id'] ?? '';
-    }
-    if ($tmdbId) {
-        $body = wp_http_get('https://api.themoviedb.org/3/' . $type . '/' . $tmdbId . '?api_key=' . WP_TMDB_KEY
-            . '&language=es-ES&append_to_response=credits,videos&include_video_language=es,en,null', 5);
-        $j = $body ? json_decode($body, true) : null;
-        if (is_array($j) && !empty($j['id'])) {
-            $d['id'] = $j['id'];
-            $d['poster'] = !empty($j['poster_path']) ? 'https://image.tmdb.org/t/p/w500' . $j['poster_path'] : '';
-            $d['backdrop'] = !empty($j['backdrop_path']) ? 'https://image.tmdb.org/t/p/w1280' . $j['backdrop_path'] : '';
-            $d['overview'] = (string)($j['overview'] ?? '');
-            foreach (array_slice($j['credits']['cast'] ?? [], 0, 12) as $a) {
-                $d['cast'][] = ['n' => $a['name'] ?? '', 'c' => $a['character'] ?? '', 'p' => !empty($a['profile_path']) ? 'https://image.tmdb.org/t/p/w185' . $a['profile_path'] : ''];
-            }
-            $vids = $j['videos']['results'] ?? [];
-            usort($vids, function ($a, $b) { return (($b['iso_639_1'] ?? '') === 'es') <=> (($a['iso_639_1'] ?? '') === 'es'); });
-            foreach ($vids as $v) {
-                if (($v['site'] ?? '') === 'YouTube' && in_array($v['type'] ?? '', ['Trailer', 'Teaser'], true)) { $d['trailer'] = $v['key']; break; }
-            }
+    $r = wp_tmdb_find($type, $title, $year, $tmdbId);
+    if (!$r) { wp_cache_set($ck, $d); return $d; }
+    $rtype = $r['_type'] ?? $type;
+    $body = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $r['id'] . '?api_key=' . WP_TMDB_KEY
+        . '&language=es-MX&append_to_response=credits,aggregate_credits,videos,images&include_video_language=es,en,null&include_image_language=es,en,null', 7);
+    $j = $body ? json_decode($body, true) : null;
+    if (!is_array($j) || empty($j['id'])) $j = $r;
+    $d['id'] = $j['id'];
+    $poster = $j['poster_path'] ?? ($r['poster_path'] ?? '');
+    if (!$poster && !empty($j['images']['posters'][0]['file_path'])) $poster = $j['images']['posters'][0]['file_path'];
+    $back = $j['backdrop_path'] ?? ($r['backdrop_path'] ?? '');
+    if (!$back && !empty($j['images']['backdrops'][0]['file_path'])) $back = $j['images']['backdrops'][0]['file_path'];
+    $d['poster'] = $poster ? 'https://image.tmdb.org/t/p/w500' . $poster : '';
+    $d['backdrop'] = $back ? 'https://image.tmdb.org/t/p/w1280' . $back : '';
+    $d['overview'] = trim((string)($j['overview'] ?? ''));
+    if ($d['overview'] === '') {
+        // sin descripción en español: se intenta España y luego inglés
+        foreach (['es-ES', 'en-US'] as $lang) {
+            $b2 = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $j['id'] . '?api_key=' . WP_TMDB_KEY . '&language=' . $lang, 5);
+            $j2 = $b2 ? json_decode($b2, true) : null;
+            if (!empty($j2['overview'])) { $d['overview'] = trim($j2['overview']); break; }
         }
     }
-    wp_cache_set($ck, $d);
+    $cast = $j['credits']['cast'] ?? [];
+    if (!$cast && !empty($j['aggregate_credits']['cast'])) {
+        foreach ($j['aggregate_credits']['cast'] as $a) $cast[] = ['name' => $a['name'] ?? '', 'character' => $a['roles'][0]['character'] ?? '', 'profile_path' => $a['profile_path'] ?? ''];
+    }
+    foreach (array_slice($cast, 0, 15) as $a) {
+        $d['cast'][] = ['n' => $a['name'] ?? '', 'c' => $a['character'] ?? '', 'p' => !empty($a['profile_path']) ? 'https://image.tmdb.org/t/p/w185' . $a['profile_path'] : ''];
+    }
+    $vids = $j['videos']['results'] ?? [];
+    usort($vids, function ($a, $b) { return (($b['iso_639_1'] ?? '') === 'es') <=> (($a['iso_639_1'] ?? '') === 'es'); });
+    foreach ($vids as $v) {
+        if (($v['site'] ?? '') === 'YouTube' && in_array($v['type'] ?? '', ['Trailer', 'Teaser'], true)) { $d['trailer'] = $v['key']; break; }
+    }
+    if ($body !== null) wp_cache_set($ck, $d);
     return $d;
 }
 
 /**
- * Carátulas TMDB para varias tarjetas a la vez (en paralelo, caché 30 días).
+ * Carátulas TMDB para varias tarjetas a la vez. Primera pasada en paralelo (tmdb_id o búsqueda con año);
+ * las que no se encuentran pasan por la búsqueda rigurosa wp_tmdb_find (máx. 10 por petición para no demorar).
  * $items = [['k' => clave, 't' => 'movie'|'series', 'tm' => tmdb_id, 'n' => nombre, 'y' => año], ...]
  * Devuelve [clave => url w342].
  */
@@ -957,33 +1052,45 @@ function wp_tmdb_posters(array $items)
 {
     $out = [];
     $need = [];
+    $slow = [];
     foreach ($items as $it) {
         $type = ($it['t'] ?? '') === 'series' ? 'tv' : 'movie';
         $tm = preg_replace('/\D/', '', (string)($it['tm'] ?? ''));
-        $ck = 'tmdbp|' . $type . '|' . ($tm ?: wp_norm_title(wp_tmdb_clean_title($it['n'] ?? '')) . '|' . ($it['y'] ?? ''));
+        list($q, $y2) = wp_tmdb_parse($it['n'] ?? '');
+        $y = preg_replace('/\D/', '', (string)($it['y'] ?? '')) ?: $y2;
+        $ck = 'tmdbp2|' . $type . '|' . ($tm ?: wp_norm_title($q) . '|' . $y);
         $hit = wp_cache_get($ck, 2592000);
-        if (is_array($hit)) {
+        if (is_array($hit) && ($hit['p'] || time() - (int)($hit['t'] ?? 0) < 172800)) {
             if ($hit['p']) $out[$it['k']] = $hit['p'];
             continue;
         }
-        $q = wp_tmdb_clean_title($it['n'] ?? '');
         if (!$tm && $q === '') continue;
         $url = $tm
-            ? 'https://api.themoviedb.org/3/' . $type . '/' . $tm . '?api_key=' . WP_TMDB_KEY . '&language=es-ES'
-            : 'https://api.themoviedb.org/3/search/' . $type . '?api_key=' . WP_TMDB_KEY . '&language=es-ES&include_adult=false&query=' . urlencode($q)
-                . (!empty($it['y']) ? ($type === 'tv' ? '&first_air_date_year=' : '&year=') . (int)$it['y'] : '');
-        $need[$it['k']] = ['ck' => $ck, 'url' => $url, 'tm' => $tm];
+            ? 'https://api.themoviedb.org/3/' . $type . '/' . $tm . '?api_key=' . WP_TMDB_KEY . '&language=es-MX'
+            : 'https://api.themoviedb.org/3/search/' . $type . '?api_key=' . WP_TMDB_KEY . '&language=es-MX&include_adult=false&query=' . urlencode($q)
+                . ($y ? ($type === 'tv' ? '&first_air_date_year=' : '&primary_release_year=') . (int)$y : '');
+        $need[$it['k']] = ['ck' => $ck, 'url' => $url, 'tm' => $tm, 'q' => $q, 'y' => $y, 'type' => $type, 'n' => $it['n'] ?? ''];
     }
     if ($need && WP_TMDB_KEY) {
         $urls = [];
         foreach ($need as $k => $n) $urls[$k] = $n['url'];
         foreach (wp_http_multi($urls, 6) as $k => $body) {
-            if ($body === null || $body === false || $body === '') continue;
+            if ($body === null || $body === false || $body === '') continue; // sin respuesta: se reintenta en la próxima visita
             $j = json_decode($body, true);
             if (!is_array($j)) continue;
-            $r = $need[$k]['tm'] ? $j : ($j['results'][0] ?? null);
+            $r = $need[$k]['tm'] ? (!empty($j['id']) ? $j : null) : wp_tmdb_pick((array)($j['results'] ?? []), $need[$k]['q'], $need[$k]['y']);
             $p = !empty($r['poster_path']) ? 'https://image.tmdb.org/t/p/w342' . $r['poster_path'] : '';
-            wp_cache_set($need[$k]['ck'], ['p' => $p]);
+            if ($p) { wp_cache_set($need[$k]['ck'], ['p' => $p, 't' => time()]); $out[$k] = $p; }
+            else $slow[$k] = $need[$k];
+        }
+        // segunda pasada rigurosa para las que no aparecieron
+        $deadline = microtime(true) + 12;
+        foreach (array_slice($slow, 0, 10, true) as $k => $n) {
+            if (microtime(true) > $deadline) break;
+            $r = wp_tmdb_find($n['type'], $n['n'], $n['y'], $n['tm']);
+            if (!$r && $n['tm']) $r = wp_tmdb_find($n['type'], $n['n'], $n['y']); // el tmdb_id del servidor puede estar mal
+            $p = !empty($r['poster_path']) ? 'https://image.tmdb.org/t/p/w342' . $r['poster_path'] : '';
+            wp_cache_set($n['ck'], ['p' => $p, 't' => time()]);
             if ($p) $out[$k] = $p;
         }
     }
@@ -1159,6 +1266,18 @@ function wp_exec(array $cmd, $timeout = 20)
     $res['ms'] = (int)round((microtime(true) - $t) * 1000);
     $res['err'] = trim(substr($res['err'], -1500));
     return $res;
+}
+
+/** Lanza una línea de shell en segundo plano (sin esperar), con la forma que permita el hosting. */
+function wp_bg($line)
+{
+    $mode = wp_exec_mode();
+    $bg = '(' . $line . ') </dev/null >/dev/null 2>&1 &';
+    if ($mode === 'proc') { $p = @proc_open($bg, [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes); if (is_resource($p)) @proc_close($p); return is_resource($p) || $p !== false; }
+    if ($mode === 'popen') { $h = @popen($bg, 'r'); if ($h) @pclose($h); return (bool)$h; }
+    if ($mode === 'exec') { @exec($bg); return true; }
+    if ($mode === 'shell') { @shell_exec($bg); return true; }
+    return false;
 }
 
 /** Ejecuta un comando y devuelve stdout (o null). */

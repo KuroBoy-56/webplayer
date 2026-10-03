@@ -59,12 +59,16 @@
         var self = this, m = this.o.media;
         if (!m || this.live) { this.next(); return; }
         var started = false;
-        var go = function (j) {
-            if (started) return;
+        var go = function (j, late) {
+            if (j && j.ok && !self.info) self.info = j;
+            if (started) {
+                // las pistas llegaron cuando el video ya había empezado: se aplican igual (menú de audio/subtítulos y audio Dolby)
+                if (late && self.info) self.afterProbe();
+                return;
+            }
             started = true;
             clearTimeout(tm);
             if (j && j.ok) {
-                self.info = j;
                 var a = j.audio && j.audio[0];
                 var needV = j.video && !videoOk(j.video);
                 if ((a && !canAudio(a.codec)) || needV) {
@@ -76,10 +80,12 @@
             }
             self.next();
         };
-        var tm = setTimeout(function () { go(null); }, m.info ? 0 : 6000);
+        var tm = setTimeout(function () { go(null); }, m.info ? 0 : 7000);
         if (m.info) { go(m.info); return; }
         this.root.classList.add('buffering');
-        fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(go).catch(function () { go(null); });
+        this._probing = true;
+        var once = function (j) { self._probing = false; go(j, true); };
+        fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(once).catch(function () { once(null); });
     };
 
     NFPlayer.prototype.build = function () {
@@ -200,7 +206,9 @@
             if (self.tc) {
                 // la conversión se cortó a mitad de la película (límite del hosting o del servidor IPTV): se retoma donde iba
                 if (self.tc.played && (self.tc.retries || 0) < 6) { self.tc.retries = (self.tc.retries || 0) + 1; var r = self.tc.retries; self.startTc(self.T(), self.tc.a, self.tc.vt); self.tc.retries = r; return; }
-                self.tc = null; self.o.media = null; self.toastMsg('No se pudo convertir el audio de este contenido'); self.idx--; self.next(); return;
+                // el navegador no pudo con el video copiado (HEVC/10 bits en equipos sin soporte): se intenta convertir también el video
+                if (!self.tc.vt && !self._fullTried) { self._fullTried = true; self.toastMsg('Adaptando el video para este navegador…'); self.startTc(self.T(), self.tc.a, true); return; }
+                self.tc = null; self.o.media = null; self.toastMsg('No se pudo convertir este contenido'); self.idx--; self.next(); return;
             }
             // el navegador no abre el archivo (MKV/AVI, audio Dolby, HEVC...): se intenta la conversión del servidor antes de cambiar de formato
             if (self.o.media && !self.live && !self._rescued) { self._rescued = true; self.rescueTc(); return; }
@@ -379,7 +387,17 @@
         this.ok = false;
         this.idx++;
         while (this.idx < list.length && !this.canEngine(list[this.idx].engine)) this.idx++;
-        if (this.idx >= list.length) { this.showError(); return; }
+        if (this.idx >= list.length) {
+            // último recurso antes del error: conversión completa en el servidor (video a H.264 y audio a AAC)
+            if (this.o.media && !this.live && !this._fullTried) {
+                this._fullTried = true;
+                this.idx = list.length - 1;
+                this.toastMsg('Adaptando el formato de este contenido…');
+                this.startTc(this.lastTime || this.o.resume || 0, this.info ? this.prefAudioIndex() : 0, true);
+                return;
+            }
+            this.showError(); return;
+        }
         var s = list[this.idx];
         this.root.classList.add('buffering');
         var t = this.lastTime || 0;
@@ -540,7 +558,7 @@
         var out = [], self = this;
         if (this.hls && this.hls.audioTracks && this.hls.audioTracks.length) {
             this.hls.audioTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || ('Audio ' + (i + 1)), lang: t.lang || '', on: self.hls.audioTrack === i, set: function () { self.hls.audioTrack = i; } }); });
-        } else if (this.info && this.info.audio && this.info.audio.length > 1 && this.o.media && !(this.v.audioTracks && this.v.audioTracks.length > 1)) {
+        } else if (this.info && this.info.audio && this.info.audio.length && this.o.media && !(this.v.audioTracks && this.v.audioTracks.length > 1)) {
             var cur = this.tc ? this.tc.a : 0;
             this.info.audio.forEach(function (t) {
                 out.push({ label: t.label, lang: t.lang, on: cur === t.i, set: function () { if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
@@ -570,9 +588,13 @@
         if (this.hls && this.hls.subtitleTracks && this.hls.subtitleTracks.length) {
             this.hls.subtitleTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || ('Subtítulo ' + (i + 1)), on: self.hls.subtitleTrack === i, set: function () { self.hls.subtitleTrack = i; self.hls.subtitleDisplay = true; } }); });
             out.off = function () { self.hls.subtitleTrack = -1; };
-        } else if (this.info && this.info.subs && this.info.subs.some(function (t) { return t.text; }) && this.o.media) {
+        } else if (this.info && this.info.subs && this.info.subs.length && this.o.media) {
             this.info.subs.forEach(function (t) {
-                if (!t.text) return;
+                if (!t.text) {
+                    // subtítulos de imagen (PGS/VobSub de los Blu-ray 4K): el navegador no los puede mostrar como texto
+                    out.push({ label: t.label + ' (imagen)', on: false, set: function () { self.toastMsg('Este subtítulo es de imagen (Blu-ray). Para verlo abre el contenido en VLC.'); } });
+                    return;
+                }
                 out.push({ label: t.label, on: self.subSel === t.i, set: function () { self.loadSub(t.i); } });
             });
             out.off = function () { self.loadSub(-1); };
@@ -595,13 +617,13 @@
             var a = this.audioList(), s = this.subList();
             h += '<div class="col"><h4>Audio</h4>';
             if (a.length) a.forEach(function (t, i) { h += '<button type="button" data-a="' + i + '" class="' + (t.on ? 'on' : '') + '">' + NF_esc(t.label) + '</button>'; });
-            else h += '<span class="na">Audio predeterminado</span>';
+            else h += '<span class="na">' + (this._probing ? 'Buscando pistas…' : 'Audio predeterminado') + '</span>';
             h += '</div><div class="col"><h4>Subtítulos</h4>';
             if (s.length) {
                 var any = s.some(function (t) { return t.on; });
                 h += '<button type="button" data-s="-1" class="' + (any ? '' : 'on') + '">Desactivados</button>';
                 s.forEach(function (t, i) { h += '<button type="button" data-s="' + i + '" class="' + (t.on ? 'on' : '') + '">' + NF_esc(t.label) + '</button>'; });
-            } else h += '<span class="na">No disponibles</span>';
+            } else h += '<span class="na">' + (this._probing ? 'Buscando subtítulos…' : 'Este contenido no trae subtítulos') + '</span>';
             h += '</div>';
             pop.innerHTML = h;
             Array.prototype.forEach.call(pop.querySelectorAll('[data-a]'), function (b) {
@@ -683,22 +705,33 @@
 
     NFPlayer.prototype.probe = function () {
         var self = this, m = this.o.media;
-        if (!m || this._probing || this.info) return;
+        if (!m || this._probing || this.info || this._probeTries > 2) return;
         this._probing = true;
+        this._probeTries = (this._probeTries || 0) + 1;
         fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
             if (!j || !j.ok) return;
             self.info = j;
-            var cur = self.info.audio[0];
-            // audio que el navegador no decodifica (Dolby AC3/E-AC3, DTS, TrueHD): se convierte en el servidor
-            if (cur && !canAudio(cur.codec) && !(self.hls)) {
-                var want = self.prefAudioIndex();
-                self.toastMsg('Convirtiendo audio ' + cur.codec.toUpperCase() + ' para este navegador');
-                self.startTc(self.T(), want, j.video && !videoOk(j.video));
-            } else if (self.info.audio.length > 1) {
-                var w = self.prefAudioIndex();
-                if (w > 0 && !(self.v.audioTracks && self.v.audioTracks.length > 1) && !self.hls) self.startTc(self.T(), w, false);
-            }
-        }).catch(function () {}).then(function () { self._probing = false; });
+            self.afterProbe();
+        }).catch(function () {}).then(function () {
+            self._probing = false;
+            // el servidor IPTV pudo rechazar la consulta mientras el video cargaba: se reintenta
+            if (!self.info && self._probeTries <= 2) setTimeout(function () { self.probe(); }, 8000);
+        });
+    };
+
+    /* con las pistas conocidas: audio Dolby → conversión; idioma preferido que no es la primera pista → conversión con esa pista */
+    NFPlayer.prototype.afterProbe = function () {
+        var j = this.info;
+        if (!j || this.tc || this.live) return;
+        var cur = j.audio && j.audio[0];
+        if (cur && !canAudio(cur.codec) && !this.hls) {
+            this.toastMsg('Convirtiendo audio ' + cur.codec.toUpperCase() + ' para este navegador');
+            this.startTc(this.T(), this.prefAudioIndex(), j.video && !videoOk(j.video));
+        } else if (j.audio && j.audio.length > 1) {
+            var w = this.prefAudioIndex();
+            if (w > 0 && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !this.hls) this.startTc(this.T(), w, false);
+        }
+        if (this.pop && this.pop.classList.contains('open') && this.pop._kind === 'tracks') { this.pop.classList.remove('open'); this.menu('tracks'); }
     };
 
     function videoOk(codec) {
@@ -798,11 +831,26 @@
         if (i < 0) { this.clearSub(); return; }
         this.subCache = this.subCache || {};
         if (this.subCache[i]) { this.applySub(); return; }
-        this.toastMsg('Cargando subtítulos…');
-        fetch(m.sub + '&i=' + i, { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw 0; return r.text(); }).then(function (txt) {
-            self.subCache[i] = parseVtt(txt);
-            if (self.subSel === i) self.applySub();
-        }).catch(function () { self.toastMsg('No se pudieron cargar los subtítulos'); });
+        var tries = 0;
+        this.toastMsg('Preparando subtítulos…');
+        var ask = function () {
+            if (self.subSel !== i) return;
+            fetch(m.sub + '&i=' + i, { credentials: 'same-origin' }).then(function (r) {
+                if (r.status === 202) {
+                    // el servidor todavía está extrayendo el subtítulo del archivo completo
+                    if (++tries < 200) { if (tries % 10 === 0) self.toastMsg('Preparando subtítulos… (la primera vez tarda un poco)'); setTimeout(ask, 3000); }
+                    else self.toastMsg('Los subtítulos están tardando demasiado');
+                    return null;
+                }
+                if (!r.ok) throw 0;
+                return r.text();
+            }).then(function (txt) {
+                if (txt == null) return;
+                self.subCache[i] = parseVtt(txt);
+                if (self.subSel === i) { self.applySub(); self.toastMsg('Subtítulos activados'); }
+            }).catch(function () { self.toastMsg('No se pudieron cargar los subtítulos'); });
+        };
+        ask();
     };
     NFPlayer.prototype.clearSub = function () {
         if (!this.subTrack) return;

@@ -71,13 +71,24 @@ if ($do === 'sub') {
     $ck = wp_cache_dir() . '/sub_' . md5($url . '|' . $i) . '.vtt';
     header('Content-Type: text/vtt; charset=utf-8');
     header('Cache-Control: private, max-age=86400');
-    if (!is_file($ck) || filesize($ck) < 10) {
-        // el subtítulo está repartido en todo el archivo: ffmpeg lo lee completo (puede tardar en archivos grandes)
-        $out = wp_run([$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-i', $url, '-map', '0:s:' . $i, '-f', 'webvtt', 'pipe:1'], 900);
-        if (!$out || strpos($out, 'WEBVTT') === false) { http_response_code(404); exit; }
-        @file_put_contents($ck, $out);
+    if (is_file($ck) && filesize($ck) >= 10) { readfile($ck); exit; }
+    // el subtítulo está repartido en todo el archivo y ffmpeg tiene que leerlo completo: se prepara en segundo plano
+    // (así no lo corta el límite de tiempo del hosting) y el reproductor vuelve a preguntar cada pocos segundos
+    $job = $ck . '.job';
+    $bad = $ck . '.bad';
+    header('Cache-Control: no-store');
+    if (is_file($bad) && time() - filemtime($bad) < 3600) { http_response_code(404); exit; }
+    if (!is_file($job) || time() - filemtime($job) > 1500) {
+        @touch($job);
+        $part = $ck . '.part';
+        $cmd = wp_cmd_line([$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', '30000000', '-i', $url, '-map', '0:s:' . $i, '-vn', '-an', '-dn', '-c:s', 'webvtt', '-f', 'webvtt', '-y', $part]);
+        $ok = wp_bg($cmd . ' && grep -q WEBVTT ' . escapeshellarg($part) . ' && mv ' . escapeshellarg($part) . ' ' . escapeshellarg($ck)
+            . ' || touch ' . escapeshellarg($bad) . '; rm -f ' . escapeshellarg($job) . ' ' . escapeshellarg($part));
+        if (!$ok) { @unlink($job); http_response_code(404); exit; }
     }
-    readfile($ck);
+    http_response_code(202);
+    header('Content-Type: application/json');
+    echo '{"wait":true}';
     exit;
 }
 
@@ -97,8 +108,8 @@ $cmd = [$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-reconnect', '1',
 if ($t > 0) array_push($cmd, '-ss', (string)$t);
 array_push($cmd, '-i', $url, '-map', '0:v:0?', '-map', '0:a:' . $a . '?', '-sn', '-dn');
 if ($vtc) {
-    // formatos antiguos (XviD, MPEG-2, WMV...): se convierte el video a H.264 hasta 1080p
-    array_push($cmd, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-vf', "scale='min(1920,iw)':-2", '-pix_fmt', 'yuv420p');
+    // formatos antiguos (XviD, MPEG-2, WMV...): se convierte el video a H.264 a 720p (rápido para que el hosting alcance a convertir en tiempo real)
+    array_push($cmd, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '25', '-g', '48', '-vf', "scale='min(1280,iw)':-2", '-pix_fmt', 'yuv420p');
 } else {
     array_push($cmd, '-c:v', 'copy');
     if (in_array($vcodec, ['hevc', 'h265'], true)) array_push($cmd, '-tag:v', 'hvc1');

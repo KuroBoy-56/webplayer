@@ -133,7 +133,8 @@ $download_url = '?' . http_build_query(array_merge($_GET, ['action' => 'download
 $extra = [['label' => 'Descargar contenido', 'href' => $download_url]];
 if ($has_prev) $extra[] = ['label' => 'Capítulo anterior', 'href' => $prev_url];
 if ($slug === 'series') $extra[] = ['label' => 'Ver episodios', 'href' => $back_url . '#episodios'];
-$extra[] = ['label' => '¿Sin audio o no carga? Diagnóstico', 'href' => 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext)];
+$diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext) . ($series_id_get ? '&series_id=' . rawurlencode($series_id_get) : '');
+$extra[] = ['label' => '¿Sin audio o no carga? Diagnóstico', 'href' => $diag_url];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -180,7 +181,7 @@ $extra[] = ['label' => '¿Sin audio o no carga? Diagnóstico', 'href' => 'diag.p
             'vlcPc' => 'playlist.php?' . http_build_query(['id' => $id, 'slug' => $slug, 'ext' => $ext, 'title' => trim($content_name . ' ' . $episode_label)]),
             'downloadUrl' => $download_url,
             'media' => $media_cfg,
-            'diagUrl' => 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext),
+            'diagUrl' => $diag_url,
             'extraMenu' => $extra,
             'id' => $id,
             'slug' => $slug,

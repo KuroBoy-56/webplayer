@@ -6,6 +6,9 @@ include "config.php";
 $id = preg_replace('/[^0-9]/', '', (string)($_GET['id'] ?? ''));
 $slug = in_array($_GET['slug'] ?? '', ['movie', 'series', 'live'], true) ? $_GET['slug'] : 'movie';
 $ext = strtolower(preg_replace('/[^a-z0-9]/i', '', (string)($_GET['ext'] ?? ''))) ?: 'mp4';
+$series_id = preg_replace('/[^0-9]/', '', (string)($_GET['series_id'] ?? ''));
+$back = $slug === 'live' ? 'tvguide.php?id=' . $id . '&slug=live'
+    : 'video_player.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext) . ($series_id ? '&series_id=' . $series_id : '');
 $exts = $slug === 'live' ? ['m3u8', 'ts'] : array_values(array_unique(['mp4', $ext, 'm3u8']));
 
 function diag_probe($url)
@@ -77,6 +80,7 @@ $page_title = 'Diagnóstico';
 include "header.php";
 ?>
 <section class="nf-section" style="padding-top:90px;max-width:900px">
+    <a class="nf-btn nf-btn-white" href="<?php echo e($back); ?>" style="display:inline-flex;margin-bottom:16px">&#9654; Volver a la reproducción</a>
     <h1 style="margin:0 0 6px">Diagnóstico de reproducción</h1>
     <p style="color:#aaa;margin:0 0 18px">Prueba hecha desde tu hosting hacia el servidor IPTV. Haz una captura de esta pantalla y envíala si un contenido no reproduce.</p>
     <div style="overflow-x:auto">
@@ -140,5 +144,9 @@ include "header.php";
         Subtítulos: <?php echo $pi['subs'] ? implode(', ', array_map(function ($x) { return e(wp_lang_name($x['lang']) ?: 'Pista ' . ($x['i'] + 1)); }, $pi['subs'])) : 'ninguno'; ?>
     </p>
     <?php endif; ?>
+    <?php if (!empty($ff['test']['ok'])): ?>
+    <p style="color:#46d369;font-size:15px;margin-top:10px">La conversión funciona en tu hosting. Al volver a la reproducción el reproductor la usa sola cuando el audio o el formato no son compatibles con el navegador.</p>
+    <?php endif; ?>
+    <a class="nf-btn nf-btn-white" href="<?php echo e($back); ?>" style="display:inline-flex;margin-top:18px">&#9654; Volver a la reproducción</a>
 </section>
 <?php include "footer.php"; ?>

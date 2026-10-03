@@ -122,3 +122,25 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 
 - Si el hosting bloquea `proc_open` (como Hostinger), la conversión con ffmpeg prueba sola las otras formas que tiene PHP para ejecutar programas: `popen`, `exec` o `shell_exec`. Basta con que una esté permitida. Se probaron las cuatro: pistas, conversión de audio y subtítulos funcionan con cualquiera de ellas.
 - El diagnóstico muestra cuáles de esas cuatro funciones permite tu hosting.
+
+## Actualización 3 de octubre (entrega final del reproductor)
+
+**Pistas de audio y subtítulos**
+- El menú de audio y subtítulos muestra todas las pistas del archivo, aunque haya una sola, y siempre se puede elegir cualquiera.
+- Antes, si la consulta de pistas tardaba más de unos segundos, el resultado se perdía y el menú decía "no hay pistas". Ahora se aplica igual cuando llega, y si el servidor la rechaza se reintenta.
+- Mientras se consultan, el menú dice "Buscando pistas…".
+- Los subtítulos se extraen en segundo plano para que el límite de tiempo del hosting no los corte. El reproductor avisa con "Preparando subtítulos…" y los activa solos cuando están listos. La primera vez tarda porque hay que leer el archivo completo; después quedan guardados.
+- Los subtítulos de imagen (PGS de Blu-ray 4K) aparecen marcados como "(imagen)". El navegador no puede mostrarlos, solo VLC.
+
+**Que todo reproduzca**
+- El orden ahora es: formatos directos, luego conversión de audio, luego conversión completa del video a H.264 720p (para HEVC de 10 bits, XviD, MPEG-2 y similares en equipos que no los soportan). El mensaje de error solo aparece si todo eso falla.
+
+**Diagnóstico**
+- Botón **Volver a la reproducción** arriba y abajo de la página. El diagnóstico es solo una prueba: el reproductor usa la conversión solo cuando hace falta.
+
+**TMDB (carátulas, elenco, descripción)**
+- Los nombres del servidor IPTV se limpian antes de buscar: prefijos ("ES -", "|LAT|", "4K |"), calidad (4K, HDR, 1080p, HEVC...), idioma (LAT, DUAL, SUBT...) y año, que se usa para afinar.
+- Se elige el resultado que más se parece por título, año y popularidad, en vez del primero de la lista. Si nada se parece, no se muestra una carátula equivocada.
+- Si no aparece, se intenta sin año, con el título antes de ":" y como serie o película. Si el `tmdb_id` del servidor está mal, se busca por nombre.
+- Los "no encontrado" se vuelven a intentar a los 2 días (antes quedaban 30). Si TMDB no respondió, no se guarda nada.
+- Descripción en español de México, luego de España y luego en inglés. Elenco también para series.
