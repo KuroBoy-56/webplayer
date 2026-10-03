@@ -105,14 +105,10 @@ function tv_channel_data($id, $username, $fav_file)
     $settings = isset($_COOKIE["settings_array"]) ? json_decode($_COOKIE["settings_array"], true) : [];
     $pref = (isset($settings["stream_type"]) && $settings["stream_type"] === 'ts') ? 'ts' : 'm3u8';
     $order = $pref === 'ts' ? ['ts', 'm3u8'] : ['m3u8', 'ts'];
-    $sources = [];
-    $https = wp_is_https();
-    foreach ($order as $x) {
-        $u = wp_stream_url('live', $id, $x);
-        $engine = $x === 'm3u8' ? 'hls' : 'mpegts';
-        if (!WP_FORCE_PROXY && (!$https || stripos($u, 'https://') === 0)) $sources[] = ['url' => $u, 'engine' => $engine];
-        $sources[] = ['url' => wp_proxy_url($u), 'engine' => $engine];
-    }
+    // Con https y sin https en el servidor IPTV el video pasa por el proxy: el flujo .ts continuo
+    // (una sola conexión) es más estable que pedir cada segmento HLS por separado.
+    if (wp_is_https() && !wp_server_https_base() && $pref !== 'ts') $order = ['ts', 'm3u8'];
+    $sources = wp_play_sources('live', $id, $order);
     $fav = wp_json_file($fav_file);
     return [
         'id' => (string)$id,
@@ -121,6 +117,7 @@ function tv_channel_data($id, $username, $fav_file)
         'poster' => (string)($info['stream_icon'] ?? ''),
         'sources' => $sources,
         'vlc' => 'vlc://' . wp_stream_url('live', $id, $pref),
+        'diag' => 'diag.php?slug=live&id=' . rawurlencode((string)$id),
         'fav' => isset($fav[$username][(string)$id]),
         'epg' => tv_epg($id, $name),
     ];
@@ -159,7 +156,7 @@ $use_vlc = isset($_COOKIE["use_vlc"]) ? $_COOKIE["use_vlc"] : "0";
 
 $page_title = 'TV en vivo';
 $body_class = 'nf-solid nf-live';
-$wp_head_extra = '<link rel="stylesheet" href="assets/nf/player.css?v=3">';
+$wp_head_extra = '<link rel="stylesheet" href="assets/nf/player.css?v=4">';
 include "header.php";
 ?>
 <style>
@@ -256,7 +253,7 @@ include "header.php";
 
 <script src="assets/vendor/hls.min.js" defer></script>
 <script src="assets/vendor/mpegts.min.js" defer></script>
-<script src="assets/nf/player.js?v=3" defer></script>
+<script src="assets/nf/player.js?v=4" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [] };
@@ -314,7 +311,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isMobile && useVLC) { window.location.href = data.vlc; return; }
         var box = document.getElementById('tvPlayer');
         if (state.player) state.player.destroy();
-        state.player = new NFPlayer(box, { live: true, title: data.name, sources: data.sources, vlcUrl: data.vlc });
+        state.player = new NFPlayer(box, { live: true, title: data.name, sources: data.sources, vlcUrl: data.vlc, diagUrl: data.diag });
     }
 
     function openChannel(id, push) {

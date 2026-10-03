@@ -1,7 +1,8 @@
 <?php
 include "session.php";
 include "config.php";
-$pagename = "Deportes";
+
+/* Respaldo: extrae tablas limpias de la web de TheSportsDB */
 function fetchAndProcessContent($target_url) {
     $content = wp_http_get($target_url, 12);
     if (!$content) return null;
@@ -60,241 +61,355 @@ function fetchAndProcessContent($target_url) {
     return $dom;
 }
 
-$sports = wp_cache_get('sports|tables', 1800, $sports_stale);
-if (!is_array($sports)) {
-    $dom1 = fetchAndProcessContent("https://www.thesportsdb.com/browse_tv");
-    $table1 = $dom1 ? (new DOMXPath($dom1))->query('//table')->item(0) : null;
-    $dom2 = fetchAndProcessContent("https://www.thesportsdb.com/");
-    $table2 = $dom2 ? (new DOMXPath($dom2))->query('//table')->item(4) : null;
-    $sports = ['t1' => $table1 ? $dom1->saveXML($table1) : '', 't2' => $table2 ? $dom2->saveXML($table2) : ''];
-    if ($sports['t1'] || $sports['t2']) wp_cache_set('sports|tables', $sports);
-    elseif (is_array($sports_stale)) $sports = $sports_stale;
+
+/* ---------- Agenda deportiva (TheSportsDB, caché 15 min) ---------- */
+if (!defined('WP_SPORTSDB_KEY')) define('WP_SPORTSDB_KEY', '123');
+
+$sp_sports = [
+    'Soccer' => ['Fútbol', '⚽', 120],
+    'Basketball' => ['Baloncesto', '🏀', 150],
+    'American Football' => ['Fútbol americano', '🏈', 210],
+    'Baseball' => ['Béisbol', '⚾', 190],
+    'Fighting' => ['Combate', '🥊', 240],
+    'Motorsport' => ['Motor', '🏁', 150],
+    'Tennis' => ['Tenis', '🎾', 150],
+    'Ice Hockey' => ['Hockey', '🏒', 160],
+];
+
+function sp_fetch_events(array $sports)
+{
+    $days = [gmdate('Y-m-d'), gmdate('Y-m-d', time() + 86400)];
+    $ck = 'sports2|' . $days[0];
+    $cached = wp_cache_get($ck, 900, $stale);
+    if (is_array($cached)) return $cached;
+    $out = [];
+    foreach ([WP_SPORTSDB_KEY, '3'] as $key) {
+        $urls = [];
+        foreach ($days as $d) foreach (array_keys($sports) as $sp) {
+            $urls[$d . '|' . $sp] = 'https://www.thesportsdb.com/api/v1/json/' . $key . '/eventsday.php?d=' . $d . '&s=' . urlencode($sp);
+        }
+        $seen = [];
+        foreach (wp_http_multi($urls, 10) as $k => $body) {
+            $j = $body ? json_decode($body, true) : null;
+            foreach ((is_array($j['events'] ?? null) ? $j['events'] : []) as $ev) {
+                $id = (string)($ev['idEvent'] ?? '');
+                if ($id === '' || isset($seen[$id])) continue;
+                $seen[$id] = 1;
+                $ts = (string)($ev['strTimestamp'] ?? '');
+                if ($ts === '' && !empty($ev['dateEvent'])) $ts = $ev['dateEvent'] . 'T' . ($ev['strTime'] ?? '00:00:00');
+                if ($ts === '') continue;
+                if (!preg_match('/[zZ]|[+-]\d\d:?\d\d$/', $ts)) $ts .= 'Z';
+                $out[] = [
+                    'id' => $id,
+                    'sp' => (string)($ev['strSport'] ?? explode('|', $k)[1]),
+                    'lg' => (string)($ev['strLeague'] ?? ''),
+                    'lb' => (string)($ev['strLeagueBadge'] ?? ''),
+                    'ev' => (string)($ev['strEvent'] ?? ''),
+                    'h' => (string)($ev['strHomeTeam'] ?? ''),
+                    'a' => (string)($ev['strAwayTeam'] ?? ''),
+                    'hb' => (string)($ev['strHomeTeamBadge'] ?? ''),
+                    'ab' => (string)($ev['strAwayTeamBadge'] ?? ''),
+                    'hs' => $ev['intHomeScore'] ?? null,
+                    'as' => $ev['intAwayScore'] ?? null,
+                    'ts' => $ts,
+                    'v' => (string)($ev['strVenue'] ?? ''),
+                    'st' => (string)($ev['strStatus'] ?? ''),
+                    'th' => (string)($ev['strThumb'] ?? ''),
+                    'pp' => strtolower((string)($ev['strPostponed'] ?? '')) === 'yes',
+                ];
+            }
+        }
+        if ($out) break;
+    }
+    if ($out) {
+        usort($out, function ($x, $y) { return strcmp($x['ts'], $y['ts']); });
+        wp_cache_set($ck, $out);
+        return $out;
+    }
+    return is_array($stale) ? $stale : [];
 }
+
+$events = sp_fetch_events($sp_sports);
+
+/* Respaldo: tablas de la web de TheSportsDB si la API no devuelve partidos */
+$sports = ['t1' => '', 't2' => ''];
+if (!$events) {
+    $sports = wp_cache_get('sports|tables', 1800, $sports_stale);
+    if (!is_array($sports)) {
+        $dom1 = fetchAndProcessContent("https://www.thesportsdb.com/browse_tv");
+        $table1 = $dom1 ? (new DOMXPath($dom1))->query('//table')->item(0) : null;
+        $dom2 = fetchAndProcessContent("https://www.thesportsdb.com/");
+        $table2 = $dom2 ? (new DOMXPath($dom2))->query('//table')->item(4) : null;
+        $sports = ['t1' => $table1 ? $dom1->saveXML($table1) : '', 't2' => $table2 ? $dom2->saveXML($table2) : ''];
+        if ($sports['t1'] || $sports['t2']) wp_cache_set('sports|tables', $sports);
+        elseif (is_array($sports_stale)) $sports = $sports_stale;
+    }
+}
+
+$sp_meta = [];
+foreach ($sp_sports as $k => $m) $sp_meta[$k] = ['n' => $m[0], 'i' => $m[1], 'd' => $m[2]];
+
+$page_title = 'Deportes';
+$nav_active = 'sports';
 $body_class = 'nf-solid';
 include "header.php";
 ?>
 <style>
-        .sp-wrap * { max-width: 100% !important; }
-        .sp-wrap { color: #b3b3b3; padding-top: calc(var(--nf-header) + 16px); }
-        
-        .sp-wrap .content-container {
-            max-width: 1200px;
-            margin: 30px auto;
-            padding: 0 15px;
-            width: 100%;
-            overflow-x: hidden;
-        }
+.sp { --sp-line: rgba(255,255,255,.08); --sp-card: #1c1c1c; --sp-card2: #232323; --sp-live: #e50914; --sp-win: #fff; --sp-mute: #9a9a9a;
+      padding: calc(var(--nf-header) + 18px) var(--nf-pad) 48px; color: var(--nf-text); min-height: 70vh; }
+.sp-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.sp-head h1 { margin: 0; font-size: clamp(28px, 3.4vw, 44px); font-weight: 800; letter-spacing: -.5px; }
+.sp-head p { margin: 4px 0 0; color: var(--sp-mute); font-size: 15px; }
+.sp-livecount { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: rgba(229,9,20,.14); color: #fff; font-weight: 700; font-size: 14px; }
+.sp-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sp-live); box-shadow: 0 0 0 0 rgba(229,9,20,.7); animation: spPulse 1.6s infinite; flex: none; }
+@keyframes spPulse { 70% { box-shadow: 0 0 0 9px rgba(229,9,20,0); } 100% { box-shadow: 0 0 0 0 rgba(229,9,20,0); } }
 
-        .sp-wrap .search-container {
-            margin-bottom: 25px;
-            text-align: center;
-        }
+.sp-bar { position: sticky; top: var(--nf-header); z-index: 40; margin: 0 calc(var(--nf-pad) * -1) 18px; padding: 10px var(--nf-pad); background: rgba(20,20,20,.94); backdrop-filter: blur(8px); border-bottom: 1px solid var(--sp-line); display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.sp-days { display: inline-flex; background: #2a2a2a; border-radius: 6px; padding: 3px; flex: none; }
+.sp-days button { border: 0; background: transparent; color: #ccc; font: inherit; font-weight: 700; font-size: 14px; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+.sp-days button.on { background: #fff; color: #000; }
+.sp-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: 1 1 360px; min-width: 0; }
+.sp-chips::-webkit-scrollbar { display: none; }
+.sp-chips .nf-chip { white-space: nowrap; flex: none; font-size: 14px; }
+.sp-chips .nf-chip b { font-weight: 400; opacity: .6; margin-left: 4px; }
+.sp-search { flex: 0 1 260px; min-width: 0; }
+.sp-search input { width: 100%; background: #000; border: 1px solid #555; color: #fff; padding: 9px 12px; border-radius: 4px; font: inherit; font-size: 14px; }
+.sp-search input:focus { outline: none; border-color: #fff; }
 
-        .sp-wrap #searchInput {
-            width: 100%;
-            max-width: 500px !important;
-            padding: 15px 25px;
-            border-radius: 50px;
-            border: 1px solid #2a2a2a;
-            background-color: #1a1a1a;
-            color: #ffffff;
-            font-size: 16px;
-            outline: none;
-        }
+.sp-livewrap { margin-bottom: 26px; }
+.sp-h2 { display: flex; align-items: center; gap: 10px; font-size: clamp(18px, 1.6vw, 22px); font-weight: 700; margin: 0 0 12px; }
+.sp-live-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(300px, 380px); gap: 12px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x mandatory; scrollbar-width: thin; }
+.sp-live-row .sp-card { scroll-snap-align: start; }
 
-        /* --- ESTILOS DE ESCRITORIO --- */
-        .sp-wrap .table-responsive {
-            width: 100%;
-            overflow-x: auto;
-            background-color: #1a1a1a;
-            border-radius: 12px;
-            padding: 20px;
-        }
-        
-        .sp-wrap table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .sp-wrap th {
-            background-color: #101010;
-            color: #b3b3b3;
-            font-size: 13px;
-            padding: 15px;
-            text-align: left;
-            border-bottom: 2px solid #2a2a2a;
-        }
-        
-        .sp-wrap td {
-            padding: 15px;
-            vertical-align: middle;
-            border-bottom: 1px solid #2a2a2a;
-            color: #ffffff;
-            font-size: 15px;
-        }
-        
-        .sp-wrap .img-banner {
-            border-radius: 6px;
-            max-width: 90px !important;
-            height: auto !important;
-        }
+.sp-league { margin-bottom: 26px; }
+.sp-lhead { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+.sp-lhead img { width: 28px; height: 28px; object-fit: contain; }
+.sp-lhead h3 { margin: 0; font-size: 17px; font-weight: 700; }
+.sp-lhead span { color: var(--sp-mute); font-size: 13px; }
+.sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 10px; }
 
-        .sp-wrap .img-icon {
-            max-width: 25px !important;
-            height: auto !important;
-            display: inline-block;
-            margin: 0 4px;
-        }
+.sp-card { position: relative; background: var(--sp-card); border: 1px solid var(--sp-line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 10px; transition: transform .18s ease, background .18s ease, border-color .18s; overflow: hidden; }
+.sp-card:hover { transform: translateY(-2px); background: var(--sp-card2); border-color: rgba(255,255,255,.16); }
+.sp-card.live { border-color: rgba(229,9,20,.55); background: linear-gradient(180deg, rgba(229,9,20,.12), var(--sp-card) 60%); }
+.sp-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--sp-mute); }
+.sp-top .lg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sp-pill { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; background: #333; color: #ddd; }
+.sp-pill.live { background: var(--sp-live); color: #fff; }
+.sp-pill.live .sp-dot { background: #fff; width: 7px; height: 7px; }
+.sp-pill.fin { background: #2b2b2b; color: #9a9a9a; }
+.sp-pill.time { background: #fff; color: #000; font-size: 13px; letter-spacing: 0; text-transform: none; }
+.sp-teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
+.sp-team { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-width: 0; }
+.sp-team img, .sp-team .ph { width: 52px; height: 52px; object-fit: contain; }
+.sp-team .ph { display: grid; place-items: center; border-radius: 50%; background: #2c2c2c; color: #888; font-weight: 800; font-size: 18px; }
+.sp-team b { font-size: 14px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.sp-score { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 1px; white-space: nowrap; }
+.sp-vs { color: #666; font-weight: 800; font-size: 15px; }
+.sp-single { font-size: 16px; font-weight: 700; text-align: center; line-height: 1.3; }
+.sp-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--sp-mute); min-width: 0; }
+.sp-foot .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sp-foot a { flex: none; color: #fff; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 4px; background: rgba(255,255,255,.1); }
+.sp-foot a:hover { background: var(--nf-red); }
 
-        .sp-wrap .section-divider {
-            border: 0;
-            height: 2px;
-            background: #e50914;
-            margin: 40px 0;
-        }
+.sp-empty { text-align: center; padding: 60px 16px; color: var(--sp-mute); }
+.sp-empty b { display: block; color: #fff; font-size: 20px; margin-bottom: 6px; }
 
-        /* =========================================
-           DISEÑO MÓVIL (VERTICAL EXTREMO Y SIN FUGAS)
-           ========================================= */
-        @media (max-width: 768px) {
-            .sp-wrap .content-container { margin: 15px auto; padding: 0 10px; }
-            
-            .sp-wrap .table-responsive {
-                padding: 0;
-                background-color: transparent;
-                overflow-x: hidden !important; 
-            }
+/* respaldo (tablas) */
+.sp-fallback { background: #1a1a1a; border-radius: 8px; padding: 12px; overflow-x: auto; margin-bottom: 18px; }
+.sp-fallback table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.sp-fallback td, .sp-fallback th { padding: 10px 8px; border-bottom: 1px solid #262626; text-align: left; vertical-align: middle; }
+.sp-fallback .img-icon { width: 18px; height: 18px; vertical-align: middle; }
+.sp-fallback .img-banner { max-height: 34px; width: auto; vertical-align: middle; }
 
-            /* REGLA MAESTRA PARA MÓVILES: Romper cualquier texto que intente desbordar */
-            .sp-wrap .table-responsive * {
-                white-space: normal !important; 
-                word-wrap: break-word !important; 
-                overflow-wrap: break-word !important;
-            }
-            
-            .sp-wrap table { 
-                min-width: 0 !important; 
-                width: 100% !important; 
-                table-layout: fixed !important;
-            }
+@media (max-width: 899px) {
+    .sp { padding-top: calc(var(--nf-header) + 54px); padding-bottom: calc(var(--nf-tabbar) + 32px); }
+    .sp-bar { position: static; margin-top: 4px; }
+}
+@media (max-width: 700px) {
+    .sp-head p { font-size: 13.5px; }
+    .sp-bar { gap: 10px; padding-top: 8px; padding-bottom: 8px; }
+    .sp-days { order: 1; }
+    .sp-search { order: 2; flex: 1 1 140px; }
+    .sp-chips { order: 3; flex-basis: 100%; }
+    .sp-live-row { grid-auto-columns: 86%; }
+    .sp-grid { grid-template-columns: 1fr; gap: 8px; }
+    /* tarjeta compacta en fila, como la app */
+    .sp-card { padding: 12px; gap: 8px; }
+    .sp-team { flex-direction: row; justify-content: flex-start; text-align: left; gap: 8px; }
+    .sp-team.away { flex-direction: row-reverse; text-align: right; }
+    .sp-team img, .sp-team .ph { width: 34px; height: 34px; }
+    .sp-team b { font-size: 13.5px; }
+    .sp-score { font-size: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .sp-dot { animation: none; } .sp-card { transition: none; } }
+</style>
 
-            .sp-wrap table, .sp-wrap thead, .sp-wrap tbody, .sp-wrap th, .sp-wrap td, .sp-wrap tr {
-                display: block !important;
-                width: 100% !important;
-            }
-
-            .sp-wrap thead { display: none !important; }
-
-            .sp-wrap tr {
-                background-color: #1a1a1a;
-                margin-bottom: 20px;
-                border-radius: 12px;
-                padding: 15px 10px;
-                border: 1px solid #2a2a2a;
-                display: flex !important;
-                flex-direction: column !important;
-                align-items: center !important;
-                justify-content: center !important;
-                min-width: 0 !important; /* Vital para que flex no desborde */
-            }
-
-            .sp-wrap td {
-                padding: 6px 0 !important;
-                border: none !important;
-                text-align: center !important;
-                min-width: 0 !important;
-                width: 100% !important;
-            }
-
-            /* Identifica si hay una fila de título/fecha (ej. td colspan="5") */
-            .sp-wrap td[colspan] {
-                background: rgba(229, 9, 20, 0.1);
-                color: #e50914 !important;
-                font-weight: bold;
-                border-radius: 6px;
-                padding: 10px !important;
-                margin-bottom: 10px !important;
-            }
-
-            /* 1. Logos de eventos */
-            .sp-wrap td:nth-child(1) { margin-bottom: 10px; }
-
-            /* 2 y 3. Fechas y Horas */
-            .sp-wrap td:nth-child(2), .sp-wrap td:nth-child(3) {
-                background: rgba(255, 255, 255, 0.05);
-                color: #b3b3b3;
-                font-size: 13px;
-                padding: 5px 15px !important;
-                border-radius: 20px;
-                margin: 3px auto !important;
-                display: inline-block !important; /* Para que queden como pastillas */
-                width: fit-content !important;
-            }
-
-            /* 4. Título / Nombre del Partido */
-            .sp-wrap td:nth-child(4) {
-                font-size: 17px;
-                font-weight: bold;
-                color: #ffffff;
-                margin: 10px 0 !important;
-                line-height: 1.3;
-            }
-
-            /* 5. Canales / Logos inferiores */
-            .sp-wrap td:nth-child(5) {
-                margin-top: 10px !important;
-                padding: 10px !important;
-                background: #101010;
-                border-radius: 8px;
-                display: flex !important;
-                flex-direction: row !important;
-                flex-wrap: wrap !important; /* Obliga a los logos a saltar a otra línea si no caben */
-                justify-content: center !important;
-                align-items: center !important;
-                gap: 8px;
-            }
-        }
-    </style>
-
-    <div class="sp-wrap"><div class="content-container"><h1 class="nf-page-title" style="text-align:left">Deportes en TV</h1>
-        <div class="search-container">
-            <input type="text" id="searchInput" onkeyup="filterTables()" placeholder="Buscar equipos, ligas o canales...">
+<main class="sp" id="sp">
+    <div class="sp-head">
+        <div>
+            <h1>Deportes</h1>
+            <p>Partidos de hoy y mañana en tu hora local.</p>
         </div>
-
-        <?php if (!empty($sports['t1'])): ?>
-            <div class="table-responsive"><?php echo $sports['t1']; ?></div>
-        <?php endif; ?>
-
-        <hr class="section-divider">
-
-        <?php if (!empty($sports['t2'])): ?>
-            <div class="table-responsive"><?php echo $sports['t2']; ?></div>
-        <?php endif; ?>
-        <?php if (empty($sports['t1']) && empty($sports['t2'])): ?><div class="nf-empty">La agenda deportiva no está disponible en este momento.</div><?php endif; ?>
+        <span class="sp-livecount" id="spLiveCount" hidden><span class="sp-dot"></span><span></span></span>
     </div>
 
+<?php if ($events): ?>
+    <div class="sp-bar">
+        <div class="sp-days" role="tablist" aria-label="Día">
+            <button type="button" class="on" data-day="0" role="tab">Hoy</button>
+            <button type="button" data-day="1" role="tab">Mañana</button>
+        </div>
+        <div class="sp-search"><input type="search" id="spQ" placeholder="Buscar equipo o liga" aria-label="Buscar equipo o liga"></div>
+        <div class="sp-chips" id="spChips"></div>
     </div>
-    <script>
-        function filterTables() {
-            let input = document.getElementById("searchInput");
-            let filter = input.value.toLowerCase();
-            let tables = document.querySelectorAll("table");
+    <section class="sp-livewrap" id="spLive" hidden>
+        <h2 class="sp-h2"><span class="sp-dot"></span>En vivo ahora</h2>
+        <div class="sp-live-row"></div>
+    </section>
+    <div id="spList"></div>
+<?php else: ?>
+    <?php if (!empty($sports['t1']) || !empty($sports['t2'])): ?>
+        <div class="sp-search" style="max-width:420px;margin-bottom:14px"><input type="search" id="spQ2" placeholder="Buscar equipos, ligas o canales" aria-label="Buscar"></div>
+        <?php if (!empty($sports['t1'])): ?><div class="sp-fallback"><?php echo $sports['t1']; ?></div><?php endif; ?>
+        <?php if (!empty($sports['t2'])): ?><div class="sp-fallback"><?php echo $sports['t2']; ?></div><?php endif; ?>
+    <?php else: ?>
+        <div class="sp-empty"><b>La agenda deportiva no está disponible</b>Vuelve a intentarlo en unos minutos.</div>
+    <?php endif; ?>
+<?php endif; ?>
+</main>
 
-            tables.forEach(table => {
-                let trs = table.getElementsByTagName("tr");
-                for (let i = 0; i < trs.length; i++) {
-                    let tr = trs[i];
-                    if (tr.getElementsByTagName("th").length > 0 || tr.parentNode.tagName.toLowerCase() === 'thead') {
-                        continue;
-                    }
-                    let textContent = tr.textContent || tr.innerText;
-                    if (textContent.toLowerCase().indexOf(filter) > -1) {
-                        tr.style.display = ""; 
-                    } else {
-                        tr.style.display = "none";
-                    }
-                }
-            });
+<script>
+(function () {
+    var q2 = document.getElementById('spQ2');
+    if (q2) q2.addEventListener('input', function () {
+        var f = q2.value.toLowerCase();
+        document.querySelectorAll('.sp-fallback tr').forEach(function (tr) {
+            if (tr.querySelector('th')) return;
+            tr.style.display = (tr.textContent || '').toLowerCase().indexOf(f) > -1 ? '' : 'none';
+        });
+    });
+
+    var EV = <?php echo json_encode($events, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+    var META = <?php echo json_encode($sp_meta, JSON_UNESCAPED_UNICODE); ?>;
+    if (!EV.length) return;
+
+    var FIN = /^(FT|AET|AOT|PEN|Match Finished|Finished|After Over Time|Final)$/i;
+    var state = { day: 0, sport: '', q: '' };
+    var fmtT = new Intl.DateTimeFormat('es', { hour: 'numeric', minute: '2-digit' });
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var dayKey = function (d) { return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); };
+
+    EV.forEach(function (e) {
+        e.t = new Date(e.ts);
+        if (isNaN(e.t)) e.t = new Date(e.ts.replace(' ', 'T'));
+        e.dk = dayKey(e.t);
+    });
+    function status(e) {
+        var now = Date.now(), dur = ((META[e.sp] || {}).d || 120) * 60000;
+        if (e.pp) return 'pp';
+        if (FIN.test(e.st || '')) return 'fin';
+        if (now >= e.t.getTime() && now < e.t.getTime() + dur) return 'live';
+        if (now >= e.t.getTime() + dur) return 'fin';
+        return 'soon';
+    }
+    window.spImg = function (img) {
+        if (!img.dataset.r) { img.dataset.r = 1; img.src = img.src.replace(/\/small$/, ''); return; }
+        var ph = document.createElement('span'); ph.className = 'ph'; ph.textContent = img.getAttribute('data-n') || '?';
+        img.replaceWith(ph);
+    };
+    function badge(src, name) {
+        var ini = esc((name || '?').charAt(0).toUpperCase());
+        if (src) return '<img src="' + esc(src) + '/small" alt="" loading="lazy" data-n="' + ini + '" onerror="spImg(this)">';
+        return '<span class="ph">' + ini + '</span>';
+    }
+    function card(e) {
+        var st = status(e), pill;
+        if (st === 'live') pill = '<span class="sp-pill live"><span class="sp-dot"></span>En vivo</span>';
+        else if (st === 'fin') pill = '<span class="sp-pill fin">Final</span>';
+        else if (st === 'pp') pill = '<span class="sp-pill fin">Aplazado</span>';
+        else pill = '<span class="sp-pill time">' + esc(fmtT.format(e.t)) + '</span>';
+        var hasScore = e.hs !== null && e.hs !== '' && e.as !== null && e.as !== '' && st !== 'soon';
+        var mid;
+        if (e.h && e.a) {
+            mid = '<div class="sp-teams"><div class="sp-team home">' + badge(e.hb, e.h) + '<b>' + esc(e.h) + '</b></div>' +
+                (hasScore ? '<div class="sp-score">' + esc(e.hs) + ' - ' + esc(e.as) + '</div>' : '<div class="sp-vs">VS</div>') +
+                '<div class="sp-team away">' + badge(e.ab, e.a) + '<b>' + esc(e.a) + '</b></div></div>';
+        } else {
+            mid = '<div class="sp-single">' + esc(e.ev) + '</div>';
         }
-    </script>
+        var m = META[e.sp] || { n: e.sp, i: '' };
+        return '<article class="sp-card' + (st === 'live' ? ' live' : '') + '">' +
+            '<div class="sp-top"><span class="lg">' + esc(m.i + ' ' + (e.lg || m.n)) + '</span>' + pill + '</div>' + mid +
+            '<div class="sp-foot"><span class="v">' + esc(e.v || (st === 'soon' ? fmtT.format(e.t) : '')) + '</span>' +
+            '<a href="tvguide.php">TV en vivo</a></div></article>';
+    }
+
+    var today = new Date(), tomorrow = new Date(Date.now() + 86400000);
+    var keys = [dayKey(today), dayKey(tomorrow)];
+
+    function visible() {
+        var q = state.q.toLowerCase();
+        return EV.filter(function (e) {
+            if (e.dk !== keys[state.day]) return false;
+            if (state.sport && e.sp !== state.sport) return false;
+            if (q && (e.h + ' ' + e.a + ' ' + e.lg + ' ' + e.ev).toLowerCase().indexOf(q) < 0) return false;
+            return true;
+        });
+    }
+    function renderChips() {
+        var count = {}, total = 0;
+        EV.forEach(function (e) { if (e.dk === keys[state.day]) { count[e.sp] = (count[e.sp] || 0) + 1; total++; } });
+        var h = '<button type="button" class="nf-chip' + (state.sport ? '' : ' active') + '" data-sp="">Todos<b>' + total + '</b></button>';
+        Object.keys(META).forEach(function (k) {
+            if (!count[k]) return;
+            h += '<button type="button" class="nf-chip' + (state.sport === k ? ' active' : '') + '" data-sp="' + esc(k) + '">' + META[k].i + ' ' + esc(META[k].n) + '<b>' + count[k] + '</b></button>';
+        });
+        document.getElementById('spChips').innerHTML = h;
+    }
+    function render() {
+        var list = visible();
+        // en vivo (siempre de hoy)
+        var live = EV.filter(function (e) { return status(e) === 'live' && (!state.sport || e.sp === state.sport); });
+        var lc = document.getElementById('spLiveCount');
+        lc.hidden = !live.length;
+        lc.lastChild.textContent = live.length + (live.length === 1 ? ' partido en vivo' : ' partidos en vivo');
+        var lw = document.getElementById('spLive');
+        lw.hidden = !(live.length && state.day === 0 && !state.q);
+        if (!lw.hidden) lw.querySelector('.sp-live-row').innerHTML = live.map(card).join('');
+
+        var groups = {}, order = [];
+        list.forEach(function (e) {
+            if (!lw.hidden && status(e) === 'live') return;
+            var g = e.lg || (META[e.sp] || {}).n || e.sp;
+            if (!groups[g]) { groups[g] = { lb: e.lb, items: [] }; order.push(g); }
+            groups[g].items.push(e);
+        });
+        var h = order.map(function (g) {
+            var G = groups[g];
+            return '<section class="sp-league"><div class="sp-lhead">' + (G.lb ? '<img src="' + esc(G.lb) + '/tiny" alt="" loading="lazy" onerror="this.remove()">' : '') +
+                '<h3>' + esc(g) + '</h3><span>' + G.items.length + '</span></div><div class="sp-grid">' + G.items.map(card).join('') + '</div></section>';
+        }).join('');
+        if (!h && lw.hidden) h = '<div class="sp-empty"><b>No hay partidos con estos filtros</b>Prueba con otro día o deporte.</div>';
+        document.getElementById('spList').innerHTML = h;
+    }
+
+    document.querySelector('.sp-days').addEventListener('click', function (ev) {
+        var b = ev.target.closest('button'); if (!b) return;
+        this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+        state.day = +b.getAttribute('data-day'); state.sport = '';
+        renderChips(); render();
+    });
+    document.getElementById('spChips').addEventListener('click', function (ev) {
+        var b = ev.target.closest('.nf-chip'); if (!b) return;
+        state.sport = b.getAttribute('data-sp'); renderChips(); render();
+    });
+    var qi = document.getElementById('spQ'), qt;
+    qi.addEventListener('input', function () { clearTimeout(qt); qt = setTimeout(function () { state.q = qi.value.trim(); render(); }, 150); });
+
+    // si hoy no queda nada, se abre mañana
+    if (!EV.some(function (e) { return e.dk === keys[0]; })) document.querySelector('.sp-days [data-day="1"]').click();
+    else { renderChips(); render(); }
+    setInterval(render, 60000);
+})();
+</script>
 <?php include "footer.php"; ?>

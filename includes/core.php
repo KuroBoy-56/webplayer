@@ -20,6 +20,14 @@ if (!defined('WP_FORCE_PROXY')) {
     define('WP_FORCE_PROXY', false);
 }
 
+// Clave de TMDB (carátulas, fondos, elenco y tráileres)
+if (!defined('WP_TMDB_KEY')) {
+    define('WP_TMDB_KEY', '0c23c3f0458f0f9e4d0a35048d3a199a');
+}
+
+// Duración de los enlaces firmados del proxy (segundos)
+define('WP_SIGN_TTL', 43200);
+
 /* ------------------------------------------------------------------ */
 /* HTTPS / sesión                                                      */
 /* ------------------------------------------------------------------ */
@@ -380,8 +388,17 @@ function wp_sign($url)
     return substr(hash_hmac('sha256', $url, wp_secret()), 0, 32);
 }
 
+/**
+ * Enlace firmado hacia proxy.php / img.php.
+ * La firma caduca (WP_SIGN_TTL) y no depende de cookies: el reproductor nativo
+ * del iPhone (AVPlayer) a veces pide el video sin enviar la cookie de sesión.
+ */
 function wp_proxy_url($url, $script = 'proxy.php')
 {
+    if ($script === 'proxy.php') {
+        $exp = (int)(ceil((time() + WP_SIGN_TTL) / 600) * 600); // redondeado: el navegador puede reutilizar caché
+        return $script . '?u=' . wp_b64u_enc($url) . '&e=' . $exp . '&s=' . wp_sign($url . '|' . $exp);
+    }
     return $script . '?u=' . wp_b64u_enc($url) . '&s=' . wp_sign($url);
 }
 
@@ -390,9 +407,57 @@ function wp_verify_signed(&$url)
     $u = isset($_GET['u']) ? wp_b64u_dec((string)$_GET['u']) : '';
     $s = isset($_GET['s']) ? (string)$_GET['s'] : '';
     if (!$u || !$s || !preg_match('~^https?://~i', $u)) return false;
-    if (!hash_equals(wp_sign($u), $s)) return false;
+    if (isset($_GET['e'])) {
+        $exp = (int)$_GET['e'];
+        if ($exp < time() || !hash_equals(wp_sign($u . '|' . $exp), $s)) return false;
+    } elseif (!hash_equals(wp_sign($u), $s)) {
+        return false;
+    }
     $url = $u;
     return true;
+}
+
+/**
+ * Base https del servidor IPTV si lo soporta (server_info.https_port), p. ej. https://host:25463
+ * Así en un sitio https el video va directo del servidor al navegador, sin pasar por el hosting.
+ */
+function wp_server_https_base()
+{
+    static $memo = false;
+    if ($memo !== false) return $memo;
+    $u = wp_user();
+    $p = parse_url((string)$u['server']);
+    if (!$p || empty($p['host'])) return $memo = null;
+    if (strtolower($p['scheme'] ?? '') === 'https') return $memo = rtrim($u['server'], '/');
+    $info = xt_get(null, [], 21600, 8);
+    $si = is_array($info['server_info'] ?? null) ? $info['server_info'] : [];
+    $hp = (int)($si['https_port'] ?? 0);
+    if ($hp <= 0) return $memo = null;
+    return $memo = 'https://' . $p['host'] . ($hp === 443 ? '' : ':' . $hp);
+}
+
+/**
+ * Fuentes de reproducción en orden de prueba para NFPlayer.
+ * $exts = extensiones a probar (p. ej. ['mp4','mkv','m3u8']).
+ */
+function wp_play_sources($kind, $id, array $exts)
+{
+    $out = [];
+    $https = wp_is_https();
+    $hbase = $https && !WP_FORCE_PROXY ? wp_server_https_base() : null;
+    foreach ($exts as $x) {
+        $u = wp_stream_url($kind, $id, $x);
+        $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
+        if (!WP_FORCE_PROXY) {
+            if (!$https || stripos($u, 'https://') === 0) {
+                $out[] = ['url' => $u, 'engine' => $engine];
+            } elseif ($hbase) {
+                $out[] = ['url' => $hbase . substr($u, strlen(rtrim(wp_user()['server'], '/'))), 'engine' => $engine, 'quick' => 1];
+            }
+        }
+        $out[] = ['url' => wp_proxy_url($u), 'engine' => $engine];
+    }
+    return $out;
 }
 
 /** URL de imagen segura: en sitios HTTPS las imágenes http pasan por img.php (evita contenido mixto). */
@@ -436,9 +501,9 @@ function wp_platforms()
         'max' => ['label' => 'HBO Max', 'img' => 'img/MAx.webp', 'kw' => ['hbo', '/\bmax\b/'], 'color' => '#5822b4'],
         'prime' => ['label' => 'Prime Video', 'img' => 'img/prime.webp', 'kw' => ['amazon', 'prime'], 'color' => '#00a8e1'],
         'marvel' => ['label' => 'Marvel', 'img' => 'img/marvel.webp', 'kw' => ['marvel', '/\bmcu\b/'], 'color' => '#ec1d24'],
-        'apple' => ['label' => 'Apple TV+', 'img' => '', 'kw' => ['apple'], 'color' => '#555'],
-        'paramount' => ['label' => 'Paramount+', 'img' => '', 'kw' => ['paramount'], 'color' => '#0064ff'],
-        'dc' => ['label' => 'DC', 'img' => '', 'kw' => ['/\bdc\b/', 'dc comics'], 'color' => '#0476f2'],
+        'apple' => ['label' => 'Apple TV+', 'img' => 'img/appletv.webp', 'kw' => ['apple'], 'color' => '#555'],
+        'paramount' => ['label' => 'Paramount+', 'img' => 'img/paramount.webp', 'kw' => ['paramount'], 'color' => '#0064ff'],
+        'dc' => ['label' => 'DC', 'img' => 'img/dc.webp', 'kw' => ['/\bdc\b/', 'dc comics'], 'color' => '#0476f2'],
         'xmas' => ['label' => 'Navidad', 'img' => 'img/xmas.webp', 'kw' => ['navidad', 'navide', 'christmas', 'xmas'], 'color' => '#1f7a3a'],
         'halloween' => ['label' => 'Halloween', 'img' => 'img/halloween.webp', 'kw' => ['halloween', 'terror', 'horror'], 'color' => '#ff6a00'],
     ];
@@ -508,7 +573,7 @@ function wp_catalog($type)
 {
     static $memo = [];
     if (isset($memo[$type])) return $memo[$type];
-    $key = 'slim|' . $type . '|' . xt_cache_key('', []);
+    $key = 'slim2|' . $type . '|' . xt_cache_key('', []);
     $data = wp_cache_get($key, 1800, $stale);
     if ($data !== null) return $memo[$type] = $data;
 
@@ -535,6 +600,7 @@ function wp_catalog($type)
                     'rating' => (float)($it['rating'] ?? 0),
                     'genre' => (string)($it['genre'] ?? ''),
                     'year' => (string)($it['year'] ?? substr((string)($it['releaseDate'] ?? ($it['release_date'] ?? '')), 0, 4)),
+                    'tm' => preg_replace('/\D/', '', (string)($it['tmdb'] ?? ($it['tmdb_id'] ?? ''))),
                 ];
             } else {
                 $slim[] = [
@@ -548,6 +614,7 @@ function wp_catalog($type)
                     'ext' => (string)($it['container_extension'] ?? ''),
                     'genre' => (string)($it['genre'] ?? ''),
                     'year' => (string)($it['year'] ?? ''),
+                    'tm' => preg_replace('/\D/', '', (string)($it['tmdb'] ?? ($it['tmdb_id'] ?? ''))),
                 ];
             }
         }
@@ -666,6 +733,7 @@ function wp_card($it, $t = null)
         'i' => wp_img($it['icon']),
         'r' => $it['rating'] ? round((float)$it['rating'], 1) : '',
         'y' => $it['year'] ?? '',
+        'tm' => $it['tm'] ?? '',
         'u' => $t === 'series' ? 'seriesvideo.php?id=' . rawurlencode($id) : 'Movie_description.php?id=' . rawurlencode($id),
     ];
 }
@@ -782,4 +850,115 @@ function wp_json_update($path, callable $fn, $flags = JSON_PRETTY_PRINT)
     @flock($fp, LOCK_UN);
     fclose($fp);
     return $new;
+}
+
+/* ------------------------------------------------------------------ */
+/* TMDB: carátulas en alta calidad, fondos, elenco y tráiler           */
+/* ------------------------------------------------------------------ */
+
+function wp_tmdb_clean_title($title)
+{
+    $t = preg_replace('/\([^)]*\)|\[[^\]]*\]/', '', (string)$title);
+    $t = preg_replace('/^\s*(?:[A-Z]{2,3}|4K|HD|FHD|LAT|SUB|ES|VOSE)\s*[-|:]\s*/u', '', $t); // prefijos "LAT - ", "4K | "
+    $t = preg_replace('/\b(?:19|20)\d{2}\b\s*$/', '', $t);
+    return trim(preg_replace('/\s+/', ' ', $t), " -|:");
+}
+
+/** Busca el id de TMDB por título (+ año) sin pedir más datos. */
+function wp_tmdb_search($type, $title, $year = '')
+{
+    $q = wp_tmdb_clean_title($title);
+    if ($q === '' || !WP_TMDB_KEY) return null;
+    $ck = 'tmdbs|' . $type . '|' . wp_norm_title($q) . '|' . $year;
+    $hit = wp_cache_get($ck, 2592000);
+    if (is_array($hit)) return $hit['r'];
+    $url = 'https://api.themoviedb.org/3/search/' . $type . '?api_key=' . WP_TMDB_KEY . '&language=es-ES&include_adult=false&query=' . urlencode($q);
+    if ($year) $url .= ($type === 'tv' ? '&first_air_date_year=' : '&year=') . (int)$year;
+    $body = wp_http_get($url, 5);
+    $s = $body ? json_decode($body, true) : null;
+    $r = !empty($s['results'][0]['id']) ? $s['results'][0] : null;
+    if (!$r && $year && is_array($s)) return wp_tmdb_search($type, $title, '');
+    if ($body !== null) wp_cache_set($ck, ['r' => $r]);
+    return $r;
+}
+
+/**
+ * Datos completos de TMDB. $type = 'movie' | 'tv'. Usa el tmdb_id del servidor si existe (más exacto).
+ * Devuelve ['id','poster','backdrop','cast','trailer','overview'] (caché 7 días).
+ */
+function wp_tmdb_details($type, $tmdbId, $title, $year = '')
+{
+    $tmdbId = preg_replace('/\D/', '', (string)$tmdbId);
+    $ck = 'tmdbd|' . $type . '|' . ($tmdbId ?: wp_norm_title($title) . '|' . $year);
+    $d = wp_cache_get($ck, 604800);
+    if (is_array($d)) return $d;
+    $d = ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => ''];
+    if (!WP_TMDB_KEY) return $d;
+    if (!$tmdbId) {
+        $r = wp_tmdb_search($type, $title, $year);
+        $tmdbId = $r['id'] ?? '';
+    }
+    if ($tmdbId) {
+        $body = wp_http_get('https://api.themoviedb.org/3/' . $type . '/' . $tmdbId . '?api_key=' . WP_TMDB_KEY
+            . '&language=es-ES&append_to_response=credits,videos&include_video_language=es,en,null', 5);
+        $j = $body ? json_decode($body, true) : null;
+        if (is_array($j) && !empty($j['id'])) {
+            $d['id'] = $j['id'];
+            $d['poster'] = !empty($j['poster_path']) ? 'https://image.tmdb.org/t/p/w500' . $j['poster_path'] : '';
+            $d['backdrop'] = !empty($j['backdrop_path']) ? 'https://image.tmdb.org/t/p/w1280' . $j['backdrop_path'] : '';
+            $d['overview'] = (string)($j['overview'] ?? '');
+            foreach (array_slice($j['credits']['cast'] ?? [], 0, 12) as $a) {
+                $d['cast'][] = ['n' => $a['name'] ?? '', 'c' => $a['character'] ?? '', 'p' => !empty($a['profile_path']) ? 'https://image.tmdb.org/t/p/w185' . $a['profile_path'] : ''];
+            }
+            $vids = $j['videos']['results'] ?? [];
+            usort($vids, function ($a, $b) { return (($b['iso_639_1'] ?? '') === 'es') <=> (($a['iso_639_1'] ?? '') === 'es'); });
+            foreach ($vids as $v) {
+                if (($v['site'] ?? '') === 'YouTube' && in_array($v['type'] ?? '', ['Trailer', 'Teaser'], true)) { $d['trailer'] = $v['key']; break; }
+            }
+        }
+    }
+    wp_cache_set($ck, $d);
+    return $d;
+}
+
+/**
+ * Carátulas TMDB para varias tarjetas a la vez (en paralelo, caché 30 días).
+ * $items = [['k' => clave, 't' => 'movie'|'series', 'tm' => tmdb_id, 'n' => nombre, 'y' => año], ...]
+ * Devuelve [clave => url w342].
+ */
+function wp_tmdb_posters(array $items)
+{
+    $out = [];
+    $need = [];
+    foreach ($items as $it) {
+        $type = ($it['t'] ?? '') === 'series' ? 'tv' : 'movie';
+        $tm = preg_replace('/\D/', '', (string)($it['tm'] ?? ''));
+        $ck = 'tmdbp|' . $type . '|' . ($tm ?: wp_norm_title(wp_tmdb_clean_title($it['n'] ?? '')) . '|' . ($it['y'] ?? ''));
+        $hit = wp_cache_get($ck, 2592000);
+        if (is_array($hit)) {
+            if ($hit['p']) $out[$it['k']] = $hit['p'];
+            continue;
+        }
+        $q = wp_tmdb_clean_title($it['n'] ?? '');
+        if (!$tm && $q === '') continue;
+        $url = $tm
+            ? 'https://api.themoviedb.org/3/' . $type . '/' . $tm . '?api_key=' . WP_TMDB_KEY . '&language=es-ES'
+            : 'https://api.themoviedb.org/3/search/' . $type . '?api_key=' . WP_TMDB_KEY . '&language=es-ES&include_adult=false&query=' . urlencode($q)
+                . (!empty($it['y']) ? ($type === 'tv' ? '&first_air_date_year=' : '&year=') . (int)$it['y'] : '');
+        $need[$it['k']] = ['ck' => $ck, 'url' => $url, 'tm' => $tm];
+    }
+    if ($need && WP_TMDB_KEY) {
+        $urls = [];
+        foreach ($need as $k => $n) $urls[$k] = $n['url'];
+        foreach (wp_http_multi($urls, 6) as $k => $body) {
+            if ($body === null || $body === false || $body === '') continue;
+            $j = json_decode($body, true);
+            if (!is_array($j)) continue;
+            $r = $need[$k]['tm'] ? $j : ($j['results'][0] ?? null);
+            $p = !empty($r['poster_path']) ? 'https://image.tmdb.org/t/p/w342' . $r['poster_path'] : '';
+            wp_cache_set($need[$k]['ck'], ['p' => $p]);
+            if ($p) $out[$k] = $p;
+        }
+    }
+    return $out;
 }

@@ -6,7 +6,6 @@ require_once __DIR__ . '/includes/ui.php';
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $selected_season = isset($_GET['season']) ? (string)(int)$_GET['season'] : null;
-$tmdb_api_key = "54a47dfd36406757c9a6b7a0e3fd9cdc";
 
 if (!$id) {
     header('Location: seriesondemand.php');
@@ -34,35 +33,12 @@ $poster = $series_info['cover'] ?? '';
 $youtube_trailer = $series_info['youtube_trailer'] ?? '';
 if ($genre) wp_genre_index_put('series', (string)$id, $genre);
 
-/* ---------- TMDB con caché ---------- */
-$tmdb_key = 'tmdb|tv|' . wp_norm_title($title);
-$tmdb = wp_cache_get($tmdb_key, 604800);
-if (!is_array($tmdb)) {
-    $tmdb = ['id' => null, 'backdrop' => '', 'cast' => [], 'trailer' => ''];
-    $clean = trim(preg_replace('/\([^)]*\)|\[[^\]]*\]/', '', $title));
-    $body = wp_http_get("https://api.themoviedb.org/3/search/tv?api_key={$tmdb_api_key}&language=es-ES&query=" . urlencode($clean), 4);
-    $s = $body ? json_decode($body, true) : null;
-    if (!empty($s['results'][0]['id'])) {
-        $r0 = $s['results'][0];
-        $tmdb['id'] = $r0['id'];
-        $tmdb['backdrop'] = !empty($r0['backdrop_path']) ? 'https://image.tmdb.org/t/p/original' . $r0['backdrop_path'] : '';
-        $more = wp_http_multi([
-            'credits' => "https://api.themoviedb.org/3/tv/{$r0['id']}/credits?api_key={$tmdb_api_key}",
-            'videos' => "https://api.themoviedb.org/3/tv/{$r0['id']}/videos?api_key={$tmdb_api_key}",
-        ], 4);
-        $cd = $more['credits'] ? json_decode($more['credits'], true) : [];
-        foreach (array_slice($cd['cast'] ?? [], 0, 10) as $a) {
-            $tmdb['cast'][] = ['n' => $a['name'] ?? '', 'c' => $a['character'] ?? '', 'p' => !empty($a['profile_path']) ? 'https://image.tmdb.org/t/p/w185' . $a['profile_path'] : ''];
-        }
-        $vd = $more['videos'] ? json_decode($more['videos'], true) : [];
-        foreach ($vd['results'] ?? [] as $v) {
-            if (($v['site'] ?? '') === 'YouTube' && in_array($v['type'] ?? '', ['Trailer', 'Teaser'], true)) { $tmdb['trailer'] = $v['key']; break; }
-        }
-    }
-    wp_cache_set($tmdb_key, $tmdb);
-}
-if (!$backdrop) $backdrop = $tmdb['backdrop'];
+/* ---------- TMDB (carátula en alta calidad, fondo, elenco y tráiler; caché 7 días) ---------- */
+$tmdb = wp_tmdb_details('tv', $series_info['tmdb_id'] ?? ($series_info['tmdb'] ?? ''), $title, $year);
+if (!empty($tmdb['poster'])) $poster = $tmdb['poster'];
+if (!empty($tmdb['backdrop'])) $backdrop = $tmdb['backdrop'];
 if (!$youtube_trailer) $youtube_trailer = $tmdb['trailer'];
+if ($description === '' && $tmdb['overview'] !== '') $description = $tmdb['overview'];
 $youtube_trailer = preg_replace('/[^A-Za-z0-9_\-]/', '', (string)$youtube_trailer);
 
 /* ---------- Favorito ---------- */
@@ -176,7 +152,6 @@ include "header.php";
                 </div>
             </div>
             <div class="nf-detail-extra">
-                <?php if ($genre): ?><div><b>Géneros:</b> <?php echo e($genre); ?></div><?php endif; ?>
                 <?php if (!empty($series_info['cast']) && !$tmdb['cast']): ?><div><b>Elenco:</b> <?php echo e($series_info['cast']); ?></div><?php endif; ?>
             </div>
         </div>

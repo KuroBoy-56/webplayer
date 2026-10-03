@@ -138,7 +138,7 @@
         v.addEventListener('pause', function () { self.state(); self.emit('pause'); });
         v.addEventListener('waiting', function () { r.classList.add('buffering'); });
         v.addEventListener('stalled', function () { r.classList.add('buffering'); });
-        v.addEventListener('playing', function () { r.classList.remove('buffering'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); });
+        v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); });
         v.addEventListener('canplay', function () { r.classList.remove('buffering'); });
         v.addEventListener('loadedmetadata', function () {
             self.ok = true;
@@ -333,7 +333,9 @@
         this.root.classList.add('buffering');
         var t = this.lastTime || 0;
         if (t > 5) { this.o.resume = t; this.resumed = false; }
-        this.loadTimer = setTimeout(function () { if (!self.ok) self.fail('timeout'); }, s.engine === 'native' ? 20000 : 25000);
+        this.root.classList.remove('needtap');
+        // las fuentes https directas se descartan rápido si el puerto no responde
+        this.loadTimer = setTimeout(function () { if (!self.ok) self.fail('timeout'); }, s.quick ? 9000 : (s.engine === 'native' ? 25000 : 30000));
         try {
             if (s.engine === 'hls') this.playHls(s.url);
             else if (s.engine === 'mpegts') this.playTs(s.url);
@@ -348,10 +350,39 @@
     };
 
     NFPlayer.prototype.autoplay = function () {
-        var self = this, p = this.v.play();
+        var self = this, v = this.v, p = v.play();
         if (p && p.catch) p.catch(function (err) {
-            if (err && err.name === 'NotAllowedError') { self.state(); self.root.classList.remove('buffering'); }
+            if (!err || err.name !== 'NotAllowedError') return;
+            // iPhone/Safari bloquean el sonido automático: se inicia en silencio (como Netflix) y se ofrece activar el audio
+            v.muted = true;
+            var p2 = v.play();
+            var giveUp = function () {
+                // ni en silencio: no es un fallo de la fuente, se espera a que el usuario toque reproducir
+                clearTimeout(self.loadTimer);
+                self.ok = true;
+                self.state();
+                self.root.classList.remove('buffering');
+                self.root.classList.add('needtap');
+            };
+            if (p2 && p2.then) p2.then(function () { self.showUnmute(); }, giveUp); else giveUp();
         });
+    };
+
+    NFPlayer.prototype.showUnmute = function () {
+        var self = this, b = this.root.querySelector('.nfp-unmute');
+        if (!b) {
+            b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'nfp-unmute';
+            b.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg><span>Activar sonido</span>';
+            b.addEventListener('click', function (e) {
+                e.stopPropagation();
+                self.v.muted = false;
+                if (self.v.volume === 0) self.v.volume = 1;
+                b.remove();
+            });
+            this.root.appendChild(b);
+        }
     };
 
     NFPlayer.prototype.playNative = function (url) {
@@ -359,17 +390,33 @@
         this.autoplay();
     };
 
+    var APPLE = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+        (/Safari/i.test(navigator.userAgent) && !/Chrome|Chromium|Edg|Android/i.test(navigator.userAgent));
+
     NFPlayer.prototype.playHls = function (url) {
         var self = this;
+        // En iPhone/Safari el HLS nativo es el más estable (igual que Netflix en Safari)
+        if (APPLE && this.v.canPlayType('application/vnd.apple.mpegurl')) {
+            this.v.src = url;
+            this.autoplay();
+            return;
+        }
         if (window.Hls && Hls.isSupported()) {
             var hls = this.hls = new Hls({
                 enableWorker: true,
                 lowLatencyMode: false,
                 backBufferLength: 60,
-                maxBufferLength: this.live ? 20 : 45,
-                fragLoadingMaxRetry: 4,
-                manifestLoadingMaxRetry: 2,
-                levelLoadingMaxRetry: 3
+                maxBufferLength: this.live ? 30 : 60,
+                maxMaxBufferLength: 120,
+                liveSyncDurationCount: 4,
+                liveMaxLatencyDurationCount: 12,
+                startFragPrefetch: true,
+                fragLoadingTimeOut: 30000,
+                manifestLoadingTimeOut: 20000,
+                levelLoadingTimeOut: 20000,
+                fragLoadingMaxRetry: 6,
+                manifestLoadingMaxRetry: 3,
+                levelLoadingMaxRetry: 4
             });
             var fatalCount = 0;
             hls.on(Hls.Events.MANIFEST_PARSED, function () { self.autoplay(); });
@@ -418,6 +465,7 @@
         h += '<button type="button" class="nf-btn nf-btn-white" data-act="retry">Reintentar</button>';
         if (o.vlcUrl) h += '<a class="nf-btn nf-btn-gray" href="' + o.vlcUrl + '">Abrir en VLC</a>';
         if (o.downloadUrl) h += '<a class="nf-btn nf-btn-gray" href="' + o.downloadUrl + '">Descargar</a>';
+        if (o.diagUrl) h += '<a class="nf-btn nf-btn-gray" href="' + o.diagUrl + '">Diagnóstico</a>';
         h += '</div>';
         this.msg.innerHTML = h;
         this.msg.classList.add('show');

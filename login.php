@@ -150,7 +150,7 @@ if (!empty($_SESSION['username']) && !empty($_SESSION['server'])) {
 }
 session_write_close();
 
-$api_key = '54a47dfd36406757c9a6b7a0e3fd9cdc';
+$api_key = WP_TMDB_KEY;
 $movies = getMoviesFromEndpoint($api_key);
 $movies = is_array($movies) ? array_slice($movies, 0, 48) : [];
 $remember = isset($_COOKIE['username']) ? (string)$_COOKIE['username'] : '';
@@ -164,7 +164,7 @@ $remember = isset($_COOKIE['username']) ? (string)$_COOKIE['username'] : '';
     <title>LatMpx - WebPlayer</title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="preconnect" href="https://image.tmdb.org">
-    <link rel="stylesheet" href="assets/nf/app.css?v=3">
+    <link rel="stylesheet" href="assets/nf/app.css?v=4">
 </head>
 <body class="nf-login-page">
     <div class="nf-login-wall" aria-hidden="true">

@@ -38,7 +38,8 @@ function wp_icon($name)
 function wp_card_html(array $c, $progress = null, $extraClass = '')
 {
     $cls = 'nf-card' . ($progress !== null ? ' has-pb' : '') . ($extraClass ? ' ' . $extraClass : '');
-    $h = '<a class="' . $cls . '" href="' . e($c['u']) . '" title="' . e($c['n']) . '">';
+    $pk = !empty($c['t']) && isset($c['id']) ? ' data-pk="' . e($c['t'] . '|' . $c['id']) . '" data-tm="' . e($c['tm'] ?? '') . '" data-y="' . e($c['y'] ?? '') . '"' : '';
+    $h = '<a class="' . $cls . '" href="' . e($c['u']) . '" title="' . e($c['n']) . '"' . $pk . '>';
     $h .= '<img src="' . e($c['i']) . '" alt="" loading="lazy" decoding="async" onload="this.classList.add(\'ok\')" onerror="NF.imgErr(this)">';
     if ($c['r'] !== '' && (float)$c['r'] > 0) $h .= '<span class="rt">★ ' . e($c['r']) . '</span>';
     $h .= '<span class="nm">' . e($c['n']) . '</span>';
@@ -84,7 +85,8 @@ function wp_platform_tiles()
     $o = '';
     foreach (wp_available_platforms() as $k => $p) {
         $o .= '<a class="nf-plat" href="browse.php?platform=' . e($k) . '" title="' . e($p['label']) . '" style="--accent:' . e($p['color']) . '">';
-        if ($p['img']) {
+        // la imagen se usa sólo si el archivo existe (si falta, se muestra el nombre)
+        if ($p['img'] && is_file(WP_ROOT . '/' . $p['img'])) {
             $o .= '<img src="' . e($p['img']) . '" alt="' . e($p['label']) . '" loading="lazy">';
         } else {
             $o .= '<span class="txt" style="color:' . e($p['color']) . '">' . e($p['label']) . '</span>';

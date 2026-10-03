@@ -60,3 +60,24 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - En una instalación desde cero, sin `includes/admin/admin.json`, el login te lleva a `setup.php`. Ahí creas el usuario y la contraseña del administrador, y opcionalmente la primera DNS.
 - Para administrar las DNS, inicia sesión en el login normal con ese usuario y contraseña. Entrarás directo al panel de DNS (`includes/dns/edit_dns.php`).
 - Cuando el administrador ya existe, `setup.php` queda bloqueado y redirige al login.
+
+## Actualización 3 de octubre (reproducción, TMDB, deportes)
+
+**Reproducción con HTTPS (sin volver a HTTP)**
+- En iPhone y Safari el video ahora arranca en silencio cuando el navegador bloquea el sonido automático, igual que Netflix, y aparece el botón **Activar sonido**. Antes el reproductor esperaba y probaba otro formato hasta mostrar un error.
+- Los enlaces del proxy son firmados y caducan a las 12 horas, y ya no dependen de la cookie de sesión. El reproductor del iPhone a veces pide el video sin enviarla.
+- El proxy corrige el tipo de archivo cuando tu servidor IPTV responde `application/octet-stream`, porque Safari no reproduce en ese caso. También responde a peticiones HEAD.
+- Si tu servidor IPTV tiene puerto HTTPS (`https_port` en su información), el video va directo del servidor al navegador sin pasar por el hosting. Si ese puerto no responde, en 9 segundos pasa al proxy.
+- En iPhone y Safari se usa el HLS nativo. Los canales en vivo con HTTPS usan el flujo `.ts` continuo, que es más estable por el proxy que pedir cada segmento. El búfer es más amplio para evitar cortes.
+- Nuevo botón **Diagnóstico** en la pantalla de error del reproductor (`diag.php`). Muestra cómo responde tu servidor IPTV a cada formato: código, tipo, si permite saltos en el video y tiempo de respuesta.
+
+**Contenido**
+- "Continuar viendo" y "Mi lista" solo muestran títulos que existen en el servidor IPTV con el que entraste.
+- Se agregó tu clave de TMDB en `includes/core.php` (`WP_TMDB_KEY`). Las tarjetas cambian a carátulas de TMDB en alta calidad, con 30 días de caché. El detalle usa la carátula, el fondo, el elenco y el tráiler de TMDB, buscando por `tmdb_id` cuando el servidor lo envía.
+- Los filtros de género se quitaron del inicio en PC (en el celular siguen) y la línea "Géneros" se quitó del detalle.
+
+**Plataformas**
+- Para usar logos propios, sube estas imágenes a la carpeta `img/`, en formato .webp de 275×183 px como las demás: `appletv.webp`, `paramount.webp` y `dc.webp`. Mientras no existan, se muestra el nombre de la plataforma.
+
+**Deportes**
+- La página es nueva: partidos de hoy y mañana en tu hora local, sección "En vivo ahora" con marcador, filtros por deporte, buscador y tarjetas por liga. En PC se ve en cuadrícula y en el celular en tarjetas compactas. Los datos vienen de TheSportsDB con 15 minutos de caché. Si no hay datos, se muestran las tablas de antes.

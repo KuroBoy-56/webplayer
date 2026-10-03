@@ -5,6 +5,15 @@ $page_title = 'Inicio';
 include "header.php";
 include "database.php";
 
+/* ---------- Sólo títulos que existen en el servidor IPTV actual ---------- */
+$have = ['movie' => [], 'series' => []];
+foreach (wp_catalog('movie') as $it) $have['movie'][$it['id']] = true;
+foreach (wp_catalog('series') as $it) $have['series'][$it['id']] = true;
+$in_server = function ($type, $id) use ($have) {
+    // si el catálogo no cargó (servidor caído) no se oculta nada
+    return !$have[$type] || isset($have[$type][(string)$id]);
+};
+
 /* ---------- Mi lista (favoritos guardados en SQLite) ---------- */
 $favoritos = [];
 if (isset($db)) {
@@ -12,7 +21,7 @@ if (isset($db)) {
     $stmt_fav->bindValue(':username', $username, SQLITE3_TEXT);
     $res_fav = $stmt_fav->execute();
     while ($res_fav && ($row = $res_fav->fetchArray(SQLITE3_ASSOC))) {
-        $favoritos[] = $row;
+        if ($in_server($row['type'] === 'series' ? 'series' : 'movie', $row['stream_id'])) $favoritos[] = $row;
     }
 }
 
@@ -22,6 +31,11 @@ $user_prog = array_values(wp_user_progress($username));
 usort($user_prog, function ($a, $b) {
     return ($b['last_watched'] ?? 0) <=> ($a['last_watched'] ?? 0);
 });
+$user_prog = array_values(array_filter($user_prog, function ($it) use ($in_server) {
+    return ($it['type'] ?? 'movie') === 'series'
+        ? $in_server('series', $it['series_id'] ?? '')
+        : $in_server('movie', $it['stream_id'] ?? '');
+}));
 $continuar_viendo = array_slice($user_prog, 0, 20);
 
 $cont_html = '';
@@ -53,7 +67,7 @@ $genres = wp_available_genres('all');
 
 <?php echo wp_platform_tiles(); ?>
 
-<nav class="nf-chips" aria-label="Géneros">
+<nav class="nf-chips m-only" aria-label="Géneros">
     <?php foreach ($genres as $k => $g): ?>
         <a class="nf-chip" href="browse.php?genre=<?php echo e($k); ?>"><?php echo e($g['label']); ?></a>
     <?php endforeach; ?>

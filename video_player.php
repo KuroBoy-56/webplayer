@@ -116,15 +116,7 @@ if (in_array($ext, ['mkv', 'avi', 'mov', 'wmv', 'flv', 'mpg', 'mpeg', 'm4v', 'di
 if (!in_array('m3u8', $exts, true)) $exts[] = 'm3u8';
 $exts = array_values(array_unique($exts));
 
-$sources = [];
-$pageHttps = wp_is_https();
-foreach ($exts as $x) {
-    $u = wp_stream_url($kind, $id, $x);
-    $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
-    $directOk = !WP_FORCE_PROXY && (!$pageHttps || stripos($u, 'https://') === 0);
-    if ($directOk) $sources[] = ['url' => $u, 'engine' => $engine];
-    $sources[] = ['url' => wp_proxy_url($u), 'engine' => $engine];
-}
+$sources = wp_play_sources($kind, $id, $exts);
 
 $back_url = ($slug == 'movie') ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get;
 $download_url = '?' . http_build_query(array_merge($_GET, ['action' => 'download_file']));
@@ -142,8 +134,8 @@ $extra[] = ['label' => 'Abrir en VLC', 'href' => 'vlc://' . $raw_url];
     <meta name="referrer" content="no-referrer">
     <title><?php echo e($content_name ?: 'Reproductor'); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=3">
-    <link rel="stylesheet" href="assets/nf/player.css?v=3">
+    <link rel="stylesheet" href="assets/nf/app.css?v=4">
+    <link rel="stylesheet" href="assets/nf/player.css?v=4">
     <style>
         html, body { height: 100%; overflow: hidden; background: #000; }
         #player-container { position: fixed; inset: 0; }
@@ -163,7 +155,7 @@ $extra[] = ['label' => 'Abrir en VLC', 'href' => 'vlc://' . $raw_url];
 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
-    <script src="assets/nf/player.js?v=3" defer></script>
+    <script src="assets/nf/player.js?v=4" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -175,6 +167,7 @@ $extra[] = ['label' => 'Abrir en VLC', 'href' => 'vlc://' . $raw_url];
             'nextUrl' => $has_next ? $next_url : '',
             'vlcUrl' => 'vlc://' . $raw_url,
             'downloadUrl' => $download_url,
+            'diagUrl' => 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext),
             'extraMenu' => $extra,
             'id' => $id,
             'slug' => $slug,

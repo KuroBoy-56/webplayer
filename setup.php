@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="robots" content="noindex">
     <title>Configuración inicial - WebPlayer</title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=3">
+    <link rel="stylesheet" href="assets/nf/app.css?v=4">
 </head>
 <body class="nf-login-page">
     <div class="nf-login-shade"></div>

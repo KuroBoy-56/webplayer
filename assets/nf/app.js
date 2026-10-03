@@ -32,12 +32,41 @@
     };
 
     NF.card = function (c, progress) {
-        var h = '<a class="nf-card' + (progress != null ? ' has-pb' : '') + '" href="' + esc(c.u) + '" title="' + esc(c.n) + '">' +
+        var pk = c.t && c.id ? ' data-pk="' + esc(c.t + '|' + c.id) + '" data-tm="' + esc(c.tm || '') + '" data-y="' + esc(c.y || '') + '"' : '';
+        var h = '<a class="nf-card' + (progress != null ? ' has-pb' : '') + '" href="' + esc(c.u) + '" title="' + esc(c.n) + '"' + pk + '>' +
             '<img src="' + esc(c.i || NOIMG) + '" alt="" loading="lazy" decoding="async" onload="this.classList.add(\'ok\')" onerror="NF.imgErr(this)">';
         if (c.r && parseFloat(c.r) > 0) h += '<span class="rt">★ ' + esc(c.r) + '</span>';
         h += '<span class="nm">' + esc(c.n) + '</span>';
         if (progress != null) h += '<span class="pb"><i style="width:' + Math.max(2, Math.min(100, progress)) + '%"></i></span>';
         return h + '</a>';
+    };
+
+    /* ---------------- Carátulas TMDB en alta calidad ---------------- */
+    NF.posters = function (root) {
+        var cards = $$('.nf-card[data-pk]:not([data-pd])', root || d);
+        if (!cards.length) return;
+        var map = {};
+        cards.forEach(function (a) { a.setAttribute('data-pd', '1'); (map[a.getAttribute('data-pk')] = map[a.getAttribute('data-pk')] || []).push(a); });
+        var keys = Object.keys(map);
+        for (var i = 0; i < keys.length; i += 40) (function (chunk) {
+            var items = chunk.map(function (k) {
+                var a = map[k][0];
+                return { k: k, t: k.split('|')[0], tm: a.getAttribute('data-tm') || '', y: a.getAttribute('data-y') || '', n: a.getAttribute('title') || '' };
+            });
+            fetch('api.php?action=posters', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ items: items }) })
+                .then(function (r) { return r.ok ? r.json() : { p: {} }; })
+                .then(function (res) {
+                    var p = res.p || {};
+                    Object.keys(p).forEach(function (k) {
+                        var im = new Image();
+                        im.onload = function () {
+                            (map[k] || []).forEach(function (a) { var img = a.querySelector('img'); if (img) { img.src = p[k]; img.classList.add('ok'); } });
+                        };
+                        im.src = p[k];
+                    });
+                })
+                .catch(function () {});
+        })(keys.slice(i, i + 40));
     };
 
     NF.toast = function (msg) {
@@ -110,6 +139,7 @@
                     slider.innerHTML = items.map(function (c) { return NF.card(c); }).join('');
                 }
                 if (slider._upd) slider._upd();
+                NF.posters(slider);
             })
             .catch(function () {
                 var row = slider.closest('.nf-row');
@@ -143,6 +173,7 @@
                 if (opts.onTotal) opts.onTotal(total);
                 var html = (res.items || []).map(function (c) { return NF.card(c); }).join('');
                 if (page === 1) box.innerHTML = html; else box.insertAdjacentHTML('beforeend', html);
+                NF.posters(box);
                 done = !res.more;
                 page++;
                 busy = false;
@@ -350,6 +381,7 @@
     function boot() {
         initHeader();
         NF.initRows(d);
+        NF.posters(d);
         initPrefetch();
         initProtect();
     }

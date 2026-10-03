@@ -25,6 +25,23 @@ function out($data)
 }
 
 switch ($action) {
+    case 'posters':
+        // Carátulas de TMDB en alta calidad para las tarjetas visibles
+        header('Cache-Control: no-store');
+        $in = json_decode((string)file_get_contents('php://input'), true);
+        $items = [];
+        foreach (array_slice(is_array($in['items'] ?? null) ? $in['items'] : [], 0, 40) as $it) {
+            if (!is_array($it) || empty($it['k'])) continue;
+            $items[] = [
+                'k' => substr((string)$it['k'], 0, 40),
+                't' => ($it['t'] ?? '') === 'series' ? 'series' : 'movie',
+                'tm' => substr(preg_replace('/\D/', '', (string)($it['tm'] ?? '')), 0, 10),
+                'n' => mb_substr((string)($it['n'] ?? ''), 0, 120),
+                'y' => substr(preg_replace('/\D/', '', (string)($it['y'] ?? '')), 0, 4),
+            ];
+        }
+        out(['p' => (object)wp_tmdb_posters($items)]);
+
     case 'row':
         $limit = max(1, min(60, (int)($_GET['limit'] ?? 30)));
         $isTop = ($_GET['sort'] ?? '') === 'top';
