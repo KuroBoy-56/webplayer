@@ -88,8 +88,9 @@ object Cloud {
     private fun parseTime(s: String): Long = runCatching { synchronized(iso) { iso.parse(s)?.time } }.getOrNull() ?: 0L
 
     private fun parseProgress(title: String, o: JSONObject): Progress? {
-        val id = o.s("id")
-        val sid = o.s("seriesId")
+        // solo dígitos, igual que la web (entradas viejas pueden traer "movie_12" o "12.mp4")
+        val id = o.s("id").filter { it.isDigit() }
+        val sid = o.s("seriesId").filter { it.isDigit() }
         val key = when (o.s("type")) {
             "movie" -> if (id.isNotEmpty()) "movie:$id" else return null
             "episode", "series" -> when {
@@ -123,7 +124,7 @@ object Cloud {
     }
 
     fun progressList(): List<Progress> = synchronized(lock) {
-        progress.values.filter { it.position > 30_000 }.sortedByDescending { it.updated }.take(30)
+        progress.values.filter { it.position > 0 }.sortedByDescending { it.updated }.take(30)
     }
 
     /**
