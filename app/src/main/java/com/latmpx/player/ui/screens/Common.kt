@@ -48,8 +48,8 @@ fun AppState.itemFromProgress(p: Progress): Item? {
     val parts = p.key.split(":")
     val id = parts.getOrNull(1)?.toIntOrNull() ?: return null
     return when (parts[0]) {
-        "movie" -> movies.firstOrNull { it.id == id } ?: Item(id, p.title, p.poster, Kind.MOVIE, ext = p.extra)
-        "series" -> series.firstOrNull { it.id == id } ?: Item(id, p.title.substringBefore(" · "), p.poster, Kind.SERIES)
+        "movie" -> movies.firstOrNull { it.id == id } ?: Item(id, p.title, p.poster, Kind.MOVIE, categoryId = p.categoryId)
+        "series" -> series.firstOrNull { it.id == id } ?: Item(id, p.title, p.poster, Kind.SERIES, categoryId = p.categoryId)
         else -> null
     }
 }

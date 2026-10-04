@@ -40,7 +40,7 @@ import coil3.compose.AsyncImage
 import com.latmpx.player.data.Item
 import com.latmpx.player.data.Kind
 import com.latmpx.player.data.Platforms
-import com.latmpx.player.data.Store
+import com.latmpx.player.data.Cloud
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.Route
 import com.latmpx.player.ui.components.FocusBox
@@ -75,8 +75,8 @@ fun HomeScreen(state: AppState) {
     val platforms = remember(state.movieCats, state.seriesCats) {
         Platforms.list.filter { p -> Platforms.categoriesFor(state.movieCats + state.seriesCats, p.kw).isNotEmpty() }
     }
-    val cont = remember(state.refresh, movies, series) { Store.progressList() }
-    val favs = remember(state.refresh) { Store.favList() }
+    val cont = remember(state.refresh, Cloud.rev, movies, series) { Cloud.progressList() }
+    val favs = remember(state.refresh, Cloud.rev) { Cloud.favList().filter { it.kind != Kind.LIVE } }
     var hero by remember(movies) { mutableStateOf(recentMovies.firstOrNull { it.backdrop.isNotEmpty() } ?: recentMovies.firstOrNull()) }
 
     LazyColumn(Modifier.fillMaxSize().background(NfBg)) {

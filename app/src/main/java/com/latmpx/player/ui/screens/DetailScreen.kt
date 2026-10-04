@@ -48,7 +48,7 @@ import com.latmpx.player.data.Details
 import com.latmpx.player.data.Episode
 import com.latmpx.player.data.Item
 import com.latmpx.player.data.Kind
-import com.latmpx.player.data.Store
+import com.latmpx.player.data.Cloud
 import com.latmpx.player.data.Xtream
 import com.latmpx.player.player.Play
 import com.latmpx.player.ui.AppState
@@ -68,11 +68,11 @@ fun DetailScreen(state: AppState, media: Item) {
     val d by produceState<Details?>(null, media.key) {
         value = if (media.kind == Kind.SERIES) Xtream.seriesDetails(s, media) else Xtream.movieDetails(s, media)
     }
-    var fav by remember(media.key) { mutableStateOf(Store.isFav(media.key)) }
-    val progress = remember(state.refresh, media.key) { Store.progress(media.key) }
-    val lastEp = remember(state.refresh, media.key) {
-        // último episodio visto de esta serie
-        if (media.kind == Kind.SERIES) Store.progressList().firstOrNull { it.key.startsWith("series:${media.id}:") } else null
+    var fav by remember(media.key, Cloud.rev) { mutableStateOf(Cloud.isFav(media.key)) }
+    val progress = remember(state.refresh, Cloud.rev, media.key) { Cloud.progress(media.key) }
+    val lastEp = remember(state.refresh, Cloud.rev, media.key) {
+        // último episodio visto de esta serie (una entrada por serie en el panel, igual que la web)
+        if (media.kind == Kind.SERIES) Cloud.seriesProgress(media.id) else null
     }
     val playFocus = remember { FocusRequester() }
     if (tv) LaunchedEffect(d != null) { runCatching { playFocus.requestFocus() } }
@@ -114,11 +114,11 @@ fun DetailScreen(state: AppState, media: Item) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         val label = when {
                             media.kind == Kind.MOVIE && progress != null -> "Continuar"
-                            lastEp != null -> "Continuar " + lastEp.title.substringAfter(" · ", "").substringBefore(" · ")
+                            lastEp != null -> lastEpLabel(seasons, lastEp.key)
                             else -> "Reproducir"
                         }
                         HeroButton(label, Icons.Filled.PlayArrow, true, Modifier.focusRequester(playFocus)) { play() }
-                        HeroButton(if (fav) "En mi lista" else "Mi lista", if (fav) Icons.Filled.Check else Icons.Filled.Add, false) { fav = Store.toggleFav(media) }
+                        HeroButton(if (fav) "En mi lista" else "Mi lista", if (fav) Icons.Filled.Check else Icons.Filled.Add, false) { fav = Cloud.toggleFav(media) }
                     }
                     if (media.kind == Kind.MOVIE && progress != null && progress.duration > 0) {
                         LinearProgressIndicator(progress = { progress.position.toFloat() / progress.duration }, color = NfRed, trackColor = Color(0x44FFFFFF),
@@ -145,7 +145,7 @@ fun DetailScreen(state: AppState, media: Item) {
             val eps = seasons[season].orEmpty()
             val all = seasons.values.flatten()
             itemsIndexed(eps, key = { _, e -> e.id }) { _, e ->
-                EpisodeRow(e, media, Store.progress("series:${media.id}:${e.id}")?.let { if (it.duration > 0) it.position.toFloat() / it.duration else 0f } ?: 0f) {
+                EpisodeRow(e, media, Cloud.progress("series:${media.id}:${e.id}")?.let { if (it.duration > 0) it.position.toFloat() / it.duration else 0f } ?: 0f) {
                     Play.episode(ctx, media, all, all.indexOf(e).coerceAtLeast(0))
                 }
             }
@@ -170,4 +170,11 @@ private fun EpisodeRow(e: Episode, series: Item, progress: Float, onClick: () ->
             }
         }
     }
+}
+
+/** "Continuar T1 E3" a partir de la clave "series:5:301" */
+private fun lastEpLabel(seasons: Map<Int, List<Episode>>, key: String): String {
+    val eid = key.split(":").getOrNull(2)?.toIntOrNull() ?: return "Continuar"
+    val e = seasons.values.flatten().firstOrNull { it.id == eid } ?: return "Continuar"
+    return "Continuar T${e.season} E${e.num}"
 }

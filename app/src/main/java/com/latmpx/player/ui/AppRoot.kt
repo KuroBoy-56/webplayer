@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -42,7 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.latmpx.player.data.Kind
-import com.latmpx.player.data.Panel
+import com.latmpx.player.data.Cloud
+import com.latmpx.player.data.PanelEpg
 import com.latmpx.player.data.Store
 import com.latmpx.player.data.Xtream
 import com.latmpx.player.ui.components.FocusBox
@@ -57,6 +59,7 @@ import com.latmpx.player.ui.screens.LiveScreen
 import com.latmpx.player.ui.screens.LoginScreen
 import com.latmpx.player.ui.screens.MyListScreen
 import com.latmpx.player.ui.screens.SearchScreen
+import com.latmpx.player.ui.screens.SportsScreen
 import com.latmpx.player.ui.theme.NfBg
 import com.latmpx.player.ui.theme.NfGray
 import com.latmpx.player.ui.theme.NfRed
@@ -69,7 +72,6 @@ fun AppRoot() {
     val booted = remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        state.config = Panel.load()
         state.session = Store.session()
         booted.value = true
     }
@@ -77,6 +79,7 @@ fun AppRoot() {
     LaunchedEffect(state.session) {
         val s = state.session ?: return@LaunchedEffect
         state.loading = true
+        launch { Cloud.load() } // continuar viendo y favoritos desde el panel
         Xtream.warmUp(s)
         state.movieCats = Xtream.categories(s, Kind.MOVIE)
         state.seriesCats = Xtream.categories(s, Kind.SERIES)
@@ -85,22 +88,24 @@ fun AppRoot() {
         state.series = Xtream.items(s, Kind.SERIES)
         state.loading = false
     }
+    // al volver del reproductor se recarga del panel (otro equipo pudo haber cambiado algo)
     LifecycleResumeEffect(Unit) {
         state.refresh++
+        if (state.session != null) scope.launch { Cloud.load() }
         onPauseOrDispose { }
     }
 
     Box(Modifier.fillMaxSize().background(NfBg)) {
         when {
             !booted.value -> Splash()
-            state.session == null -> LoginScreen(state.config) { s ->
+            state.session == null -> LoginScreen { s ->
                 Store.saveSession(s)
                 Xtream.clearCache()
                 state.session = s
             }
             else -> MainShell(state, onLogout = {
                 scope.launch {
-                    Store.logout(); Xtream.clearCache(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
+                    Store.logout(); Xtream.clearCache(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
                 }
             })
         }
@@ -117,7 +122,7 @@ private fun Splash() {
 }
 
 private val tabIcons: Map<Tab, ImageVector> = mapOf(
-    Tab.HOME to Icons.Filled.Home, Tab.MOVIES to Icons.Filled.Movie, Tab.SERIES to Icons.Filled.Tv, Tab.LIVE to Icons.Filled.LiveTv,
+    Tab.HOME to Icons.Filled.Home, Tab.MOVIES to Icons.Filled.Movie, Tab.SERIES to Icons.Filled.Tv, Tab.LIVE to Icons.Filled.LiveTv, Tab.SPORTS to Icons.Filled.SportsSoccer,
     Tab.MYLIST to Icons.Filled.Bookmark, Tab.SEARCH to Icons.Filled.Search, Tab.ACCOUNT to Icons.Filled.AccountCircle,
 )
 
@@ -138,6 +143,7 @@ private fun MainShell(state: AppState, onLogout: () -> Unit) {
                 Tab.MOVIES -> CatalogScreen(state, Kind.MOVIE)
                 Tab.SERIES -> CatalogScreen(state, Kind.SERIES)
                 Tab.LIVE -> LiveScreen(state)
+                Tab.SPORTS -> SportsScreen(state)
                 Tab.MYLIST -> MyListScreen(state)
                 Tab.SEARCH -> SearchScreen(state)
                 Tab.ACCOUNT -> AccountScreen(state, onLogout)
@@ -170,7 +176,7 @@ private fun MainShell(state: AppState, onLogout: () -> Unit) {
         }
     } else {
         // teléfono: barra inferior como la app de Netflix
-        val phoneTabs = listOf(Tab.HOME, Tab.MOVIES, Tab.SERIES, Tab.LIVE, Tab.SEARCH, Tab.ACCOUNT)
+        val phoneTabs = listOf(Tab.HOME, Tab.MOVIES, Tab.SERIES, Tab.LIVE, Tab.SPORTS, Tab.SEARCH, Tab.ACCOUNT)
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) { content() }
             NavigationBar(containerColor = Color(0xFF0B0B0B), tonalElevation = 0.dp) {
@@ -180,6 +186,7 @@ private fun MainShell(state: AppState, onLogout: () -> Unit) {
                         onClick = { state.stack.clear(); state.tab = t },
                         icon = { Icon(tabIcons.getValue(t), t.label) },
                         label = { Text(t.label, fontSize = 10.sp, maxLines = 1) },
+                        alwaysShowLabel = false,
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = Color.White, selectedTextColor = Color.White, indicatorColor = Color(0x22FFFFFF),
                             unselectedIconColor = NfGray, unselectedTextColor = NfGray,

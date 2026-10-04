@@ -44,6 +44,7 @@ import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.latmpx.player.Device
+import com.latmpx.player.data.Cloud
 import com.latmpx.player.data.Kind
 import com.latmpx.player.data.Net
 import com.latmpx.player.data.Progress
@@ -71,6 +72,9 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var kind: Kind
     private lateinit var queue: List<QueueEntry>
     private var extra = ""
+    private var saveTitle = ""
+    private var savePoster = ""
+    private var category = ""
     /** para canales: qué dirección alternativa (m3u8 / ts / sin extensión) se está usando en cada canal */
     private val liveAlt = HashMap<Int, Int>()
     private var retries = 0
@@ -87,6 +91,9 @@ class PlayerActivity : ComponentActivity() {
         val posters = intent.getStringArrayExtra(Play.X_POSTERS) ?: emptyArray()
         val exts = intent.getStringArrayExtra(Play.X_EXTS) ?: emptyArray()
         extra = intent.getStringExtra(Play.X_EXTRA).orEmpty()
+        saveTitle = intent.getStringExtra(Play.X_SAVE_TITLE).orEmpty()
+        savePoster = intent.getStringExtra(Play.X_SAVE_POSTER).orEmpty()
+        category = intent.getStringExtra(Play.X_CATEGORY).orEmpty()
         queue = ids.indices.map { i -> QueueEntry(ids[i], titles.getOrElse(i) { "" }, keys.getOrElse(i) { "" }, posters.getOrElse(i) { "" }, exts.getOrElse(i) { "" }) }
         if (queue.isEmpty()) { finish(); return }
         val start = intent.getIntExtra(Play.X_INDEX, 0).coerceIn(0, queue.lastIndex)
@@ -232,7 +239,7 @@ class PlayerActivity : ComponentActivity() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (!isPlaying) saveProgress()
+                if (!isPlaying) saveProgress(force = true)
             }
         })
     }
@@ -334,17 +341,26 @@ class PlayerActivity : ComponentActivity() {
 
     private fun resumePosition(q: QueueEntry): Long {
         if (kind == Kind.LIVE) return C.TIME_UNSET
-        val p = Store.progress(q.key) ?: return 0
+        val p = Cloud.progress(q.key) ?: return 0
         return if (p.position > 30_000 && (p.duration <= 0 || p.position < p.duration * 0.95)) p.position else 0
     }
 
-    private fun saveProgress() {
+    /** Guarda en el panel con el formato de la web: película por nombre; serie una entrada por serie. */
+    private fun saveProgress(force: Boolean = false) {
         if (kind == Kind.LIVE || !::player.isInitialized) return
         val q = queue.getOrNull(player.currentMediaItemIndex) ?: return
         val pos = player.currentPosition
         val dur = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0
         if (pos < 5_000) return
-        Store.saveProgress(Progress(q.key, q.title, q.poster, pos, dur, System.currentTimeMillis(), "", q.ext))
+        val url = player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
+        Cloud.saveProgress(
+            Progress(
+                key = q.key, title = saveTitle.ifEmpty { q.title }, label = q.title,
+                poster = savePoster.ifEmpty { q.poster }, position = pos, duration = dur,
+                updated = System.currentTimeMillis(), url = url, categoryId = category,
+            ),
+            force,
+        )
     }
 
     private val saver = object : Runnable {
@@ -397,13 +413,13 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        saveProgress()
+        saveProgress(force = true)
         if (::player.isInitialized && !(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode)) player.pause()
     }
 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
-        if (::player.isInitialized) { saveProgress(); player.release() }
+        if (::player.isInitialized) { saveProgress(force = true); player.release() }
         super.onDestroy()
     }
 

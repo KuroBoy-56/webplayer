@@ -6,13 +6,15 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Dirección del panel administrativo. Se puede cambiar aquí o en local.properties (panel.url=https://...)
-val panelUrl: String = run {
+// Configuración local (local.properties o secretos de GitHub Actions). Nada de esto va en el repositorio.
+val localProps: Properties = Properties().apply {
     val f = rootProject.file("local.properties")
-    val p = Properties()
-    if (f.exists()) f.inputStream().use { p.load(it) }
-    p.getProperty("panel.url") ?: "https://tu-dominio.com/webplayer"
+    if (f.exists()) f.inputStream().use { load(it) }
 }
+// panel.url opcional: si está vacío la app usa la dirección codificada en PanelUrl.kt
+val panelUrl: String = localProps.getProperty("panel.url") ?: ""
+// llave maestra AES de login.php (hex de 64 caracteres). Nunca se sube al repositorio.
+val panelMasterKey: String = localProps.getProperty("panel.master_key") ?: ""
 
 android {
     namespace = "com.latmpx.player"
@@ -25,6 +27,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         buildConfigField("String", "PANEL_URL", "\"$panelUrl\"")
+        buildConfigField("String", "PANEL_MASTER_KEY", "\"$panelMasterKey\"")
     }
 
     buildTypes {
@@ -69,6 +72,7 @@ dependencies {
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:$media3+1")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
 }

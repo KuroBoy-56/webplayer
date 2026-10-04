@@ -1,0 +1,9 @@
+# Copia este archivo como local.properties (no se sube a GitHub) y completa los valores.
+# sdk.dir lo escribe Android Studio solo.
+
+# Opcional: dirección del panel. Si se deja vacía, la app usa la dirección codificada en PanelUrl.kt.
+# Puede ser la carpeta api (https://tu-dominio.com/master/panel/api/) o cualquier archivo dentro de ella.
+panel.url=
+
+# Obligatoria para activar equipos: llave maestra AES del panel (64 caracteres hex, la misma de includes/secrets.php).
+panel.master_key=

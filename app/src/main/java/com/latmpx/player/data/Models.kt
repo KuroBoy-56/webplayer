@@ -50,12 +50,19 @@ data class EpgEntry(val title: String, val desc: String, val start: Long, val en
 
 data class Session(val dnsName: String, val base: String, val user: String, val pass: String, val expires: String)
 
-data class Progress(val key: String, val title: String, val poster: String, val position: Long, val duration: Long, val updated: Long, val url: String, val extra: String)
-
-data class PanelConfig(
-    val name: String,
-    val dns: List<Pair<String, String>>,
-    val logo: String = "",
-    val message: String = "",
-    val tmdbKey: String = "",
+/**
+ * Entrada de "Continuar viendo" (panel progress.php).
+ * key: "movie:12" o "series:5:301"; title: clave en el panel (nombre de la película o de la serie);
+ * label: texto a mostrar (incluye temporada/episodio). Posiciones en milisegundos.
+ */
+data class Progress(
+    val key: String,
+    val title: String,
+    val label: String,
+    val poster: String,
+    val position: Long,
+    val duration: Long,
+    val updated: Long,
+    val url: String = "",
+    val categoryId: String = "",
 )

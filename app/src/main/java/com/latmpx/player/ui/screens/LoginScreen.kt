@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,93 +19,238 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.latmpx.player.data.PanelConfig
+import com.latmpx.player.Device
 import com.latmpx.player.data.Panel
+import com.latmpx.player.data.PanelCrypto
 import com.latmpx.player.data.Session
+import com.latmpx.player.data.Store
+import com.latmpx.player.data.Tmdb
 import com.latmpx.player.data.Xtream
+import com.latmpx.player.ui.components.Chip
+import com.latmpx.player.ui.components.DnsButton
+import com.latmpx.player.ui.components.FocusBox
+import com.latmpx.player.ui.components.PosterWall
+import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.components.LogoHeader
 import com.latmpx.player.ui.theme.NfGray2
 import com.latmpx.player.ui.theme.NfRed
 import kotlinx.coroutines.launch
 
-/** Inicio de sesión: el usuario solo escribe usuario y contraseña; los DNS vienen del panel y se prueban en orden. */
+/**
+ * Activación por el panel:
+ * 1. auth.php / check_mac: si el equipo ya tiene línea, entra solo (o elige entre varias).
+ * 2. Si no: muestra el código MAC del equipo para que el distribuidor lo active, permite activar con
+ *    usuario + contraseña + servidor (fetch_dns / submit_url) o pedir una demo automática (auto_demo).
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LoginScreen(config: PanelConfig?, onLogged: (Session) -> Unit) {
+fun LoginScreen(onLogged: (Session) -> Unit) {
+    val ctx = LocalContext.current
+    val tv = LocalIsTv.current
+    val deviceId = remember { Device.id(ctx) }
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(true) }
+    var status by remember { mutableStateOf("Comprobando el equipo en el panel…") }
+    var err by remember { mutableStateOf<String?>(null) }
+    var lines by remember { mutableStateOf<List<Panel.Line>>(emptyList()) }
+    var dns by remember { mutableStateOf<List<String>>(emptyList()) }
+    var dnsIdx by remember { mutableIntStateOf(0) }
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var err by remember { mutableStateOf<String?>(null) }
-    var cfg by remember { mutableStateOf(config) }
-    val scope = rememberCoroutineScope()
+    var demoUsed by remember { mutableStateOf(Store.demoUsed) }
+    val firstFocus = remember { FocusRequester() }
+    var posters by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    fun go() {
-        if (user.isBlank() || pass.isBlank()) { err = "Escribe tu usuario y contraseña"; return }
-        busy = true; err = null
-        scope.launch {
-            val c = cfg ?: Panel.load().also { cfg = it }
-            if (c == null || c.dns.isEmpty()) { busy = false; err = "No se pudo obtener la configuración del panel. Revisa tu conexión."; return@launch }
-            when (val r = Xtream.login(c.dns, user.trim(), pass.trim())) {
-                is Xtream.LoginResult.Ok -> onLogged(r.session)
-                is Xtream.LoginResult.Fail -> err = r.message
-            }
-            busy = false
+    suspend fun connect(line: Panel.Line) {
+        status = "Conectando con ${line.name}…"
+        when (val r = Xtream.login(listOf(line.name to line.base), line.user, line.pass)) {
+            is Xtream.LoginResult.Ok -> onLogged(r.session)
+            is Xtream.LoginResult.Fail -> err = r.message
         }
+    }
+
+    /** Pregunta al panel qué líneas tiene este equipo y entra si hay una sola. */
+    suspend fun resolve(): Boolean {
+        busy = true; status = "Comprobando el equipo en el panel…"
+        val a = Panel.playlists(deviceId)
+        var found = a.value.orEmpty()
+        var problem = a.error
+        if (found.isEmpty()) {
+            val c = Panel.checkMac(deviceId)
+            c.value?.let { found = listOf(it) }
+            if (problem == null) problem = c.error
+        }
+        lines = found
+        if (found.size == 1) connect(found.first())
+        else if (found.isEmpty() && problem != null) err = problem
+        busy = false
+        return found.isNotEmpty()
+    }
+
+    fun act(block: suspend () -> Unit) {
+        if (busy) return
+        err = null
+        scope.launch { busy = true; block(); busy = false }
+    }
+
+    // fondo de pósters (la llave TMDB llega del panel en auth.php)
+    LaunchedEffect(Store.tmdbKey) { posters = Tmdb.nowPlaying(Store.tmdbKey) }
+    LaunchedEffect(Unit) {
+        resolve()
+        if (lines.isEmpty() && PanelCrypto.hasKey()) Panel.fetchDns().value?.let { dns = it }
+        if (tv) runCatching { firstFocus.requestFocus() }
     }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = Color.White, unfocusedBorderColor = Color(0xFF555555), focusedTextColor = Color.White, unfocusedTextColor = Color.White,
         focusedLabelColor = Color.White, unfocusedLabelColor = NfGray2, cursorColor = NfRed, focusedContainerColor = Color(0xFF333333), unfocusedContainerColor = Color(0xFF333333),
     )
-    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        PosterWall(posters, columns = if (tv) 8 else 4)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()) {
+        // .nf-login-header: logo arriba a la izquierda y el botón DNS
+        Row(Modifier.fillMaxWidth().padding(horizontal = sidePad(), vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            LogoHeader(height = 46.dp)
+            Spacer(Modifier.weight(1f))
+            DnsButton()
+        }
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+        // .nf-login-box: caja negra al 75 %
         Column(
-            Modifier.widthIn(max = 420.dp).fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(24.dp)
-                .background(Color(0xCC000000), RoundedCornerShape(8.dp)).padding(28.dp),
+            Modifier.widthIn(max = 480.dp).fillMaxWidth()
+                .background(Color(0xBF000000), RoundedCornerShape(6.dp)).padding(horizontal = if (tv) 48.dp else 24.dp, vertical = 36.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            LogoHeader(Modifier.align(Alignment.CenterHorizontally), height = 80.dp)
-            Text("Iniciar sesión", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            config?.message?.takeIf { it.isNotBlank() }?.let { Text(it, color = NfGray2, fontSize = 13.sp) }
-            OutlinedTextField(
-                value = user, onValueChange = { user = it }, label = { Text("Usuario") }, singleLine = true, colors = fieldColors,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = pass, onValueChange = { pass = it }, label = { Text("Contraseña") }, singleLine = true, colors = fieldColors,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { go() }), modifier = Modifier.fillMaxWidth(),
-            )
-            err?.let { Text(it, color = Color(0xFFE87C03), fontSize = 14.sp) }
-            Button(
-                onClick = { go() }, enabled = !busy, shape = RoundedCornerShape(4.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = NfRed, contentColor = Color.White),
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-            ) {
-                if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.height(22.dp))
-                else Text("Iniciar sesión", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (!PanelCrypto.hasKey()) {
+                ErrorBanner("Esta versión de la app no tiene la llave del panel (PANEL_MASTER_KEY). La activación no funcionará hasta instalar una versión configurada.")
             }
-            Spacer(Modifier.height(4.dp))
+            if (lines.size > 1) {
+                Text("Elige tu servicio", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                lines.forEachIndexed { i, l ->
+                    HeroButton(l.name.ifBlank { "Servicio ${i + 1}" }, Icons.Filled.PlayArrow, i == 0, if (i == 0) Modifier.focusRequester(firstFocus) else Modifier) {
+                        act { connect(l) }
+                    }
+                }
+            } else {
+                Text("Iniciar sesión", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                err?.let { ErrorBanner(it) }
+                Text("Código del equipo (MAC)", color = NfGray2, fontSize = 13.sp)
+                Text(deviceId, color = Color.White, fontSize = if (tv) 30.sp else 24.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+                Text("Envía este código a tu distribuidor para que active el equipo en el panel y luego pulsa \"Comprobar\".", color = NfGray2, fontSize = 13.sp)
+                RedButton("Comprobar activación", Modifier.focusRequester(firstFocus)) {
+                    act { if (!resolve() && err == null) err = "El equipo aún no está activado en el panel" }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text("¿Ya tienes usuario y contraseña?", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = user, onValueChange = { user = it }, label = { Text("Usuario") }, singleLine = true, colors = fieldColors,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = pass, onValueChange = { pass = it }, label = { Text("Contraseña") }, singleLine = true, colors = fieldColors,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { }), modifier = Modifier.fillMaxWidth(),
+                )
+                if (dns.size > 1) {
+                    Text("Servidor", color = NfGray2, fontSize = 13.sp)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        dns.forEachIndexed { i, _ -> Chip("Servidor ${i + 1}", i == dnsIdx) { dnsIdx = i } }
+                    }
+                }
+                RedButton("Activar") {
+                    act {
+                        if (user.isBlank() || pass.isBlank()) { err = "Escribe tu usuario y contraseña"; return@act }
+                        if (dns.isEmpty()) Panel.fetchDns().let { d -> d.value?.let { dns = it }; if (d.value == null) err = d.error }
+                        val server = dns.getOrNull(dnsIdx) ?: dns.firstOrNull()
+                        if (server == null) { if (err == null) err = "El panel no tiene servidores disponibles"; return@act }
+                        status = "Activando…"
+                        val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), server)
+                        if (r.value == null) { err = r.error; return@act }
+                        if (!resolve() && err == null) connect(Panel.Line("Servidor ${dnsIdx + 1}", Xtream.normalize(server), user.trim(), pass.trim()))
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                HeroButton(if (demoUsed) "Demo ya utilizada" else "Demo automática (24 h)", Icons.Filled.CardGiftcard, false) {
+                    if (demoUsed) { err = "La demo ya se usó en este equipo"; return@HeroButton }
+                    act {
+                        status = "Creando demo…"
+                        val r = Panel.autoDemo(deviceId)
+                        val cred = r.value
+                        if (cred == null) {
+                            err = r.error
+                            if (r.code == 403) { demoUsed = true; Store.demoUsed = true }
+                            return@act
+                        }
+                        Store.demoUsed = true; demoUsed = true
+                        if (!resolve() && err == null) {
+                            val d = dns.ifEmpty { Panel.fetchDns().value.orEmpty() }
+                            val first = d.firstOrNull()
+                            if (first != null) connect(Panel.Line("Demo", Xtream.normalize(first), cred.first, cred.second))
+                            else err = "Demo creada, pero el panel no devolvió el servidor. Pulsa \"Comprobar activación\"."
+                        }
+                    }
+                }
+            }
+            if (busy) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = NfRed, strokeWidth = 2.dp)
+                    Text(status, color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+            if (lines.size > 1) err?.let { ErrorBanner(it) }
+            Text("Ingresa con el usuario y la contraseña de tu suscripción o pide la activación con el código del equipo.",
+                color = Color(0xFF8C8C8C), fontSize = 13.sp)
+        }
+        }
+        // .nf-login-footer
+        Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} Garevyn TV", color = Color(0xFF999999), fontSize = 14.sp,
+            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).background(Color(0x99000000)).padding(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun ErrorBanner(text: String) {
+    Text(text, color = Color.White, fontSize = 14.sp, lineHeight = 19.sp,
+        modifier = Modifier.fillMaxWidth().background(Color(0xFFE87C03), RoundedCornerShape(4.dp)).padding(horizontal = 16.dp, vertical = 12.dp))
+}
+
+/** .nf-btn-red .nf-btn-block: botón rojo a todo el ancho */
+@Composable
+private fun RedButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    FocusBox(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(4.dp), focusScale = 1.03f) { f ->
+        Box(Modifier.fillMaxWidth().height(48.dp).background(if (f) Color(0xFFF6121D) else NfRed), contentAlignment = Alignment.Center) {
+            Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

@@ -7,11 +7,10 @@ import androidx.compose.runtime.setValue
 import com.latmpx.player.data.Category
 import com.latmpx.player.data.Item
 import com.latmpx.player.data.Kind
-import com.latmpx.player.data.PanelConfig
 import com.latmpx.player.data.Platform
 import com.latmpx.player.data.Session
 
-enum class Tab(val label: String) { HOME("Inicio"), MOVIES("Películas"), SERIES("Series"), LIVE("TV en vivo"), MYLIST("Mi lista"), SEARCH("Buscar"), ACCOUNT("Cuenta") }
+enum class Tab(val label: String) { HOME("Inicio"), MOVIES("Películas"), SERIES("Series"), LIVE("TV en vivo"), SPORTS("Deportes"), MYLIST("Mi lista"), SEARCH("Buscar"), ACCOUNT("Cuenta") }
 
 /** Pantallas que se apilan sobre las pestañas (atrás vuelve a la anterior). */
 sealed class Route {
@@ -21,7 +20,6 @@ sealed class Route {
 }
 
 class AppState {
-    var config by mutableStateOf<PanelConfig?>(null)
     var session by mutableStateOf<Session?>(null)
     var tab by mutableStateOf(Tab.HOME)
     val stack = mutableStateListOf<Route>()

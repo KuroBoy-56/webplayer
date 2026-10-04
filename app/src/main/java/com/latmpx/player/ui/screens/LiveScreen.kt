@@ -44,6 +44,8 @@ import com.latmpx.player.R
 import com.latmpx.player.data.EpgEntry
 import com.latmpx.player.data.Item
 import com.latmpx.player.data.Kind
+import com.latmpx.player.data.Cloud
+import com.latmpx.player.data.PanelEpg
 import com.latmpx.player.data.Store
 import com.latmpx.player.data.Xtream
 import com.latmpx.player.player.Play
@@ -71,16 +73,16 @@ fun LiveScreen(state: AppState) {
     val all = channels
     if (all == null) { Loading("Cargando canales…"); return }
     val cats = remember(state.liveCats) { listOf(FAVS to "★ Favoritos", ALL to "Todos") + state.liveCats.map { it.id to it.name } }
-    val shown = remember(all, cat, favTick, state.refresh) {
+    val shown = remember(all, cat, favTick, state.refresh, Cloud.rev) {
         when (cat) {
             ALL -> all
-            FAVS -> all.filter { Store.isFav(it.key) }
+            FAVS -> all.filter { Cloud.isFav(it.key) }
             else -> all.filter { it.categoryId == cat }
         }
     }
     var focused by remember { mutableStateOf<Item?>(null) }
     val play: (Int) -> Unit = { i -> Store.setLastChannel(shown[i].id); Play.live(ctx, shown, i) }
-    val fav: (Item) -> Unit = { ch -> Store.toggleFav(ch.copy(kind = Kind.LIVE)); favTick++ }
+    val fav: (Item) -> Unit = { ch -> Cloud.toggleFav(ch.copy(kind = Kind.LIVE)); favTick++ }
 
     if (tv) {
         // TV: categorías | canales | guía del canal seleccionado
@@ -101,7 +103,7 @@ fun LiveScreen(state: AppState) {
                     ChannelRow(ch, i + 1, onClick = { play(i) }, onLong = { fav(ch) }, onFocus = { focused = ch })
                 }
             }
-            EpgPanel(state, focused, Modifier.width(320.dp).fillMaxHeight())
+            EpgPanel(state, focused, shown, Modifier.width(320.dp).fillMaxHeight())
         }
     } else {
         Column(Modifier.fillMaxSize().background(NfBg)) {
@@ -119,7 +121,7 @@ fun LiveScreen(state: AppState) {
 
 @Composable
 private fun ChannelRow(ch: Item, num: Int, onClick: () -> Unit, onLong: () -> Unit, onFocus: (() -> Unit)? = null) {
-    val isFav = Store.isFav(ch.key)
+    val isFav = Cloud.isFav(ch.key)
     FocusBox(onClick = onClick, onLongClick = onLong, onFocus = onFocus, focusScale = 1.02f, modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) { f ->
         Row(
             Modifier.fillMaxWidth().background(if (f) Color(0xFF2E2E2E) else Color(0xFF1A1A1A)).padding(10.dp),
@@ -137,13 +139,17 @@ private fun ChannelRow(ch: Item, num: Int, onClick: () -> Unit, onLong: () -> Un
 }
 
 @Composable
-private fun EpgPanel(state: AppState, ch: Item?, modifier: Modifier) {
+private fun EpgPanel(state: AppState, ch: Item?, shown: List<Item>, modifier: Modifier) {
     val s = state.session
     val epg by produceState<List<EpgEntry>>(emptyList(), ch?.id) {
         value = emptyList()
         if (ch != null && s != null) {
             kotlinx.coroutines.delay(350) // espera a que el foco se detenga en un canal
-            value = Xtream.shortEpg(s, ch.id)
+            // primero la guía del proveedor; si no trae, la de respaldo del panel (lote con los canales vecinos)
+            value = Xtream.shortEpg(s, ch.id).ifEmpty {
+                val i = shown.indexOfFirst { it.id == ch.id }.coerceAtLeast(0)
+                PanelEpg.guide(ch, shown.subList((i - 50).coerceAtLeast(0), (i + 350).coerceAtMost(shown.size)))
+            }
         }
     }
     val hm = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }

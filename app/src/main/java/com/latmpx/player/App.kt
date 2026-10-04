@@ -17,7 +17,7 @@ class App : Application(), SingletonImageLoader.Factory {
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
-            .components { add(OkHttpNetworkFetcherFactory(callFactory = { Net.client })) }
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = { Net.client })) } // mismo cliente: mismo DNS
             .crossfade(true)
             .build()
 }

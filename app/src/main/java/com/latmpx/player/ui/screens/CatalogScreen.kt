@@ -27,7 +27,7 @@ import com.latmpx.player.data.Item
 import com.latmpx.player.data.Kind
 import com.latmpx.player.data.Platform
 import com.latmpx.player.data.Platforms
-import com.latmpx.player.data.Store
+import com.latmpx.player.data.Cloud
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.Route
 import com.latmpx.player.ui.components.Chip
@@ -75,7 +75,7 @@ fun byCats(all: List<Item>, ids: Set<String>): List<Item> = all.filter { it.cate
 fun Grid(state: AppState, items: List<Item>) {
     if (items.isEmpty()) { Empty("No hay contenido en esta sección"); return }
     val pw = posterWidth()
-    val progress = remember(state.refresh) { Store.progressList().associateBy { it.key } }
+    val progress = remember(state.refresh, Cloud.rev) { Cloud.progressList().associateBy { it.key.split(":").take(2).joinToString(":") } }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(pw), contentPadding = PaddingValues(horizontal = sidePad(), vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize(),
@@ -103,7 +103,7 @@ fun BrowseScreen(state: AppState, title: String, kind: Kind?, categoryIds: Set<S
 
 @Composable
 fun MyListScreen(state: AppState) {
-    val favs = remember(state.refresh) { Store.favList() }
+    val favs = remember(state.refresh, Cloud.rev) { Cloud.favList().filter { it.kind != Kind.LIVE } }
     Column(Modifier.fillMaxSize().background(NfBg)) {
         Text("Mi lista", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = sidePad(), top = 16.dp, bottom = 6.dp))
         if (favs.isEmpty()) Empty("Agrega películas y series con el botón \"Mi lista\" para verlas aquí") else Grid(state, favs)

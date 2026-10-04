@@ -2,8 +2,11 @@ package com.latmpx.player.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -17,6 +20,7 @@ object Net {
         .followRedirects(true)
         .followSslRedirects(true)
         .retryOnConnectionFailure(true)
+        .dns(SecureDns)
         .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", UA).build()) }
         .build()
 
@@ -27,6 +31,33 @@ object Net {
             null
         }
     }
+
+    /** Respuesta HTTP simple: código (0 si no hubo conexión) y cuerpo. */
+    data class Resp(val code: Int, val body: String) {
+        val ok: Boolean get() = code in 200..299
+        fun json(): JSONObject? = body.trim().let { t -> if (t.startsWith("{")) runCatching { JSONObject(t) }.getOrNull() else null }
+    }
+
+    private val JSON_TYPE = "application/json; charset=utf-8".toMediaType()
+
+    private suspend fun exec(req: Request): Resp = withContext(Dispatchers.IO) {
+        try {
+            client.newCall(req).execute().use { r -> Resp(r.code, r.body?.string().orEmpty()) }
+        } catch (e: Exception) {
+            Resp(0, "")
+        }
+    }
+
+    suspend fun postJson(url: String, body: JSONObject): Resp =
+        exec(Request.Builder().url(url).post(body.toString().toRequestBody(JSON_TYPE)).build())
+
+    suspend fun postForm(url: String, fields: Map<String, String>): Resp {
+        val fb = FormBody.Builder()
+        fields.forEach { (k, v) -> fb.add(k, v) }
+        return exec(Request.Builder().url(url).post(fb.build()).build())
+    }
+
+    suspend fun get(url: String): Resp = exec(Request.Builder().url(url).build())
 
     suspend fun obj(url: String): JSONObject? = text(url)?.trim()?.let { t -> if (t.startsWith("{")) runCatching { JSONObject(t) }.getOrNull() else null }
 
