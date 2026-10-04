@@ -682,6 +682,9 @@
                 out.push({ label: t.label, lang: t.lang, on: cur === t.i, set: function () { if (!self.o.media) self.o.media = self._media0; if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
             });
         } else if (this.v.audioTracks && this.v.audioTracks.length) {
+            // En iOS/Safari, NO exponer pistas nativas al menú HTML para evitar que JS las corrompa (WebKit bug: audio doble y menús rotos).
+            if (APPLE && !this.hls && this.v.canPlayType('application/vnd.apple.mpegurl')) return out;
+            
             var at = this.v.audioTracks;
             for (var i = 0; i < at.length; i++) (function (t, i) {
                 out.push({ label: t.label || t.language || ('Audio ' + (i + 1)), lang: t.language || '', on: t.enabled, set: function () { for (var j = 0; j < at.length; j++) at[j].enabled = j === i; } });
@@ -691,7 +694,9 @@
     };
 
     NFPlayer.prototype.applyAudioPref = function () {
-        // solo pistas que el navegador cambia por sí mismo (Safari / HLS); con las del servidor lo hace afterProbe
+        // En iOS/Safari (HLS nativo), no tocar v.audioTracks vía JS para no romper el menú nativo ni causar audio doble.
+        if (APPLE && !this.hls && this.v.canPlayType('application/vnd.apple.mpegurl')) return;
+        
         if (!this.hls && !(this.v.audioTracks && this.v.audioTracks.length > 1)) return;
         var list = this.audioList();
         if (list.length < 2) return;
@@ -702,37 +707,10 @@
         if (!list[w].on) list[w].set();
     };
 
-    /* iPhone/Safari (HLS nativo): deja UNA sola pista de audio activa para que no suenen los dos
-       idiomas a la vez. Respeta el idioma que el usuario eligió antes; si no, el del navegador. */
+    /* iPhone/Safari (HLS nativo): ya no forzamos nada vía JS. Safari gestiona sus pistas nativamente. */
     NFPlayer.prototype.enforceSingleAudio = function (e) {
-        var at = this.v.audioTracks;
-        if (this.hls || !at || at.length < 2 || this._normAudio) return;
-        this._normAudio = true;
-        try {
-            var list = [], enabledCount = 0, firstEnabled = -1;
-            for (var i = 0; i < at.length; i++) {
-                list.push({ lang: at[i].language || '', label: at[i].label || '', def: at[i].enabled });
-                if (at[i].enabled) { enabledCount++; if (firstEnabled < 0) firstEnabled = i; }
-            }
-
-            // Si el evento es 'change' y hay exactamente una pista activa, significa que Safari o
-            // el usuario desde el menú nativo seleccionó una pista. No peleamos con el navegador:
-            // simplemente actualizamos nuestra preferencia y no forzamos nada más para evitar conflictos.
-            if (e && e.type === 'change' && enabledCount === 1) {
-                store('nfp_audio', list[firstEnabled].lang + '|' + list[firstEnabled].label);
-                if (list[firstEnabled].lang) store('nfp_audio_lang', list[firstEnabled].lang);
-                this._normAudio = false;
-                return;
-            }
-
-            var want = -1;
-            var pref = store('nfp_audio');
-            if (pref) for (var k = 0; k < list.length; k++) if ((list[k].lang + '|' + list[k].label) === pref) { want = k; break; }
-            // si ya hay exactamente una activa y no hay preferencia guardada, se respeta; si no, el idioma del navegador
-            if (want < 0) want = (enabledCount === 1 && firstEnabled >= 0) ? firstEnabled : pickLang(list);
-            for (var j = 0; j < at.length; j++) { var on = j === want; if (at[j].enabled !== on) at[j].enabled = on; }
-        } catch (err) {}
-        this._normAudio = false;
+        // Desactivado para no corromper el menú nativo de AVPlayer y evitar el audio doble (WebKit bug).
+        return;
     };
 
     NFPlayer.prototype.subList = function () {
