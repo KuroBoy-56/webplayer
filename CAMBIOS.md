@@ -1,8 +1,8 @@
 # WebPlayer: resumen de cambios
 
-Desde la actualización del 4 de octubre **todo se administra desde el panel** (ver la última sección). Las secciones de abajo describen la historia de cambios. Donde mencionan el administrador, `setup.php`, `dns.json`, `admin.json`, `progress.json`, `userdata.sqlite`, el proxy de video (`proxy.php`), la conversión con ffmpeg (`media.php`, `bin/`) o el botón DNS, eso ya no existe: el video va directo del servidor IPTV al navegador.
+Desde la actualización del 4 de octubre **todo se administra desde el panel** (ver la última sección). Las secciones de abajo describen la historia de cambios. Donde mencionan el administrador, `setup.php`, `dns.json`, `admin.json`, `progress.json`, `userdata.sqlite` o el botón DNS, eso ya no existe.
 
-**Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
+**Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg es opcional, para adaptar audio en `media.php`). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
 ## 1. Login con varias DNS
 - El formulario muestra solo usuario, contraseña e Ingresar. Ya no aparece el selector de DNS.
@@ -199,7 +199,7 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 ## Actualización 4 de octubre (video directo, sin pasar por el hosting)
 
 **El video ya no pasa por el hosting**
-- Todo el video (películas, series y TV en vivo) va directo del servidor IPTV al navegador. El hosting compartido solo hace llamadas pequeñas: la API del servidor IPTV (`player_api`) y el panel.
+- (Reemplazado más abajo: el video de servidores http vuelve a pasar por `proxy.php`.)
 - Se quitaron `proxy.php` (proxy de video), `media.php` (conversión con ffmpeg a MP4/HLS, pistas y subtítulos) y la carpeta `bin/`. Ya no hace falta ffmpeg en el hosting. Si los subiste, puedes borrar `bin/ffmpeg` y `bin/ffprobe`.
 - Si la web está en HTTPS, los enlaces de video se arman en HTTPS hacia el servidor IPTV (`https_port` de su información, o el 443), así el navegador no bloquea contenido mixto. Tu servidor tiene certificado válido en el 443.
 - "Descargar" lleva directo al archivo del servidor IPTV.
@@ -217,10 +217,8 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - Si un formato no se puede reproducir en ese navegador (por ejemplo MKV o HEVC en iPhone, o audio Dolby en Chrome), el reproductor lo dice y ofrece abrirlo en VLC o en otra app como último recurso.
 - **Límite:** sin conversión en el hosting, lo que el navegador no decodifica (audio AC3/DTS en Chrome, MKV/HEVC en iPhone) solo se puede ver en VLC.
 
-## Reproducción directa con la web en HTTPS (4 de octubre)
-- Un navegador no deja que una página https reproduzca video http, y hls.js/mpegts.js necesitan permiso CORS del servidor IPTV. Por eso, sin proxy, no reproducía nada.
-- Ahora la web prueba desde el hosting (solo unos bytes, con caché de 6 horas) si el servidor IPTV entrega el video por https con certificado válido. Si no, abre el reproductor `play.php` por http: el navegador lee el video directo del servidor IPTV, como cuando la web estaba en http. El video nunca pasa por el hosting.
-- `play.php` no usa la cookie de sesión: recibe un enlace cifrado (AES-256-GCM, llave propia del hosting) que caduca en 12 horas. "Continuar viendo" se sigue guardando en el panel.
-- Si el reproductor https falla con todas las fuentes, cambia solo a `play.php` y continúa desde el mismo segundo.
-- TV en vivo: si el canal necesita http, en la guía aparece el botón **Ver canal**, que lo abre en `play.php`.
-- `.htaccess` manda toda la web a https excepto `play.php` y `assets/`. En Hostinger hay que apagar **Forzar HTTPS**.
+## Reproducción otra vez por el hosting (4 de octubre, a pedido)
+- La reproducción directa por http (`play.php`) no funcionó en el iPhone, así que se volvió a la reproducción de antes: si la página es https y el servidor IPTV es http, el video pasa por `proxy.php` (enlaces firmados). Si el servidor IPTV tiene https válido, el video va directo.
+- Vuelven `media.php` (adaptación con ffmpeg en el hosting, si está disponible) y la carpeta `bin/`.
+- El botón DNS sigue fuera de la web player.
+- "Forzar HTTPS" de Hostinger se puede volver a activar.

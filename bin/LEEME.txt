@@ -1,0 +1,1 @@
+Sube aqui un ffmpeg y ffprobe estaticos para Linux (johnvansickle.com/ffmpeg) si tu hosting no los tiene.

@@ -206,8 +206,7 @@ function wp_panel_token()
 function wp_panel_store_token($token)
 {
     $_SESSION['panel_token'] = $token;
-    // play.php (reproductor http) no tiene sesión que guardar
-    if (defined('WP_HANDOFF') || session_status() === PHP_SESSION_ACTIVE) return;
+    if (session_status() === PHP_SESSION_ACTIVE) return;
     if (headers_sent()) return;
     $mem = $_SESSION;
     wp_session_start();

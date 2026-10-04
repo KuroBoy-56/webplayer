@@ -50,11 +50,6 @@
         this.ts = null;
         this.resumed = false;
         this.live = !!opts.live;
-        // TV en vivo: en iPhone/Safari (HLS nativo) o sin MSE para .ts se prueba primero el m3u8 del servidor
-        if (this.live && opts.sources && opts.sources.length > 1) {
-            var hlsFirst = (APPLE && CAPS.nativeHls) || !(window.mpegts && mpegts.isSupported());
-            if (hlsFirst) opts.sources = opts.sources.filter(function (x) { return x.engine === 'hls'; }).concat(opts.sources.filter(function (x) { return x.engine !== 'hls'; }));
-        }
         this.build();
         this.bind();
         this.boot();
@@ -417,12 +412,6 @@
                 this.startTc(this.lastTime || this.o.resume || 0, this.info ? this.prefAudioIndex() : 0, 2);
                 return;
             }
-            // página https y video http: se abre el reproductor directo por http (el video nunca pasa por el hosting)
-            if (this.o.fallbackUrl && location.protocol === 'https:') {
-                var t0 = Math.floor(this.lastTime || this.o.resume || 0);
-                location.replace(this.o.fallbackUrl + (t0 > 0 ? '&t=' + t0 : ''));
-                return;
-            }
             this.showError(); return;
         }
         var s = list[this.idx];
@@ -583,9 +572,7 @@
         var canFix = this._media0 && !this.live && !store(this.fixKey);
         // antes de mostrar el error se busca una solución automáticamente (VLC queda como último recurso)
         if (canFix && !this._fixTried && !this._autoFixed) { this._autoFixed = true; this.fix(true); return; }
-        var hard = /^(mkv|avi|wmv|flv|divx|xvid|mpg|mpeg)$/i.test(o.ext || '');
-        var h = '<h3>No se pudo reproducir este contenido</h3><p>' + (canFix ? 'Toca Solucionar para adaptar el audio y el formato, o ábrelo en VLC.'
-            : (hard || CAPS.mobile ? 'Este navegador no puede reproducir el formato de este contenido. Ábrelo en VLC (o en otra app de video) o reintenta.' : 'Puedes reintentar o abrirlo en VLC.')) + '</p><div class="acts">';
+        var h = '<h3>No se pudo reproducir este contenido</h3><p>' + (canFix ? 'Toca Solucionar para adaptar el audio y el formato, o ábrelo en VLC.' : 'Puedes reintentar o abrirlo en VLC.') + '</p><div class="acts">';
         if (canFix) h += '<button type="button" class="nf-btn nf-btn-white" data-act="fix">Solucionar</button>';
         h += '<button type="button" class="nf-btn ' + (canFix ? 'nf-btn-gray' : 'nf-btn-white') + '" data-act="retry">Reintentar</button>';
         if (NFPlayer.canVlc(o)) h += '<button type="button" class="nf-btn nf-btn-gray" data-act="vlc">Abrir en VLC</button>';
