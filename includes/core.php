@@ -2,7 +2,7 @@
 /**
  * Núcleo compartido de la WebPlayer.
  * - Sesión segura (sin bloqueos entre peticiones)
- * - Lectura de DNS/servidores
+ * - Lectura de DNS/servidores (desde el panel, ver includes/panel.php)
  * - Llamadas a la API Xtream con caché en disco (rápido y sin recargar)
  * - Proxy firmado para video/imágenes (compatibilidad HTTPS)
  * - Filtros inteligentes por plataforma y género
@@ -110,28 +110,15 @@ function wp_json_file($path, $default = [])
     return is_array($data) ? $data : $default;
 }
 
-function wp_admin_config()
-{
-    return wp_json_file(WP_ROOT . '/includes/admin/admin.json');
-}
-
-function wp_dns_config()
-{
-    return wp_json_file(WP_ROOT . '/includes/dns/dns.json');
-}
-
-/** Lista de servidores configurados (en orden) => [ ['id'=>1,'name'=>..,'url'=>..], ... ] */
+/**
+ * Servidores (DNS) que entrega el panel, en orden => [ ['id'=>'1','name'=>'Servidor 1','url'=>..], ... ]
+ * Ver includes/panel.php (caché de 10 minutos y última copia buena).
+ */
 function wp_dns_list()
 {
-    $json = wp_dns_config();
-    $n = isset($json['dns_number']) ? $json['dns_number'] : 'no';
-    $n = ($n === 'no' || (int)$n < 1) ? 1 : min(6, (int)$n);
     $list = [];
-    for ($i = 1; $i <= $n; $i++) {
-        $url = trim((string)($json['server' . $i] ?? ''));
-        if ($url === '') continue;
-        if (!preg_match('~^https?://~i', $url)) $url = 'http://' . $url;
-        $list[] = ['id' => (string)$i, 'name' => (string)($json['server' . $i . '_name'] ?? ('Server ' . $i)), 'url' => rtrim($url, '/')];
+    foreach (wp_panel_dns_urls() as $i => $url) {
+        $list[] = ['id' => (string)($i + 1), 'name' => 'Servidor ' . ($i + 1), 'url' => rtrim($url, '/')];
     }
     return $list;
 }
@@ -806,21 +793,6 @@ function wp_available_genres($type = 'all')
     return $out;
 }
 
-/* ------------------------------------------------------------------ */
-/* Progreso / favoritos (mismos archivos de siempre)                   */
-/* ------------------------------------------------------------------ */
-
-function wp_progress_all()
-{
-    return wp_json_file(WP_ROOT . '/progress.json');
-}
-
-function wp_user_progress($username)
-{
-    $all = wp_progress_all();
-    return isset($all[$username]) && is_array($all[$username]) ? $all[$username] : [];
-}
-
 /** Protección básica contra fuerza bruta en el login. */
 function wp_rate_limited($bucket, $max = 12, $window = 300)
 {
@@ -840,11 +812,6 @@ function wp_rate_reset($bucket)
 {
     $ip = $_SERVER['REMOTE_ADDR'] ?? '0';
     wp_cache_set('rl|' . $bucket . '|' . $ip, []);
-}
-
-function wp_is_admin()
-{
-    return !empty($_SESSION['is_admin']);
 }
 
 function wp_first_key(array $a)
@@ -1355,3 +1322,5 @@ function wp_lang_name($code)
     $c = strtolower((string)$code);
     return $m[$c] ?? ($c !== '' && $c !== 'und' ? strtoupper($c) : '');
 }
+
+require_once __DIR__ . '/panel.php';

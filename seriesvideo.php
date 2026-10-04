@@ -1,7 +1,6 @@
 <?php
 include "session.php";
 include "config.php";
-include "database.php";
 require_once __DIR__ . '/includes/ui.php';
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -42,16 +41,7 @@ if ($description === '' && $tmdb['overview'] !== '') $description = $tmdb['overv
 $youtube_trailer = preg_replace('/[^A-Za-z0-9_\-]/', '', (string)$youtube_trailer);
 
 /* ---------- Favorito ---------- */
-$is_favorite = false;
-if (isset($db)) {
-    $stmt_fav = @$db->prepare("SELECT 1 FROM user_favorites WHERE username = :u AND stream_id = :sid AND type = 'series'");
-    if ($stmt_fav) {
-        $stmt_fav->bindValue(':u', $username, SQLITE3_TEXT);
-        $stmt_fav->bindValue(':sid', $id, SQLITE3_INTEGER);
-        $res_fav = $stmt_fav->execute();
-        if ($res_fav && $res_fav->fetchArray()) $is_favorite = true;
-    }
-}
+$is_favorite = wp_is_favorite('series', $id);
 
 /* ---------- Progreso: último episodio visto de esta serie ---------- */
 $resume_time = 0;

@@ -3,8 +3,8 @@
 # ==========================================================
 # (Sólo directivas permitidas con AllowOverride habitual, para no provocar error 500)
 
-# --- Bloquear archivos de datos y configuración (dns.json, admin.json,
-#     progress.json, userdata.sqlite, caché, etc.) ---
+# --- Bloquear archivos de datos y configuración (caché, registros,
+#     llave del panel, etc.) ---
 <FilesMatch "(?i)\.(json|sqlite|sqlite3|db|txt|log|lock|tmp|bak|old|phpx|ini|sh|sql|map|md)$">
     <IfModule mod_authz_core.c>
         Require all denied
@@ -27,7 +27,7 @@
 RewriteEngine on
 
 # --- Archivos internos que nunca se abren desde el navegador ---
-RewriteRule ^includes/(cache/|core\.php|ui\.php|ondemand\.php|admin_guard\.php|functions\.php|epg\.php) - [F,L,NC]
+RewriteRule ^includes/ - [F,L,NC]
 RewriteRule ^bin/ - [F,L,NC]
 RewriteRule ^api/ - [F,L,NC]
 

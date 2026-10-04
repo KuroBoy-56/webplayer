@@ -131,9 +131,8 @@ include "header.php";
     <h2 style="font-size:18px;margin:22px 0 8px">Guía de programas (EPG)</h2>
     <p style="color:#ccc;font-size:14px;line-height:1.8">
         Guía del servidor IPTV para este canal: <b><?php echo $nsrv ? $nsrv . ' programas' : 'no envía'; ?></b><br>
-        Guía pública de respaldo para este canal: <b><?php echo $alt ? count($alt) . ' programas' : 'sin coincidencia'; ?></b><br>
-        Respaldo actualizado: <b><?php echo $est && $est['t'] ? e(date('d/m H:i', $est['t'])) . ' · ' . (int)$est['channels'] . ' canales con guía' : 'todavía no (se genera en segundo plano, vuelve en unos minutos)'; ?></b><br>
-        <?php foreach (($est['log'] ?? []) as $lg): ?><span style="color:#999;font-size:12px"><?php echo e(basename((string)$lg[0]) . ': ' . $lg[1] . (isset($lg[2]) ? ' · ' . (int)$lg[2] . ' canales' : '')); ?></span><br><?php endforeach; ?>
+        Guía de respaldo del panel para este canal: <b><?php echo $alt ? count($alt) . ' programas' : 'sin coincidencia'; ?></b><br>
+        Última consulta al panel: <b><?php echo $est && !empty($est['t']) ? e(date('d/m H:i', (int)$est['t'])) . (!empty($est['updated']) ? ' · guía del panel actualizada ' . e(date('d/m H:i', (int)$est['updated'])) : '') : (wp_panel_ready() ? 'sin respuesta del panel' : 'falta includes/panel_secret.php'); ?></b><br>
     </p>
     <?php endif; ?>
     <?php if ($slug !== 'live' && wp_bin('ffprobe') && ($pi = wp_probe(wp_stream_url($slug === 'series' ? 'series' : 'movie', $id, $ext)))): ?>

@@ -3,7 +3,6 @@ include "session.php";
 include "config.php";
 $page_title = 'Inicio';
 include "header.php";
-include "database.php";
 
 /* ---------- Sólo títulos que existen en el servidor IPTV actual ---------- */
 $have = ['movie' => [], 'series' => []];
@@ -14,18 +13,15 @@ $in_server = function ($type, $id) use ($have) {
     return !$have[$type] || isset($have[$type][(string)$id]);
 };
 
-/* ---------- Mi lista (favoritos guardados en SQLite) ---------- */
+/* ---------- Mi lista (favoritos guardados en el panel) ---------- */
 $favoritos = [];
-if (isset($db)) {
-    $stmt_fav = $db->prepare("SELECT stream_id, title, poster_url, type FROM user_favorites WHERE username = :username AND type IN ('movie', 'series') ORDER BY added_at DESC LIMIT 30");
-    $stmt_fav->bindValue(':username', $username, SQLITE3_TEXT);
-    $res_fav = $stmt_fav->execute();
-    while ($res_fav && ($row = $res_fav->fetchArray(SQLITE3_ASSOC))) {
-        if ($in_server($row['type'] === 'series' ? 'series' : 'movie', $row['stream_id'])) $favoritos[] = $row;
-    }
+foreach (wp_user_favorites() as $row) {
+    if (!in_array($row['type'], ['movie', 'series'], true)) continue;
+    if ($in_server($row['type'], $row['stream_id'])) $favoritos[] = $row;
+    if (count($favoritos) >= 30) break;
 }
 
-/* ---------- Continuar viendo (progress.json) ---------- */
+/* ---------- Continuar viendo (progreso guardado en el panel) ---------- */
 $continuar_viendo = [];
 $user_prog = array_values(wp_user_progress($username));
 usort($user_prog, function ($a, $b) {

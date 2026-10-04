@@ -2,16 +2,14 @@
 include "session.php";
 include "config.php";
 
-$fav_file = __DIR__ . '/api/live_favorites.json';
+// Los canales favoritos se guardan en el panel (api/progress.php)
+$fav_file = null;
 
 function tv_fav_channels($username, $fav_file)
 {
     $channels = [];
-    $fav_data = wp_json_file($fav_file);
-    if (isset($fav_data[$username]) && is_array($fav_data[$username])) {
-        foreach ($fav_data[$username] as $sid => $info) {
-            $channels[] = ['stream_id' => (string)$sid, 'name' => $info['title'] ?? '', 'stream_icon' => $info['poster_url'] ?? ''];
-        }
+    foreach (wp_user_favorites('live') as $f) {
+        $channels[] = ['stream_id' => (string)$f['stream_id'], 'name' => $f['title'], 'stream_icon' => $f['poster_url']];
     }
     return $channels;
 }
@@ -56,8 +54,8 @@ function tv_epg($id, $name)
         }
         return $out;
     };
-    $out = $prefer_alt ? wp_epg_for($id) : $server();
-    if (!$out) $out = $prefer_alt ? $server() : wp_epg_for($id);
+    $out = $prefer_alt ? wp_epg_for($id, $name) : $server();
+    if (!$out) $out = $prefer_alt ? $server() : wp_epg_for($id, $name);
     usort($out, function ($a, $b) { return $a['s'] - $b['s']; });
     return array_slice($out, 0, 15);
 }
@@ -79,7 +77,6 @@ function tv_channel_data($id, $username, $fav_file)
     // (una sola conexión) es más estable que pedir cada segmento HLS por separado.
     if (wp_is_https() && !wp_server_https_base() && $pref !== 'ts') $order = ['ts', 'm3u8'];
     $sources = wp_play_sources('live', $id, $order);
-    $fav = wp_json_file($fav_file);
     return [
         'id' => (string)$id,
         'name' => $name,
@@ -90,7 +87,7 @@ function tv_channel_data($id, $username, $fav_file)
         'stream' => wp_stream_url('live', $id, $pref),
         'vlcPc' => 'playlist.php?' . http_build_query(['id' => (string)$id, 'slug' => 'live', 'ext' => $pref, 'title' => $name]),
         'diag' => 'diag.php?slug=live&id=' . rawurlencode((string)$id),
-        'fav' => isset($fav[$username][(string)$id]),
+        'fav' => wp_is_favorite('live', $id),
         'epg' => tv_epg($id, $name),
     ];
 }

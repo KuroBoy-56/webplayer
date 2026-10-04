@@ -1,7 +1,6 @@
 <?php
 include "session.php";
 include "config.php";
-include "database.php";
 require_once __DIR__ . '/includes/ui.php';
 
 $id = preg_replace('/[^0-9]/', '', (string)($_GET["id"] ?? ''));
@@ -40,16 +39,7 @@ $img_url = wp_img($img);
 $bg_url = $backdrop ? wp_img($backdrop, '') : $img_url;
 
 /* ---------- Favorito / progreso ---------- */
-$is_favorite = false;
-if (isset($db)) {
-    $stmt_fav = @$db->prepare("SELECT 1 FROM user_favorites WHERE username = :u AND stream_id = :sid AND type = 'movie'");
-    if ($stmt_fav) {
-        $stmt_fav->bindValue(':u', $username, SQLITE3_TEXT);
-        $stmt_fav->bindValue(':sid', $id, SQLITE3_INTEGER);
-        $res_fav = $stmt_fav->execute();
-        if ($res_fav && $res_fav->fetchArray()) $is_favorite = true;
-    }
-}
+$is_favorite = wp_is_favorite('movie', $id);
 $prog = wp_user_progress($username);
 $resume_time = (int)($prog['movie_' . $id]['current_time'] ?? 0);
 $total_time = (int)($prog['movie_' . $id]['total_time'] ?? 0);

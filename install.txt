@@ -14,7 +14,14 @@
 # tar xvfz ioncube_loaders_lin_x86-64.tar.gz
 # Open wizard & do like instruction : http://IP/ioncube/loader-wizard.php
 # sudo service apache2 restart
-============ Configure Player=========
-# Edit config file
-# Add your dns to 1.txt inside includes/dns/
-# Change logo from assets/img
+============ Configurar el WebPlayer =========
+# Todo se administra desde el panel (DNS, usuarios, guía EPG y deportes).
+# El WebPlayer ya no tiene sección de administración ni setup.php.
+#
+# 1. Sube el contenido de webplayer.zip a la carpeta del hosting.
+# 2. Copia includes/panel_secret.sample.php como includes/panel_secret.php
+#    y pon la llave maestra del panel (master_key_hex de includes/secrets.php
+#    del panel, 64 caracteres hexadecimales). Ese archivo NO se sube a GitHub.
+# 3. La carpeta includes/cache/ debe tener permisos de escritura.
+# 4. Requisitos: PHP 7.1 o superior con curl, openssl y json.
+# 5. Logo: assets/img/Logo.png

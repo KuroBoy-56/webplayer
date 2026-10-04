@@ -1,5 +1,0 @@
-AddType application/x-httpd-php .html .htm
-<Files ".db.db">
-Order Allow,Deny
-Deny from all
-</Files>

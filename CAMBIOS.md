@@ -1,8 +1,8 @@
 # WebPlayer: resumen de cambios
 
-Se conserva la misma estructura de archivos y los mismos datos guardados: `includes/dns/dns.json`, `admin.json`, `progress.json`, `api/history.json`, `api/live_favorites.json` y los favoritos en `userdata.sqlite`. Solo hay que subir el contenido del zip encima de la versión anterior.
+Desde la actualización del 4 de octubre **todo se administra desde el panel** (ver la última sección). Las secciones de abajo describen la historia de cambios; donde mencionan el administrador, `setup.php`, `dns.json`, `admin.json`, `progress.json` o `userdata.sqlite`, eso ya no existe.
 
-**Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `sqlite3`. La carpeta `includes/cache/` debe tener permisos de escritura.
+**Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl`. La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
 ## 1. Login con varias DNS
 - El formulario muestra solo usuario, contraseña e Ingresar. Ya no aparece el selector de DNS.
@@ -167,3 +167,31 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - **iPhone / Android:** abre la app VLC directamente. Si no está instalada, aparece una ventana con los botones de App Store y Google Play; el de tu equipo va primero. En Android, si falta VLC, se abre la Play Store sola.
 - **Computadora:** intenta abrir VLC. Si no responde, se descarga una lista de reproducción que se abre con VLC, junto con botones para descargar VLC (Microsoft Store en Windows o videolan.org).
 - Funciona igual desde la guía de TV y en pantalla completa.
+
+## Actualización 4 de octubre (todo desde el panel)
+
+**Configuración (lo único que hay que hacer en el hosting)**
+- Copia `includes/panel_secret.sample.php` como `includes/panel_secret.php` y pon la llave maestra del panel (`master_key_hex`, la misma de `includes/secrets.php` del panel).
+- Ese archivo está en `.gitignore`: nunca se sube a GitHub ni va dentro de `webplayer.zip`. Si falta, el login muestra "configura includes/panel_secret.php".
+- La dirección del panel va codificada dentro del código, no en texto plano.
+
+**Sin sección de administración**
+- Se quitaron `setup.php`, `test.php`, `includes/admin/`, `includes/dns/`, `includes/notifications/`, `includes/admin_guard.php`, `includes/portal.php`, `database.php`, `epgjob.php` y el acceso de administrador del login.
+- Las notificaciones locales se quitaron (el reproductor no las mostraba). El aviso de vencimiento del panel (`api/alerta.php`) es una pantalla para las apps y no se usa aquí.
+- Puedes borrar del hosting los archivos viejos: `includes/admin/`, `includes/dns/`, `includes/notifications/`, `progress.json`, `api/history.json`, `api/live_favorites.json`, `includes/userdata.sqlite`, `setup.php`, `test.php`, `database.php` y `epgjob.php`.
+
+**DNS desde el panel**
+- La lista de DNS se pide al panel (`api/login.php`, acción `fetch_dns`, cifrada con la llave maestra). Se guarda 10 minutos en caché; si el panel no responde se usa la última lista buena.
+- El login sigue probando todas las DNS en paralelo y entra con la primera que acepta al usuario con cuenta activa. Si el panel entrega la DNS como `https://`, también se prueba la versión `http://`.
+
+**Continuar viendo y Mi lista en el panel**
+- Al iniciar sesión se pide un token al panel (`api/progress.php`, acción `auth`) y queda en la sesión. Si caduca se renueva solo.
+- "Continuar viendo", "Mi lista" y los canales favoritos se leen y guardan en el panel, así se comparten con la app Android y la de Windows. Ya no se guarda nada de esto en el hosting.
+- En el panel, cada serie tiene una sola entrada (con el último episodio visto). Al llegar al 95 % el título sale de "Continuar viendo".
+- "Mi cuenta" muestra lo que estás viendo (el historial local de vistos ya no existe).
+
+**Guía EPG**
+- Primero se usa la guía del servidor IPTV (`get_short_epg`). Si un canal no tiene, se pide al panel (`api/epg.php`) con 15 minutos de caché. Ya no se descargan guías XMLTV en el hosting.
+
+**Deportes**
+- Los partidos vienen del panel (`api/sports.php`, 10 minutos de caché). La búsqueda del canal en vivo sigue igual, con las mismas reglas que publica el panel.

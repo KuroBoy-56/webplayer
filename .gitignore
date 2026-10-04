@@ -1,0 +1,17 @@
+# Llave maestra del panel (nunca se sube)
+includes/panel_secret.php
+
+# Caché y datos generados en el hosting
+includes/cache/*
+!includes/cache/.htaccess
+!includes/cache/index.php
+
+# Datos antiguos que ya no se usan (ahora viven en el panel)
+progress.json
+api/history.json
+api/live_favorites.json
+includes/userdata.sqlite
+includes/dns/
+includes/admin/
+includes/notifications/
+*.log

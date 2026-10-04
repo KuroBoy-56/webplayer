@@ -3,11 +3,9 @@ require_once __DIR__ . '/includes/core.php';
 include "config.php";
 wp_security_headers();
 
-// Sin administrador creado todavía: ir a la configuración inicial
-if ($adminU === '' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: setup.php');
-    exit;
-}
+// La llave del panel es obligatoria (includes/panel_secret.php, no se sube a GitHub)
+$panel_ready = wp_panel_ready();
+$panel_msg = 'Falta configurar la conexión con el panel: configura includes/panel_secret.php (copia includes/panel_secret.sample.php y pon la llave maestra del panel).';
 
 /* ---------- Fondo de pósters (TMDB) con caché, sin bloquear el login ---------- */
 function getMoviesFromEndpoint($api_key, $pages = 4)
@@ -59,22 +57,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         exit;
     }
 
+    if (!$panel_ready) {
+        echo json_encode(['success' => false, 'message' => $panel_msg]);
+        exit;
+    }
+
     wp_session_start();
 
-    // Acceso de administrador
-    if ($adminU !== '' && hash_equals((string)$adminU, $username) && hash_equals((string)$adminP, $password)) {
-        session_regenerate_id(true);
-        $_SESSION['is_admin'] = true;
-        wp_rate_reset('login');
-        echo json_encode(['success' => true, 'redirect' => 'includes/dns/edit_dns.php']);
+    // DNS desde el panel (caché de 10 minutos; si el panel no responde, la última lista buena)
+    $servers = wp_dns_list();
+    if (!$servers) {
+        echo json_encode(['success' => false, 'message' => 'No se pudo obtener la lista de servidores del panel. Inténtalo de nuevo en unos minutos.']);
         exit;
     }
 
-    $servers = wp_dns_list();
-    if (!$servers) {
-        echo json_encode(['success' => false, 'message' => 'No hay servidores configurados.']);
-        exit;
+    // Cuando el panel responde por HTTPS cambia http:// por https:// en las DNS.
+    // Se prueba también la versión http:// (primero), porque muchos servidores IPTV no tienen HTTPS.
+    $cands = [];
+    foreach ($servers as $srv) {
+        if (stripos($srv['url'], 'https://') === 0) {
+            $cands[] = ['url' => 'http://' . substr($srv['url'], 8)] + $srv;
+        }
+        $cands[] = $srv;
     }
+    $servers = $cands;
 
     $urls = [];
     foreach ($servers as $i => $srv) {
@@ -115,7 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         $_SESSION["server"] = $srv['url'];
         $_SESSION["server_id"] = $srv['id'];
         $_SESSION["server_name"] = $srv['name'];
-        unset($_SESSION['is_admin']);
+        // Token del panel para "Continuar viendo" y "Mi lista"
+        $_SESSION['panel_token'] = wp_panel_auth($username, $password);
         wp_rate_reset('login');
 
         // Sólo se recuerda el usuario (nunca la contraseña en una cookie)
@@ -183,7 +190,7 @@ $remember = isset($_COOKIE['username']) ? (string)$_COOKIE['username'] : '';
     <main class="nf-login-main">
         <form id="login-form" class="nf-login-box" method="POST" autocomplete="on" novalidate>
             <h1>Iniciar sesión</h1>
-            <div id="login-error" class="nf-login-error" role="alert" hidden></div>
+            <div id="login-error" class="nf-login-error" role="alert"<?php echo $panel_ready ? ' hidden' : ''; ?>><?php echo $panel_ready ? '' : e($panel_msg); ?></div>
 
             <label class="nf-field">
                 <input type="text" id="username" name="username" placeholder=" " autocomplete="username" autocapitalize="none" spellcheck="false" value="<?php echo e($remember); ?>" required>

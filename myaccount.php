@@ -14,12 +14,9 @@ $created = !empty($ui['created_at']) ? date('d/m/Y', (int)$ui['created_at']) : '
 $expire = ($exp == NULL) ? "ILIMITADO" : gmdate("d/m/Y", (int)$exp);
 $days_left = ($exp && is_numeric($exp)) ? (int)floor(((int)$exp - time()) / 86400) : null;
 
-$history_items = [];
-$json_hist = wp_json_file(__DIR__ . '/api/history.json');
-if (isset($json_hist[$username]) && is_array($json_hist[$username])) {
-    $history_items = array_values($json_hist[$username]);
-    usort($history_items, function ($a, $b) { return ($b['completed_at'] ?? 0) <=> ($a['completed_at'] ?? 0); });
-}
+// Lo que el usuario está viendo (guardado en el panel, igual que en las apps)
+$history_items = array_values(wp_user_progress($username));
+usort($history_items, function ($a, $b) { return ($b['last_watched'] ?? 0) <=> ($a['last_watched'] ?? 0); });
 $body_class = 'nf-solid';
 include "header.php";
 ?>
@@ -45,7 +42,7 @@ include "header.php";
 <div class="nf-page account-wrapper">
     <div class="ac-wrap">
         <h1 class="nf-page-title">Mi cuenta</h1>
-        <p class="nf-page-sub">Detalles de tu suscripción y lo que ya terminaste de ver.</p>
+        <p class="nf-page-sub">Detalles de tu suscripción y lo que estás viendo.</p>
         <div class="ac-grid">
             <div class="ac-item"><small>Usuario</small><b><?php echo e($acc_user); ?></b></div>
             <div class="ac-item"><small>Estado</small><b class="<?php echo strcasecmp($acc_active, 'Active') === 0 ? 'ok' : 'bad'; ?>"><?php echo strcasecmp($acc_active, 'Active') === 0 ? 'Activa' : e($acc_active); ?></b></div>
@@ -59,17 +56,17 @@ include "header.php";
             <a class="nf-btn nf-btn-dark" href="logout.php" data-noprefetch><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
         </div>
         <div class="ac-hist history-section">
-            <h3>Historial de vistos</h3>
+            <h3>Continuar viendo</h3>
             <?php if ($history_items): ?>
                 <?php foreach (array_slice($history_items, 0, 200) as $item): ?>
                     <div class="ac-row">
                         <span class="n"><?php echo e($item['title'] ?? ''); ?></span>
                         <span class="t <?php echo ($item['type'] ?? '') === 'movie' ? 'movie' : 'series'; ?>"><?php echo ($item['type'] ?? '') === 'movie' ? 'Película' : 'Serie'; ?></span>
-                        <span class="d"><?php echo date('d M Y - g:i A', (int)($item['completed_at'] ?? 0)); ?></span>
+                        <span class="d"><?php echo !empty($item['last_watched']) ? date('d M Y - g:i A', (int)$item['last_watched']) : ''; ?></span>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
-                <div class="nf-empty" style="padding:30px">Aún no tienes contenido completado.</div>
+                <div class="nf-empty" style="padding:30px">Aún no tienes contenido en progreso.</div>
             <?php endif; ?>
         </div>
     </div>

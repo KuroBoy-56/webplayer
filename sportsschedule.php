@@ -153,9 +153,7 @@ function fetchAndProcessContent($target_url) {
 }
 
 
-/* ---------- Agenda deportiva (TheSportsDB, caché 15 min) ---------- */
-if (!defined('WP_SPORTSDB_KEY')) define('WP_SPORTSDB_KEY', '123');
-
+/* ---------- Agenda deportiva: la entrega el panel (api/sports.php, caché 10 min) ---------- */
 $sp_sports = [
     'Soccer' => ['Fútbol', '⚽', 120],
     'Basketball' => ['Baloncesto', '🏀', 150],
@@ -167,60 +165,18 @@ $sp_sports = [
     'Ice Hockey' => ['Hockey', '🏒', 160],
 ];
 
-function sp_fetch_events(array $sports)
-{
-    $days = [gmdate('Y-m-d'), gmdate('Y-m-d', time() + 86400)];
-    $ck = 'sports2|' . $days[0];
-    $cached = wp_cache_get($ck, 900, $stale);
-    if (is_array($cached)) return $cached;
-    $out = [];
-    foreach ([WP_SPORTSDB_KEY, '3'] as $key) {
-        $urls = [];
-        foreach ($days as $d) foreach (array_keys($sports) as $sp) {
-            $urls[$d . '|' . $sp] = 'https://www.thesportsdb.com/api/v1/json/' . $key . '/eventsday.php?d=' . $d . '&s=' . urlencode($sp);
-        }
-        $seen = [];
-        foreach (wp_http_multi($urls, 10) as $k => $body) {
-            $j = $body ? json_decode($body, true) : null;
-            foreach ((is_array($j['events'] ?? null) ? $j['events'] : []) as $ev) {
-                $id = (string)($ev['idEvent'] ?? '');
-                if ($id === '' || isset($seen[$id])) continue;
-                $seen[$id] = 1;
-                $ts = (string)($ev['strTimestamp'] ?? '');
-                if ($ts === '' && !empty($ev['dateEvent'])) $ts = $ev['dateEvent'] . 'T' . ($ev['strTime'] ?? '00:00:00');
-                if ($ts === '') continue;
-                if (!preg_match('/[zZ]|[+-]\d\d:?\d\d$/', $ts)) $ts .= 'Z';
-                $out[] = [
-                    'id' => $id,
-                    'sp' => (string)($ev['strSport'] ?? explode('|', $k)[1]),
-                    'lg' => (string)($ev['strLeague'] ?? ''),
-                    'lb' => (string)($ev['strLeagueBadge'] ?? ''),
-                    'ev' => (string)($ev['strEvent'] ?? ''),
-                    'h' => (string)($ev['strHomeTeam'] ?? ''),
-                    'a' => (string)($ev['strAwayTeam'] ?? ''),
-                    'hb' => (string)($ev['strHomeTeamBadge'] ?? ''),
-                    'ab' => (string)($ev['strAwayTeamBadge'] ?? ''),
-                    'hs' => $ev['intHomeScore'] ?? null,
-                    'as' => $ev['intAwayScore'] ?? null,
-                    'ts' => $ts,
-                    'v' => (string)($ev['strVenue'] ?? ''),
-                    'st' => (string)($ev['strStatus'] ?? ''),
-                    'th' => (string)($ev['strThumb'] ?? ''),
-                    'pp' => strtolower((string)($ev['strPostponed'] ?? '')) === 'yes',
-                ];
-            }
-        }
-        if ($out) break;
+$sp_panel = wp_panel_sports();
+// Deportes que publica el panel (nombre, ícono y duración del partido en minutos)
+foreach ((is_array($sp_panel['sports'] ?? null) ? $sp_panel['sports'] : []) as $k => $m) {
+    if (is_array($m) && !empty($m['label'])) {
+        $sp_sports[(string)$k] = [(string)$m['label'], (string)($m['icon'] ?? ''), (int)($m['minutes'] ?? 120) ?: 120];
     }
-    if ($out) {
-        usort($out, function ($x, $y) { return strcmp($x['ts'], $y['ts']); });
-        wp_cache_set($ck, $out);
-        return $out;
-    }
-    return is_array($stale) ? $stale : [];
+}
+$events = [];
+foreach ((is_array($sp_panel['events'] ?? null) ? $sp_panel['events'] : []) as $ev) {
+    if (is_array($ev) && !empty($ev['id']) && !empty($ev['ts'])) $events[] = $ev;
 }
 
-$events = sp_fetch_events($sp_sports);
 
 /* Respaldo: tablas de la web de TheSportsDB si la API no devuelve partidos */
 $sports = ['t1' => '', 't2' => ''];
