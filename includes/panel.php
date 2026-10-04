@@ -129,6 +129,7 @@ function wp_panel_request($endpoint, $body = null, array $headers = [], $timeout
     $headers[] = 'Accept: application/json';
     $opts[CURLOPT_HTTPHEADER] = $headers;
     curl_setopt_array($ch, $opts);
+    wp_doh_apply($ch, $base . $endpoint);
     $res = curl_exec($ch);
     $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $err = curl_errno($ch);

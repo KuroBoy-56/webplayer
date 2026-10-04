@@ -86,6 +86,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'download_file') {
     header('Cache-Control: must-revalidate');
     header('Pragma: public');
     $ch = curl_init($raw_url);
+    wp_doh_apply($ch, $raw_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -122,7 +123,7 @@ $sources = wp_play_sources($kind, $id, $exts);
 $media_cfg = null;
 if (wp_bin('ffprobe') && wp_bin('ffmpeg')) {
     $mb = wp_proxy_url($raw_url, 'media.php');
-    $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
+    $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'hls' => $mb . '&do=hls', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
     // pistas ya conocidas (caché): el reproductor decide al instante si necesita convertir el audio
     $pc = wp_cache_get('probe|' . md5($raw_url), 604800);
     if (is_array($pc)) $media_cfg['info'] = wp_probe_labels($pc);
@@ -145,7 +146,7 @@ if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'ac
     <meta name="referrer" content="no-referrer">
     <title><?php echo e($content_name ?: 'Reproductor'); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=4">
+    <link rel="stylesheet" href="assets/nf/app.css?v=5">
     <link rel="stylesheet" href="assets/nf/player.css?v=5">
     <style>
         html, body { height: 100%; overflow: hidden; background: #000; }
@@ -166,7 +167,7 @@ if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'ac
 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
-    <script src="assets/nf/player.js?v=5" defer></script>
+    <script src="assets/nf/player.js?v=6" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

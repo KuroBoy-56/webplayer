@@ -171,7 +171,7 @@ $remember = isset($_COOKIE['username']) ? (string)$_COOKIE['username'] : '';
     <title>LatMpx - WebPlayer</title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="preconnect" href="https://image.tmdb.org">
-    <link rel="stylesheet" href="assets/nf/app.css?v=4">
+    <link rel="stylesheet" href="assets/nf/app.css?v=5">
 </head>
 <body class="nf-login-page">
     <div class="nf-login-wall" aria-hidden="true">

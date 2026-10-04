@@ -16,6 +16,7 @@ function diag_probe($url)
     $r = ['code' => 0, 'type' => '', 'len' => '', 'range' => 'no', 'final' => '', 'ms' => 0, 'err' => ''];
     $t = microtime(true);
     $ch = curl_init($url);
+    wp_doh_apply($ch, $url);
     $hdr = [];
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,

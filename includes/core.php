@@ -191,6 +191,7 @@ function wp_curl($url, $timeout = 12)
         CURLOPT_SSL_VERIFYHOST => 0,
         CURLOPT_ENCODING => '',
     ]);
+    wp_doh_apply($ch, $url);
     return $ch;
 }
 
@@ -430,6 +431,7 @@ function wp_server_https_base()
         $ch = curl_init($base . '/player_api.php');
         curl_setopt_array($ch, [CURLOPT_NOBODY => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 6,
             CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2, CURLOPT_USERAGENT => WP_UA]);
+        wp_doh_apply($ch, $base);
         curl_exec($ch);
         $ok = curl_errno($ch) === 0 && (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE) > 0 ? 1 : 0;
         curl_close($ch);
@@ -446,11 +448,13 @@ function wp_play_sources($kind, $id, array $exts)
 {
     $out = [];
     $https = wp_is_https();
-    $hbase = $https && !WP_FORCE_PROXY ? wp_server_https_base() : null;
+    // Con un DNS elegido (botón DNS) el video pasa por el proxy, así la elección se aplica
+    $direct = !WP_FORCE_PROXY && wp_dns_choice() === 'auto';
+    $hbase = $https && $direct ? wp_server_https_base() : null;
     foreach ($exts as $x) {
         $u = wp_stream_url($kind, $id, $x);
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
-        if (!WP_FORCE_PROXY) {
+        if ($direct) {
             if (!$https || stripos($u, 'https://') === 0) {
                 $out[] = ['url' => $u, 'engine' => $engine];
             } elseif ($hbase) {
@@ -1096,9 +1100,10 @@ function wp_probe($url)
     if (is_array($hit)) return $hit;
     $bin = wp_bin('ffprobe');
     if (!$bin) return null;
-    $cmd = [$bin, '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', '15000000', '-show_entries',
+    list($in, $hdr) = wp_doh_ffmpeg($url);
+    $cmd = array_merge([$bin, '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', '15000000'], $hdr, ['-show_entries',
         'format=duration:stream=index,codec_type,codec_name,channels,profile:stream_tags=language,title:stream_disposition=default,forced',
-        '-of', 'json', $url];
+        '-of', 'json', $in]);
     $out = wp_run($cmd, 25);
     $j = $out ? json_decode($out, true) : null;
     if (!is_array($j) || empty($j['streams'])) {
@@ -1323,4 +1328,5 @@ function wp_lang_name($code)
     return $m[$c] ?? ($c !== '' && $c !== 'und' ? strtoupper($c) : '');
 }
 
+require_once __DIR__ . '/doh.php';
 require_once __DIR__ . '/panel.php';

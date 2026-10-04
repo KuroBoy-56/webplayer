@@ -79,7 +79,12 @@ function wp_rewrite_m3u8($body, $base)
 
 $path = (string)parse_url($url, PHP_URL_PATH);
 $isPlaylist = (bool)preg_match('/\.m3u8?$/i', $path);
-$state = ['code' => 200, 'headers' => [], 'mode' => null, 'buf' => '', 'sent' => false];
+$state = ['code' => 200, 'headers' => [], 'mode' => null, 'buf' => '', 'sent' => false, 'left' => -1];
+// Range pedido por el navegador (iPhone/Safari siempre pide "bytes=0-1" antes de reproducir un MP4)
+$wantRange = null;
+if (!empty($_SERVER['HTTP_RANGE']) && preg_match('/^bytes=(\d+)-(\d*)$/', trim($_SERVER['HTTP_RANGE']), $rm)) {
+    $wantRange = [(int)$rm[1], $rm[2] === '' ? null : (int)$rm[2]];
+}
 
 $isHead = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD';
 $mimeByExt = ['mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'mov' => 'video/quicktime', 'mkv' => 'video/x-matroska',
@@ -92,6 +97,7 @@ if (!empty($_SERVER['HTTP_RANGE'])) $fwd[] = 'Range: ' . $_SERVER['HTTP_RANGE'];
 if (!empty($_SERVER['HTTP_IF_RANGE'])) $fwd[] = 'If-Range: ' . $_SERVER['HTTP_IF_RANGE'];
 
 $ch = curl_init($url);
+wp_doh_apply($ch, $url);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => false,
     CURLOPT_HEADER => false,
@@ -119,14 +125,24 @@ curl_setopt_array($ch, [
         if ($pos !== false) $state['headers'][strtolower(trim(substr($h, 0, $pos)))] = trim(substr($h, $pos + 1));
         return $len;
     },
-    CURLOPT_WRITEFUNCTION => function ($c, $chunk) use (&$state, $isPlaylist, $extMime) {
+    CURLOPT_WRITEFUNCTION => function ($c, $chunk) use (&$state, $isPlaylist, $extMime, $wantRange) {
         if ($state['mode'] === null) {
             $ct = strtolower($state['headers']['content-type'] ?? '');
             $state['mode'] = ($isPlaylist || strpos($ct, 'mpegurl') !== false || strncmp(ltrim($chunk), '#EXTM3U', 7) === 0) ? 'playlist' : 'stream';
             if ($state['mode'] === 'stream') {
+                wp_proxy_fake_range($state, $wantRange);
                 wp_proxy_send_headers($state, $extMime);
                 $state['sent'] = true;
             }
+        }
+        if ($state['left'] >= 0 && $state['mode'] === 'stream') {
+            // el servidor IPTV ignoró el Range: se entrega solo el tramo pedido y se corta
+            if ($state['left'] === 0) return -1;
+            if (strlen($chunk) > $state['left']) $chunk = substr($chunk, 0, $state['left']);
+            $state['left'] -= strlen($chunk);
+            echo $chunk;
+            @flush();
+            return $state['left'] === 0 ? -1 : strlen($chunk);
         }
         if ($state['mode'] === 'playlist') {
             $state['buf'] .= $chunk;
@@ -138,6 +154,23 @@ curl_setopt_array($ch, [
         return strlen($chunk);
     },
 ]);
+
+/**
+ * Si el navegador pidió un tramo desde el byte 0 y el servidor IPTV respondió el archivo completo (200),
+ * se responde 206 con ese tramo. Sin esto Safari en iPhone no abre el MP4 ni permite adelantar.
+ */
+function wp_proxy_fake_range(&$state, $wantRange)
+{
+    if (!$wantRange || $wantRange[0] !== 0 || $state['code'] !== 200) return;
+    $len = isset($state['headers']['content-length']) ? (int)$state['headers']['content-length'] : 0;
+    if ($len <= 0) return;
+    $end = $wantRange[1] === null ? $len - 1 : min($len - 1, $wantRange[1]);
+    $state['code'] = 206;
+    $state['headers']['content-range'] = 'bytes 0-' . $end . '/' . $len;
+    $state['headers']['content-length'] = (string)($end + 1);
+    $state['headers']['accept-ranges'] = 'bytes';
+    if ($end < $len - 1) $state['left'] = $end + 1;
+}
 
 function wp_proxy_send_headers($state, $extMime)
 {
@@ -173,6 +206,7 @@ if ($state['mode'] === 'playlist') {
 }
 if (!$state['sent']) {
     if ($isHead && !$err && $state['code'] < 400) {
+        wp_proxy_fake_range($state, $wantRange);
         wp_proxy_send_headers($state, $extMime); // HEAD: sólo cabeceras
     } else {
         http_response_code($err ? 502 : ($state['code'] ?: 502));

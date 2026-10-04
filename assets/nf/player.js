@@ -429,7 +429,8 @@
     };
 
     NFPlayer.prototype.canEngine = function (eng) {
-        if (eng === 'hls') return (window.Hls && Hls.isSupported()) || !!this.v.canPlayType('application/vnd.apple.mpegurl');
+        if (eng === 'hls') return (window.Hls && Hls.isSupported()) || CAPS.nativeHls;
+        // .ts en vivo necesita MSE (no existe en iPhone antiguos): ahí se usa HLS o la conversión del servidor
         if (eng === 'mpegts') return !!(window.mpegts && mpegts.isSupported());
         return true;
     };
@@ -478,6 +479,23 @@
     var APPLE = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
         (/Safari/i.test(navigator.userAgent) && !/Chrome|Chromium|Edg|Android/i.test(navigator.userAgent));
 
+    /* Capacidades del navegador: se elige sola la forma de reproducir en PC y en celulares
+       (Safari iPhone, Chrome Android, Samsung Internet, Firefox) */
+    var CAPS = (function () {
+        var v = document.createElement('video');
+        var c = {
+            mse: !!(window.MediaSource || window.ManagedMediaSource || window.WebKitMediaSource),
+            mms: !window.MediaSource && !!window.ManagedMediaSource, // iPhone con iOS 17.1 o superior
+            nativeHls: !!(v.canPlayType('application/vnd.apple.mpegurl') || v.canPlayType('audio/mpegurl')),
+            h264: !!v.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'),
+            mobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+        };
+        // Safari no reproduce un MP4 "en flujo" sin saltos: ahí la conversión del servidor se pide en HLS
+        c.hlsTc = c.nativeHls && (APPLE || !c.mse);
+        return c;
+    })();
+    NFPlayer.caps = CAPS;
+
     NFPlayer.prototype.playHls = function (url) {
         var self = this;
         // En iPhone/Safari el HLS nativo es el más estable (igual que Netflix en Safari)
@@ -487,6 +505,7 @@
             return;
         }
         if (window.Hls && Hls.isSupported()) {
+            if (CAPS.mms) this.v.disableRemotePlayback = true;
             var hls = this.hls = new Hls({
                 enableWorker: true,
                 lowLatencyMode: false,
@@ -525,6 +544,7 @@
 
     NFPlayer.prototype.playTs = function (url) {
         var self = this;
+        if (CAPS.mms) this.v.disableRemotePlayback = true; // ManagedMediaSource lo exige en iPhone
         var p = this.ts = mpegts.createPlayer({ type: 'mpegts', isLive: this.live, url: url }, {
             enableWorker: true, lazyLoad: !this.live, liveBufferLatencyChasing: this.live, autoCleanupSourceBuffer: true
         });
@@ -908,7 +928,8 @@
         var hadDirect = !this.tc && v.getAttribute('src') && v.getAttribute('src').indexOf('media.php') < 0;
         this.tc = { off: t, dur: dur, a: a || 0, vt: vt === 2 ? 2 : (vt ? 1 : 0) };
         this.root.classList.add('buffering');
-        var src = m.tc + '&t=' + Math.floor(t) + '&a=' + (a || 0) + (this.tc.vt ? '&v=' + this.tc.vt : ''), tc0 = this.tc;
+        // iPhone/Safari: la conversión llega en HLS (Safari no abre un MP4 en flujo); el resto, MP4 en flujo
+        var src = (CAPS.hlsTc && m.hls ? m.hls : m.tc) + '&t=' + Math.floor(t) + '&a=' + (a || 0) + (this.tc.vt ? '&v=' + this.tc.vt : ''), tc0 = this.tc;
         // se cierra primero la conexión directa: muchas cuentas IPTV permiten una sola conexión a la vez
         try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
         setTimeout(function () {

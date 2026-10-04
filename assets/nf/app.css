@@ -86,6 +86,9 @@ button { font-family: inherit; }
 .nf-clock { text-align: right; line-height: 1.1; cursor: pointer; user-select: none; }
 .nf-clock .t { font-size: 15px; font-weight: 700; color: #fff; }
 .nf-clock .d { font-size: 11px; color: var(--nf-gray2); }
+.nf-dns-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid rgba(255,255,255,.35); border-radius: 4px; color: #fff; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.nf-dns-btn:hover { border-color: #fff; }
+.nf-dns-btn.on { border-color: var(--nf-red); background: rgba(229,9,20,.15); }
 
 .nf-profile { position: relative; }
 .nf-profile-btn { display: flex; align-items: center; gap: 6px; background: none; border: 0; cursor: pointer; color: #fff; padding: 0; }
@@ -450,6 +453,7 @@ button:disabled { cursor: progress; opacity: .85; }
     .nf-nav { display: none; }
     .nf-clock { display: none; }
     .nf-header-right { gap: 10px; }
+    .nf-dns-btn { padding: 4px 7px; font-size: 12px; }
     .nf-search.open { position: absolute; left: 0; right: 0; top: 0; height: var(--nf-header); background: var(--nf-bg); padding: 0 10px; z-index: 5; }
     .nf-search.open form { flex: 1; }
     .nf-search.open input { width: 100%; flex: 1; }

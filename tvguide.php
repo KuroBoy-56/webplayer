@@ -77,6 +77,11 @@ function tv_channel_data($id, $username, $fav_file)
     // (una sola conexión) es más estable que pedir cada segmento HLS por separado.
     if (wp_is_https() && !wp_server_https_base() && $pref !== 'ts') $order = ['ts', 'm3u8'];
     $sources = wp_play_sources('live', $id, $order);
+    // Último recurso (celulares sin MSE, p. ej. iPhone antiguo, o lista m3u8 del servidor rota):
+    // el hosting convierte el flujo .ts en HLS con ffmpeg
+    if (wp_bin('ffmpeg') && wp_exec_mode()) {
+        $sources[] = ['url' => wp_proxy_url(wp_stream_url('live', $id, 'ts'), 'media.php') . '&do=hls&live=1', 'engine' => 'hls', 'remux' => 1];
+    }
     return [
         'id' => (string)$id,
         'name' => $name,
@@ -222,7 +227,7 @@ include "header.php";
 
 <script src="assets/vendor/hls.min.js" defer></script>
 <script src="assets/vendor/mpegts.min.js" defer></script>
-<script src="assets/nf/player.js?v=5" defer></script>
+<script src="assets/nf/player.js?v=6" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [] };

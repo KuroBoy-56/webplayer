@@ -195,3 +195,20 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 
 **Deportes**
 - Los partidos vienen del panel (`api/sports.php`, 10 minutos de caché). La búsqueda del canal en vivo sigue igual, con las mismas reglas que publica el panel.
+
+## Actualización 4 de octubre (celulares y botón DNS)
+
+**Reproducción en celulares (igual que en la PC)**
+- El reproductor detecta qué sabe hacer el navegador (MSE, ManagedMediaSource del iPhone con iOS 17.1+, HLS nativo, H.264) y elige solo el camino: Safari en iPhone, Chrome en Android, Samsung Internet y Firefox.
+- iPhone/Safari: HLS nativo. Cuando hay que convertir (audio Dolby/DTS, MKV, HEVC sin soporte, archivos dañados) el servidor entrega la conversión en **HLS** (`media.php?do=hls`), porque Safari no reproduce un MP4 "en flujo". En Android y PC se sigue usando el MP4 en flujo, que arranca más rápido.
+- TV en vivo: si el navegador no tiene MSE (iPhone antiguos) o la lista m3u8 del servidor está rota, el hosting convierte el flujo `.ts` en HLS con ffmpeg como último recurso. La conversión se detiene sola 45 segundos después de que el celular deja de pedir video.
+- `proxy.php`: si el servidor IPTV ignora los pedidos por tramos, el proxy responde igual `206` al primer tramo. Safari en iPhone lo necesita para abrir un MP4 y poder adelantar.
+- VLC queda solo como último recurso.
+- Las conversiones necesitan ffmpeg en el hosting (ver `diag.php`). Sin ffmpeg, MP4 y HLS se reproducen igual. Lo que no reproduce el navegador del celular se ofrece en VLC.
+
+**Botón DNS**
+- Arriba, al lado de la hora, y en Ajustes → DNS: Automático (predeterminado), Cloudflare, Google, Quad9, AdGuard (sin rastreo ni anuncios), NextDNS (anti-bloqueo geográfico) y OpenDNS. Cada opción explica para qué sirve.
+- El navegador no deja cambiar su DNS, así que la elección se aplica en el servidor a la API del proveedor IPTV, al video que pasa por el proxy, a las imágenes, al panel y a ffmpeg. Se resuelve por DNS sobre HTTPS (formato estándar, válido para todos, también para OpenDNS) y la IP queda guardada hasta 10 minutos. Si el PHP lo permite (PHP 8.2 o superior con curl 7.62 o superior), también se usa `CURLOPT_DOH_URL`.
+- Con un DNS distinto de Automático, el video pasa por el proxy firmado para que la elección tenga efecto. Esto consume ancho de banda del hosting.
+- Si el proveedor de DNS no responde desde el hosting, se usa el DNS normal, así el video no se corta.
+- La elección queda en una cookie del navegador (`wp_dns`). No es un dato secreto.
