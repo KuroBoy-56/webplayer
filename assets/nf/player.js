@@ -189,7 +189,7 @@
         v.addEventListener('pause', function () { self.state(); self.emit('pause'); });
         v.addEventListener('waiting', function () { r.classList.add('buffering'); });
         v.addEventListener('stalled', function () { r.classList.add('buffering'); });
-        v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.watchAudio(); });
+        v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.watchAudio(); self.enforceSingleAudio(); });
         v.addEventListener('canplay', function () { r.classList.remove('buffering'); });
         v.addEventListener('loadedmetadata', function () {
             self.ok = true;
@@ -200,10 +200,18 @@
                 self.toastMsg('Continuando desde ' + fmt(self.o.resume));
             }
             self.applyAudioPref();
+            self.enforceSingleAudio();
             self.updTime();
             if (!self.tc && !self.live) self.probe();
             if (self.tc) self.applySub();
         });
+        // iPhone/Safari (HLS nativo) añade las pistas de audio después de cargar: hay que volver a
+        // dejar una sola activa cada vez que aparezca o cambie una, si no se oyen los dos idiomas a la vez.
+        if (v.audioTracks) {
+            var onAudioTracks = function () { self.enforceSingleAudio(); };
+            try { v.audioTracks.addEventListener('addtrack', onAudioTracks); } catch (e) {}
+            try { v.audioTracks.addEventListener('change', onAudioTracks); } catch (e) {}
+        }
         v.addEventListener('timeupdate', function () { self.updTime(); self.emit('time'); });
         v.addEventListener('progress', function () { self.updBuf(); });
         v.addEventListener('volumechange', function () {
@@ -692,6 +700,28 @@
         // pistas nativas (Safari / HLS): la del idioma del navegador
         var w = pickLang(list.map(function (t) { return { lang: t.lang, label: t.label, def: t.on }; }));
         if (!list[w].on) list[w].set();
+    };
+
+    /* iPhone/Safari (HLS nativo): deja UNA sola pista de audio activa para que no suenen los dos
+       idiomas a la vez. Respeta el idioma que el usuario eligió antes; si no, el del navegador. */
+    NFPlayer.prototype.enforceSingleAudio = function () {
+        var at = this.v.audioTracks;
+        if (this.hls || !at || at.length < 2 || this._normAudio) return;
+        this._normAudio = true;
+        try {
+            var list = [], enabledCount = 0, firstEnabled = -1;
+            for (var i = 0; i < at.length; i++) {
+                list.push({ lang: at[i].language || '', label: at[i].label || '', def: at[i].enabled });
+                if (at[i].enabled) { enabledCount++; if (firstEnabled < 0) firstEnabled = i; }
+            }
+            var want = -1;
+            var pref = store('nfp_audio');
+            if (pref) for (var k = 0; k < list.length; k++) if ((list[k].lang + '|' + list[k].label) === pref) { want = k; break; }
+            // si ya hay exactamente una activa y no hay preferencia guardada, se respeta; si no, el idioma del navegador
+            if (want < 0) want = (enabledCount === 1 && firstEnabled >= 0) ? firstEnabled : pickLang(list);
+            for (var j = 0; j < at.length; j++) { var on = j === want; if (at[j].enabled !== on) at[j].enabled = on; }
+        } catch (e) {}
+        this._normAudio = false;
     };
 
     NFPlayer.prototype.subList = function () {
