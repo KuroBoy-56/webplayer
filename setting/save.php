@@ -13,8 +13,4 @@ $CookieArray = json_encode(["color" => $theme_color, "pincode" => $pincode, "str
 setcookie("settings_array", $CookieArray, time() + 1209600, "/", $_SERVER["SERVER_NAME"], wp_is_https());
 if (isset($_POST['use_vlc'])) setcookie("use_vlc", $_POST['use_vlc'] === '1' ? '1' : '0', time() + 31536000, "/", "", wp_is_https());
 if (isset($_POST['epg_source'])) setcookie("epg_source", $_POST['epg_source'] === 'custom' ? 'custom' : 'server', time() + 31536000, "/", "", wp_is_https());
-if (isset($_POST['dns'])) {
-    $dns = isset(wp_dns_providers()[(string)$_POST['dns']]) ? (string)$_POST['dns'] : 'auto';
-    wp_setcookie('wp_dns', $dns, time() + 31536000);
-}
 header("Location: ../settings?saved=1");

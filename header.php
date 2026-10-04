@@ -41,7 +41,7 @@ if (!function_exists('wp_nav_cls')) {
     <title><?php echo e($page_title); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
-    <link rel="stylesheet" href="assets/nf/app.css?v=5">
+    <link rel="stylesheet" href="assets/nf/app.css?v=6">
     <script>window.NF={imgErr:function(i){i.onerror=null;i.src='assets/nf/noposter.svg';i.classList.add('ok');var c=i.closest&&i.closest('.nf-card');if(c)c.classList.add('noimg');}};</script>
     <script src="assets/nf/app.js?v=4" defer></script>
     <?php if (!empty($wp_head_extra)) echo $wp_head_extra; ?>
@@ -71,8 +71,6 @@ if (!function_exists('wp_nav_cls')) {
             </form>
             <div class="nf-suggest" id="nfSuggest"></div>
         </div>
-        <?php $wp_dns_p = wp_dns_providers(); $wp_dns_c = wp_dns_choice(); ?>
-        <a class="nf-dns-btn<?php echo $wp_dns_c !== 'auto' ? ' on' : ''; ?>" href="settings.php#dns" title="DNS: <?php echo e($wp_dns_p[$wp_dns_c]['label']); ?>" aria-label="Elegir DNS"><i class="fas fa-globe"></i><span>DNS</span></a>
         <div class="nf-clock fecha-hora-container" id="nfClock" title="Clic para cambiar 12h/24h">
             <div class="t hora-display" id="clockDisplay"></div>
             <div class="d fecha-display" id="dateDisplay"></div>
@@ -86,7 +84,6 @@ if (!function_exists('wp_nav_cls')) {
                 <div class="who"><b><?php echo e($username); ?></b><?php echo $wp_server_name ? 'Servidor: ' . e($wp_server_name) : ''; ?></div>
                 <a href="myaccount.php"><i class="fas fa-user"></i> Mi cuenta</a>
                 <a href="settings.php"><i class="fas fa-cog"></i> Ajustes</a>
-                <a href="settings.php#dns"><i class="fas fa-globe"></i> DNS: <?php echo e($wp_dns_p[$wp_dns_c]['label']); ?></a>
                 <a href="sportsschedule.php"><i class="fas fa-futbol"></i> Deportes</a>
                 <div class="sep"><a href="logout.php" data-noprefetch><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a></div>
             </div>

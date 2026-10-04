@@ -28,7 +28,6 @@ RewriteEngine on
 
 # --- Archivos internos que nunca se abren desde el navegador ---
 RewriteRule ^includes/ - [F,L,NC]
-RewriteRule ^bin/ - [F,L,NC]
 RewriteRule ^api/ - [F,L,NC]
 
 # --- Rewrite so that php extentions are not shown ---
@@ -45,10 +44,7 @@ RewriteRule ^(.*)$ $1.php [L]
     Header unset X-Powered-By
 </IfModule>
 
-# --- Compresión (no se aplica al video del proxy) ---
-<IfModule mod_setenvif.c>
-    SetEnvIfNoCase Request_URI "proxy(\.php)?" no-gzip dont-vary
-</IfModule>
+# --- Compresión ---
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/css text/plain application/javascript text/javascript application/json image/svg+xml
 </IfModule>

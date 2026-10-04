@@ -1,8 +1,8 @@
 # WebPlayer: resumen de cambios
 
-Desde la actualización del 4 de octubre **todo se administra desde el panel** (ver la última sección). Las secciones de abajo describen la historia de cambios; donde mencionan el administrador, `setup.php`, `dns.json`, `admin.json`, `progress.json` o `userdata.sqlite`, eso ya no existe.
+Desde la actualización del 4 de octubre **todo se administra desde el panel** (ver la última sección). Las secciones de abajo describen la historia de cambios. Donde mencionan el administrador, `setup.php`, `dns.json`, `admin.json`, `progress.json`, `userdata.sqlite`, el proxy de video (`proxy.php`), la conversión con ffmpeg (`media.php`, `bin/`) o el botón DNS, eso ya no existe: el video va directo del servidor IPTV al navegador.
 
-**Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl`. La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
+**Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
 ## 1. Login con varias DNS
 - El formulario muestra solo usuario, contraseña e Ingresar. Ya no aparece el selector de DNS.
@@ -196,19 +196,23 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 **Deportes**
 - Los partidos vienen del panel (`api/sports.php`, 10 minutos de caché). La búsqueda del canal en vivo sigue igual, con las mismas reglas que publica el panel.
 
-## Actualización 4 de octubre (celulares y botón DNS)
+## Actualización 4 de octubre (video directo, sin pasar por el hosting)
 
-**Reproducción en celulares (igual que en la PC)**
-- El reproductor detecta qué sabe hacer el navegador (MSE, ManagedMediaSource del iPhone con iOS 17.1+, HLS nativo, H.264) y elige solo el camino: Safari en iPhone, Chrome en Android, Samsung Internet y Firefox.
-- iPhone/Safari: HLS nativo. Cuando hay que convertir (audio Dolby/DTS, MKV, HEVC sin soporte, archivos dañados) el servidor entrega la conversión en **HLS** (`media.php?do=hls`), porque Safari no reproduce un MP4 "en flujo". En Android y PC se sigue usando el MP4 en flujo, que arranca más rápido.
-- TV en vivo: si el navegador no tiene MSE (iPhone antiguos) o la lista m3u8 del servidor está rota, el hosting convierte el flujo `.ts` en HLS con ffmpeg como último recurso. La conversión se detiene sola 45 segundos después de que el celular deja de pedir video.
-- `proxy.php`: si el servidor IPTV ignora los pedidos por tramos, el proxy responde igual `206` al primer tramo. Safari en iPhone lo necesita para abrir un MP4 y poder adelantar.
-- VLC queda solo como último recurso.
-- Las conversiones necesitan ffmpeg en el hosting (ver `diag.php`). Sin ffmpeg, MP4 y HLS se reproducen igual. Lo que no reproduce el navegador del celular se ofrece en VLC.
+**El video ya no pasa por el hosting**
+- Todo el video (películas, series y TV en vivo) va directo del servidor IPTV al navegador. El hosting compartido solo hace llamadas pequeñas: la API del servidor IPTV (`player_api`) y el panel.
+- Se quitaron `proxy.php` (proxy de video), `media.php` (conversión con ffmpeg a MP4/HLS, pistas y subtítulos) y la carpeta `bin/`. Ya no hace falta ffmpeg en el hosting. Si los subiste, puedes borrar `bin/ffmpeg` y `bin/ffprobe`.
+- Si la web está en HTTPS, los enlaces de video se arman en HTTPS hacia el servidor IPTV (`https_port` de su información, o el 443), así el navegador no bloquea contenido mixto. Tu servidor tiene certificado válido en el 443.
+- "Descargar" lleva directo al archivo del servidor IPTV.
+- `diag.php` ya no prueba ffmpeg. Muestra cómo responde cada formato y si el video sale en HTTPS directo.
+- Se quitó el botón DNS y la resolución por DNS sobre HTTPS.
 
-**Botón DNS**
-- Arriba, al lado de la hora, y en Ajustes → DNS: Automático (predeterminado), Cloudflare, Google, Quad9, AdGuard (sin rastreo ni anuncios), NextDNS (anti-bloqueo geográfico) y OpenDNS. Cada opción explica para qué sirve.
-- El navegador no deja cambiar su DNS, así que la elección se aplica en el servidor a la API del proveedor IPTV, al video que pasa por el proxy, a las imágenes, al panel y a ffmpeg. Se resuelve por DNS sobre HTTPS (formato estándar, válido para todos, también para OpenDNS) y la IP queda guardada hasta 10 minutos. Si el PHP lo permite (PHP 8.2 o superior con curl 7.62 o superior), también se usa `CURLOPT_DOH_URL`.
-- Con un DNS distinto de Automático, el video pasa por el proxy firmado para que la elección tenga efecto. Esto consume ancho de banda del hosting.
-- Si el proveedor de DNS no responde desde el hosting, se usa el DNS normal, así el video no se corta.
-- La elección queda en una cookie del navegador (`wp_dns`). No es un dato secreto.
+**Reproductor en PC y celulares**
+- El reproductor detecta qué sabe hacer el navegador y elige solo:
+  - hls.js donde hay MSE (Chrome, Edge, Firefox, Samsung Internet, Android).
+  - HLS nativo en iPhone/Safari.
+  - mpegts.js para TV en vivo `.ts` (MSE o ManagedMediaSource del iPhone con iOS 17.1 o superior).
+  - MP4 directo con saltos (Range) para películas y series.
+- TV en vivo en iPhone/Safari: se usa primero el m3u8 del servidor.
+- Se mantiene la elección de audio y subtítulos con las pistas que muestra el navegador (Safari y HLS).
+- Si un formato no se puede reproducir en ese navegador (por ejemplo MKV o HEVC en iPhone, o audio Dolby en Chrome), el reproductor lo dice y ofrece abrirlo en VLC o en otra app como último recurso.
+- **Límite:** sin conversión en el hosting, lo que el navegador no decodifica (audio AC3/DTS en Chrome, MKV/HEVC en iPhone) solo se puede ver en VLC.

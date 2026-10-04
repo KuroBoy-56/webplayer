@@ -10,7 +10,6 @@ if (isset($_COOKIE["settings_array"])) {
 }
 $use_vlc = isset($_COOKIE["use_vlc"]) ? $_COOKIE["use_vlc"] : "0";
 $epg_source = isset($_COOKIE["epg_source"]) ? $_COOKIE["epg_source"] : "server";
-$dns_choice = wp_dns_choice();
 $body_class = 'nf-solid';
 include "header.php";
 
@@ -59,13 +58,6 @@ function opt($name, $value, $label, $desc, $current)
                 <div class="st-opts">
                     <?php echo opt('epg_source', 'server', 'Servidor primero', 'Guía de tu proveedor; si un canal no tiene, se usa la guía del panel', $epg_source); ?>
                     <?php echo opt('epg_source', 'custom', 'Guía del panel primero', 'Usa primero la guía de respaldo del panel (guías públicas configuradas en el panel)', $epg_source); ?>
-                </div>
-            </div>
-            <div class="st-card" id="dns">
-                <h3><i class="fa fa-globe"></i> DNS</h3>
-                <p>El navegador no permite cambiar su DNS, así que la elección se aplica en el servidor: conexión con tu proveedor IPTV, video, imágenes y panel. Con un DNS distinto de Automático el video pasa por el servidor de la web para que la elección tenga efecto. Si un servidor no carga o está bloqueado en tu zona, prueba otro.</p>
-                <div class="st-opts">
-                    <?php foreach (wp_dns_providers() as $k => $p) echo opt('dns', $k, $p['label'], $p['desc'], $dns_choice); ?>
                 </div>
             </div>
             <div class="st-card">

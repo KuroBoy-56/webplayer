@@ -73,15 +73,8 @@ function tv_channel_data($id, $username, $fav_file)
     $settings = isset($_COOKIE["settings_array"]) ? json_decode($_COOKIE["settings_array"], true) : [];
     $pref = (isset($settings["stream_type"]) && $settings["stream_type"] === 'ts') ? 'ts' : 'm3u8';
     $order = $pref === 'ts' ? ['ts', 'm3u8'] : ['m3u8', 'ts'];
-    // Con https y sin https en el servidor IPTV el video pasa por el proxy: el flujo .ts continuo
-    // (una sola conexión) es más estable que pedir cada segmento HLS por separado.
-    if (wp_is_https() && !wp_server_https_base() && $pref !== 'ts') $order = ['ts', 'm3u8'];
+    // Directo del servidor IPTV al navegador (el reproductor pone primero el m3u8 en iPhone/Safari)
     $sources = wp_play_sources('live', $id, $order);
-    // Último recurso (celulares sin MSE, p. ej. iPhone antiguo, o lista m3u8 del servidor rota):
-    // el hosting convierte el flujo .ts en HLS con ffmpeg
-    if (wp_bin('ffmpeg') && wp_exec_mode()) {
-        $sources[] = ['url' => wp_proxy_url(wp_stream_url('live', $id, 'ts'), 'media.php') . '&do=hls&live=1', 'engine' => 'hls', 'remux' => 1];
-    }
     return [
         'id' => (string)$id,
         'name' => $name,
@@ -227,7 +220,7 @@ include "header.php";
 
 <script src="assets/vendor/hls.min.js" defer></script>
 <script src="assets/vendor/mpegts.min.js" defer></script>
-<script src="assets/nf/player.js?v=6" defer></script>
+<script src="assets/nf/player.js?v=7" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [] };
