@@ -26,14 +26,8 @@
 
 RewriteEngine on
 
-# --- HTTPS en toda la web, excepto el reproductor directo (play.php) y sus archivos ---
-# Si el servidor IPTV entrega el video por http, la web abre play.php por http para que el
-# navegador lea el video directo del servidor IPTV (el video nunca pasa por el hosting).
-# Por eso en Hostinger "Forzar HTTPS" debe estar apagado: esta regla hace ese trabajo.
-RewriteCond %{HTTPS} !=on
-RewriteCond %{HTTP:X-Forwarded-Proto} !https
-RewriteCond %{REQUEST_URI} !(^|/)(play(\.php)?|assets/.*)$ [NC]
-RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=302,L]
+# La web funciona en http para reproducir el video directo del servidor IPTV sin que el
+# navegador lo bloquee. No se fuerza https aqui; manten "Forzar HTTPS" apagado en el hosting.
 
 # --- Archivos internos que nunca se abren desde el navegador ---
 RewriteRule ^includes/ - [F,L,NC]
