@@ -17,6 +17,12 @@ if (!$d || empty($d['srv']) || empty($d['usr'])) {
         . '<h2>Este enlace caducó</h2><p>Vuelve a abrir el contenido desde la web.</p></body>';
     exit;
 }
+// Safari (iPhone) y Chrome cambian solos http por https cuando la web tiene SSL. Se devuelve a http
+// una sola vez: el navegador ve el ciclo y se queda en http, así el video va directo del servidor IPTV.
+if (wp_is_https() && $_SERVER['REQUEST_METHOD'] === 'GET' && empty($_GET['h'])) {
+    header('Location: http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ($_SERVER['REQUEST_URI'] ?? '/play.php') . '&h=1', true, 302);
+    exit;
+}
 $get_dns = rtrim((string)$d['srv'], '/');
 $username = (string)$d['usr'];
 $password = (string)($d['pwd'] ?? '');

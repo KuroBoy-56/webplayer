@@ -224,3 +224,5 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - Si el reproductor https falla con todas las fuentes, cambia solo a `play.php` y continúa desde el mismo segundo.
 - TV en vivo: si el canal necesita http, en la guía aparece el botón **Ver canal**, que lo abre en `play.php`.
 - `.htaccess` manda toda la web a https excepto `play.php` y `assets/`. En Hostinger hay que apagar **Forzar HTTPS**.
+- Safari (iPhone) y Chrome cambian solos `http://` por `https://` cuando la web tiene SSL, y eso volvía a bloquear el video. `play.php` ahora regresa a http una vez: el navegador detecta el ciclo y se queda en http.
+- Se probó volver al proxy del hosting, pero se descartó para no saturar el hosting compartido.
