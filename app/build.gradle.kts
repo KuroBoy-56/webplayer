@@ -11,9 +11,7 @@ val localProps: Properties = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-// panel.url opcional: si está vacío la app usa la dirección codificada en PanelUrl.kt
-val panelUrl: String = localProps.getProperty("panel.url") ?: ""
-// llave maestra AES de login.php (hex de 64 caracteres). Nunca se sube al repositorio.
+// llave maestra AES de login.php (hex de 64 caracteres). Única fuente: local.properties (nunca en el repositorio).
 val panelMasterKey: String = localProps.getProperty("panel.master_key") ?: ""
 
 android {
@@ -26,7 +24,6 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
-        buildConfigField("String", "PANEL_URL", "\"$panelUrl\"")
         buildConfigField("String", "PANEL_MASTER_KEY", "\"$panelMasterKey\"")
     }
 

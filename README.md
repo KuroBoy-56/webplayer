@@ -24,26 +24,29 @@ https://github.com/KuroBoy-56/webplayer/releases/tag/apk-latest
 
 **Settings → Secrets and variables → Actions → New repository secret**
 
-| Nombre | Valor | ¿Obligatorio? |
-|---|---|---|
-| `PANEL_MASTER_KEY` | La llave maestra AES del panel (64 caracteres hex, la misma `master_key_hex` de `includes/secrets.php`) | **Sí**: sin ella la app no puede activar equipos |
-| `PANEL_URL` | Otra dirección del panel (carpeta `api/` o un archivo dentro de ella) | No: si no existe se usa la dirección codificada en la app |
+Solo hace falta uno: **`PANEL_MASTER_KEY`** = la llave maestra AES del panel (64 caracteres hex, la misma `master_key_hex` de `includes/secrets.php`).
 
-La llave nunca va en el código: el workflow la escribe en `local.properties` al compilar y queda solo dentro del APK.
-Si un APK se compila sin la llave, la pantalla de activación muestra un aviso en vez de cerrarse.
+### La llave maestra
+
+- **No está en el código ni en el repositorio en ninguna forma** (ni cifrada ni escondida).
+- La única fuente es `local.properties` → `panel.master_key=…`. Ese archivo está en `.gitignore` y nunca se sube.
+- En tu PC la pones tú en `local.properties`. En GitHub, el workflow escribe `local.properties` con el secreto `PANEL_MASTER_KEY` solo durante la compilación.
+- Si falta, la compilación igual termina (con un aviso) y la app abre, pero la pantalla de activación muestra que falta la llave y no puede hablar con `login.php`.
+
+La dirección del panel ya viene dentro de la app (ver más abajo), así que no hay ningún secreto para la URL.
 
 ## Abrir en Android Studio → Run
 
 1. **File → Open** y elige esta carpeta (rama `android`). El wrapper de Gradle ya viene incluido.
 2. Si pregunta, acepta descargar el SDK de Android 36.
-3. Copia `local.properties.example` como `local.properties` y pon `panel.master_key=` (y `panel.url=` solo si usas otro panel).
+3. Copia `local.properties.example` como `local.properties` y pon `panel.master_key=` con la llave del panel.
 4. Elige un teléfono, un Android TV o un emulador y pulsa **Run ▶**.
 5. Para publicar: **Build → Generate Signed App Bundle / APK** con tu propia clave.
 
 ## Cómo entra la app (anillos de seguridad del panel)
 
-Dirección del panel: no está en texto plano. En `data/PanelUrl.kt` va en hex (XOR con `KURO` → base64 → hex) y la app la decodifica al iniciar.
-De ahí sale la carpeta `…/master/panel/api/` que usan todos los endpoints.
+Panel: `https://garevynpanels.latmpx.com/master/panel/`. La dirección no está en texto plano: en `data/PanelUrl.kt` va en hex (XOR con `KURO` → base64 → hex) y la app la decodifica al iniciar.
+De ahí sale la carpeta `…/master/panel/api/` que usan todos los endpoints. No depende de ningún secreto del repositorio.
 
 **Código del equipo (MAC):** el Android ID en 16 hex mayúsculas, 8 pares separados por `:` (ej. `A1:B2:C3:D4:E5:F6:07:18`).
 Si es más corto se completa con ceros a la izquierda y se quita el `00:` inicial igual que `normalise_mac()` del panel, así lo que se ve en pantalla es lo mismo que guarda el panel.

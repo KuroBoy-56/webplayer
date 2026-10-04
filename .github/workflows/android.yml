@@ -21,14 +21,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # la dirección del panel y la llave maestra no van en el código: se guardan como secretos del repositorio
+      # la llave maestra no va en el código: el secreto PANEL_MASTER_KEY se escribe en local.properties solo durante la compilación
       - name: Configurar panel
         env:
-          PANEL_URL: ${{ secrets.PANEL_URL }}
           PANEL_MASTER_KEY: ${{ secrets.PANEL_MASTER_KEY }}
         run: |
           : > local.properties
-          if [ -n "$PANEL_URL" ]; then echo "panel.url=$PANEL_URL" >> local.properties; fi
           if [ -n "$PANEL_MASTER_KEY" ]; then echo "panel.master_key=$PANEL_MASTER_KEY" >> local.properties; else echo "::warning::Falta el secreto PANEL_MASTER_KEY: la activación no funcionará"; fi
 
       - name: Compilar APK

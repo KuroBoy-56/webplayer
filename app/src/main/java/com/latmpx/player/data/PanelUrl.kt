@@ -1,11 +1,10 @@
 package com.latmpx.player.data
 
 import android.util.Base64
-import com.latmpx.player.BuildConfig
 
 /**
  * Dirección del panel. No va en texto plano: XOR con "KURO" -> base64 -> hex.
- * Si se compila con panel.url (secreto PANEL_URL), esa dirección tiene prioridad.
+ * Panel: https://garevynpanels.latmpx.com/master/panel/ (api en …/master/panel/api/).
  */
 object PanelUrl {
     private const val ENC =
@@ -21,8 +20,8 @@ object PanelUrl {
         ""
     }
 
-    /** Dirección completa (…/master/panel/api/player_api.php o la del secreto PANEL_URL). */
-    private val source: String by lazy { BuildConfig.PANEL_URL.trim().ifEmpty { decode() } }
+    /** Dirección completa: …/master/panel/api/player_api.php */
+    private val source: String by lazy { decode() }
 
     /** Carpeta api del panel, terminada en "/": …/master/panel/api/ */
     val apiBase: String by lazy {
