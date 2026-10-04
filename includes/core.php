@@ -1060,3 +1060,4 @@ function wp_lang_name($code)
 }
 
 require_once __DIR__ . '/panel.php';
+require_once __DIR__ . '/handoff.php';

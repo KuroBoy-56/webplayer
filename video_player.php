@@ -95,6 +95,18 @@ $exts = array_values(array_unique($exts));
 
 $sources = wp_play_sources($kind, $id, $exts);
 
+/* ---------- Página https y video http: reproductor directo por http (play.php) ---------- */
+$http_url = wp_handoff_url([
+    'kind' => $kind, 'id' => $id, 'exts' => $exts, 'vlcExt' => $ext, 'slug' => $slug, 'sid' => $series_id_get,
+    'title' => $content_name, 'sub' => $episode_label, 'resume' => $resume_time,
+    'back' => wp_handoff_abs($slug == 'movie' ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get),
+    'next' => $has_next ? wp_handoff_abs($next_url) : '',
+]);
+if ($http_url !== '' && $use_vlc !== '1' && wp_needs_handoff($kind, $id, $sources)) {
+    header('Location: ' . $http_url);
+    exit;
+}
+
 $back_url = ($slug == 'movie') ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get;
 $download_url = '?' . http_build_query(array_merge($_GET, ['action' => 'download_file']));
 $extra = [['label' => 'Descargar contenido', 'href' => $download_url]];
@@ -132,7 +144,7 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
-    <script src="assets/nf/player.js?v=7" defer></script>
+    <script src="assets/nf/player.js?v=8" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -154,6 +166,7 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
             'slug' => $slug,
             'seriesId' => $series_id_get,
             'useVlc' => $use_vlc === '1',
+            'fallbackUrl' => $http_url,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
 
         var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);

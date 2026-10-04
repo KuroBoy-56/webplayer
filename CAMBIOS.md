@@ -216,3 +216,11 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - Se mantiene la elección de audio y subtítulos con las pistas que muestra el navegador (Safari y HLS).
 - Si un formato no se puede reproducir en ese navegador (por ejemplo MKV o HEVC en iPhone, o audio Dolby en Chrome), el reproductor lo dice y ofrece abrirlo en VLC o en otra app como último recurso.
 - **Límite:** sin conversión en el hosting, lo que el navegador no decodifica (audio AC3/DTS en Chrome, MKV/HEVC en iPhone) solo se puede ver en VLC.
+
+## Reproducción directa con la web en HTTPS (4 de octubre)
+- Un navegador no deja que una página https reproduzca video http, y hls.js/mpegts.js necesitan permiso CORS del servidor IPTV. Por eso, sin proxy, no reproducía nada.
+- Ahora la web prueba desde el hosting (solo unos bytes, con caché de 6 horas) si el servidor IPTV entrega el video por https con certificado válido. Si no, abre el reproductor `play.php` por http: el navegador lee el video directo del servidor IPTV, como cuando la web estaba en http. El video nunca pasa por el hosting.
+- `play.php` no usa la cookie de sesión: recibe un enlace cifrado (AES-256-GCM, llave propia del hosting) que caduca en 12 horas. "Continuar viendo" se sigue guardando en el panel.
+- Si el reproductor https falla con todas las fuentes, cambia solo a `play.php` y continúa desde el mismo segundo.
+- TV en vivo: si el canal necesita http, en la guía aparece el botón **Ver canal**, que lo abre en `play.php`.
+- `.htaccess` manda toda la web a https excepto `play.php` y `assets/`. En Hostinger hay que apagar **Forzar HTTPS**.
