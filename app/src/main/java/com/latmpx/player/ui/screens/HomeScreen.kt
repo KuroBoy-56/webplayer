@@ -44,6 +44,7 @@ import com.latmpx.player.data.Cloud
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.Route
 import com.latmpx.player.ui.components.FocusBox
+import com.latmpx.player.ui.components.HeroCarousel
 import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.components.LogoHeader
 import com.latmpx.player.ui.components.PlatformCard
@@ -77,11 +78,19 @@ fun HomeScreen(state: AppState) {
     }
     val cont = remember(state.refresh, Cloud.rev, movies, series) { Cloud.progressList() }
     val favs = remember(state.refresh, Cloud.rev) { Cloud.favList().filter { it.kind != Kind.LIVE } }
-    var hero by remember(movies) { mutableStateOf(recentMovies.firstOrNull { it.backdrop.isNotEmpty() } ?: recentMovies.firstOrNull()) }
+    val heroItems = remember(movies) { recentMovies.filter { it.backdrop.isNotEmpty() }.take(5).ifEmpty { recentMovies.take(1) } }
+    var userFocusedHero by remember(movies) { mutableStateOf<Item?>(null) }
 
     LazyColumn(Modifier.fillMaxSize().background(NfBg)) {
         item {
-            hero?.let { h -> Hero(state, h, tv) }
+            val h = userFocusedHero
+            if (h != null) {
+                Hero(state, h, tv)
+            } else {
+                HeroCarousel(items = heroItems, tv = tv) { item ->
+                    Hero(state, item, tv)
+                }
+            }
         }
         item {
             ShelfRow("Continuar viendo", cont, pad) { _, p ->
@@ -99,14 +108,14 @@ fun HomeScreen(state: AppState) {
         }
         item {
             ShelfRow("Películas recién agregadas", recentMovies, pad) { _, it ->
-                PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ hero = it }) else null)
+                PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ userFocusedHero = it }) else null)
             }
         }
         item { ShelfRow("Series recién agregadas", recentSeries, pad) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
         genreRows.forEach { (label, list) ->
             item(key = "g_$label") {
                 ShelfRow(label, list, pad) { _, it ->
-                    PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ hero = it }) else null)
+                    PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ userFocusedHero = it }) else null)
                 }
             }
         }
@@ -115,7 +124,7 @@ fun HomeScreen(state: AppState) {
 }
 
 @Composable
-private fun Hero(state: AppState, item: Item, tv: Boolean) {
+fun Hero(state: AppState, item: Item, tv: Boolean) {
     val first = remember { FocusRequester() }
     if (tv) LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Box(Modifier.fillMaxWidth().height(if (tv) 360.dp else 470.dp)) {

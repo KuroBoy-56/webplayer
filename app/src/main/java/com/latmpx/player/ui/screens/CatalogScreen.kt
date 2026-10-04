@@ -10,6 +10,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import com.latmpx.player.ui.components.HeroCarousel
+import com.latmpx.player.ui.components.LocalIsTv
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +42,8 @@ import com.latmpx.player.ui.theme.NfBg
 fun CatalogScreen(state: AppState, kind: Kind) {
     val all = if (kind == Kind.MOVIE) state.movies else state.series
     val cats = if (kind == Kind.MOVIE) state.movieCats else state.seriesCats
+    val tv = LocalIsTv.current
+    val heroItems = remember(all) { all.sortedByDescending { it.added }.filter { it.backdrop.isNotEmpty() }.take(5).ifEmpty { all.take(1) } }
     if (state.loading && all.isEmpty()) { Loading(); return }
     var filter by rememberSaveable(kind) { mutableStateOf("all") }
     val filters = remember(cats) {
@@ -65,14 +70,14 @@ fun CatalogScreen(state: AppState, kind: Kind) {
         LazyRow(contentPadding = PaddingValues(horizontal = sidePad(), vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(filters, key = { it.first }) { (k, l) -> Chip(l, filter == k) { filter = k } }
         }
-        Grid(state, shown)
+        Grid(state, shown, heroItems, tv)
     }
 }
 
 fun byCats(all: List<Item>, ids: Set<String>): List<Item> = all.filter { it.categoryId in ids }.sortedByDescending { it.added }
 
 @Composable
-fun Grid(state: AppState, items: List<Item>) {
+fun Grid(state: AppState, items: List<Item>, heroItems: List<Item> = emptyList(), tv: Boolean = false) {
     if (items.isEmpty()) { Empty("No hay contenido en esta sección"); return }
     val pw = posterWidth()
     val progress = remember(state.refresh, Cloud.rev) { Cloud.progressList().associateBy { it.key.split(":").take(2).joinToString(":") } }
@@ -80,6 +85,13 @@ fun Grid(state: AppState, items: List<Item>) {
         columns = GridCells.Adaptive(pw), contentPadding = PaddingValues(horizontal = sidePad(), vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize(),
     ) {
+        if (heroItems.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                HeroCarousel(items = heroItems, tv = tv) { item ->
+                    com.latmpx.player.ui.screens.Hero(state, item, tv)
+                }
+            }
+        }
         items(items, key = { it.key }) { it ->
             val p = progress[it.key]
             PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, progress = if (p != null && p.duration > 0) p.position.toFloat() / p.duration else 0f)
@@ -109,3 +121,4 @@ fun MyListScreen(state: AppState) {
         if (favs.isEmpty()) Empty("Agrega películas y series con el botón \"Mi lista\" para verlas aquí") else Grid(state, favs)
     }
 }
+
