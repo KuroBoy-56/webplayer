@@ -42,11 +42,20 @@ function wp_is_https()
 function wp_session_start()
 {
     if (session_status() === PHP_SESSION_ACTIVE) return;
+    // La cookie de sesión debe ser "secure" solo en https. Se fija por ini_set (no depende de
+    // headers_sent ni del php.ini del hosting): si el hosting fuerza secure=1 y la web está en
+    // http, el navegador descarta la cookie y el login se recarga sin dar acceso.
+    @ini_set('session.use_strict_mode', '1');
+    @ini_set('session.use_only_cookies', '1');
+    @ini_set('session.gc_maxlifetime', '86400');
+    @ini_set('session.cookie_secure', wp_is_https() ? '1' : '0');
+    @ini_set('session.cookie_httponly', '1');
+    @ini_set('session.cookie_samesite', 'Lax');
+    @ini_set('session.cookie_path', '/');
     if (!headers_sent()) {
-        $params = session_get_cookie_params();
         $opts = [
             'lifetime' => 0,
-            'path' => $params['path'] ?: '/',
+            'path' => '/',
             'secure' => wp_is_https(),
             'httponly' => true,
             'samesite' => 'Lax',
@@ -56,9 +65,6 @@ function wp_session_start()
         } else {
             session_set_cookie_params(0, $opts['path'] . '; samesite=Lax', '', $opts['secure'], true);
         }
-        @ini_set('session.use_strict_mode', '1');
-        @ini_set('session.use_only_cookies', '1');
-        @ini_set('session.gc_maxlifetime', '86400');
     }
     @session_start();
 }

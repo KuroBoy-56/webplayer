@@ -228,3 +228,4 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - Se probó volver al proxy del hosting, pero se descartó para no saturar el hosting compartido.
 
 - El `.htaccess` ya **no** fuerza https. La web funciona en http y el video va directo del servidor IPTV. (Antes, al quitar el SSL, el propio `.htaccess` seguía redirigiendo a https y la web no abría.)
+- Arreglado el login que se recargaba sin dar acceso en http: la cookie de sesion ya no se marca "secure" cuando la web esta en http (se fija por ini_set, sin depender del php.ini del hosting). Antes, si el hosting forzaba secure=1, el navegador descartaba la cookie.
