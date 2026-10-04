@@ -24,6 +24,6 @@
 #    del panel, 64 caracteres hexadecimales). Ese archivo NO se sube a GitHub.
 # 3. La carpeta includes/cache/ debe tener permisos de escritura.
 # 4. Requisitos: PHP 7.1 o superior con curl, openssl y json.
-#    ffmpeg es opcional (media.php); si la web es https y el servidor IPTV http, el video pasa por proxy.php
+#    No hace falta ffmpeg: el video va directo del servidor IPTV al navegador
 #    (en HTTPS se usa el puerto https del servidor IPTV).
 # 5. Logo: assets/img/Logo.png

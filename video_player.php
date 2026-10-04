@@ -71,33 +71,9 @@ if ($slug == "movie") {
 
 $raw_url = wp_stream_url($kind, $id, $ext);
 
-/* ---------- Descarga (igual que antes) ---------- */
+/* ---------- Descarga: directo desde el servidor IPTV (no pasa por el hosting) ---------- */
 if (isset($_GET['action']) && $_GET['action'] === 'download_file') {
-    @set_time_limit(0);
-    error_reporting(0);
-    while (ob_get_level() > 0) @ob_end_clean();
-    $safe_name = preg_replace('/[^A-Za-z0-9_\-]/', '_', $content_name . ($episode_label ? ' ' . $episode_label : ''));
-    if (empty($safe_name)) $safe_name = "video";
-    $safe_name .= "." . $ext;
-    header('Content-Description: File Transfer');
-    header('Content-Type: application/octet-stream');
-    header('Content-Disposition: attachment; filename="' . $safe_name . '"');
-    header('Expires: 0');
-    header('Cache-Control: must-revalidate');
-    header('Pragma: public');
-    $ch = curl_init($raw_url);
-    wp_doh_apply($ch, $raw_url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-    curl_setopt($ch, CURLOPT_USERAGENT, WP_UA);
-    curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($c, $h) {
-        if (stripos($h, 'Content-Length:') === 0) header(trim($h));
-        return strlen($h);
-    });
-    curl_exec($ch);
-    curl_close($ch);
+    header('Location: ' . wp_client_stream_url($kind, $id, $ext));
     exit;
 }
 
@@ -119,14 +95,16 @@ $exts = array_values(array_unique($exts));
 
 $sources = wp_play_sources($kind, $id, $exts);
 
-/* Motor multimedia (ffmpeg en el hosting): audio Dolby, pistas de idioma y subtítulos internos */
-$media_cfg = null;
-if (wp_bin('ffprobe') && wp_bin('ffmpeg')) {
-    $mb = wp_proxy_url($raw_url, 'media.php');
-    $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'hls' => $mb . '&do=hls', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
-    // pistas ya conocidas (caché): el reproductor decide al instante si necesita convertir el audio
-    $pc = wp_cache_get('probe|' . md5($raw_url), 604800);
-    if (is_array($pc)) $media_cfg['info'] = wp_probe_labels($pc);
+/* ---------- Página https y video http: reproductor directo por http (play.php) ---------- */
+$http_url = wp_handoff_url([
+    'kind' => $kind, 'id' => $id, 'exts' => $exts, 'vlcExt' => $ext, 'slug' => $slug, 'sid' => $series_id_get,
+    'title' => $content_name, 'sub' => $episode_label, 'resume' => $resume_time,
+    'back' => wp_handoff_abs($slug == 'movie' ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get),
+    'next' => $has_next ? wp_handoff_abs($next_url) : '',
+]);
+if ($http_url !== '' && $use_vlc !== '1' && wp_needs_handoff($kind, $id, $sources)) {
+    header('Location: ' . $http_url);
+    exit;
 }
 
 $back_url = ($slug == 'movie') ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get;
@@ -135,7 +113,6 @@ $extra = [['label' => 'Descargar contenido', 'href' => $download_url]];
 if ($has_prev) $extra[] = ['label' => 'Capítulo anterior', 'href' => $prev_url];
 if ($slug === 'series') $extra[] = ['label' => 'Ver episodios', 'href' => $back_url . '#episodios'];
 $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext) . ($series_id_get ? '&series_id=' . rawurlencode($series_id_get) : '');
-if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'act' => 'fix'];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -146,7 +123,7 @@ if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'ac
     <meta name="referrer" content="no-referrer">
     <title><?php echo e($content_name ?: 'Reproductor'); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=5">
+    <link rel="stylesheet" href="assets/nf/app.css?v=6">
     <link rel="stylesheet" href="assets/nf/player.css?v=5">
     <style>
         html, body { height: 100%; overflow: hidden; background: #000; }
@@ -167,7 +144,7 @@ if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'ac
 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
-    <script src="assets/nf/player.js?v=6" defer></script>
+    <script src="assets/nf/player.js?v=8" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -181,13 +158,15 @@ if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'ac
             'streamUrl' => $raw_url,
             'vlcPc' => 'playlist.php?' . http_build_query(['id' => $id, 'slug' => $slug, 'ext' => $ext, 'title' => trim($content_name . ' ' . $episode_label)]),
             'downloadUrl' => $download_url,
-            'media' => $media_cfg,
+            'media' => null,
+            'ext' => $ext,
             'diagUrl' => $diag_url,
             'extraMenu' => $extra,
             'id' => $id,
             'slug' => $slug,
             'seriesId' => $series_id_get,
             'useVlc' => $use_vlc === '1',
+            'fallbackUrl' => $http_url,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
 
         var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
