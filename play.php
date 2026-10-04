@@ -68,7 +68,7 @@ $title = (string)($d['title'] ?? '');
     <div id="player-container"></div>
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
-    <script src="assets/nf/player.js?v=8" defer></script>
+    <script src="assets/nf/player.js?v=9" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

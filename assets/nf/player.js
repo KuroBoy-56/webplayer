@@ -55,6 +55,15 @@
             var hlsFirst = (APPLE && CAPS.nativeHls) || !(window.mpegts && mpegts.isSupported());
             if (hlsFirst) opts.sources = opts.sources.filter(function (x) { return x.engine === 'hls'; }).concat(opts.sources.filter(function (x) { return x.engine !== 'hls'; }));
         }
+        // VOD: para poder elegir audio y subtítulos en cualquier navegador. Chrome/Firefox no cambian
+        // las pistas de un MP4 directo; hls.js sí las expone. Así que si el navegador no trae esa API
+        // (todo menos Safari) y el servidor ofrece HLS, se reproduce por HLS. Si el servidor no tiene
+        // HLS para VOD, falla rápido al manifiesto y sigue con el archivo directo (sin pistas, como antes).
+        if (!this.live && opts.sources && opts.sources.length > 1 && !CAPS.audioTrackApi
+            && window.Hls && Hls.isSupported() && opts.sources.some(function (x) { return x.engine === 'hls'; })) {
+            opts.sources = opts.sources.filter(function (x) { return x.engine === 'hls'; })
+                .concat(opts.sources.filter(function (x) { return x.engine !== 'hls'; }));
+        }
         this.build();
         this.bind();
         this.boot();
@@ -498,6 +507,7 @@
             mse: !!(window.MediaSource || window.ManagedMediaSource || window.WebKitMediaSource),
             mms: !window.MediaSource && !!window.ManagedMediaSource, // iPhone con iOS 17.1 o superior
             nativeHls: !!(v.canPlayType('application/vnd.apple.mpegurl') || v.canPlayType('audio/mpegurl')),
+            audioTrackApi: ('audioTracks' in v), // Safari sí; Chrome/Firefox no exponen pistas de un MP4 directo
             h264: !!v.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'),
             mobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
         };
