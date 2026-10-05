@@ -672,7 +672,8 @@
         if (this.hls && this.hls.audioTracks && this.hls.audioTracks.length) {
             this.hls.audioTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || ('Audio ' + (i + 1)), lang: t.lang || '', on: self.hls.audioTrack === i, set: function () { self.hls.audioTrack = i; } }); });
         } else if (this.info && this.info.audio && this.info.audio.length && this._media0 && !(this.v.audioTracks && this.v.audioTracks.length > 1)) {
-            var cur = this.tc ? this.tc.a : 0;
+            var cur = this.tc ? this.tc.a : -1;
+            out.push({ label: 'Automático', lang: 'auto', on: cur === -1, set: function () { if (cur !== -1 || self.tc) { self.tc = null; self.playNative(self._media0); } } });
             this.info.audio.forEach(function (t) {
                 out.push({ label: t.label, lang: t.lang, on: cur === t.i, set: function () { if (!self.o.media) self.o.media = self._media0; if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
             });
@@ -686,7 +687,7 @@
     };
 
     NFPlayer.prototype.applyAudioPref = function () {
-        if (!this.hls && !(this.v.audioTracks && this.v.audioTracks.length > 1)) return;
+        if (!this.hls && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !(this.info && this.info.audio && this.info.audio.length)) return;
         var list = this.audioList();
         if (list.length < 2) return;
         var pref = store('nfp_audio');
@@ -698,14 +699,7 @@
         }
         if (w < 0) w = pickLang(list.map(function (t) { return { lang: t.lang, label: t.label, def: t.on }; }));
         
-        // Ensure ONLY the selected track is enabled (fixes Safari native dual audio bug)
-        if (APPLE && !this.hls && this.v.audioTracks) {
-            for (var j = 0; j < this.v.audioTracks.length; j++) {
-                this.v.audioTracks[j].enabled = (j === w);
-            }
-        } else {
-            if (!list[w].on) list[w].set();
-        }
+        if (!list[w].on) list[w].set();
     };
 
     NFPlayer.prototype.subList = function () {
