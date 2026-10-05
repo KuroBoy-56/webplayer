@@ -28,6 +28,18 @@ object Store {
         get() = p.getString("tmdb_key", "") ?: ""
         set(v) = p.edit().putString("tmdb_key", v).apply()
 
+    var streamFormat: String
+        get() = p.getString("stream_format", "m3u8") ?: "m3u8"
+        set(v) = p.edit().putString("stream_format", v).apply()
+
+    var externalPlayer: Boolean
+        get() = p.getBoolean("ext_player", false)
+        set(v) = p.edit().putBoolean("ext_player", v).apply()
+
+    var parentalPin: String
+        get() = p.getString("parental_pin", "") ?: ""
+        set(v) = p.edit().putString("parental_pin", v).apply()
+
     /* ---------- identificador de respaldo para equipos sin Android ID ---------- */
     fun fallbackDeviceId(): String {
         p.getString("device_id", null)?.takeIf { it.isNotEmpty() }?.let { return it }

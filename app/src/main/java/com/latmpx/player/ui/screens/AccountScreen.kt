@@ -43,6 +43,39 @@ import com.latmpx.player.ui.theme.NfRed
 fun AccountScreen(state: AppState, onLogout: () -> Unit) {
     val s = state.session ?: return
     val progressList = remember(state.refresh, Cloud.rev) { Cloud.progressList() }
+    
+    var streamFormat by remember { mutableStateOf(com.latmpx.player.data.Store.streamFormat) }
+    var extPlayer by remember { mutableStateOf(com.latmpx.player.data.Store.externalPlayer) }
+    var pinDialog by remember { mutableStateOf(false) }
+    var pinValue by remember { mutableStateOf("") }
+    
+    if (pinDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pinDialog = false },
+            title = { Text("Control Parental") },
+            text = {
+                Column {
+                    Text("Ingresa un PIN de 4 dígitos para bloquear contenido de adultos (deja en blanco para desactivar):")
+                    Spacer(Modifier.height(8.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = pinValue,
+                        onValueChange = { if (it.length <= 4) pinValue = it },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                    )
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    com.latmpx.player.data.Store.parentalPin = pinValue
+                    state.refresh++
+                    pinDialog = false
+                }) { Text("Guardar") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { pinDialog = false }) { Text("Cancelar") }
+            }
+        )
+    }
 
     Column(Modifier.fillMaxSize().background(NfBg).verticalScroll(rememberScrollState()).padding(sidePad())) {
         LogoHeader(height = 50.dp)
@@ -89,11 +122,20 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
         
         Text("Configuración de la aplicación", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
         Column(Modifier.fillMaxWidth().background(Color(0xFF1A1A1A), RoundedCornerShape(8.dp)).padding(vertical = 8.dp)) {
-            SettingsItem(Icons.Filled.Lock, "Control Parental", "Bloquea contenido para adultos") { }
+            SettingsItem(Icons.Filled.Lock, "Control Parental", if (com.latmpx.player.data.Store.parentalPin.isEmpty()) "Desactivado" else "Activado") {
+                pinValue = com.latmpx.player.data.Store.parentalPin
+                pinDialog = true
+            }
             HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
-            SettingsItem(Icons.Filled.OndemandVideo, "Formato de Streaming", "HLS (.m3u8)") { }
+            SettingsItem(Icons.Filled.OndemandVideo, "Formato de Streaming", if (streamFormat == "ts") "MPEG-TS (.ts)" else "HLS (.m3u8)") {
+                streamFormat = if (streamFormat == "ts") "m3u8" else "ts"
+                com.latmpx.player.data.Store.streamFormat = streamFormat
+            }
             HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
-            SettingsItem(Icons.Filled.PlayCircle, "Reproductor", "Interno (ExoPlayer)") { }
+            SettingsItem(Icons.Filled.PlayCircle, "Reproductor", if (extPlayer) "Externo" else "Interno (ExoPlayer)") {
+                extPlayer = !extPlayer
+                com.latmpx.player.data.Store.externalPlayer = extPlayer
+            }
             HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             
             Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {

@@ -41,6 +41,24 @@ object Play {
         // un intent no aguanta listas enormes: se envía una ventana alrededor del elegido
         val from = (index - 300).coerceAtLeast(0)
         val win = q.subList(from, (index + 300).coerceAtMost(q.size))
+        if (com.latmpx.player.data.Store.externalPlayer) {
+            val qv = win[index - from]
+            val s = com.latmpx.player.data.Store.session()!!
+            val url = when (kind) {
+                com.latmpx.player.data.Kind.MOVIE -> com.latmpx.player.data.Xtream.movieUrl(s, qv.id, qv.ext)
+                com.latmpx.player.data.Kind.SERIES -> com.latmpx.player.data.Xtream.episodeUrl(s, qv.id, qv.ext)
+                com.latmpx.player.data.Kind.LIVE -> com.latmpx.player.data.Xtream.liveUrls(s, qv.id).first()
+            }
+            val intent = Intent(Intent.ACTION_VIEW)
+            intent.setDataAndType(android.net.Uri.parse(url), "video/*")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                ctx.startActivity(intent)
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(ctx, "No hay reproductor externo instalado", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
         ctx.startActivity(Intent(ctx, PlayerActivity::class.java).apply {
             putExtra(X_KIND, kind.name)
             putExtra(X_INDEX, index - from)

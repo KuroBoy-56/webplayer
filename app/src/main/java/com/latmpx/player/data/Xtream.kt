@@ -38,9 +38,11 @@ object Xtream {
             if (ui == null || ui.i("auth") != 1) { lastMsg = "Usuario o contraseña incorrectos"; continue }
             val status = ui.s("status")
             if (status.isNotEmpty() && !status.equals("Active", true)) { lastMsg = "Tu cuenta está $status"; continue }
-            val exp = ui.s("exp_date").toLongOrNull()?.let { SimpleDateFormat("dd/MM/yyyy", Locale.US).format(it * 1000) } ?: "Ilimitado"
-            // si el servidor anuncia su propio dominio/puerto https, se respeta el DNS del panel (el que sí funciona desde la app)
-            return LoginResult.Ok(probe.copy(expires = exp))
+            val exp = ui.s("exp_date").toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: "Ilimitado"
+            val created = ui.s("created_at").toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: "Desconocido"
+            val active = ui.s("active_cons").takeIf { it.isNotBlank() } ?: "0"
+            val max = ui.s("max_connections").takeIf { it.isNotBlank() } ?: "0"
+            return LoginResult.Ok(probe.copy(expires = exp, createdAt = created, activeCons = active, maxCons = max))
         }
         return LoginResult.Fail(lastMsg)
     }

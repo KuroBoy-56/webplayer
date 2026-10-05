@@ -158,12 +158,20 @@ fun HomeScreen(state: AppState) {
         item { Spacer(Modifier.height(40.dp)) }
     }
     if (!tv) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = pad, vertical = 16.dp).background(Brush.verticalGradient(listOf(Color(0x99000000), Color.Transparent))), verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.weight(1f))
-            Icon(Icons.Filled.Search, null, tint = Color.White, modifier = Modifier.size(28.dp).clickable { state.tab = Tab.SEARCH })
-            Spacer(Modifier.width(16.dp))
-            Box(Modifier.size(32.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFE50914)).clickable { showProfileDialog = true }, contentAlignment = androidx.compose.ui.Alignment.Center) {
-                Text(state.session?.user?.take(1)?.uppercase() ?: "U", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+        Column(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xCC000000), Color(0x66000000), Color.Transparent)))) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = pad, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.latmpx.player.R.drawable.logo), null, modifier = Modifier.height(32.dp))
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.Filled.Search, null, tint = Color.White, modifier = Modifier.size(28.dp).clickable { state.tab = Tab.SEARCH })
+                Spacer(Modifier.width(16.dp))
+                Box(Modifier.size(32.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFE50914)).clickable { showProfileDialog = true }, contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    Text(state.session?.user?.take(1)?.uppercase() ?: "U", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.latmpx.player.ui.components.Chip("Series", false) { state.tab = Tab.SERIES }
+                com.latmpx.player.ui.components.Chip("Películas", false) { state.tab = Tab.MOVIES }
+                com.latmpx.player.ui.components.Chip("Deportes", false) { state.tab = Tab.SPORTS }
             }
         }
     }
