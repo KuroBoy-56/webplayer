@@ -18,7 +18,7 @@ data class Item(
     val plot: String = "",
     val epgId: String = "",
     val backdrop: String = "",
-) { : java.io.Serializable {
+) : java.io.Serializable {
     /** clave única para progreso y favoritos */
     val key: String get() = "${kind.name.lowercase()}:$id"
 }

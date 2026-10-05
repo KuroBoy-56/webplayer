@@ -70,6 +70,7 @@ fun AppRoot() {
     val state = remember { AppState() }
     val scope = rememberCoroutineScope()
     val booted = remember { mutableStateOf(false) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(Unit) {
         state.session = Store.session()
@@ -83,7 +84,7 @@ fun AppRoot() {
         Xtream.warmUp(s)
         
         launch(kotlinx.coroutines.Dispatchers.IO) {
-            val ctx = com.latmpx.player.App.ctx
+            
             val cacheFile = java.io.File(ctx.cacheDir, "catalog_cache_" + s.user + ".json")
             
             // Try to load from cache first for instant UI
@@ -161,8 +162,6 @@ fun AppRoot() {
                 state.movies = newM; state.series = newSer
                 state.loading = false
             }
-        }
-    }
         }
     }
     // al volver del reproductor se recarga del panel (otro equipo pudo haber cambiado algo)

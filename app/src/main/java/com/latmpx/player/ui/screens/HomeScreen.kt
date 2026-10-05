@@ -1,4 +1,6 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.foundation.layout.size
+import com.latmpx.player.ui.theme.NfRed
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
