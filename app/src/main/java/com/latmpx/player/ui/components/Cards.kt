@@ -22,6 +22,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -75,12 +82,28 @@ fun PosterCard(item: Item, width: Dp, onClick: () -> Unit, progress: Float = 0f,
 
 /** Fila horizontal con título, como las de Netflix. */
 @Composable
-fun <T> ShelfRow(title: String, items: List<T>, pad: Dp, content: @Composable (Int, T) -> Unit) {
+fun <T> ShelfRow(title: String, items: List<T>, pad: Dp, onViewAll: (() -> Unit)? = null, content: @Composable (Int, T) -> Unit) {
     if (items.isEmpty()) return
     Column(Modifier.padding(top = 18.dp)) {
-        Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = pad, bottom = 8.dp))
+        Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.Bottom) {
+            Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            if (onViewAll != null) {
+                Text("Ver todos", color = Color.LightGray, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, modifier = Modifier.clickable { onViewAll() }.padding(start = 16.dp, top = 4.dp, bottom = 4.dp))
+            }
+        }
         LazyRow(contentPadding = PaddingValues(horizontal = pad, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(items) { i, it -> content(i, it) }
+            if (onViewAll != null) {
+                item {
+                    Box(Modifier.width(100.dp).fillMaxHeight().clickable { onViewAll() }.padding(start = 16.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                            Icon(androidx.compose.material.icons.Icons.Filled.ArrowForward, null, tint = Color.White, modifier = Modifier.size(32.dp).background(Color(0x33FFFFFF), androidx.compose.foundation.shape.CircleShape).padding(8.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text("Ver todos", color = Color.White, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
         }
     }
 }

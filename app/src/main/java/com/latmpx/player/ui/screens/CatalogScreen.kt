@@ -34,6 +34,7 @@ import com.latmpx.player.ui.components.HeroCarousel
 import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.components.PosterCard
 import com.latmpx.player.ui.components.ShelfRow
+import com.latmpx.player.ui.components.Top10Card
 import com.latmpx.player.ui.theme.NfBg
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,16 +90,16 @@ fun CatalogScreen(state: AppState, kind: Kind) {
                 }
                 
                 val recent = all.sortedByDescending { it.added }.take(20)
-                item { ShelfRow("Agregadas recientemente", recent, sp) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
+                item { ShelfRow("Agregadas recientemente", recent, sp, onViewAll = { state.push(Route.Browse("Agregadas recientemente", kind, setOf(filter.removePrefix("c:")))) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
                 
                 val top10 = all.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10)
-                item { ShelfRow("Top 10", top10, sp) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
+                item { ShelfRow("Top 10", top10, sp) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) } }
                 
                 cats.take(15).forEach { c ->
                     val list = all.filter { it.categoryId == c.id }.sortedByDescending { it.added }.take(20)
                     if (list.isNotEmpty()) {
                         item(key = "c_${c.id}") {
-                            ShelfRow(c.name, list, sp) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) }
+                            ShelfRow(c.name, list, sp, onViewAll = { state.push(Route.Browse(c.name, kind, setOf(c.id))) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) }
                         }
                     }
                 }

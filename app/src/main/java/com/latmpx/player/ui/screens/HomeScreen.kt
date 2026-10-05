@@ -141,14 +141,16 @@ fun HomeScreen(state: AppState) {
             ShelfRow("Plataformas", platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.PlatformPage(p)) }) }
         }
         item {
-            ShelfRow("Películas recién agregadas", recentMovies, pad) { _, it ->
+            ShelfRow("Películas recién agregadas", recentMovies, pad, onViewAll = { state.push(Route.Browse("Películas recién agregadas", com.latmpx.player.data.Kind.MOVIE, emptySet())) }) { _, it ->
                 PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ userFocusedHero = it }) else null)
             }
         }
-        item { ShelfRow("Series recién agregadas", recentSeries, pad) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
+        item { ShelfRow("Series recién agregadas", recentSeries, pad, onViewAll = { state.push(Route.Browse("Series recién agregadas", com.latmpx.player.data.Kind.SERIES, emptySet())) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
         genreRows.forEach { (label, list) ->
             item(key = "g_$label") {
-                ShelfRow(label, list, pad) { _, it ->
+                val kw = com.latmpx.player.data.Platforms.genres.find { it.first == label }?.second ?: emptyList()
+                val ids = com.latmpx.player.data.Platforms.categoriesFor(state.movieCats, kw)
+                ShelfRow(label, list, pad, onViewAll = { state.push(Route.Browse(label, com.latmpx.player.data.Kind.MOVIE, ids)) }) { _, it ->
                     PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ userFocusedHero = it }) else null)
                 }
             }
@@ -157,15 +159,12 @@ fun HomeScreen(state: AppState) {
     }
     if (!tv) {
         Row(Modifier.fillMaxWidth().padding(horizontal = pad, vertical = 16.dp).background(Brush.verticalGradient(listOf(Color(0x99000000), Color.Transparent))), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f).height(40.dp).background(Color(0x80333333), RoundedCornerShape(20.dp)).clickable { state.tab = Tab.SEARCH }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Search, null, tint = NfGray2, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Buscar...", color = NfGray2, fontSize = 14.sp)
-                }
-            }
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Filled.Search, null, tint = Color.White, modifier = Modifier.size(28.dp).clickable { state.tab = Tab.SEARCH })
             Spacer(Modifier.width(16.dp))
-            Icon(Icons.Filled.AccountCircle, null, tint = Color.White, modifier = Modifier.size(36.dp).clip(CircleShape).clickable { showProfileDialog = true })
+            Box(Modifier.size(32.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFE50914)).clickable { showProfileDialog = true }, contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Text(state.session?.user?.take(1)?.uppercase() ?: "U", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+            }
         }
     }
 }
