@@ -65,12 +65,6 @@ import com.latmpx.player.ui.theme.NfGray2
 import com.latmpx.player.ui.theme.NfRed
 import kotlinx.coroutines.launch
 
-/**
- * Activación por el panel:
- * 1. auth.php / check_mac: si el equipo ya tiene línea, entra solo (o elige entre varias).
- * 2. Si no: muestra el código MAC del equipo para que el distribuidor lo active, permite activar con
- *    usuario + contraseña + servidor (fetch_dns / submit_url) o pedir una demo automática (auto_demo).
- */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LoginScreen(onLogged: (Session) -> Unit) {
@@ -98,7 +92,6 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
         }
     }
 
-    /** Pregunta al panel qué líneas tiene este equipo y entra si hay una sola. */
     suspend fun resolve(): Boolean {
         busy = true; status = "Comprobando el equipo en el panel…"
         val a = Panel.playlists(deviceId)
@@ -122,7 +115,6 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
         scope.launch { busy = true; block(); busy = false }
     }
 
-    // fondo de pósters (la llave TMDB llega del panel en auth.php)
     LaunchedEffect(Store.tmdbKey) { posters = Tmdb.nowPlaying(Store.tmdbKey) }
     LaunchedEffect(Unit) {
         resolve()
@@ -137,104 +129,98 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         PosterWall(posters, columns = if (tv) 8 else 4)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()) {
-        // .nf-login-header: logo arriba a la izquierda y el botón DNS
-        Row(Modifier.fillMaxWidth().padding(horizontal = sidePad(), vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            LogoHeader(height = 46.dp)
-            Spacer(Modifier.weight(1f))
-            DnsButton()
-        }
-        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-        // .nf-login-box: caja negra al 75 %
-        Column(
-            Modifier.widthIn(max = 480.dp).fillMaxWidth()
-                .background(Color(0xBF000000), RoundedCornerShape(6.dp)).padding(horizontal = if (tv) 48.dp else 24.dp, vertical = 36.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            if (!PanelCrypto.hasKey()) {
-                ErrorBanner("Esta versión de la app no tiene la llave del panel (PANEL_MASTER_KEY). La activación no funcionará hasta instalar una versión configurada.")
+            Row(Modifier.fillMaxWidth().padding(horizontal = sidePad(), vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                LogoHeader(height = 46.dp)
+                Spacer(Modifier.weight(1f))
             }
-            if (lines.size > 1) {
-                Text("Elige tu servicio", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                lines.forEachIndexed { i, l ->
-                    HeroButton(l.name.ifBlank { "Servicio ${i + 1}" }, Icons.Filled.PlayArrow, i == 0, if (i == 0) Modifier.focusRequester(firstFocus) else Modifier) {
-                        act { connect(l) }
+            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                Column(
+                    Modifier.widthIn(max = 400.dp).fillMaxWidth()
+                        .background(Color(0xBF000000), RoundedCornerShape(6.dp)).padding(horizontal = if (tv) 32.dp else 24.dp, vertical = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (!PanelCrypto.hasKey()) {
+                        ErrorBanner("Esta versión de la app no tiene la llave del panel (PANEL_MASTER_KEY). La activación no funcionará hasta instalar una versión configurada.")
                     }
-                }
-            } else {
-                Text("Iniciar sesión", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                err?.let { ErrorBanner(it) }
-                Text("Código del equipo (MAC)", color = NfGray2, fontSize = 13.sp)
-                Text(deviceId, color = Color.White, fontSize = if (tv) 30.sp else 24.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
-                Text("Envía este código a tu distribuidor para que active el equipo en el panel y luego pulsa \"Comprobar\".", color = NfGray2, fontSize = 13.sp)
-                RedButton("Comprobar activación", Modifier.focusRequester(firstFocus)) {
-                    act { if (!resolve() && err == null) err = "El equipo aún no está activado en el panel" }
-                }
-                Spacer(Modifier.height(4.dp))
-                Text("¿Ya tienes usuario y contraseña?", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                OutlinedTextField(
-                    value = user, onValueChange = { user = it }, label = { Text("Usuario") }, singleLine = true, colors = fieldColors,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = pass, onValueChange = { pass = it }, label = { Text("Contraseña") }, singleLine = true, colors = fieldColors,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { }), modifier = Modifier.fillMaxWidth(),
-                )
-                if (dns.size > 1) {
-                    Text("Servidor", color = NfGray2, fontSize = 13.sp)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        dns.forEachIndexed { i, _ -> Chip("Servidor ${i + 1}", i == dnsIdx) { dnsIdx = i } }
-                    }
-                }
-                RedButton("Activar") {
-                    act {
-                        if (user.isBlank() || pass.isBlank()) { err = "Escribe tu usuario y contraseña"; return@act }
-                        if (dns.isEmpty()) Panel.fetchDns().let { d -> d.value?.let { dns = it }; if (d.value == null) err = d.error }
-                        val server = dns.getOrNull(dnsIdx) ?: dns.firstOrNull()
-                        if (server == null) { if (err == null) err = "El panel no tiene servidores disponibles"; return@act }
-                        status = "Activando…"
-                        val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), server)
-                        if (r.value == null) { err = r.error; return@act }
-                        if (!resolve() && err == null) connect(Panel.Line("Servidor ${dnsIdx + 1}", Xtream.normalize(server), user.trim(), pass.trim()))
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                HeroButton(if (demoUsed) "Demo ya utilizada" else "Demo automática (24 h)", Icons.Filled.CardGiftcard, false) {
-                    if (demoUsed) { err = "La demo ya se usó en este equipo"; return@HeroButton }
-                    act {
-                        status = "Creando demo…"
-                        val r = Panel.autoDemo(deviceId)
-                        val cred = r.value
-                        if (cred == null) {
-                            err = r.error
-                            if (r.code == 403) { demoUsed = true; Store.demoUsed = true }
-                            return@act
+                    if (lines.size > 1) {
+                        Text("Elige tu servicio", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                        lines.forEachIndexed { i, l ->
+                            HeroButton(l.name.ifBlank { "Servicio ${i + 1}" }, Icons.Filled.PlayArrow, i == 0, if (i == 0) Modifier.focusRequester(firstFocus) else Modifier) {
+                                act { connect(l) }
+                            }
                         }
-                        Store.demoUsed = true; demoUsed = true
-                        if (!resolve() && err == null) {
-                            val d = dns.ifEmpty { Panel.fetchDns().value.orEmpty() }
-                            val first = d.firstOrNull()
-                            if (first != null) connect(Panel.Line("Demo", Xtream.normalize(first), cred.first, cred.second))
-                            else err = "Demo creada, pero el panel no devolvió el servidor. Pulsa \"Comprobar activación\"."
+                    } else {
+                        Text("Iniciar sesión", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                        err?.let { ErrorBanner(it) }
+                        
+                        Column(Modifier.fillMaxWidth().background(Color(0xFF222222), RoundedCornerShape(4.dp)).padding(12.dp)) {
+                            Text("Código MAC (Para activación remota)", color = NfGray2, fontSize = 12.sp)
+                            Text(deviceId, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+                        }
+                        
+                        OutlinedTextField(
+                            value = user, onValueChange = { user = it }, label = { Text("Usuario") }, singleLine = true, colors = fieldColors,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value = pass, onValueChange = { pass = it }, label = { Text("Contraseña") }, singleLine = true, colors = fieldColors,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { }), modifier = Modifier.fillMaxWidth(),
+                        )
+                        
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            RedButton("Entrar", Modifier.weight(1f).focusRequester(firstFocus)) {
+                                act {
+                                    if (user.isBlank() || pass.isBlank()) { err = "Escribe tu usuario y contraseña"; return@act }
+                                    if (dns.isEmpty()) Panel.fetchDns().let { d -> d.value?.let { dns = it }; if (d.value == null) err = d.error }
+                                    val server = dns.getOrNull(dnsIdx) ?: dns.firstOrNull()
+                                    if (server == null) { if (err == null) err = "El panel no tiene servidores disponibles"; return@act }
+                                    status = "Activando…"
+                                    val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), server)
+                                    if (r.value == null) { err = r.error; return@act }
+                                    if (!resolve() && err == null) connect(Panel.Line("Servidor ${dnsIdx + 1}", Xtream.normalize(server), user.trim(), pass.trim()))
+                                }
+                            }
+                            HeroButton(if (demoUsed) "Demo" else "Demo (24h)", Icons.Filled.CardGiftcard, false, Modifier.weight(1f)) {
+                                if (demoUsed) { err = "La demo ya se usó"; return@HeroButton }
+                                act {
+                                    status = "Creando demo…"
+                                    val r = Panel.autoDemo(deviceId)
+                                    val cred = r.value
+                                    if (cred == null) {
+                                        err = r.error
+                                        if (r.code == 403) { demoUsed = true; Store.demoUsed = true }
+                                        return@act
+                                    }
+                                    Store.demoUsed = true; demoUsed = true
+                                    if (!resolve() && err == null) {
+                                        val d = dns.ifEmpty { Panel.fetchDns().value.orEmpty() }
+                                        val first = d.firstOrNull()
+                                        if (first != null) connect(Panel.Line("Demo", Xtream.normalize(first), cred.first, cred.second))
+                                        else err = "Demo creada, pero el panel no devolvió el servidor."
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (dns.size > 1 || true) {
+                            Spacer(Modifier.height(8.dp))
+                            DnsButton()
                         }
                     }
+                    if (busy) {
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = NfRed, strokeWidth = 2.dp)
+                            Text(status, color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp), textAlign = TextAlign.Center)
+                        }
+                    }
+                    if (lines.size > 1) err?.let { ErrorBanner(it) }
                 }
             }
-            if (busy) {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = NfRed, strokeWidth = 2.dp)
-                    Text(status, color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
-                }
-            }
-            if (lines.size > 1) err?.let { ErrorBanner(it) }
-            Text("Ingresa con el usuario y la contraseña de tu suscripción o pide la activación con el código del equipo.",
-                color = Color(0xFF8C8C8C), fontSize = 13.sp)
-        }
-        }
-        // .nf-login-footer
-        Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} Garevyn TV", color = Color(0xFF999999), fontSize = 14.sp,
-            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).background(Color(0x99000000)).padding(20.dp))
+            Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} Garevyn TV", color = Color(0xFF999999), fontSize = 14.sp,
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).background(Color(0x99000000)).padding(20.dp))
         }
     }
 }
@@ -245,7 +231,6 @@ private fun ErrorBanner(text: String) {
         modifier = Modifier.fillMaxWidth().background(Color(0xFFE87C03), RoundedCornerShape(4.dp)).padding(horizontal = 16.dp, vertical = 12.dp))
 }
 
-/** .nf-btn-red .nf-btn-block: botón rojo a todo el ancho */
 @Composable
 private fun RedButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     FocusBox(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(4.dp), focusScale = 1.03f) { f ->

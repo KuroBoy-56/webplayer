@@ -1,34 +1,21 @@
 package com.latmpx.player.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +26,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import com.latmpx.player.R
 import com.latmpx.player.data.EpgEntry
@@ -62,6 +55,7 @@ import java.util.Locale
 private const val FAVS = "__favs"
 private const val ALL = "__all"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LiveScreen(state: AppState) {
     val s = state.session ?: return
@@ -73,19 +67,28 @@ fun LiveScreen(state: AppState) {
     val all = channels
     if (all == null) { Loading("Cargando canales…"); return }
     val cats = remember(state.liveCats) { listOf(FAVS to "★ Favoritos", ALL to "Todos") + state.liveCats.map { it.id to it.name } }
-    val shown = remember(all, cat, favTick, state.refresh, Cloud.rev) {
-        when (cat) {
+    
+    var searchQuery by remember { mutableStateOf("") }
+    
+    val shown = remember(all, cat, favTick, state.refresh, Cloud.rev, searchQuery) {
+        val filtered = when (cat) {
             ALL -> all
             FAVS -> all.filter { Cloud.isFav(it.key) }
             else -> all.filter { it.categoryId == cat }
         }
+        if (searchQuery.isBlank()) filtered else filtered.filter { it.name.contains(searchQuery, ignoreCase = true) }
     }
+    
     var focused by remember { mutableStateOf<Item?>(null) }
-    val play: (Int) -> Unit = { i -> Store.setLastChannel(shown[i].id); Play.live(ctx, shown, i) }
+    var playingItem by remember { mutableStateOf<Item?>(null) }
+    
+    val play: (Int) -> Unit = { i -> 
+        Store.setLastChannel(shown[i].id)
+        if (tv) Play.live(ctx, shown, i) else playingItem = shown[i]
+    }
     val fav: (Item) -> Unit = { ch -> Cloud.toggleFav(ch.copy(kind = Kind.LIVE)); favTick++ }
 
     if (tv) {
-        // TV: categorías | canales | guía del canal seleccionado
         Row(Modifier.fillMaxSize().background(NfBg)) {
             LazyColumn(Modifier.width(230.dp).fillMaxHeight().background(Color(0xFF101010)), contentPadding = PaddingValues(vertical = 12.dp)) {
                 items(cats, key = { it.first }) { (id, name) ->
@@ -106,11 +109,76 @@ fun LiveScreen(state: AppState) {
             EpgPanel(state, focused, shown, Modifier.width(320.dp).fillMaxHeight())
         }
     } else {
+        var dropdownExpanded by remember { mutableStateOf(false) }
+        val catName = cats.firstOrNull { it.first == cat }?.second ?: "Categorías"
+        
         Column(Modifier.fillMaxSize().background(NfBg)) {
-            Text("TV en vivo", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = sidePad(), top = 16.dp, bottom = 6.dp))
-            LazyRow(contentPadding = PaddingValues(horizontal = sidePad(), vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(cats, key = { it.first }) { (id, name) -> Chip(name, cat == id) { cat = id } }
+            // Player Area
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)) {
+                if (playingItem != null) {
+                    val p = playingItem!!
+                    val exoPlayer = remember { ExoPlayer.Builder(ctx).build() }
+                    DisposableEffect(p) {
+                        val urls = Xtream.liveUrls(s, p.id)
+                        val url = urls.firstOrNull() ?: ""
+                        val mediaItem = MediaItem.Builder().setUri(url).build()
+                        exoPlayer.setMediaItem(mediaItem)
+                        exoPlayer.prepare()
+                        exoPlayer.playWhenReady = true
+                        onDispose { exoPlayer.release() }
+                    }
+                    AndroidView(factory = {
+                        PlayerView(ctx).apply {
+                            player = exoPlayer
+                            useController = true
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        }
+                    }, modifier = Modifier.fillMaxSize())
+                    
+                    // Fullscreen button
+                    IconButton(onClick = { 
+                        val idx = shown.indexOf(p).coerceAtLeast(0)
+                        Play.live(ctx, shown, idx) 
+                    }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                        Icon(Icons.Filled.Fullscreen, "Pantalla completa", tint = Color.White)
+                    }
+                } else {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Selecciona un canal", color = NfGray2)
+                    }
+                }
             }
+            
+            // Search & Filter
+            Column(Modifier.padding(horizontal = sidePad(), vertical = 8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        Row(Modifier.clickable { dropdownExpanded = true }.padding(4.dp).background(Color(0xFF222222), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(catName, color = Color.White)
+                            Icon(Icons.Filled.ArrowDropDown, null, tint = Color.White)
+                        }
+                        DropdownMenu(expanded = dropdownExpanded, onDismissRequest = { dropdownExpanded = false }) {
+                            cats.forEach { (k, n) -> DropdownMenuItem(text = { Text(n) }, onClick = { cat = k; dropdownExpanded = false }) }
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text(" Canales", color = NfGray2, fontSize = 14.sp)
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = searchQuery, onValueChange = { searchQuery = it },
+                    placeholder = { Text("Buscar canal...") },
+                    leadingIcon = { Icon(Icons.Filled.Search, null) },
+                    singleLine = true, modifier = Modifier.fillMaxWidth().height(50.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFF1A1A1A), unfocusedContainerColor = Color(0xFF1A1A1A),
+                        focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent,
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(25.dp)
+                )
+            }
+            
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
                 if (shown.isEmpty()) item { Empty(if (cat == FAVS) "Mantén presionado un canal para agregarlo a favoritos" else "Sin canales") }
                 itemsIndexed(shown, key = { _, c -> c.id }) { i, ch -> ChannelRow(ch, i + 1, onClick = { play(i) }, onLong = { fav(ch) }) }
@@ -127,7 +195,7 @@ private fun ChannelRow(ch: Item, num: Int, onClick: () -> Unit, onLong: () -> Un
             Modifier.fillMaxWidth().background(if (f) Color(0xFF2E2E2E) else Color(0xFF1A1A1A)).padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("$num", color = NfGray2, fontSize = 13.sp, modifier = Modifier.width(38.dp))
+            Text("", color = NfGray2, fontSize = 13.sp, modifier = Modifier.width(38.dp))
             Box(Modifier.size(width = 64.dp, height = 40.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF0E0E0E)), contentAlignment = Alignment.Center) {
                 AsyncImage(model = ch.poster.ifBlank { R.drawable.logo }, contentDescription = null, contentScale = ContentScale.Fit,
                     error = androidx.compose.ui.res.painterResource(R.drawable.logo), modifier = Modifier.fillMaxSize().padding(3.dp))
@@ -145,7 +213,6 @@ private fun EpgPanel(state: AppState, ch: Item?, shown: List<Item>, modifier: Mo
         value = emptyList()
         if (ch != null && s != null) {
             kotlinx.coroutines.delay(350) // espera a que el foco se detenga en un canal
-            // primero la guía del proveedor; si no trae, la de respaldo del panel (lote con los canales vecinos)
             value = Xtream.shortEpg(s, ch.id).ifEmpty {
                 val i = shown.indexOfFirst { it.id == ch.id }.coerceAtLeast(0)
                 PanelEpg.guide(ch, shown.subList((i - 50).coerceAtLeast(0), (i + 350).coerceAtMost(shown.size)))
@@ -159,7 +226,7 @@ private fun EpgPanel(state: AppState, ch: Item?, shown: List<Item>, modifier: Mo
         if (epg.isEmpty()) Text("Sin guía disponible para este canal", color = NfGray2, fontSize = 13.sp)
         epg.forEachIndexed { i, e ->
             Column {
-                Text("${hm.format(e.start)} - ${hm.format(e.end)}" + if (i == 0 && e.start <= System.currentTimeMillis()) "  ·  AHORA" else "",
+                Text(" - " + if (i == 0 && e.start <= System.currentTimeMillis()) "  ·  AHORA" else "",
                     color = if (i == 0) NfRed else NfGray2, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Text(e.title, color = Color.White, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (i == 0 && e.desc.isNotBlank()) Text(e.desc, color = NfGray2, fontSize = 12.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)

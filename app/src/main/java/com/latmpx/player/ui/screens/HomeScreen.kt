@@ -5,6 +5,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import com.latmpx.player.ui.Tab
+
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -81,7 +90,30 @@ fun HomeScreen(state: AppState) {
     val heroItems = remember(movies) { recentMovies.filter { it.backdrop.isNotEmpty() }.take(5).ifEmpty { recentMovies.take(1) } }
     var userFocusedHero by remember(movies) { mutableStateOf<Item?>(null) }
 
-    LazyColumn(Modifier.fillMaxSize().background(NfBg)) {
+    var showProfileDialog by remember { mutableStateOf(false) }
+
+    if (showProfileDialog) {
+        AlertDialog(
+            onDismissRequest = { showProfileDialog = false },
+            title = { Text("Perfil", color = Color.White) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Usuario: " + (state.session?.user ?: ""), color = Color.White)
+                    Text("Servidor: " + (state.session?.dnsName ?: ""), color = NfGray2)
+                    Text("Mi cuenta", color = Color.White, modifier = Modifier.clickable { showProfileDialog = false; state.tab = Tab.ACCOUNT })
+                    Text("Ajustes", color = Color.White, modifier = Modifier.clickable { showProfileDialog = false })
+                    Text("Deportes", color = Color.White, modifier = Modifier.clickable { showProfileDialog = false; state.tab = Tab.SPORTS })
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showProfileDialog = false }) { Text("Cerrar", color = NfRed) }
+            },
+            containerColor = Color(0xFF222222)
+        )
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize().background(NfBg)) {
         item {
             val h = userFocusedHero
             if (h != null) {
@@ -121,6 +153,20 @@ fun HomeScreen(state: AppState) {
         }
         item { Spacer(Modifier.height(40.dp)) }
     }
+    if (!tv) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = pad, vertical = 16.dp).background(Brush.verticalGradient(listOf(Color(0x99000000), Color.Transparent))), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f).height(40.dp).background(Color(0x80333333), RoundedCornerShape(20.dp)).clickable { state.tab = Tab.SEARCH }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Search, null, tint = NfGray2, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Buscar...", color = NfGray2, fontSize = 14.sp)
+                }
+            }
+            Spacer(Modifier.width(16.dp))
+            Icon(Icons.Filled.AccountCircle, null, tint = Color.White, modifier = Modifier.size(36.dp).clip(CircleShape).clickable { showProfileDialog = true })
+        }
+    }
+}
 }
 
 @Composable

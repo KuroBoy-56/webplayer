@@ -2,7 +2,7 @@ package com.latmpx.player.data
 
 enum class Kind { MOVIE, SERIES, LIVE }
 
-data class Category(val id: String, val name: String, val kind: Kind)
+data class Category(val id: String, val name: String, val kind: Kind) : java.io.Serializable
 
 /** Película, serie o canal tal como llega de player_api.php */
 data class Item(
@@ -18,7 +18,7 @@ data class Item(
     val plot: String = "",
     val epgId: String = "",
     val backdrop: String = "",
-) {
+) { : java.io.Serializable {
     /** clave única para progreso y favoritos */
     val key: String get() = "${kind.name.lowercase()}:$id"
 }
@@ -66,3 +66,4 @@ data class Progress(
     val url: String = "",
     val categoryId: String = "",
 )
+
