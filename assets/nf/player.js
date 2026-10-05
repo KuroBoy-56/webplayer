@@ -192,7 +192,7 @@
         v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.watchAudio(); });
         v.addEventListener('canplay', function () { r.classList.remove('buffering'); });
         v.addEventListener('loadedmetadata', function () {
-            if (v.audioTracks && !v.audioTracks.onaddtrack && !APPLE) {
+            if (v.audioTracks && !v.audioTracks.onaddtrack) {
                 v.audioTracks.onaddtrack = function () { self.applyAudioPref(); };
             }
             self.ok = true;
@@ -676,7 +676,7 @@
             this.info.audio.forEach(function (t) {
                 out.push({ label: t.label, lang: t.lang, on: cur === t.i, set: function () { if (!self.o.media) self.o.media = self._media0; if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
             });
-        } else if (this.v.audioTracks && this.v.audioTracks.length && !APPLE) {
+        } else if (this.v.audioTracks && this.v.audioTracks.length) {
             var at = this.v.audioTracks;
             for (var i = 0; i < at.length; i++) (function (t, i) {
                 out.push({ label: t.label || t.language || ('Audio ' + (i + 1)), lang: t.language || '', on: t.enabled, set: function () { for (var j = 0; j < at.length; j++) at[j].enabled = j === i; } });
@@ -698,7 +698,14 @@
         }
         if (w < 0) w = pickLang(list.map(function (t) { return { lang: t.lang, label: t.label, def: t.on }; }));
         
-        if (!list[w].on) list[w].set();
+        // Ensure ONLY the selected track is enabled (fixes Safari native dual audio bug)
+        if (APPLE && !this.hls && this.v.audioTracks) {
+            for (var j = 0; j < this.v.audioTracks.length; j++) {
+                this.v.audioTracks[j].enabled = (j === w);
+            }
+        } else {
+            if (!list[w].on) list[w].set();
+        }
     };
 
     NFPlayer.prototype.subList = function () {
