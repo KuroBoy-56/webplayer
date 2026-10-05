@@ -101,3 +101,25 @@ fun Grid(state: AppState, items: List<Item>, heroItems: List<Item> = emptyList()
         item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(this.maxLineSpan) }) { Spacer(Modifier.height(60.dp)) }
     }
 }
+
+@Composable
+fun BrowseScreen(state: AppState, title: String, kind: Kind?, categoryIds: Set<String>, platform: com.latmpx.player.data.Platform? = null) {
+    val list = remember(state.movies, state.series, platform, categoryIds) {
+        if (platform != null) {
+            byCats(state.movies, com.latmpx.player.data.Platforms.categoriesFor(state.movieCats, platform.kw)) + byCats(state.series, com.latmpx.player.data.Platforms.categoriesFor(state.seriesCats, platform.kw))
+        } else byCats(if (kind == Kind.SERIES) state.series else state.movies, categoryIds)
+    }
+    Column(Modifier.fillMaxSize().background(NfBg)) {
+        Text(title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = sidePad(), top = 16.dp, bottom = 6.dp))
+        Grid(state, list)
+    }
+}
+
+@Composable
+fun MyListScreen(state: AppState) {
+    val favs = remember(state.refresh, Cloud.rev) { Cloud.favList().filter { it.kind != Kind.LIVE } }
+    Column(Modifier.fillMaxSize().background(NfBg)) {
+        Text("Mi lista", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = sidePad(), top = 16.dp, bottom = 6.dp))
+        if (favs.isEmpty()) Empty("Agrega películas y series con el botón \"Mi lista\" para verlas aquí") else Grid(state, favs)
+    }
+}
