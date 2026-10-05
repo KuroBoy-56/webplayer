@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 include "session.php";
 include "config.php";
 
@@ -42,7 +42,7 @@ if ($slug == "movie") {
                 $episodes_list[] = [
                     'id' => (string)$ep['id'],
                     'ext' => strtolower($ep['container_extension'] ?? 'mp4') ?: 'mp4',
-                    'label' => 'T' . $season . ':E' . ($ep['episode_num'] ?? '') . (!empty($ep['title']) ? ' · ' . $ep['title'] : ''),
+                    'label' => 'T' . $season . ':E' . ($ep['episode_num'] ?? '') . (!empty($ep['title']) ? ' Â· ' . $ep['title'] : ''),
                 ];
             }
         }
@@ -77,7 +77,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'download_file') {
     exit;
 }
 
-/* ---------- Posición para reanudar ---------- */
+/* ---------- PosiciÃ³n para reanudar ---------- */
 $resume_time = 0;
 if ($restart == 0) {
     $prog = wp_user_progress($username);
@@ -95,7 +95,7 @@ $exts = array_values(array_unique($exts));
 
 $sources = wp_play_sources($kind, $id, $exts);
 
-/* ---------- Página https y video http: reproductor directo por http (play.php) ---------- */
+/* ---------- PÃ¡gina https y video http: reproductor directo por http (play.php) ---------- */
 $http_url = wp_handoff_url([
     'kind' => $kind, 'id' => $id, 'exts' => $exts, 'vlcExt' => $ext, 'slug' => $slug, 'sid' => $series_id_get,
     'title' => $content_name, 'sub' => $episode_label, 'resume' => $resume_time,
@@ -110,7 +110,7 @@ if ($http_url !== '' && $use_vlc !== '1' && wp_needs_handoff($kind, $id, $source
 $back_url = ($slug == 'movie') ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get;
 $download_url = '?' . http_build_query(array_merge($_GET, ['action' => 'download_file']));
 $extra = [['label' => 'Descargar contenido', 'href' => $download_url]];
-if ($has_prev) $extra[] = ['label' => 'Capítulo anterior', 'href' => $prev_url];
+if ($has_prev) $extra[] = ['label' => 'CapÃ­tulo anterior', 'href' => $prev_url];
 if ($slug === 'series') $extra[] = ['label' => 'Ver episodios', 'href' => $back_url . '#episodios'];
 $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext) . ($series_id_get ? '&series_id=' . rawurlencode($series_id_get) : '');
 ?>
@@ -136,7 +136,7 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
 <body>
     <div id="vlc-overlay" class="vlc-overlay">
         <h2>Abriendo VLC Player...</h2>
-        <p>Si el contenido no se abre automáticamente, presiona el botón.</p>
+        <p>Si el contenido no se abre automÃ¡ticamente, presiona el botÃ³n.</p>
         <a href="vlc://<?php echo e($raw_url); ?>" class="nf-btn nf-btn-red">Reproducir en VLC</a>
         <p style="margin-top:22px"><a href="<?php echo e($back_url); ?>" style="color:#aaa">Volver</a></p>
     </div>
@@ -144,7 +144,7 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
-    <script src="assets/nf/player.js?v=12" defer></script>
+    <script src="assets/nf/player.js?v=13" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

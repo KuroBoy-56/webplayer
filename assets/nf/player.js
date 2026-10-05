@@ -189,9 +189,12 @@
         v.addEventListener('pause', function () { self.state(); self.emit('pause'); });
         v.addEventListener('waiting', function () { r.classList.add('buffering'); });
         v.addEventListener('stalled', function () { r.classList.add('buffering'); });
-        v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.watchAudio(); self.enforceSingleAudio(); });
+        v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.watchAudio(); });
         v.addEventListener('canplay', function () { r.classList.remove('buffering'); });
         v.addEventListener('loadedmetadata', function () {
+            if (v.audioTracks && !v.audioTracks.onaddtrack) {
+                v.audioTracks.onaddtrack = function () { self.applyAudioPref(); };
+            }
             self.ok = true;
             clearTimeout(self.loadTimer);
             if (!self.tc && !self.resumed && self.o.resume > 5 && isFinite(v.duration) && self.o.resume < v.duration - 10) {
@@ -200,18 +203,10 @@
                 self.toastMsg('Continuando desde ' + fmt(self.o.resume));
             }
             self.applyAudioPref();
-            self.enforceSingleAudio();
             self.updTime();
             if (!self.tc && !self.live) self.probe();
             if (self.tc) self.applySub();
         });
-        // iPhone/Safari (HLS nativo) añade las pistas de audio después de cargar: hay que volver a
-        // dejar una sola activa cada vez que aparezca o cambie una, si no se oyen los dos idiomas a la vez.
-        if (v.audioTracks) {
-            var onAudioTracks = function (e) { self.enforceSingleAudio(e); };
-            try { v.audioTracks.addEventListener('addtrack', onAudioTracks); } catch (e) {}
-            try { v.audioTracks.addEventListener('change', onAudioTracks); } catch (e) {}
-        }
         v.addEventListener('timeupdate', function () { self.updTime(); self.emit('time'); });
         v.addEventListener('progress', function () { self.updBuf(); });
         v.addEventListener('volumechange', function () {
@@ -682,9 +677,6 @@
                 out.push({ label: t.label, lang: t.lang, on: cur === t.i, set: function () { if (!self.o.media) self.o.media = self._media0; if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
             });
         } else if (this.v.audioTracks && this.v.audioTracks.length) {
-            // En iOS/Safari, NO exponer pistas nativas al menú HTML para evitar que JS las corrompa (WebKit bug: audio doble y menús rotos).
-            if (APPLE && !this.hls && this.v.canPlayType('application/vnd.apple.mpegurl')) return out;
-            
             var at = this.v.audioTracks;
             for (var i = 0; i < at.length; i++) (function (t, i) {
                 out.push({ label: t.label || t.language || ('Audio ' + (i + 1)), lang: t.language || '', on: t.enabled, set: function () { for (var j = 0; j < at.length; j++) at[j].enabled = j === i; } });
@@ -694,23 +686,26 @@
     };
 
     NFPlayer.prototype.applyAudioPref = function () {
-        // En iOS/Safari (HLS nativo), no tocar v.audioTracks vía JS para no romper el menú nativo ni causar audio doble.
-        if (APPLE && !this.hls && this.v.canPlayType('application/vnd.apple.mpegurl')) return;
-        
         if (!this.hls && !(this.v.audioTracks && this.v.audioTracks.length > 1)) return;
         var list = this.audioList();
         if (list.length < 2) return;
         var pref = store('nfp_audio');
-        if (pref) for (var i = 0; i < list.length; i++) if ((list[i].lang + '|' + list[i].label) === pref) { if (!list[i].on) list[i].set(); return; }
-        // pistas nativas (Safari / HLS): la del idioma del navegador
-        var w = pickLang(list.map(function (t) { return { lang: t.lang, label: t.label, def: t.on }; }));
-        if (!list[w].on) list[w].set();
-    };
-
-    /* iPhone/Safari (HLS nativo): ya no forzamos nada vía JS. Safari gestiona sus pistas nativamente. */
-    NFPlayer.prototype.enforceSingleAudio = function (e) {
-        // Desactivado para no corromper el menú nativo de AVPlayer y evitar el audio doble (WebKit bug).
-        return;
+        var w = -1;
+        if (pref) {
+            for (var i = 0; i < list.length; i++) {
+                if ((list[i].lang + '|' + list[i].label) === pref) { w = i; break; }
+            }
+        }
+        if (w < 0) w = pickLang(list.map(function (t) { return { lang: t.lang, label: t.label, def: t.on }; }));
+        
+        // Ensure ONLY the selected track is enabled (fixes Safari native dual audio bug)
+        if (APPLE && !this.hls && this.v.audioTracks) {
+            for (var j = 0; j < this.v.audioTracks.length; j++) {
+                this.v.audioTracks[j].enabled = (j === w);
+            }
+        } else {
+            if (!list[w].on) list[w].set();
+        }
     };
 
     NFPlayer.prototype.subList = function () {
@@ -894,13 +889,8 @@
             this.toastMsg('Convirtiendo audio ' + cur.codec.toUpperCase() + ' para este navegador');
             this.startTc(this.curT(), this.prefAudioIndex(), j.video && !videoOk(j.video));
         } else if (j.audio && j.audio.length > 1) {
-            // Safari iOS/macOS a veces reproduce ambas pistas a la vez en HLS nativo. 
-            // Si es Apple HLS, forzamos el transcoder (tc) para el audio.
             var w = this.prefAudioIndex();
-            var needsTcForApple = (APPLE && !this.hls && this.v.canPlayType('application/vnd.apple.mpegurl'));
-            if ((w > 0 && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !this.hls) || needsTcForApple) {
-                this.startTc(this.curT(), needsTcForApple ? w : w, false);
-            }
+            if (w > 0 && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !this.hls) this.startTc(this.curT(), w, false);
         }
         if (this.pop && this.pop.classList.contains('open') && this.pop._kind === 'tracks') { this.pop.classList.remove('open'); this.menu('tracks'); }
     };
