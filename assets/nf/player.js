@@ -894,8 +894,13 @@
             this.toastMsg('Convirtiendo audio ' + cur.codec.toUpperCase() + ' para este navegador');
             this.startTc(this.curT(), this.prefAudioIndex(), j.video && !videoOk(j.video));
         } else if (j.audio && j.audio.length > 1) {
+            // Safari iOS/macOS a veces reproduce ambas pistas a la vez en HLS nativo. 
+            // Si es Apple HLS, forzamos el transcoder (tc) para el audio.
             var w = this.prefAudioIndex();
-            if (w > 0 && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !this.hls) this.startTc(this.curT(), w, false);
+            var needsTcForApple = (APPLE && !this.hls && this.v.canPlayType('application/vnd.apple.mpegurl'));
+            if ((w > 0 && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !this.hls) || needsTcForApple) {
+                this.startTc(this.curT(), needsTcForApple ? w : w, false);
+            }
         }
         if (this.pop && this.pop.classList.contains('open') && this.pop._kind === 'tracks') { this.pop.classList.remove('open'); this.menu('tracks'); }
     };
