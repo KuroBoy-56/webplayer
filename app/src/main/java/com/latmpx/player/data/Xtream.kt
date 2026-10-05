@@ -39,7 +39,8 @@ object Xtream {
             val status = ui.s("status")
             if (status.isNotEmpty() && !status.equals("Active", true)) { lastMsg = "Tu cuenta está $status"; continue }
             val exp = ui.s("exp_date").toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: "Ilimitado"
-            val created = ui.s("created_at").toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: "Desconocido"
+            val c = ui.s("created_at")
+            val created = c.toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: c.takeIf { it.isNotBlank() } ?: "Desconocido"
             val active = ui.s("active_cons").takeIf { it.isNotBlank() } ?: "0"
             val max = ui.s("max_connections").takeIf { it.isNotBlank() } ?: "0"
             return LoginResult.Ok(probe.copy(expires = exp, createdAt = created, activeCons = active, maxCons = max))

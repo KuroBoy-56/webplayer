@@ -73,7 +73,7 @@ fun CatalogScreen(state: AppState, kind: Kind) {
             cats.forEach { c ->
                 val list = all.filter { it.categoryId == c.id }.sortedByDescending { it.added }.take(20)
                 if (list.isNotEmpty()) {
-                    item(key = "c_") {
+                    item(key = "c_${c.id}") {
                         ShelfRow(c.name, list, sp, onViewAll = { state.push(Route.Browse(c.name, kind, setOf(c.id))) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) }
                     }
                 }
@@ -83,7 +83,7 @@ fun CatalogScreen(state: AppState, kind: Kind) {
     }
 }
 
-fun byCats(all: List<Item>, ids: Set<String>): List<Item> = all.filter { it.categoryId in ids }.sortedByDescending { it.added }
+fun byCats(all: List<Item>, ids: Set<String>): List<Item> = if (ids.isEmpty()) all.sortedByDescending { it.added } else all.filter { it.categoryId in ids }.sortedByDescending { it.added }
 
 @Composable
 fun Grid(state: AppState, items: List<Item>, heroItems: List<Item> = emptyList(), tv: Boolean = false) {

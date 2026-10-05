@@ -111,7 +111,7 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
         Column(Modifier.fillMaxWidth().background(Color(0xFF1A1A1A), RoundedCornerShape(8.dp)).padding(16.dp)) {
             Row2("Vencimiento", s.expires)
             HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
-            Row2("Conexiones", " / ")
+            Row2("Conexiones", "${s.activeCons} / ${s.maxCons}")
             HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
             Row2("Servidor DNS", s.dnsName)
             HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
