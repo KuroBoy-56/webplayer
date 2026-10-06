@@ -154,11 +154,6 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                         Text("Iniciar sesión", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
                         err?.let { ErrorBanner(it) }
                         
-                        Column(Modifier.fillMaxWidth().background(Color(0xFF222222), RoundedCornerShape(4.dp)).padding(12.dp)) {
-                            Text("Código MAC (Para activación remota)", color = NfGray2, fontSize = 12.sp)
-                            Text(deviceId, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
-                        }
-                        
                         OutlinedTextField(
                             value = user, onValueChange = { user = it }, label = { Text("Usuario") }, singleLine = true, colors = fieldColors,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth(),
@@ -170,20 +165,26 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                             keyboardActions = KeyboardActions(onDone = { }), modifier = Modifier.fillMaxWidth(),
                         )
                         
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            RedButton("Entrar", Modifier.weight(1f).focusRequester(firstFocus)) {
-                                act {
-                                    if (user.isBlank() || pass.isBlank()) { err = "Escribe tu usuario y contraseña"; return@act }
-                                    if (dns.isEmpty()) Panel.fetchDns().let { d -> d.value?.let { dns = it }; if (d.value == null) err = d.error }
-                                    val server = dns.getOrNull(dnsIdx) ?: dns.firstOrNull()
-                                    if (server == null) { if (err == null) err = "El panel no tiene servidores disponibles"; return@act }
-                                    status = "Activando…"
-                                    val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), server)
-                                    if (r.value == null) { err = r.error; return@act }
-                                    if (!resolve() && err == null) connect(Panel.Line("Servidor ${dnsIdx + 1}", Xtream.normalize(server), user.trim(), pass.trim()))
-                                }
+                        Column(Modifier.fillMaxWidth().background(Color(0x33FFFFFF), RoundedCornerShape(4.dp)).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Código MAC (Activación remota)", color = NfGray2, fontSize = 12.sp)
+                            Text(deviceId, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        }
+                        
+                        RedButton("Iniciar sesión", Modifier.fillMaxWidth().focusRequester(firstFocus)) {
+                            act {
+                                if (user.isBlank() || pass.isBlank()) { err = "Escribe tu usuario y contraseña"; return@act }
+                                if (dns.isEmpty()) Panel.fetchDns().let { d -> d.value?.let { dns = it }; if (d.value == null) err = d.error }
+                                val server = dns.getOrNull(dnsIdx) ?: dns.firstOrNull()
+                                if (server == null) { if (err == null) err = "El panel no tiene servidores disponibles"; return@act }
+                                status = "Activando…"
+                                val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), server)
+                                if (r.value == null) { err = r.error; return@act }
+                                if (!resolve() && err == null) connect(Panel.Line("Servidor ${dnsIdx + 1}", Xtream.normalize(server), user.trim(), pass.trim()))
                             }
-                            HeroButton(if (demoUsed) "Demo" else "Demo (24h)", Icons.Filled.CardGiftcard, false, Modifier.weight(1f)) {
+                        }
+                        
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            HeroButton(if (demoUsed) "Autodemo" else "Autodemo", Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
                                 if (demoUsed) { err = "La demo ya se usó"; return@HeroButton }
                                 act {
                                     status = "Creando demo…"
@@ -203,11 +204,14 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                                     }
                                 }
                             }
-                        }
-                        
-                        if (dns.size > 1 || true) {
-                            Spacer(Modifier.height(8.dp))
-                            DnsButton()
+                            
+                            if (dns.size > 1 || true) {
+                                Box(Modifier.weight(1f)) {
+                                    DnsButton()
+                                }
+                            } else {
+                                Spacer(Modifier.weight(1f))
+                            }
                         }
                     }
                     if (busy) {

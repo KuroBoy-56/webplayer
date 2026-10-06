@@ -79,13 +79,15 @@ fun HomeScreen(state: AppState) {
     val top10 = remember(movies) { movies.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10) }
     val genreRows = remember(movies, state.movieCats) {
         Platforms.genres.mapNotNull { (label, kw) ->
-            val ids = Platforms.categoriesFor(state.movieCats, kw)
+            val mcats = state.movieCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }
+            val ids = Platforms.categoriesFor(mcats, kw)
             val list = if (ids.isEmpty()) emptyList() else movies.filter { it.categoryId in ids }.sortedByDescending { it.added }.take(30)
             if (list.size >= 4) label to list else null
         }
     }
     val platforms = remember(state.movieCats, state.seriesCats) {
-        Platforms.list.filter { p -> Platforms.categoriesFor(state.movieCats + state.seriesCats, p.kw).isNotEmpty() }
+        val safeCats = (state.movieCats + state.seriesCats).filter { it.id !in com.latmpx.player.data.Store.blockedCats }
+        Platforms.list.filter { p -> Platforms.categoriesFor(safeCats, p.kw).isNotEmpty() }
     }
     val cont = remember(state.refresh, Cloud.rev, movies, series) { Cloud.progressList() }
     val favs = remember(state.refresh, Cloud.rev) { Cloud.favList().filter { it.kind != Kind.LIVE } }
@@ -149,7 +151,7 @@ fun HomeScreen(state: AppState) {
         genreRows.forEach { (label, list) ->
             item(key = "g_$label") {
                 val kw = com.latmpx.player.data.Platforms.genres.find { it.first == label }?.second ?: emptyList()
-                val ids = com.latmpx.player.data.Platforms.categoriesFor(state.movieCats, kw)
+                val ids = com.latmpx.player.data.Platforms.categoriesFor(state.movieCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }, kw)
                 ShelfRow(label, list, pad, onViewAll = { state.push(Route.Browse(label, com.latmpx.player.data.Kind.MOVIE, ids)) }) { _, it ->
                     PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ userFocusedHero = it }) else null)
                 }

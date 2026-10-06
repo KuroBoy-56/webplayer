@@ -18,6 +18,10 @@ import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,30 +53,90 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
     var pinDialog by remember { mutableStateOf(false) }
     var pinValue by remember { mutableStateOf("") }
     
+    var pinStep by remember { mutableStateOf(if (com.latmpx.player.data.Store.parentalPin.isEmpty()) "CREATE" else "ENTER") }
+    var tempPin by remember { mutableStateOf("") }
+    var blockedCatsState by remember { mutableStateOf(com.latmpx.player.data.Store.blockedCats) }
+    
     if (pinDialog) {
         androidx.compose.material3.AlertDialog(
-            onDismissRequest = { pinDialog = false },
-            title = { Text("Control Parental") },
+            onDismissRequest = { pinDialog = false; tempPin = "" },
+            containerColor = Color(0xFF222222),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+            title = { Text(when(pinStep) { "CREATE" -> "Crear PIN"; "ENTER" -> "Ingresar PIN"; "SETTINGS" -> "Control Parental"; "CATS" -> "Carpetas Bloqueadas"; else -> "" }) },
             text = {
-                Column {
-                    Text("Ingresa un PIN de 4 dígitos para bloquear contenido de adultos (deja en blanco para desactivar):")
-                    Spacer(Modifier.height(8.dp))
-                    androidx.compose.material3.OutlinedTextField(
-                        value = pinValue,
-                        onValueChange = { if (it.length <= 4) pinValue = it },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
-                    )
+                Column(Modifier.fillMaxWidth()) {
+                    when (pinStep) {
+                        "CREATE", "ENTER" -> {
+                            Text(if (pinStep == "CREATE") "Crea un PIN de 4 dígitos:" else "Ingresa tu PIN actual:")
+                            Spacer(Modifier.height(8.dp))
+                            androidx.compose.material3.OutlinedTextField(
+                                value = tempPin,
+                                onValueChange = { if (it.length <= 4) tempPin = it },
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NfRed, unfocusedBorderColor = NfGray2)
+                            )
+                        }
+                        "SETTINGS" -> {
+                            SettingsItem(Icons.Filled.Lock, "Cambiar PIN", "Actualizar el PIN actual") { pinStep = "CREATE"; tempPin = "" }
+                            HorizontalDivider(color = Color(0xFF333333))
+                            SettingsItem(Icons.Filled.OndemandVideo, "Carpetas Bloqueadas", "${blockedCatsState.size} carpetas ocultas") { pinStep = "CATS" }
+                            HorizontalDivider(color = Color(0xFF333333))
+                            SettingsItem(Icons.Filled.Lock, "Desactivar Control", "Elimina el PIN y las restricciones") { 
+                                com.latmpx.player.data.Store.parentalPin = ""
+                                com.latmpx.player.data.Store.blockedCats = emptySet()
+                                pinDialog = false
+                            }
+                        }
+                        "CATS" -> {
+                            val allCats = remember { (state.movieCats + state.seriesCats + state.liveCats).distinctBy { it.id }.sortedBy { it.name } }
+                            Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                                allCats.forEach { cat ->
+                                    Row(Modifier.fillMaxWidth().clickable {
+                                        val m = blockedCatsState.toMutableSet()
+                                        if (m.contains(cat.id)) m.remove(cat.id) else m.add(cat.id)
+                                        blockedCatsState = m
+                                    }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(checked = blockedCatsState.contains(cat.id), onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = NfRed))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(cat.name, color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    com.latmpx.player.data.Store.parentalPin = pinValue
-                    state.refresh++
-                    pinDialog = false
-                }) { Text("Guardar") }
+                if (pinStep == "CREATE" || pinStep == "ENTER") {
+                    androidx.compose.material3.TextButton(onClick = {
+                        if (pinStep == "CREATE" && tempPin.length == 4) {
+                            com.latmpx.player.data.Store.parentalPin = tempPin
+                            tempPin = ""
+                            pinStep = "SETTINGS"
+                        } else if (pinStep == "ENTER" && tempPin == com.latmpx.player.data.Store.parentalPin) {
+                            tempPin = ""
+                            pinStep = "SETTINGS"
+                        }
+                    }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text("Aceptar") }
+                } else if (pinStep == "CATS") {
+                    androidx.compose.material3.TextButton(onClick = {
+                        com.latmpx.player.data.Store.blockedCats = blockedCatsState
+                        pinStep = "SETTINGS"
+                        state.refresh++
+                    }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text("Guardar") }
+                } else {
+                    androidx.compose.material3.TextButton(onClick = { pinDialog = false }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text("Cerrar") }
+                }
             },
             dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { pinDialog = false }) { Text("Cancelar") }
+                if (pinStep != "SETTINGS") {
+                    androidx.compose.material3.TextButton(onClick = { 
+                        if (pinStep == "CATS") { pinStep = "SETTINGS"; blockedCatsState = com.latmpx.player.data.Store.blockedCats }
+                        else pinDialog = false 
+                    }, colors = ButtonDefaults.textButtonColors(contentColor = NfGray2)) { Text("Cancelar") }
+                }
             }
         )
     }
@@ -127,8 +191,8 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
                 pinDialog = true
             }
             HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
-            SettingsItem(Icons.Filled.OndemandVideo, "Formato de Streaming", if (streamFormat == "ts") "MPEG-TS (.ts)" else "HLS (.m3u8)") {
-                streamFormat = if (streamFormat == "ts") "m3u8" else "ts"
+            SettingsItem(Icons.Filled.OndemandVideo, "Formato de Streaming", when(streamFormat) { "ts" -> "MPEG-TS (.ts)"; "auto" -> "Automático"; else -> "HLS (.m3u8)" }) {
+                streamFormat = when(streamFormat) { "m3u8" -> "ts"; "ts" -> "auto"; else -> "m3u8" }
                 com.latmpx.player.data.Store.streamFormat = streamFormat
             }
             HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))

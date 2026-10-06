@@ -185,12 +185,15 @@ object Xtream {
     fun movieUrl(s: Session, id: Int, ext: String) = "${s.base}/movie/${enc(s.user)}/${enc(s.pass)}/$id.${ext.ifEmpty { "mp4" }}"
     fun episodeUrl(s: Session, id: Int, ext: String) = "${s.base}/series/${enc(s.user)}/${enc(s.pass)}/$id.${ext.ifEmpty { "mp4" }}"
 
-    /** canales: primero HLS (m3u8) y si el servidor no lo ofrece, MPEG-TS */
-    fun liveUrls(s: Session, id: Int) = listOf(
-        "${s.base}/live/${enc(s.user)}/${enc(s.pass)}/$id.m3u8",
-        "${s.base}/live/${enc(s.user)}/${enc(s.pass)}/$id.ts",
-        "${s.base}/${enc(s.user)}/${enc(s.pass)}/$id",
-    )
+    /** canales: primero HLS (m3u8) y si el servidor no lo ofrece, MPEG-TS (o al revés según el ajuste) */
+    fun liveUrls(s: Session, id: Int): List<String> {
+        val base = "${s.base}/live/${enc(s.user)}/${enc(s.pass)}/$id"
+        return when (Store.streamFormat) {
+            "ts" -> listOf("$base.ts", "$base.m3u8", base)
+            "m3u8" -> listOf("$base.m3u8", "$base.ts", base)
+            else -> listOf("$base.m3u8", "$base.ts", base)
+        }
+    }
 
     /** Precarga en paralelo lo necesario para el inicio. */
     suspend fun warmUp(s: Session) = coroutineScope {

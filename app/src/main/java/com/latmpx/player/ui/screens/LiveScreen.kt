@@ -56,7 +56,7 @@ fun LiveScreen(state: AppState) {
     var favTick by remember { mutableIntStateOf(0) }
     val all = channels
     if (all == null) { Loading("Cargando canales…"); return }
-    val cats = remember(state.liveCats) { listOf(FAVS to "★ Favoritos", ALL to "Todos") + state.liveCats.map { it.id to it.name } }
+    val cats = remember(state.liveCats) { listOf(FAVS to "★ Favoritos", ALL to "Todos") + state.liveCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }.map { it.id to it.name } }
     
     var searchQuery by remember { mutableStateOf("") }
     var dropdownExpanded by remember { mutableStateOf(false) }

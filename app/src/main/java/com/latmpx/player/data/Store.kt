@@ -40,6 +40,10 @@ object Store {
         get() = p.getString("parental_pin", "") ?: ""
         set(v) = p.edit().putString("parental_pin", v).apply()
 
+    var blockedCats: Set<String>
+        get() = p.getStringSet("blocked_cats", emptySet()) ?: emptySet()
+        set(v) = p.edit().putStringSet("blocked_cats", v).apply()
+
     /* ---------- identificador de respaldo para equipos sin Android ID ---------- */
     fun fallbackDeviceId(): String {
         p.getString("device_id", null)?.takeIf { it.isNotEmpty() }?.let { return it }

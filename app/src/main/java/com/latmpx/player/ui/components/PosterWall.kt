@@ -44,8 +44,8 @@ fun PosterWall(posters: List<String>, columns: Int, modifier: Modifier = Modifie
             val anim = rememberInfiniteTransition(label = "wall")
             val p by anim.animateFloat(0f, 1f, infiniteRepeatable(tween(120_000, easing = LinearEasing), RepeatMode.Restart), label = "wallY")
             var h by remember { mutableIntStateOf(0) }
-            // dos copias de la lista: al llegar a la mitad se vuelve al inicio sin que se note
-            val rows = remember(posters, columns) { (posters + posters).chunked(columns) }
+            val safePosters = remember(posters, columns) { posters.take(posters.size - (posters.size % columns)) }
+            val rows = remember(safePosters, columns) { (safePosters + safePosters).chunked(columns) }
             Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = -8f; scaleX = 1.3f; scaleY = 1.3f }) {
                 Column(
                     Modifier.fillMaxWidth().wrapContentHeight(align = Alignment.Top, unbounded = true)
