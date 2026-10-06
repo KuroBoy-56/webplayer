@@ -52,6 +52,7 @@ import com.latmpx.player.data.Item
 import com.latmpx.player.data.Kind
 import com.latmpx.player.data.Cloud
 import com.latmpx.player.data.Xtream
+import com.latmpx.player.data.Tmdb
 import com.latmpx.player.player.Play
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.Route
@@ -71,6 +72,15 @@ fun DetailScreen(state: AppState, media: Item) {
     val tv = LocalIsTv.current
     val d by produceState<Details?>(null, media.key) {
         value = if (media.kind == Kind.SERIES) Xtream.seriesDetails(s, media) else Xtream.movieDetails(s, media)
+    }
+    val tmdb by produceState<Tmdb.Details?>(null, d) {
+        val det = d ?: return@produceState
+        value = Tmdb.getDetails(
+            type = if (media.kind == Kind.SERIES) "tv" else "movie",
+            title = media.name,
+            year = media.year,
+            tmdbId = det.tmdbId
+        )
     }
     var fav by remember(media.key, Cloud.rev) { mutableStateOf(Cloud.isFav(media.key)) }
     val progress = remember(state.refresh, Cloud.rev, media.key) { Cloud.progress(media.key) }
@@ -99,14 +109,14 @@ fun DetailScreen(state: AppState, media: Item) {
     LazyColumn(Modifier.fillMaxSize().background(NfBg)) {
         item {
             Box(Modifier.fillMaxWidth().height(if (tv) 300.dp else 260.dp)) {
-                AsyncImage(model = det?.backdrop?.ifEmpty { null } ?: media.backdrop.ifEmpty { media.poster }, contentDescription = null,
+                AsyncImage(model = tmdb?.backdrop?.ifEmpty { null } ?: det?.backdrop?.ifEmpty { null } ?: media.backdrop.ifEmpty { media.poster }, contentDescription = null,
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x33000000), Color(0x99141414), NfBg))))
             }
         }
         item {
             Row(Modifier.padding(horizontal = sidePad()).padding(top = 0.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Poster(media.poster, media.name, Modifier.width(if (tv) 150.dp else 110.dp).aspectRatio(2f / 3f).background(Color.Black, RoundedCornerShape(6.dp)))
+                Poster(tmdb?.poster?.ifEmpty { null } ?: media.poster, media.name, Modifier.width(if (tv) 150.dp else 110.dp).aspectRatio(2f / 3f).background(Color.Black, RoundedCornerShape(6.dp)))
                 Column(Modifier.weight(1f)) {
                     Text(media.name, color = Color.White, fontSize = if (tv) 30.sp else 22.sp, fontWeight = FontWeight.Black)
                     val meta = listOfNotNull(
@@ -134,13 +144,30 @@ fun DetailScreen(state: AppState, media: Item) {
         item {
             Column(Modifier.padding(horizontal = sidePad(), vertical = 14.dp)) {
                 if (det == null) Text("Cargando información…", color = NfGray2)
-                val plot = det?.plot?.ifBlank { null } ?: media.plot
+                val plot = tmdb?.overview?.ifBlank { null } ?: det?.plot?.ifBlank { null } ?: media.plot
                 if (plot.isNotBlank()) Text(plot, color = Color(0xFFDDDDDD), fontSize = 15.sp, lineHeight = 21.sp)
                 det?.director?.takeIf { it.isNotBlank() }?.let { Text("Dirección: $it", color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp)) }
             }
         }
         
-        if (det?.cast?.isNotBlank() == true) {
+        if (tmdb?.cast?.isNotEmpty() == true) {
+            item {
+                Text("Elenco", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad(), vertical = 8.dp))
+                LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(tmdb!!.cast) { actor ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp)) {
+                            val url = actor.profile.ifEmpty { "https://ui-avatars.com/api/?name=${java.net.URLEncoder.encode(actor.name, "UTF-8")}&background=333&color=fff" }
+                            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(60.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFF333333)))
+                            Text(actor.name, color = Color.White, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                            if (actor.character.isNotEmpty()) {
+                                Text(actor.character, color = NfGray2, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        } else if (det?.cast?.isNotBlank() == true) {
             item {
                 Text("Elenco", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad(), vertical = 8.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

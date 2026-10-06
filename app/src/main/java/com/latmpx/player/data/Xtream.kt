@@ -113,6 +113,7 @@ object Xtream {
             duration = info?.s("duration").orEmpty(),
             backdrop = info?.optJSONArray("backdrop_path")?.optString(0).orEmpty().ifEmpty { item.backdrop },
             trailer = info?.s("youtube_trailer").orEmpty(),
+            tmdbId = info?.s("tmdb_id").orEmpty()
         )
     }
 
@@ -157,6 +158,7 @@ object Xtream {
             duration = info?.s("episode_run_time").orEmpty(),
             backdrop = info?.optJSONArray("backdrop_path")?.optString(0).orEmpty().ifEmpty { item.backdrop },
             trailer = info?.s("youtube_trailer").orEmpty(),
+            tmdbId = info?.s("tmdb_id").orEmpty(),
             seasons = seasons,
         )
     }

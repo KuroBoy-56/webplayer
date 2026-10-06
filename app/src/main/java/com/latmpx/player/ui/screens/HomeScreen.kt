@@ -13,6 +13,10 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.border
 import androidx.compose.material3.TextButton
 import com.latmpx.player.ui.Tab
 
@@ -27,6 +31,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -97,23 +104,43 @@ fun HomeScreen(state: AppState) {
     var showProfileDialog by remember { mutableStateOf(false) }
 
     if (showProfileDialog) {
-        AlertDialog(
-            onDismissRequest = { showProfileDialog = false },
-            title = { Text("Perfil", color = Color.White) },
-            text = {
+        Dialog(onDismissRequest = { showProfileDialog = false }) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Brush.verticalGradient(listOf(Color(0xE6141414), Color(0xF2000000))), RoundedCornerShape(16.dp))
+                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp))
+                    .padding(24.dp)
+            ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Usuario: " + (state.session?.user ?: ""), color = Color.White)
-                    Text("Servidor: " + (state.session?.dnsName ?: ""), color = NfGray2)
-                    Text("Mi cuenta", color = Color.White, modifier = Modifier.clickable { showProfileDialog = false; state.tab = Tab.ACCOUNT })
-                    Text("Ajustes", color = Color.White, modifier = Modifier.clickable { showProfileDialog = false })
-                    Text("Deportes", color = Color.White, modifier = Modifier.clickable { showProfileDialog = false; state.tab = Tab.SPORTS })
+                    Text("Perfil", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(state.session?.user ?: "", color = Color.White, fontSize = 16.sp)
+                        Text(state.session?.dnsName ?: "", color = NfGray2, fontSize = 13.sp)
+                    }
+                    HorizontalDivider(color = Color(0x33FFFFFF))
+                    Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.ACCOUNT }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Text("Mi cuenta", color = Color.White, fontSize = 16.sp)
+                    }
+                    Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.ACCOUNT }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Settings, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Text("Ajustes", color = Color.White, fontSize = 16.sp)
+                    }
+                    Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.SPORTS }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.SportsSoccer, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Text("Deportes", color = Color.White, fontSize = 16.sp)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = { showProfileDialog = false }, modifier = Modifier.align(Alignment.End)) { 
+                        Text("Cerrar", color = NfRed) 
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showProfileDialog = false }) { Text("Cerrar", color = NfRed) }
-            },
-            containerColor = Color(0xFF222222)
-        )
+            }
+        }
     }
 
     Box(Modifier.fillMaxSize()) {

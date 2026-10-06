@@ -43,6 +43,7 @@ data class Details(
     val duration: String,
     val backdrop: String,
     val trailer: String,
+    val tmdbId: String = "",
     val seasons: Map<Int, List<Episode>> = emptyMap(),
 )
 
