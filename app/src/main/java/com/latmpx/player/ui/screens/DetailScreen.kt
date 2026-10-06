@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -125,13 +126,22 @@ fun DetailScreen(state: AppState, media: Item) {
                     ).joinToString("  ·  ")
                     if (meta.isNotEmpty()) Text(meta, color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
                     Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
                         val label = when {
                             media.kind == Kind.MOVIE && progress != null -> "Continuar"
                             lastEp != null -> lastEpLabel(seasons, lastEp.key)
                             else -> "Reproducir"
                         }
                         HeroButton(label, Icons.Filled.PlayArrow, true, Modifier.focusRequester(playFocus)) { play() }
+                        tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { trailerId ->
+                            HeroButton("Tráiler", Icons.Filled.PlayArrow, false) {
+                                try {
+                                    ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("vnd.youtube:" + trailerId)))
+                                } catch (e: Exception) {
+                                    ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=" + trailerId)))
+                                }
+                            }
+                        }
                         HeroButton(if (fav) "En mi lista" else "Mi lista", if (fav) Icons.Filled.Check else Icons.Filled.Add, false) { fav = Cloud.toggleFav(media) }
                     }
                     if (media.kind == Kind.MOVIE && progress != null && progress.duration > 0) {

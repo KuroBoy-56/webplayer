@@ -15,7 +15,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.ArrowForwardIos
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.Checkbox
@@ -79,9 +79,9 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
                         }
                         "SETTINGS" -> {
                             SettingsItem(Icons.Filled.Lock, "Cambiar PIN", "Actualizar el PIN actual") { pinStep = "CREATE"; tempPin = "" }
-                            HorizontalDivider(color = Color(0xFF333333))
+                            Divider(color = Color(0xFF333333))
                             SettingsItem(Icons.Filled.OndemandVideo, "Carpetas Bloqueadas", "${blockedCatsState.size} carpetas ocultas") { pinStep = "CATS" }
-                            HorizontalDivider(color = Color(0xFF333333))
+                            Divider(color = Color(0xFF333333))
                             SettingsItem(Icons.Filled.Lock, "Desactivar Control", "Elimina el PIN y las restricciones") { 
                                 com.latmpx.player.data.Store.parentalPin = ""
                                 com.latmpx.player.data.Store.blockedCats = emptySet()
@@ -174,11 +174,11 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
         Text("Detalles de la cuenta", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
         Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2A), Color(0xFF1A1A1A))), RoundedCornerShape(12.dp)).border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp)).padding(16.dp)) {
             Row2("Vencimiento", s.expires)
-            HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
+            Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
             Row2("Conexiones", "${s.activeCons} / ${s.maxCons}")
-            HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
+            Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
             Row2("Servidor DNS", s.dnsName)
-            HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
+            Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
             Row2("Miembro desde", s.createdAt)
         }
 
@@ -190,28 +190,28 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
                 pinValue = com.latmpx.player.data.Store.parentalPin
                 pinDialog = true
             }
-            HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+            Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             SettingsItem(Icons.Filled.OndemandVideo, "Formato de Streaming", when(streamFormat) { "ts" -> "MPEG-TS (.ts)"; "auto" -> "Automático"; else -> "HLS (.m3u8)" }) {
                 streamFormat = when(streamFormat) { "m3u8" -> "ts"; "ts" -> "auto"; else -> "m3u8" }
                 com.latmpx.player.data.Store.streamFormat = streamFormat
             }
-            HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+            Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             SettingsItem(Icons.Filled.PlayCircle, "Reproductor", if (extPlayer) "Externo" else "Interno (ExoPlayer)") {
                 extPlayer = !extPlayer
                 com.latmpx.player.data.Store.externalPlayer = extPlayer
             }
-            HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+            Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             
             Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 DnsButton()
             }
             
-            HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+            Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Versión", color = NfGray2, fontSize = 15.sp)
                 Text(BuildConfig.VERSION_NAME, color = Color.White, fontSize = 15.sp)
             }
-            HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+            Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Dirección MAC", color = NfGray2, fontSize = 15.sp)
                 Text(Device.id(LocalContext.current), color = Color.White, fontSize = 15.sp)
