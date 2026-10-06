@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -32,6 +33,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -52,6 +54,7 @@ import com.latmpx.player.data.Cloud
 import com.latmpx.player.data.Xtream
 import com.latmpx.player.player.Play
 import com.latmpx.player.ui.AppState
+import com.latmpx.player.ui.Route
 import com.latmpx.player.ui.components.Chip
 import com.latmpx.player.ui.components.FocusBox
 import com.latmpx.player.ui.components.LocalIsTv
@@ -174,7 +177,7 @@ fun DetailScreen(state: AppState, media: Item) {
             }
             if (similar.isNotEmpty()) {
                 Spacer(Modifier.height(24.dp))
-                Text("Sugerencias", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad(), bottom = 12.dp))
+                Text("Sugerencias", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad()).padding(bottom = 12.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(similar) { it ->
                         PosterCard(it, if (tv) 150.dp else 110.dp, onClick = { state.push(Route.Detail(it)) })
