@@ -91,7 +91,7 @@ if (!function_exists('wp_nav_cls')) {
     </div>
 </header>
 
-<?php if (!in_array($wp_script, ['movie_description', 'seriesvideo'], true)): ?>
+<?php if (!in_array($wp_script, ['movie_description', 'series', 'seriesvideo'], true)): ?>
 <nav class="nf-mobile-pills" id="nfPills">
     <a href="seriesondemand.php"<?php echo wp_nav_cls('series'); ?>>Series</a>
     <a href="moviesondemand.php"<?php echo wp_nav_cls('movies'); ?>>Películas</a>
