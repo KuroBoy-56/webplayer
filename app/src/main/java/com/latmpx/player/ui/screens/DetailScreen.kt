@@ -56,6 +56,7 @@ import com.latmpx.player.ui.components.Chip
 import com.latmpx.player.ui.components.FocusBox
 import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.components.Poster
+import com.latmpx.player.ui.components.PosterCard
 import com.latmpx.player.ui.theme.NfBg
 import com.latmpx.player.ui.theme.NfGray2
 import com.latmpx.player.ui.theme.NfRed
@@ -132,8 +133,24 @@ fun DetailScreen(state: AppState, media: Item) {
                 if (det == null) Text("Cargando información…", color = NfGray2)
                 val plot = det?.plot?.ifBlank { null } ?: media.plot
                 if (plot.isNotBlank()) Text(plot, color = Color(0xFFDDDDDD), fontSize = 15.sp, lineHeight = 21.sp)
-                det?.cast?.takeIf { it.isNotBlank() }?.let { Text("Elenco: $it", color = NfGray2, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp)) }
-                det?.director?.takeIf { it.isNotBlank() }?.let { Text("Dirección: $it", color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)) }
+                det?.director?.takeIf { it.isNotBlank() }?.let { Text("Dirección: $it", color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp)) }
+            }
+        }
+        
+        if (det?.cast?.isNotBlank() == true) {
+            item {
+                Text("Elenco", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad(), vertical = 8.dp))
+                LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val actors = det.cast.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                    items(actors) { actor ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp)) {
+                            val url = "https://ui-avatars.com/api/?name=${java.net.URLEncoder.encode(actor, "UTF-8")}&background=333&color=fff"
+                            AsyncImage(model = url, contentDescription = null, modifier = Modifier.size(60.dp).clip(androidx.compose.foundation.shape.CircleShape))
+                            Text(actor, color = NfGray2, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                        }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
             }
         }
         if (media.kind == Kind.SERIES && seasons.isNotEmpty()) {
@@ -147,6 +164,21 @@ fun DetailScreen(state: AppState, media: Item) {
             itemsIndexed(eps, key = { _, e -> e.id }) { _, e ->
                 EpisodeRow(e, media, Cloud.progress("series:${media.id}:${e.id}")?.let { if (it.duration > 0) it.position.toFloat() / it.duration else 0f } ?: 0f) {
                     Play.episode(ctx, media, all, all.indexOf(e).coerceAtLeast(0))
+                }
+            }
+        }
+        item {
+            val all = if (media.kind == Kind.MOVIE) state.movies else state.series
+            val similar = remember(all, media.categoryId, media.id) {
+                all.filter { it.categoryId == media.categoryId && it.id != media.id }.shuffled().take(24)
+            }
+            if (similar.isNotEmpty()) {
+                Spacer(Modifier.height(24.dp))
+                Text("Sugerencias", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad(), bottom = 12.dp))
+                LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(similar) { it ->
+                        PosterCard(it, if (tv) 150.dp else 110.dp, onClick = { state.push(Route.Detail(it)) })
+                    }
                 }
             }
         }
