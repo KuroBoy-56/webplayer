@@ -176,7 +176,7 @@ $remember = isset($_COOKIE['username']) ? (string)$_COOKIE['username'] : '';
 <body class="nf-login-page">
     <div class="nf-login-wall" aria-hidden="true">
         <div class="nf-login-wall-inner">
-            <?php for ($rep = 0; $rep < 2; $rep++) foreach ($movies as $movie): ?>
+            <?php for ($rep = 0; $rep < 4; $rep++) foreach ($movies as $movie): ?>
                 <img src="https://image.tmdb.org/t/p/w342<?php echo e($movie['poster_path']); ?>" alt="" loading="lazy" decoding="async">
             <?php endforeach; ?>
         </div>
