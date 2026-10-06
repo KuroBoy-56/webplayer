@@ -675,7 +675,12 @@
         } else if (this.info && this.info.audio && this.info.audio.length && this._media0 && (isIos || !(this.v.audioTracks && this.v.audioTracks.length > 1))) {
             // Safari iOS/Mac native fallback bypassed. Usamos el panel (startTc) para transcodificar.
             var cur = this.tc ? this.tc.a : -1;
-            out.push({ label: 'Automático (Nativo)', lang: 'auto', on: cur === -1, set: function () { if (cur !== -1 || self.tc) { self.tc = null; self.playNative(self._media0); } } });
+            if (!isIos) {
+                out.push({ label: 'Automático (Nativo)', lang: 'auto', on: cur === -1, set: function () { if (cur !== -1 || self.tc) { self.tc = null; self.playNative(self._media0); } } });
+            } else if (cur === -1) {
+                // En iOS forzamos transcodificación, por lo que el estado "Nativo" se mapea visualmente al primer track.
+                cur = 0;
+            }
             this.info.audio.forEach(function (t) {
                 out.push({ label: t.label, lang: t.lang, on: cur === t.i, set: function () { if (!self.o.media) self.o.media = self._media0; if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
             });
@@ -780,16 +785,37 @@
     };
     NFPlayer.prototype.closePop = function () { this.pop.classList.remove('open'); };
 
+    /* Pseudo-fullscreen para iPhone: el div ocupa toda la pantalla con CSS en vez de
+       entregar el video al reproductor nativo de iOS (que tiene su propio selector de
+       audio y causa el doble audio). En navegadores con Fullscreen API se usa la API normal. */
     NFPlayer.prototype.fullscreen = function () {
         var r = this.root, d = document;
+        // ¿Ya estamos en fullscreen real?
         if (d.fullscreenElement || d.webkitFullscreenElement) {
             (d.exitFullscreen || d.webkitExitFullscreen).call(d);
-        } else if (r.requestFullscreen) {
+            return;
+        }
+        // ¿Ya estamos en pseudo-fullscreen (iPhone)?
+        if (r.classList.contains('nfp-fakefs')) {
+            r.classList.remove('nfp-fakefs');
+            this.setIcon(this.bFull, 'full');
+            try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {}
+            return;
+        }
+        // Fullscreen API real (funciona en Chrome, Firefox, Safari Mac, Android)
+        if (r.requestFullscreen) {
             r.requestFullscreen().then(function () {
                 try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {}); } catch (e) {}
             }).catch(function () {});
-        } else if (r.webkitRequestFullscreen) r.webkitRequestFullscreen();
-        else if (this.v.webkitEnterFullscreen) this.v.webkitEnterFullscreen(); // iPhone
+        } else if (r.webkitRequestFullscreen) {
+            r.webkitRequestFullscreen();
+        } else {
+            // iPhone: NO usar webkitEnterFullscreen (abre el reproductor nativo con su propio audio).
+            // En su lugar, pseudo-fullscreen con CSS.
+            r.classList.add('nfp-fakefs');
+            this.setIcon(this.bFull, 'exitfull');
+            try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {}); } catch (e) {}
+        }
     };
 
     NFPlayer.prototype.pip = function () {
@@ -862,8 +888,10 @@
             self._probing = false;
             if (j && j.ok) self.info = j; else self._deepTried = true;
             if (direct) {
+                var isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
                 var a = self.info && self.info.audio && self.info.audio[0];
-                if (self.info && ((a && !canAudio(a.codec)) || self.prefAudioIndex() > 0)) self.startTc(t, self.prefAudioIndex(), self.info.video && !videoOk(self.info.video));
+                var multiAudio = self.info && self.info.audio && self.info.audio.length > 1;
+                if (self.info && ((a && !canAudio(a.codec)) || self.prefAudioIndex() > 0 || (isIos && multiAudio))) self.startTc(t, self.prefAudioIndex(), self.info.video && !videoOk(self.info.video));
                 else {
                     // se retoma la reproducción directa donde iba
                     self.o.resume = self.lastTime = t; self.resumed = false; self.idx--; self.next();
@@ -881,13 +909,16 @@
     NFPlayer.prototype.afterProbe = function () {
         var j = this.info;
         if (!j || this.tc || this.live) return;
+        var isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         var cur = j.audio && j.audio[0];
         if (cur && !canAudio(cur.codec) && !this.hls) {
             this.toastMsg('Convirtiendo audio ' + cur.codec.toUpperCase() + ' para este navegador');
             this.startTc(this.curT(), this.prefAudioIndex(), j.video && !videoOk(j.video));
         } else if (j.audio && j.audio.length > 1) {
             var w = this.prefAudioIndex();
-            if (w > 0 && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !this.hls) this.startTc(this.curT(), w, false);
+            // En iOS siempre forzamos la transcodificación (startTc) cuando hay audios duales,
+            // ignorando si el navegador nativo expone audioTracks.
+            if ((isIos || w > 0) && (isIos || !(this.v.audioTracks && this.v.audioTracks.length > 1)) && !this.hls) this.startTc(this.curT(), w, false);
         }
         if (this.pop && this.pop.classList.contains('open') && this.pop._kind === 'tracks') { this.pop.classList.remove('open'); this.menu('tracks'); }
     };

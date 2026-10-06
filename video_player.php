@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 include "session.php";
 include "config.php";
 
@@ -123,8 +123,8 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
     <meta name="referrer" content="no-referrer">
     <title><?php echo e($content_name ?: 'Reproductor'); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=6">
-    <link rel="stylesheet" href="assets/nf/player.css?v=5">
+    <link rel="stylesheet" href="assets/nf/app.css?v=7">
+    <link rel="stylesheet" href="assets/nf/player.css?v=6">
     <style>
         html, body { height: 100%; overflow: hidden; background: #000; }
         #player-container { position: fixed; inset: 0; }
@@ -136,7 +136,7 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
 <body>
     <div id="vlc-overlay" class="vlc-overlay">
         <h2>Abriendo VLC Player...</h2>
-        <p>Si el contenido no se abre automÃ¡ticamente, presiona el botÃ³n.</p>
+        <p>Si el contenido no se abre automáticamente, presiona el botón.</p>
         <a href="vlc://<?php echo e($raw_url); ?>" class="nf-btn nf-btn-red">Reproducir en VLC</a>
         <p style="margin-top:22px"><a href="<?php echo e($back_url); ?>" style="color:#aaa">Volver</a></p>
     </div>
@@ -144,7 +144,7 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
-    <script src="assets/nf/player.js?v=13" defer></script>
+    <script src="assets/nf/player.js?v=14" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
