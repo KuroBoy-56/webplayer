@@ -669,11 +669,13 @@
     /* ---------- audio / subtítulos / velocidad ---------- */
     NFPlayer.prototype.audioList = function () {
         var out = [], self = this;
+        var isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         if (this.hls && this.hls.audioTracks && this.hls.audioTracks.length) {
             this.hls.audioTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || ('Audio ' + (i + 1)), lang: t.lang || '', on: self.hls.audioTrack === i, set: function () { self.hls.audioTrack = i; } }); });
-        } else if (this.info && this.info.audio && this.info.audio.length && this._media0 && !(this.v.audioTracks && this.v.audioTracks.length > 1)) {
+        } else if (this.info && this.info.audio && this.info.audio.length && this._media0 && (isIos || !(this.v.audioTracks && this.v.audioTracks.length > 1))) {
+            // Safari iOS/Mac native fallback bypassed. Usamos el panel (startTc) para transcodificar.
             var cur = this.tc ? this.tc.a : -1;
-            out.push({ label: 'Automático', lang: 'auto', on: cur === -1, set: function () { if (cur !== -1 || self.tc) { self.tc = null; self.playNative(self._media0); } } });
+            out.push({ label: 'Automático (Nativo)', lang: 'auto', on: cur === -1, set: function () { if (cur !== -1 || self.tc) { self.tc = null; self.playNative(self._media0); } } });
             this.info.audio.forEach(function (t) {
                 out.push({ label: t.label, lang: t.lang, on: cur === t.i, set: function () { if (!self.o.media) self.o.media = self._media0; if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
             });
@@ -687,6 +689,7 @@
     };
 
     NFPlayer.prototype.applyAudioPref = function () {
+        var isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         if (!this.hls && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !(this.info && this.info.audio && this.info.audio.length)) return;
         var list = this.audioList();
         if (list.length < 2) return;
