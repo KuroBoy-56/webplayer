@@ -30,7 +30,7 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 
 ## Subir a la Amazon Appstore
 
-1. Descarga los `.vpkg` de **Releases › vega-latest** (hay uno por arquitectura: `armv7` y `aarch64`).
+1. Descarga los `.vpkg` de **Releases › vega-latest** (`latmpxvega_armv7.vpkg` y `latmpxvega_aarch64.vpkg`; el `x86_64` es solo para el simulador).
 2. En la [Amazon Developer Console](https://developer.amazon.com/apps-and-games/console/apps/list.html)
    crea una app nueva para **Fire TV (Vega OS)**.
 3. En *Archivos de la app* sube los `.vpkg`. El identificador del paquete es
@@ -47,7 +47,7 @@ Fire TV en modo desarrollador en la misma red:
 
 ```sh
 vega device connect <IP-del-Fire-TV>
-vega device install-app --packagePath LatMpx*_aarch64_release.vpkg   # o el armv7
+vega device install-app --packagePath latmpxvega_armv7.vpkg   # o latmpxvega_aarch64.vpkg
 vega device launch-app --appName com.latmpx.player.vega.main
 ```
 
