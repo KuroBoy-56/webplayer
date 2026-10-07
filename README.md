@@ -40,15 +40,38 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 
 Para cambiar el número de versión que ve la tienda, edita `version` en `manifest.toml` y en `package.json`.
 
+## Probar sin Fire TV: simulador de Vega en Linux
+
+Amazon trae un **Vega Virtual Device** (simulador de Fire TV) que corre en **Ubuntu 22.04 de 64 bits**
+(Intel/AMD). Sirve también un Ubuntu "portable" en USB con persistencia, siempre que el PC tenga la
+virtualización activada en la BIOS (Intel VT-x / AMD-V; con KVM va mucho más fluido).
+
+1. Instala el SDK con el simulador (sin cuenta):
+   ```sh
+   sudo apt install -y curl lz4 jq
+   curl -fsSL https://sdk-installer.vega.labcollab.net/get_vvm.sh | bash
+   source ~/vega/env        # o abre una terminal nueva
+   ```
+2. Descarga `latmpxvega_x86_64.vpkg` de **Releases › vega-latest** (el x86_64 es el del simulador).
+3. Arranca el simulador y abre la app:
+   ```sh
+   vega virtual-device start --timeout 120
+   vega run-app latmpxvega_x86_64.vpkg com.latmpx.player.vega.main -d VirtualDevice
+   ```
+   Con el teclado: flechas = cruceta, Enter = OK, Esc/Retroceso = Atrás.
+   Si la imagen falla, prueba `vega virtual-device start --no-gl-accel`.
+4. Para cerrarlo: `vega virtual-device stop`.
+
 ## Probar en un Fire TV con Vega OS
 
-Con el [SDK de Vega](https://developer.amazon.com/docs/vega/0.24/install-vega-sdk.html) en tu PC y el
-Fire TV en modo desarrollador en la misma red:
+Con el SDK en el PC y el Fire TV en la misma red:
 
 ```sh
-vega device connect <IP-del-Fire-TV>
-vega device install-app --packagePath latmpxvega_armv7.vpkg   # o latmpxvega_aarch64.vpkg
-vega device launch-app --appName com.latmpx.player.vega.main
+vega devmode login
+vega devmode enable-device --code <código de 6 dígitos que muestra la TV>
+vega device list
+vega device install-app --packagePath latmpxvega_armv7.vpkg
+vega device launch-app --appName com.latmpx.player.vega
 ```
 
 ## Compilar en tu PC
@@ -59,11 +82,15 @@ npm run typecheck
 npm run build:release     # necesita el SDK de Vega instalado
 ```
 
+Con `config/panel.key` en tu PC (ver [config/README.md](config/README.md)) la compilación local
+incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
+
 ## Límites conocidos
 
 - La TV en vivo usa MPEG-TS (`.ts`), que el reproductor de Vega abre directo. HLS (`.m3u8`)
   necesitaría integrar Shaka Player; no hace falta mientras el proveedor sirva `.ts`.
-- Autodemo y registrar el equipo usan `login.php` con la llave maestra, que no va en el
-  repositorio; esta versión no los trae.
+- Autodemo, registrar el equipo y la activación por código MAC usan `login.php` con la llave
+  maestra, que no va en el código: se agrega al compilar (ver [config/README.md](config/README.md)).
+  Sin llave esos botones no aparecen.
 - La app no se ha probado en un Fire TV real todavía: se compiló y se revisó el código,
   pero el contenedor de desarrollo no llega al panel ni tiene un equipo Vega.

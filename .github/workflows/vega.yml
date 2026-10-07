@@ -14,6 +14,8 @@ permissions:
   contents: write
 
 env:
+  # llave del panel para Autodemo y registro del equipo (opcional; ver config/README.md)
+  PANEL_KEY: ${{ secrets.PANEL_KEY }}
   # SDK de Vega fijado; si Amazon lo retira se prueba con la última versión
   VEGA_SDK_PINNED: '0.24.12112'
 
@@ -53,6 +55,11 @@ jobs:
 
       - name: Instalar paquetes
         run: npm ci --no-audit --no-fund
+
+      - name: Llave del panel
+        run: |
+          node tools/prepare-key.js | tee key.log
+          grep -q incluida key.log || echo "::notice::Compilado sin llave del panel: sin Autodemo ni registro del equipo (ver config/README.md)"
 
       - name: Revisar código (TypeScript)
         run: npm run typecheck

@@ -1,7 +1,8 @@
 // Panel LatMpx: servidores (dns.php), equipo (auth.php) y nube con token
 // (progress.php, epg.php, sports.php). Mismo contrato que la web, Android, Windows y Roku.
 import { decodePanelUrl, dnsDecode, mopeDecrypt, mopeEncrypt } from '../lib/crypto';
-import { http, HttpResult, json } from '../lib/http';
+import { hasMasterKey, panelDecrypt, panelEncrypt } from '../lib/aes';
+import { formBody, http, HttpResult, json } from '../lib/http';
 import { read, remove, write } from '../lib/storage';
 import { normalizeBase, str } from '../lib/util';
 
@@ -99,6 +100,13 @@ export async function panelDnsList(): Promise<Server[]> {
       // respuesta no válida: lista vacía
     }
   }
+  for (const u of await panelFetchDns()) {
+    const b = normalizeBase(u);
+    if (!seen.has(b)) {
+      seen.add(b);
+      out.push({ name: '', base: b });
+    }
+  }
   out.forEach((s, i) => {
     if (!s.name) s.name = 'Servidor ' + (i + 1);
   });
@@ -193,4 +201,64 @@ export async function cloud(file: string, method: 'GET' | 'POST', payload: Recor
 
 export function forgetCloud(): void {
   remove('cloud_token');
+}
+
+// ---------- login.php (con la llave maestra) ----------
+
+// POST a login.php con el JSON cifrado
+async function panelLogin(action: string, payload: Record<string, any>): Promise<HttpResult & { error?: string }> {
+  const data = panelEncrypt(JSON.stringify(payload));
+  if (!data) return { code: -1, body: '', ok: false, error: 'Esta versión no tiene la llave del panel.' };
+  const r = await panel('login.php', 'POST', formBody({ action, data }), 'application/x-www-form-urlencoded');
+  return r.code === 0 ? { ...r, error: 'No se pudo conectar con el panel.' } : r;
+}
+
+function panelError(r: HttpResult & { error?: string }, fallback: string): string {
+  if (r.error) return r.error;
+  const j = json(r);
+  const msg = j && typeof j === 'object' ? str(j.error) || str(j.message) : '';
+  if (msg === 'Server not configured') return 'El panel no está configurado';
+  if (msg === 'Decryption failed') return 'La llave de la app no coincide con la del panel';
+  return msg || fallback;
+}
+
+// línea activada para este equipo en el panel
+export async function panelCheckMac(deviceId: string) {
+  if (!hasMasterKey()) return null;
+  const j = json(await panelLogin('check_mac', { mac_address: deviceId }));
+  if (!j || j.exists !== true) return null;
+  return lineFromUrl('Servidor', str(j.url), str(j.username), str(j.password));
+}
+
+// registra el equipo (código MAC) con la cuenta en el panel
+export async function panelSubmit(deviceId: string, user: string, pass: string, dns: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await panelLogin('submit_url', { mac_address: deviceId, username: user, password: pass, url: dns });
+  const j = json(r);
+  if (r.ok && j && str(j.status) === 'ok') return { ok: true };
+  return { ok: false, error: panelError(r, 'No se pudo registrar el equipo') };
+}
+
+// demo de 24 horas, una por equipo
+export async function panelDemo(deviceId: string): Promise<{ ok: boolean; user?: string; pass?: string; error?: string; code: number }> {
+  const r = await panelLogin('auto_demo', { mac_address: deviceId });
+  const j = json(r);
+  if (r.ok && j && str(j.status) === 'ok' && str(j.username)) return { ok: true, user: str(j.username), pass: str(j.password), code: r.code };
+  let fb = 'No se pudo crear la demo';
+  if (r.code === 403) fb = 'Demo ya utilizada en este dispositivo o dispositivo ya registrado.';
+  if (r.code === 429) fb = 'Demasiadas demos desde esta conexión. Inténtalo mañana.';
+  return { ok: false, error: panelError(r, fb), code: r.code };
+}
+
+// DNS extra que solo da login.php
+export async function panelFetchDns(): Promise<string[]> {
+  if (!hasMasterKey()) return [];
+  const r = await panelLogin('fetch_dns', {});
+  if (!r.ok) return [];
+  const plain = panelDecrypt(r.body);
+  try {
+    const arr = plain ? JSON.parse(plain) : [];
+    return Array.isArray(arr) ? arr.map(str).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
 }

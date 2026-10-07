@@ -4,3 +4,5 @@ dist/
 generated/
 *.vpkg
 .DS_Store
+config/panel.key
+src/generated/

@@ -4,6 +4,8 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import PinDialog from '../components/PinDialog';
 import { Focusable } from '../components/ui';
 import { catalog } from '../data/catalog';
+import { panelSubmit } from '../api/panel';
+import { hasMasterKey } from '../lib/aes';
 import { pref, setPref } from '../lib/storage';
 import { dateText } from '../lib/util';
 import { useNav } from '../nav';
@@ -44,6 +46,7 @@ export default function Account() {
   const st = useAppState();
   const [, force] = useState(0);
   const [pin, setPin] = useState(false);
+  const [reg, setReg] = useState('');
   const s0 = st.session;
   const audio = pref('audio_lang', 'es');
   const subs = pref('subs_lang', 'off');
@@ -92,6 +95,16 @@ export default function Account() {
           }
         }}
       />
+      {hasMasterKey() && s0 ? (
+        <Setting
+          label="Registrar este equipo en el panel"
+          value={reg || 'Código ' + deviceId()}
+          onPress={() => {
+            setReg('Registrando…');
+            panelSubmit(deviceId(), s0.user, s0.pass, s0.base).then(r => setReg(r.ok ? 'Equipo registrado' : r.error || 'No se pudo registrar'));
+          }}
+        />
+      ) : null}
       <Setting
         label="Recargar catálogo"
         value="Actualizar películas, series y canales"

@@ -1,11 +1,12 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
-import { panelDnsList, panelPlaylists } from '../api/panel';
+import { panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit } from '../api/panel';
 import { loginAll } from '../api/xtream';
 import { Button, Logo } from '../components/ui';
 import { http, json } from '../lib/http';
-import { read } from '../lib/storage';
+import { hasMasterKey } from '../lib/aes';
+import { read, write } from '../lib/storage';
 import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
 import { deviceId, setSession } from '../state';
@@ -40,8 +41,13 @@ export default function Login() {
     panelPlaylists(dev).then(async r => {
       if (!alive) return;
       tmdbPosters().then(p => alive && setPosters(p));
-      if (!r.lines.length) return;
-      setAssigned(r.lines);
+      let lines = r.lines;
+      // con la llave: línea activada por código MAC en el panel
+      if (!lines.length) {
+        const ln = await panelCheckMac(dev);
+        if (ln) lines = [ln];
+      }
+      if (alive && lines.length) setAssigned(lines);
     });
     return () => {
       alive = false;
@@ -59,11 +65,33 @@ export default function Login() {
     const r = await loginAll(list, u.trim(), p.trim());
     setBusy('');
     if (r.session) {
+      // registra el código del equipo en el panel (igual que Android y Roku)
+      if (hasMasterKey()) panelSubmit(dev, r.session.user, r.session.pass, r.session.base).catch(() => {});
       setSession(r.session);
       nav.reset({ name: 'main' });
     } else {
       setError(r.error || 'No se pudo iniciar sesión');
     }
+  };
+
+  const demo = async () => {
+    if (read('demo_used') === '1') {
+      setError('La demo ya se usó en este equipo.');
+      return;
+    }
+    setError('');
+    setBusy('Creando tu demo de 24 horas…');
+    const d = await panelDemo(dev);
+    if (!d.ok) {
+      setBusy('');
+      if (d.code === 403) write('demo_used', '1');
+      setError(d.error || 'No se pudo crear la demo');
+      return;
+    }
+    write('demo_used', '1');
+    const pl = await panelPlaylists(dev);
+    const own = pl.lines.filter(l => l.user === d.user);
+    await enter(d.user!, d.pass!, own.length ? own.map(l => ({ name: l.name, base: l.base })) : undefined);
   };
 
   const enterAssigned = () => {
@@ -113,6 +141,7 @@ export default function Login() {
         {busy ? <Text style={s.busy}>{busy}</Text> : null}
         <View style={s.btns}>
           <Button label={busy ? 'Entrando…' : 'Ingresar'} primary onPress={() => !busy && enter(user, pass)} />
+          {hasMasterKey() ? <Button label="Autodemo" onPress={() => !busy && demo()} /> : null}
         </View>
         {assigned.length ? (
           <View style={s.btns}>

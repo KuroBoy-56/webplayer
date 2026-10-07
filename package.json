@@ -9,12 +9,19 @@
     "build:release": "react-native build-vega --build-type Release",
     "build:debug": "react-native build-vega --build-type Debug",
     "app:install": "vega device install-app --dir .",
-    "app:launch": "vega device launch-app"
+    "app:launch": "vega device launch-app",
+    "prepare:key": "node tools/prepare-key.js",
+    "pretypecheck": "node tools/prepare-key.js",
+    "prebuild:release": "node tools/prepare-key.js",
+    "prebuild:debug": "node tools/prepare-key.js",
+    "prebundle:check": "node tools/prepare-key.js"
   },
   "dependencies": {
     "@amazon-devices/react-native-async-storage__async-storage": "~2.1.0",
     "@amazon-devices/react-native-kepler": "~4.0.0",
     "@amazon-devices/react-native-w3cmedia": "~2.3.2",
+    "@noble/ciphers": "^1.3.0",
+    "@noble/hashes": "^1.8.0",
     "@react-native-async-storage/async-storage": "npm:@amazon-devices/react-native-async-storage__async-storage@~2.1.0",
     "react": "19.2.0",
     "react-native": "0.83.0"
