@@ -188,6 +188,9 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
         Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2A), Color(0xFF1A1A1A))), RoundedCornerShape(12.dp)).border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp)).padding(vertical = 8.dp)) {
             SettingsItem(Icons.Filled.Lock, "Control Parental", if (com.latmpx.player.data.Store.parentalPin.isEmpty()) "Desactivado" else "Activado") {
                 pinValue = com.latmpx.player.data.Store.parentalPin
+                // siempre se pide el PIN al abrir (antes se quedaba en el menú ya desbloqueado)
+                pinStep = if (com.latmpx.player.data.Store.parentalPin.isEmpty()) "CREATE" else "ENTER"
+                tempPin = ""
                 pinDialog = true
             }
             Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))

@@ -1,8 +1,8 @@
-# LatMpx para Android, Android TV y Google TV
+# LatMpx para celular y tablet Android (rama `android`)
 
 App nativa en Kotlin con la misma lógica y el mismo diseño que el reproductor web (rama `main`).
+La app para Android TV / Google TV / TV Box está en la rama `android-tv` (descarga en Releases > `apk-tv-latest`).
 
-- **TV:** menú lateral, foco visible para el control remoto (borde blanco y zoom), guía de canales al costado, arriba/abajo o CH+/CH- para cambiar de canal.
 - **Teléfono:** pantalla vertical con barra inferior como la app de Netflix. El reproductor gira a horizontal.
 - **Reproductor:** ExoPlayer (Media3) con decodificador FFmpeg. Reproduce Dolby AC3/E-AC3, DTS, TrueHD, MKV, AVI, TS, HLS y más directo en el equipo, sin convertir en el hosting.
   - Selector de audio y subtítulos.
