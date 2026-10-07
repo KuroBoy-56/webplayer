@@ -70,7 +70,13 @@ fun TvBillboard(state: AppState, items: List<Item>) {
     var index by remember(items) { mutableIntStateOf(0) }
     var holding by remember { mutableStateOf(false) }
     val play = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { play.requestFocus() } }
+    LaunchedEffect(Unit) {
+        // el foco entra a la cartelera una sola vez por visita a la sección
+        if (state.billboardFocusedTab != state.tab) {
+            state.billboardFocusedTab = state.tab
+            runCatching { play.requestFocus() }
+        }
+    }
     LaunchedEffect(items, holding) {
         while (!holding && items.size > 1) {
             delay(9000)

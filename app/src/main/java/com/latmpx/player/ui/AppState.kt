@@ -31,6 +31,8 @@ class AppState {
     var loading by mutableStateOf(false)
     /** cambia cada vez que se vuelve del reproductor, para refrescar "Continuar viendo" */
     var refresh by mutableStateOf(0)
+    /** TV: sección cuya cartelera ya tomó el foco (así no lo roba al volver a verse al hacer scroll) */
+    var billboardFocusedTab: Tab? = null
 
     fun push(r: Route) { stack.add(r) }
     fun pop(): Boolean { if (stack.isEmpty()) return false; stack.removeAt(stack.lastIndex); return true }

@@ -104,7 +104,7 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
         LogoHeader(height = 30.dp)
         Spacer(Modifier.width(28.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            tvTabs.forEach { t -> TopTab(t.label, state.tab == t, Modifier.focusRequester(tabFocus.getValue(t))) { state.tab = t } }
+            tvTabs.forEach { t -> TopTab(t.label, state.tab == t, Modifier.focusRequester(tabFocus.getValue(t))) { state.billboardFocusedTab = null; state.tab = t } }
         }
         Spacer(Modifier.weight(1f))
         FocusBox(
