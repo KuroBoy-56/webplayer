@@ -45,6 +45,9 @@ $sources = [];
 foreach ($exts as $x) {
     $sources[] = ['url' => wp_stream_url($kind, $id, $x), 'engine' => $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native'), 'ext' => $x];
 }
+// el navegador volvió a forzar https (Safari en iPhone lo hace cuando la web tiene SSL): un video http
+// se bloquearía, así que se usan las mismas fuentes https que la página normal (https directo o relay de Cloudflare)
+if (wp_is_https()) $sources = wp_play_sources($kind, $id, $exts);
 $raw_url = wp_stream_url($kind, $id, (string)($d['vlcExt'] ?? $ext));
 $title = (string)($d['title'] ?? '');
 ?>
@@ -69,7 +72,7 @@ $title = (string)($d['title'] ?? '');
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=16" defer></script>
+    <script src="assets/nf/player.js?v=17" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

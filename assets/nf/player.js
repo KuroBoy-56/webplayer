@@ -666,7 +666,7 @@
         h += '</div>';
         // detalle técnico de cada intento (para soporte) y enlace al diagnóstico
         if (this._whys && this._whys.length) h += '<p class="nfp-why">' + this._whys.map(function (w) { return w.replace(/[<>&]/g, ''); }).join(' · ')
-            + (o.diagUrl ? ' · <a href="' + o.diagUrl + '">Diagnóstico</a>' : '') + (location.protocol === 'https:' ? ' · https' : ' · http') + '</p>';
+            + (o.diagUrl ? ' · <a href="' + o.diagUrl + '">Diagnóstico</a>' : '') + (location.protocol === 'https:' ? ' · https' : ' · http') + (/play\.php/.test(location.pathname) ? ' · p' : '') + '</p>';
         this.msg.innerHTML = h;
         this.msg.classList.add('show');
         this.msg.querySelector('[data-act=retry]').addEventListener('click', function () { self.hideMsg(); self._rescued = self._fullTried = self._safeTried = false; if (self._media0) self.o.media = self._media0; self.idx = -1; self.next(); });
