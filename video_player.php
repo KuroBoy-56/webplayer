@@ -194,10 +194,13 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
             return;
         }
 
-        var lastSave = 0, lastSent = -1;
+        var openedAt = Date.now(), resumeAt = cfg.resume || 0, lastSave = 0, lastSent = -1;
         function save(v, beacon) {
             var cur = Math.floor(v.currentTime || 0), tot = Math.floor(isFinite(v.duration) ? v.duration : 0);
-            if (cur <= 0 || cur === lastSent) return;
+            if (cur < 10 || cur === lastSent) return;
+            // al abrir, el video arranca en 0 unos instantes antes de saltar al punto guardado (y al cambiar de motor se pausa):
+            // esos segundos iniciales no deben borrar el progreso que ya había
+            if (resumeAt > 60 && cur < resumeAt - 60 && Date.now() - openedAt < 120000) return;
             lastSent = cur;
             var fd = new FormData();
             fd.append('id', cfg.id);
@@ -206,7 +209,9 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
             fd.append('current_time', cur);
             fd.append('total_time', tot > 0 ? tot : 0);
             if (beacon && navigator.sendBeacon) { navigator.sendBeacon('save_progress.php', fd); return; }
-            fetch('save_progress.php', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true }).catch(function () {});
+            fetch('save_progress.php', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true })
+                .then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok) lastSent = -1, lastSave = 0; })
+                .catch(function () { lastSent = -1; lastSave = 0; }); // no se guardó: se reintenta en el siguiente aviso
         }
 
         cfg.onTime = function (v) {

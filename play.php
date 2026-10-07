@@ -95,10 +95,13 @@ $title = (string)($d['title'] ?? '');
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
 
         if (!cfg.live) {
-            var lastSave = 0, lastSent = -1, here = location.href;
+            var openedAt = Date.now(), resumeAt = cfg.resume || 0, lastSave = 0, lastSent = -1, here = location.href;
             var save = function (v, beacon) {
                 var cur = Math.floor(v.currentTime || 0), tot = Math.floor(isFinite(v.duration) ? v.duration : 0);
-                if (cur <= 0 || cur === lastSent) return;
+                if (cur < 10 || cur === lastSent) return;
+                // al abrir, el video arranca en 0 unos instantes antes de saltar al punto guardado (y al cambiar de motor se pausa):
+                // esos segundos iniciales no deben borrar el progreso que ya había
+                if (resumeAt > 60 && cur < resumeAt - 60 && Date.now() - openedAt < 120000) return;
                 lastSent = cur;
                 var fd = new FormData();
                 fd.append('id', cfg.id);
@@ -107,7 +110,9 @@ $title = (string)($d['title'] ?? '');
                 fd.append('current_time', cur);
                 fd.append('total_time', tot > 0 ? tot : 0);
                 if (beacon && navigator.sendBeacon) { navigator.sendBeacon(here, fd); return; }
-                fetch(here, { method: 'POST', body: fd, keepalive: true }).catch(function () {});
+                fetch(here, { method: 'POST', body: fd, keepalive: true })
+                    .then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok) lastSent = -1, lastSave = 0; })
+                    .catch(function () { lastSent = -1; lastSave = 0; });
             };
             cfg.onTime = function (v) { var now = Date.now(); if (now - lastSave > 10000) { lastSave = now; save(v); } };
             cfg.onPause = function (v) { save(v); };
