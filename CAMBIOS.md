@@ -254,3 +254,4 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - `media.php` (ffmpeg) vuelve para el contenido http: lista de pistas, audio Dolby/DTS convertido a AAC y formatos que el navegador no abre (MKV, etc.). Con https no se usa.
 - El relay de Cloudflare ya no hace falta: puedes borrar `includes/https_relay.php`.
 - Archivos nuevos: `proxy.php`, `media.php`, `includes/media_core.php`, `includes/doh.php`, `bin/`.
+- `instalar_ffmpeg.php`: abre esta página con tu sesión iniciada y toca "Descargar e instalar ffmpeg". El hosting descarga ffmpeg y ffprobe (versión estática 6.0 para Linux) directo a `bin/` y comprueba que funcionan. No hay que subir nada desde el celular. Después se puede borrar.
