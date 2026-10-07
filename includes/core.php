@@ -485,7 +485,7 @@ function wp_content_multi_audio($kind, $id, array $exts, $cacheOnly = false)
     $u = wp_tracks_target($kind, $id, $exts);
     if ($u === '') return false;
     $n = wp_audio_track_count($u, $cacheOnly);
-    if ($n < 0) return null;
+    if ($n <= 0) return $cacheOnly ? null : false; // 0 = no se pudo leer: sigue siendo desconocido
     return $n > 1;
 }
 

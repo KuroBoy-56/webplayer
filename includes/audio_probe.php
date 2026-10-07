@@ -84,7 +84,9 @@ function wp_audio_track_count($url, $cacheOnly = false)
     $ck = 'atracks2|' . md5((string)$url);
     if (isset($memo[$ck])) return $memo[$ck];
     $hit = wp_cache_get($ck, 2592000);
-    if (is_array($hit) && ($hit['n'] > 0 || time() - (int)$hit['t'] < 3600)) return $memo[$ck] = (int)$hit['n'];
+    if (is_array($hit) && $hit['n'] > 0) return $memo[$ck] = (int)$hit['n'];
+    // no se pudo leer hace poco: no se insiste en cada visita (2 min)
+    if (is_array($hit) && ($cacheOnly || time() - (int)$hit['t'] < 120)) return $cacheOnly ? 0 : $memo[$ck] = 0;
     if ($cacheOnly) return -1; // aún no se sabe (se averigua en segundo plano con tracks.php)
     $r = new WpRangeReader($url, 10);
     $head = $r->read(0, 16);

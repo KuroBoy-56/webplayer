@@ -93,6 +93,12 @@ if (in_array($ext, ['mkv', 'avi', 'mov', 'wmv', 'flv', 'mpg', 'mpeg', 'm4v', 'di
 if (!in_array('m3u8', $exts, true)) $exts[] = 'm3u8';
 $exts = array_values(array_unique($exts));
 
+/* iPhone: Safari no informa bien los audios de un MP4 (dice 0 o 1 y suenan todos a la vez), así que hay que
+   saberlo antes de abrir el video. Se cuenta una sola vez por contenido (luego queda en caché 30 días). */
+if (!wp_is_https() && preg_match('/iPhone|iPad|iPod|Macintosh/i', (string)($_SERVER['HTTP_USER_AGENT'] ?? ''))
+    && wp_content_multi_audio($kind, $id, $exts, true) === null) {
+    wp_content_multi_audio($kind, $id, $exts);
+}
 $sources = wp_play_sources($kind, $id, $exts);
 
 /* Motor multimedia del hosting (ffmpeg): solo si el contenido trae más de una pista de audio
@@ -163,7 +169,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=24" defer></script>
+    <script src="assets/nf/player.js?v=25" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

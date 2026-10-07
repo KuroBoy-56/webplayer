@@ -71,7 +71,7 @@
             var mps = opts.sources.filter(function (x) { return x.engine === 'native' && /^(mp4|m4v|mov)$/i.test(x.ext || ''); });
             // el motor necesita permiso CORS: solo la fuente del hosting (contenido con varios audios) o un https directo.
             // Un http directo sin CORS no se intenta: fallaría y solo retrasaría el inicio del video.
-            var mp = mps.filter(function (x) { return x.cors && !x.alt; })[0] || mps.filter(function (x) { return /^https:/i.test(x.url); })[0];
+            var mp = mps.filter(function (x) { return x.cors && !x.alt; })[0]; // el servidor IPTV no da CORS: solo por el hosting
             if (mp) opts.sources = [{ url: mp.url, engine: 'mp4', ext: mp.ext }].concat(opts.sources);
         }
         this.build();
@@ -220,6 +220,8 @@
             self.applyAudioPref();
             if (self.maybeMse()) return;
             self.multiNative();
+            // pistas ya conocidas (varios audios) y el motor MP4 no pudo: en iPhone se pasa a un solo audio con ffmpeg
+            if (!self.tc && !self.mp4 && self.info && !self.live) self.afterProbe();
             self.updTime();
             if (!self.tc && !self.live) self.probe();
             if (self.tc) self.applySub();
