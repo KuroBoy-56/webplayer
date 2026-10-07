@@ -13,8 +13,13 @@ class MainActivity : ComponentActivity() {
     private fun checkSignature() {
         if (com.latmpx.player.BuildConfig.DEBUG) return
         try {
-            val packageInfo = packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
-            val signatures = packageInfo.signingInfo?.apkContentsSigners
+            // GET_SIGNING_CERTIFICATES solo existe desde Android 9; los TV Box y celulares más viejos usan GET_SIGNATURES
+            val signatures = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES).signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNATURES).signatures
+            }
             if (signatures == null || signatures.isEmpty()) { finishAffinity(); kotlin.system.exitProcess(0) }
             val md = java.security.MessageDigest.getInstance("SHA-256")
             val hashBytes = md.digest(signatures[0].toByteArray())
