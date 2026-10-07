@@ -157,7 +157,7 @@ if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'ac
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=20" defer></script>
+    <script src="assets/nf/player.js?v=21" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

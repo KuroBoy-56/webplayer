@@ -465,8 +465,12 @@ function wp_play_sources($kind, $id, array $exts)
             continue;
         }
         $out[] = ['url' => $u, 'engine' => $engine, 'ext' => $x];
-        if ($multi && $engine === 'native') {
-            $extra[] = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
+        if ($kind !== 'live' && $engine === 'native') {
+            // fuente de respaldo por el hosting. Si ya se sabe que trae varios audios, el motor MP4 arranca con ella.
+            // Si no (alt), solo se usa cuando el navegador descubre varios audios (iPhone) o si lo directo falla.
+            $p = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
+            if (!$multi) $p['alt'] = 1;
+            $extra[] = $p;
         }
     }
     return array_merge($out, $extra);

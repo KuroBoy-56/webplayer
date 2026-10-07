@@ -17,7 +17,7 @@ final class WpRangeReader
     private $chunks = [];
     private $deadline;
 
-    public function __construct($url, $seconds = 8)
+    public function __construct($url, $seconds = 3)
     {
         $this->url = $url;
         $this->deadline = microtime(true) + $seconds;
@@ -29,7 +29,7 @@ final class WpRangeReader
         foreach ($this->chunks as $start => $data) {
             if ($off >= $start && $off + $len <= $start + strlen($data)) return substr($data, $off - $start, $len);
         }
-        if ($this->requests >= 12 || microtime(true) > $this->deadline) return '';
+        if ($this->requests >= 8 || microtime(true) > $this->deadline) return '';
         $want = max($len, 65536);
         $data = $this->fetch($off, $want);
         if ($data === '') return '';
@@ -46,7 +46,7 @@ final class WpRangeReader
         $ch = curl_init($this->url);
         wp_doh_apply($ch, $this->url);
         curl_setopt_array($ch, [
-            CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 8, CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 8, CURLOPT_CONNECTTIMEOUT => 3,
             CURLOPT_TIMEOUT => max(2, (int)ceil($this->deadline - microtime(true))),
             CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_USERAGENT => WP_UA,
             CURLOPT_HTTPHEADER => ['Range: bytes=' . $off . '-' . ($off + $len - 1)],

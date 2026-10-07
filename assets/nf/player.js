@@ -71,7 +71,7 @@
             var mps = opts.sources.filter(function (x) { return x.engine === 'native' && /^(mp4|m4v|mov)$/i.test(x.ext || ''); });
             // el motor necesita permiso CORS: solo la fuente del hosting (contenido con varios audios) o un https directo.
             // Un http directo sin CORS no se intenta: fallaría y solo retrasaría el inicio del video.
-            var mp = mps.filter(function (x) { return x.cors; })[0] || mps.filter(function (x) { return /^https:/i.test(x.url); })[0];
+            var mp = mps.filter(function (x) { return x.cors && !x.alt; })[0] || mps.filter(function (x) { return /^https:/i.test(x.url); })[0];
             if (mp) opts.sources = [{ url: mp.url, engine: 'mp4', ext: mp.ext }].concat(opts.sources);
         }
         this.build();
@@ -205,7 +205,7 @@
         v.addEventListener('canplay', function () { r.classList.remove('buffering'); });
         v.addEventListener('loadedmetadata', function () {
             if (v.audioTracks && !v.audioTracks.onaddtrack) {
-                v.audioTracks.onaddtrack = function () { self.applyAudioPref(); };
+                v.audioTracks.onaddtrack = function () { self.applyAudioPref(); self.maybeMse(); };
             }
             self.ok = true;
             clearTimeout(self.loadTimer);
@@ -215,6 +215,7 @@
                 self.toastMsg('Continuando desde ' + fmt(self.o.resume));
             }
             self.applyAudioPref();
+            if (self.maybeMse()) return;
             self.updTime();
             if (!self.tc && !self.live) self.probe();
             if (self.tc) self.applySub();
@@ -537,6 +538,25 @@
             onError: function (why) { if (self.idx === idx && self.mp4) self.fail('mp4 ' + why); },
             onFatal: function (why) { if (self.idx === idx && self.mp4) { self.lastTime = self.T(); self.fail('mp4 ' + why); } }
         });
+    };
+    /* El navegador descubrió varias pistas de audio en un MP4 directo (en iPhone sonarían todas a la vez):
+       se cambia al motor MP4 por la fuente del hosting, en el mismo segundo. Si ese motor falla,
+       se vuelve a la fuente directa. */
+    NFPlayer.prototype.maybeMse = function () {
+        var v = this.v, list = this.o.sources, s = list[this.idx];
+        if (this._mseSwitched || this.live || this.tc || this.mp4 || !s || s.engine !== 'native' || s.nomse) return false;
+        if (!(v.audioTracks && v.audioTracks.length > 1) || !(window.NFMp4 && NFMp4.supported()) || store('nfp_nomse')) return false;
+        var alt = list.filter(function (x) { return x.engine === 'native' && x.cors && /^(mp4|m4v|mov)$/i.test(x.ext || ''); })[0];
+        if (!alt) return false;
+        this._mseSwitched = true;
+        var t = this.T();
+        if (t > 5) this.lastTime = t;
+        try { v.pause(); } catch (e) {}
+        var back = {}; for (var k in s) back[k] = s[k]; back.nomse = true;
+        list.splice(this.idx + 1, 0, { url: alt.url, engine: 'mp4', ext: alt.ext }, back);
+        this.toastMsg('Preparando los idiomas…');
+        this.next();
+        return true;
     };
     /* cambia al reproductor nativo sin contar como fallo (misma fuente) */
     NFPlayer.prototype.native = function (url, idx, resume) {
@@ -879,6 +899,11 @@
         // Fullscreen API real (Chrome, Firefox, Safari Mac, iPad, Android). En iPhone nunca: ahí el
         // reproductor nativo de iOS tomaría el control del audio, así que se usa la pantalla completa propia.
         if (IPHONE) {
+            // con un solo audio y el reproductor normal, la pantalla completa real de iOS no causa doble audio
+            var v = this.v;
+            if (!this.mp4 && v.webkitEnterFullscreen && !(v.audioTracks && v.audioTracks.length > 1) && v.readyState >= 1) {
+                try { v.webkitEnterFullscreen(); return; } catch (e) {}
+            }
             r.classList.add('nfp-fakefs');
             this.setIcon(this.bFull, 'exitfull');
             try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {}); } catch (e) {}

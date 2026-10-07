@@ -107,35 +107,58 @@ function wp_panel_request($endpoint, $body = null, array $headers = [], $timeout
     $code = 0;
     $base = wp_panel_base();
     if ($base === '' || !function_exists('curl_init')) return null;
-    $ch = curl_init($base . $endpoint);
-    wp_doh_apply($ch, $base . $endpoint);
-    $opts = [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => false,
-        CURLOPT_CONNECTTIMEOUT => min(5, $timeout),
-        CURLOPT_TIMEOUT => $timeout,
-        CURLOPT_USERAGENT => WP_UA,
-        CURLOPT_ENCODING => '',
-        CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
-    ];
     if (is_array($body)) {
-        $opts[CURLOPT_POST] = true;
-        $opts[CURLOPT_POSTFIELDS] = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $post = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $headers[] = 'Content-Type: application/json';
     } elseif (is_string($body)) {
-        $opts[CURLOPT_POST] = true;
-        $opts[CURLOPT_POSTFIELDS] = $body;
+        $post = $body;
         $headers[] = 'Content-Type: application/x-www-form-urlencoded';
+    } else {
+        $post = null;
     }
     $headers[] = 'Accept: application/json';
-    $opts[CURLOPT_HTTPHEADER] = $headers;
-    curl_setopt_array($ch, $opts);
-    $res = curl_exec($ch);
-    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $err = curl_errno($ch);
-    curl_close($ch);
-    if ($err || $res === false) return null;
-    return (string)$res;
+    // panel caído hace menos de 1 minuto: no se espera otra vez (las páginas no se ponen lentas)
+    if (wp_cache_get('panel|down', 60)) return null;
+    // 1) https normal  2) https sin revisar el certificado (SSL quitado o vencido)  3) http
+    $tries = [[$base, true], [$base, false]];
+    if (stripos($base, 'https://') === 0) $tries[] = ['http://' . substr($base, 8), false];
+    $last = wp_cache_get('panel|mode', 3600);
+    if (is_int($last) && isset($tries[$last])) $tries = array_merge([$tries[$last]], $tries);
+    foreach ($tries as $i => $t) {
+        $url = $t[0] . $endpoint;
+        $ch = curl_init($url);
+        wp_doh_apply($ch, $url);
+        $opts = [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_CONNECTTIMEOUT => min(5, $timeout),
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_USERAGENT => WP_UA,
+            CURLOPT_ENCODING => '',
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_SSL_VERIFYPEER => $t[1],
+            CURLOPT_SSL_VERIFYHOST => $t[1] ? 2 : 0,
+            CURLOPT_HTTPHEADER => $headers,
+        ];
+        if ($post !== null) {
+            $opts[CURLOPT_POST] = true;
+            $opts[CURLOPT_POSTFIELDS] = $post;
+        }
+        curl_setopt_array($ch, $opts);
+        $res = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_errno($ch);
+        $GLOBALS['wp_panel_last_error'] = $err ? $err . ' ' . curl_error($ch) : '';
+        curl_close($ch);
+        // http que redirige a https (o https que ya no responde): se prueba la siguiente forma
+        if (!$err && $res !== false && $code > 0 && ($code < 300 || $code >= 400)) {
+            $mode = array_search($t, [[$base, true], [$base, false], ['http://' . substr($base, 8), false]], true);
+            if ($mode !== false && $mode !== $last) wp_cache_set('panel|mode', $mode);
+            return (string)$res;
+        }
+    }
+    wp_cache_set('panel|down', 1);
+    return null;
 }
 
 /* ------------------------------------------------------------------ */

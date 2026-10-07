@@ -266,3 +266,10 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - Corregido "getaddrinfo() thread failed to start": cuando el hosting llega a su límite de procesos, curl no puede crear el hilo con el que busca la IP. Ahora la IP se busca con `gethostbyname()` (sin hilos), queda en caché 30 minutos y se le entrega a curl.
 - `diag.php` muestra cuántos audios tiene el contenido, por dónde va el video y la IP resuelta del servidor IPTV.
 - Corregido: al quitar el SSL el login parpadeaba y no entraba. El navegador conservaba la cookie de sesión "secure" de cuando la web era https y una página http no puede reemplazarla. Ahora la cookie de sesión se llama distinto en http (`WPSESS`) y en https (`WPSESS_S`).
+
+## Progreso, doble audio en iPhone y pantalla completa (7 de octubre)
+- **Progreso:** si el panel deja de responder por https (por ejemplo, al quitar el SSL del dominio), la web ahora prueba https sin revisar el certificado y luego http, y recuerda la forma que funcionó. Si el panel está caído, se espera solo una vez por minuto, así las páginas no se ponen lentas.
+- **Doble audio en iPhone:** aunque el hosting no alcance a leer las pistas, el reproductor detecta en el propio iPhone que el MP4 trae varios audios y se cambia en el mismo segundo al motor MP4 por el hosting (un solo audio y menú de idiomas). Si eso falla, vuelve a lo directo.
+- **Pantalla completa en iPhone:** con un solo audio se usa la pantalla completa real de iOS. Con varios audios sigue la pantalla completa propia (la de iOS mezclaría los audios).
+- **Más rápido:** la lectura de pistas en el hosting tiene un tope de 3 segundos.
+- Nuevo `estado.php`: muestra si el hosting llega al panel (https, https sin certificado, http), cuántos títulos de progreso tienes, los procesos del hosting y un botón para detener las conversiones de ffmpeg.
