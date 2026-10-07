@@ -19,6 +19,7 @@ launch-type = "singleton"
 
 [processes]
 [[processes.group]]
+id = "main"
 component-ids = ["com.latmpx.player.vega.main"]
 
 [wants]
@@ -62,6 +63,10 @@ id = "/com.amazon.vega.os@IVega_1_2"
 [offers]
 [[offers.service]]
 id = "com.amazon.gipc.uuid.*"
+
+[[offers.module]]
+id = "/com.latmpx.player.vega.main@IMod1"
+includes-messages = ["pkg://com.latmpx.player.vega.main"]
 
 [[message]]
 uri = "pkg://com.latmpx.player.vega.main"
