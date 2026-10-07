@@ -123,6 +123,27 @@ include "header.php";
         <?php endforeach; ?>
     </table>
     </div>
+    <h2 style="font-size:18px;margin:22px 0 8px">Video por tu hosting (proxy.php), probado desde este navegador</h2>
+    <div id="pxres" style="font-size:14px;color:#ccc;line-height:1.9">Probando…</div>
+    <script>
+    (function () {
+        var tests = <?php $kind1 = $slug === 'series' ? 'series' : $slug; $pt = []; foreach ($exts as $x) { $u = wp_stream_url($kind1, $id, $x); $pt[] = ['ext' => $x, 'url' => wp_via_hosting($u) ? wp_proxy_url($u) : $u, 'host' => wp_via_hosting($u)]; } echo json_encode($pt, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+        var box = document.getElementById('pxres'), out = [];
+        function show() { box.innerHTML = out.join('<br>'); }
+        tests.forEach(function (t, i) {
+            out[i] = '<b>.' + t.ext + '</b> (' + (t.host ? 'por el hosting' : 'directo https') + '): probando…';
+            var t0 = Date.now();
+            fetch(t.url, { headers: { Range: 'bytes=0-1023' }, cache: 'no-store' }).then(function (r) {
+                return r.arrayBuffer().then(function (b) {
+                    out[i] = '<b>.' + t.ext + '</b> (' + (t.host ? 'por el hosting' : 'directo https') + '): código ' + r.status + ' · ' + (r.headers.get('content-type') || '—') + ' · '
+                        + (r.headers.get('content-range') || r.headers.get('content-length') || '—') + ' · ' + b.byteLength + ' bytes · ' + (Date.now() - t0) + ' ms';
+                    show();
+                });
+            }).catch(function (e) { out[i] = '<b>.' + t.ext + '</b>: <span style="color:#e87c03">error ' + (e && e.message) + '</span> · ' + (Date.now() - t0) + ' ms'; show(); });
+        });
+        show();
+    })();
+    </script>
     <h2 style="font-size:18px;margin:22px 0 8px">Relay de Cloudflare</h2>
     <?php if (!$relay_rows): ?>
     <p style="color:#e87c03;font-size:14px">No está configurado: falta <b>includes/https_relay.php</b>.</p>
