@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,11 +58,12 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
     
     var pinStep by remember { mutableStateOf(if (com.latmpx.player.data.Store.parentalPin.isEmpty()) "CREATE" else "ENTER") }
     var tempPin by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf(false) }
     var blockedCatsState by remember { mutableStateOf(com.latmpx.player.data.Store.blockedCats) }
     
     if (pinDialog) {
-        androidx.compose.ui.window.Dialog(onDismissRequest = { pinDialog = false; tempPin = "" }) {
-            Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xE61A1A1A), Color(0xF2000000))), RoundedCornerShape(16.dp)).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp)).padding(24.dp)) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { pinDialog = false; tempPin = "" }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+            Box(Modifier.widthIn(max = 560.dp).fillMaxWidth(0.6f).background(Brush.verticalGradient(listOf(Color(0xE61A1A1A), Color(0xF2000000))), RoundedCornerShape(16.dp)).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp)).padding(24.dp)) {
                 Column(Modifier.fillMaxWidth()) {
                     Text(when(pinStep) { "CREATE" -> "Crear PIN"; "ENTER" -> "Ingresar PIN"; "SETTINGS" -> "Control Parental"; "CATS" -> "Carpetas Bloqueadas"; else -> "" }, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
                     
@@ -69,54 +71,7 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
                         "CREATE", "ENTER" -> {
                             Text(if (pinStep == "CREATE") "Crea un PIN de 4 dígitos:" else "Ingresa tu PIN actual:", color = Color.White)
                             Spacer(Modifier.height(8.dp))
-                            androidx.compose.material3.OutlinedTextField(
-                                value = tempPin,
-                                onValueChange = { if (it.length <= 4) tempPin = it },
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NfRed, unfocusedBorderColor = NfGray2)
-                            )
-                        }
-                        "SETTINGS" -> {
-                            SettingsItem(Icons.Filled.Lock, "Cambiar PIN", "Actualizar el PIN actual") { pinStep = "CREATE"; tempPin = "" }
-                            Divider(color = Color(0xFF333333))
-                            SettingsItem(Icons.Filled.OndemandVideo, "Carpetas Bloqueadas", "${blockedCatsState.size} carpetas ocultas") { pinStep = "CATS" }
-                            Divider(color = Color(0xFF333333))
-                            SettingsItem(Icons.Filled.Lock, "Desactivar Control", "Elimina el PIN y las restricciones") { 
-                                com.latmpx.player.data.Store.parentalPin = ""
-                                com.latmpx.player.data.Store.blockedCats = emptySet()
-                                pinDialog = false
-                            }
-                        }
-                        "CATS" -> {
-                            val allCats = remember { (state.movieCats + state.seriesCats + state.liveCats).distinctBy { it.id }.sortedBy { it.name } }
-                            Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
-                                allCats.forEach { cat ->
-                                    Row(Modifier.fillMaxWidth().clickable {
-                                        val m = blockedCatsState.toMutableSet()
-                                        if (m.contains(cat.id)) m.remove(cat.id) else m.add(cat.id)
-                                        blockedCatsState = m
-                                    }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Checkbox(checked = blockedCatsState.contains(cat.id), onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = NfRed))
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(cat.name, color = Color.White)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.End) {
-                        if (pinStep != "SETTINGS") {
-                            androidx.compose.material3.TextButton(onClick = { 
-                                if (pinStep == "CATS") { pinStep = "SETTINGS"; blockedCatsState = com.latmpx.player.data.Store.blockedCats }
-                                else { pinDialog = false; tempPin = "" }
-                            }, colors = ButtonDefaults.textButtonColors(contentColor = NfGray2)) { Text("Cancelar") }
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        
-                        if (pinStep == "CREATE" || pinStep == "ENTER") {
-                            androidx.compose.material3.TextButton(onClick = {
+                            com.latmpx.player.ui.components.PinPad(tempPin, onChange = { tempPin = it; pinError = false }, error = pinError, onDone = {
                                 if (pinStep == "CREATE" && tempPin.length == 4) {
                                     com.latmpx.player.data.Store.parentalPin = tempPin
                                     tempPin = ""
@@ -124,16 +79,58 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
                                 } else if (pinStep == "ENTER" && tempPin == com.latmpx.player.data.Store.parentalPin) {
                                     tempPin = ""
                                     pinStep = "SETTINGS"
+                                } else { pinError = true; tempPin = "" }
+                            })
+                        }
+                        "SETTINGS" -> {
+                            val firstRow = remember { androidx.compose.ui.focus.FocusRequester() }
+                            LaunchedEffect(Unit) { runCatching { firstRow.requestFocus() } }
+                            com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.Lock, "Cambiar PIN", "Actualizar el PIN actual", Modifier.focusRequester(firstRow)) { pinStep = "CREATE"; tempPin = "" }
+                            Divider(color = Color(0xFF333333))
+                            com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.OndemandVideo, "Carpetas Bloqueadas", "${blockedCatsState.size} carpetas ocultas") { pinStep = "CATS" }
+                            Divider(color = Color(0xFF333333))
+                            com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.Lock, "Desactivar Control", "Elimina el PIN y las restricciones") { 
+                                com.latmpx.player.data.Store.parentalPin = ""
+                                com.latmpx.player.data.Store.blockedCats = emptySet()
+                                pinDialog = false
+                            }
+                        }
+                        "CATS" -> {
+                            val allCats = remember { (state.movieCats + state.seriesCats + state.liveCats).distinctBy { it.id }.sortedBy { it.name } }
+                            Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                                allCats.forEach { cat ->
+                                    com.latmpx.player.ui.components.FocusBox(onClick = {
+                                        val m = blockedCatsState.toMutableSet()
+                                        if (m.contains(cat.id)) m.remove(cat.id) else m.add(cat.id)
+                                        blockedCatsState = m
+                                    }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), focusScale = 1.01f) { f ->
+                                        Row(Modifier.fillMaxWidth().background(if (f) Color(0x33FFFFFF) else Color.Transparent).padding(vertical = 6.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(checked = blockedCatsState.contains(cat.id), onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = NfRed))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(cat.name, color = Color.White, fontWeight = if (f) FontWeight.Bold else FontWeight.Normal)
+                                        }
+                                    }
                                 }
-                            }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text("Aceptar") }
-                        } else if (pinStep == "CATS") {
-                            androidx.compose.material3.TextButton(onClick = {
+                            }
+                        }
+                    }
+
+                    // en TV el PIN se confirma con la tecla ✓ del teclado; aquí quedan Cancelar / Guardar / Cerrar
+                    Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+                        if (pinStep != "SETTINGS") {
+                            com.latmpx.player.ui.components.TvDialogButton("Cancelar", primary = false) {
+                                if (pinStep == "CATS") { pinStep = "SETTINGS"; blockedCatsState = com.latmpx.player.data.Store.blockedCats }
+                                else { pinDialog = false; tempPin = "" }
+                            }
+                        }
+                        if (pinStep == "CATS") {
+                            com.latmpx.player.ui.components.TvDialogButton("Guardar", primary = true) {
                                 com.latmpx.player.data.Store.blockedCats = blockedCatsState
                                 pinStep = "SETTINGS"
                                 state.refresh++
-                            }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text("Guardar") }
-                        } else {
-                            androidx.compose.material3.TextButton(onClick = { pinDialog = false }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text("Cerrar") }
+                            }
+                        } else if (pinStep == "SETTINGS") {
+                            com.latmpx.player.ui.components.TvDialogButton("Cerrar", primary = true) { pinDialog = false }
                         }
                     }
                 }
@@ -188,6 +185,9 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
         Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2A), Color(0xFF1A1A1A))), RoundedCornerShape(12.dp)).border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp)).padding(vertical = 8.dp)) {
             SettingsItem(Icons.Filled.Lock, "Control Parental", if (com.latmpx.player.data.Store.parentalPin.isEmpty()) "Desactivado" else "Activado") {
                 pinValue = com.latmpx.player.data.Store.parentalPin
+                // siempre se pide el PIN al abrir (antes se quedaba en el menú ya desbloqueado)
+                pinStep = if (com.latmpx.player.data.Store.parentalPin.isEmpty()) "CREATE" else "ENTER"
+                tempPin = ""
                 pinDialog = true
             }
             Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
@@ -226,15 +226,8 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
 
 @Composable
 private fun SettingsItem(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = NfGray2, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontSize = 16.sp)
-            Text(subtitle, color = NfGray2, fontSize = 13.sp)
-        }
-        Icon(Icons.Filled.ArrowForwardIos, null, tint = NfGray2, modifier = Modifier.size(16.dp))
-    }
+    // TV: la fila se pinta de blanco con el foco del control remoto
+    com.latmpx.player.ui.components.TvSettingsRow(icon, title, subtitle, onClick = onClick)
 }
 
 @Composable

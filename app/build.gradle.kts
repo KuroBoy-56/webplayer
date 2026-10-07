@@ -19,7 +19,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.latmpx.player"
+        applicationId = "com.latmpx.player.tv"
         minSdk = 23
         targetSdk = 36
         versionCode = 1

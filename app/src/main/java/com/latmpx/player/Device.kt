@@ -9,8 +9,8 @@ import com.latmpx.player.data.Store
 
 /** Detecta si la app corre en un televisor (Android TV / Google TV / TV Box) o en un teléfono / tablet. */
 object Device {
-    /** Esta rama (android) es la app para celular y tablet: siempre interfaz táctil. La de TV vive en la rama android-tv. */
-    const val TV_APP = false
+    /** Esta rama (android-tv) es la app exclusiva para televisor: siempre interfaz con control remoto. La de celular vive en la rama android. */
+    const val TV_APP = true
 
     fun isTv(ctx: Context): Boolean = TV_APP
 

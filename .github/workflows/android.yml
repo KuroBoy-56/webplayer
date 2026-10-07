@@ -1,8 +1,8 @@
-name: APK Android
+name: APK Android TV
 
 on:
   push:
-    branches: [android]
+    branches: [android-tv]
   workflow_dispatch:
 
 permissions:
@@ -42,17 +42,17 @@ jobs:
           echo "::error title=Errores de compilación::$msg"
 
       - name: Renombrar
-        run: cp app/build/outputs/apk/release/app-release.apk LatMpx.apk
+        run: cp app/build/outputs/apk/release/app-release.apk LatMpx-TV.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: LatMpx-apk
-          path: LatMpx.apk
+          name: LatMpx-TV-apk
+          path: LatMpx-TV.apk
 
-      # publica siempre la última versión en la misma dirección de descarga (Releases > apk-latest)
+      # publica siempre la última versión en la misma dirección de descarga (Releases > apk-tv-latest)
       - name: Publicar descarga
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete apk-latest --yes --cleanup-tag || true
-          gh release create apk-latest LatMpx.apk --target "$GITHUB_SHA" --title "LatMpx APK (última versión)" --notes "Compilado automáticamente desde la rama android ($GITHUB_SHA)." --prerelease
+          gh release delete apk-tv-latest --yes --cleanup-tag || true
+          gh release create apk-tv-latest LatMpx-TV.apk --target "$GITHUB_SHA" --title "LatMpx TV APK (última versión)" --notes "Compilado automáticamente desde la rama android-tv ($GITHUB_SHA). Solo para Android TV / Google TV / TV Box." --prerelease

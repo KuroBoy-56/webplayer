@@ -205,7 +205,8 @@ private val tabIcons: Map<Tab, ImageVector> = mapOf(
 @Composable
 private fun MainShell(state: AppState, onLogout: () -> Unit) {
     val tv = LocalIsTv.current
-    BackHandler(enabled = state.stack.isNotEmpty() || state.tab != Tab.HOME) {
+    // en TV el botón atrás lo maneja TvShell (menú superior y diálogo de salida)
+    if (!tv) BackHandler(enabled = state.stack.isNotEmpty() || state.tab != Tab.HOME) {
         if (!state.pop()) state.tab = Tab.HOME
     }
     val top = state.stack.lastOrNull()
@@ -227,29 +228,8 @@ private fun MainShell(state: AppState, onLogout: () -> Unit) {
         }
     }
     if (tv) {
-        // TV: menú lateral que se recorre con el control remoto
-        Row(Modifier.fillMaxSize()) {
-            Column(
-                Modifier.fillMaxHeight().width(84.dp).background(Color(0xFF0B0B0B)).padding(vertical = 18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                LogoHeader(height = 30.dp)
-                Spacer(Modifier.height(18.dp))
-                Tab.entries.forEach { t ->
-                    val sel = state.tab == t && top == null
-                    FocusBox(onClick = { state.stack.clear(); state.tab = t }, shape = RoundedCornerShape(10.dp), focusScale = 1.1f) { f ->
-                        Column(
-                            Modifier.width(72.dp).background(if (f) Color(0x33FFFFFF) else Color.Transparent).padding(vertical = 8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Icon(tabIcons.getValue(t), t.label, tint = if (sel) NfRed else if (f) Color.White else NfGray, modifier = Modifier.size(26.dp))
-                            Text(t.label, fontSize = 10.sp, color = if (sel || f) Color.White else NfGray, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
-                        }
-                    }
-                }
-            }
-            Box(Modifier.weight(1f).fillMaxHeight()) { content() }
-        }
+        // TV: menú superior como el reproductor web
+        TvShell(state) { content() }
     } else {
         // teléfono: barra inferior como la app de Netflix
         val phoneTabs = listOf(Tab.HOME, Tab.SERIES, Tab.MOVIES, Tab.LIVE, Tab.ACCOUNT)

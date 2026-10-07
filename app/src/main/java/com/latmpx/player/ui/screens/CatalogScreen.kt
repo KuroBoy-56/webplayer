@@ -49,7 +49,7 @@ fun CatalogScreen(state: AppState, kind: Kind) {
 
         LazyColumn(Modifier.fillMaxSize(), state = listState) {
             item {
-                if (tv) HeroCarousel(items = heroItems, tv = tv) { item -> com.latmpx.player.ui.screens.Hero(state, item, tv) }
+                if (tv) TvBillboard(state, cardHero.ifEmpty { heroItems })
                 else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 112.dp)
             }
             if (tv) item {

@@ -154,10 +154,8 @@ fun HomeScreen(state: AppState) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize().background(NfBg), state = listState) {
         item {
-            if (tv) {
-                val h = userFocusedHero
-                if (h != null) Hero(state, h, tv) else HeroCarousel(items = heroItems, tv = tv) { item -> Hero(state, item, tv) }
-            } else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 112.dp)
+            if (tv) TvBillboard(state, cardHero.ifEmpty { heroItems })
+            else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 112.dp)
         }
         item {
             ShelfRow("Continuar viendo para ${state.session?.user.orEmpty()}", cont, pad) { _, p ->
@@ -174,7 +172,7 @@ fun HomeScreen(state: AppState) {
         }
         item {
             ShelfRow("Películas recién agregadas", recentMovies, pad, onViewAll = { state.push(Route.Browse("Películas recién agregadas", com.latmpx.player.data.Kind.MOVIE, emptySet())) }) { _, it ->
-                PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ userFocusedHero = it }) else null)
+                PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) })
             }
         }
         item { ShelfRow("Series recién agregadas", recentSeries, pad, onViewAll = { state.push(Route.Browse("Series recién agregadas", com.latmpx.player.data.Kind.SERIES, emptySet())) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
@@ -183,7 +181,7 @@ fun HomeScreen(state: AppState) {
                 val kw = com.latmpx.player.data.Platforms.genres.find { it.first == label }?.second ?: emptyList()
                 val ids = com.latmpx.player.data.Platforms.categoriesFor(state.movieCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }, kw)
                 ShelfRow(label, list, pad, onViewAll = { state.push(Route.Browse(label, com.latmpx.player.data.Kind.MOVIE, ids)) }) { _, it ->
-                    PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ userFocusedHero = it }) else null)
+                    PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) })
                 }
             }
         }
