@@ -91,6 +91,41 @@ function diag_relay($url, $origin)
     }
     return $r;
 }
+/* proxy.php pedido por el propio hosting a sí mismo (https, como el navegador): muestra el error real si lo hay */
+function diag_self($url, $h2)
+{
+    $r = ['code' => 0, 'hdr' => '', 'body' => '', 'len' => 0, 'err' => '', 'ms' => 0];
+    $t = microtime(true);
+    $hdr = '';
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_TIMEOUT => 25,
+        CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_USERAGENT => WP_UA,
+        CURLOPT_HTTPHEADER => ['Range: bytes=0-1023'],
+        CURLOPT_HTTP_VERSION => $h2 ? (defined('CURL_HTTP_VERSION_2TLS') ? CURL_HTTP_VERSION_2TLS : CURL_HTTP_VERSION_2_0) : CURL_HTTP_VERSION_1_1,
+        CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$hdr) { $hdr .= $h; return strlen($h); },
+    ]);
+    $body = curl_exec($ch);
+    $r['code'] = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $r['err'] = curl_errno($ch) ? curl_errno($ch) . ' ' . curl_error($ch) : '';
+    curl_close($ch);
+    $r['ms'] = (int)round((microtime(true) - $t) * 1000);
+    $r['hdr'] = trim(preg_replace('/\r?\n/', ' | ', trim($hdr)));
+    $r['len'] = is_string($body) ? strlen($body) : 0;
+    if (is_string($body) && $r['code'] >= 300) $r['body'] = mb_substr(preg_replace('/\s+/', ' ', strip_tags($body)), 0, 200);
+    return $r;
+}
+$self_rows = [];
+$kind2 = $slug === 'series' ? 'series' : $slug;
+$u0 = wp_stream_url($kind2, $id, $exts[0]);
+if (wp_via_hosting($u0)) {
+    $base = (wp_is_https() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost') . rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/') . '/';
+    $self_rows[] = ['v' => 'HTTP/1.1', 'r' => diag_self($base . wp_proxy_url($u0), false)];
+    $self_rows[] = ['v' => 'HTTP/2', 'r' => diag_self($base . wp_proxy_url($u0), true)];
+}
+$proxy_err = @file_get_contents(wp_cache_dir('data') . '/proxy_error.txt');
+$proxy_err = $proxy_err ? implode("\n", array_slice(explode("\n", trim($proxy_err)), -3)) : '';
+
 $relay_rows = [];
 $relay_base = wp_https_relay();
 if ($relay_base !== '') {
@@ -144,6 +179,15 @@ include "header.php";
         show();
     })();
     </script>
+    <h3 style="font-size:16px;margin:16px 0 6px">proxy.php pedido por el hosting a sí mismo</h3>
+    <div style="font-size:13px;color:#ccc;line-height:1.7;word-break:break-word">
+    <?php foreach ($self_rows as $sr): $r = $sr['r']; ?>
+        <p style="margin:0 0 8px"><b><?php echo e($sr['v']); ?>:</b> código <?php echo (int)$r['code']; ?> · <?php echo (int)$r['len']; ?> bytes · <?php echo (int)$r['ms']; ?> ms<?php echo $r['err'] ? ' · <span style="color:#e87c03">' . e($r['err']) . '</span>' : ''; ?><br>
+        <span style="color:#888"><?php echo e($r['hdr']); ?></span><?php echo $r['body'] ? '<br><span style="color:#e87c03">' . e($r['body']) . '</span>' : ''; ?></p>
+    <?php endforeach; ?>
+    <?php if (!$self_rows): ?><p>El servidor IPTV es https: no pasa por el hosting.</p><?php endif; ?>
+    <p style="margin:0">Último error de PHP en proxy.php: <b><?php echo $proxy_err !== '' ? nl2br(e($proxy_err)) : 'ninguno'; ?></b></p>
+    </div>
     <h2 style="font-size:18px;margin:22px 0 8px">Relay de Cloudflare</h2>
     <?php if (!$relay_rows): ?>
     <p style="color:#e87c03;font-size:14px">No está configurado: falta <b>includes/https_relay.php</b>.</p>

@@ -8,6 +8,14 @@
  */
 require_once __DIR__ . '/includes/core.php';
 
+// registro del último error de PHP (lo muestra diag.php): ayuda a ver por qué se corta el video
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR], true)) {
+        @file_put_contents(wp_cache_dir('data') . '/proxy_error.txt', date('d/m H:i:s') . ' ' . $e['message'] . ' (' . basename($e['file']) . ':' . $e['line'] . ")\n", FILE_APPEND);
+    }
+});
+
 $url = null;
 // Los enlaces firmados con caducidad no necesitan cookie (el iPhone a veces no la envía al pedir el video)
 if (!wp_verify_signed($url) || !isset($_GET['e'])) {
