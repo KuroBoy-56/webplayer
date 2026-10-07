@@ -95,6 +95,17 @@ $exts = array_values(array_unique($exts));
 
 $sources = wp_play_sources($kind, $id, $exts);
 
+/* Motor multimedia del hosting (ffmpeg): solo para contenido http del servidor IPTV.
+   Lee las pistas y convierte audio Dolby/DTS o formatos que el navegador no abre. Con https no se usa. */
+$media_cfg = null;
+if (wp_via_hosting($raw_url) && wp_bin('ffprobe') && wp_bin('ffmpeg')) {
+    $mb = wp_proxy_url($raw_url, 'media.php');
+    $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'hls' => $mb . '&do=hls', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
+    // pistas ya conocidas (caché): el reproductor decide al instante si necesita convertir el audio
+    $pc = wp_cache_get('probe|' . md5($raw_url), 604800);
+    if (is_array($pc)) $media_cfg['info'] = wp_probe_labels($pc);
+}
+
 /* ---------- Página https y video http: reproductor directo por http (play.php) ---------- */
 $http_url = wp_handoff_url([
     'kind' => $kind, 'id' => $id, 'exts' => $exts, 'vlcExt' => $ext, 'slug' => $slug, 'sid' => $series_id_get,
@@ -113,6 +124,7 @@ $extra = [['label' => 'Descargar contenido', 'href' => $download_url]];
 if ($has_prev) $extra[] = ['label' => 'Capítulo anterior', 'href' => $prev_url];
 if ($slug === 'series') $extra[] = ['label' => 'Ver episodios', 'href' => $back_url . '#episodios'];
 $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext) . ($series_id_get ? '&series_id=' . rawurlencode($series_id_get) : '');
+if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'act' => 'fix'];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -145,7 +157,7 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=18" defer></script>
+    <script src="assets/nf/player.js?v=19" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -159,7 +171,7 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
             'streamUrl' => $raw_url,
             'vlcPc' => 'playlist.php?' . http_build_query(['id' => $id, 'slug' => $slug, 'ext' => $ext, 'title' => trim($content_name . ' ' . $episode_label)]),
             'downloadUrl' => $download_url,
-            'media' => null,
+            'media' => $media_cfg,
             'ext' => $ext,
             'diagUrl' => $diag_url,
             'extraMenu' => $extra,

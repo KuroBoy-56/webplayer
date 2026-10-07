@@ -383,7 +383,7 @@ function wp_sign($url)
  * La firma caduca (WP_SIGN_TTL) y no depende de cookies: el reproductor nativo
  * del iPhone (AVPlayer) a veces pide el video sin enviar la cookie de sesión.
  */
-function wp_proxy_url($url, $script = 'img.php')
+function wp_proxy_url($url, $script = 'proxy.php')
 {
     if ($script !== 'img.php') {
         $exp = (int)(ceil((time() + WP_SIGN_TTL) / 600) * 600); // redondeado: el navegador puede reutilizar caché
@@ -444,21 +444,28 @@ function wp_client_stream_url($kind, $id, $ext)
 function wp_play_sources($kind, $id, array $exts)
 {
     $out = [];
-    $relay = wp_is_https() ? wp_https_relay() : '';
     foreach ($exts as $x) {
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
-        $url = wp_client_stream_url($kind, $id, $x);
-        if ($relay === '') { $out[] = ['url' => $url, 'engine' => $engine, 'ext' => $x]; continue; }
-        // página https con relay: primero el https directo del servidor IPTV si la prueba del hosting pasó
-        // (rápido, sin gastar el relay) y SIEMPRE después el relay de Cloudflare como respaldo. La prueba se hace
-        // desde el hosting y no garantiza que el celular pueda abrirlo; antes, si pasaba, el relay nunca se usaba.
-        if (wp_direct_https_ok($kind, $id, $x, $engine !== 'native')) {
-            $out[] = ['url' => $url, 'engine' => $engine, 'ext' => $x, 'quick' => true, 'cors' => wp_direct_https_ok($kind, $id, $x, true)];
+        $u = wp_stream_url($kind, $id, $x);
+        if (wp_via_hosting($u)) {
+            // servidor IPTV en http: el hosting entrega el video (proxy.php). Mismo dominio que la web, así el
+            // navegador puede leer las pistas de audio (motor MP4) y no hay contenido mixto en https.
+            $out[] = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
+        } else {
+            // servidor IPTV en https: directo del servidor al navegador, el hosting no participa
+            $out[] = ['url' => $u, 'engine' => $engine, 'ext' => $x];
         }
-        // el relay añade el permiso CORS: con él el navegador puede separar las pistas de audio (motor MP4)
-        $out[] = ['url' => wp_relay_url(wp_stream_url($kind, $id, $x)), 'engine' => $engine, 'ext' => $x, 'cors' => true];
     }
     return $out;
+}
+
+/**
+ * ¿Este enlace pasa por el hosting? Solo si el servidor IPTV lo entrega por http.
+ * El día que la DNS del servidor IPTV sea https, todo va directo y el hosting queda libre.
+ */
+function wp_via_hosting($url)
+{
+    return stripos((string)$url, 'https://') !== 0;
 }
 
 /**
@@ -1102,3 +1109,5 @@ function wp_lang_name($code)
 
 require_once __DIR__ . '/panel.php';
 require_once __DIR__ . '/handoff.php';
+require_once __DIR__ . '/doh.php';
+require_once __DIR__ . '/media_core.php';

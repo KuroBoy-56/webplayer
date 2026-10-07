@@ -68,8 +68,8 @@
         // y reproduce UNA sola pista de audio elegible: sin doble audio en iPhone y con idiomas en Chrome/Firefox.
         // Si el archivo trae un solo audio, o el servidor no lo permite (CORS/rangos), sigue el reproductor nativo.
         if (!this.live && opts.sources && window.NFMp4 && NFMp4.supported() && !store('nfp_nomse')) {
-            var mps = opts.sources.filter(function (x) { return x.engine === 'native' && /^(mp4|m4v|mov)$/i.test(x.ext || '') && (location.protocol !== 'https:' || /^https:/i.test(x.url)); });
-            // el motor necesita permiso CORS: se prefiere la fuente que lo tiene (el relay de Cloudflare)
+            var mps = opts.sources.filter(function (x) { return x.engine === 'native' && /^(mp4|m4v|mov)$/i.test(x.ext || '') && (location.protocol !== 'https:' || !/^http:/i.test(x.url)); });
+            // el motor necesita permiso CORS: se prefiere la fuente que lo tiene (proxy.php del hosting o el relay)
             var mp = mps.filter(function (x) { return x.cors; })[0] || mps[0];
             if (mp) opts.sources = [{ url: mp.url, engine: 'mp4', ext: mp.ext }].concat(opts.sources);
         }
@@ -958,7 +958,7 @@
         var self = this, m = this._media0, v = this.v;
         if (!m || this._probing || this.info || this._deepTried) return;
         if (!this._probeTries) { this._probeTries = 0; this.probe(); return; }
-        var direct = !this.tc && v.getAttribute('src');
+        var direct = !this.tc && !this.mp4 && v.getAttribute('src');
         var t = this.curT(), wasPaused = v.paused;
         this._probing = true;
         if (direct) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} this.root.classList.add('buffering'); }
@@ -996,7 +996,8 @@
             var w = this.prefAudioIndex();
             // En iOS siempre forzamos la transcodificación (startTc) cuando hay audios duales,
             // ignorando si el navegador nativo expone audioTracks.
-            if ((isIos || w > 0) && (isIos || !(this.v.audioTracks && this.v.audioTracks.length > 1)) && !this.hls) this.startTc(this.curT(), w, false);
+            // con el motor MP4 activo el navegador ya reproduce una sola pista y la cambia él mismo (sin ffmpeg)
+            if ((isIos || w > 0) && (isIos || !(this.v.audioTracks && this.v.audioTracks.length > 1)) && !this.hls && !this.mp4) this.startTc(this.curT(), w, false);
         }
         if (this.pop && this.pop.classList.contains('open') && this.pop._kind === 'tracks') { this.pop.classList.remove('open'); this.menu('tracks'); }
     };

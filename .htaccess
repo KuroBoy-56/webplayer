@@ -31,6 +31,7 @@ RewriteEngine on
 
 # --- Archivos internos que nunca se abren desde el navegador ---
 RewriteRule ^includes/ - [F,L,NC]
+RewriteRule ^bin/ - [F,L,NC]
 RewriteRule ^api/ - [F,L,NC]
 RewriteRule ^cloudflare/ - [F,L,NC]
 
@@ -49,6 +50,9 @@ RewriteRule ^(.*)$ $1.php [L]
 </IfModule>
 
 # --- Compresión ---
+<IfModule mod_setenvif.c>
+    SetEnvIfNoCase Request_URI "(proxy|media)(\.php)?" no-gzip dont-vary
+</IfModule>
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/css text/plain application/javascript text/javascript application/json image/svg+xml
 </IfModule>
