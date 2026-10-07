@@ -61,7 +61,7 @@ $title = (string)($d['title'] ?? '');
     <title><?php echo e($title ?: 'Reproductor'); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/nf/app.css?v=6">
-    <link rel="stylesheet" href="assets/nf/player.css?v=8">
+    <link rel="stylesheet" href="assets/nf/player.css?v=9">
     <style>
         html, body { height: 100%; overflow: hidden; background: #000; }
         #player-container { position: fixed; inset: 0; }
@@ -72,7 +72,7 @@ $title = (string)($d['title'] ?? '');
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=25" defer></script>
+    <script src="assets/nf/player.js?v=26" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

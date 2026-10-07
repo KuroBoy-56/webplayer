@@ -203,7 +203,7 @@
         v.addEventListener('pause', function () { self.state(); self.emit('pause'); });
         v.addEventListener('waiting', function () { r.classList.add('buffering'); });
         v.addEventListener('stalled', function () { r.classList.add('buffering'); });
-        v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.watchAudio(); self.askTracks(); });
+        v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.status(); self.watchAudio(); self.askTracks(); });
         v.addEventListener('canplay', function () { r.classList.remove('buffering'); });
         v.addEventListener('loadedmetadata', function () {
             self.log('metadata: audioTracks=' + (v.audioTracks ? v.audioTracks.length : 'n/a') + ' mp4=' + !!self.mp4 + ' tc=' + !!self.tc);
@@ -437,6 +437,33 @@
         var d = new Date();
         this.dbg.textContent = ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2) + ' ' + m + '\n' + this.dbg.textContent;
     };
+    /* Aviso para el usuario arriba del video: solo lo que necesita saber para esperar.
+       Muestra las líneas una por una (cada una reemplaza a la anterior); la última queda con puntitos
+       hasta que el video empieza a reproducirse. status() sin líneas lo quita. */
+    NFPlayer.prototype.status = function (lines) {
+        var self = this;
+        lines = lines ? [].concat(lines) : [];
+        clearTimeout(this._stT);
+        clearTimeout(this._stSlow);
+        var x = this.root.querySelector('.nfp-status');
+        if (!lines.length) { if (x) x.classList.remove('show'); this._stLast = ''; return; }
+        x = x || this.root.appendChild(el('div', 'nfp-status'));
+        var i = 0;
+        (function step() {
+            var t = lines[i];
+            var show = function () {
+                x.innerHTML = '';
+                var sp = document.createElement('span'); sp.textContent = t; x.appendChild(sp);
+                if (i === lines.length - 1) x.appendChild(el('span', 'dots'));
+                x.classList.add('show');
+                self._stLast = t;
+                if (++i < lines.length) self._stT = setTimeout(step, 2200);
+            };
+            // cambio suave: la línea anterior se apaga y aparece la nueva
+            if (x.classList.contains('show') && self._stLast !== t) { x.classList.remove('show'); self._stT = setTimeout(show, 350); }
+            else show();
+        })();
+    };
     NFPlayer.prototype.next = function () {
         var self = this, list = this.o.sources;
         this.tc = null;
@@ -449,14 +476,12 @@
             if (this.o.media && !this.live && !this._fullTried) {
                 this._fullTried = true;
                 this.idx = list.length - 1;
-                this.toastMsg('Adaptando el formato de este contenido…');
                 this.startTc(this.lastTime || this.o.resume || 0, this.info ? this.prefAudioIndex() : 0, true);
                 return;
             }
             if (this.o.media && !this.live && !this._safeTried) {
                 this._safeTried = true;
                 this.idx = list.length - 1;
-                this.toastMsg('Probando un modo de reproducción más compatible…');
                 this.startTc(this.lastTime || this.o.resume || 0, this.info ? this.prefAudioIndex() : 0, 2);
                 return;
             }
@@ -469,6 +494,8 @@
             this.showError(); return;
         }
         var s = list[this.idx];
+        if (!this._stStarted) { this._stStarted = true; this.status('Cargando el contenido'); }
+        else if (this._stFailed) { this._stFailed = false; this.status(['Error de reproducción en este navegador', 'Probando otra forma de reproducir']); }
         this.log('probando ' + (this.idx + 1) + ': ' + s.engine + ' ' + s.ext + (s.cors ? ' por hosting' : ' directo') + (s.nomse ? ' (respaldo)' : ''));
         this.root.classList.add('buffering');
         var t = this.lastTime || 0;
@@ -568,8 +595,8 @@
         try { v.pause(); } catch (e) {}
         var back = {}; for (var k in s) back[k] = s[k]; back.nomse = true;
         list.splice(this.idx + 1, 0, { url: alt.url, engine: 'mp4', ext: alt.ext }, back);
-        this.toastMsg('Preparando los idiomas…');
         this.next();
+        this.status(['Este contenido tiene varios idiomas', 'Preparando la selección de idioma']);
         return true;
     };
     /* pistas aún desconocidas en el hosting: se cuentan en segundo plano (tracks.php, sin ffmpeg).
@@ -706,6 +733,7 @@
         (this._whys = this._whys || []).push((s ? (s.engine === 'mp4' ? 'motor' : s.ext) + (s.cors && /\/https?\/[^/]+\//.test(s.url) && !/^https?:\/\/[^/]+\/(movie|series|live)\//.test(s.url) ? ' relay' : '') : '?') + ': ' + String(why || '').slice(0, 40));
         if (this.T() > 5) this.lastTime = this.T();
         this.log('FALLÓ: ' + why);
+        this._stFailed = !this.tc;
         var self = this;
         // tras el motor MP4 se espera un poco: el servidor IPTV puede seguir contando esa conexión y rechazar la siguiente
         setTimeout(function () { self._failing = false; self.next(); }, s && s.engine === 'mp4' ? 1500 : 150);
@@ -713,6 +741,7 @@
 
     NFPlayer.prototype.showError = function () {
         this.root.classList.remove('buffering');
+        this.status();
         var o = this.o, self = this;
         // si "Solucionar" ya se intentó y volvió a fallar, el botón ya no se muestra para este contenido
         if (this._fixTried) store(this.fixKey, '1');
@@ -1140,6 +1169,13 @@
         var m = this.o.media, self = this, v = this.v;
         this.log('ffmpeg: convertir desde ' + Math.round(t || 0) + 's audio ' + a + (vt ? ' video ' + vt : '') + (m ? '' : ' (sin motor)'));
         if (!m) return;
+        // al adelantar o cambiar de idioma durante la conversión basta con "Cargando"
+        if (this.tc) this.status('Cargando');
+        else {
+            this.status(this.ok && !this._stFailed ? ['Convirtiendo a un formato compatible'] : ['Tu navegador no es compatible con este formato', 'Convirtiendo a un archivo compatible']);
+            this._stSlow = setTimeout(function () { if (!self.ok || self.root.classList.contains('buffering')) self.status('Ya casi: la conversión puede tardar unos segundos, no cierres el video'); }, 15000);
+        }
+        this._stFailed = false;
         var dur = (this.tc && this.tc.dur) || (this.info && this.info.dur) || (isFinite(v.duration) ? v.duration : 0);
         var wasPaused = v.paused && this.ok;
         if (this.hls) { try { this.hls.destroy(); } catch (e) {} this.hls = null; }

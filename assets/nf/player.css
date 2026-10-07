@@ -132,3 +132,8 @@
     box-sizing: border-box;
     background: #000 !important;
 }
+/* aviso de carga para el usuario: una línea a la vez, arriba del video, desaparece al reproducir */
+.nfp-status { position: absolute; left: 50%; top: 58px; transform: translateX(-50%); max-width: calc(100% - 32px); background: rgba(0,0,0,.72); color: #46d369; padding: 7px 14px; border-radius: 4px; font-size: 14px; line-height: 1.35; z-index: 8; text-align: center; opacity: 0; transition: opacity .35s; pointer-events: none; }
+.nfp-status.show { opacity: 1; }
+.nfp-status .dots::after { content: ''; display: inline-block; width: 1.2em; text-align: left; animation: nfpDots 1.2s steps(4, end) infinite; }
+@keyframes nfpDots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75%, 100% { content: '...'; } }
