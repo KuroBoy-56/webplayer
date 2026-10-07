@@ -52,6 +52,10 @@ function wp_session_start()
     @ini_set('session.cookie_httponly', '1');
     @ini_set('session.cookie_samesite', 'Lax');
     @ini_set('session.cookie_path', '/');
+    // Nombre de cookie distinto en http y en https: si el navegador guardó una cookie "secure" cuando la
+    // web tenía SSL, una página http no puede reemplazarla (regla de los navegadores) y el login se
+    // recargaba sin entrar. Con otro nombre no chocan.
+    if (!headers_sent()) session_name(wp_is_https() ? 'WPSESS_S' : 'WPSESS');
     if (!headers_sent()) {
         $opts = [
             'lifetime' => 0,

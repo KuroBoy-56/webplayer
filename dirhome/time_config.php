@@ -1,5 +1,5 @@
 <?php
-if (!defined('WP_SESSION_LOADED') && session_status() === PHP_SESSION_NONE) session_start();
+if (!defined('WP_SESSION_LOADED') && session_status() === PHP_SESSION_NONE) { require_once dirname(__DIR__) . '/includes/core.php'; wp_session_start(); }
 
 $app_timezone = $_SESSION['timezone'] ?? 'Etc/GMT+5';
 

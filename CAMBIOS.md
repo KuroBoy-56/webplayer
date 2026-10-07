@@ -265,3 +265,4 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - Página en **https**: el navegador bloquea video http, así que ese video sigue pasando por el hosting. Para que el hosting quede libre, la web debe abrirse en http.
 - Corregido "getaddrinfo() thread failed to start": cuando el hosting llega a su límite de procesos, curl no puede crear el hilo con el que busca la IP. Ahora la IP se busca con `gethostbyname()` (sin hilos), queda en caché 30 minutos y se le entrega a curl.
 - `diag.php` muestra cuántos audios tiene el contenido, por dónde va el video y la IP resuelta del servidor IPTV.
+- Corregido: al quitar el SSL el login parpadeaba y no entraba. El navegador conservaba la cookie de sesión "secure" de cuando la web era https y una página http no puede reemplazarla. Ahora la cookie de sesión se llama distinto en http (`WPSESS`) y en https (`WPSESS_S`).
