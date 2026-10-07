@@ -64,6 +64,13 @@
             opts.sources = opts.sources.filter(function (x) { return x.engine === 'hls'; })
                 .concat(opts.sources.filter(function (x) { return x.engine !== 'hls'; }));
         }
+        // VOD en MP4: primero el motor propio (NFMp4). El navegador lee el archivo directo del servidor IPTV
+        // y reproduce UNA sola pista de audio elegible: sin doble audio en iPhone y con idiomas en Chrome/Firefox.
+        // Si el archivo trae un solo audio, o el servidor no lo permite (CORS/rangos), sigue el reproductor nativo.
+        if (!this.live && opts.sources && window.NFMp4 && NFMp4.supported() && !store('nfp_nomse')) {
+            var mp = opts.sources.filter(function (x) { return x.engine === 'native' && /^(mp4|m4v|mov)$/i.test(x.ext || '') && (location.protocol !== 'https:' || /^https:/i.test(x.url)); })[0];
+            if (mp) opts.sources = [{ url: mp.url, engine: 'mp4', ext: mp.ext }].concat(opts.sources);
+        }
         this.build();
         this.bind();
         this.boot();
@@ -221,6 +228,7 @@
         });
         v.addEventListener('timeupdate', function () { if (self.tc && !self.tc.played && v.currentTime > 2) self.tc.played = true; });
         v.addEventListener('error', function () {
+            if (self.mp4) { if (self.ok) self.lastTime = self.T(); self.fail('mp4 media ' + (v.error ? v.error.code : '')); return; }
             if (self.hls || self.ts || !v.getAttribute('src')) return;
             if (self.tc) {
                 // la conversión se cortó a mitad de la película (límite del hosting o del servidor IPTV): se retoma donde iba
@@ -318,6 +326,11 @@
             else return;
             self.wake();
         });
+        // iPhone: si iOS intenta abrir su reproductor propio (doble toque, gesto), se vuelve al del navegador
+        v.addEventListener('webkitbeginfullscreen', function () {
+            try { v.webkitExitFullscreen(); } catch (e) {}
+            if (!r.classList.contains('nfp-fakefs')) self.fullscreen();
+        });
         document.addEventListener('fullscreenchange', function () { self.setIcon(self.bFull, document.fullscreenElement ? 'exitfull' : 'full'); });
         document.addEventListener('webkitfullscreenchange', function () { self.setIcon(self.bFull, document.webkitFullscreenElement ? 'exitfull' : 'full'); });
         this.wake();
@@ -401,6 +414,7 @@
     NFPlayer.prototype.cleanup = function () {
         if (this.hls) { try { this.hls.destroy(); } catch (e) {} this.hls = null; }
         if (this.ts) { try { this.ts.pause(); this.ts.unload(); this.ts.detachMediaElement(); this.ts.destroy(); } catch (e) {} this.ts = null; }
+        if (this.mp4) { try { this.mp4.destroy(); } catch (e) {} this.mp4 = null; }
         clearTimeout(this.loadTimer);
         this.v.removeAttribute('src');
         try { this.v.load(); } catch (e) {}
@@ -443,10 +457,11 @@
         if (t > 5) { this.o.resume = t; this.resumed = false; }
         this.root.classList.remove('needtap');
         // las fuentes https directas se descartan rápido si el puerto no responde
-        this.loadTimer = setTimeout(function () { if (!self.ok) self.fail('timeout'); }, s.quick ? 9000 : (s.engine === 'native' ? 25000 : 30000));
+        this.loadTimer = setTimeout(function () { if (!self.ok) self.fail('timeout'); }, s.engine === 'mp4' ? 20000 : (s.quick ? 9000 : (s.engine === 'native' ? 25000 : 30000)));
         try {
             if (s.engine === 'hls') this.playHls(s.url);
             else if (s.engine === 'mpegts') this.playTs(s.url);
+            else if (s.engine === 'mp4') this.playMp4(s.url);
             else this.playNative(s.url);
         } catch (e) { this.fail(e.message); }
     };
@@ -455,6 +470,7 @@
         if (eng === 'hls') return (window.Hls && Hls.isSupported()) || CAPS.nativeHls;
         // .ts en vivo necesita MSE (no existe en iPhone antiguos): ahí se usa HLS o la conversión del servidor
         if (eng === 'mpegts') return !!(window.mpegts && mpegts.isSupported());
+        if (eng === 'mp4') return !!(window.NFMp4 && NFMp4.supported());
         return true;
     };
 
@@ -494,11 +510,52 @@
         }
     };
 
+    /* MP4 con varios audios o subtítulos: el navegador arma el video con una sola pista de audio (NFMp4) */
+    NFPlayer.prototype.playMp4 = function (url) {
+        var self = this, resume = this.o.resume > 5 ? this.o.resume : 0, idx = this.idx;
+        if (resume) this.resumed = true;
+        this.mp4 = new NFMp4(this.v, url, {
+            start: resume,
+            pick: function (list) { return self.pickAudio(list); },
+            onInfo: function (m) {
+                // un solo audio y sin subtítulos: el reproductor nativo del navegador ya lo hace bien
+                var okA = m.audio.filter(function (a) { return a.ok; }).length;
+                if (m.audio.length > 1 && okA) return true;
+                if (m.subs.length && okA && m.videoOk) return true;
+                self.native(url, idx, resume);
+                return false;
+            },
+            onTracks: function () {
+                if (resume) self.toastMsg('Continuando desde ' + fmt(resume));
+                self.autoplay();
+            },
+            onError: function (why) { if (self.idx === idx && self.mp4) self.fail('mp4 ' + why); },
+            onFatal: function (why) { if (self.idx === idx && self.mp4) { self.lastTime = self.T(); self.fail('mp4 ' + why); } }
+        });
+    };
+    /* cambia al reproductor nativo sin contar como fallo (misma fuente) */
+    NFPlayer.prototype.native = function (url, idx, resume) {
+        if (this.idx !== idx) return;
+        if (this.mp4) { try { this.mp4.destroy(); } catch (e) {} this.mp4 = null; }
+        this.resumed = false;
+        this.o.resume = resume || this.o.resume;
+        this.playNative(url);
+    };
+    /* pista preferida: la que eligió antes el usuario o la del idioma del navegador */
+    NFPlayer.prototype.pickAudio = function (list) {
+        var pref = store('nfp_audio');
+        if (pref) for (var i = 0; i < list.length; i++) if ((list[i].lang + '|' + list[i].label) === pref) return i;
+        var pl = store('nfp_audio_lang');
+        if (pl) for (var j = 0; j < list.length; j++) if (lang2(list[j]) === lang2({ lang: pl })) return j;
+        return pickLang(list);
+    };
+
     NFPlayer.prototype.playNative = function (url) {
         this.v.src = url;
         this.autoplay();
     };
 
+    var IPHONE = /iPhone|iPod/i.test(navigator.userAgent);
     var APPLE = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
         (/Safari/i.test(navigator.userAgent) && !/Chrome|Chromium|Edg|Android/i.test(navigator.userAgent));
 
@@ -670,7 +727,12 @@
     NFPlayer.prototype.audioList = function () {
         var out = [], self = this;
         var isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        if (this.hls && this.hls.audioTracks && this.hls.audioTracks.length) {
+        if (this.mp4 && this.mp4.audio.length) {
+            this.mp4.audio.forEach(function (t) {
+                if (!t.ok) return; // códec que este navegador no decodifica (p. ej. Dolby en Chrome)
+                out.push({ label: t.label, lang: t.lang, on: self.mp4.audioId === t.id, set: function () { if (self.mp4 && self.mp4.audioId !== t.id) { self.root.classList.add('buffering'); self.mp4.setAudio(t.id); } } });
+            });
+        } else if (this.hls && this.hls.audioTracks && this.hls.audioTracks.length) {
             this.hls.audioTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || ('Audio ' + (i + 1)), lang: t.lang || '', on: self.hls.audioTrack === i, set: function () { self.hls.audioTrack = i; } }); });
         } else if (this.info && this.info.audio && this.info.audio.length && this._media0 && (isIos || !(this.v.audioTracks && this.v.audioTracks.length > 1))) {
             // Safari iOS/Mac native fallback bypassed. Usamos el panel (startTc) para transcodificar.
@@ -695,6 +757,7 @@
 
     NFPlayer.prototype.applyAudioPref = function () {
         var isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (this.mp4) return; // el motor MP4 ya arranca con la pista preferida
         if (!this.hls && !(this.v.audioTracks && this.v.audioTracks.length > 1) && !(this.info && this.info.audio && this.info.audio.length)) return;
         var list = this.audioList();
         if (list.length < 2) return;
@@ -802,7 +865,14 @@
             try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {}
             return;
         }
-        // Fullscreen API real (funciona en Chrome, Firefox, Safari Mac, Android)
+        // Fullscreen API real (Chrome, Firefox, Safari Mac, iPad, Android). En iPhone nunca: ahí el
+        // reproductor nativo de iOS tomaría el control del audio, así que se usa la pantalla completa propia.
+        if (IPHONE) {
+            r.classList.add('nfp-fakefs');
+            this.setIcon(this.bFull, 'exitfull');
+            try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {}); } catch (e) {}
+            return;
+        }
         if (r.requestFullscreen) {
             r.requestFullscreen().then(function () {
                 try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {}); } catch (e) {}

@@ -444,11 +444,40 @@ function wp_client_stream_url($kind, $id, $ext)
 function wp_play_sources($kind, $id, array $exts)
 {
     $out = [];
+    $relay = wp_is_https() ? wp_https_relay() : '';
     foreach ($exts as $x) {
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
-        $out[] = ['url' => wp_client_stream_url($kind, $id, $x), 'engine' => $engine, 'ext' => $x];
+        $url = wp_client_stream_url($kind, $id, $x);
+        // página https y el servidor IPTV sin https válido: se usa el relay https propio (Cloudflare), no el hosting
+        if ($relay !== '' && !wp_direct_https_ok($kind, $id, $x, $engine !== 'native')) $url = wp_relay_url(wp_stream_url($kind, $id, $x));
+        $out[] = ['url' => $url, 'engine' => $engine, 'ext' => $x];
     }
     return $out;
+}
+
+/**
+ * Relay HTTPS opcional: un Cloudflare Worker de tu cuenta (cloudflare/relay-worker.js) que entrega
+ * por https el video http del servidor IPTV. El video va servidor IPTV → Cloudflare → navegador:
+ * nunca pasa por el hosting. Se activa creando includes/https_relay.php (ver https_relay.sample.php).
+ */
+function wp_https_relay()
+{
+    static $r = null;
+    if ($r !== null) return $r;
+    $f = __DIR__ . '/https_relay.php';
+    $v = is_file($f) ? (include $f) : '';
+    $v = is_string($v) ? rtrim(trim($v), '/') : '';
+    return $r = preg_match('~^https://[a-z0-9.-]+(:\d+)?(/[^\s]*)?$~i', $v) ? $v : '';
+}
+
+/** http://host:puerto/ruta → https://relay/http/host:puerto/ruta (las rutas relativas de HLS siguen funcionando) */
+function wp_relay_url($url)
+{
+    $relay = wp_https_relay();
+    $p = parse_url($url);
+    if ($relay === '' || !$p || empty($p['host'])) return $url;
+    $hp = $p['host'] . (isset($p['port']) ? ':' . $p['port'] : '');
+    return $relay . '/' . strtolower($p['scheme'] ?? 'http') . '/' . $hp . ($p['path'] ?? '/') . (isset($p['query']) ? '?' . $p['query'] : '');
 }
 
 /** URL de imagen segura: en sitios HTTPS las imágenes http pasan por img.php (evita contenido mixto). */

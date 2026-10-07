@@ -15,3 +15,4 @@ includes/dns/
 includes/admin/
 includes/notifications/
 *.log
+includes/https_relay.php

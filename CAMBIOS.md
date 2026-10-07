@@ -230,3 +230,14 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - El `.htaccess` ya **no** fuerza https. La web funciona en http y el video va directo del servidor IPTV. (Antes, al quitar el SSL, el propio `.htaccess` seguía redirigiendo a https y la web no abría.)
 - Arreglado el login que se recargaba sin dar acceso en http: la cookie de sesion ya no se marca "secure" cuando la web esta en http (se fija por ini_set, sin depender del php.ini del hosting). Antes, si el hosting forzaba secure=1, el navegador descartaba la cookie.
 - Audio y subtitulos seleccionables en cualquier navegador: en VOD, los navegadores que no exponen las pistas de un MP4 directo (Chrome, Firefox, Android) reproducen por HLS (hls.js), que si las expone. En Safari/iPhone se usa el archivo directo que ya trae esa funcion. Si el servidor no ofrece HLS para una pelicula, se reproduce igual el archivo directo (sin cambio de pista, como un MP4 normal).
+
+## Audio dual sin doble audio y video por HTTPS (7 de octubre)
+- **Motor MP4 propio (`assets/nf/mp4mse.js` + `assets/vendor/mp4box.min.js`):** cuando una película o episodio MP4 trae más de un audio (o subtítulos de texto), el navegador lee el archivo directo del servidor IPTV por partes, separa las pistas y reproduce **una sola**. El reproductor del navegador es el que manda: en iPhone ya no suenan dos idiomas a la vez, y en Chrome, Edge y Firefox de PC y Android por fin se puede elegir el idioma de un MP4 (antes solo Safari).
+  - Cambiar de idioma continúa desde el mismo segundo. Adelantar o retroceder pide solo esa parte del archivo.
+  - Arranca con el idioma que elegiste la última vez, o el del navegador.
+  - Los subtítulos de texto que vienen dentro del MP4 aparecen en el menú de subtítulos.
+  - Guarda en memoria solo lo necesario (borra lo ya visto) para que 4K funcione también en celulares.
+  - Si el contenido tiene un solo audio, si el servidor no permite leerlo por partes (CORS/rangos) o el navegador no tiene MediaSource (iPhone con iOS menor a 17.1), se usa el reproductor de siempre.
+- **iPhone:** la pantalla completa nunca abre el reproductor de iOS: se usa la pantalla completa propia del web player (con su menú de audio y subtítulos). Si iOS intenta abrir el suyo con un gesto, se vuelve al del navegador.
+- **Video por HTTPS sin pasar por el hosting:** si pones la web en https, el orden es: 1) https directo del servidor IPTV (puerto https del servidor), 2) **relay https propio en Cloudflare** (`cloudflare/relay-worker.js`, gratis), 3) `play.php` en http. Con el relay, el video va servidor IPTV → Cloudflare → navegador. Ver GUIA.md.
+- Corregidos textos con acentos rotos en el reproductor ("Capítulo anterior", "T1:E1 · título").
