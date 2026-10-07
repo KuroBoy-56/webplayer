@@ -273,3 +273,5 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - **Pantalla completa en iPhone:** con un solo audio se usa la pantalla completa real de iOS. Con varios audios sigue la pantalla completa propia (la de iOS mezclaría los audios).
 - **Más rápido:** la lectura de pistas en el hosting tiene un tope de 3 segundos.
 - Nuevo `estado.php`: muestra si el hosting llega al panel (https, https sin certificado, http), cuántos títulos de progreso tienes, los procesos del hosting y un botón para detener las conversiones de ffmpeg.
+- **Pantalla completa real en iPhone también con selección de idioma:** con el motor MP4 o la conversión el video lleva un solo audio, así que se usa la pantalla completa de iOS (sin barra del navegador). Si iOS no la abre, queda la propia.
+- **Contenido con varios audios donde el motor MP4 falla (p. ej. audio Dolby):** si el iPhone detecta varios audios en el reproductor normal, se leen las pistas en el hosting y ffmpeg entrega un solo audio (el elegido). Con un solo audio el hosting sigue sin trabajar (`media.lazy`).

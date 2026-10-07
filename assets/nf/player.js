@@ -83,7 +83,7 @@
        sin abrir una conexión directa que el servidor IPTV podría contar como una pantalla más */
     NFPlayer.prototype.boot = function () {
         var self = this, m = this.o.media;
-        if (!m || this.live) { this.next(); return; }
+        if (!m || this.live || m.lazy) { this.next(); return; }
         var started = false;
         var go = function (j, late) {
             if (j && j.ok && !self.info) self.info = j;
@@ -205,7 +205,7 @@
         v.addEventListener('canplay', function () { r.classList.remove('buffering'); });
         v.addEventListener('loadedmetadata', function () {
             if (v.audioTracks && !v.audioTracks.onaddtrack) {
-                v.audioTracks.onaddtrack = function () { self.applyAudioPref(); self.maybeMse(); };
+                v.audioTracks.onaddtrack = function () { self.applyAudioPref(); if (!self.maybeMse() && self.multiNative()) self.probe(); };
             }
             self.ok = true;
             clearTimeout(self.loadTimer);
@@ -216,6 +216,7 @@
             }
             self.applyAudioPref();
             if (self.maybeMse()) return;
+            self.multiNative();
             self.updTime();
             if (!self.tc && !self.live) self.probe();
             if (self.tc) self.applySub();
@@ -556,6 +557,14 @@
         list.splice(this.idx + 1, 0, { url: alt.url, engine: 'mp4', ext: alt.ext }, back);
         this.toastMsg('Preparando los idiomas…');
         this.next();
+        return true;
+    };
+    /* varios audios en el reproductor nativo y sin motor MP4 posible: se permite leer las pistas en el hosting
+       para que, en iPhone, ffmpeg entregue un solo audio (si no, sonarían todos a la vez) */
+    NFPlayer.prototype.multiNative = function () {
+        var v = this.v;
+        if (this.mp4 || this.tc || this.live || !(v.audioTracks && v.audioTracks.length > 1)) return false;
+        this._needProbe = true;
         return true;
     };
     /* cambia al reproductor nativo sin contar como fallo (misma fuente) */
@@ -900,9 +909,16 @@
         // reproductor nativo de iOS tomaría el control del audio, así que se usa la pantalla completa propia.
         if (IPHONE) {
             // con un solo audio y el reproductor normal, la pantalla completa real de iOS no causa doble audio
-            var v = this.v;
-            if (!this.mp4 && v.webkitEnterFullscreen && !(v.audioTracks && v.audioTracks.length > 1) && v.readyState >= 1) {
-                try { v.webkitEnterFullscreen(); return; } catch (e) {}
+            // también con el motor MP4 o la conversión: ahí el video lleva un solo audio, así que iOS no mezcla idiomas
+            var v = this.v, single = this.mp4 || this.tc || !(v.audioTracks && v.audioTracks.length > 1);
+            if (single && v.webkitEnterFullscreen && v.readyState >= 1) {
+                try {
+                    v.webkitEnterFullscreen();
+                    var self2 = this;
+                    // si iOS no la abrió (algunas versiones con el motor MP4), se usa la pantalla completa propia
+                    setTimeout(function () { if (!v.webkitDisplayingFullscreen && !r.classList.contains('nfp-fakefs')) { r.classList.add('nfp-fakefs'); self2.setIcon(self2.bFull, 'exitfull'); } }, 700);
+                    return;
+                } catch (e) {}
             }
             r.classList.add('nfp-fakefs');
             this.setIcon(this.bFull, 'exitfull');
@@ -966,6 +982,7 @@
     NFPlayer.prototype.probe = function () {
         var self = this, m = this.o.media;
         if (!m || this._probing || this.info || this._probeTries > 2) return;
+        if (m.lazy && !this._needProbe) return; // un solo audio: el hosting no trabaja
         this._probing = true;
         this._probeTries = (this._probeTries || 0) + 1;
         fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {

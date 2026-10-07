@@ -98,9 +98,12 @@ $sources = wp_play_sources($kind, $id, $exts);
 /* Motor multimedia del hosting (ffmpeg): solo si el contenido trae más de una pista de audio
    (para poder elegir el idioma cuando el motor MP4 no alcanza). Con un solo audio el hosting no convierte nada. */
 $media_cfg = null;
-if (wp_content_multi_audio($kind, $id, $exts) && wp_bin('ffprobe') && wp_bin('ffmpeg')) {
+$multi_audio = wp_content_multi_audio($kind, $id, $exts);
+if (wp_bin('ffprobe') && wp_bin('ffmpeg')) {
     $mb = wp_proxy_url($raw_url, 'media.php');
     $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'hls' => $mb . '&do=hls', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
+    // sin varios audios conocidos: ffmpeg no se usa salvo que el iPhone descubra varios audios y el motor MP4 no pueda con ellos
+    if (!$multi_audio) $media_cfg['lazy'] = 1;
     // pistas ya conocidas (caché): el reproductor decide al instante si necesita convertir el audio
     $pc = wp_cache_get('probe|' . md5($raw_url), 604800);
     if (is_array($pc)) $media_cfg['info'] = wp_probe_labels($pc);
@@ -124,7 +127,7 @@ $extra = [['label' => 'Descargar contenido', 'href' => $download_url]];
 if ($has_prev) $extra[] = ['label' => 'Capítulo anterior', 'href' => $prev_url];
 if ($slug === 'series') $extra[] = ['label' => 'Ver episodios', 'href' => $back_url . '#episodios'];
 $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext) . ($series_id_get ? '&series_id=' . rawurlencode($series_id_get) : '');
-if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'act' => 'fix'];
+if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'act' => 'fix'];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -157,7 +160,7 @@ if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'ac
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=21" defer></script>
+    <script src="assets/nf/player.js?v=22" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
