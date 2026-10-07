@@ -456,7 +456,7 @@ function wp_play_sources($kind, $id, array $exts)
     $out = [];
     $extra = [];
     $https = wp_is_https();
-    $multi = !$https && wp_content_multi_audio($kind, $id, $exts);
+    $multi = !$https && wp_content_multi_audio($kind, $id, $exts, true) === true;
     foreach ($exts as $x) {
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
         $u = wp_stream_url($kind, $id, $x);
@@ -476,21 +476,27 @@ function wp_play_sources($kind, $id, array $exts)
     return array_merge($out, $extra);
 }
 
-/** ¿El contenido (película o episodio) trae más de una pista de audio? Se lee la cabecera del archivo, sin ffmpeg. */
-function wp_content_multi_audio($kind, $id, array $exts)
+/**
+ * ¿El contenido (película o episodio) trae más de una pista de audio? Se lee la cabecera del archivo, sin ffmpeg.
+ * $cacheOnly: solo lo ya averiguado (true/false) o null si aún no se sabe; así la página no espera al servidor IPTV.
+ */
+function wp_content_multi_audio($kind, $id, array $exts, $cacheOnly = false)
 {
-    static $memo = [];
-    if ($kind === 'live') return false;
-    $k = $kind . '|' . $id . '|' . implode(',', $exts);
-    if (isset($memo[$k])) return $memo[$k];
-    $tried = 0;
+    $u = wp_tracks_target($kind, $id, $exts);
+    if ($u === '') return false;
+    $n = wp_audio_track_count($u, $cacheOnly);
+    if ($n < 0) return null;
+    return $n > 1;
+}
+
+/** Enlace del archivo cuyas pistas se cuentan (la primera extensión que no es m3u8/ts). */
+function wp_tracks_target($kind, $id, array $exts)
+{
+    if ($kind === 'live') return '';
     foreach ($exts as $x) {
-        if (in_array($x, ['m3u8', 'ts'], true) || $tried >= 2) continue;
-        $tried++;
-        $n = wp_audio_track_count(wp_stream_url($kind, $id, $x));
-        if ($n > 0) return $memo[$k] = $n > 1;
+        if (!in_array($x, ['m3u8', 'ts'], true)) return wp_stream_url($kind, $id, $x);
     }
-    return $memo[$k] = false;
+    return '';
 }
 
 /**

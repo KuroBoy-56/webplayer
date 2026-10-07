@@ -201,7 +201,7 @@
         v.addEventListener('pause', function () { self.state(); self.emit('pause'); });
         v.addEventListener('waiting', function () { r.classList.add('buffering'); });
         v.addEventListener('stalled', function () { r.classList.add('buffering'); });
-        v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.watchAudio(); });
+        v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.watchAudio(); self.askTracks(); });
         v.addEventListener('canplay', function () { r.classList.remove('buffering'); });
         v.addEventListener('loadedmetadata', function () {
             if (v.audioTracks && !v.audioTracks.onaddtrack) {
@@ -543,10 +543,10 @@
     /* El navegador descubrió varias pistas de audio en un MP4 directo (en iPhone sonarían todas a la vez):
        se cambia al motor MP4 por la fuente del hosting, en el mismo segundo. Si ese motor falla,
        se vuelve a la fuente directa. */
-    NFPlayer.prototype.maybeMse = function () {
+    NFPlayer.prototype.maybeMse = function (force) {
         var v = this.v, list = this.o.sources, s = list[this.idx];
         if (this._mseSwitched || this.live || this.tc || this.mp4 || !s || s.engine !== 'native' || s.nomse) return false;
-        if (!(v.audioTracks && v.audioTracks.length > 1) || !(window.NFMp4 && NFMp4.supported()) || store('nfp_nomse')) return false;
+        if (!(force || (v.audioTracks && v.audioTracks.length > 1)) || !(window.NFMp4 && NFMp4.supported()) || store('nfp_nomse')) return false;
         var alt = list.filter(function (x) { return x.engine === 'native' && x.cors && /^(mp4|m4v|mov)$/i.test(x.ext || ''); })[0];
         if (!alt) return false;
         this._mseSwitched = true;
@@ -558,6 +558,20 @@
         this.toastMsg('Preparando los idiomas…');
         this.next();
         return true;
+    };
+    /* pistas aún desconocidas en el hosting: se cuentan en segundo plano (tracks.php, sin ffmpeg).
+       Con más de un audio se cambia al motor MP4 (elegir idioma) o, si no se puede, se habilita ffmpeg. */
+    NFPlayer.prototype.askTracks = function () {
+        var self = this, u = this.o.tracks;
+        if (!u || this._tracksAsked || this.live) return;
+        this._tracksAsked = true;
+        fetch(u, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+            if (!j || !(j.n > 1) || self.mp4 || self.tc) return;
+            if (self.o.media) self.o.media.lazy = 0;
+            if (self._media0) self._media0.lazy = 0;
+            self._needProbe = true;
+            if (!self.maybeMse(true)) self.probe();
+        }).catch(function () {});
     };
     /* varios audios en el reproductor nativo y sin motor MP4 posible: se permite leer las pistas en el hosting
        para que, en iPhone, ffmpeg entregue un solo audio (si no, sonarían todos a la vez) */

@@ -14,10 +14,11 @@ final class WpRangeReader
     public $url;
     public $size = 0;
     public $requests = 0;
+    public $failed = false; // alguna lectura no llegó (tiempo, límite o error): el conteo no es confiable
     private $chunks = [];
     private $deadline;
 
-    public function __construct($url, $seconds = 3)
+    public function __construct($url, $seconds = 10)
     {
         $this->url = $url;
         $this->deadline = microtime(true) + $seconds;
@@ -29,10 +30,10 @@ final class WpRangeReader
         foreach ($this->chunks as $start => $data) {
             if ($off >= $start && $off + $len <= $start + strlen($data)) return substr($data, $off - $start, $len);
         }
-        if ($this->requests >= 8 || microtime(true) > $this->deadline) return '';
+        if ($this->requests >= 14 || microtime(true) > $this->deadline) { $this->failed = true; return ''; }
         $want = max($len, 65536);
         $data = $this->fetch($off, $want);
-        if ($data === '') return '';
+        if ($data === '') { $this->failed = true; return ''; }
         $this->chunks[$off] = $data;
         return substr($data, 0, $len);
     }
@@ -77,20 +78,23 @@ final class WpRangeReader
 }
 
 /** Número de pistas de audio (0 = no se pudo saber). Caché 30 días; si falla, se reintenta en 1 hora. */
-function wp_audio_track_count($url)
+function wp_audio_track_count($url, $cacheOnly = false)
 {
     static $memo = [];
-    $ck = 'atracks|' . md5((string)$url);
+    $ck = 'atracks2|' . md5((string)$url);
     if (isset($memo[$ck])) return $memo[$ck];
     $hit = wp_cache_get($ck, 2592000);
     if (is_array($hit) && ($hit['n'] > 0 || time() - (int)$hit['t'] < 3600)) return $memo[$ck] = (int)$hit['n'];
-    $r = new WpRangeReader($url);
+    if ($cacheOnly) return -1; // aún no se sabe (se averigua en segundo plano con tracks.php)
+    $r = new WpRangeReader($url, 10);
     $head = $r->read(0, 16);
     $n = 0;
     if (strlen($head) >= 8) {
         if (substr($head, 0, 4) === "\x1A\x45\xDF\xA3") $n = wp_mkv_audio_count($r);
         elseif (in_array(substr($head, 4, 4), ['ftyp', 'moov', 'free', 'mdat', 'skip', 'wide', 'pdin', 'styp'], true)) $n = wp_mp4_audio_count($r);
     }
+    // si alguna lectura falló, el conteo puede estar incompleto (p. ej. 1 de 2 audios): se toma como desconocido
+    if ($r->failed) $n = 0;
     wp_cache_set($ck, ['n' => $n, 't' => time()]);
     return $memo[$ck] = $n;
 }

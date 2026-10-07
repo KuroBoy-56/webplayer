@@ -98,7 +98,10 @@ $sources = wp_play_sources($kind, $id, $exts);
 /* Motor multimedia del hosting (ffmpeg): solo si el contenido trae más de una pista de audio
    (para poder elegir el idioma cuando el motor MP4 no alcanza). Con un solo audio el hosting no convierte nada. */
 $media_cfg = null;
-$multi_audio = wp_content_multi_audio($kind, $id, $exts);
+$multi_audio = wp_content_multi_audio($kind, $id, $exts, true);
+// pistas aún desconocidas: el reproductor las pide en segundo plano (tracks.php) sin retrasar la página
+$tracks_url = ($multi_audio === null && !wp_is_https()) ? wp_proxy_url(wp_tracks_target($kind, $id, $exts), 'tracks.php') : '';
+$multi_audio = $multi_audio === true;
 if (wp_bin('ffprobe') && wp_bin('ffmpeg')) {
     $mb = wp_proxy_url($raw_url, 'media.php');
     $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'hls' => $mb . '&do=hls', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
@@ -160,7 +163,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=22" defer></script>
+    <script src="assets/nf/player.js?v=23" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -175,6 +178,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
             'vlcPc' => 'playlist.php?' . http_build_query(['id' => $id, 'slug' => $slug, 'ext' => $ext, 'title' => trim($content_name . ' ' . $episode_label)]),
             'downloadUrl' => $download_url,
             'media' => $media_cfg,
+            'tracks' => $tracks_url,
             'ext' => $ext,
             'diagUrl' => $diag_url,
             'extraMenu' => $extra,
