@@ -45,6 +45,12 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.latmpx.player.R
 import com.latmpx.player.data.Item
+import com.latmpx.player.data.Posters
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.latmpx.player.data.Platform
 import com.latmpx.player.ui.theme.NfCard
 import com.latmpx.player.ui.theme.NfGray2
@@ -59,11 +65,31 @@ fun Poster(url: String, title: String, modifier: Modifier = Modifier, contentSca
     }
 }
 
+/**
+ * Carátula de una película o serie que nunca queda vacía: si el servidor no trae imagen
+ * o el enlace falla, se busca en TMDB (llave del panel). Mientras tanto se ve el título.
+ */
+@Composable
+fun ItemPoster(item: Item, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop) {
+    var url by remember(item.key, item.poster) { mutableStateOf(item.poster.ifBlank { Posters.cached(item).orEmpty() }) }
+    var tried by remember(item.key) { mutableStateOf(false) }
+    LaunchedEffect(item.key, url) {
+        if (url.isBlank() && !tried && item.kind != com.latmpx.player.data.Kind.LIVE) { tried = true; url = Posters.resolve(item) }
+    }
+    Box(modifier.background(Brush.verticalGradient(listOf(Color(0xFF2B2B2B), Color(0xFF1A1A1A)))), contentAlignment = Alignment.Center) {
+        Text(item.name, color = NfGray2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp))
+        if (url.isNotBlank()) AsyncImage(
+            model = url, contentDescription = item.name, contentScale = contentScale, modifier = Modifier.fillMaxSize(),
+            onError = { if (!tried) url = "" },
+        )
+    }
+}
+
 @Composable
 fun PosterCard(item: Item, width: Dp, onClick: () -> Unit, progress: Float = 0f, onFocus: (() -> Unit)? = null) {
     Column(Modifier.width(width)) {
         FocusBox(onClick = onClick, onFocus = onFocus, modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
-            Poster(item.poster, item.name, Modifier.fillMaxSize())
+            ItemPoster(item, Modifier.fillMaxSize())
             if (item.rating > 0) {
                 Text(
                     "★ " + String.format(java.util.Locale.US, "%.1f", item.rating), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold,
@@ -123,7 +149,7 @@ fun Top10Card(rank: Int, item: Item, posterWidth: Dp, onClick: () -> Unit) {
             modifier = Modifier.align(Alignment.BottomStart).offset(y = (posterWidth.value * 0.16f).dp),
         )
         FocusBox(onClick = onClick, modifier = Modifier.align(Alignment.CenterEnd).width(posterWidth * 0.82f).aspectRatio(2f / 3f)) {
-            Poster(item.poster, item.name, Modifier.fillMaxSize())
+            ItemPoster(item, Modifier.fillMaxSize())
         }
     }
 }

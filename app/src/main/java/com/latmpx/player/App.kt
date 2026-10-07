@@ -13,6 +13,7 @@ class App : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         Store.init(this)
+        com.latmpx.player.data.Posters.init(this)
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

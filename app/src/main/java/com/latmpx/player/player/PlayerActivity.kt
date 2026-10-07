@@ -19,6 +19,14 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.core.os.LocaleListCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -63,8 +71,8 @@ import com.latmpx.player.data.Xtream
 class PlayerActivity : ComponentActivity() {
     private lateinit var player: ExoPlayer
     private lateinit var view: PlayerView
-    private lateinit var title: TextView
-    private lateinit var toast: TextView
+    private lateinit var ui2: PlayerUiModel
+    private var tv = false
     private lateinit var selector: DefaultTrackSelector
     private val ui = Handler(Looper.getMainLooper())
 
@@ -105,8 +113,15 @@ class PlayerActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
-        buildUi()
+        tv = Device.isTv(this)
         buildPlayer()
+        ui2 = PlayerUiModel(player, kind == Kind.LIVE, tv).apply {
+            episodes = if (kind == Kind.SERIES) queue.map { q -> q.title.removePrefix(saveTitle).trim().trimStart('·').trim().ifEmpty { q.title } } else emptyList()
+            resize = Store.resizeMode
+        }
+        buildUi()
+        view.player = player
+        applyTitle(start)
 
         player.setMediaItems(queue.map { mediaItem(it) }, start, resumePosition(queue[start]))
         player.prepare()
@@ -118,49 +133,58 @@ class PlayerActivity : ComponentActivity() {
     /* ---------------- interfaz ---------------- */
 
     private fun buildUi() {
-        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         view = PlayerView(this).apply {
-            useController = true
-            setShowSubtitleButton(true)
-            setShowNextButton(queue.size > 1)
-            setShowPreviousButton(queue.size > 1)
-            setShowFastForwardButton(kind != Kind.LIVE)
-            setShowRewindButton(kind != Kind.LIVE)
-            controllerShowTimeoutMs = 4000
+            useController = false // controles propios estilo Netflix (PlayerUi.kt)
             setKeepContentOnPlayerReset(true)
-            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-            setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-            setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { v -> title.visibility = v })
-            isFocusable = true
-            isFocusableInTouchMode = true
+            resizeMode = Store.resizeMode
+            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+            setBackgroundColor(Color.BLACK)
+            // subtítulos grandes, blancos con borde, como Netflix
+            subtitleView?.apply {
+                setStyle(CaptionStyleCompat(Color.WHITE, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, Typeface.DEFAULT_BOLD))
+                setFractionalTextSize(if (tv) 0.055f else 0.065f)
+                setBottomPaddingFraction(0.08f)
+            }
+            isFocusable = false
         }
-        root.addView(view, FrameLayout.LayoutParams(-1, -1))
-        title = TextView(this).apply {
-            setTextColor(Color.WHITE); textSize = 18f; setTypeface(typeface, Typeface.BOLD)
-            setShadowLayer(6f, 0f, 0f, Color.BLACK)
-            setPadding(dp(24), dp(18), dp(24), dp(8))
-            maxLines = 2
+        val actions = PlayerActions(
+            back = { finish() },
+            next = { if (player.hasNextMediaItem()) { saveProgress(force = true); player.seekToNextMediaItem(); player.play() } },
+            pickEpisode = { i -> saveProgress(force = true); player.seekTo(i, C.TIME_UNSET); player.prepare(); player.play() },
+            zap = { d -> zap(d) },
+            resize = { r -> view.resizeMode = r; ui2.resize = r; Store.resizeMode = r },
+        )
+        setContent {
+            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
+                AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
+                PlayerOverlay(ui2, actions)
+            }
         }
-        root.addView(title, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
-        toast = TextView(this).apply {
-            setTextColor(Color.WHITE); textSize = 15f
-            setBackgroundColor(0xCC000000.toInt())
-            setPadding(dp(16), dp(10), dp(16), dp(10))
-            visibility = View.GONE
-        }
-        root.addView(toast, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(dp(20), dp(20), dp(20), dp(20)) })
-        setContentView(root)
-        view.requestFocus()
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when {
+                    ui2.panel != null -> { ui2.panel = null; ui2.poke() }
+                    ui2.locked -> { ui2.poke() }
+                    tv && ui2.visible -> ui2.visible = false
+                    else -> finish()
+                }
+            }
+        })
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
-    private val hideToast = Runnable { toast.visibility = View.GONE }
-    private fun showToast(t: String) {
-        toast.text = t
-        toast.visibility = View.VISIBLE
-        ui.removeCallbacks(hideToast)
-        ui.postDelayed(hideToast, 3000)
+    private fun showToast(t: String) { if (::ui2.isInitialized) ui2.toast = t }
+
+    /** título grande (película, serie o canal) y debajo temporada/episodio */
+    private fun applyTitle(i: Int) {
+        val q = queue.getOrNull(i) ?: return
+        if (kind == Kind.SERIES && saveTitle.isNotEmpty() && q.title.startsWith(saveTitle)) {
+            ui2.title = saveTitle
+            ui2.subtitle = q.title.removePrefix(saveTitle).trim().trimStart('·').trim()
+        } else { ui2.title = q.title; ui2.subtitle = "" }
+        ui2.index = i
+        ui2.hasNext = kind == Kind.SERIES && i < queue.lastIndex
     }
 
     /* ---------------- reproductor ---------------- */
@@ -169,7 +193,7 @@ class PlayerActivity : ComponentActivity() {
         // FFmpeg entra cuando el equipo no tiene decodificador para ese audio (Dolby, DTS...)
         val renderers = DefaultRenderersFactory(this)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-            .setEnableDecoderFallback(true)
+            .setEnableDecoderFallback(true) // si el decodificador por hardware no puede (4K/HEVC/10 bits), prueba el siguiente
 
         val http = OkHttpDataSource.Factory(Net.client).setUserAgent(Net.UA)
         val data = DefaultDataSource.Factory(this, http)
@@ -185,12 +209,21 @@ class PlayerActivity : ComponentActivity() {
             if (sub.isNullOrEmpty()) setIgnoredTextSelectionFlags(C.SELECTION_FLAG_DEFAULT) // subtítulos apagados salvo los forzados
             else setPreferredTextLanguage(sub)
             setExceedRendererCapabilitiesIfNecessary(true)
+            // 4K en cualquier equipo: no se limita la calidad al tamaño de la pantalla ni a lo que el equipo "dice" soportar
+            clearViewportSizeConstraints()
+            clearVideoSizeConstraints()
+            setExceedVideoConstraintsIfNecessary(true)
+            setExceedAudioConstraintsIfNecessary(true)
+            setAllowVideoNonSeamlessAdaptiveness(true)
+            if (tv) setTunnelingEnabled(false)
             setAllowVideoMixedMimeTypeAdaptiveness(true)
             setAllowAudioMixedMimeTypeAdaptiveness(true)
         })
 
         val load = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(15_000, if (kind == Kind.LIVE) 30_000 else 60_000, 1_500, 3_000)
+            // búfer amplio para 4K (alto bitrate) sin tardar en arrancar
+            .setBufferDurationsMs(if (kind == Kind.LIVE) 15_000 else 30_000, if (kind == Kind.LIVE) 40_000 else 120_000, 1_500, 3_000)
+            .setBackBuffer(if (kind == Kind.LIVE) 0 else 20_000, true)
             .build()
 
         player = ExoPlayer.Builder(this, renderers)
@@ -202,15 +235,14 @@ class PlayerActivity : ComponentActivity() {
             .setSeekBackIncrementMs(10_000)
             .setSeekForwardIncrementMs(10_000)
             .build()
-        view.player = player
 
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                title.text = mediaItem?.mediaMetadata?.title ?: ""
+                applyTitle(player.currentMediaItemIndex)
                 retries = 0
                 if (kind == Kind.LIVE) {
                     queue.getOrNull(player.currentMediaItemIndex)?.let { Store.setLastChannel(it.id) }
-                    showToast(title.text.toString())
+                    showToast(mediaItem?.mediaMetadata?.title?.toString() ?: "")
                 } else if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
                     queue.getOrNull(player.currentMediaItemIndex)?.let { q ->
                         val pos = resumePosition(q)
@@ -222,6 +254,7 @@ class PlayerActivity : ComponentActivity() {
             override fun onPlayerError(error: PlaybackException) = handleError(error)
 
             override fun onTracksChanged(tracks: Tracks) {
+                if (::ui2.isInitialized) ui2.tracksRev++
                 // si el usuario eligió una pista a mano, se recuerda su idioma para lo siguiente
                 if (player.trackSelectionParameters.overrides.isEmpty()) return
                 for (g in tracks.groups) {
@@ -239,7 +272,12 @@ class PlayerActivity : ComponentActivity() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (::ui2.isInitialized) { ui2.playing = isPlaying; if (!isPlaying) ui2.poke() }
                 if (!isPlaying) saveProgress(force = true)
+            }
+
+            override fun onPlaybackStateChanged(state: Int) {
+                if (::ui2.isInitialized) ui2.buffering = state == Player.STATE_BUFFERING || (state == Player.STATE_IDLE && player.playWhenReady)
             }
         })
     }
@@ -373,23 +411,35 @@ class PlayerActivity : ComponentActivity() {
     /* ---------------- control remoto ---------------- */
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN && kind == Kind.LIVE) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> { zap(-1); return true }
-                KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> { zap(1); return true }
-                KeyEvent.KEYCODE_DPAD_UP -> if (!view.isControllerFullyVisible) { zap(-1); return true }
-                KeyEvent.KEYCODE_DPAD_DOWN -> if (!view.isControllerFullyVisible) { zap(1); return true }
+        if (!::ui2.isInitialized) return super.dispatchKeyEvent(event)
+        val k = event.keyCode
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            // teclas multimedia del control: siempre
+            when (k) {
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> { ui2.toggle(); return true }
+                KeyEvent.KEYCODE_MEDIA_PLAY -> { player.play(); ui2.poke(); return true }
+                KeyEvent.KEYCODE_MEDIA_PAUSE -> { player.pause(); ui2.poke(); return true }
+                KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> if (kind != Kind.LIVE) { player.seekForward(); ui2.seekHint = "10 s »"; return true }
+                KeyEvent.KEYCODE_MEDIA_REWIND -> if (kind != Kind.LIVE) { player.seekBack(); ui2.seekHint = "« 10 s"; return true }
+                KeyEvent.KEYCODE_MEDIA_NEXT -> if (kind == Kind.SERIES && player.hasNextMediaItem()) { player.seekToNextMediaItem(); return true }
+                KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> if (kind == Kind.LIVE) { zap(-1); return true }
+                KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> if (kind == Kind.LIVE) { zap(1); return true }
             }
+            // controles escondidos: el control remoto no navega, actúa directo (como Netflix en TV)
+            if (!ui2.visible && ui2.panel == null) {
+                when (k) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> if (kind != Kind.LIVE) { player.seekBack(); ui2.seekHint = "« 10 s"; return true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> if (kind != Kind.LIVE) { player.seekForward(); ui2.seekHint = "10 s »"; return true }
+                    KeyEvent.KEYCODE_DPAD_UP -> if (kind == Kind.LIVE) { zap(-1); return true }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> if (kind == Kind.LIVE) { zap(1); return true }
+                }
+                if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+                    k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN || k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    ui2.poke(); ui2.focusTick++; return true
+                }
+            } else if (k != KeyEvent.KEYCODE_BACK) ui2.poke()
         }
-        if (event.action == KeyEvent.ACTION_DOWN && !view.isControllerFullyVisible) {
-            when (event.keyCode) {
-                // sin el menú visible: izquierda/derecha adelantan o retroceden 10 s, OK muestra los controles
-                KeyEvent.KEYCODE_DPAD_LEFT -> if (kind != Kind.LIVE) { player.seekBack(); view.showController(); return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> if (kind != Kind.LIVE) { player.seekForward(); view.showController(); return true }
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { view.showController(); return true }
-            }
-        }
-        return view.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
+        return super.dispatchKeyEvent(event)
     }
 
     private fun zap(dir: Int) {
@@ -409,6 +459,11 @@ class PlayerActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !Device.isTv(this) && ::player.isInitialized && player.isPlaying) {
             runCatching { enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) }
         }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (::ui2.isInitialized) { ui2.visible = !isInPictureInPictureMode; ui2.panel = null }
     }
 
     override fun onStop() {

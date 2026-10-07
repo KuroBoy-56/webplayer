@@ -40,25 +40,19 @@ fun CatalogScreen(state: AppState, kind: Kind) {
     val heroItems = remember(all) { all.sortedByDescending { it.added }.filter { it.backdrop.isNotEmpty() }.take(5).ifEmpty { all.take(1) } }
     if (state.loading && all.isEmpty()) { Loading(); return }
     
-    Column(Modifier.fillMaxSize().background(NfBg)) {
-        if (!tv) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = sidePad(), vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Series", color = if (kind == Kind.SERIES) Color.White else Color.Gray, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { state.tab = Tab.SERIES })
-                Text("Películas", color = if (kind == Kind.MOVIE) Color.White else Color.Gray, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { state.tab = Tab.MOVIES })
-                Text("Deportes", color = Color.Gray, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { state.tab = Tab.SPORTS })
-            }
-        }
-        
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val solid = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 260
+    val cardHero = remember(all) { all.sortedByDescending { it.added }.take(40).sortedByDescending { it.rating }.take(6) }
+    Box(Modifier.fillMaxSize().background(NfBg)) {
         val pw = posterWidth()
         val sp = sidePad()
-        
-        LazyColumn(Modifier.fillMaxSize()) {
+
+        LazyColumn(Modifier.fillMaxSize(), state = listState) {
             item {
-                HeroCarousel(items = heroItems, tv = tv) { item ->
-                    com.latmpx.player.ui.screens.Hero(state, item, tv)
-                }
+                if (tv) HeroCarousel(items = heroItems, tv = tv) { item -> com.latmpx.player.ui.screens.Hero(state, item, tv) }
+                else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 112.dp)
             }
-            item {
+            if (tv) item {
                 Row(Modifier.fillMaxWidth().padding(horizontal = sp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (kind == Kind.MOVIE) "Películas" else "Series", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
@@ -80,6 +74,7 @@ fun CatalogScreen(state: AppState, kind: Kind) {
             }
             item { Spacer(Modifier.height(40.dp)) }
         }
+        if (!tv) PhoneTopBar(state, sp, solid, if (kind == Kind.MOVIE) Tab.MOVIES else Tab.SERIES) { state.tab = Tab.ACCOUNT }
     }
 }
 

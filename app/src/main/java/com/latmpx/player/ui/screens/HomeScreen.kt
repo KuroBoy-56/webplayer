@@ -17,6 +17,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material3.TextButton
 import com.latmpx.player.ui.Tab
 
@@ -142,23 +143,26 @@ fun HomeScreen(state: AppState) {
         }
     }
 
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val solid = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 260
+    val cardHero = remember(movies, series) {
+        // destacados: lo más nuevo y mejor valorado, películas y series mezcladas
+        val m = recentMovies.take(30).sortedByDescending { it.rating }.take(4)
+        val se = recentSeries.take(30).sortedByDescending { it.rating }.take(3)
+        (m.zip(se).flatMap { listOf(it.first, it.second) } + m.drop(se.size) + se.drop(m.size)).distinctBy { it.key }.take(7)
+    }
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize().background(NfBg)) {
+        LazyColumn(Modifier.fillMaxSize().background(NfBg), state = listState) {
         item {
-            val h = userFocusedHero
-            if (h != null) {
-                Hero(state, h, tv)
-            } else {
-                HeroCarousel(items = heroItems, tv = tv) { item ->
-                    Hero(state, item, tv)
-                }
-            }
+            if (tv) {
+                val h = userFocusedHero
+                if (h != null) Hero(state, h, tv) else HeroCarousel(items = heroItems, tv = tv) { item -> Hero(state, item, tv) }
+            } else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 112.dp)
         }
         item {
-            ShelfRow("Continuar viendo", cont, pad) { _, p ->
+            ShelfRow("Continuar viendo para ${state.session?.user.orEmpty()}", cont, pad) { _, p ->
                 val it = state.itemFromProgress(p) ?: return@ShelfRow
-                PosterCard(it.copy(poster = p.poster.ifEmpty { it.poster }), pw, onClick = { state.push(Route.Detail(it)) },
-                    progress = if (p.duration > 0) p.position.toFloat() / p.duration else 0f)
+                ContinueCard(state, it.copy(poster = p.poster.ifEmpty { it.poster }), p, pw)
             }
         }
         item { ShelfRow("Mi lista", favs, pad) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
@@ -185,25 +189,61 @@ fun HomeScreen(state: AppState) {
         }
         item { Spacer(Modifier.height(40.dp)) }
     }
-    if (!tv) {
-        Column(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xCC000000), Color(0x66000000), Color.Transparent)))) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = pad, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.latmpx.player.R.drawable.logo), null, modifier = Modifier.height(32.dp))
+    if (!tv) PhoneTopBar(state, pad, solid, null) { showProfileDialog = true }
+}
+}
+
+/**
+ * Barra superior de la app de Netflix para celular: "Para <usuario>", buscar y perfil;
+ * debajo los filtros Series / Películas / Deportes. Transparente sobre los destacados y oscura al bajar.
+ */
+@Composable
+fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolean, current: Tab?, onProfile: () -> Unit) {
+    val bg by androidx.compose.animation.animateColorAsState(if (solid) Color(0xF2141414) else Color.Transparent, label = "bar")
+    Column(Modifier.fillMaxWidth().background(bg).background(Brush.verticalGradient(listOf(Color(0xB3000000), Color.Transparent)))) {
+        Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (current == null) {
+                Text("Para " + (state.session?.user ?: ""), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            } else {
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.latmpx.player.R.drawable.logo), null, modifier = Modifier.height(28.dp))
                 Spacer(Modifier.weight(1f))
-                Icon(Icons.Filled.Search, null, tint = Color.White, modifier = Modifier.size(28.dp).clickable { state.tab = Tab.SEARCH })
-                Spacer(Modifier.width(16.dp))
-                Box(Modifier.size(32.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFE50914)).clickable { showProfileDialog = true }, contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    Text(state.session?.user?.take(1)?.uppercase() ?: "U", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
-                }
             }
-            Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                com.latmpx.player.ui.components.Chip("Series", false) { state.tab = Tab.SERIES }
-                com.latmpx.player.ui.components.Chip("Películas", false) { state.tab = Tab.MOVIES }
-                com.latmpx.player.ui.components.Chip("Deportes", false) { state.tab = Tab.SPORTS }
+            Icon(Icons.Filled.Search, "Buscar", tint = Color.White, modifier = Modifier.size(26.dp).clickable { state.tab = Tab.SEARCH })
+            Spacer(Modifier.width(18.dp))
+            Box(Modifier.size(30.dp).clip(RoundedCornerShape(5.dp)).background(Brush.linearGradient(listOf(Color(0xFFE50914), Color(0xFF8E0B12)))).clickable { onProfile() }, contentAlignment = Alignment.Center) {
+                Text(state.session?.user?.take(1)?.uppercase() ?: "U", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
+        }
+        Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (current != null) com.latmpx.player.ui.components.Chip("✕", false) { state.tab = Tab.HOME }
+            com.latmpx.player.ui.components.Chip("Series", current == Tab.SERIES) { state.tab = Tab.SERIES }
+            com.latmpx.player.ui.components.Chip("Películas", current == Tab.MOVIES) { state.tab = Tab.MOVIES }
+            com.latmpx.player.ui.components.Chip("Deportes", current == Tab.SPORTS) { state.tab = Tab.SPORTS }
+            com.latmpx.player.ui.components.Chip("Mi lista", current == Tab.MYLIST) { state.tab = Tab.MYLIST }
         }
     }
 }
+
+/** Continuar viendo: carátula con barra roja de avance y botones de información, como Netflix */
+@Composable
+fun ContinueCard(state: AppState, item: Item, p: com.latmpx.player.data.Progress, width: androidx.compose.ui.unit.Dp) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    Column(Modifier.width(width).clip(RoundedCornerShape(6.dp)).background(Color(0xFF1F1F1F))) {
+        FocusBox(onClick = { state.push(Route.Detail(item)) }, modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f), shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)) {
+            com.latmpx.player.ui.components.ItemPoster(item, Modifier.fillMaxSize())
+            Box(Modifier.align(Alignment.Center).size(46.dp).background(Color(0x99000000), CircleShape).border(1.5.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.PlayArrow, "Reproducir", tint = Color.White, modifier = Modifier.size(28.dp))
+            }
+        }
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { if (p.duration > 0) (p.position.toFloat() / p.duration).coerceIn(0f, 1f) else 0f }, color = NfRed, trackColor = Color(0xFF4D4D4D),
+            modifier = Modifier.fillMaxWidth().height(3.dp),
+        )
+        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(p.label.removePrefix(item.name).trim().trimStart('·').trim().ifBlank { item.name }, color = NfGray2, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Icon(Icons.Filled.Info, "Información", tint = NfGray2, modifier = Modifier.size(18.dp).clickable { state.push(Route.Detail(item)) })
+        }
+    }
 }
 
 @Composable

@@ -29,6 +29,39 @@ object Tmdb {
         return list
     }
 
+    /** "ES - Avengers: Endgame (2019) [4K] LAT" → ("Avengers: Endgame", "2019"): lo que TMDB entiende */
+    fun clean(raw: String): Pair<String, String> {
+        var t = raw.trim()
+        val year = Regex("[\\(\\[]((19|20)\\d{2})[\\)\\]]").find(t)?.groupValues?.get(1)
+            ?: Regex("\\b((19|20)\\d{2})\\s*$").find(t)?.groupValues?.get(1) ?: ""
+        t = t.replace(Regex("^\\s*[A-Z]{2,4}\\s*[-|:]\\s+"), "")                     // prefijos de país: "ES - ", "LAT | "
+        t = t.replace(Regex("[\\(\\[][^\\)\\]]*[\\)\\]]"), " ")                       // (2019) [4K] (Latino)
+        t = t.replace(Regex("(?i)\\b(4k|uhd|fhd|hd|sd|1080p|720p|2160p|hdr|dual|latino|lat|castellano|subtitulad[oa]|sub|esp|eng|vose|cam|ts|hevc|x265|x264)\\b"), " ")
+        if (year.isNotEmpty()) t = t.replace(Regex("\\b$year\\s*$"), " ")
+        t = t.replace(Regex("[_.]+"), " ").replace(Regex("\\s*[-|]\\s*$"), "").replace(Regex("\\s+"), " ").trim()
+        return t to year
+    }
+
+    /** póster de TMDB (w342) para una película o serie, buscando por nombre y año */
+    suspend fun findPoster(type: String, rawTitle: String, rawYear: String = ""): String {
+        val k = key()
+        if (k.isBlank()) return ""
+        val (title, y0) = clean(rawTitle)
+        if (title.length < 2) return ""
+        val y = rawYear.filter { it.isDigit() }.take(4).ifEmpty { y0 }
+        val q = URLEncoder.encode(title, "UTF-8")
+        val yp = if (y.length == 4) (if (type == "tv") "&first_air_date_year=$y" else "&year=$y") else ""
+        var res = Net.obj("https://api.themoviedb.org/3/search/$type?api_key=$k&language=es-MX&include_adult=false&query=$q$yp")
+        if (yp.isNotEmpty() && (res?.optJSONArray("results")?.length() ?: 0) == 0)
+            res = Net.obj("https://api.themoviedb.org/3/search/$type?api_key=$k&language=es-MX&include_adult=false&query=$q")
+        val arr = res?.optJSONArray("results") ?: return ""
+        for (i in 0 until arr.length()) {
+            val pp = arr.optJSONObject(i)?.optString("poster_path").orEmpty()
+            if (pp.isNotEmpty() && pp != "null") return "https://image.tmdb.org/t/p/w342$pp"
+        }
+        return ""
+    }
+
     data class Details(
         val id: Int,
         val poster: String,
@@ -46,7 +79,8 @@ object Tmdb {
         val k = key()
         if (k.isBlank()) return null
         
-        val cleanTitle = title.substringBefore(":").substringBefore(" - ").trim()
+        val cleanTitle = clean(title).first.ifEmpty { title.trim() }
+        val year = year.ifEmpty { clean(title).second }
         val cacheKey = "$type|$cleanTitle|$year|$tmdbId"
         cache[cacheKey]?.let { return it }
 

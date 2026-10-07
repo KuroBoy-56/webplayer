@@ -32,6 +32,11 @@ object Store {
         get() = p.getString("stream_format", "m3u8") ?: "m3u8"
         set(v) = p.edit().putString("stream_format", v).apply()
 
+    /** forma de ajustar el video: 0 ajustar, 3 estirar, 4 zoom (AspectRatioFrameLayout) */
+    var resizeMode: Int
+        get() = p.getInt("resize_mode", 0)
+        set(v) = p.edit().putInt("resize_mode", v).apply()
+
     var externalPlayer: Boolean
         get() = p.getBoolean("ext_player", false)
         set(v) = p.edit().putBoolean("ext_player", v).apply()

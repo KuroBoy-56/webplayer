@@ -24,6 +24,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.foundation.border
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -109,13 +112,57 @@ fun DetailScreen(state: AppState, media: Item) {
 
     LazyColumn(Modifier.fillMaxSize().background(NfBg)) {
         item {
-            Box(Modifier.fillMaxWidth().height(if (tv) 300.dp else 260.dp)) {
+            Box(Modifier.fillMaxWidth().then(if (tv) Modifier.height(300.dp) else Modifier.aspectRatio(16f / 10f))) {
                 AsyncImage(model = tmdb?.backdrop?.ifEmpty { null } ?: det?.backdrop?.ifEmpty { null } ?: media.backdrop.ifEmpty { media.poster }, contentDescription = null,
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x33000000), Color(0x99141414), NfBg))))
             }
         }
-        item {
+        if (!tv) item {
+            // celular: como la app de Netflix (título, datos, botones a todo el ancho)
+            Column(Modifier.padding(horizontal = sidePad())) {
+                Text(media.name, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Black, lineHeight = 30.sp)
+                Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (media.rating > 0) Text("★ " + String.format(java.util.Locale.US, "%.1f", media.rating), color = Color(0xFF46D369), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    if (media.year.isNotBlank()) Text(media.year.take(4), color = NfGray2, fontSize = 14.sp)
+                    det?.duration?.takeIf { it.isNotBlank() }?.let { Text(it, color = NfGray2, fontSize = 14.sp) }
+                    if (media.kind == Kind.SERIES && seasons.isNotEmpty()) Text("${seasons.size} temporada" + if (seasons.size > 1) "s" else "", color = NfGray2, fontSize = 14.sp)
+                    Text("HD", color = NfGray2, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.border(1.dp, NfGray2, RoundedCornerShape(3.dp)).padding(horizontal = 4.dp, vertical = 1.dp))
+                }
+                det?.genre?.takeIf { it.isNotBlank() }?.let { Text(it, color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)) }
+                Spacer(Modifier.height(14.dp))
+                val label = when {
+                    media.kind == Kind.MOVIE && progress != null -> "Continuar"
+                    lastEp != null -> lastEpLabel(seasons, lastEp.key)
+                    else -> "Reproducir"
+                }
+                WideButton(label, Icons.Filled.PlayArrow, true) { play() }
+                if (media.kind == Kind.MOVIE && progress != null && progress.duration > 0) {
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        LinearProgressIndicator(progress = { progress.position.toFloat() / progress.duration }, color = NfRed, trackColor = Color(0x44FFFFFF), modifier = Modifier.weight(1f).height(3.dp))
+                        Text("  Quedan " + com.latmpx.player.player.fmtTime(progress.duration - progress.position), color = NfGray2, fontSize = 12.sp)
+                    }
+                }
+                tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { trailerId ->
+                    Spacer(Modifier.height(8.dp))
+                    WideButton("Ver tráiler", Icons.Filled.Movie, false) { openTrailer(ctx, trailerId) }
+                }
+                val plot = tmdb?.overview?.ifBlank { null } ?: det?.plot?.ifBlank { null } ?: media.plot
+                if (plot.isNotBlank()) Text(plot, color = Color(0xFFE5E5E5), fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 14.dp))
+                val castLine = tmdb?.cast?.take(4)?.joinToString(", ") { it.name }?.ifBlank { null } ?: det?.cast?.split(",")?.take(4)?.joinToString(", ") { it.trim() }.orEmpty()
+                if (castLine.isNotBlank()) Text("Elenco: $castLine", color = NfGray2, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                det?.director?.takeIf { it.isNotBlank() }?.let { Text("Dirección: $it", color = NfGray2, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp)) }
+                Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    IconAction(if (fav) Icons.Filled.Check else Icons.Filled.Add, "Mi lista") { fav = Cloud.toggleFav(media) }
+                    tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { t -> IconAction(Icons.Filled.Movie, "Tráiler") { openTrailer(ctx, t) } }
+                    IconAction(Icons.Filled.Share, "Compartir") {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, "Mira \"${media.name}\" en LatMpx")
+                        runCatching { ctx.startActivity(android.content.Intent.createChooser(send, "Compartir")) }
+                    }
+                }
+            }
+        }
+        if (tv) item {
             Row(Modifier.padding(horizontal = sidePad()).padding(top = 0.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 Poster(tmdb?.poster?.ifEmpty { null } ?: media.poster, media.name, Modifier.width(if (tv) 150.dp else 110.dp).aspectRatio(2f / 3f).background(Color.Black, RoundedCornerShape(6.dp)))
                 Column(Modifier.weight(1f)) {
@@ -151,12 +198,12 @@ fun DetailScreen(state: AppState, media: Item) {
                 }
             }
         }
-        item {
+        if (tv || det == null) item {
             Column(Modifier.padding(horizontal = sidePad(), vertical = 14.dp)) {
                 if (det == null) Text("Cargando información…", color = NfGray2)
                 val plot = tmdb?.overview?.ifBlank { null } ?: det?.plot?.ifBlank { null } ?: media.plot
-                if (plot.isNotBlank()) Text(plot, color = Color(0xFFDDDDDD), fontSize = 15.sp, lineHeight = 21.sp)
-                det?.director?.takeIf { it.isNotBlank() }?.let { Text("Dirección: $it", color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp)) }
+                if (tv && plot.isNotBlank()) Text(plot, color = Color(0xFFDDDDDD), fontSize = 15.sp, lineHeight = 21.sp)
+                if (tv) det?.director?.takeIf { it.isNotBlank() }?.let { Text("Dirección: $it", color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp)) }
             }
         }
         
@@ -223,6 +270,35 @@ fun DetailScreen(state: AppState, media: Item) {
             }
         }
         item { Spacer(Modifier.height(40.dp)) }
+    }
+}
+
+private fun openTrailer(ctx: android.content.Context, id: String) {
+    try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("vnd.youtube:$id"))) }
+    catch (e: Exception) { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=$id"))) } }
+}
+
+@Composable
+private fun WideButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, primary: Boolean, onClick: () -> Unit) {
+    FocusBox(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(5.dp), focusScale = 1.02f) { f ->
+        Row(
+            Modifier.fillMaxWidth().background(if (primary) Color.White else if (f) Color(0x80FFFFFF) else Color(0xFF2E2E2E)).padding(vertical = 11.dp),
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val c = if (primary) Color.Black else Color.White
+            androidx.compose.material3.Icon(icon, null, tint = c, modifier = Modifier.size(24.dp))
+            Text(text, color = c, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(start = 6.dp))
+        }
+    }
+}
+
+@Composable
+private fun IconAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    FocusBox(onClick = onClick, shape = RoundedCornerShape(8.dp), focusScale = 1.05f) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.material3.Icon(icon, label, tint = Color.White, modifier = Modifier.size(26.dp))
+            Text(label, color = NfGray2, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+        }
     }
 }
 
