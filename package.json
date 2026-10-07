@@ -1,0 +1,50 @@
+{
+  "name": "latmpxvega",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "react-native start",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "bundle:check": "react-native bundle --entry-file index.js --platform kepler --dev false --bundle-output build/check/main.js --assets-dest build/check/assets",
+    "build:release": "react-native build-vega --build-type Release",
+    "build:debug": "react-native build-vega --build-type Debug",
+    "app:install": "vega device install-app --dir .",
+    "app:launch": "vega device launch-app"
+  },
+  "dependencies": {
+    "@amazon-devices/react-native-async-storage__async-storage": "~2.1.0",
+    "@amazon-devices/react-native-kepler": "~4.0.0",
+    "@amazon-devices/react-native-w3cmedia": "~2.3.2",
+    "@react-native-async-storage/async-storage": "npm:@amazon-devices/react-native-async-storage__async-storage@~2.1.0",
+    "react": "19.2.0",
+    "react-native": "0.83.0"
+  },
+  "devDependencies": {
+    "@amazon-devices/kepler-cli-platform": "~0.22.7",
+    "@babel/core": "^7.25.2",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "^20.0.0",
+    "@react-native/babel-preset": "0.83.0",
+    "@react-native/metro-config": "0.83.0",
+    "@react-native/typescript-config": "0.83.0",
+    "@types/react": "^19.2.0",
+    "typescript": "5.8.3"
+  },
+  "resolutions": {
+    "@types/react": "^19.2.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "kepler": {
+    "projectType": "application",
+    "appName": "LatMpxTV",
+    "targets": [
+      "tv"
+    ],
+    "os": [
+      "vega"
+    ],
+    "api": 0.1
+  }
+}
