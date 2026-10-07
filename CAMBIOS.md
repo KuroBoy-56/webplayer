@@ -255,3 +255,4 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - El relay de Cloudflare ya no hace falta: puedes borrar `includes/https_relay.php`.
 - Archivos nuevos: `proxy.php`, `media.php`, `includes/media_core.php`, `includes/doh.php`, `bin/`.
 - `instalar_ffmpeg.php`: abre esta página con tu sesión iniciada y toca "Descargar e instalar ffmpeg". El hosting descarga ffmpeg y ffprobe (versión estática 6.0 para Linux) directo a `bin/` y comprueba que funcionan. No hay que subir nada desde el celular. Después se puede borrar.
+- Corregido: la DNS del proveedor es https, pero el video redirige a otro servidor por **http** (p. ej. `http://88.99.28.189`). El reproductor lo mandaba directo y el iPhone lo bloqueaba ("Load failed" / "native 4"). Ahora el hosting comprueba una vez (caché de 6 h) a dónde termina el enlace: si termina en http, el video pasa por `proxy.php`; si termina en https, va directo.

@@ -465,7 +465,38 @@ function wp_play_sources($kind, $id, array $exts)
  */
 function wp_via_hosting($url)
 {
-    return stripos((string)$url, 'https://') !== 0;
+    $url = (string)$url;
+    if (stripos($url, 'https://') !== 0) return true;
+    // la DNS es https pero muchos servidores IPTV redirigen el video a otro servidor por http
+    // (p. ej. https://dns → http://IP): el navegador lo bloquearía, así que también pasa por el hosting.
+    return wp_final_is_http($url);
+}
+
+/** ¿El enlace https termina, tras las redirecciones, en http? Se prueba una vez por servidor y tipo (caché 6 h). */
+function wp_final_is_http($url)
+{
+    static $memo = [];
+    $p = parse_url($url);
+    $seg = preg_match('~^/([^/]+)/~', (string)($p['path'] ?? ''), $m) ? strtolower($m[1]) : '';
+    $ck = 'finalhttp|' . strtolower((string)($p['host'] ?? '')) . ':' . ($p['port'] ?? '') . '|' . $seg . '|' . strtolower(pathinfo((string)($p['path'] ?? ''), PATHINFO_EXTENSION));
+    if (isset($memo[$ck])) return $memo[$ck];
+    $hit = wp_cache_get($ck, 21600);
+    if (is_array($hit)) return $memo[$ck] = !empty($hit['http']);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 8, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_USERAGENT => WP_UA,
+        CURLOPT_HTTPHEADER => ['Range: bytes=0-1'], CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_WRITEFUNCTION => function ($c, $d) { $k = (int)curl_getinfo($c, CURLINFO_RESPONSE_CODE); return $k >= 200 && $k < 300 ? -1 : strlen($d); }, // se corta al llegar el video
+    ]);
+    curl_exec($ch);
+    $final = (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    // sin respuesta no se sabe: se usa el hosting (siempre funciona) y se vuelve a probar en 6 h
+    $http = $code === 0 || stripos($final, 'https://') !== 0;
+    wp_cache_set($ck, ['http' => $http]);
+    return $memo[$ck] = $http;
 }
 
 /**

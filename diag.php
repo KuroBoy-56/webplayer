@@ -215,7 +215,7 @@ include "header.php";
         Video en HTTPS directo desde: <b><?php echo $https_base ? e(parse_url($https_base, PHP_URL_HOST) . ':' . (parse_url($https_base, PHP_URL_PORT) ?: '443')) : 'no'; ?></b> ·
         PHP <?php echo e(PHP_VERSION); ?>
     </p>
-    <p style="color:#aaa;font-size:14px;max-width:760px">El video va siempre directo del servidor IPTV a tu navegador (no pasa por el hosting). Si un formato no se puede reproducir en el navegador (por ejemplo MKV o HEVC en iPhone), ábrelo en VLC.</p>
+    <p style="color:#aaa;font-size:14px;max-width:760px">Si el servidor IPTV entrega el video por https, va directo a tu navegador; si lo entrega por http (o redirige a http), pasa por tu hosting (proxy.php). Si un formato no se puede reproducir en el navegador (por ejemplo MKV o HEVC en iPhone), ábrelo en VLC.</p>
     <?php if ($slug === 'live'): require_once __DIR__ . '/includes/epg.php';
         $sepg = xt_get('get_short_epg', ['stream_id' => $id, 'limit' => 5], 60, 8);
         $nsrv = count((array)($sepg['epg_listings'] ?? []));
