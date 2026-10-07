@@ -127,7 +127,7 @@ $use_vlc = isset($_COOKIE["use_vlc"]) ? $_COOKIE["use_vlc"] : "0";
 
 $page_title = 'TV en vivo';
 $body_class = 'nf-solid nf-live';
-$wp_head_extra = '<link rel="stylesheet" href="assets/nf/player.css?v=7">';
+$wp_head_extra = '<link rel="stylesheet" href="assets/nf/player.css?v=8">';
 include "header.php";
 ?>
 <style>
@@ -224,7 +224,7 @@ include "header.php";
 
 <script src="assets/vendor/hls.min.js" defer></script>
 <script src="assets/vendor/mpegts.min.js" defer></script>
-<script src="assets/nf/player.js?v=15" defer></script>
+<script src="assets/nf/player.js?v=16" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [] };

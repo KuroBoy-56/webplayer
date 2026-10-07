@@ -640,9 +640,12 @@
         if (this._failing) return;
         this._failing = true;
         if (window.console) console.warn('[NFPlayer] fuente ' + (this.idx + 1) + ' falló:', why);
+        var s = this.o.sources[this.idx];
+        (this._whys = this._whys || []).push((s ? (s.engine === 'mp4' ? 'motor' : s.ext) : '?') + ': ' + String(why || '').slice(0, 40));
         if (this.T() > 5) this.lastTime = this.T();
         var self = this;
-        setTimeout(function () { self._failing = false; self.next(); }, 150);
+        // tras el motor MP4 se espera un poco: el servidor IPTV puede seguir contando esa conexión y rechazar la siguiente
+        setTimeout(function () { self._failing = false; self.next(); }, s && s.engine === 'mp4' ? 1500 : 150);
     };
 
     NFPlayer.prototype.showError = function () {
@@ -661,6 +664,9 @@
         if (NFPlayer.canVlc(o)) h += '<button type="button" class="nf-btn nf-btn-gray" data-act="vlc">Abrir en VLC</button>';
         if (o.downloadUrl) h += '<a class="nf-btn nf-btn-gray" href="' + o.downloadUrl + '">Descargar</a>';
         h += '</div>';
+        // detalle técnico de cada intento (para soporte) y enlace al diagnóstico
+        if (this._whys && this._whys.length) h += '<p class="nfp-why">' + this._whys.map(function (w) { return w.replace(/[<>&]/g, ''); }).join(' · ')
+            + (o.diagUrl ? ' · <a href="' + o.diagUrl + '">Diagnóstico</a>' : '') + (location.protocol === 'https:' ? ' · https' : ' · http') + '</p>';
         this.msg.innerHTML = h;
         this.msg.classList.add('show');
         this.msg.querySelector('[data-act=retry]').addEventListener('click', function () { self.hideMsg(); self._rescued = self._fullTried = self._safeTried = false; if (self._media0) self.o.media = self._media0; self.idx = -1; self.next(); });
@@ -708,7 +714,7 @@
             self.msg.innerHTML = '<h3>No fue posible adaptar este contenido</h3><p>Es posible que el archivo esté dañado o que el servidor no lo entregue completo. Prueba abrirlo en VLC.</p><div class="acts">'
                 + '<button type="button" class="nf-btn nf-btn-white" data-act="retry">Reintentar</button>'
                 + (NFPlayer.canVlc(self.o) ? '<button type="button" class="nf-btn nf-btn-gray" data-act="vlc">Abrir en VLC</button>' : '') + '</div>';
-            self.msg.querySelector('[data-act=retry]').addEventListener('click', function () { self.hideMsg(); self.idx = -1; self.next(); });
+            self.msg.querySelector('[data-act=retry]').addEventListener('click', function () { self.hideMsg(); self._whys = []; self.idx = -1; self.next(); });
             var vb = self.msg.querySelector('[data-act=vlc]');
             if (vb) vb.addEventListener('click', function () { NFPlayer.openVlc(self.o); });
         });

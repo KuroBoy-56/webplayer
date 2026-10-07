@@ -241,3 +241,6 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - **iPhone:** la pantalla completa nunca abre el reproductor de iOS: se usa la pantalla completa propia del web player (con su menú de audio y subtítulos). Si iOS intenta abrir el suyo con un gesto, se vuelve al del navegador.
 - **Video por HTTPS sin pasar por el hosting:** si pones la web en https, el orden es: 1) https directo del servidor IPTV (puerto https del servidor), 2) **relay https propio en Cloudflare** (`cloudflare/relay-worker.js`, gratis), 3) `play.php` en http. Con el relay, el video va servidor IPTV → Cloudflare → navegador. Ver GUIA.md.
 - Corregidos textos con acentos rotos en el reproductor ("Capítulo anterior", "T1:E1 · título").
+- La pantalla "No se pudo reproducir" muestra en letra pequeña por qué falló cada intento, si la página está en http o https y un enlace a **Diagnóstico**. Sirve para encontrar la causa con una captura.
+- Después del motor MP4 se esperan 1,5 s antes de probar el reproductor normal, porque algunos servidores IPTV siguen contando esa conexión un momento y rechazan la siguiente.
+- Relay de Cloudflare: si el servidor IPTV redirige una película o episodio a otro servidor (balanceador), el Worker sigue esa redirección él mismo. Así `ALLOWED_HOSTS` ya no lo bloquea. Hay que volver a pegar `cloudflare/relay-worker.js` en el Worker.

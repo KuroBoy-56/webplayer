@@ -59,11 +59,20 @@ export default {
     const wrap = (abs) => {
       try { const u = new URL(abs, target); return base + '/' + u.protocol.replace(':', '') + '/' + u.host + u.pathname + u.search; } catch (e) { return abs; }
     };
+    // películas y series: el balanceador del servidor IPTV suele mandar a otro host (a veces una IP).
+    // Se sigue aquí mismo, así ALLOWED_HOSTS no lo bloquea y el navegador sigue usando la misma dirección.
+    if (up.status >= 300 && up.status < 400 && up.headers.get('location') && !/\.m3u8$/i.test(path)) {
+      try {
+        up = await fetch(new URL(up.headers.get('location'), target).toString(), { method: req.method, headers: h, redirect: 'follow', cf: { cacheEverything: false } });
+      } catch (e) {
+        return new Response('upstream', { status: 502, headers: cors(new Headers(), allowOrigin) });
+      }
+    }
     const out = new Headers();
     for (const k of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'cache-control', 'last-modified', 'etag']) { const v = up.headers.get(k); if (v) out.set(k, v); }
     cors(out, allowOrigin);
 
-    // redirecciones del servidor IPTV (balanceadores): se siguen también por el relay
+    // redirecciones de listas HLS: se siguen también por el relay
     if (up.status >= 300 && up.status < 400 && up.headers.get('location')) {
       out.set('Location', wrap(up.headers.get('location')));
       return new Response(null, { status: up.status, headers: out });

@@ -124,7 +124,7 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
     <title><?php echo e($content_name ?: 'Reproductor'); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/nf/app.css?v=7">
-    <link rel="stylesheet" href="assets/nf/player.css?v=7">
+    <link rel="stylesheet" href="assets/nf/player.css?v=8">
     <style>
         html, body { height: 100%; overflow: hidden; background: #000; }
         #player-container { position: fixed; inset: 0; }
@@ -145,7 +145,7 @@ $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ex
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=15" defer></script>
+    <script src="assets/nf/player.js?v=16" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
