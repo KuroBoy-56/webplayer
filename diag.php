@@ -16,6 +16,7 @@ function diag_probe($url)
     $r = ['code' => 0, 'type' => '', 'len' => '', 'range' => 'no', 'final' => '', 'ms' => 0, 'err' => ''];
     $t = microtime(true);
     $ch = curl_init($url);
+    wp_doh_apply($ch, $url);
     $hdr = [];
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -61,6 +62,7 @@ function diag_relay($url, $origin)
     $t = microtime(true);
     $hdr = [];
     $ch = curl_init($url);
+    wp_doh_apply($ch, $url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
@@ -98,6 +100,7 @@ function diag_self($url, $h2)
     $t = microtime(true);
     $hdr = '';
     $ch = curl_init($url);
+    wp_doh_apply($ch, $url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_TIMEOUT => 25,
         CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_USERAGENT => WP_UA,
@@ -215,7 +218,17 @@ include "header.php";
         Video en HTTPS directo desde: <b><?php echo $https_base ? e(parse_url($https_base, PHP_URL_HOST) . ':' . (parse_url($https_base, PHP_URL_PORT) ?: '443')) : 'no'; ?></b> ·
         PHP <?php echo e(PHP_VERSION); ?>
     </p>
-    <p style="color:#aaa;font-size:14px;max-width:760px">Si el servidor IPTV entrega el video por https, va directo a tu navegador; si lo entrega por http (o redirige a http), pasa por tu hosting (proxy.php). Si un formato no se puede reproducir en el navegador (por ejemplo MKV o HEVC en iPhone), ábrelo en VLC.</p>
+    <?php
+    $n_audio = $slug === 'live' ? 0 : wp_audio_track_count(wp_stream_url($kind2, $id, $exts[0]));
+    $dns_host = (string)parse_url(wp_user()['server'], PHP_URL_HOST);
+    $dns_ip = wp_resolve_ip($dns_host);
+    ?>
+    <p style="color:#aaa;font-size:14px">
+        Pistas de audio de este contenido: <b><?php echo $slug === 'live' ? 'no aplica (en vivo)' : ($n_audio ? $n_audio : 'no se pudo leer'); ?></b> ·
+        Ruta: <b><?php echo wp_is_https() ? 'página https: el video http pasa por el hosting' : ($n_audio > 1 ? 'varios audios: por el hosting (para elegir idioma)' : 'directo del servidor IPTV'); ?></b> ·
+        IP del servidor IPTV (resuelta sin hilos): <b><?php echo $dns_ip ? e($dns_host . ' → ' . $dns_ip) : 'no se pudo resolver'; ?></b>
+    </p>
+    <p style="color:#aaa;font-size:14px;max-width:760px">Con la página en http, el video va directo del servidor IPTV a tu navegador y solo el contenido con más de un audio pasa por tu hosting. Con la página en https, todo video http tiene que pasar por el hosting (el navegador bloquea http dentro de https). Si un formato no se puede reproducir en el navegador (por ejemplo MKV o HEVC en iPhone), ábrelo en VLC.</p>
     <?php if ($slug === 'live'): require_once __DIR__ . '/includes/epg.php';
         $sepg = xt_get('get_short_epg', ['stream_id' => $id, 'limit' => 5], 60, 8);
         $nsrv = count((array)($sepg['epg_listings'] ?? []));

@@ -256,3 +256,12 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - Archivos nuevos: `proxy.php`, `media.php`, `includes/media_core.php`, `includes/doh.php`, `bin/`.
 - `instalar_ffmpeg.php`: abre esta página con tu sesión iniciada y toca "Descargar e instalar ffmpeg". El hosting descarga ffmpeg y ffprobe (versión estática 6.0 para Linux) directo a `bin/` y comprueba que funcionan. No hay que subir nada desde el celular. Después se puede borrar.
 - Corregido: la DNS del proveedor es https, pero el video redirige a otro servidor por **http** (p. ej. `http://88.99.28.189`). El reproductor lo mandaba directo y el iPhone lo bloqueaba ("Load failed" / "native 4"). Ahora el hosting comprueba una vez (caché de 6 h) a dónde termina el enlace: si termina en http, el video pasa por `proxy.php`; si termina en https, va directo.
+
+## El hosting solo trabaja con contenido de varios audios (7 de octubre, tarde)
+- **Nueva regla (página en http):** el video va directo del servidor IPTV al navegador por http. Solo si la película o el episodio trae **más de una pista de audio** se agrega la fuente por el hosting (`proxy.php`), para poder elegir el idioma. Si esa fuente falla, sigue lo directo.
+- Las pistas se cuentan **sin ffmpeg**: el hosting lee solo la cabecera del archivo (unos KB, MP4 y MKV) y guarda el resultado 30 días (`includes/audio_probe.php`).
+- ffmpeg (`media.php`, "Solucionar") solo se ofrece en contenido con varios audios. Con un solo audio ya no aparece "No se pudo convertir".
+- Más rápido: el reproductor ya no intenta el motor MP4 con un http directo (fallaba sin CORS y retrasaba el inicio), y con el motor MP4 no espera a ffmpeg antes de arrancar.
+- Página en **https**: el navegador bloquea video http, así que ese video sigue pasando por el hosting. Para que el hosting quede libre, la web debe abrirse en http.
+- Corregido "getaddrinfo() thread failed to start": cuando el hosting llega a su límite de procesos, curl no puede crear el hilo con el que busca la IP. Ahora la IP se busca con `gethostbyname()` (sin hilos), queda en caché 30 minutos y se le entrega a curl.
+- `diag.php` muestra cuántos audios tiene el contenido, por dónde va el video y la IP resuelta del servidor IPTV.

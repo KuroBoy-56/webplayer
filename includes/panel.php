@@ -108,6 +108,7 @@ function wp_panel_request($endpoint, $body = null, array $headers = [], $timeout
     $base = wp_panel_base();
     if ($base === '' || !function_exists('curl_init')) return null;
     $ch = curl_init($base . $endpoint);
+    wp_doh_apply($ch, $base . $endpoint);
     $opts = [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => false,

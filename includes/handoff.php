@@ -81,6 +81,7 @@ function wp_direct_https_ok($kind, $id, $ext, $needCors)
     $hdr = [];
     $got = 0;
     $ch = curl_init($url);
+    wp_doh_apply($ch, $url);
     curl_setopt_array($ch, [
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS => 6,

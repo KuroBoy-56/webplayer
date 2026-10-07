@@ -193,6 +193,7 @@ function wp_curl($url, $timeout = 12)
         CURLOPT_SSL_VERIFYHOST => 0,
         CURLOPT_ENCODING => '',
     ]);
+    wp_doh_apply($ch, $url);
     return $ch;
 }
 
@@ -438,25 +439,50 @@ function wp_client_stream_url($kind, $id, $ext)
 }
 
 /**
- * Fuentes de reproducción en orden de prueba para NFPlayer, siempre directas al servidor IPTV.
+ * Fuentes de reproducción en orden de prueba para NFPlayer.
  * $exts = extensiones a probar (p. ej. ['mp4','mkv','m3u8']).
+ *
+ * Página http: el navegador lee el video directo del servidor IPTV (el hosting no trabaja). Solo si el
+ * contenido trae más de una pista de audio se agrega además la fuente por el hosting (proxy.php, mismo
+ * dominio): con ella el motor MP4 del reproductor puede elegir el idioma. Si falla, sigue lo directo.
+ * Página https: un video http sería bloqueado (contenido mixto), así que ese video sí va por el hosting.
  */
 function wp_play_sources($kind, $id, array $exts)
 {
     $out = [];
+    $extra = [];
+    $https = wp_is_https();
+    $multi = !$https && wp_content_multi_audio($kind, $id, $exts);
     foreach ($exts as $x) {
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
         $u = wp_stream_url($kind, $id, $x);
-        if (wp_via_hosting($u)) {
-            // servidor IPTV en http: el hosting entrega el video (proxy.php). Mismo dominio que la web, así el
-            // navegador puede leer las pistas de audio (motor MP4) y no hay contenido mixto en https.
+        if ($https && wp_via_hosting($u)) {
             $out[] = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
-        } else {
-            // servidor IPTV en https: directo del servidor al navegador, el hosting no participa
-            $out[] = ['url' => $u, 'engine' => $engine, 'ext' => $x];
+            continue;
+        }
+        $out[] = ['url' => $u, 'engine' => $engine, 'ext' => $x];
+        if ($multi && $engine === 'native') {
+            $extra[] = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
         }
     }
-    return $out;
+    return array_merge($out, $extra);
+}
+
+/** ¿El contenido (película o episodio) trae más de una pista de audio? Se lee la cabecera del archivo, sin ffmpeg. */
+function wp_content_multi_audio($kind, $id, array $exts)
+{
+    static $memo = [];
+    if ($kind === 'live') return false;
+    $k = $kind . '|' . $id . '|' . implode(',', $exts);
+    if (isset($memo[$k])) return $memo[$k];
+    $tried = 0;
+    foreach ($exts as $x) {
+        if (in_array($x, ['m3u8', 'ts'], true) || $tried >= 2) continue;
+        $tried++;
+        $n = wp_audio_track_count(wp_stream_url($kind, $id, $x));
+        if ($n > 0) return $memo[$k] = $n > 1;
+    }
+    return $memo[$k] = false;
 }
 
 /**
@@ -483,6 +509,7 @@ function wp_final_is_http($url)
     $hit = wp_cache_get($ck, 21600);
     if (is_array($hit)) return $memo[$ck] = !empty($hit['http']);
     $ch = curl_init($url);
+    wp_doh_apply($ch, $url);
     curl_setopt_array($ch, [
         CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 8, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => 10,
         CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_USERAGENT => WP_UA,
@@ -1142,3 +1169,4 @@ require_once __DIR__ . '/panel.php';
 require_once __DIR__ . '/handoff.php';
 require_once __DIR__ . '/doh.php';
 require_once __DIR__ . '/media_core.php';
+require_once __DIR__ . '/audio_probe.php';

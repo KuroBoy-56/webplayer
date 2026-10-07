@@ -68,9 +68,10 @@
         // y reproduce UNA sola pista de audio elegible: sin doble audio en iPhone y con idiomas en Chrome/Firefox.
         // Si el archivo trae un solo audio, o el servidor no lo permite (CORS/rangos), sigue el reproductor nativo.
         if (!this.live && opts.sources && window.NFMp4 && NFMp4.supported() && !store('nfp_nomse')) {
-            var mps = opts.sources.filter(function (x) { return x.engine === 'native' && /^(mp4|m4v|mov)$/i.test(x.ext || '') && (location.protocol !== 'https:' || !/^http:/i.test(x.url)); });
-            // el motor necesita permiso CORS: se prefiere la fuente que lo tiene (proxy.php del hosting o el relay)
-            var mp = mps.filter(function (x) { return x.cors; })[0] || mps[0];
+            var mps = opts.sources.filter(function (x) { return x.engine === 'native' && /^(mp4|m4v|mov)$/i.test(x.ext || ''); });
+            // el motor necesita permiso CORS: solo la fuente del hosting (contenido con varios audios) o un https directo.
+            // Un http directo sin CORS no se intenta: fallaría y solo retrasaría el inicio del video.
+            var mp = mps.filter(function (x) { return x.cors; })[0] || mps.filter(function (x) { return /^https:/i.test(x.url); })[0];
             if (mp) opts.sources = [{ url: mp.url, engine: 'mp4', ext: mp.ext }].concat(opts.sources);
         }
         this.build();
@@ -105,7 +106,9 @@
             }
             self.next();
         };
-        var tm = setTimeout(function () { go(null); }, m.info ? 0 : 7000);
+        // con el motor MP4 (elige el idioma en el navegador) no se espera a ffmpeg: el video arranca ya
+        var mp4First = this.o.sources && this.o.sources[0] && this.o.sources[0].engine === 'mp4';
+        var tm = setTimeout(function () { go(null); }, m.info || mp4First ? 0 : 7000);
         if (m.info) { go(m.info); return; }
         this.root.classList.add('buffering');
         this._probing = true;

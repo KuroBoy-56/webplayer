@@ -95,10 +95,10 @@ $exts = array_values(array_unique($exts));
 
 $sources = wp_play_sources($kind, $id, $exts);
 
-/* Motor multimedia del hosting (ffmpeg): solo para contenido http del servidor IPTV.
-   Lee las pistas y convierte audio Dolby/DTS o formatos que el navegador no abre. Con https no se usa. */
+/* Motor multimedia del hosting (ffmpeg): solo si el contenido trae más de una pista de audio
+   (para poder elegir el idioma cuando el motor MP4 no alcanza). Con un solo audio el hosting no convierte nada. */
 $media_cfg = null;
-if (wp_via_hosting($raw_url) && wp_bin('ffprobe') && wp_bin('ffmpeg')) {
+if (wp_content_multi_audio($kind, $id, $exts) && wp_bin('ffprobe') && wp_bin('ffmpeg')) {
     $mb = wp_proxy_url($raw_url, 'media.php');
     $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'hls' => $mb . '&do=hls', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
     // pistas ya conocidas (caché): el reproductor decide al instante si necesita convertir el audio
@@ -157,7 +157,7 @@ if ($media_cfg) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'ac
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=19" defer></script>
+    <script src="assets/nf/player.js?v=20" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
