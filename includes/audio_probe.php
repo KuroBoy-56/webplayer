@@ -67,7 +67,7 @@ final class WpRangeReader
         $final = (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
         curl_close($ch);
         if ($code === 206) {
-            if ($final !== '') $this->url = $final; // las siguientes lecturas van directo al destino final
+            // cada lectura vuelve a pedir el enlace original: el destino temporal del servidor IPTV puede servir solo una vez
             if (preg_match('~/(\d+)\s*$~', (string)($hdr['content-range'] ?? ''), $m)) $this->size = (int)$m[1];
             return substr($buf, 0, $len);
         }
@@ -78,7 +78,7 @@ final class WpRangeReader
 }
 
 /** Número de pistas de audio (0 = no se pudo saber). Caché 30 días; si falla, se reintenta en 1 hora. */
-function wp_audio_track_count($url, $cacheOnly = false)
+function wp_audio_track_count($url, $cacheOnly = false, $useProbe = false)
 {
     static $memo = [];
     $ck = 'atracks2|' . md5((string)$url);
@@ -86,7 +86,7 @@ function wp_audio_track_count($url, $cacheOnly = false)
     $hit = wp_cache_get($ck, 2592000);
     if (is_array($hit) && $hit['n'] > 0) return $memo[$ck] = (int)$hit['n'];
     // no se pudo leer hace poco: no se insiste en cada visita (2 min)
-    if (is_array($hit) && ($cacheOnly || time() - (int)$hit['t'] < 120)) return $cacheOnly ? 0 : $memo[$ck] = 0;
+    if (is_array($hit) && ($cacheOnly || (!$useProbe && time() - (int)$hit['t'] < 120))) return $cacheOnly ? 0 : $memo[$ck] = 0;
     if ($cacheOnly) return -1; // aún no se sabe (se averigua en segundo plano con tracks.php)
     $r = new WpRangeReader($url, 10);
     $head = $r->read(0, 16);
@@ -97,6 +97,11 @@ function wp_audio_track_count($url, $cacheOnly = false)
     }
     // si alguna lectura falló, el conteo puede estar incompleto (p. ej. 1 de 2 audios): se toma como desconocido
     if ($r->failed) $n = 0;
+    // respaldo: ffprobe (si está instalado) lee el archivo completo por su cuenta; solo se pregunta, no convierte nada
+    if ($n === 0 && $useProbe && function_exists('wp_bin') && wp_bin('ffprobe')) {
+        $p = wp_probe($url);
+        if (is_array($p) && !empty($p['audio'])) $n = count($p['audio']);
+    }
     wp_cache_set($ck, ['n' => $n, 't' => time()]);
     return $memo[$ck] = $n;
 }

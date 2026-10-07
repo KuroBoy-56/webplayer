@@ -9,5 +9,6 @@ if (!wp_verify_signed($url) || !isset($_GET['e'])) {
 }
 header('Content-Type: application/json');
 header('Cache-Control: private, max-age=3600');
-@set_time_limit(20);
-echo json_encode(['n' => wp_audio_track_count($url)]);
+@set_time_limit(90);
+// en segundo plano se puede esperar a ffprobe si la lectura rápida no alcanzó
+echo json_encode(['n' => wp_audio_track_count($url, false, true)]);

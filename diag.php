@@ -219,7 +219,7 @@ include "header.php";
         PHP <?php echo e(PHP_VERSION); ?>
     </p>
     <?php
-    $n_audio = $slug === 'live' ? 0 : wp_audio_track_count(wp_stream_url($kind2, $id, $exts[0]));
+    $n_audio = $slug === 'live' ? 0 : wp_audio_track_count(wp_stream_url($kind2, $id, $exts[0]), false, true);
     $dns_host = (string)parse_url(wp_user()['server'], PHP_URL_HOST);
     $dns_ip = wp_resolve_ip($dns_host);
     ?>
