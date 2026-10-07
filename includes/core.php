@@ -448,9 +448,15 @@ function wp_play_sources($kind, $id, array $exts)
     foreach ($exts as $x) {
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
         $url = wp_client_stream_url($kind, $id, $x);
-        // página https y el servidor IPTV sin https válido: se usa el relay https propio (Cloudflare), no el hosting
-        if ($relay !== '' && !wp_direct_https_ok($kind, $id, $x, $engine !== 'native')) $url = wp_relay_url(wp_stream_url($kind, $id, $x));
-        $out[] = ['url' => $url, 'engine' => $engine, 'ext' => $x];
+        if ($relay === '') { $out[] = ['url' => $url, 'engine' => $engine, 'ext' => $x]; continue; }
+        // página https con relay: primero el https directo del servidor IPTV si la prueba del hosting pasó
+        // (rápido, sin gastar el relay) y SIEMPRE después el relay de Cloudflare como respaldo. La prueba se hace
+        // desde el hosting y no garantiza que el celular pueda abrirlo; antes, si pasaba, el relay nunca se usaba.
+        if (wp_direct_https_ok($kind, $id, $x, $engine !== 'native')) {
+            $out[] = ['url' => $url, 'engine' => $engine, 'ext' => $x, 'quick' => true, 'cors' => wp_direct_https_ok($kind, $id, $x, true)];
+        }
+        // el relay añade el permiso CORS: con él el navegador puede separar las pistas de audio (motor MP4)
+        $out[] = ['url' => wp_relay_url(wp_stream_url($kind, $id, $x)), 'engine' => $engine, 'ext' => $x, 'cors' => true];
     }
     return $out;
 }

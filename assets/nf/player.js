@@ -68,7 +68,9 @@
         // y reproduce UNA sola pista de audio elegible: sin doble audio en iPhone y con idiomas en Chrome/Firefox.
         // Si el archivo trae un solo audio, o el servidor no lo permite (CORS/rangos), sigue el reproductor nativo.
         if (!this.live && opts.sources && window.NFMp4 && NFMp4.supported() && !store('nfp_nomse')) {
-            var mp = opts.sources.filter(function (x) { return x.engine === 'native' && /^(mp4|m4v|mov)$/i.test(x.ext || '') && (location.protocol !== 'https:' || /^https:/i.test(x.url)); })[0];
+            var mps = opts.sources.filter(function (x) { return x.engine === 'native' && /^(mp4|m4v|mov)$/i.test(x.ext || '') && (location.protocol !== 'https:' || /^https:/i.test(x.url)); });
+            // el motor necesita permiso CORS: se prefiere la fuente que lo tiene (el relay de Cloudflare)
+            var mp = mps.filter(function (x) { return x.cors; })[0] || mps[0];
             if (mp) opts.sources = [{ url: mp.url, engine: 'mp4', ext: mp.ext }].concat(opts.sources);
         }
         this.build();
@@ -641,7 +643,7 @@
         this._failing = true;
         if (window.console) console.warn('[NFPlayer] fuente ' + (this.idx + 1) + ' falló:', why);
         var s = this.o.sources[this.idx];
-        (this._whys = this._whys || []).push((s ? (s.engine === 'mp4' ? 'motor' : s.ext) : '?') + ': ' + String(why || '').slice(0, 40));
+        (this._whys = this._whys || []).push((s ? (s.engine === 'mp4' ? 'motor' : s.ext) + (s.cors && /\/https?\/[^/]+\//.test(s.url) && !/^https?:\/\/[^/]+\/(movie|series|live)\//.test(s.url) ? ' relay' : '') : '?') + ': ' + String(why || '').slice(0, 40));
         if (this.T() > 5) this.lastTime = this.T();
         var self = this;
         // tras el motor MP4 se espera un poco: el servidor IPTV puede seguir contando esa conexión y rechazar la siguiente
