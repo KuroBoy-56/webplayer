@@ -59,6 +59,17 @@ include "header.php";
     <p style="color:#aaa">Tu progreso en el panel: <b><?php echo count($ud['progress']); ?></b> títulos · favoritos: <b><?php echo count($ud['favorites']); ?></b>
         <?php if (!empty($GLOBALS['wp_panel_last_error'])): ?> · último error: <?php echo e($GLOBALS['wp_panel_last_error']); ?><?php endif; ?></p>
 
+    <h2 style="font-size:18px;margin-top:22px">Lo que el panel tiene guardado ahora</h2>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+        <?php foreach (array_slice($ud['progress'], 0, 15, true) as $pt => $pp): if (!is_array($pp)) continue; ?>
+        <tr style="border-bottom:1px solid #333">
+            <td style="padding:4px"><?php echo e($pt); ?></td>
+            <td><?php echo e(($pp['type'] ?? '') . ' ' . ($pp['id'] ?? '')); ?></td>
+            <td style="white-space:nowrap"><?php echo e(gmdate('H:i:s', (int)($pp['position'] ?? 0))); ?></td>
+            <td style="white-space:nowrap;color:#aaa"><?php $u = @strtotime((string)($pp['updatedAt'] ?? '')); echo $u ? e(date('d/m H:i', $u)) : '—'; ?></td>
+        </tr>
+        <?php endforeach; ?>
+    </table></div>
     <h2 style="font-size:18px;margin-top:22px">Últimos guardados de progreso</h2>
     <?php $plog = wp_cache_get('progress|log', 864000); $plog = is_array($plog) ? $plog : []; ?>
     <?php if (!$plog): ?><p style="color:#e87c03">Ningún intento de guardado ha llegado al hosting.</p><?php else: ?>

@@ -117,6 +117,8 @@ function wp_panel_request($endpoint, $body = null, array $headers = [], $timeout
         $post = null;
     }
     $headers[] = 'Accept: application/json';
+    $headers[] = 'Cache-Control: no-cache';
+    $headers[] = 'Pragma: no-cache';
     // panel caído hace menos de 1 minuto: no se espera otra vez (las páginas no se ponen lentas)
     if (wp_cache_get('panel|down', 60)) return null;
     // 1) https normal  2) https sin revisar el certificado (SSL quitado o vencido)  3) http
@@ -281,7 +283,8 @@ function wp_panel_userdata($refresh = false)
 {
     static $memo = null;
     if ($memo !== null && !$refresh) return $memo;
-    $j = wp_panel_call('progress.php?v=2', null, 6);
+    // parámetro único: ninguna caché del hosting puede devolver un progreso viejo
+    $j = wp_panel_call('progress.php?v=2&_=' . str_replace('.', '', (string)microtime(true)), null, 6);
     $memo = [
         'progress' => (is_array($j) && is_array($j['progress'] ?? null)) ? $j['progress'] : [],
         'favorites' => (is_array($j) && is_array($j['favorites'] ?? null)) ? $j['favorites'] : [],
@@ -320,7 +323,12 @@ function wp_user_progress($username = '')
         $seriesId = preg_replace('/[^0-9]/', '', (string)($p['seriesId'] ?? ''));
         if ($isSeries && $seriesId === '') continue;
         $key = ($isSeries ? 'series_' : 'movie_') . $id;
+        // el mismo contenido puede estar guardado varias veces con otro título (otra app, otra DNS):
+        // gana el guardado más reciente, si no la web reanudaba en una posición vieja
+        $when = isset($p['ts']) ? (float)$p['ts'] / (((float)$p['ts']) > 1e11 ? 1e6 : 1) : (float)@strtotime((string)($p['updatedAt'] ?? ''));
+        if (isset($out[$key]) && $out[$key]['_when'] >= $when) continue;
         $out[$key] = [
+            '_when' => $when,
             'stream_id' => $id,
             'series_id' => $isSeries ? $seriesId : '0',
             'type' => $isSeries ? 'series' : 'movie',
