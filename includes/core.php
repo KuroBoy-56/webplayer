@@ -456,7 +456,7 @@ function wp_play_sources($kind, $id, array $exts)
     $out = [];
     $extra = [];
     $https = wp_is_https();
-    $multi = !$https && wp_content_multi_audio($kind, $id, $exts, true) === true;
+    $multi = null;
     foreach ($exts as $x) {
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
         $u = wp_stream_url($kind, $id, $x);
@@ -464,8 +464,18 @@ function wp_play_sources($kind, $id, array $exts)
             $out[] = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
             continue;
         }
+        if ($multi === null) $multi = wp_content_multi_audio($kind, $id, $exts, true) === true;
+        $vod = $kind !== 'live' && $engine === 'native';
+        // el servidor IPTV entrega por https y con permiso CORS: el navegador elige el idioma solo,
+        // directo del servidor IPTV. No se agrega nada por el hosting.
+        if ($vod && wp_direct_cors($u)) {
+            $d = ['url' => $u, 'engine' => $engine, 'ext' => $x, 'cors' => true];
+            if (!$multi) $d['alt'] = 1;
+            $out[] = $d;
+            continue;
+        }
         $out[] = ['url' => $u, 'engine' => $engine, 'ext' => $x];
-        if ($kind !== 'live' && $engine === 'native') {
+        if ($vod) {
             // fuente de respaldo por el hosting. Si ya se sabe que trae varios audios, el motor MP4 arranca con ella.
             // Si no (alt), solo se usa cuando el navegador descubre varios audios (iPhone) o si lo directo falla.
             $p = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
@@ -474,6 +484,70 @@ function wp_play_sources($kind, $id, array $exts)
         }
     }
     return array_merge($out, $extra);
+}
+
+/** Código, destino final y cabecera (de la última respuesta) de una petición, sin descargar el cuerpo. */
+function wp_cors_head($url, $method, array $hdrs, $follow)
+{
+    $h = [];
+    $ch = curl_init($url);
+    wp_doh_apply($ch, $url);
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST => $method, CURLOPT_FOLLOWLOCATION => $follow, CURLOPT_MAXREDIRS => 8,
+        CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 8, CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_USERAGENT => WP_UA, CURLOPT_HTTPHEADER => $hdrs, CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADERFUNCTION => function ($c, $l) use (&$h) {
+            if (stripos($l, 'HTTP/') === 0) $h = []; // cada redirección trae sus propias cabeceras: vale la última
+            elseif (($p = strpos($l, ':')) !== false) $h[strtolower(trim(substr($l, 0, $p)))] = trim(substr($l, $p + 1));
+            return strlen($l);
+        },
+        CURLOPT_WRITEFUNCTION => function ($c, $d) { return -1; }, // basta con las cabeceras
+    ]);
+    curl_exec($ch);
+    $r = ['code' => (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE), 'final' => (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL), 'h' => $h];
+    curl_close($ch);
+    return $r;
+}
+
+/** ¿El contenido se reproduce directo del servidor IPTV (sin pasar todo por el hosting)? */
+function wp_content_direct($kind, $id, array $exts)
+{
+    $u = wp_tracks_target($kind, $id, $exts);
+    return $u !== '' && (!wp_is_https() || !wp_via_hosting($u));
+}
+
+/**
+ * ¿El servidor IPTV entrega este video por https y con permiso CORS para esta web?
+ * Con eso el navegador puede separar los idiomas por su cuenta y el hosting no trabaja.
+ * Se detecta solo: el día que el proveedor lo active, se usa sin cambiar nada (caché 6 h por servidor).
+ */
+function wp_direct_cors($url)
+{
+    static $memo = [];
+    $url = (string)$url;
+    if (stripos($url, 'https://') !== 0) return false; // la DNS del proveedor es http: no hay nada que probar
+    $p = parse_url($url);
+    $seg = preg_match('~^/([^/]+)/~', (string)($p['path'] ?? ''), $m) ? strtolower($m[1]) : '';
+    $origin = (wp_is_https() ? 'https://' : 'http://') . (string)($_SERVER['HTTP_HOST'] ?? '');
+    $ck = 'dcors|' . strtolower((string)($p['host'] ?? '')) . ':' . ($p['port'] ?? '') . '|' . $seg . '|' . strtolower(pathinfo((string)($p['path'] ?? ''), PATHINFO_EXTENSION)) . '|' . $origin;
+    if (isset($memo[$ck])) return $memo[$ck];
+    $hit = wp_cache_get($ck, 21600);
+    if (is_array($hit)) return $memo[$ck] = !empty($hit['ok']);
+    $allow = function ($h) use ($origin) { $v = rtrim((string)($h['access-control-allow-origin'] ?? ''), '/'); return $v === '*' || strcasecmp($v, $origin) === 0; };
+    $lists = function ($h, $k, $want) { $v = strtolower((string)($h[$k] ?? '')); return $v === '*' || in_array($want, array_map('trim', explode(',', $v)), true); };
+    // 1) el video (con redirecciones): destino https, permiso para esta web y el tamaño visible (Content-Range)
+    $g = wp_cors_head($url, 'GET', ['Range: bytes=0-1', 'Origin: ' . $origin], true);
+    $ok = $g['code'] >= 200 && $g['code'] < 300 && stripos($g['final'], 'https://') === 0 && $allow($g['h'])
+        && $lists($g['h'], 'access-control-expose-headers', 'content-range');
+    // tras una redirección a otro servidor el navegador manda Origin "null": solo sirve el permiso "*"
+    if ($ok && strcasecmp((string)parse_url($g['final'], PHP_URL_HOST), (string)($p['host'] ?? '')) !== 0) $ok = ($g['h']['access-control-allow-origin'] ?? '') === '*';
+    // 2) el permiso previo que pide el navegador por la cabecera Range (sin redirecciones, como el navegador)
+    if ($ok) {
+        $o = wp_cors_head($url, 'OPTIONS', ['Origin: ' . $origin, 'Access-Control-Request-Method: GET', 'Access-Control-Request-Headers: range'], false);
+        $ok = $o['code'] >= 200 && $o['code'] < 300 && $allow($o['h']) && $lists($o['h'], 'access-control-allow-headers', 'range');
+    }
+    wp_cache_set($ck, ['ok' => $ok]);
+    return $memo[$ck] = $ok;
 }
 
 /**

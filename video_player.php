@@ -95,7 +95,7 @@ $exts = array_values(array_unique($exts));
 
 /* iPhone: Safari no informa bien los audios de un MP4 (dice 0 o 1 y suenan todos a la vez), así que hay que
    saberlo antes de abrir el video. Se cuenta una sola vez por contenido (luego queda en caché 30 días). */
-if (!wp_is_https() && preg_match('/iPhone|iPad|iPod|Macintosh/i', (string)($_SERVER['HTTP_USER_AGENT'] ?? ''))
+if (wp_content_direct($kind, $id, $exts) && preg_match('/iPhone|iPad|iPod|Macintosh/i', (string)($_SERVER['HTTP_USER_AGENT'] ?? ''))
     && wp_content_multi_audio($kind, $id, $exts, true) === null) {
     wp_content_multi_audio($kind, $id, $exts);
 }
@@ -106,7 +106,7 @@ $sources = wp_play_sources($kind, $id, $exts);
 $media_cfg = null;
 $multi_audio = wp_content_multi_audio($kind, $id, $exts, true);
 // pistas aún desconocidas: el reproductor las pide en segundo plano (tracks.php) sin retrasar la página
-$tracks_url = ($multi_audio === null && !wp_is_https()) ? wp_proxy_url(wp_tracks_target($kind, $id, $exts), 'tracks.php') : '';
+$tracks_url = ($multi_audio === null && wp_content_direct($kind, $id, $exts)) ? wp_proxy_url(wp_tracks_target($kind, $id, $exts), 'tracks.php') : '';
 $multi_audio = $multi_audio === true;
 if (wp_bin('ffprobe') && wp_bin('ffmpeg')) {
     $mb = wp_proxy_url($raw_url, 'media.php');
