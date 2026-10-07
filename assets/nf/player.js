@@ -75,6 +75,8 @@
             if (mp) opts.sources = [{ url: mp.url, engine: 'mp4', ext: mp.ext }].concat(opts.sources);
         }
         this.build();
+        if (opts.debug) { this.dbg = el('div', 'nfp-dbg'); this.dbg.style.cssText = 'position:absolute;left:4px;top:4px;right:4px;z-index:50;max-height:45%;overflow:auto;background:rgba(0,0,0,.75);color:#7f7;font:11px/1.35 monospace;padding:4px;pointer-events:none;white-space:pre-wrap'; this.root.appendChild(this.dbg); }
+        this.log('fuentes: ' + opts.sources.map(function (x) { return x.engine + ':' + x.ext + (x.cors ? '(hosting' + (x.alt ? ',alt' : '') + ')' : ''); }).join(' | ') + ' · MSE ' + !!(window.NFMp4 && NFMp4.supported()) + ' · media ' + (opts.media ? (opts.media.lazy ? 'lazy' : 'sí') : 'no') + ' · tracks ' + !!opts.tracks);
         this.bind();
         this.boot();
     }
@@ -204,6 +206,7 @@
         v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.watchAudio(); self.askTracks(); });
         v.addEventListener('canplay', function () { r.classList.remove('buffering'); });
         v.addEventListener('loadedmetadata', function () {
+            self.log('metadata: audioTracks=' + (v.audioTracks ? v.audioTracks.length : 'n/a') + ' mp4=' + !!self.mp4 + ' tc=' + !!self.tc);
             if (v.audioTracks && !v.audioTracks.onaddtrack) {
                 v.audioTracks.onaddtrack = function () { self.applyAudioPref(); if (!self.maybeMse() && self.multiNative()) self.probe(); };
             }
@@ -427,6 +430,11 @@
         try { this.v.load(); } catch (e) {}
     };
 
+    NFPlayer.prototype.log = function (m) {
+        if (!this.dbg) return;
+        var d = new Date();
+        this.dbg.textContent = ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2) + ' ' + m + '\n' + this.dbg.textContent;
+    };
     NFPlayer.prototype.next = function () {
         var self = this, list = this.o.sources;
         this.tc = null;
@@ -459,6 +467,7 @@
             this.showError(); return;
         }
         var s = list[this.idx];
+        this.log('probando ' + (this.idx + 1) + ': ' + s.engine + ' ' + s.ext + (s.cors ? ' por hosting' : ' directo') + (s.nomse ? ' (respaldo)' : ''));
         this.root.classList.add('buffering');
         var t = this.lastTime || 0;
         if (t > 5) { this.o.resume = t; this.resumed = false; }
@@ -525,6 +534,7 @@
             start: resume,
             pick: function (list) { return self.pickAudio(list); },
             onInfo: function (m) {
+                self.log('motor MP4: audios ' + m.audio.map(function (a) { return a.codec + (a.ok ? '✓' : '✗'); }).join(',') + ' video ' + (m.videoOk ? '✓' : '✗'));
                 // un solo audio y sin subtítulos: el reproductor nativo del navegador ya lo hace bien
                 var okA = m.audio.filter(function (a) { return a.ok; }).length;
                 if (m.audio.length > 1 && okA) return true;
@@ -550,6 +560,7 @@
         var alt = list.filter(function (x) { return x.engine === 'native' && x.cors && /^(mp4|m4v|mov)$/i.test(x.ext || ''); })[0];
         if (!alt) return false;
         this._mseSwitched = true;
+        this.log('varios audios → cambio al motor MP4 por el hosting');
         var t = this.T();
         if (t > 5) this.lastTime = t;
         try { v.pause(); } catch (e) {}
@@ -566,6 +577,7 @@
         if (!u || this._tracksAsked || this.live) return;
         this._tracksAsked = true;
         fetch(u, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+            self.log('hosting contó audios: ' + (j ? j.n : 'error'));
             if (!j || !(j.n > 1) || self.mp4 || self.tc) return;
             if (self.o.media) self.o.media.lazy = 0;
             if (self._media0) self._media0.lazy = 0;
@@ -691,6 +703,7 @@
         var s = this.o.sources[this.idx];
         (this._whys = this._whys || []).push((s ? (s.engine === 'mp4' ? 'motor' : s.ext) + (s.cors && /\/https?\/[^/]+\//.test(s.url) && !/^https?:\/\/[^/]+\/(movie|series|live)\//.test(s.url) ? ' relay' : '') : '?') + ': ' + String(why || '').slice(0, 40));
         if (this.T() > 5) this.lastTime = this.T();
+        this.log('FALLÓ: ' + why);
         var self = this;
         // tras el motor MP4 se espera un poco: el servidor IPTV puede seguir contando esa conexión y rechazar la siguiente
         setTimeout(function () { self._failing = false; self.next(); }, s && s.engine === 'mp4' ? 1500 : 150);
@@ -1000,6 +1013,7 @@
         this._probing = true;
         this._probeTries = (this._probeTries || 0) + 1;
         fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+            self.log('ffprobe: ' + (j && j.ok ? (j.audio || []).map(function (a) { return a.codec; }).join(',') + ' video ' + j.video : 'falló'));
             if (!j || !j.ok) return;
             self.info = j;
             self.afterProbe();
@@ -1122,6 +1136,7 @@
 
     NFPlayer.prototype.startTc = function (t, a, vt) {
         var m = this.o.media, self = this, v = this.v;
+        this.log('ffmpeg: convertir desde ' + Math.round(t || 0) + 's audio ' + a + (vt ? ' video ' + vt : '') + (m ? '' : ' (sin motor)'));
         if (!m) return;
         var dur = (this.tc && this.tc.dur) || (this.info && this.info.dur) || (isFinite(v.duration) ? v.duration : 0);
         var wasPaused = v.paused && this.ok;

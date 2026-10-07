@@ -224,7 +224,7 @@ include "header.php";
 
 <script src="assets/vendor/hls.min.js" defer></script>
 <script src="assets/vendor/mpegts.min.js" defer></script>
-<script src="assets/nf/player.js?v=23" defer></script>
+<script src="assets/nf/player.js?v=24" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [] };

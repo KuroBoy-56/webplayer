@@ -163,7 +163,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=23" defer></script>
+    <script src="assets/nf/player.js?v=24" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -171,6 +171,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
             'subtitle' => $episode_label,
             'sources' => $sources,
             'resume' => $resume_time,
+            'debug' => !empty($_GET['debug']),
             'backUrl' => $back_url,
             'nextUrl' => $has_next ? $next_url : '',
             'vlcUrl' => 'vlc://' . $raw_url,
