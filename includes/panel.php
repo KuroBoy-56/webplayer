@@ -292,6 +292,8 @@ function wp_panel_userdata($refresh = false)
 function wp_panel_post($action, array $data)
 {
     $j = wp_panel_call('progress.php', ['action' => $action] + $data, 8);
+    if (is_array($j) && empty($j['success'])) $GLOBALS['wp_panel_last_error'] = 'respuesta: ' . substr(json_encode($j, JSON_UNESCAPED_UNICODE), 0, 120);
+    elseif ($j === null && empty($GLOBALS['wp_panel_last_error'])) $GLOBALS['wp_panel_last_error'] = 'sin respuesta o token rechazado';
     return is_array($j) && !empty($j['success']);
 }
 

@@ -59,10 +59,26 @@ include "header.php";
     <p style="color:#aaa">Tu progreso en el panel: <b><?php echo count($ud['progress']); ?></b> títulos · favoritos: <b><?php echo count($ud['favorites']); ?></b>
         <?php if (!empty($GLOBALS['wp_panel_last_error'])): ?> · último error: <?php echo e($GLOBALS['wp_panel_last_error']); ?><?php endif; ?></p>
 
+    <h2 style="font-size:18px;margin-top:22px">Últimos guardados de progreso</h2>
+    <?php $plog = wp_cache_get('progress|log', 864000); $plog = is_array($plog) ? $plog : []; ?>
+    <?php if (!$plog): ?><p style="color:#e87c03">Ningún intento de guardado ha llegado al hosting.</p><?php else: ?>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+        <?php foreach ($plog as $l): ?>
+        <tr style="border-bottom:1px solid #333">
+            <td style="padding:4px;white-space:nowrap"><?php echo e(date('H:i:s', (int)$l['t'])); ?></td>
+            <td><?php echo e($l['slug'] . ' ' . $l['id']); ?></td>
+            <td><?php echo e($l['title']); ?></td>
+            <td style="white-space:nowrap"><?php echo e(gmdate('H:i:s', (int)$l['pos'])); ?></td>
+            <td style="color:<?php echo $l['ok'] ? '#46d369' : '#e87c03'; ?>"><?php echo $l['ok'] ? 'guardado' : 'NO: ' . e($l['why'] ?: ('panel ' . $l['err'])); ?></td>
+        </tr>
+        <?php endforeach; ?>
+    </table></div>
+    <?php endif; ?>
     <h2 style="font-size:18px;margin-top:22px">Procesos de tu cuenta en el hosting</h2>
     <p style="color:#aaa"><?php echo $lines ? 'Procesos activos: <b>' . count($lines) . '</b> · ffmpeg/ffprobe: <b>' . $nff . '</b>' : 'El hosting no deja ver los procesos.'; ?></p>
     <?php if ($lines): ?><pre style="background:#111;padding:10px;max-height:240px;overflow:auto;font-size:12px"><?php echo e(implode("\n", array_slice($lines, 0, 60))); ?></pre><?php endif; ?>
     <form method="post"><input type="hidden" name="do" value="kill"><button class="nf-btn nf-btn-red" type="submit">Detener todas las conversiones (ffmpeg)</button></form>
-    <p style="color:#aaa;margin-top:16px">PHP <?php echo e(PHP_VERSION); ?> · página en <?php echo wp_is_https() ? 'https' : 'http'; ?></p>
+    <p style="color:#aaa;margin-top:16px">ffmpeg: <b><?php echo wp_bin('ffmpeg') ? 'instalado' : 'NO instalado'; ?></b> · ffprobe: <b><?php echo wp_bin('ffprobe') ? 'instalado' : 'NO instalado'; ?></b> · ejecutar programas: <b><?php echo e(wp_exec_mode() ?: 'bloqueado'); ?></b></p>
+    <p style="color:#aaa">PHP <?php echo e(PHP_VERSION); ?> · página en <?php echo wp_is_https() ? 'https' : 'http'; ?></p>
 </section>
 <?php include "footer.php"; ?>
