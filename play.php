@@ -91,6 +91,7 @@ $title = (string)($d['title'] ?? '');
             'id' => $id,
             'slug' => (string)($d['slug'] ?? $kind),
             'seriesId' => (string)($d['sid'] ?? '0'),
+            'diagUrl' => 'diag.php?id=' . $id . '&slug=' . ($kind === 'series' ? 'series' : $kind) . '&ext=' . rawurlencode((string)($d['vlcExt'] ?? $ext)) . (!empty($d['sid']) ? '&series_id=' . rawurlencode((string)$d['sid']) : ''),
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
 
         if (!cfg.live) {
