@@ -19,6 +19,8 @@ sealed class Route {
     data class PlatformPage(val platform: Platform) : Route()
     /** actor del elenco: tmdbId 0 = se busca por nombre en TMDB */
     data class ActorPage(val name: String, val tmdbId: Int = 0, val photo: String = "") : Route()
+    /** rejilla completa de "Continuar viendo" (true) o de "Mi lista" (false) */
+    data class Saved(val continueWatching: Boolean) : Route()
 }
 
 class AppState {

@@ -62,6 +62,7 @@ import com.latmpx.player.ui.screens.HomeScreen
 import com.latmpx.player.ui.screens.LiveScreen
 import com.latmpx.player.ui.screens.LoginScreen
 import com.latmpx.player.ui.screens.MyListScreen
+import com.latmpx.player.ui.screens.SavedScreen
 import com.latmpx.player.ui.screens.SearchScreen
 import com.latmpx.player.ui.screens.SportsScreen
 import com.latmpx.player.ui.theme.NfBg
@@ -156,6 +157,7 @@ private fun MainShell(state: AppState, onLogout: () -> Unit) {
             is Route.Browse -> BrowseScreen(state, top.title, top.kind, top.categoryIds)
             is Route.PlatformPage -> BrowseScreen(state, top.platform.label, null, emptySet(), top.platform)
             is Route.ActorPage -> ActorScreen(state, top)
+            is Route.Saved -> SavedScreen(state, top.continueWatching)
             null -> when (state.tab) {
                 Tab.HOME -> HomeScreen(state)
                 Tab.MOVIES -> CatalogScreen(state, Kind.MOVIE)
