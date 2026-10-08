@@ -49,8 +49,8 @@ $resume_total = 0;
 $resume_episode_id = 0;
 $latest = 0;
 foreach (wp_user_progress($username) as $v) {
-    if (($v['type'] ?? '') === 'series' && (string)($v['series_id'] ?? '') === (string)$id && ($v['last_watched'] ?? 0) > $latest) {
-        $latest = $v['last_watched'];
+    if (($v['type'] ?? '') === 'series' && (string)($v['series_id'] ?? '') === (string)$id && ($v['_when'] ?? 0) > $latest) {
+        $latest = $v['_when'];
         $resume_time = (int)$v['current_time'];
         $resume_total = (int)($v['total_time'] ?? 0);
         $resume_episode_id = (int)$v['stream_id'];
@@ -167,11 +167,11 @@ include "header.php";
     <h2>Elenco</h2>
     <div class="nf-cast">
         <?php foreach ($tmdb['cast'] as $a): ?>
-            <div class="nf-actor">
+            <a class="nf-actor" href="<?php echo e(wp_actor_url($a)); ?>" title="Ver filmografía de <?php echo e($a['n']); ?>">
                 <img src="<?php echo e($a['p'] ?: 'https://ui-avatars.com/api/?name=' . urlencode($a['n']) . '&background=333&color=fff'); ?>" alt="" loading="lazy">
                 <div class="a"><?php echo e($a['n']); ?></div>
                 <div class="c"><?php echo e($a['c']); ?></div>
-            </div>
+            </a>
         <?php endforeach; ?>
     </div>
 </section>

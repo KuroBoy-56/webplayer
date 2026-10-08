@@ -1142,7 +1142,7 @@ function wp_tmdb_search($type, $title, $year = '')
  */
 function wp_tmdb_details($type, $tmdbId, $title, $year = '')
 {
-    $ck = 'tmdbd2|' . $type . '|' . (preg_replace('/\D/', '', (string)$tmdbId) ?: wp_norm_title(wp_tmdb_clean_title($title)) . '|' . $year);
+    $ck = 'tmdbd3|' . $type . '|' . (preg_replace('/\D/', '', (string)$tmdbId) ?: wp_norm_title(wp_tmdb_clean_title($title)) . '|' . $year);
     $d = wp_cache_get($ck, 604800);
     if (is_array($d) && ($d['id'] || time() - (int)($d['_t'] ?? 0) < 172800)) return $d;
     $d = ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', '_t' => time()];
@@ -1172,10 +1172,10 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '')
     }
     $cast = $j['credits']['cast'] ?? [];
     if (!$cast && !empty($j['aggregate_credits']['cast'])) {
-        foreach ($j['aggregate_credits']['cast'] as $a) $cast[] = ['name' => $a['name'] ?? '', 'character' => $a['roles'][0]['character'] ?? '', 'profile_path' => $a['profile_path'] ?? ''];
+        foreach ($j['aggregate_credits']['cast'] as $a) $cast[] = ['id' => $a['id'] ?? 0, 'name' => $a['name'] ?? '', 'character' => $a['roles'][0]['character'] ?? '', 'profile_path' => $a['profile_path'] ?? ''];
     }
     foreach (array_slice($cast, 0, 15) as $a) {
-        $d['cast'][] = ['n' => $a['name'] ?? '', 'c' => $a['character'] ?? '', 'p' => !empty($a['profile_path']) ? 'https://image.tmdb.org/t/p/w185' . $a['profile_path'] : ''];
+        $d['cast'][] = ['id' => (int)($a['id'] ?? 0), 'n' => $a['name'] ?? '', 'c' => $a['character'] ?? '', 'p' => !empty($a['profile_path']) ? 'https://image.tmdb.org/t/p/w185' . $a['profile_path'] : ''];
     }
     $vids = $j['videos']['results'] ?? [];
     usort($vids, function ($a, $b) { return (($b['iso_639_1'] ?? '') === 'es') <=> (($a['iso_639_1'] ?? '') === 'es'); });

@@ -118,11 +118,11 @@ include "header.php";
     <h2>Elenco</h2>
     <div class="nf-cast">
         <?php foreach ($tmdb['cast'] as $a): ?>
-            <div class="nf-actor">
+            <a class="nf-actor" href="<?php echo e(wp_actor_url($a)); ?>" title="Ver filmografía de <?php echo e($a['n']); ?>">
                 <img src="<?php echo e($a['p'] ?: 'https://ui-avatars.com/api/?name=' . urlencode($a['n']) . '&background=333&color=fff'); ?>" alt="" loading="lazy">
                 <div class="a"><?php echo e($a['n']); ?></div>
                 <div class="c"><?php echo e($a['c']); ?></div>
-            </div>
+            </a>
         <?php endforeach; ?>
     </div>
 </section>

@@ -5,6 +5,7 @@ if (defined('WP_UI_LOADED')) {
 }
 define('WP_UI_LOADED', true);
 require_once __DIR__ . '/core.php';
+require_once __DIR__ . '/actor.php';
 
 function wp_icon($name)
 {

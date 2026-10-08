@@ -25,7 +25,7 @@ foreach (wp_user_favorites() as $row) {
 $continuar_viendo = [];
 $user_prog = array_values(wp_user_progress($username));
 usort($user_prog, function ($a, $b) {
-    return ($b['last_watched'] ?? 0) <=> ($a['last_watched'] ?? 0);
+    return ($b['_when'] ?? 0) <=> ($a['_when'] ?? 0);
 });
 $user_prog = array_values(array_filter($user_prog, function ($it) use ($in_server) {
     return ($it['type'] ?? 'movie') === 'series'

@@ -16,7 +16,7 @@ $days_left = ($exp && is_numeric($exp)) ? (int)floor(((int)$exp - time()) / 8640
 
 // Lo que el usuario está viendo (guardado en el panel, igual que en las apps)
 $history_items = array_values(wp_user_progress($username));
-usort($history_items, function ($a, $b) { return ($b['last_watched'] ?? 0) <=> ($a['last_watched'] ?? 0); });
+usort($history_items, function ($a, $b) { return ($b['_when'] ?? 0) <=> ($a['_when'] ?? 0); });
 $body_class = 'nf-solid';
 include "header.php";
 ?>
