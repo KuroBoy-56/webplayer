@@ -38,10 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.latmpx.player.Device
 import com.latmpx.player.data.Alerts
 import com.latmpx.player.data.CatalogCache
 import com.latmpx.player.data.Category
@@ -50,6 +52,7 @@ import com.latmpx.player.data.Kind
 import com.latmpx.player.data.Cloud
 import com.latmpx.player.data.PanelEpg
 import com.latmpx.player.data.Store
+import com.latmpx.player.data.Tenant
 import com.latmpx.player.data.Xtream
 import com.latmpx.player.ui.components.FocusBox
 import com.latmpx.player.ui.components.LocalIsTv
@@ -59,6 +62,8 @@ import com.latmpx.player.ui.screens.AccountScreen
 import com.latmpx.player.ui.screens.ActorScreen
 import com.latmpx.player.ui.screens.BrowseScreen
 import com.latmpx.player.ui.screens.CatalogScreen
+import com.latmpx.player.ui.screens.DistributorScreen
+import com.latmpx.player.ui.screens.TenantRetryScreen
 import com.latmpx.player.ui.screens.DetailScreen
 import com.latmpx.player.ui.screens.HomeScreen
 import com.latmpx.player.ui.screens.LiveScreen
@@ -74,16 +79,71 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 
+/** puerta del distribuidor antes del inicio de sesión */
+private enum class Gate { CHOOSE, RETRY, OPEN }
+
 @Composable
 fun AppRoot() {
     val state = remember { AppState() }
     val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
     val booted = remember { mutableStateOf(false) }
     val alert = remember { mutableStateOf<Alerts.Alert?>(null) }
+    val gate = remember { mutableStateOf(Gate.OPEN) }
+    val distMsg = remember { mutableStateOf<String?>(null) }
+    val retryMsg = remember { mutableStateOf("") }
+    val checking = remember { mutableStateOf(false) }
+
+    // "Cambiar distribuidor" o número cortado por el panel: se borra el número, su marca, la sesión y el token
+    fun wipe(msg: String?) {
+        Store.logout() // antes de Tenant.clear(): borra el token de este distribuidor
+        Tenant.clear()
+        Alerts.reset(); alert.value = null; Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear()
+        state.stack.clear(); state.tab = Tab.HOME; state.session = null
+        distMsg.value = msg
+        gate.value = Gate.CHOOSE
+    }
+
+    // guardián: vuelve a pedir tenant_config (al abrir y al volver a la app pasado recheck_after)
+    fun guard() {
+        val b = Tenant.brand ?: return
+        if (b.expired()) { wipe(Tenant.expiredMessage(b)); return }
+        if (checking.value) return
+        checking.value = true
+        scope.launch {
+            val r = Tenant.fetch(b.code, Device.id(ctx))
+            checking.value = false
+            if (Tenant.code != b.code) return@launch // cambió de distribuidor mientras tanto
+            when (r) {
+                is Tenant.Check.Ok -> {
+                    if (r.brand.expired()) wipe(Tenant.expiredMessage(r.brand))
+                    else { Tenant.refresh(r.brand); if (gate.value == Gate.RETRY) gate.value = Gate.OPEN }
+                }
+                is Tenant.Check.Denied -> wipe(r.message)
+                // sin conexión o error del servidor: se sigue con la copia guardada hasta 72 h
+                is Tenant.Check.Offline -> if (!Tenant.offlineOk()) { retryMsg.value = r.message; gate.value = Gate.RETRY }
+                is Tenant.Check.Problem -> if (!Tenant.offlineOk()) { retryMsg.value = r.message; gate.value = Gate.RETRY }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
-        state.session = Store.session()
+        when {
+            Store.distChoice.isEmpty() -> gate.value = Gate.CHOOSE // primera vez: se pregunta el número
+            Store.distChoice == "code" && Tenant.brand == null -> wipe(null)
+            else -> {
+                gate.value = Gate.OPEN
+                state.session = Store.session()
+            }
+        }
         booted.value = true
+        if (gate.value == Gate.OPEN && Tenant.active) guard()
+    }
+    // el panel cortó el distribuidor mientras se usaba la app (vencido, suspendido, no vinculado)
+    LaunchedEffect(Tenant.revoked) {
+        val m = Tenant.revoked ?: return@LaunchedEffect
+        Tenant.revoked = null
+        if (Tenant.active) wipe(m)
     }
     // al entrar con sesión: primero el catálogo guardado en el equipo (al instante) y
     // después, en segundo plano, el del servidor si la copia ya es vieja o no existe
@@ -114,12 +174,21 @@ fun AppRoot() {
     LifecycleResumeEffect(Unit) {
         state.refresh++
         if (state.session != null) scope.launch { Cloud.load() }
+        if (booted.value && Tenant.active && (Tenant.due() || Tenant.brand?.expired() == true)) guard()
         onPauseOrDispose { }
     }
 
     Box(Modifier.fillMaxSize().background(NfBg)) {
         when {
             !booted.value -> Splash()
+            gate.value == Gate.CHOOSE -> DistributorScreen(distMsg.value) {
+                // con un número nuevo no se reutiliza la sesión de antes (era de otro distribuidor o del dueño)
+                if (Tenant.active) Store.logout()
+                distMsg.value = null
+                gate.value = Gate.OPEN
+                state.session = Store.session()
+            }
+            gate.value == Gate.RETRY -> TenantRetryScreen(retryMsg.value, checking.value, onRetry = { guard() }, onChange = { wipe(null) })
             state.session == null -> LoginScreen { s ->
                 Store.saveSession(s)
                 Xtream.clearCache()
@@ -129,7 +198,7 @@ fun AppRoot() {
                 scope.launch {
                     Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
                 }
-            })
+            }, onChangeDistributor = { wipe(null) })
         }
         alert.value?.takeIf { state.session != null }?.let { a -> PanelAlertDialog(a) { alert.value = null } }
     }
@@ -150,7 +219,7 @@ private val tabIcons: Map<Tab, ImageVector> = mapOf(
 )
 
 @Composable
-private fun MainShell(state: AppState, onLogout: () -> Unit) {
+private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor: () -> Unit) {
     val tv = LocalIsTv.current
     // en TV el botón atrás lo maneja TvShell (menú superior y diálogo de salida)
     if (!tv) BackHandler(enabled = state.stack.isNotEmpty() || state.tab != Tab.HOME) {
@@ -169,10 +238,10 @@ private fun MainShell(state: AppState, onLogout: () -> Unit) {
                 Tab.MOVIES -> CatalogScreen(state, Kind.MOVIE)
                 Tab.SERIES -> CatalogScreen(state, Kind.SERIES)
                 Tab.LIVE -> LiveScreen(state)
-                Tab.SPORTS -> SportsScreen(state)
+                Tab.SPORTS -> if (Tenant.sportsEnabled) SportsScreen(state) else HomeScreen(state)
                 Tab.MYLIST -> MyListScreen(state)
                 Tab.SEARCH -> SearchScreen(state)
-                Tab.ACCOUNT -> AccountScreen(state, onLogout)
+                Tab.ACCOUNT -> AccountScreen(state, onLogout, onChangeDistributor)
             }
         }
     }

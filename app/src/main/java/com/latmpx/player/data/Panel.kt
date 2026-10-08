@@ -21,8 +21,9 @@ object Panel {
 
     private fun device(id: String) = JSONObject().put("mac_address", id)
 
-    /** POST a login.php con el JSON cifrado. Devuelve el cuerpo crudo o el error. */
-    private suspend fun login(action: String, payload: JSONObject): Answer<Net.Resp> {
+    /** POST a login.php con el JSON cifrado. Devuelve el cuerpo crudo o el error. Con distribuidor lleva "tenant" + "app". */
+    private suspend fun login(action: String, payload: JSONObject, tag: Boolean = true): Answer<Net.Resp> {
+        if (tag) Tenant.tag(payload)
         val data = try {
             PanelCrypto.encrypt(payload.toString())
         } catch (e: PanelCrypto.MissingKey) {
@@ -37,6 +38,8 @@ object Panel {
 
     private fun errorOf(r: Net.Resp, fallback: String): String {
         val j = r.json()
+        // distribuidor vencido / suspendido / no válido: Tenant avisa a la interfaz y da el mensaje en español
+        Tenant.onPanelError(j)?.let { return it }
         val msg = j?.s("error").orEmpty().ifEmpty { j?.s("message").orEmpty() }
         return when {
             msg == "Server not configured" -> "El panel no está configurado"
@@ -50,6 +53,8 @@ object Panel {
     suspend fun checkMac(deviceId: String): Answer<Line> {
         val a = login("check_mac", device(deviceId))
         val r = a.value ?: return Answer(null, a.error)
+        // con distribuidor: un error del panel (vencido, suspendido…) se muestra en vez de "no hay línea"
+        if (Tenant.active && r.code in 400..499) return Answer(null, errorOf(r, "El panel rechazó la solicitud"))
         val j = r.json() ?: return Answer(null, errorOf(r, "Respuesta no válida del panel"))
         if (!j.optBoolean("exists", false)) return Answer(null)
         val line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))
@@ -96,8 +101,43 @@ object Panel {
         return Answer(null, errorOf(r, fallback), r.code)
     }
 
+    /** Respuesta de tenant_config: la configuración descifrada o el código de error (tenant_invalid, offline, no_key…). */
+    data class TenantAnswer(val value: JSONObject?, val error: String? = null, val errorCode: String = "")
+
+    /** login.php action tenant_config con {code, app, device} cifrado; la respuesta viene cifrada igual que fetch_dns. */
+    suspend fun tenantConfig(code: String, deviceId: String): TenantAnswer {
+        if (!PanelCrypto.hasKey()) return TenantAnswer(null, "Esta versión de la app no tiene la llave del panel", "no_key")
+        val payload = JSONObject().put("code", code).put("app", Tenant.APP).put("device", deviceId)
+        val a = login("tenant_config", payload, tag = false)
+        val r = a.value ?: return TenantAnswer(null, a.error, "offline")
+        if (r.code >= 500) return TenantAnswer(null, NO_PANEL, "offline")
+        if (!r.ok) {
+            val j = r.json()
+            val c = j?.s("code").orEmpty()
+            val msg = j?.s("error").orEmpty().let { m ->
+                when (m) {
+                    "Decryption failed" -> "La llave de la app no coincide con la del panel"
+                    "Server not configured" -> "El panel no está configurado"
+                    else -> m.ifEmpty { "El panel rechazó el número (${r.code})" }
+                }
+            }
+            return TenantAnswer(null, msg, c.ifEmpty { "http_${r.code}" })
+        }
+        val dec: String? = try {
+            PanelCrypto.decrypt(r.body)
+        } catch (e: PanelCrypto.MissingKey) {
+            return TenantAnswer(null, "Esta versión de la app no tiene la llave del panel", "no_key")
+        }
+        val plain = dec ?: return TenantAnswer(null, "La llave de la app no coincide con la del panel", "bad_key")
+        val j = runCatching { JSONObject(plain) }.getOrNull()
+        if (j == null || j.s("status") != "ok") return TenantAnswer(null, "Respuesta no válida del panel", "bad_response")
+        return TenantAnswer(j)
+    }
+
     /** auth.php: listas asignadas al equipo (respuesta cifrada con mope). */
     suspend fun playlists(deviceId: String): Answer<List<Line>> {
+        // auth.php solo conoce las listas del dueño: con distribuidor se usa check_mac (que sí lo respeta)
+        if (Tenant.active) return Answer(emptyList())
         val body = JSONObject().put("data", PanelCrypto.mopeEncrypt(device(deviceId).toString()))
         val r = Net.postJson(PanelUrl.api("auth.php"), body)
         if (r.code == 0) return Answer(null, NO_PANEL)

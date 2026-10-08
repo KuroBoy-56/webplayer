@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -179,7 +180,20 @@ fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 fun LogoHeader(modifier: Modifier = Modifier, height: Dp = 34.dp) {
+    val brand = com.latmpx.player.data.Tenant.brand
+    val name = com.latmpx.player.data.Tenant.nameOr("LatMpx")
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Image(painterResource(R.drawable.logo), "LatMpx", modifier = Modifier.height(height).clip(RoundedCornerShape(4.dp)))
+        val url = brand?.logoUrl.orEmpty()
+        if (url.isEmpty()) {
+            Image(painterResource(R.drawable.logo), name, modifier = Modifier.height(height).clip(RoundedCornerShape(4.dp)))
+        } else {
+            // logo del distribuidor (Coil lo guarda en caché); si no carga, el logo de la app
+            val fallback = painterResource(R.drawable.logo)
+            AsyncImage(
+                model = url, contentDescription = name, contentScale = ContentScale.Fit,
+                placeholder = fallback, error = fallback, fallback = fallback,
+                modifier = Modifier.height(height).widthIn(max = height * 5).clip(RoundedCornerShape(4.dp)),
+            )
+        }
     }
 }

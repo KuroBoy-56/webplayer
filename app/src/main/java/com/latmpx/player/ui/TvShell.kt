@@ -128,7 +128,8 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
         LogoHeader(height = 34.dp)
         Spacer(Modifier.width(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            tvTabs.forEach { t -> TopTab(t.label, state.tab == t, Modifier.focusRequester(tabFocus.getValue(t))) { state.billboardFocusedTab = null; state.tab = t } }
+            // sports=false del distribuidor: sin Deportes
+            tvTabs.filter { it != Tab.SPORTS || com.latmpx.player.data.Tenant.sportsEnabled }.forEach { t -> TopTab(t.label, state.tab == t, Modifier.focusRequester(tabFocus.getValue(t))) { state.billboardFocusedTab = null; state.tab = t } }
         }
         Spacer(Modifier.weight(1f))
         Clock()
@@ -148,7 +149,7 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
         ) { f ->
             Box(
                 Modifier.size(38.dp)
-                    .background(Brush.linearGradient(listOf(Color(0xFFE50914), Color(0xFF8E0B12))), RoundedCornerShape(6.dp))
+                    .background(Brush.linearGradient(listOf(NfRed, if (com.latmpx.player.data.Tenant.brand?.colors == null) Color(0xFF8E0B12) else androidx.compose.ui.graphics.lerp(NfRed, Color.Black, 0.4f))), RoundedCornerShape(6.dp))
                     .then(if (f || state.tab == Tab.ACCOUNT) Modifier.border(2.dp, Color.White, RoundedCornerShape(6.dp)) else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
