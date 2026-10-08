@@ -110,13 +110,14 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
     val ctx = LocalContext.current
     val conf = LocalConfiguration.current
     val height = minOf(conf.screenWidthDp * 0.5625f, conf.screenHeightDp * 0.88f).dp
-    val heroes = remember(cacheKey) { mutableStateListOf<TvHero>().apply { addAll(HeroCache.map[cacheKey].orEmpty()) } }
-    var done by remember(cacheKey) { mutableStateOf(heroes.isNotEmpty()) }
-    var index by remember(cacheKey) { mutableIntStateOf(0) }
+    val key = "$cacheKey|${s.user}@${s.base}" // otra cuenta u otro servidor: otros destacados
+    val heroes = remember(key) { mutableStateListOf<TvHero>().apply { addAll(HeroCache.map[key].orEmpty()) } }
+    var done by remember(key) { mutableStateOf(heroes.isNotEmpty()) }
+    var index by remember(key) { mutableIntStateOf(0) }
     var holding by remember { mutableStateOf(false) }
     val play = remember { FocusRequester() }
 
-    LaunchedEffect(cacheKey, pool.isNotEmpty()) {
+    LaunchedEffect(key, pool.isNotEmpty()) {
         if (done || pool.isEmpty()) return@LaunchedEffect
         val found = ArrayList<TvHero>()
         for (chunk in pool.chunked(4)) {
@@ -124,7 +125,7 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
             got.forEach { h -> if (found.size < 6 && found.none { it.item.key == h.item.key }) { found += h; heroes += h } }
             if (found.size >= 6) break
         }
-        if (found.isNotEmpty()) HeroCache.map[cacheKey] = found.toList()
+        if (found.isNotEmpty()) HeroCache.map[key] = found.toList()
         done = true
     }
     // el foco entra a la cartelera una sola vez por visita a la sección, cuando ya hay botones
