@@ -24,6 +24,25 @@ object Net {
         .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", UA).build()) }
         .build()
 
+    /**
+     * Cliente de imágenes (carátulas y logos): mismo DNS y conexiones, pero con su propia cola.
+     * OkHttp deja solo 5 descargas a la vez por servidor; con cientos de logos del mismo servidor IPTV
+     * las imágenes se quedaban esperando y además bloqueaban las consultas del catálogo.
+     * Se envía Referer del propio servidor, igual que img.php de la web (algunos lo exigen).
+     */
+    val imageClient: OkHttpClient by lazy {
+        client.newBuilder()
+            .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 48; maxRequestsPerHost = 12 })
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                val req = chain.request()
+                val u = req.url
+                chain.proceed(req.newBuilder().header("Referer", "${u.scheme}://${u.host}/").build())
+            }
+            .build()
+    }
+
     suspend fun text(url: String): String? = withContext(Dispatchers.IO) {
         try {
             client.newCall(Request.Builder().url(url).build()).execute().use { r -> if (r.isSuccessful) r.body?.string() else null }

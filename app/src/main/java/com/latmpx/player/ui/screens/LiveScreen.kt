@@ -42,8 +42,8 @@ import com.latmpx.player.ui.theme.NfRed
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private const val FAVS = "__favs"
-private const val ALL = "__all"
+internal const val FAVS = "__favs"
+internal const val ALL = "__all"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,23 +51,23 @@ fun LiveScreen(state: AppState) {
     val s = state.session ?: return
     val ctx = LocalContext.current
     val tv = LocalIsTv.current
-    val channels by produceState<List<Item>?>(null, s) { value = Xtream.items(s, Kind.LIVE) }
+    // canales guardados en el equipo (AppState.live); si aún no hay copia se piden al servidor
+    val fetched by produceState<List<Item>?>(null, s, state.live.isEmpty()) { if (state.live.isEmpty()) value = Xtream.items(s, Kind.LIVE) }
     var cat by rememberSaveable { mutableStateOf(ALL) }
     var favTick by remember { mutableIntStateOf(0) }
-    val all = channels
+    val all = state.live.ifEmpty { null } ?: fetched
     if (all == null) { Loading("Cargando canales…"); return }
     val cats = remember(state.liveCats) { listOf(FAVS to "★ Favoritos", ALL to "Todos") + state.liveCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }.map { it.id to it.name } }
+    // celular: diseño de tvguide.php de la web (ver LivePhone.kt)
+    if (!tv) { PhoneLive(state, all, cats); return }
     
-    var searchQuery by remember { mutableStateOf("") }
-    var dropdownExpanded by remember { mutableStateOf(false) }
-    
-    val shown = remember(all, cat, favTick, state.refresh, Cloud.rev, searchQuery) {
-        val filtered = when (cat) {
+    // TV: categorías a la izquierda, canales al centro y guía a la derecha
+    val shown = remember(all, cat, favTick, state.refresh, Cloud.rev) {
+        when (cat) {
             ALL -> all
             FAVS -> all.filter { Cloud.isFav(it.key) }
             else -> all.filter { it.categoryId == cat }
         }
-        if (searchQuery.isBlank()) filtered else filtered.filter { it.name.contains(searchQuery, ignoreCase = true) }
     }
     
     var focused by remember { mutableStateOf<Item?>(null) }
@@ -78,60 +78,24 @@ fun LiveScreen(state: AppState) {
     }
     val fav: (Item) -> Unit = { ch -> Cloud.toggleFav(ch.copy(kind = Kind.LIVE)); favTick++ }
 
-    if (tv) {
-        Row(Modifier.fillMaxSize().background(NfBg)) {
-            LazyColumn(Modifier.width(230.dp).fillMaxHeight().background(Color(0xFF101010)), contentPadding = PaddingValues(vertical = 12.dp)) {
-                items(cats, key = { it.first }) { (id, name) ->
-                    FocusBox(onClick = { cat = id }, onFocus = { cat = id }, focusScale = 1.03f, shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).fillMaxWidth()) { f ->
-                        Text(name, color = if (cat == id || f) Color.White else NfGray2, fontWeight = if (cat == id) FontWeight.Bold else FontWeight.Normal,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth().background(if (f) Color(0x33FFFFFF) else if (cat == id) Color(0x1AFFFFFF) else Color.Transparent).padding(horizontal = 12.dp, vertical = 10.dp))
-                    }
+    Row(Modifier.fillMaxSize().background(NfBg)) {
+        LazyColumn(Modifier.width(230.dp).fillMaxHeight().background(Color(0xFF101010)), contentPadding = PaddingValues(vertical = 12.dp)) {
+            items(cats, key = { it.first }) { (id, name) ->
+                FocusBox(onClick = { cat = id }, onFocus = { cat = id }, focusScale = 1.03f, shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).fillMaxWidth()) { f ->
+                    Text(name, color = if (cat == id || f) Color.White else NfGray2, fontWeight = if (cat == id) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().background(if (f) Color(0x33FFFFFF) else if (cat == id) Color(0x1AFFFFFF) else Color.Transparent).padding(horizontal = 12.dp, vertical = 10.dp))
                 }
-            }
-            LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(12.dp)) {
-                if (shown.isEmpty()) item { Text(if (cat == FAVS) "Mantén presionado OK sobre un canal para agregarlo a favoritos" else "Sin canales", color = NfGray2, modifier = Modifier.padding(20.dp)) }
-                itemsIndexed(shown, key = { _, c -> c.id }) { i, ch ->
-                    ChannelRow(ch, i + 1, onClick = { play(i) }, onLong = { fav(ch) }, onFocus = { focused = ch })
-                }
-            }
-            EpgPanel(state, focused, shown, Modifier.width(320.dp).fillMaxHeight())
-        }
-    } else {
-        val catName = cats.firstOrNull { it.first == cat }?.second ?: "Categorías"
-        
-        Column(Modifier.fillMaxSize().background(NfBg)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("TV en vivo", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(16.dp))
-                Box {
-                    Row(Modifier.clickable { dropdownExpanded = true }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(catName, color = Color.LightGray)
-                        Icon(Icons.Filled.ArrowDropDown, null, tint = Color.LightGray)
-                    }
-                    DropdownMenu(expanded = dropdownExpanded, onDismissRequest = { dropdownExpanded = false }) {
-                        cats.forEach { (k, n) ->
-                            DropdownMenuItem(text = { Text(n) }, onClick = { cat = k; dropdownExpanded = false })
-                        }
-                    }
-                }
-            }
-            
-            OutlinedTextField(
-                value = searchQuery, onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Buscar canal...") },
-                singleLine = true,
-                colors = TextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedContainerColor = Color(0xFF1A1A1A), unfocusedContainerColor = Color(0xFF1A1A1A), focusedIndicatorColor = NfRed, unfocusedIndicatorColor = Color.Transparent)
-            )
-            
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
-                if (shown.isEmpty()) item { Empty(if (cat == FAVS) "Mantén presionado un canal para agregarlo a favoritos" else "Sin canales") }
-                itemsIndexed(shown, key = { _, c -> c.id }) { i, ch -> ChannelRow(ch, i + 1, onClick = { play(i) }, onLong = { fav(ch) }) }
-                item { Spacer(Modifier.height(80.dp)) }
             }
         }
+        LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(12.dp)) {
+            if (shown.isEmpty()) item { Text(if (cat == FAVS) "Mantén presionado OK sobre un canal para agregarlo a favoritos" else "Sin canales", color = NfGray2, modifier = Modifier.padding(20.dp)) }
+            itemsIndexed(shown, key = { _, c -> c.id }) { i, ch ->
+                ChannelRow(ch, i + 1, onClick = { play(i) }, onLong = { fav(ch) }, onFocus = { focused = ch })
+            }
+        }
+        EpgPanel(state, focused, shown, Modifier.width(320.dp).fillMaxHeight())
     }
 }
 

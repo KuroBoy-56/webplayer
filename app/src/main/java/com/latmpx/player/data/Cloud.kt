@@ -40,7 +40,9 @@ object Cloud {
     private suspend fun token(s: Session): String? {
         Store.cloudToken?.takeIf { it.isNotEmpty() }?.let { return it }
         val r = Net.postJson(api(), JSONObject().put("action", "auth").put("user", s.user).put("pass", s.pass).put("dns", s.base))
-        val t = r.json()?.s("token").orEmpty()
+        val j = r.json()
+        rememberTmdbKey(j)
+        val t = j?.s("token").orEmpty()
         if (t.isEmpty()) return null
         Store.cloudToken = t
         return t
@@ -56,8 +58,16 @@ object Cloud {
             tok = token(s) ?: return null
             r = block(tok)
         }
-        r.json()?.s("token")?.takeIf { it.isNotEmpty() }?.let { Store.cloudToken = it }
+        val j = r.json()
+        j?.s("token")?.takeIf { it.isNotEmpty() }?.let { Store.cloudToken = it }
+        rememberTmdbKey(j)
         return r
+    }
+
+    /** llave TMDB del panel (settings.tmdb_key) que el panel envía junto al token: la usan las carátulas */
+    private fun rememberTmdbKey(j: JSONObject?) {
+        val k = j?.s("tmdbKey").orEmpty()
+        if (k.isNotEmpty() && k != "missing_tmdb_key" && k != Store.tmdbKey) Store.tmdbKey = k
     }
 
     /* ---------- carga ---------- */
