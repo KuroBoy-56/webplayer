@@ -39,7 +39,7 @@ object Cloud {
 
     private suspend fun token(s: Session): String? {
         Store.cloudToken?.takeIf { it.isNotEmpty() }?.let { return it }
-        val r = Net.postJson(api(), JSONObject().put("action", "auth").put("user", s.user).put("pass", s.pass))
+        val r = Net.postJson(api(), JSONObject().put("action", "auth").put("user", s.user).put("pass", s.pass).put("dns", s.base))
         val t = r.json()?.s("token").orEmpty()
         if (t.isEmpty()) return null
         Store.cloudToken = t
