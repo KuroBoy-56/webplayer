@@ -1,6 +1,7 @@
 package com.latmpx.player.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,11 +10,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -89,7 +93,7 @@ fun Grid(state: AppState, items: List<Item>, heroItems: List<Item> = emptyList()
         columns = GridCells.Adaptive(pw), contentPadding = PaddingValues(horizontal = sidePad(), vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize(),
     ) {
-        items(items, key = { it.id }) { it ->
+        items(items, key = { it.key }) { it ->
             val p = progress[it.key]
             PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, progress = if (p != null && p.duration > 0) p.position.toFloat() / p.duration else 0f)
         }
@@ -104,10 +108,67 @@ fun BrowseScreen(state: AppState, title: String, kind: Kind?, categoryIds: Set<S
             byCats(state.movies, com.latmpx.player.data.Platforms.categoriesFor(state.movieCats, platform.kw)) + byCats(state.series, com.latmpx.player.data.Platforms.categoriesFor(state.seriesCats, platform.kw))
         } else byCats(if (kind == Kind.SERIES) state.series else state.movies, categoryIds)
     }
-    Column(Modifier.fillMaxSize().background(NfBg)) {
-        Text(title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = sidePad(), top = 16.dp, bottom = 6.dp))
-        Grid(state, list)
+    // plataformas: lupa arriba a la derecha para filtrar por nombre (sin distinguir mayúsculas ni acentos)
+    var searching by rememberSaveable(title) { mutableStateOf(false) }
+    var query by rememberSaveable(title) { mutableStateOf("") }
+    val shown = remember(list, query) {
+        val q = com.latmpx.player.data.Platforms.fold(query.trim())
+        if (q.isEmpty()) list else list.filter { com.latmpx.player.data.Platforms.fold(it.name).contains(q) }
     }
+    Column(Modifier.fillMaxSize().background(NfBg)) {
+        Row(Modifier.fillMaxWidth().padding(start = sidePad(), end = sidePad(), top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = if (searching) Modifier.widthIn(max = 280.dp) else Modifier.weight(1f))
+            if (platform != null) {
+                if (searching) {
+                    Spacer(Modifier.width(12.dp))
+                    NameFilterField(query, Modifier.weight(1f)) { query = it }
+                }
+                Spacer(Modifier.width(10.dp))
+                com.latmpx.player.ui.components.FocusBox(
+                    onClick = { if (searching) { searching = false; query = "" } else searching = true },
+                    shape = androidx.compose.foundation.shape.CircleShape, focusScale = 1.12f,
+                ) { f ->
+                    Box(Modifier.size(40.dp).background(if (f) Color.White else Color(0x22FFFFFF), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(
+                            if (searching) androidx.compose.material.icons.Icons.Filled.Close else androidx.compose.material.icons.Icons.Filled.Search,
+                            if (searching) "Cerrar búsqueda" else "Buscar", tint = if (f) Color.Black else Color.White, modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+            }
+        }
+        if (shown.isEmpty() && query.isNotBlank()) Empty("No hay títulos que coincidan con \"${query.trim()}\"") else Grid(state, shown)
+    }
+}
+
+/** Campo de texto para filtrar por nombre: toma el foco y abre el teclado al aparecer (celular y control remoto). */
+@Composable
+private fun NameFilterField(value: String, modifier: Modifier, onChange: (String) -> Unit) {
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus(); kb?.show() } }
+    androidx.compose.foundation.text.BasicTextField(
+        value = value, onValueChange = onChange, singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { kb?.hide() }),
+        modifier = modifier.focusRequester(focus),
+        decorationBox = { inner ->
+            Row(
+                Modifier.fillMaxWidth().background(Color(0xFF000000), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                    .border(1.dp, Color.White, androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(androidx.compose.material.icons.Icons.Filled.Search, null, tint = Color(0xFF808080), modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(1f)) {
+                    if (value.isEmpty()) Text("Filtrar por nombre…", color = Color(0xFF808080), fontSize = 16.sp)
+                    inner()
+                }
+            }
+        },
+    )
 }
 
 @Composable
