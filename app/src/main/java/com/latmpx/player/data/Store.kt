@@ -23,10 +23,32 @@ object Store {
         get() = p.getString("dns", "auto") ?: "auto"
         set(v) { p.edit().putString("dns", v).apply(); SecureDns.select(v) }
 
-    /* ---------- llave TMDB del panel (solo para el fondo de pósters) ---------- */
+    /* ---------- llave TMDB del panel (una por distribuidor; Omitir = la de siempre) ---------- */
+    private fun tenantKey(base: String): String = Tenant.code.let { if (it.isEmpty()) base else "$base|$it" }
+
     var tmdbKey: String
-        get() = p.getString("tmdb_key", "") ?: ""
-        set(v) = p.edit().putString("tmdb_key", v).apply()
+        get() = p.getString(tenantKey("tmdb_key"), "") ?: ""
+        set(v) = p.edit().putString(tenantKey("tmdb_key"), v).apply()
+
+    /* ---------- distribuidor (ver Tenant.kt) ---------- */
+    /** "" = sin elegir (se pregunta), "skip" = Omitir, "code" = con número */
+    var distChoice: String
+        get() = p.getString("dist_choice", "") ?: ""
+        set(v) = p.edit().putString("dist_choice", v).apply()
+
+    var distCode: String
+        get() = p.getString("dist_code", "") ?: ""
+        set(v) = p.edit().putString("dist_code", v).apply()
+
+    /** última respuesta correcta de tenant_config (nombre, logo, colores, vencimiento, funciones) */
+    var distConfig: String
+        get() = p.getString("dist_config", "") ?: ""
+        set(v) = p.edit().putString("dist_config", v).apply()
+
+    /** hora (ms) de la última comprobación correcta con el panel */
+    var distLastOk: Long
+        get() = p.getLong("dist_last_ok", 0L)
+        set(v) = p.edit().putLong("dist_last_ok", v).apply()
 
     var streamFormat: String
         get() = p.getString("stream_format", "m3u8") ?: "m3u8"
@@ -70,15 +92,15 @@ object Store {
 
     /** el panel respondió que la demo ya se usó en este equipo: el botón queda desactivado */
     var demoUsed: Boolean
-        get() = p.getBoolean("demo_used", false)
-        set(v) = p.edit().putBoolean("demo_used", v).apply()
+        get() = p.getBoolean(tenantKey("demo_used"), false)
+        set(v) = p.edit().putBoolean(tenantKey("demo_used"), v).apply()
 
-    fun logout() = p.edit().remove("session").remove("cloud_token2").apply()
+    fun logout() = p.edit().remove("session").remove(tenantKey("cloud_token2")).apply()
 
-    /* ---------- token de progress.php / epg.php / sports.php (30 días) ---------- */
+    /* ---------- token de progress.php / epg.php / sports.php (30 días; uno por distribuidor) ---------- */
     var cloudToken: String?
-        get() = p.getString("cloud_token2", null)
-        set(v) = p.edit().putString("cloud_token2", v).apply()
+        get() = p.getString(tenantKey("cloud_token2"), null)
+        set(v) = p.edit().putString(tenantKey("cloud_token2"), v).apply()
 
     private fun scope(): String = session()?.let { "${it.user}@${it.base}" } ?: "-"
 

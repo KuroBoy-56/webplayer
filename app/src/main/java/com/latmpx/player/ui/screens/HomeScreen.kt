@@ -129,7 +129,7 @@ fun HomeScreen(state: AppState) {
                         Spacer(Modifier.width(16.dp))
                         Text("Ajustes", color = Color.White, fontSize = 16.sp)
                     }
-                    Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.SPORTS }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (com.latmpx.player.data.Tenant.sportsEnabled) Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.SPORTS }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.SportsSoccer, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(16.dp))
                         Text("Deportes", color = Color.White, fontSize = 16.sp)
@@ -205,12 +205,12 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
             if (current == null) {
                 Text("Para " + (state.session?.user ?: ""), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             } else {
-                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.latmpx.player.R.drawable.logo), null, modifier = Modifier.height(28.dp))
+                LogoHeader(height = 28.dp)
                 Spacer(Modifier.weight(1f))
             }
             Icon(Icons.Filled.Search, "Buscar", tint = Color.White, modifier = Modifier.size(26.dp).clickable { state.tab = Tab.SEARCH })
             Spacer(Modifier.width(18.dp))
-            Box(Modifier.size(30.dp).clip(RoundedCornerShape(5.dp)).background(Brush.linearGradient(listOf(Color(0xFFE50914), Color(0xFF8E0B12)))).clickable { onProfile() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(30.dp).clip(RoundedCornerShape(5.dp)).background(Brush.linearGradient(listOf(NfRed, if (com.latmpx.player.data.Tenant.brand?.colors == null) Color(0xFF8E0B12) else androidx.compose.ui.graphics.lerp(NfRed, Color.Black, 0.4f)))).clickable { onProfile() }, contentAlignment = Alignment.Center) {
                 Text(state.session?.user?.take(1)?.uppercase() ?: "U", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
         }
@@ -218,7 +218,7 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
             if (current != null) com.latmpx.player.ui.components.Chip("✕", false) { state.tab = Tab.HOME }
             com.latmpx.player.ui.components.Chip("Series", current == Tab.SERIES) { state.tab = Tab.SERIES }
             com.latmpx.player.ui.components.Chip("Películas", current == Tab.MOVIES) { state.tab = Tab.MOVIES }
-            com.latmpx.player.ui.components.Chip("Deportes", current == Tab.SPORTS) { state.tab = Tab.SPORTS }
+            if (com.latmpx.player.data.Tenant.sportsEnabled) com.latmpx.player.ui.components.Chip("Deportes", current == Tab.SPORTS) { state.tab = Tab.SPORTS }
             com.latmpx.player.ui.components.Chip("Mi lista", current == Tab.MYLIST) { state.tab = Tab.MYLIST }
         }
     }

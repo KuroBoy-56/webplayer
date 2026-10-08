@@ -46,7 +46,7 @@ import com.latmpx.player.ui.theme.NfGray2
 import com.latmpx.player.ui.theme.NfRed
 
 @Composable
-fun AccountScreen(state: AppState, onLogout: () -> Unit) {
+fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: () -> Unit = {}) {
     val s = state.session ?: return
     val progressList = remember(state.refresh, Cloud.rev) { Cloud.progressList() }
     
@@ -146,7 +146,7 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
         Spacer(Modifier.height(24.dp))
         
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(64.dp).background(Color(0xFFE50914), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(64.dp).background(NfRed, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
                 Text(s.user.take(1).uppercase(), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.width(16.dp))
@@ -221,6 +221,9 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit) {
             }
         }
         
+        Spacer(Modifier.height(32.dp))
+        // número de distribuidor, vencimiento y "Cambiar distribuidor" (también para quien eligió Omitir)
+        DistributorAccountCard(onChangeDistributor)
         Spacer(Modifier.height(32.dp))
         HeroButton("Cerrar sesión", Icons.AutoMirrored.Filled.Logout, false, onClick = onLogout)
         Spacer(Modifier.height(60.dp))

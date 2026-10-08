@@ -39,8 +39,10 @@ object Cloud {
 
     private suspend fun token(s: Session): String? {
         Store.cloudToken?.takeIf { it.isNotEmpty() }?.let { return it }
-        val r = Net.postJson(api(), JSONObject().put("action", "auth").put("user", s.user).put("pass", s.pass).put("dns", s.base))
+        // con distribuidor el token lleva su número y la app (t, a); Omitir = igual que antes
+        val r = Net.postJson(api(), Tenant.tag(JSONObject().put("action", "auth").put("user", s.user).put("pass", s.pass).put("dns", s.base)))
         val j = r.json()
+        Tenant.onPanelError(j)
         rememberTmdbKey(j)
         val t = j?.s("token").orEmpty()
         if (t.isEmpty()) return null
@@ -59,6 +61,8 @@ object Cloud {
             r = block(tok)
         }
         val j = r.json()
+        // distribuidor vencido / suspendido mientras se usa la app: la interfaz vuelve a la pantalla del número
+        if (r.code == 403 || r.code == 404) Tenant.onPanelError(j)
         j?.s("token")?.takeIf { it.isNotEmpty() }?.let { Store.cloudToken = it }
         rememberTmdbKey(j)
         return r

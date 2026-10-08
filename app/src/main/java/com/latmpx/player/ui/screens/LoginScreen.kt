@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +54,7 @@ import com.latmpx.player.data.Panel
 import com.latmpx.player.data.PanelCrypto
 import com.latmpx.player.data.Session
 import com.latmpx.player.data.Store
+import com.latmpx.player.data.Tenant
 import com.latmpx.player.data.Tmdb
 import com.latmpx.player.data.Xtream
 import com.latmpx.player.ui.components.Chip
@@ -62,6 +64,7 @@ import com.latmpx.player.ui.components.PosterWall
 import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.components.LogoHeader
 import com.latmpx.player.ui.theme.NfGray2
+import com.latmpx.player.ui.theme.NfOnRed
 import com.latmpx.player.ui.theme.NfRed
 import kotlinx.coroutines.launch
 
@@ -184,7 +187,8 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                         }
                         
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            HeroButton(if (demoUsed) "Autodemo" else "Autodemo", Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
+                            // el distribuidor puede no tener demo (sin DNS): entonces no se muestra el botón
+                            if (Tenant.demoEnabled) HeroButton(if (demoUsed) "Autodemo" else "Autodemo", Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
                                 if (demoUsed) { err = "La demo ya se usó"; return@HeroButton }
                                 act {
                                     status = "Creando demo…"
@@ -223,7 +227,7 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                     if (lines.size > 1) err?.let { ErrorBanner(it) }
                 }
             }
-            Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} Garevyn TV", color = Color(0xFF999999), fontSize = 14.sp,
+            Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} ${Tenant.nameOr("Garevyn TV")}", color = Color(0xFF999999), fontSize = 14.sp,
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).background(Color(0x99000000)).padding(20.dp))
         }
     }
@@ -238,8 +242,8 @@ private fun ErrorBanner(text: String) {
 @Composable
 private fun RedButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     FocusBox(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(4.dp), focusScale = 1.03f) { f ->
-        Box(Modifier.fillMaxWidth().height(48.dp).background(if (f) Color(0xFFF6121D) else NfRed), contentAlignment = Alignment.Center) {
-            Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Box(Modifier.fillMaxWidth().height(48.dp).background(if (f) (if (Tenant.brand?.colors == null) Color(0xFFF6121D) else lerp(NfRed, Color.White, 0.12f)) else NfRed), contentAlignment = Alignment.Center) {
+            Text(text, color = NfOnRed, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

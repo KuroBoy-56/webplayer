@@ -63,6 +63,18 @@ Se envía siempre en el campo `mac_address`.
 
 En la pantalla de activación se ve el código MAC para que el distribuidor lo active en el panel, y el botón **Comprobar activación** vuelve a preguntar.
 
+## Distribuidor (número de 6 dígitos)
+
+Al abrir la app por primera vez sale **Número de distribuidor** (mismo diseño que el inicio de sesión; en TV con teclado numérico en pantalla o los números del control). La elección se guarda en el equipo y no se vuelve a preguntar: con sesión entra directo al inicio, sin sesión al login.
+
+- **Omitir:** todo funciona exactamente como antes (no se envía nada nuevo al panel, logo, colores y nombre de la app).
+- **Continuar:** `login.php` acción `tenant_config` con `{code, app, device}` cifrado (app = `android` o `android_tv` según `Device.TV_APP`). La respuesta (nombre, logo, colores, vencimiento, funciones) se guarda y se aplica antes de la primera pantalla.
+- Con número, todas las llamadas llevan el distribuidor: `"tenant"` + `"app"` en los payload de `login.php` y en el `auth` de `progress.php` (el token, uno por número, sirve para `epg.php` y `sports.php`); `alerta.php?t=…&app=…`. `auth.php` solo conoce las listas del dueño, así que con número se usa `check_mac`.
+- **Guardián** (`data/Tenant.kt`, `ui/AppRoot.kt`): al abrir la app y al volver a ella pasado `recheck_after` (6 h) se vuelve a pedir `tenant_config`. `tenant_invalid`, `tenant_expired`, `tenant_suspended` o `app_not_linked` (también si llegan en cualquier otra llamada) borran número, marca, sesión y token y vuelven a la pantalla del número con el mensaje. Sin conexión se sigue con la copia hasta 72 h; después, pantalla **Reintentar**. El vencimiento (`expires_at`, hora de Panamá) también se comprueba en el equipo.
+- Funciones: `demo=false` oculta **Autodemo**, `alerts=false` no muestra el aviso, `sports=false` oculta **Deportes**.
+- Marca: el logo (`logo_url`, con Coil y respaldo al logo de la app) reemplaza a `LogoHeader`; la paleta `{accent, bg, surface, text}` reemplaza a los colores `Nf*` de `ui/theme/Theme.kt` (texto sobre acento negro o blanco según luminancia, texto secundario al 65 %, tarjetas = superficie 8 % hacia el texto).
+- **Cuenta → Cambiar distribuidor:** muestra distribuidor, número y vencimiento; borra todo, cierra sesión y vuelve a pedir el número.
+
 ## Datos que viven en el panel
 
 Todas estas llamadas usan un token: la app hace `POST progress.php {"action":"auth","user","pass"}` una vez y guarda solo el token (30 días). Si vence, pide otro.

@@ -20,7 +20,10 @@ object Alerts {
     suspend fun forLaunch(s: Session): Alert? {
         val key = "${s.user}@${s.base}"
         if (shownFor == key) return null
+        // el distribuidor desactivó los avisos
+        if (!Tenant.alertsEnabled) return null
         val url = PanelUrl.api("alerta.php").toHttpUrlOrNull()?.newBuilder()
+            ?.let { Tenant.tag(it) } // ?t=<número>&app=<app>: textos del distribuidor (nada con Omitir)
             ?.addQueryParameter("format", "json")
             ?.addQueryParameter("user", s.user)
             ?.addQueryParameter("pass", s.pass)

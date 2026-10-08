@@ -156,7 +156,7 @@ fun DetailScreen(state: AppState, media: Item) {
                     IconAction(if (fav) Icons.Filled.Check else Icons.Filled.Add, "Mi lista") { fav = Cloud.toggleFav(media) }
                     tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { t -> IconAction(Icons.Filled.Movie, "Tráiler") { openTrailer(ctx, t) } }
                     IconAction(Icons.Filled.Share, "Compartir") {
-                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, "Mira \"${media.name}\" en LatMpx")
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, "Mira \"${media.name}\" en ${com.latmpx.player.data.Tenant.nameOr("LatMpx")}")
                         runCatching { ctx.startActivity(android.content.Intent.createChooser(send, "Compartir")) }
                     }
                 }
