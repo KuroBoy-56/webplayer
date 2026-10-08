@@ -26,7 +26,7 @@ if (wp_is_https() && $_SERVER['REQUEST_METHOD'] === 'GET' && empty($_GET['h'])) 
 $get_dns = rtrim((string)$d['srv'], '/');
 $username = (string)$d['usr'];
 $password = (string)($d['pwd'] ?? '');
-$_SESSION = ['server' => $get_dns, 'username' => $username, 'password' => $password, 'panel_token' => (string)($d['pt'] ?? '')];
+$_SESSION = ['server' => $get_dns, 'username' => $username, 'password' => $password, 'panel_token2' => (string)($d['pt'] ?? '')];
 
 /* ---------- Guardar progreso (misma lógica que save_progress.php) ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

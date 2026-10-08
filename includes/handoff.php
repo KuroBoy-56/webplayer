@@ -49,7 +49,7 @@ function wp_handoff_url(array $v)
         'srv' => $u['server'],
         'usr' => $u['username'],
         'pwd' => $u['password'],
-        'pt' => (string)($_SESSION['panel_token'] ?? ''),
+        'pt' => (string)($_SESSION['panel_token2'] ?? ''),
     ]);
     if ($tok === '') return '';
     $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');

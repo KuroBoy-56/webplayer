@@ -122,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         $_SESSION["server_id"] = $srv['id'];
         $_SESSION["server_name"] = $srv['name'];
         // Token del panel para "Continuar viendo" y "Mi lista"
-        $_SESSION['panel_token'] = wp_panel_auth($username, $password);
+        $_SESSION['panel_token2'] = wp_panel_auth($username, $password, $srv['url']);
         wp_rate_reset('login');
 
         // Sólo se recuerda el usuario (nunca la contraseña en una cookie)

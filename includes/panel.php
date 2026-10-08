@@ -214,31 +214,34 @@ function wp_panel_dns_urls()
 /* Token por usuario (progress.php acción auth)                        */
 /* ------------------------------------------------------------------ */
 
-/** Pide un token al panel con el usuario y la contraseña de la línea. */
-function wp_panel_auth($user, $pass)
+/**
+ * Pide un token al panel con el usuario, la contraseña y el DNS de la línea:
+ * el panel guarda el progreso y Mi lista por usuario + servidor.
+ */
+function wp_panel_auth($user, $pass, $dns = '')
 {
     if (!wp_panel_ready() || $user === '' || $pass === '') return '';
-    $body = wp_panel_request('progress.php', ['action' => 'auth', 'user' => (string)$user, 'pass' => (string)$pass], [], 8, $code);
+    $body = wp_panel_request('progress.php', ['action' => 'auth', 'user' => (string)$user, 'pass' => (string)$pass, 'dns' => (string)$dns], [], 8, $code);
     $j = $body !== null ? json_decode($body, true) : null;
     return (is_array($j) && !empty($j['token']) && is_string($j['token'])) ? $j['token'] : '';
 }
 
 function wp_panel_token()
 {
-    return (string)($_SESSION['panel_token'] ?? '');
+    return (string)($_SESSION['panel_token2'] ?? '');
 }
 
 /** Guarda un token nuevo en la sesión (si todavía se puede escribir). */
 function wp_panel_store_token($token)
 {
-    $_SESSION['panel_token'] = $token;
+    $_SESSION['panel_token2'] = $token;
     // play.php (reproductor http) no tiene sesión que guardar
     if (defined('WP_HANDOFF') || session_status() === PHP_SESSION_ACTIVE) return;
     if (headers_sent()) return;
     $mem = $_SESSION;
     wp_session_start();
     if (session_status() === PHP_SESSION_ACTIVE) {
-        if (($_SESSION['username'] ?? '') === ($mem['username'] ?? '')) $_SESSION['panel_token'] = $token;
+        if (($_SESSION['username'] ?? '') === ($mem['username'] ?? '')) $_SESSION['panel_token2'] = $token;
         $all = $_SESSION;
         session_write_close();
         $_SESSION = $all;
@@ -258,7 +261,7 @@ function wp_panel_call($endpoint, $body = null, $timeout = 8)
     for ($try = 0; $try < 2; $try++) {
         if ($token === '') {
             $u = wp_user();
-            $token = wp_panel_auth($u['username'], $u['password']);
+            $token = wp_panel_auth($u['username'], $u['password'], $u['server']);
             if ($token === '') return null;
             wp_panel_store_token($token);
         }
