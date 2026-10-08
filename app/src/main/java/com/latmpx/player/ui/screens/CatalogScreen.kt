@@ -181,3 +181,21 @@ fun MyListScreen(state: AppState) {
         if (favs.isEmpty()) Empty("Agrega películas y series con el botón \"Mi lista\" para verlas aquí") else Grid(state, favs)
     }
 }
+
+/** "Ver todo" de Continuar viendo / Mi lista: todos los títulos en rejilla (con su avance) */
+@Composable
+fun SavedScreen(state: AppState, continueWatching: Boolean) {
+    val list = remember(continueWatching, state.refresh, Cloud.rev, state.movies, state.series) {
+        if (continueWatching) {
+            Cloud.progressList().mapNotNull { p -> state.itemFromProgress(p)?.let { it.copy(poster = p.poster.ifEmpty { it.poster }) } }.distinctBy { it.key }
+        } else Cloud.favList().filter { it.kind != Kind.LIVE }
+    }
+    Column(Modifier.fillMaxSize().background(NfBg)) {
+        Text(
+            if (continueWatching) "Continuar viendo" else "Mi lista", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = sidePad(), top = 16.dp, bottom = 6.dp),
+        )
+        if (list.isEmpty()) Empty(if (continueWatching) "Aún no has empezado a ver nada" else "Agrega películas y series con el botón \"Mi lista\" para verlas aquí")
+        else Grid(state, list)
+    }
+}

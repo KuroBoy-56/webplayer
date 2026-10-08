@@ -17,12 +17,18 @@ sealed class Route {
     data class Detail(val item: Item) : Route()
     data class Browse(val title: String, val kind: Kind, val categoryIds: Set<String>) : Route()
     data class PlatformPage(val platform: Platform) : Route()
+    /** actor del elenco: tmdbId 0 = se busca por nombre en TMDB */
+    data class ActorPage(val name: String, val tmdbId: Int = 0, val photo: String = "") : Route()
+    /** rejilla completa de "Continuar viendo" (true) o de "Mi lista" (false) */
+    data class Saved(val continueWatching: Boolean) : Route()
 }
 
 class AppState {
     var session by mutableStateOf<Session?>(null)
     var tab by mutableStateOf(Tab.HOME)
     val stack = mutableStateListOf<Route>()
+    /** celular: video a pantalla completa (se ocultan la barra inferior y las del sistema) */
+    var immersive by mutableStateOf(false)
     var movieCats by mutableStateOf<List<Category>>(emptyList())
     var seriesCats by mutableStateOf<List<Category>>(emptyList())
     var liveCats by mutableStateOf<List<Category>>(emptyList())

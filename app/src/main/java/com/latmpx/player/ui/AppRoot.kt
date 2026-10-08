@@ -54,6 +54,7 @@ import com.latmpx.player.ui.components.FocusBox
 import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.components.LogoHeader
 import com.latmpx.player.ui.screens.AccountScreen
+import com.latmpx.player.ui.screens.ActorScreen
 import com.latmpx.player.ui.screens.BrowseScreen
 import com.latmpx.player.ui.screens.CatalogScreen
 import com.latmpx.player.ui.screens.DetailScreen
@@ -61,6 +62,7 @@ import com.latmpx.player.ui.screens.HomeScreen
 import com.latmpx.player.ui.screens.LiveScreen
 import com.latmpx.player.ui.screens.LoginScreen
 import com.latmpx.player.ui.screens.MyListScreen
+import com.latmpx.player.ui.screens.SavedScreen
 import com.latmpx.player.ui.screens.SearchScreen
 import com.latmpx.player.ui.screens.SportsScreen
 import com.latmpx.player.ui.theme.NfBg
@@ -155,6 +157,8 @@ private fun MainShell(state: AppState, onLogout: () -> Unit) {
             is Route.Detail -> DetailScreen(state, top.item)
             is Route.Browse -> BrowseScreen(state, top.title, top.kind, top.categoryIds)
             is Route.PlatformPage -> BrowseScreen(state, top.platform.label, null, emptySet(), top.platform)
+            is Route.ActorPage -> ActorScreen(state, top)
+            is Route.Saved -> SavedScreen(state, top.continueWatching)
             null -> when (state.tab) {
                 Tab.HOME -> HomeScreen(state)
                 Tab.MOVIES -> CatalogScreen(state, Kind.MOVIE)
@@ -175,7 +179,7 @@ private fun MainShell(state: AppState, onLogout: () -> Unit) {
         val phoneTabs = listOf(Tab.HOME, Tab.SERIES, Tab.MOVIES, Tab.LIVE, Tab.ACCOUNT)
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) { content() }
-            NavigationBar(containerColor = Color(0xFF0B0B0B), tonalElevation = 0.dp) {
+            if (!state.immersive) NavigationBar(containerColor = Color(0xFF0B0B0B), tonalElevation = 0.dp) {
                 phoneTabs.forEach { t ->
                     NavigationBarItem(
                         selected = state.tab == t && top == null,

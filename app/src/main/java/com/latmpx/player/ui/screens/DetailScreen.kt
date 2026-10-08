@@ -214,13 +214,15 @@ fun DetailScreen(state: AppState, media: Item) {
                 Text("Elenco", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad(), vertical = 8.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(tmdb!!.cast) { actor ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp)) {
+                        FocusBox(onClick = { state.push(Route.ActorPage(actor.name, actor.id, actor.profile)) }, focusScale = 1.05f, shape = RoundedCornerShape(8.dp)) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp).padding(vertical = 4.dp)) {
                             val url = actor.profile.ifEmpty { "https://ui-avatars.com/api/?name=${java.net.URLEncoder.encode(actor.name, "UTF-8")}&background=333&color=fff" }
                             AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(60.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFF333333)))
                             Text(actor.name, color = Color.White, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
                             if (actor.character.isNotEmpty()) {
                                 Text(actor.character, color = NfGray2, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                             }
+                        }
                         }
                     }
                 }
@@ -232,10 +234,12 @@ fun DetailScreen(state: AppState, media: Item) {
                 LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     val actors = det.cast.split(",").map { it.trim() }.filter { it.isNotEmpty() }
                     items(actors) { actor ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp)) {
+                        FocusBox(onClick = { state.push(Route.ActorPage(actor)) }, focusScale = 1.05f, shape = RoundedCornerShape(8.dp)) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp).padding(vertical = 4.dp)) {
                             val url = "https://ui-avatars.com/api/?name=${java.net.URLEncoder.encode(actor, "UTF-8")}&background=333&color=fff"
                             AsyncImage(model = url, contentDescription = null, modifier = Modifier.size(60.dp).clip(androidx.compose.foundation.shape.CircleShape))
                             Text(actor, color = NfGray2, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                        }
                         }
                     }
                 }

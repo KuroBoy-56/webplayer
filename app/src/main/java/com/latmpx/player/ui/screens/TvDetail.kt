@@ -215,13 +215,14 @@ fun TvDetailScreen(state: AppState, media: Item) {
             }
         }
 
-        val castList = tmdb?.cast.orEmpty().map { Triple(it.name, it.character, it.profile) }
-            .ifEmpty { det?.cast.orEmpty().split(",").map { it.trim() }.filter { it.isNotEmpty() }.map { Triple(it, "", "") } }
+        val castList = tmdb?.cast.orEmpty()
+            .ifEmpty { det?.cast.orEmpty().split(",").map { it.trim() }.filter { it.isNotEmpty() }.map { Tmdb.CastMember(it, "", "") } }
         if (castList.isNotEmpty()) item(key = "cast") {
             Column(Modifier.padding(top = 20.dp)) {
                 Text("Elenco", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = pad))
                 LazyRow(contentPadding = PaddingValues(horizontal = pad, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                    items(castList) { (name, character, photo) -> CastChip(name, character, photo) }
+                    // OK sobre un actor: sus películas y series disponibles en el servidor
+                    items(castList) { c -> CastChip(c.name, c.character, c.profile) { state.push(Route.ActorPage(c.name, c.id, c.profile)) } }
                 }
             }
         }
@@ -274,8 +275,8 @@ private fun CircleAction(icon: ImageVector, on: Boolean, onClick: () -> Unit) {
 
 /** .nf-actor: foto redonda, nombre y personaje; enfocable con el control (anillo blanco y crece) */
 @Composable
-private fun CastChip(name: String, character: String, photo: String) {
-    TvFocusable(onClick = {}, shape = RoundedCornerShape(10.dp), scale = 1.08f, border = false, modifier = Modifier.width(110.dp)) { f ->
+private fun CastChip(name: String, character: String, photo: String, onClick: () -> Unit) {
+    TvFocusable(onClick = onClick, shape = RoundedCornerShape(10.dp), scale = 1.08f, border = false, modifier = Modifier.width(110.dp)) { f ->
         Column(
             Modifier.fillMaxWidth().background(if (f) Color(0xFF262626) else Color.Transparent).padding(vertical = 8.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

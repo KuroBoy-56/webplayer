@@ -18,6 +18,8 @@ data class Item(
     val plot: String = "",
     val epgId: String = "",
     val backdrop: String = "",
+    /** elenco que envía el servidor en la lista (get_series lo trae; las películas casi nunca) */
+    val cast: String = "",
 ) : java.io.Serializable {
     /** clave única para progreso y favoritos */
     val key: String get() = "${kind.name.lowercase()}:$id"

@@ -72,7 +72,7 @@ object CatalogCache {
                 r.beginArray()
                 while (r.hasNext()) {
                     var id = 0; var name = ""; var poster = ""; var cat = ""; var ext = ""; var rating = 0.0
-                    var year = ""; var added = 0L; var plot = ""; var epg = ""; var backdrop = ""
+                    var year = ""; var added = 0L; var plot = ""; var epg = ""; var backdrop = ""; var cast = ""
                     r.beginObject()
                     while (r.hasNext()) {
                         when (r.nextName()) {
@@ -87,11 +87,12 @@ object CatalogCache {
                             "d" -> plot = r.nextString()
                             "e" -> epg = r.nextString()
                             "b" -> backdrop = r.nextString()
+                            "k" -> cast = r.nextString()
                             else -> r.skipValue()
                         }
                     }
                     r.endObject()
-                    if (id > 0) out.add(Item(id, name, poster, kind, cat, ext, rating, year, added, plot, epg, backdrop))
+                    if (id > 0) out.add(Item(id, name, poster, kind, cat, ext, rating, year, added, plot, epg, backdrop, cast))
                 }
                 r.endArray()
             }
@@ -122,6 +123,7 @@ object CatalogCache {
                     if (x.plot.isNotEmpty()) w.name("d").value(x.plot)
                     if (x.epgId.isNotEmpty()) w.name("e").value(x.epgId)
                     if (x.backdrop.isNotEmpty()) w.name("b").value(x.backdrop)
+                    if (x.cast.isNotEmpty()) w.name("k").value(x.cast)
                     w.endObject()
                 }
             }

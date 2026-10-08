@@ -1,6 +1,13 @@
 package com.latmpx.player.ui.screens
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -201,7 +208,8 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
                     maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp),
                 )
                 Spacer(Modifier.height(20.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                // los botones no se encogen al ancho del texto de arriba: siempre en una línea y del mismo alto
+                Row(Modifier.wrapContentWidth(Alignment.Start, unbounded = true), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     NfButton("Reproducir", Icons.Filled.PlayArrow, white = true, modifier = Modifier.focusRequester(play)) {
                         if (item.kind == Kind.MOVIE) Play.movie(ctx, item, item.ext) else state.push(Route.Detail(item))
                     }
@@ -236,24 +244,42 @@ private fun HeroBackdrop(h: TvHero) {
     )
 }
 
-/** .nf-btn-white / .nf-btn-gray; con el foco crecen y el gris se aclara (como Netflix para TV) */
+/**
+ * .nf-btn-white / .nf-btn-gray de la web a escala de TV: alto fijo, icono y texto centrados en una sola línea
+ * (nunca se parten ni se aplastan) y esquinas redondeadas. Con el foco el botón crece un poco y aparece un aro
+ * blanco por fuera (el blanco sigue blanco y el gris se aclara), así siempre se ve cuál está enfocado.
+ */
 @Composable
 fun NfButton(text: String, icon: ImageVector?, white: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(4.dp), focusScale = 1.08f) { f ->
-        Row(
-            Modifier.background(
-                when {
-                    white && f -> Color.White
-                    white -> Color(0xF2FFFFFF)
-                    f -> Color.White
-                    else -> Color(0xB36D6D6E)
-                },
-            ).padding(start = 18.dp, end = 24.dp, top = 9.dp, bottom = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val c = if (white || f) Color.Black else Color.White
-            if (icon != null) Icon(icon, null, tint = c, modifier = Modifier.size(26.dp))
-            Text(text, color = c, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(start = 8.dp))
+    val src = remember { MutableInteractionSource() }
+    val f by src.collectIsFocusedAsState()
+    val sc by animateFloatAsState(if (f) 1.06f else 1f, label = "nfbtn")
+    val shape = RoundedCornerShape(6.dp)
+    val bg = when {
+        white -> Color.White
+        f -> Color(0xE68C8C8D)
+        else -> Color(0xB36D6D6E)
+    }
+    val fg = if (white) Color.Black else Color.White
+    Box(
+        modifier
+            .zIndex(if (f) 1f else 0f)
+            .graphicsLayer { scaleX = sc; scaleY = sc }
+            .border(2.dp, if (f) Color.White else Color.Transparent, RoundedCornerShape(9.dp))
+            .padding(3.dp)
+            .clip(shape)
+            .background(bg)
+            .clickable(interactionSource = src, indication = null, onClick = onClick)
+            .height(46.dp)
+            .padding(start = if (icon != null) 18.dp else 24.dp, end = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, null, tint = fg, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.width(10.dp))
+            }
+            Text(text, color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp, lineHeight = 22.sp, maxLines = 1, softWrap = false)
         }
     }
 }

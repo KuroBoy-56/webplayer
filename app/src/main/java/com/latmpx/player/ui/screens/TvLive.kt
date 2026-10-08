@@ -84,6 +84,7 @@ import com.latmpx.player.data.PanelEpg
 import com.latmpx.player.data.Session
 import com.latmpx.player.data.Store
 import com.latmpx.player.data.Xtream
+import com.latmpx.player.player.LivePreview
 import com.latmpx.player.player.Play
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.components.TvFocusable
@@ -104,9 +105,11 @@ private val LvText = Color(0xFFEDEDF2)
 
 /**
  * TV en vivo para televisor al estilo TiviMate: categorías a la izquierda, canales con número, logo, programa actual
- * y barra de avance al centro; a la derecha la vista previa en vivo del canal enfocado con su guía (ahora y siguientes).
- * OK abre el canal a pantalla completa (reproductor de siempre); mantener OK o MENÚ marca favorito;
- * se recuerda el último canal visto y el foco vuelve a él.
+ * y barra de avance al centro; a la derecha la vista previa en vivo del canal SELECCIONADO con su guía (ahora y siguientes).
+ * Recorrer la lista no cambia la vista previa: OK sobre un canal lo selecciona y empieza a verse a la derecha;
+ * OK otra vez sobre el canal que ya se ve lo abre a pantalla completa (reproductor de siempre).
+ * Mantener OK o MENÚ marca favorito; se recuerda el último canal visto y el foco vuelve a él.
+ * La vista previa se detiene al salir de TV en vivo, al abrir la pantalla completa y con la app en segundo plano.
  */
 @Composable
 fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
@@ -125,6 +128,10 @@ fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
         )
     }
     var focusedId by rememberSaveable { mutableIntStateOf(lastId) }
+    // canal seleccionado con OK: el que se ve en la vista previa (no cambia al recorrer la lista)
+    var selectedId by rememberSaveable { mutableIntStateOf(lastId) }
+    // al volver de la pantalla completa (donde se pudo cambiar de canal) queda seleccionado el último visto
+    LaunchedEffect(lastId) { if (lastId != 0 && all.any { it.id == lastId }) selectedId = lastId }
     val now by produceState(System.currentTimeMillis()) { while (true) { delay(30_000); value = System.currentTimeMillis() } }
 
     // número de canal: su posición en la lista completa (igual en todas las categorías)
@@ -139,13 +146,13 @@ fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
             else -> all.filter { it.categoryId == cat }
         }
     }
-    val focused = remember(all, focusedId) { all.firstOrNull { it.id == focusedId } } ?: shown.firstOrNull()
+    val selected = remember(all, selectedId) { all.firstOrNull { it.id == selectedId } }
     // guía del servidor IPTV (get_short_epg) ya consultada; si no tiene, la del panel (epg.php)
     val providerEpg = remember { mutableStateMapOf<Int, List<EpgEntry>>() }
-    val guide by produceState<List<EpgEntry>?>(null, focused?.id) {
-        val ch = focused ?: run { value = emptyList(); return@produceState }
+    // la guía de la derecha es la del canal seleccionado (la del enfocado se ve en su fila)
+    val guide by produceState<List<EpgEntry>?>(null, selected?.id) {
+        val ch = selected ?: run { value = emptyList(); return@produceState }
         value = providerEpg[ch.id] ?: PanelEpg.cached(ch.id)
-        delay(250)
         var g = providerEpg[ch.id] ?: runCatching { Xtream.shortEpg(s, ch.id, 10) }.getOrDefault(emptyList())
         if (g.isNotEmpty()) providerEpg[ch.id] = g
         else {
@@ -163,18 +170,23 @@ fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
         onPauseOrDispose { preview.release() }
     }
     DisposableEffect(Unit) { onDispose { preview.release() } }
-    LaunchedEffect(focused?.id, resumeTick) {
-        val ch = focused ?: return@LaunchedEffect
-        delay(1100) // solo cuando el foco se detiene en el canal
+    LaunchedEffect(selected?.id, resumeTick) {
+        val ch = selected ?: return@LaunchedEffect
         preview.play(s, ch)
     }
 
     val play: (Int) -> Unit = { i ->
         shown.getOrNull(i)?.let { ch ->
-            preview.release() // libera la conexión: muchas líneas permiten una sola
             focusedId = ch.id
             Store.setLastChannel(ch.id)
-            Play.live(ctx, shown, i)
+            if (ch.id != selectedId) {
+                // primer OK: se selecciona y se ve en la vista previa
+                selectedId = ch.id
+            } else {
+                // OK sobre el canal que ya se ve: pantalla completa
+                preview.release() // libera la conexión: muchas líneas permiten una sola
+                Play.live(ctx, shown, i)
+            }
         }
     }
     val toggleFav: (Item) -> Unit = { ch -> Cloud.toggleFav(ch.copy(kind = Kind.LIVE)); favTick++ }
@@ -218,7 +230,7 @@ fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
                 itemsIndexed(shown, key = { _, c -> c.id }) { i, ch ->
                     LvChannelRow(
                         ch, numbers[ch.id] ?: (i + 1), i, shown, now,
-                        playing = ch.id == lastId, fav = Cloud.isFav(ch.key), provider = providerEpg[ch.id],
+                        playing = ch.id == selectedId, fav = Cloud.isFav(ch.key), provider = providerEpg[ch.id],
                         modifier = if (ch.id == lastId) Modifier.focusRequester(lastReq) else Modifier,
                         onFocus = { focusedId = ch.id }, onClick = { play(i) }, onFav = { toggleFav(ch) },
                     )
@@ -227,10 +239,12 @@ fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
         }
         /* ---------- vista previa y guía ---------- */
         Column(Modifier.weight(1f).fillMaxHeight().background(Brush.verticalGradient(listOf(LvPanel, LvBg))).padding(16.dp)) {
-            PreviewBox(preview, focused, focused?.let { numbers[it.id] } ?: 0)
-            if (focused != null) GuidePanel(focused, guide, now, Modifier.weight(1f))
+            PreviewBox(preview, selected, selected?.let { numbers[it.id] } ?: 0)
+            if (selected != null) GuidePanel(selected, guide, now, Modifier.weight(1f))
+            else Text("Presiona OK sobre un canal para verlo aquí", color = LvDim, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(top = 14.dp))
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                KeyHint("OK", "Pantalla completa")
+                KeyHint("OK", "Ver canal")
+                KeyHint("OK otra vez", "Pantalla completa")
                 KeyHint("Mantén OK", "Favorito")
             }
         }
@@ -408,61 +422,3 @@ private fun ChannelLogoBox(url: String, modifier: Modifier, transparent: Boolean
 
 private val lvHmFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
 private fun lvHm(ms: Long): String = lvHmFmt.format(ms)
-
-/**
- * Vista previa en vivo del canal enfocado (ExoPlayer propio, independiente del reproductor a pantalla completa).
- * Prueba los mismos formatos que el reproductor (m3u8 / ts) y se libera antes de abrir la pantalla completa.
- */
-@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
-private class LivePreview(private val ctx: Context) {
-    var player by mutableStateOf<ExoPlayer?>(null)
-        private set
-    /** canal cuya imagen ya se está viendo */
-    var showingId by mutableIntStateOf(-1)
-        private set
-    private var channelId = -1
-    private var urls: List<String> = emptyList()
-    private var alt = 0
-
-    fun play(s: Session, ch: Item) {
-        if (channelId == ch.id && player != null) return
-        channelId = ch.id
-        showingId = -1
-        urls = Xtream.liveUrls(s, ch.id)
-        alt = 0
-        val p = player ?: build().also { player = it }
-        load(p)
-    }
-
-    private fun load(p: ExoPlayer) {
-        val u = urls.getOrNull(alt) ?: return
-        val mime = when {
-            u.endsWith(".m3u8", true) -> MimeTypes.APPLICATION_M3U8
-            u.endsWith(".ts", true) -> MimeTypes.VIDEO_MP2T
-            else -> null
-        }
-        p.setMediaItem(MediaItem.Builder().setUri(u).setMimeType(mime).build())
-        p.prepare()
-        p.playWhenReady = true
-    }
-
-    private fun build(): ExoPlayer {
-        val http = OkHttpDataSource.Factory(Net.client).setUserAgent(Net.UA)
-        val p = ExoPlayer.Builder(ctx).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(ctx, http))).build()
-        p.addListener(object : Player.Listener {
-            override fun onRenderedFirstFrame() { showingId = channelId }
-            override fun onPlayerError(error: PlaybackException) {
-                showingId = -1
-                if (alt + 1 < urls.size) { alt++; load(p) }
-            }
-        })
-        return p
-    }
-
-    fun release() {
-        player?.release()
-        player = null
-        channelId = -1
-        showingId = -1
-    }
-}

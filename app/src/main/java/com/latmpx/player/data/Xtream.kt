@@ -138,6 +138,7 @@ object Xtream {
             plot = o.s("plot"),
             epgId = o.s("epg_channel_id"),
             backdrop = Posters.clean(o.optJSONArray("backdrop_path")?.optString(0).orEmpty()),
+            cast = if (kind == Kind.LIVE) "" else o.s("cast").ifEmpty { o.s("actors") },
         )
     }
 

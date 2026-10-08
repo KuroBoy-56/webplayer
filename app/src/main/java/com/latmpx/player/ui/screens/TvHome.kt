@@ -134,12 +134,12 @@ fun TvHomeScreen(state: AppState) {
             }
         }
         if (cont.isNotEmpty()) item(key = "cont") {
-            TvRow("Continuar viendo", cont, onFocused = { scope.focusRow(list, "cont") }) { _, p ->
+            TvRow("Continuar viendo", cont, onViewAll = { state.push(Route.Saved(continueWatching = true)) }, onFocused = { scope.focusRow(list, "cont") }) { _, p ->
                 val it = state.itemFromProgress(p) ?: return@TvRow
                 TvCard(it.copy(poster = p.poster.ifEmpty { it.poster }), w, progress = if (p.duration > 0) p.position.toFloat() / p.duration else 0.05f) { open(it) }
             }
         }
-        if (favs.isNotEmpty()) item(key = "favs") { TvRow("Mi lista", favs, onFocused = { scope.focusRow(list, "favs") }) { _, it -> TvCard(it, w) { open(it) } } }
+        if (favs.isNotEmpty()) item(key = "favs") { TvRow("Mi lista", favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) }, onFocused = { scope.focusRow(list, "favs") }) { _, it -> TvCard(it, w) { open(it) } } }
         item(key = "top") { TvRow("Top 10 de hoy", top10, onFocused = { scope.focusRow(list, "top") }) { i, it -> TvTop10Card(i + 1, it, w) { open(it) } } }
         item(key = "rm") {
             TvRow("Películas agregadas recientemente", recentMovies, onViewAll = { state.push(Route.Browse("Películas agregadas recientemente", Kind.MOVIE, emptySet())) }, onFocused = { scope.focusRow(list, "rm") }) { _, it -> TvCard(it, w) { open(it) } }

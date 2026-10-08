@@ -90,6 +90,32 @@ object Tmdb {
         return if (answered) "" else null
     }
 
+    /**
+     * Id de TMDB de una persona buscada por nombre (prefiere a quien actúa).
+     * 0 = TMDB no la conoce; null = sin respuesta.
+     */
+    suspend fun searchPersonId(name: String): Int? {
+        val q = name.trim()
+        if (q.length < 2) return 0
+        val res = get("search/person?language=es-MX&include_adult=false&query=${URLEncoder.encode(q, "UTF-8")}") ?: return null
+        val arr = res.optJSONArray("results") ?: return 0
+        var first = 0
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.optInt("id")
+            if (id <= 0) continue
+            if (first == 0) first = id
+            if (o.optString("known_for_department") == "Acting") return id
+        }
+        return first
+    }
+
+    /** Persona con su filmografía completa (películas y series) en un solo pedido. null = sin respuesta. */
+    suspend fun person(id: Int): JSONObject? = get("person/$id?language=es-MX&append_to_response=combined_credits")
+
+    /** Biografía en inglés cuando no hay traducción al español. */
+    suspend fun personBioEn(id: Int): String = get("person/$id?language=en-US")?.optString("biography").orEmpty()
+
     data class Details(
         val id: Int,
         val poster: String,
@@ -99,7 +125,7 @@ object Tmdb {
         val trailer: String
     )
 
-    data class CastMember(val name: String, val character: String, val profile: String)
+    data class CastMember(val name: String, val character: String, val profile: String, val id: Int = 0)
 
     private val cache = mutableMapOf<String, Details>()
 
@@ -145,7 +171,7 @@ object Tmdb {
             for (i in 0 until Math.min(arr.length(), 15)) {
                 val c = arr.optJSONObject(i)
                 val profile = c?.optString("profile_path")?.let { if (it.isNotEmpty() && it != "null") "https://image.tmdb.org/t/p/w185$it" else "" } ?: ""
-                cast.add(CastMember(c?.optString("name") ?: "", c?.optString("character") ?: "", profile))
+                cast.add(CastMember(c?.optString("name") ?: "", c?.optString("character") ?: "", profile, c?.optInt("id") ?: 0))
             }
         }
 
