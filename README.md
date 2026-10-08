@@ -73,6 +73,8 @@ Todas estas llamadas usan un token: la app hace `POST progress.php {"action":"au
 | `api/epg.php` | Guía de respaldo: primero `get_short_epg` del proveedor; si un canal no trae guía, `POST {channels:[{id, epg, name}]}` en lotes de hasta 400 canales. |
 | `api/sports.php` | Pestaña **Deportes**: partidos de hoy y mañana con el mismo diseño de la web (Hoy/Mañana, deportes con emoji, escudos, en vivo / marcador / final, botón **TV en vivo**). El canal se busca con las reglas `match` del panel (misma puntuación que la web). |
 
+**Aviso al abrir la app** (`api/alerta.php?format=json&user&pass&dns&title`, sin token): lo que se configura en **Alertas** del panel. Con 3, 2 o 1 días restantes sale el texto de ese día, con 0 días o vencida el de 0 días (título rojo, sin imagen); si no, la bienvenida con el texto general y la imagen de `img/alertas/`. Sale una vez cada vez que se abre la app y otra vez tras iniciar sesión, con un solo botón **Entendido** (enfocado para el control remoto; atrás también lo cierra). Código: `data/Alerts.kt`, `ui/components/PanelAlert.kt`.
+
 ## DNS
 
 Botón **DNS** en el inicio de sesión y en **Cuenta**: Automático (por defecto), Cloudflare, Google, Quad9, AdGuard (sin rastreo ni anuncios), NextDNS (anti-bloqueo geográfico) y OpenDNS.

@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.latmpx.player.data.Alerts
 import com.latmpx.player.data.CatalogCache
 import com.latmpx.player.data.Category
 import com.latmpx.player.data.Item
@@ -53,6 +54,7 @@ import com.latmpx.player.data.Xtream
 import com.latmpx.player.ui.components.FocusBox
 import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.components.LogoHeader
+import com.latmpx.player.ui.components.PanelAlertDialog
 import com.latmpx.player.ui.screens.AccountScreen
 import com.latmpx.player.ui.screens.ActorScreen
 import com.latmpx.player.ui.screens.BrowseScreen
@@ -77,6 +79,7 @@ fun AppRoot() {
     val state = remember { AppState() }
     val scope = rememberCoroutineScope()
     val booted = remember { mutableStateOf(false) }
+    val alert = remember { mutableStateOf<Alerts.Alert?>(null) }
 
     LaunchedEffect(Unit) {
         state.session = Store.session()
@@ -87,6 +90,7 @@ fun AppRoot() {
     LaunchedEffect(state.session) {
         val s = state.session ?: return@LaunchedEffect
         launch { Cloud.load() } // continuar viendo y favoritos desde el panel (no bloquea la pantalla)
+        launch { alert.value = Alerts.forLaunch(s) } // aviso del panel (bienvenida o vencimiento)
         val kinds = listOf(Kind.MOVIE, Kind.SERIES, Kind.LIVE)
         fun put(kind: Kind, cats: List<Category>, items: List<Item>) {
             when (kind) {
@@ -123,10 +127,11 @@ fun AppRoot() {
             }
             else -> MainShell(state, onLogout = {
                 scope.launch {
-                    Store.logout(); Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
+                    Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
                 }
             })
         }
+        alert.value?.takeIf { state.session != null }?.let { a -> PanelAlertDialog(a) { alert.value = null } }
     }
 }
 
