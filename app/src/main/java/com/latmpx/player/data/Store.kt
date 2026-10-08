@@ -73,12 +73,12 @@ object Store {
         get() = p.getBoolean("demo_used", false)
         set(v) = p.edit().putBoolean("demo_used", v).apply()
 
-    fun logout() = p.edit().remove("session").remove("cloud_token").apply()
+    fun logout() = p.edit().remove("session").remove("cloud_token2").apply()
 
     /* ---------- token de progress.php / epg.php / sports.php (30 días) ---------- */
     var cloudToken: String?
-        get() = p.getString("cloud_token", null)
-        set(v) = p.edit().putString("cloud_token", v).apply()
+        get() = p.getString("cloud_token2", null)
+        set(v) = p.edit().putString("cloud_token2", v).apply()
 
     private fun scope(): String = session()?.let { "${it.user}@${it.base}" } ?: "-"
 
