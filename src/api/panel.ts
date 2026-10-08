@@ -162,17 +162,17 @@ export function bindSession(fn: () => Session | null): void {
 
 async function cloudToken(forceNew = false): Promise<string> {
   if (!forceNew) {
-    const t = read('cloud_token');
+    const t = read('cloud_token2');
     if (t) return t;
   }
   const s = sessionRef();
   if (!s) return '';
-  const r = await panel('progress.php', 'POST', JSON.stringify({ action: 'auth', user: s.user, pass: s.pass }), 'application/json');
+  const r = await panel('progress.php', 'POST', JSON.stringify({ action: 'auth', user: s.user, pass: s.pass, dns: s.base }), 'application/json');
   const j = json(r);
   if (!j || !str(j.token)) return '';
   const tmdb = str(j.tmdbKey);
   if (tmdb && tmdb !== 'missing_tmdb_key') write('tmdb_key', tmdb);
-  write('cloud_token', j.token);
+  write('cloud_token2', j.token);
   return j.token;
 }
 
@@ -190,17 +190,17 @@ export async function cloud(file: string, method: 'GET' | 'POST', payload: Recor
       r = await panel(file, 'POST', JSON.stringify({ ...(payload || {}), token: tok }), 'application/json');
     }
     if (r.code !== 401 || attempt === 2) break;
-    remove('cloud_token');
+    remove('cloud_token2');
     tok = await cloudToken(true);
     if (!tok) break;
   }
   const j = json(r);
-  if (j && typeof j === 'object' && str(j.token)) write('cloud_token', j.token);
+  if (j && typeof j === 'object' && str(j.token)) write('cloud_token2', j.token);
   return r;
 }
 
 export function forgetCloud(): void {
-  remove('cloud_token');
+  remove('cloud_token2');
 }
 
 // ---------- login.php (con la llave maestra) ----------
