@@ -64,13 +64,14 @@ function wp_years_ok($a, $b)
     return !$a || !$b || abs((int)$a - (int)$b) <= 1;
 }
 
-/** Año de un elemento del catálogo: campo year, o "(2019)" / "2019" en el nombre. */
+/**
+ * Año de un elemento del catálogo: campo year, o "(2019)" / "[2019]" en el nombre.
+ * Un año final sin paréntesis puede ser parte del título ("Blade Runner 2049"): ese va en el nivel base.
+ */
 function wp_catalog_year(array $it)
 {
     if (preg_match('/(19\d{2}|20\d{2})/', (string)($it['year'] ?? ''), $m)) return (int)$m[1];
-    if (preg_match('/[\(\[\s](19\d{2}|20\d{2})[\)\]]?\s*$|\((19\d{2}|20\d{2})\)/', ' ' . (string)($it['name'] ?? ''), $m)) {
-        return (int)($m[1] ?: $m[2]);
-    }
+    if (preg_match('/[\(\[](19\d{2}|20\d{2})[\)\]]/', (string)($it['name'] ?? ''), $m)) return (int)$m[1];
     return null;
 }
 
