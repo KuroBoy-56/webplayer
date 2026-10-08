@@ -36,6 +36,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.launch
 import com.latmpx.player.ui.components.FocusBox
 import com.latmpx.player.ui.components.LogoHeader
 import com.latmpx.player.ui.theme.NfBg
@@ -51,6 +53,7 @@ import com.latmpx.player.ui.theme.NfRed
 
 /** Secciones del menú superior de TV, en el mismo orden que el reproductor web. */
 private val tvTabs = listOf(Tab.HOME, Tab.SERIES, Tab.MOVIES, Tab.LIVE, Tab.SPORTS, Tab.MYLIST)
+private val overlayTabs = setOf(Tab.HOME, Tab.SERIES, Tab.MOVIES)
 
 /**
  * Estructura de la app de TV: menú arriba como el reproductor web y el contenido debajo.
@@ -71,19 +74,38 @@ fun TvShell(state: AppState, content: @Composable () -> Unit) {
         if (!menuFocused && !contentFocused) runCatching { tabFocus.getValue(state.tab).requestFocus() }
     }
 
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     BackHandler {
         when {
             state.stack.isNotEmpty() -> state.pop()
-            !menuFocused -> runCatching { tabFocus.getValue(state.tab).requestFocus() }
+            !menuFocused -> {
+                // el menú está oculto mientras se recorren las filas: primero se vuelve arriba
+                if (state.tvHeaderHidden) { state.tvScrollTop++; state.tvHeaderHidden = false }
+                scope.launch {
+                    kotlinx.coroutines.delay(120)
+                    runCatching { tabFocus.getValue(state.tab).requestFocus() }
+                }
+            }
             else -> askExit = true
         }
     }
 
+    // Inicio, Series y Películas: el menú va encima del destacado (transparente y sólido al bajar), como .nf-header de la web
+    val overlay = top == null && state.tab in overlayTabs
     Box(Modifier.fillMaxSize().background(NfBg)) {
-        Column(Modifier.fillMaxSize()) {
+        if (overlay) {
+            Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }) { content() }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !state.tvHeaderHidden,
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it },
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it },
+            ) {
+                TvTopBar(state, tabFocus, Modifier.onFocusChanged { menuFocused = it.hasFocus }, solid = false)
+            }
+        } else Column(Modifier.fillMaxSize()) {
             // la ficha de un contenido ocupa toda la pantalla, sin menú
             if (top == null) {
-                TvTopBar(state, tabFocus, Modifier.onFocusChanged { menuFocused = it.hasFocus })
+                TvTopBar(state, tabFocus, Modifier.onFocusChanged { menuFocused = it.hasFocus }, solid = true)
             }
             Box(Modifier.weight(1f).fillMaxWidth().onFocusChanged { contentFocused = it.hasFocus }) { content() }
         }
@@ -93,20 +115,24 @@ fun TvShell(state: AppState, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifier: Modifier) {
+private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifier: Modifier, solid: Boolean) {
+    val bg by animateColorAsState(if (solid) NfBg else Color.Transparent, animationSpec = androidx.compose.animation.core.tween(350), label = "menu")
     Row(
         modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color(0xFF000000), Color(0xF0080808))))
-            .padding(horizontal = 36.dp, vertical = 12.dp),
+            .background(bg)
+            .background(Brush.verticalGradient(listOf(Color(0xCC000000), Color(0x59000000), Color.Transparent)))
+            .padding(horizontal = (LocalConfiguration.current.screenWidthDp * 0.04f).dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LogoHeader(height = 30.dp)
-        Spacer(Modifier.width(28.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        LogoHeader(height = 34.dp)
+        Spacer(Modifier.width(24.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             tvTabs.forEach { t -> TopTab(t.label, state.tab == t, Modifier.focusRequester(tabFocus.getValue(t))) { state.billboardFocusedTab = null; state.tab = t } }
         }
         Spacer(Modifier.weight(1f))
+        Clock()
+        Spacer(Modifier.width(18.dp))
         FocusBox(
             onClick = { state.tab = Tab.SEARCH }, modifier = Modifier.focusRequester(tabFocus.getValue(Tab.SEARCH)),
             shape = CircleShape, focusScale = 1.12f,
@@ -136,18 +162,28 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
 private fun TopTab(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(20.dp), focusScale = 1.06f) { f ->
         val bg by animateColorAsState(if (f) Color.White else Color.Transparent, label = "tab")
-        Column(
-            Modifier.background(bg, RoundedCornerShape(20.dp)).padding(horizontal = 14.dp, vertical = 7.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                label, fontSize = 15.sp, maxLines = 1,
-                color = if (f) Color.Black else if (selected) Color.White else Color(0xFFB3B3B3),
-                fontWeight = if (selected || f) FontWeight.Bold else FontWeight.Medium,
-            )
-            // la sección actual lleva una línea roja debajo, como en la web
-            Box(Modifier.padding(top = 3.dp).width(if (selected && !f) 18.dp else 0.dp).height(3.dp).background(NfRed, RoundedCornerShape(2.dp)))
-        }
+        // .nf-nav a: texto #e5e5e5; la sección actual en blanco y negrita
+        Text(
+            label, fontSize = 16.sp, maxLines = 1,
+            color = if (f) Color.Black else if (selected) Color.White else Color(0xFFE5E5E5),
+            fontWeight = if (selected || f) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.background(bg, RoundedCornerShape(20.dp)).padding(horizontal = 14.dp, vertical = 7.dp),
+        )
+    }
+}
+
+/** .nf-clock: hora y fecha a la derecha del menú */
+@Composable
+private fun Clock() {
+    val now by androidx.compose.runtime.produceState(System.currentTimeMillis()) {
+        while (true) { kotlinx.coroutines.delay(15_000); value = System.currentTimeMillis() }
+    }
+    Column(horizontalAlignment = Alignment.End) {
+        Text(java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(now), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(
+            java.text.SimpleDateFormat("EEE d MMM", java.util.Locale.forLanguageTag("es")).format(now).replace(".", ""),
+            color = NfGray2, fontSize = 11.sp,
+        )
     }
 }
 

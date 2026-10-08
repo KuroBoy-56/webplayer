@@ -61,42 +61,8 @@ fun LiveScreen(state: AppState) {
     // celular: diseño de tvguide.php de la web (ver LivePhone.kt)
     if (!tv) { PhoneLive(state, all, cats); return }
     
-    // TV: categorías a la izquierda, canales al centro y guía a la derecha
-    val shown = remember(all, cat, favTick, state.refresh, Cloud.rev) {
-        when (cat) {
-            ALL -> all
-            FAVS -> all.filter { Cloud.isFav(it.key) }
-            else -> all.filter { it.categoryId == cat }
-        }
-    }
-    
-    var focused by remember { mutableStateOf<Item?>(null) }
-    
-    val play: (Int) -> Unit = { i -> 
-        Store.setLastChannel(shown[i].id)
-        Play.live(ctx, shown, i)
-    }
-    val fav: (Item) -> Unit = { ch -> Cloud.toggleFav(ch.copy(kind = Kind.LIVE)); favTick++ }
-
-    Row(Modifier.fillMaxSize().background(NfBg)) {
-        LazyColumn(Modifier.width(230.dp).fillMaxHeight().background(Color(0xFF101010)), contentPadding = PaddingValues(vertical = 12.dp)) {
-            items(cats, key = { it.first }) { (id, name) ->
-                FocusBox(onClick = { cat = id }, onFocus = { cat = id }, focusScale = 1.03f, shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp).fillMaxWidth()) { f ->
-                    Text(name, color = if (cat == id || f) Color.White else NfGray2, fontWeight = if (cat == id) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().background(if (f) Color(0x33FFFFFF) else if (cat == id) Color(0x1AFFFFFF) else Color.Transparent).padding(horizontal = 12.dp, vertical = 10.dp))
-                }
-            }
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(12.dp)) {
-            if (shown.isEmpty()) item { Text(if (cat == FAVS) "Mantén presionado OK sobre un canal para agregarlo a favoritos" else "Sin canales", color = NfGray2, modifier = Modifier.padding(20.dp)) }
-            itemsIndexed(shown, key = { _, c -> c.id }) { i, ch ->
-                ChannelRow(ch, i + 1, onClick = { play(i) }, onLong = { fav(ch) }, onFocus = { focused = ch })
-            }
-        }
-        EpgPanel(state, focused, shown, Modifier.width(320.dp).fillMaxHeight())
-    }
+    // TV: estilo TiviMate (TvLive.kt)
+    TvLive(state, all, cats)
 }
 
 @Composable

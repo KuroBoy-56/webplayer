@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,19 +20,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -38,115 +41,218 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.latmpx.player.data.Cloud
 import com.latmpx.player.data.Item
 import com.latmpx.player.data.Kind
+import com.latmpx.player.data.Session
 import com.latmpx.player.data.Tmdb
+import com.latmpx.player.data.Xtream
 import com.latmpx.player.player.Play
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.Route
+import com.latmpx.player.ui.components.FocusBox
+import com.latmpx.player.ui.components.ItemPoster
 import com.latmpx.player.ui.theme.NfBg
 import com.latmpx.player.ui.theme.NfRed
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 
+/** Un destacado listo para mostrar: siempre con imagen horizontal (backdrop), como el "hero" de api.php de la web. */
+data class TvHero(val item: Item, val backdrop: String, val tmdbBackdrop: String, val plot: String, val genre: String)
+
+/** destacados ya resueltos por sección (al volver de una ficha no se vuelven a pedir ni cambian) */
+private object HeroCache { val map = java.util.concurrent.ConcurrentHashMap<String, List<TvHero>>() }
+
 /**
- * Cartelera principal de la TV, igual que la del reproductor web: fondo grande del contenido,
- * datos a la izquierda (tipo, título, año, nota, sinopsis) y los botones Reproducir / Más información / Mi lista.
- * Cambia sola cada pocos segundos mientras el foco no está en sus botones.
+ * Igual que api.php?action=hero: de lo más reciente con carátula se eligen al azar 8 películas y 8 series,
+ * se pide su ficha (get_vod_info / get_series_info) y solo quedan las que tienen fondo horizontal.
+ * Si el servidor no trae fondo se usa el de TMDB (llave del panel con la de respaldo).
+ */
+private suspend fun resolveHero(s: Session, it: Item): TvHero? {
+    val d = runCatching { if (it.kind == Kind.SERIES) Xtream.seriesDetails(s, it) else Xtream.movieDetails(s, it) }.getOrNull()
+    val own = it.backdrop.ifBlank { d?.backdrop.orEmpty() }
+    var plot = d?.plot?.ifBlank { null } ?: it.plot
+    var tmdbBd = ""
+    if (own.isBlank() || plot.isBlank()) {
+        val t = runCatching { Tmdb.getDetails(if (it.kind == Kind.SERIES) "tv" else "movie", it.name, it.year, d?.tmdbId.orEmpty()) }.getOrNull()
+        tmdbBd = t?.backdrop.orEmpty()
+        if (plot.isBlank()) plot = t?.overview.orEmpty()
+    }
+    if (own.isBlank() && tmdbBd.isBlank()) return null
+    val genre = d?.genre.orEmpty().split(',', '/').map { g -> g.trim() }.filter { g -> g.isNotEmpty() }.take(2).joinToString(", ")
+    return TvHero(it, own.ifBlank { tmdbBd }, tmdbBd, plot, genre)
+}
+
+/** candidatos al azar entre lo más reciente con carátula (8 de cada tipo, mezclados) */
+fun heroPool(lists: List<List<Item>>): List<Item> =
+    lists.flatMap { l -> l.filter { it.poster.isNotBlank() }.sortedByDescending { it.added }.take(150).shuffled().take(8) }.shuffled()
+
+/**
+ * Cartelera de la TV igual que .nf-hero de la web: fondo horizontal a todo el ancho (56.25% del ancho, máx. 88% del alto)
+ * por detrás del menú, degradado oscuro desde la izquierda, "N" + tipo, título grande, % para ti / año / HD / género,
+ * sinopsis de tres líneas y los botones Reproducir / Más información. Cambia sola cada 8 s mientras el foco no está en ella.
  */
 @Composable
-fun TvBillboard(state: AppState, items: List<Item>) {
-    if (items.isEmpty()) return
+fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.name, onFocusTop: () -> Unit = {}) {
+    val s = state.session ?: return
     val ctx = LocalContext.current
-    val height = (LocalConfiguration.current.screenHeightDp * 0.66f).dp
-    var index by remember(items) { mutableIntStateOf(0) }
+    val conf = LocalConfiguration.current
+    val height = minOf(conf.screenWidthDp * 0.5625f, conf.screenHeightDp * 0.88f).dp
+    val heroes = remember(cacheKey) { mutableStateListOf<TvHero>().apply { addAll(HeroCache.map[cacheKey].orEmpty()) } }
+    var done by remember(cacheKey) { mutableStateOf(heroes.isNotEmpty()) }
+    var index by remember(cacheKey) { mutableIntStateOf(0) }
     var holding by remember { mutableStateOf(false) }
     val play = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        // el foco entra a la cartelera una sola vez por visita a la sección
-        if (state.billboardFocusedTab != state.tab) {
+
+    LaunchedEffect(cacheKey, pool.isNotEmpty()) {
+        if (done || pool.isEmpty()) return@LaunchedEffect
+        val found = ArrayList<TvHero>()
+        for (chunk in pool.chunked(4)) {
+            val got = coroutineScope { chunk.map { c -> async { resolveHero(s, c) } }.awaitAll() }.filterNotNull()
+            got.forEach { h -> if (found.size < 6 && found.none { it.item.key == h.item.key }) { found += h; heroes += h } }
+            if (found.size >= 6) break
+        }
+        if (found.isNotEmpty()) HeroCache.map[cacheKey] = found.toList()
+        done = true
+    }
+    // el foco entra a la cartelera una sola vez por visita a la sección, cuando ya hay botones
+    LaunchedEffect(heroes.isNotEmpty(), done) {
+        if ((heroes.isNotEmpty() || done) && state.billboardFocusedTab != state.tab) {
             state.billboardFocusedTab = state.tab
+            delay(60)
             runCatching { play.requestFocus() }
         }
     }
-    LaunchedEffect(items, holding) {
-        while (!holding && items.size > 1) {
-            delay(9000)
-            index = (index + 1) % items.size
-        }
-    }
-    val item = items[index.coerceIn(0, items.lastIndex)]
-    // fondo y sinopsis de TMDB cuando el servidor no los trae
-    var art by remember(item.key) { mutableStateOf(item.backdrop) }
-    var plot by remember(item.key) { mutableStateOf(item.plot) }
-    LaunchedEffect(item.key) {
-        if (art.isNotBlank() && plot.isNotBlank()) return@LaunchedEffect
-        val d = runCatching { Tmdb.getDetails(if (item.kind == Kind.SERIES) "tv" else "movie", item.name, item.year) }.getOrNull()
-        if (d != null) {
-            if (art.isBlank()) art = d.backdrop
-            if (plot.isBlank()) plot = d.overview
+    LaunchedEffect(heroes.size, holding) {
+        while (!holding && heroes.size > 1) {
+            delay(8000)
+            index = (index + 1) % heroes.size
         }
     }
 
     Box(Modifier.fillMaxWidth().height(height).background(Color.Black)) {
-        Crossfade(targetState = art.ifBlank { item.poster }, animationSpec = tween(900), label = "fondo") { url ->
-            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        val hero = heroes.getOrNull(index.coerceIn(0, (heroes.size - 1).coerceAtLeast(0)))
+        // sin destacados con fondo (todavía o nunca): la carátula del primero, sin estirarla, a la derecha
+        val fallback = if (hero == null && done) pool.firstOrNull() else null
+        if (hero != null) {
+            Crossfade(targetState = hero, animationSpec = tween(900), label = "fondo") { h -> HeroBackdrop(h) }
+        } else if (fallback != null) {
+            Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF3A0A0D), Color.Black), radius = 1600f)))
+            ItemPoster(fallback, Modifier.align(Alignment.CenterEnd).padding(end = 90.dp, top = 70.dp, bottom = 60.dp).fillMaxHeight().aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp)))
+        } else {
+            Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF1C1C1C), Color.Black), radius = 1600f)))
         }
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color(0xE6000000), 0.42f to Color(0x80000000), 0.75f to Color.Transparent)))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 0.85f to Color(0x99141414), 1f to NfBg)))
+        // .nf-hero::before (77°: negro .75 → .35 al 38% → transparente al 70%) y ::after (difuminado inferior hacia el fondo)
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color(0xC0000000), 0.38f to Color(0x59000000), 0.70f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color(0x99000000), 0.16f to Color.Transparent)))
+        Box(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height((conf.screenWidthDp * 0.147f).coerceAtLeast(120f).dp)
+                .background(Brush.verticalGradient(0f to Color.Transparent, 0.15f to Color(0x26141414), 0.45f to Color(0x8C141414), 1f to NfBg)),
+        )
 
-        Column(
-            Modifier.align(Alignment.BottomStart).padding(start = 36.dp, bottom = 34.dp).width((LocalConfiguration.current.screenWidthDp * 0.46f).dp)
-                .onFocusChanged { holding = it.hasFocus },
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("N", color = NfRed, fontSize = 26.sp, fontWeight = FontWeight.Black)
-                Text(
-                    if (item.kind == Kind.SERIES) "S E R I E" else "P E L Í C U L A",
-                    color = Color(0xFFDDDDDD), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-            Text(
-                item.name, color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Black, lineHeight = 44.sp,
-                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp),
-            )
-            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (item.rating > 0) Text("${(item.rating * 10).toInt().coerceAtMost(99)}% para ti", color = Color(0xFF46D369), fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                if (item.year.isNotBlank()) Text(item.year.take(4), color = Color(0xFFDDDDDD), fontSize = 15.sp)
-                Text(
-                    "HD", color = Color(0xFFDDDDDD), fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(3.dp)).padding(horizontal = 6.dp, vertical = 1.dp),
-                )
-            }
-            if (plot.isNotBlank()) Text(
-                plot, color = Color.White, fontSize = 15.sp, lineHeight = 21.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 10.dp),
-            )
-            Spacer(Modifier.height(18.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HeroButton("Reproducir", Icons.Filled.PlayArrow, true, Modifier.focusRequester(play)) {
-                    if (item.kind == Kind.MOVIE) Play.movie(ctx, item, item.ext) else state.push(Route.Detail(item))
+        val item = hero?.item ?: fallback
+        if (item != null) {
+            Column(
+                Modifier.align(Alignment.BottomStart)
+                    .padding(start = (conf.screenWidthDp * 0.04f).dp, bottom = height * 0.30f)
+                    .width((conf.screenWidthDp * 0.40f).coerceAtLeast(320f).dp)
+                    .onFocusChanged { holding = it.hasFocus; if (it.hasFocus) onFocusTop() },
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("N", color = NfRed, fontSize = 26.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        if (item.kind == Kind.SERIES) "SERIE" else "PELÍCULA", color = Color(0xFFDDDDDD), fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold, letterSpacing = 3.sp, modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
-                HeroButton("Más información", Icons.Filled.Info, false) { state.push(Route.Detail(item)) }
-                var fav by remember(item.key, Cloud.rev) { mutableStateOf(Cloud.isFav(item.key)) }
-                HeroButton(if (fav) "En mi lista" else "Mi lista", if (fav) Icons.Filled.Check else Icons.Filled.Add, false) { fav = Cloud.toggleFav(item) }
+                Text(
+                    item.name,
+                    style = TextStyle(
+                        color = Color.White, fontSize = (conf.screenWidthDp * 0.042f).coerceIn(30f, 64f).sp, fontWeight = FontWeight.ExtraBold,
+                        lineHeight = ((conf.screenWidthDp * 0.042f).coerceIn(30f, 64f) * 1.05f).sp, shadow = Shadow(Color(0x73000000), blurRadius = 8f),
+                    ),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (item.rating > 0) Text("${(item.rating * 10).toInt().coerceAtMost(99)}% para ti", color = Color(0xFF46D369), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    if (item.year.isNotBlank()) Text(item.year.take(4), color = Color(0xFFDDDDDD), fontSize = 15.sp)
+                    Text(
+                        "HD", color = Color(0xFFDDDDDD), fontSize = 12.sp,
+                        modifier = Modifier.border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(3.dp)).padding(horizontal = 6.dp),
+                    )
+                    hero?.genre?.takeIf { it.isNotBlank() }?.let { Text(it, color = Color(0xFFDDDDDD), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                }
+                val plot = hero?.plot ?: item.plot
+                if (plot.isNotBlank()) Text(
+                    plot, style = TextStyle(color = Color.White, fontSize = 16.sp, lineHeight = 22.sp, shadow = Shadow(Color(0x99000000), blurRadius = 4f)),
+                    maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp),
+                )
+                Spacer(Modifier.height(20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    NfButton("Reproducir", Icons.Filled.PlayArrow, white = true, modifier = Modifier.focusRequester(play)) {
+                        if (item.kind == Kind.MOVIE) Play.movie(ctx, item, item.ext) else state.push(Route.Detail(item))
+                    }
+                    NfButton("Más información", Icons.Filled.Info, white = false) { state.push(Route.Detail(item)) }
+                }
             }
         }
-        if (items.size > 1) Row(
-            Modifier.align(Alignment.BottomEnd).padding(end = 36.dp, bottom = 40.dp),
+        // .nf-hero-dots
+        if (heroes.size > 1) Row(
+            Modifier.align(Alignment.BottomEnd).padding(end = (conf.screenWidthDp * 0.04f).dp, bottom = height * 0.30f),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            items.indices.forEach { i ->
-                Box(Modifier.size(if (i == index) 22.dp else 8.dp, 8.dp).clip(CircleShape).background(if (i == index) Color.White else Color(0x59FFFFFF)))
-            }
+            heroes.indices.forEach { i -> Box(Modifier.size(10.dp).clip(CircleShape).background(if (i == index) Color.White else Color(0x59FFFFFF))) }
+        }
+    }
+}
+
+/** fondo del destacado: recortado como background-position: center 20%; si el enlace no carga, el de TMDB */
+@Composable
+private fun HeroBackdrop(h: TvHero) {
+    var url by remember(h.item.key) { mutableStateOf(h.backdrop) }
+    var failed by remember(h.item.key) { mutableStateOf(false) }
+    LaunchedEffect(h.item.key, failed) {
+        if (!failed) return@LaunchedEffect
+        val alt = h.tmdbBackdrop.takeIf { it.isNotBlank() && it != url }
+            ?: runCatching { Tmdb.getDetails(if (h.item.kind == Kind.SERIES) "tv" else "movie", h.item.name, h.item.year)?.backdrop }.getOrNull().orEmpty()
+        if (alt.isNotBlank() && alt != url) { url = alt; failed = false }
+    }
+    AsyncImage(
+        model = url, contentDescription = null, contentScale = ContentScale.Crop, alignment = BiasAlignment(0f, -0.6f),
+        modifier = Modifier.fillMaxSize(), onError = { failed = true },
+    )
+}
+
+/** .nf-btn-white / .nf-btn-gray; con el foco crecen y el gris se aclara (como Netflix para TV) */
+@Composable
+fun NfButton(text: String, icon: ImageVector?, white: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(4.dp), focusScale = 1.08f) { f ->
+        Row(
+            Modifier.background(
+                when {
+                    white && f -> Color.White
+                    white -> Color(0xF2FFFFFF)
+                    f -> Color.White
+                    else -> Color(0xB36D6D6E)
+                },
+            ).padding(start = 18.dp, end = 24.dp, top = 9.dp, bottom = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val c = if (white || f) Color.Black else Color.White
+            if (icon != null) Icon(icon, null, tint = c, modifier = Modifier.size(26.dp))
+            Text(text, color = c, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(start = 8.dp))
         }
     }
 }

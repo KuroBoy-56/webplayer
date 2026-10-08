@@ -34,6 +34,10 @@ class AppState {
     var refresh by mutableStateOf(0)
     /** TV: sección cuya cartelera ya tomó el foco (así no lo roba al volver a verse al hacer scroll) */
     var billboardFocusedTab: Tab? = null
+    /** TV: el menú superior (transparente sobre el destacado) se oculta al bajar por las filas, como Netflix para TV */
+    var tvHeaderHidden by mutableStateOf(false)
+    /** TV: al aumentar, Inicio / Series / Películas vuelven arriba (atrás desde las filas) */
+    var tvScrollTop by mutableStateOf(0)
 
     fun push(r: Route) { stack.add(r) }
     fun pop(): Boolean { if (stack.isEmpty()) return false; stack.removeAt(stack.lastIndex); return true }

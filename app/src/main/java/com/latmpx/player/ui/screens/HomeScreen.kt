@@ -76,6 +76,8 @@ import com.latmpx.player.ui.theme.NfGray2
 fun HomeScreen(state: AppState) {
     if (state.loading && state.movies.isEmpty()) { Loading("Preparando tu catálogo…"); return }
     val tv = LocalIsTv.current
+    // TV: diseño del reproductor web (TvHome.kt)
+    if (tv) { TvHomeScreen(state); return }
     val pad = sidePad()
     val pw = posterWidth()
     val movies = state.movies

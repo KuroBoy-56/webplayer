@@ -74,6 +74,8 @@ fun DetailScreen(state: AppState, media: Item) {
     val s = state.session ?: return
     val ctx = LocalContext.current
     val tv = LocalIsTv.current
+    // TV: ficha igual que la web (TvDetail.kt)
+    if (tv) { TvDetailScreen(state, media); return }
     val d by produceState<Details?>(null, media.key) {
         value = if (media.kind == Kind.SERIES) Xtream.seriesDetails(s, media) else Xtream.movieDetails(s, media)
     }
