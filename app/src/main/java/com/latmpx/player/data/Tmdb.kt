@@ -6,21 +6,39 @@ import java.net.URLEncoder
 object Tmdb {
     private var cached: List<String>? = null
     private const val FALLBACK_KEY = "0c23c3f0458f0f9e4d0a35048d3a199a"
+    /** la llave del panel respondió 401 (vencida o mal copiada): se usa la de respaldo */
+    @Volatile private var panelKeyBad = false
 
-    private fun key() = Store.tmdbKey.ifEmpty { FALLBACK_KEY }
+
+    /**
+     * Consulta TMDB con la llave del panel (Store.tmdbKey) y, si TMDB la rechaza, con la de respaldo.
+     * null = sin respuesta válida (sin conexión, error del servidor o llave rechazada).
+     */
+    private suspend fun get(path: String): JSONObject? {
+        val panel = Store.tmdbKey.takeIf { it.isNotBlank() && !panelKeyBad }
+        val keys = listOfNotNull(panel, FALLBACK_KEY).distinct()
+        for (k in keys) {
+            val sep = if (path.contains('?')) "&" else "?"
+            val r = Net.get("https://api.themoviedb.org/3/$path${sep}api_key=${URLEncoder.encode(k, "UTF-8")}")
+            if (r.code == 401) {
+                if (k == panel) panelKeyBad = true
+                continue
+            }
+            return if (r.ok) r.json() else null
+        }
+        return null
+    }
 
     suspend fun nowPlaying(key: String, pages: Int = 3): List<String> {
         cached?.let { return it }
-        val k = key.ifEmpty { key() }
-        if (k.isBlank()) return emptyList()
         val out = ArrayList<String>()
         for (p in 1..pages) {
-            val j = Net.obj("https://api.themoviedb.org/3/movie/now_playing?api_key=${URLEncoder.encode(k, "UTF-8")}&language=es-MX&page=$p") ?: break
+            val j = get("movie/now_playing?language=es-MX&page=$p") ?: break
             j.optJSONArray("results")?.let { arr ->
                 for (i in 0 until arr.length()) {
                     val o = arr.optJSONObject(i)
                     val pp = o?.optString("poster_path") ?: ""
-                    if (pp.isNotEmpty()) out += "https://image.tmdb.org/t/p/w342$pp"
+                    if (pp.isNotEmpty() && pp != "null") out += "https://image.tmdb.org/t/p/w342$pp"
                 }
             }
         }
@@ -42,24 +60,34 @@ object Tmdb {
         return t to year
     }
 
-    /** póster de TMDB (w342) para una película o serie, buscando por nombre y año */
-    suspend fun findPoster(type: String, rawTitle: String, rawYear: String = ""): String {
-        val k = key()
-        if (k.isBlank()) return ""
+    /**
+     * Póster de TMDB (w342) para una película o serie, buscando por nombre y año (igual que la web:
+     * con año, sin año, título antes de ":" o " - " y por último el otro tipo).
+     * "" = TMDB no lo tiene; null = no hubo respuesta (se vuelve a intentar más tarde).
+     */
+    suspend fun findPoster(type: String, rawTitle: String, rawYear: String = ""): String? {
         val (title, y0) = clean(rawTitle)
         if (title.length < 2) return ""
         val y = rawYear.filter { it.isDigit() }.take(4).ifEmpty { y0 }
-        val q = URLEncoder.encode(title, "UTF-8")
-        val yp = if (y.length == 4) (if (type == "tv") "&first_air_date_year=$y" else "&year=$y") else ""
-        var res = Net.obj("https://api.themoviedb.org/3/search/$type?api_key=$k&language=es-MX&include_adult=false&query=$q$yp")
-        if (yp.isNotEmpty() && (res?.optJSONArray("results")?.length() ?: 0) == 0)
-            res = Net.obj("https://api.themoviedb.org/3/search/$type?api_key=$k&language=es-MX&include_adult=false&query=$q")
-        val arr = res?.optJSONArray("results") ?: return ""
-        for (i in 0 until arr.length()) {
-            val pp = arr.optJSONObject(i)?.optString("poster_path").orEmpty()
-            if (pp.isNotEmpty() && pp != "null") return "https://image.tmdb.org/t/p/w342$pp"
+        val tries = ArrayList<Triple<String, String, String>>()
+        if (y.length == 4) tries += Triple(type, title, y)
+        tries += Triple(type, title, "")
+        listOf(":", " - ", " – ").forEach { sep ->
+            if (title.contains(sep)) title.substringBefore(sep).trim().takeIf { it.length >= 3 }?.let { tries += Triple(type, it, y) }
         }
-        return ""
+        tries += Triple(if (type == "tv") "movie" else "tv", title, "")
+        var answered = false
+        for ((t, q, yr) in tries.distinct()) {
+            val yp = if (yr.length == 4) (if (t == "tv") "&first_air_date_year=$yr" else "&year=$yr") else ""
+            val res = get("search/$t?language=es-MX&include_adult=false&query=${URLEncoder.encode(q, "UTF-8")}$yp") ?: continue
+            answered = true
+            val arr = res.optJSONArray("results") ?: continue
+            for (i in 0 until arr.length()) {
+                val pp = arr.optJSONObject(i)?.optString("poster_path").orEmpty()
+                if (pp.isNotEmpty() && pp != "null") return "https://image.tmdb.org/t/p/w342$pp"
+            }
+        }
+        return if (answered) "" else null
     }
 
     data class Details(
@@ -76,9 +104,6 @@ object Tmdb {
     private val cache = mutableMapOf<String, Details>()
 
     suspend fun getDetails(type: String, title: String, year: String, tmdbId: String = ""): Details? {
-        val k = key()
-        if (k.isBlank()) return null
-        
         val cleanTitle = clean(title).first.ifEmpty { title.trim() }
         val year = year.ifEmpty { clean(title).second }
         val cacheKey = "$type|$cleanTitle|$year|$tmdbId"
@@ -94,12 +119,10 @@ object Tmdb {
                 if (type == "tv") "&first_air_date_year=$y" else "&primary_release_year=$y"
             } else ""
             
-            val searchUrl = "https://api.themoviedb.org/3/search/$type?api_key=$k&language=es-MX&query=$q$yParam"
-            var res = Net.obj(searchUrl)
+            var res = get("search/$type?language=es-MX&query=$q$yParam")
             
             if (res == null || res.optJSONArray("results")?.length() == 0) {
-                val searchUrl2 = "https://api.themoviedb.org/3/search/$type?api_key=$k&language=es-MX&query=$q"
-                res = Net.obj(searchUrl2)
+                res = get("search/$type?language=es-MX&query=$q")
             }
 
             val results = res?.optJSONArray("results")
@@ -110,8 +133,7 @@ object Tmdb {
 
         if (idToFetch.isEmpty() || idToFetch == "null") return null
 
-        val detailsUrl = "https://api.themoviedb.org/3/$fetchedType/$idToFetch?api_key=$k&language=es-MX&append_to_response=credits,aggregate_credits,videos"
-        val d = Net.obj(detailsUrl) ?: return null
+        val d = get("$fetchedType/$idToFetch?language=es-MX&append_to_response=credits,aggregate_credits,videos") ?: return null
 
         val poster = d.optString("poster_path").let { if (it.isNotEmpty() && it != "null") "https://image.tmdb.org/t/p/w500$it" else "" }
         val backdrop = d.optString("backdrop_path").let { if (it.isNotEmpty() && it != "null") "https://image.tmdb.org/t/p/w1280$it" else "" }

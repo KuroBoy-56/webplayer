@@ -65,23 +65,65 @@ object Xtream {
 
     fun clearCache() { cache.clear() }
 
+    /** Categorías: memoria → copia del equipo → servidor. */
     suspend fun categories(s: Session, kind: Kind): List<Category> = memo("cat|${kind.name}") {
-        val action = when (kind) { Kind.MOVIE -> "get_vod_categories"; Kind.SERIES -> "get_series_categories"; Kind.LIVE -> "get_live_categories" }
-        Net.arr(api(s, action)).mapObj { o -> Category(o.s("category_id"), o.s("category_name"), kind) }
+        CatalogCache.categories(s, kind) ?: fetchCategories(s, kind)
     }
 
-    /** Todas las películas / series / canales (una sola consulta, igual que la web). */
+    /** Todas las películas / series / canales (una sola consulta, igual que la web): memoria → equipo → servidor. */
     suspend fun items(s: Session, kind: Kind): List<Item> = memo("all|${kind.name}") {
+        CatalogCache.items(s, kind) ?: fetchItems(s, kind).also { list ->
+            if (list.isNotEmpty()) CatalogCache.save(s, kind, lock.withLock { cache["cat|${kind.name}"] as? List<Category> }.orEmpty(), list)
+        }
+    }
+
+    private suspend fun fetchCategories(s: Session, kind: Kind): List<Category> {
+        val action = when (kind) { Kind.MOVIE -> "get_vod_categories"; Kind.SERIES -> "get_series_categories"; Kind.LIVE -> "get_live_categories" }
+        return Net.arr(api(s, action)).mapObj { o -> Category(o.s("category_id"), o.s("category_name"), kind) }
+    }
+
+    private suspend fun fetchItems(s: Session, kind: Kind): List<Item> {
         val action = when (kind) { Kind.MOVIE -> "get_vod_streams"; Kind.SERIES -> "get_series"; Kind.LIVE -> "get_live_streams" }
-        withContext(Dispatchers.Default) {
+        return withContext(Dispatchers.Default) {
             Net.arr(api(s, action)).mapObj { o -> parseItem(o, kind) }.distinctBy { it.id }
         }
+    }
+
+    /** Solo lo guardado en el equipo (sin red); también queda en memoria. null si no hay copia. */
+    suspend fun cached(s: Session, kind: Kind): Pair<List<Category>, List<Item>>? {
+        val items = CatalogCache.items(s, kind) ?: return null
+        val cats = CatalogCache.categories(s, kind).orEmpty()
+        lock.withLock {
+            cache["all|${kind.name}"] = items
+            if (cats.isNotEmpty()) cache["cat|${kind.name}"] = cats
+        }
+        return cats to items
+    }
+
+    /**
+     * Vuelve a pedir el catálogo al servidor y actualiza memoria y equipo.
+     * Si el servidor no responde (o llega vacío) se conserva lo anterior y devuelve null.
+     */
+    suspend fun refresh(s: Session, kind: Kind): Pair<List<Category>, List<Item>>? = coroutineScope {
+        val c = async { fetchCategories(s, kind) }
+        val i = async { fetchItems(s, kind) }
+        val items = i.await()
+        val cats = c.await()
+        if (items.isEmpty()) return@coroutineScope null
+        val finalCats = lock.withLock {
+            cache["all|${kind.name}"] = items
+            if (cats.isNotEmpty()) cache["cat|${kind.name}"] = cats
+            val known = cache["cat|${kind.name}"] as? List<Category>
+            known.orEmpty()
+        }
+        CatalogCache.save(s, kind, finalCats, items)
+        finalCats to items
     }
 
     private fun parseItem(o: org.json.JSONObject, kind: Kind): Item? {
         val id = if (kind == Kind.SERIES) o.i("series_id") else o.i("stream_id")
         if (id <= 0) return null
-        val poster = when (kind) { Kind.SERIES -> o.s("cover"); Kind.LIVE -> o.s("stream_icon"); else -> o.s("stream_icon") }
+        val poster = Posters.clean(when (kind) { Kind.SERIES -> o.s("cover"); Kind.LIVE -> o.s("stream_icon"); else -> o.s("stream_icon") })
         val year = o.s("year").ifEmpty { o.s("releaseDate").take(4) }.ifEmpty { o.s("release_date").take(4) }
         return Item(
             id = id,
@@ -95,7 +137,7 @@ object Xtream {
             added = (if (kind == Kind.SERIES) o.s("last_modified") else o.s("added")).toLongOrNull() ?: 0,
             plot = o.s("plot"),
             epgId = o.s("epg_channel_id"),
-            backdrop = o.optJSONArray("backdrop_path")?.optString(0).orEmpty(),
+            backdrop = Posters.clean(o.optJSONArray("backdrop_path")?.optString(0).orEmpty()),
         )
     }
 
@@ -105,13 +147,13 @@ object Xtream {
         val md = j?.optJSONObject("movie_data")
         val ext = md?.s("container_extension")?.ifEmpty { null } ?: item.ext
         Details(
-            item = item.copy(ext = ext, poster = item.poster.ifEmpty { info?.s("movie_image").orEmpty() }),
+            item = item.copy(ext = ext, poster = item.poster.ifEmpty { Posters.clean(info?.s("movie_image").orEmpty()) }),
             plot = info?.let { it.s("plot").ifEmpty { it.s("description") } } ?: item.plot,
             cast = info?.let { it.s("cast").ifEmpty { it.s("actors") } }.orEmpty(),
             director = info?.s("director").orEmpty(),
             genre = info?.s("genre").orEmpty(),
             duration = info?.s("duration").orEmpty(),
-            backdrop = info?.optJSONArray("backdrop_path")?.optString(0).orEmpty().ifEmpty { item.backdrop },
+            backdrop = Posters.clean(info?.optJSONArray("backdrop_path")?.optString(0).orEmpty()).ifEmpty { item.backdrop },
             trailer = info?.s("youtube_trailer").orEmpty(),
             tmdbId = info?.s("tmdb_id").orEmpty()
         )
@@ -156,7 +198,7 @@ object Xtream {
             director = info?.s("director").orEmpty(),
             genre = info?.s("genre").orEmpty(),
             duration = info?.s("episode_run_time").orEmpty(),
-            backdrop = info?.optJSONArray("backdrop_path")?.optString(0).orEmpty().ifEmpty { item.backdrop },
+            backdrop = Posters.clean(info?.optJSONArray("backdrop_path")?.optString(0).orEmpty()).ifEmpty { item.backdrop },
             trailer = info?.s("youtube_trailer").orEmpty(),
             tmdbId = info?.s("tmdb_id").orEmpty(),
             seasons = seasons,

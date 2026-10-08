@@ -14,11 +14,12 @@ class App : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         Store.init(this)
         com.latmpx.player.data.Posters.init(this)
+        com.latmpx.player.data.CatalogCache.init(this)
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
-            .components { add(OkHttpNetworkFetcherFactory(callFactory = { Net.client })) } // mismo cliente: mismo DNS
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = { Net.imageClient })) } // mismo DNS, cola propia para imágenes
             .crossfade(true)
             .build()
 }

@@ -71,7 +71,7 @@ fun Poster(url: String, title: String, modifier: Modifier = Modifier, contentSca
  */
 @Composable
 fun ItemPoster(item: Item, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop) {
-    var url by remember(item.key, item.poster) { mutableStateOf(item.poster.ifBlank { Posters.cached(item).orEmpty() }) }
+    var url by remember(item.key, item.poster) { mutableStateOf(Posters.clean(item.poster).ifBlank { Posters.cached(item).orEmpty() }) }
     var tried by remember(item.key) { mutableStateOf(false) }
     LaunchedEffect(item.key, url) {
         if (url.isBlank() && !tried && item.kind != com.latmpx.player.data.Kind.LIVE) { tried = true; url = Posters.resolve(item) }

@@ -28,6 +28,7 @@ class AppState {
     var liveCats by mutableStateOf<List<Category>>(emptyList())
     var movies by mutableStateOf<List<Item>>(emptyList())
     var series by mutableStateOf<List<Item>>(emptyList())
+    var live by mutableStateOf<List<Item>>(emptyList())
     var loading by mutableStateOf(false)
     /** cambia cada vez que se vuelve del reproductor, para refrescar "Continuar viendo" */
     var refresh by mutableStateOf(0)
