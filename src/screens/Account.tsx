@@ -7,10 +7,11 @@ import { catalog } from '../data/catalog';
 import { panelSubmit } from '../api/panel';
 import { hasMasterKey } from '../lib/aes';
 import { pref, setPref } from '../lib/storage';
+import { brand, brandName, distChoice, expiryText } from '../lib/tenant';
 import { dateText } from '../lib/util';
 import { useNav } from '../nav';
-import { deviceId, loadCatalog, loadCloud, logout, refreshCatalog, useAppState } from '../state';
-import { C, px, SIDE } from '../theme';
+import { deviceId, loadCatalog, loadCloud, logout, refreshCatalog, resetTenant, useAppState } from '../state';
+import { C, px, SIDE, themed } from '../theme';
 
 const AUDIO = [
   ['es', 'Español'],
@@ -51,6 +52,8 @@ export default function Account() {
   const audio = pref('audio_lang', 'es');
   const subs = pref('subs_lang', 'off');
   const hideAdult = pref('hide_adult', '1') === '1';
+  const dist = brand();
+  const distDate = dist ? expiryText(dist) : '';
 
   return (
     <ScrollView contentContainerStyle={s.root}>
@@ -62,6 +65,12 @@ export default function Account() {
           <Text style={s.row}>Vence: <Text style={s.val}>{dateText(s0.exp)}</Text></Text>
           <Text style={s.row}>Conexiones: <Text style={s.val}>{s0.active || '0'} de {s0.max || '1'}</Text></Text>
           <Text style={s.row}>Código del equipo: <Text style={s.val}>{deviceId()}</Text></Text>
+          {dist ? (
+            <Text style={s.row}>
+              Distribuidor: <Text style={s.val}>{dist.name ? dist.name + ' (' + dist.code + ')' : dist.code}</Text>
+            </Text>
+          ) : null}
+          {distDate ? <Text style={s.row}>Vence el distribuidor: <Text style={s.val}>{distDate} (hora de Panamá)</Text></Text> : null}
         </View>
       ) : null}
 
@@ -114,6 +123,14 @@ export default function Account() {
         }}
       />
       <Setting
+        label="Cambiar distribuidor"
+        value={distChoice() === 'code' ? 'Número ' + (dist?.code || '') : 'Escribir un número de distribuidor'}
+        onPress={() => {
+          resetTenant();
+          nav.rebrand({ name: 'distributor' });
+        }}
+      />
+      <Setting
         label="Cerrar sesión"
         value=""
         onPress={() => {
@@ -121,7 +138,7 @@ export default function Account() {
           nav.reset({ name: 'login' });
         }}
       />
-      <Text style={s.ver}>LatMpx TV+ para Fire TV (Vega OS) · versión 1.0.0</Text>
+      <Text style={s.ver}>{brandName()} para Fire TV (Vega OS) · versión 1.0.0</Text>
       <PinDialog
         visible={pin}
         onClose={() => setPin(false)}
@@ -136,16 +153,18 @@ export default function Account() {
   );
 }
 
-const s = StyleSheet.create({
-  root: { paddingTop: px(130), paddingHorizontal: SIDE, paddingBottom: px(100) },
-  title: { color: '#fff', fontSize: px(48), fontWeight: '800' },
-  card: { backgroundColor: C.bg2, borderRadius: px(10), padding: px(30), marginTop: px(20), width: px(1000) },
-  row: { color: C.sub, fontSize: px(28), marginBottom: px(10) },
-  val: { color: '#fff', fontWeight: '700' },
-  sub: { color: '#fff', fontSize: px(36), fontWeight: '800', marginTop: px(40), marginBottom: px(14) },
-  set: { width: px(1000), height: px(84), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: px(28), backgroundColor: C.bg2, borderRadius: px(8), marginBottom: px(10) },
-  setF: { backgroundColor: '#fff' },
-  setLabel: { color: '#fff', fontSize: px(28), fontWeight: '700' },
-  setValue: { color: C.sub, fontSize: px(26) },
-  ver: { color: C.dim, fontSize: px(22), marginTop: px(40) },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    root: { paddingTop: px(130), paddingHorizontal: SIDE, paddingBottom: px(100) },
+    title: { color: '#fff', fontSize: px(48), fontWeight: '800' },
+    card: { backgroundColor: C.bg2, borderRadius: px(10), padding: px(30), marginTop: px(20), width: px(1000) },
+    row: { color: C.sub, fontSize: px(28), marginBottom: px(10) },
+    val: { color: '#fff', fontWeight: '700' },
+    sub: { color: '#fff', fontSize: px(36), fontWeight: '800', marginTop: px(40), marginBottom: px(14) },
+    set: { width: px(1000), height: px(84), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: px(28), backgroundColor: C.bg2, borderRadius: px(8), marginBottom: px(10) },
+    setF: { backgroundColor: '#fff' },
+    setLabel: { color: '#fff', fontSize: px(28), fontWeight: '700' },
+    setValue: { color: C.sub, fontSize: px(26) },
+    ver: { color: C.dim, fontSize: px(22), marginTop: px(40) },
+  }),
+);

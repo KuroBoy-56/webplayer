@@ -4,20 +4,26 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, BackHandler, StatusBar, StyleSheet, View } from 'react-native';
 import { fetchAlert, PanelAlert } from './api/alerts';
 import AlertDialog from './components/AlertDialog';
-import { Logo, Spinner } from './components/ui';
+import { Spinner } from './components/ui';
 import { loadStorage } from './lib/storage';
+import { applyBrand, distChoice, features, onTenantProblem, tenantCode } from './lib/tenant';
 import { Nav, NavContext, Route } from './nav';
 import Actor from './screens/Actor';
 import Detail from './screens/Detail';
+import Distributor, { TenantRetry } from './screens/Distributor';
 import Grid from './screens/Grid';
 import Login from './screens/Login';
 import Main from './screens/Main';
 import Player from './screens/Player';
-import { getState, loadCatalog, loadCloud, restoreSession } from './state';
-import { C } from './theme';
+import { checkTenant, getState, Guard, loadCatalog, loadCloud, restoreSession, tenantCheckDue } from './state';
+import { C, themed } from './theme';
 
 function Screen({ route, active }: { route: Route; active: boolean }) {
   switch (route.name) {
+    case 'distributor':
+      return <Distributor message={route.message} />;
+    case 'tenant_retry':
+      return <TenantRetry message={route.message} />;
     case 'login':
       return <Login />;
     case 'main':
@@ -35,9 +41,17 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
 
 export default function App() {
   const [stack, setStack] = useState<Route[] | null>(null);
+  // cambia cuando cambian los colores: se vuelven a montar las pantallas con los nuevos estilos
+  const [skin, setSkin] = useState(0);
 
   useEffect(() => {
-    loadStorage().then(() => setStack([restoreSession() ? { name: 'main' } : { name: 'login' }]));
+    loadStorage().then(() => {
+      // marca guardada del distribuidor antes de la primera pantalla
+      applyBrand();
+      const logged = restoreSession();
+      if (!distChoice()) setStack([{ name: 'distributor' }]);
+      else setStack([logged ? { name: 'main' } : { name: 'login' }]);
+    });
   }, []);
 
   // al entrar: catálogo y nube (progreso y Mi lista)
@@ -52,9 +66,10 @@ export default function App() {
       loadCloud();
       if (!alertDone.current) {
         alertDone.current = true;
-        fetchAlert(ses).then(a => a && setAlert(a)).catch(() => {});
+        // el distribuidor puede tener los avisos apagados
+        if (features().alerts) fetchAlert(ses).then(a => a && setAlert(a)).catch(() => {});
       }
-    } else if (top === 'login') {
+    } else if (top === 'login' || top === 'distributor') {
       alertDone.current = false;
       setAlert(null);
     }
@@ -76,9 +91,47 @@ export default function App() {
       push: r => setStack(s => [...(s || []), r]),
       pop: () => setStack(s => (s && s.length > 1 ? s.slice(0, -1) : s)),
       reset: r => setStack([r]),
+      rebrand: r => {
+        if (applyBrand()) setSkin(k => k + 1);
+        setStack([r]);
+      },
     }),
     [],
   );
+
+  // guardián del distribuidor: al abrir, al volver a la app, cada recheck_after segundos y
+  // cuando el panel rechaza el número en progreso, EPG o deportes
+  const stackRef = useRef<Route[] | null>(null);
+  stackRef.current = stack;
+  const ready = !!stack;
+  useEffect(() => {
+    if (!ready) return;
+    const handle = (g: Guard) => {
+      if (g.kind === 'wiped') nav.rebrand({ name: 'distributor', message: g.message });
+      else if (g.kind === 'retry') nav.rebrand({ name: 'tenant_retry', message: g.message });
+      else if (g.kind === 'ok' && g.changed) {
+        // colores nuevos solo si no interrumpe (nada abierto encima); si no, al próximo inicio
+        const st = stackRef.current;
+        if (st && st.length === 1) {
+          if (applyBrand()) setSkin(k => k + 1);
+        }
+      }
+    };
+    const run = () => {
+      if (tenantCode()) checkTenant().then(handle).catch(() => {});
+    };
+    run();
+    onTenantProblem(run);
+    const sub = AppState.addEventListener('change', st => {
+      if (st === 'active' && tenantCheckDue()) run();
+    });
+    const timer = setInterval(() => tenantCheckDue() && run(), 15 * 60000);
+    return () => {
+      sub.remove();
+      clearInterval(timer);
+      onTenantProblem(() => {});
+    };
+  }, [ready, nav]);
 
   const onBack = useCallback(() => {
     if (stack && stack.length > 1 && stack[stack.length - 1].name !== 'player') {
@@ -94,9 +147,9 @@ export default function App() {
   }, [onBack]);
 
   if (!stack) {
+    // mientras se lee lo guardado: sin logo (aún no se sabe si es el de un distribuidor)
     return (
       <View style={s.root}>
-        <Logo size={200} />
         <Spinner />
       </View>
     );
@@ -105,7 +158,7 @@ export default function App() {
   return (
     <NavContext.Provider value={nav}>
       <StatusBar hidden />
-      <View style={s.app}>
+      <View key={skin} style={s.app}>
         {stack.map((r, i) => {
           const active = i === stack.length - 1;
           // el reproductor tapa todo; lo de abajo se oculta para que el foco no se escape
@@ -121,8 +174,10 @@ export default function App() {
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' },
-  app: { flex: 1, backgroundColor: C.bg },
-  hidden: { display: 'none' },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' },
+    app: { flex: 1, backgroundColor: C.bg },
+    hidden: { display: 'none' },
+  }),
+);

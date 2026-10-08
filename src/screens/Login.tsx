@@ -7,13 +7,14 @@ import { Button, Logo } from '../components/ui';
 import { http, json } from '../lib/http';
 import { hasMasterKey } from '../lib/aes';
 import { read, write } from '../lib/storage';
+import { features, scoped } from '../lib/tenant';
 import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
 import { deviceId, setSession } from '../state';
-import { C, px } from '../theme';
+import { C, px, themed } from '../theme';
 
 async function tmdbPosters(): Promise<string[]> {
-  const key = read('tmdb_key');
+  const key = read(scoped('tmdb_key'));
   if (!key) return [];
   const out: string[] = [];
   for (const path of ['movie/now_playing', 'trending/tv/week', 'movie/popular']) {
@@ -75,7 +76,7 @@ export default function Login() {
   };
 
   const demo = async () => {
-    if (read('demo_used') === '1') {
+    if (read(scoped('demo_used')) === '1') {
       setError('La demo ya se usó en este equipo.');
       return;
     }
@@ -84,11 +85,11 @@ export default function Login() {
     const d = await panelDemo(dev);
     if (!d.ok) {
       setBusy('');
-      if (d.code === 403) write('demo_used', '1');
+      if (d.code === 403) write(scoped('demo_used'), '1');
       setError(d.error || 'No se pudo crear la demo');
       return;
     }
-    write('demo_used', '1');
+    write(scoped('demo_used'), '1');
     const pl = await panelPlaylists(dev);
     const own = pl.lines.filter(l => l.user === d.user);
     await enter(d.user!, d.pass!, own.length ? own.map(l => ({ name: l.name, base: l.base })) : undefined);
@@ -141,7 +142,7 @@ export default function Login() {
         {busy ? <Text style={s.busy}>{busy}</Text> : null}
         <View style={s.btns}>
           <Button label={busy ? 'Entrando…' : 'Ingresar'} primary onPress={() => !busy && enter(user, pass)} />
-          {hasMasterKey() ? <Button label="Autodemo" onPress={() => !busy && demo()} /> : null}
+          {hasMasterKey() && features().demo ? <Button label="Autodemo" onPress={() => !busy && demo()} /> : null}
         </View>
         {assigned.length ? (
           <View style={s.btns}>
@@ -154,17 +155,19 @@ export default function Login() {
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
-  mosaic: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, flexDirection: 'row', flexWrap: 'wrap', transform: [{ rotate: '-8deg' }, { scale: 1.3 }] },
-  mosaicImg: { width: px(192), height: px(288), margin: px(4), borderRadius: px(6) },
-  shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.72)' },
-  top: { position: 'absolute', left: px(80), top: px(40) },
-  box: { alignSelf: 'center', marginTop: px(150), width: px(760), backgroundColor: 'rgba(0,0,0,0.78)', borderRadius: px(10), padding: px(60) },
-  title: { color: '#fff', fontSize: px(52), fontWeight: '800', marginBottom: px(30) },
-  input: { height: px(84), backgroundColor: '#333', borderRadius: px(6), color: '#fff', fontSize: px(32), paddingHorizontal: px(24), marginBottom: px(22) },
-  error: { color: '#e87c03', fontSize: px(26), marginBottom: px(14) },
-  busy: { color: C.sub, fontSize: px(26), marginBottom: px(14) },
-  btns: { flexDirection: 'row', marginTop: px(12) },
-  device: { color: C.dim, fontSize: px(24), marginTop: px(30) },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: '#000' },
+    mosaic: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, flexDirection: 'row', flexWrap: 'wrap', transform: [{ rotate: '-8deg' }, { scale: 1.3 }] },
+    mosaicImg: { width: px(192), height: px(288), margin: px(4), borderRadius: px(6) },
+    shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.72)' },
+    top: { position: 'absolute', left: px(80), top: px(40) },
+    box: { alignSelf: 'center', marginTop: px(150), width: px(760), backgroundColor: 'rgba(0,0,0,0.78)', borderRadius: px(10), padding: px(60) },
+    title: { color: '#fff', fontSize: px(52), fontWeight: '800', marginBottom: px(30) },
+    input: { height: px(84), backgroundColor: '#333', borderRadius: px(6), color: '#fff', fontSize: px(32), paddingHorizontal: px(24), marginBottom: px(22) },
+    error: { color: '#e87c03', fontSize: px(26), marginBottom: px(14) },
+    busy: { color: C.sub, fontSize: px(26), marginBottom: px(14) },
+    btns: { flexDirection: 'row', marginTop: px(12) },
+    device: { color: C.dim, fontSize: px(24), marginTop: px(30) },
+  }),
+);

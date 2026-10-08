@@ -28,6 +28,15 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   (mismas reglas `match` de `api/sports.php`).
 - **Progreso y Mi lista sincronizados** con `api/progress.php`: lo que ves en la TV sigue en la web y el móvil, aunque cada app haya entrado por otra DNS del mismo servicio (el panel los une). Se vuelven a leer al regresar a la app.
 - **Aviso del panel al abrir la app** (`api/alerta.php?format=json`, página **Alertas** del panel): bienvenida con el texto general y la imagen, o aviso de vencimiento con el texto de 3, 2, 1 o 0 días. Una vez por arranque y otra vez tras iniciar sesión; botón **Entendido** enfocado, *Atrás* también lo cierra.
+- **Número de distribuidor** (primera vez): 6 dígitos con teclado en pantalla. Con número, la
+  app usa el logo, el nombre y los colores de ese distribuidor (`login.php` acción
+  `tenant_config`, app `vega`) y todas las llamadas al panel llevan `tenant` + `app` (DNS,
+  demo, registro, progreso, EPG, deportes y `alerta.php?t=`). **Omitir** deja la app como
+  siempre. No vuelve a preguntar: abre en el inicio de sesión o directo en Inicio. Al abrir, al
+  volver a la app y cada 6 h se revisa el número: si venció, está suspendido o ya no vale se
+  borra (con la sesión) y vuelve a pedirlo con el motivo; sin conexión sigue con lo guardado
+  hasta 72 h. **Cuenta › Cambiar distribuidor** cierra sesión y pide otro número. Necesita la
+  llave del panel (sin llave, *Continuar* avisa y *Omitir* sigue funcionando).
 - **Control parental**: oculta adultos; se desbloquea con el PIN del panel (0000 por defecto).
 
 ## Subir a la Amazon Appstore

@@ -1,11 +1,12 @@
 // Estado global: sesión, carga del catálogo, progreso ("Continuar viendo") y Mi lista,
 // sincronizados con api/progress.php del panel igual que la web, Android y Roku.
 import { useSyncExternalStore } from 'react';
-import { bindSession, cloud, forgetCloud, Session } from './api/panel';
+import { bindSession, cloud, forgetCloud, panelTenantConfig, Session } from './api/panel';
 import { Kind, loadKind } from './api/xtream';
 import { catalog } from './data/catalog';
 import { json } from './lib/http';
 import { read, readJson, remove, write, writeJson } from './lib/storage';
+import { brand, clearTenant, expiredMessage, locallyExpired, OFFLINE_GRACE, saveBrand, scoped, TENANT_FATAL, tenantCode } from './lib/tenant';
 import { digits, nowSec, parseIso, str } from './lib/util';
 
 export type Progress = {
@@ -252,5 +253,59 @@ export function deviceId(): string {
 
 // PIN de control parental: el elegido en el equipo o el del panel (0000 por defecto)
 export function parentalPin(): string {
-  return read('parental_pin') || read('panel_pin') || '0000';
+  return read('parental_pin') || read(scoped('panel_pin')) || '0000';
+}
+
+// ---------- distribuidor (guardián) ----------
+
+// "Cambiar distribuidor" o número que dejó de valer: cierra sesión y borra número y marca
+export function resetTenant() {
+  logout();
+  clearTenant();
+}
+
+export type Guard =
+  | { kind: 'skip' } // Omitir o sin número: nada que revisar
+  | { kind: 'ok'; changed: boolean } // vigente (changed: nueva marca)
+  | { kind: 'offline' } // sin respuesta: sigue con lo guardado (< 72 h)
+  | { kind: 'wiped'; message: string } // número borrado: pedir otro
+  | { kind: 'retry'; message: string }; // sin respuesta hace más de 72 h
+
+let guarding: Promise<Guard> | null = null;
+
+// revisa el número con el panel (tenant_config); una sola revisión a la vez
+export function checkTenant(): Promise<Guard> {
+  if (!guarding) guarding = runCheck().finally(() => (guarding = null));
+  return guarding;
+}
+
+// toca revisar: al abrir, al volver a la app o cada recheck_after segundos
+export function tenantCheckDue(): boolean {
+  const b = brand();
+  return !!b && nowSec() - b.lastOk >= b.recheckAfter;
+}
+
+async function runCheck(): Promise<Guard> {
+  const code = tenantCode();
+  if (!code) return { kind: 'skip' };
+  const old = brand();
+  const now = nowSec();
+  const r = await panelTenantConfig(code, deviceId(), now);
+  if (tenantCode() !== code) return { kind: 'skip' }; // cambió mientras tanto
+  if (r.ok) {
+    saveBrand(r.brand);
+    const changed = !old || old.rev !== r.brand.rev || old.logoRev !== r.brand.logoRev || old.logoUrl !== r.brand.logoUrl;
+    return { kind: 'ok', changed };
+  }
+  if (TENANT_FATAL.includes(r.code)) {
+    resetTenant();
+    return { kind: 'wiped', message: r.message };
+  }
+  // sin respuesta válida (red, 5xx, 429…): vale lo guardado, salvo vencido por fecha o pasadas 72 h
+  if (old && locallyExpired(old, now)) {
+    resetTenant();
+    return { kind: 'wiped', message: expiredMessage(old) };
+  }
+  if (old && now - old.lastOk < OFFLINE_GRACE) return { kind: 'offline' };
+  return { kind: 'retry', message: r.network ? 'No se pudo comprobar tu distribuidor. Revisa tu conexión a internet.' : r.message };
 }

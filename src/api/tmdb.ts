@@ -3,6 +3,7 @@
 import { catalog, Item } from '../data/catalog';
 import { http, json } from '../lib/http';
 import { read } from '../lib/storage';
+import { scoped } from '../lib/tenant';
 import { buildTitleIndex, catalogYear, lookupTitle, TitleIndex, titleKeys, yearsOk } from '../lib/titles';
 import { str } from '../lib/util';
 
@@ -11,7 +12,7 @@ const API = 'https://api.themoviedb.org/3/';
 const IMG = 'https://image.tmdb.org/t/p/';
 
 function keys(): string[] {
-  const panel = read('tmdb_key');
+  const panel = read(scoped('tmdb_key'));
   const out = /^[0-9a-f]{32}$/i.test(panel) ? [panel] : [];
   if (!out.includes(BUILTIN_KEY)) out.push(BUILTIN_KEY);
   return out;

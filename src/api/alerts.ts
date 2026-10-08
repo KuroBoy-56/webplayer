@@ -1,6 +1,7 @@
 // Aviso del panel al abrir la app (Alertas / admin_alertas.php → api/alerta.php?format=json):
 // bienvenida (texto general + imagen) o vencimiento (texto de 3, 2, 1 o 0 días).
 import { json } from '../lib/http';
+import { APP_ID, tenantCode } from '../lib/tenant';
 import { panel, panelApiBase, Session } from './panel';
 
 export type PanelAlert = { expiry: boolean; title: string; message: string; image: string; button: string };
@@ -12,6 +13,8 @@ export async function fetchAlert(s: Session): Promise<PanelAlert | null> {
     ['pass', s.pass],
     ['dns', s.base],
     ['title', s.dns || ''],
+    // con distribuidor: sus textos (?t=<número>&app=)
+    ...(tenantCode() ? [['t', tenantCode()], ['app', APP_ID]] : []),
   ]
     .map(([k, v]) => k + '=' + encodeURIComponent(v))
     .join('&');

@@ -4,6 +4,7 @@ import { decodePanelUrl, dnsDecode, mopeDecrypt, mopeEncrypt } from '../lib/cryp
 import { hasMasterKey, panelDecrypt, panelEncrypt } from '../lib/aes';
 import { formBody, http, HttpResult, json } from '../lib/http';
 import { read, remove, write } from '../lib/storage';
+import { APP_ID, Brand, parseConfig, reportTenantProblem, scoped, TENANT_ERRORS, TENANT_FATAL, tenantCode, tenantFields } from '../lib/tenant';
 import { normalizeBase, str } from '../lib/util';
 
 export type Session = {
@@ -80,11 +81,12 @@ export function lineFromUrl(name: string, url: string, user = '', pass = ''): (S
   return { name, base, user, pass };
 }
 
-// Servidores (DNS) que el panel tiene configurados
+// Servidores (DNS) que el panel tiene configurados. Con distribuidor solo los suyos
+// (login.php fetch_dns); dns.php es siempre la lista del dueño.
 export async function panelDnsList(): Promise<Server[]> {
   const out: Server[] = [];
   const seen = new Set<string>();
-  const r = await panel('dns.php');
+  const r = tenantCode() ? { code: 0, body: '', ok: false } : await panel('dns.php');
   if (r.ok) {
     try {
       const j = JSON.parse(dnsDecode(r.body));
@@ -111,10 +113,10 @@ export async function panelDnsList(): Promise<Server[]> {
     if (!s.name) s.name = 'Servidor ' + (i + 1);
   });
   // la lista se guarda por si el panel no responde la próxima vez
-  if (out.length) write('servers', JSON.stringify(out));
+  if (out.length) write(scoped('servers'), JSON.stringify(out));
   else {
     try {
-      return JSON.parse(read('servers', '[]'));
+      return JSON.parse(read(scoped('servers'), '[]'));
     } catch {
       return [];
     }
@@ -122,8 +124,10 @@ export async function panelDnsList(): Promise<Server[]> {
   return out;
 }
 
-// auth.php: listas que el panel tiene asignadas a este equipo (sin llave)
+// auth.php: listas que el panel tiene asignadas a este equipo (sin llave). Solo responde con
+// datos del dueño: con distribuidor se usa check_mac (login.php).
 export async function panelPlaylists(deviceId: string): Promise<{ lines: (Server & { user: string; pass: string })[]; error: string }> {
+  if (tenantCode()) return { lines: [], error: '' };
   const r = await panel('auth.php', 'POST', JSON.stringify({ data: mopeEncrypt(JSON.stringify({ mac_address: deviceId })) }), 'application/json');
   if (r.code === 0) return { lines: [], error: 'No se pudo conectar con el panel. Revisa tu conexión a internet.' };
   const outer = json(r);
@@ -139,8 +143,8 @@ export async function panelPlaylists(deviceId: string): Promise<{ lines: (Server
   if (!resp) resp = outer.plain;
   if (!resp) return { lines: [], error: '' };
   const tmdb = str(resp.tmdbKey);
-  if (tmdb && tmdb !== 'missing_tmdb_key') write('tmdb_key', tmdb);
-  if (str(resp.parent_control)) write('panel_pin', str(resp.parent_control));
+  if (tmdb && tmdb !== 'missing_tmdb_key') write(scoped('tmdb_key'), tmdb);
+  if (str(resp.parent_control)) write(scoped('panel_pin'), str(resp.parent_control));
   const lines: (Server & { user: string; pass: string })[] = [];
   const seen = new Set<string>();
   for (const o of resp.urls || []) {
@@ -160,20 +164,30 @@ export function bindSession(fn: () => Session | null): void {
   sessionRef = fn;
 }
 
+// el token es de cada distribuidor (con Omitir, la clave de siempre)
 async function cloudToken(forceNew = false): Promise<string> {
+  const key = scoped('cloud_token2');
   if (!forceNew) {
-    const t = read('cloud_token2');
+    const t = read(key);
     if (t) return t;
   }
   const s = sessionRef();
   if (!s) return '';
-  const r = await panel('progress.php', 'POST', JSON.stringify({ action: 'auth', user: s.user, pass: s.pass, dns: s.base }), 'application/json');
+  const r = await panel('progress.php', 'POST', JSON.stringify({ action: 'auth', user: s.user, pass: s.pass, dns: s.base, ...tenantFields() }), 'application/json');
+  tenantProblem(r);
   const j = json(r);
   if (!j || !str(j.token)) return '';
   const tmdb = str(j.tmdbKey);
-  if (tmdb && tmdb !== 'missing_tmdb_key') write('tmdb_key', tmdb);
-  write('cloud_token2', j.token);
+  if (tmdb && tmdb !== 'missing_tmdb_key') write(scoped('tmdb_key'), tmdb);
+  write(key, j.token);
   return j.token;
+}
+
+// error del distribuidor (vencido, suspendido…) en progress/epg/sports: lo revisa el guardián
+function tenantProblem(r: HttpResult): void {
+  if (!tenantCode() || r.code < 400 || r.code >= 500) return;
+  const code = str(json(r)?.code);
+  if (TENANT_FATAL.includes(code)) reportTenantProblem(code);
 }
 
 // petición con token; si venció (401) pide otro una vez
@@ -190,24 +204,25 @@ export async function cloud(file: string, method: 'GET' | 'POST', payload: Recor
       r = await panel(file, 'POST', JSON.stringify({ ...(payload || {}), token: tok }), 'application/json');
     }
     if (r.code !== 401 || attempt === 2) break;
-    remove('cloud_token2');
+    remove(scoped('cloud_token2'));
     tok = await cloudToken(true);
     if (!tok) break;
   }
+  tenantProblem(r);
   const j = json(r);
-  if (j && typeof j === 'object' && str(j.token)) write('cloud_token2', j.token);
+  if (j && typeof j === 'object' && str(j.token)) write(scoped('cloud_token2'), j.token);
   return r;
 }
 
 export function forgetCloud(): void {
-  remove('cloud_token2');
+  remove(scoped('cloud_token2'));
 }
 
 // ---------- login.php (con la llave maestra) ----------
 
-// POST a login.php con el JSON cifrado
+// POST a login.php con el JSON cifrado (con distribuidor lleva "tenant" y "app")
 async function panelLogin(action: string, payload: Record<string, any>): Promise<HttpResult & { error?: string }> {
-  const data = panelEncrypt(JSON.stringify(payload));
+  const data = panelEncrypt(JSON.stringify({ ...payload, ...tenantFields() }));
   if (!data) return { code: -1, body: '', ok: false, error: 'Esta versión no tiene la llave del panel.' };
   const r = await panel('login.php', 'POST', formBody({ action, data }), 'application/x-www-form-urlencoded');
   return r.code === 0 ? { ...r, error: 'No se pudo conectar con el panel.' } : r;
@@ -216,6 +231,11 @@ async function panelLogin(action: string, payload: Record<string, any>): Promise
 function panelError(r: HttpResult & { error?: string }, fallback: string): string {
   if (r.error) return r.error;
   const j = json(r);
+  const code = j && typeof j === 'object' ? str(j.code) : '';
+  if (tenantCode() && TENANT_ERRORS[code]) {
+    if (TENANT_FATAL.includes(code)) reportTenantProblem(code);
+    return TENANT_ERRORS[code];
+  }
   const msg = j && typeof j === 'object' ? str(j.error) || str(j.message) : '';
   if (msg === 'Server not configured') return 'El panel no está configurado';
   if (msg === 'Decryption failed') return 'La llave de la app no coincide con la del panel';
@@ -261,4 +281,36 @@ export async function panelFetchDns(): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+// ---------- distribuidor (login.php tenant_config) ----------
+
+export type TenantResult =
+  | { ok: true; brand: Brand }
+  // network: sin conexión o error del servidor (5xx); code: error del panel (tenant_invalid…)
+  | { ok: false; network: boolean; code: string; message: string };
+
+export async function panelTenantConfig(code: string, device: string, now: number): Promise<TenantResult> {
+  if (!hasMasterKey()) return { ok: false, network: false, code: 'no_key', message: 'Esta versión de la app no tiene la llave del panel' };
+  const data = panelEncrypt(JSON.stringify({ code, app: APP_ID, device }));
+  const r = await panel('login.php', 'POST', formBody({ action: 'tenant_config', data }), 'application/x-www-form-urlencoded');
+  if (r.code === 0 || r.code >= 500) return { ok: false, network: true, code: '', message: 'No se pudo conectar con el panel. Revisa tu conexión a internet.' };
+  if (!r.ok) {
+    const j = json(r);
+    const c = j && typeof j === 'object' ? str(j.code) : '';
+    if (TENANT_ERRORS[c]) return { ok: false, network: false, code: c, message: TENANT_ERRORS[c] };
+    const msg = j && typeof j === 'object' ? str(j.error) : '';
+    if (msg === 'Decryption failed') return { ok: false, network: false, code: 'key', message: 'La llave de la app no coincide con la del panel' };
+    return { ok: false, network: true, code: '', message: msg || 'Respuesta no válida del panel (' + r.code + ')' };
+  }
+  const plain = panelDecrypt(r.body);
+  let j: any = null;
+  try {
+    j = plain ? JSON.parse(plain) : null;
+  } catch {
+    j = null;
+  }
+  const brand = parseConfig(j, now);
+  if (!brand || brand.code !== code) return { ok: false, network: true, code: '', message: 'Respuesta no válida del panel' };
+  return { ok: true, brand };
 }

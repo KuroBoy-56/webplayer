@@ -2,7 +2,7 @@
 import React from 'react';
 import { Image, Modal, StyleSheet, Text, View } from 'react-native';
 import { PanelAlert } from '../api/alerts';
-import { C, px } from '../theme';
+import { C, px, themed } from '../theme';
 import { Button, Logo } from './ui';
 
 export default function AlertDialog({ alert, onClose }: { alert: PanelAlert | null; onClose: () => void }) {
@@ -29,17 +29,19 @@ export default function AlertDialog({ alert, onClose }: { alert: PanelAlert | nu
   );
 }
 
-const s = StyleSheet.create({
-  back: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
-  box: { width: px(820), backgroundColor: C.bg2, borderRadius: px(16), borderWidth: 1, borderColor: 'rgba(255,255,255,0.13)', overflow: 'hidden' },
-  accent: { height: px(6), flexDirection: 'row' },
-  accentExpiry: { backgroundColor: C.red },
-  accentWelcome: { backgroundColor: C.red },
-  gold: { flex: 1, marginLeft: '50%', backgroundColor: '#F5C518' },
-  body: { paddingHorizontal: px(56), paddingTop: px(40), paddingBottom: px(44), alignItems: 'center' },
-  title: { color: '#fff', fontSize: px(44), fontWeight: '800', textAlign: 'center', marginTop: px(20) },
-  titleExpiry: { color: '#F6121D' },
-  msg: { color: C.sub, fontSize: px(30), lineHeight: px(44), textAlign: 'center', marginTop: px(14) },
-  img: { width: px(700), height: px(300), marginTop: px(26), borderRadius: px(8) },
-  btns: { flexDirection: 'row', marginTop: px(34), marginRight: -px(18) },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    back: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
+    box: { width: px(820), backgroundColor: C.bg2, borderRadius: px(16), borderWidth: 1, borderColor: 'rgba(255,255,255,0.13)', overflow: 'hidden' },
+    accent: { height: px(6), flexDirection: 'row' },
+    accentExpiry: { backgroundColor: C.red },
+    accentWelcome: { backgroundColor: C.red },
+    gold: { flex: 1, marginLeft: '50%', backgroundColor: '#F5C518' },
+    body: { paddingHorizontal: px(56), paddingTop: px(40), paddingBottom: px(44), alignItems: 'center' },
+    title: { color: '#fff', fontSize: px(44), fontWeight: '800', textAlign: 'center', marginTop: px(20) },
+    titleExpiry: { color: '#F6121D' },
+    msg: { color: C.sub, fontSize: px(30), lineHeight: px(44), textAlign: 'center', marginTop: px(14) },
+    img: { width: px(700), height: px(300), marginTop: px(26), borderRadius: px(8) },
+    btns: { flexDirection: 'row', marginTop: px(34), marginRight: -px(18) },
+  }),
+);

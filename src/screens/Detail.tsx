@@ -10,7 +10,7 @@ import { catalog, Item } from '../data/catalog';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, progressMovie, progressSeries, toggleFav, useAppState } from '../state';
-import { C, px, SIDE } from '../theme';
+import { C, px, SIDE, themed } from '../theme';
 
 export default function Detail({ item }: { item: Item }) {
   const nav = useNav();
@@ -207,35 +207,37 @@ export default function Detail({ item }: { item: Item }) {
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
-  bg: { position: 'absolute', left: 0, top: 0, right: 0, height: px(1080) },
-  shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,20,20,0.72)' },
-  head: { paddingLeft: SIDE, paddingTop: px(110), width: px(1300) },
-  title: { color: '#fff', fontSize: px(72), fontWeight: '900' },
-  meta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },
-  genre: { color: C.sub, fontSize: px(26), marginTop: px(8) },
-  plot: { color: '#e5e5e5', fontSize: px(30), lineHeight: px(42), marginTop: px(18) },
-  small: { color: C.sub, fontSize: px(24), marginTop: px(10) },
-  btns: { flexDirection: 'row', marginTop: px(34) },
-  season: { paddingHorizontal: px(26), height: px(56), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: px(3), borderColor: 'transparent' },
-  seasonOn: { borderColor: C.red },
-  seasonF: { backgroundColor: '#fff' },
-  seasonText: { color: '#fff', fontSize: px(26), fontWeight: '700' },
-  ep: { width: px(400), marginRight: px(22), borderWidth: px(4), borderColor: 'transparent', borderRadius: px(8), padding: px(4) },
-  epF: { borderColor: '#fff', transform: [{ scale: 1.05 }] },
-  epImgBox: { width: '100%', height: px(220), backgroundColor: C.card, borderRadius: px(6), overflow: 'hidden' },
-  epImg: { width: '100%', height: '100%' },
-  epTitle: { color: '#fff', fontSize: px(26), fontWeight: '700', marginTop: px(10) },
-  epPlot: { color: C.sub, fontSize: px(22), marginTop: px(4) },
-  bar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(7), backgroundColor: 'rgba(255,255,255,0.35)' },
-  barFill: { height: '100%', backgroundColor: C.red },
-  rowTitle: { color: '#fff', fontSize: px(34), fontWeight: '800', marginLeft: SIDE, marginBottom: px(14) },
-  actor: { width: px(170), marginRight: px(26), alignItems: 'center' },
-  actorImgBox: { width: px(140), height: px(140), borderRadius: px(70), overflow: 'hidden', backgroundColor: C.card, borderWidth: px(4), borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
-  actorImgF: { borderColor: '#fff', transform: [{ scale: 1.08 }] },
-  actorImg: { width: '100%', height: '100%' },
-  actorInitial: { color: '#fff', fontSize: px(56), fontWeight: '800' },
-  actorName: { color: '#e5e5e5', fontSize: px(22), fontWeight: '700', marginTop: px(10), textAlign: 'center' },
-  actorChar: { color: C.dim, fontSize: px(20), marginTop: px(2), textAlign: 'center' },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: C.bg },
+    bg: { position: 'absolute', left: 0, top: 0, right: 0, height: px(1080) },
+    shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,20,20,0.72)' },
+    head: { paddingLeft: SIDE, paddingTop: px(110), width: px(1300) },
+    title: { color: '#fff', fontSize: px(72), fontWeight: '900' },
+    meta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },
+    genre: { color: C.sub, fontSize: px(26), marginTop: px(8) },
+    plot: { color: '#e5e5e5', fontSize: px(30), lineHeight: px(42), marginTop: px(18) },
+    small: { color: C.sub, fontSize: px(24), marginTop: px(10) },
+    btns: { flexDirection: 'row', marginTop: px(34) },
+    season: { paddingHorizontal: px(26), height: px(56), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: px(3), borderColor: 'transparent' },
+    seasonOn: { borderColor: C.red },
+    seasonF: { backgroundColor: '#fff' },
+    seasonText: { color: '#fff', fontSize: px(26), fontWeight: '700' },
+    ep: { width: px(400), marginRight: px(22), borderWidth: px(4), borderColor: 'transparent', borderRadius: px(8), padding: px(4) },
+    epF: { borderColor: '#fff', transform: [{ scale: 1.05 }] },
+    epImgBox: { width: '100%', height: px(220), backgroundColor: C.card, borderRadius: px(6), overflow: 'hidden' },
+    epImg: { width: '100%', height: '100%' },
+    epTitle: { color: '#fff', fontSize: px(26), fontWeight: '700', marginTop: px(10) },
+    epPlot: { color: C.sub, fontSize: px(22), marginTop: px(4) },
+    bar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(7), backgroundColor: 'rgba(255,255,255,0.35)' },
+    barFill: { height: '100%', backgroundColor: C.red },
+    rowTitle: { color: '#fff', fontSize: px(34), fontWeight: '800', marginLeft: SIDE, marginBottom: px(14) },
+    actor: { width: px(170), marginRight: px(26), alignItems: 'center' },
+    actorImgBox: { width: px(140), height: px(140), borderRadius: px(70), overflow: 'hidden', backgroundColor: C.card, borderWidth: px(4), borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
+    actorImgF: { borderColor: '#fff', transform: [{ scale: 1.08 }] },
+    actorImg: { width: '100%', height: '100%' },
+    actorInitial: { color: '#fff', fontSize: px(56), fontWeight: '800' },
+    actorName: { color: '#e5e5e5', fontSize: px(22), fontWeight: '700', marginTop: px(10), textAlign: 'center' },
+    actorChar: { color: C.dim, fontSize: px(20), marginTop: px(2), textAlign: 'center' },
+  }),
+);

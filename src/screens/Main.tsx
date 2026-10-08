@@ -4,8 +4,9 @@ import { useKeplerBackHandler } from '@amazon-devices/react-native-kepler';
 import React, { useEffect, useState } from 'react';
 import { BackHandler, Modal, StyleSheet, Text, View } from 'react-native';
 import { Button, Focusable, Logo } from '../components/ui';
+import { brandName, features, useBrandRev } from '../lib/tenant';
 import { useAppState } from '../state';
-import { C, px, SIDE } from '../theme';
+import { C, px, SIDE, themed } from '../theme';
 import Account from './Account';
 import Browse from './Browse';
 import Live from './Live';
@@ -31,6 +32,9 @@ export default function Main({ active }: { active: boolean }) {
   const back = useKeplerBackHandler();
   const [section, setSection] = useState<Section>('home');
   const [exitAsk, setExitAsk] = useState(false);
+  useBrandRev();
+  // el distribuidor puede no tener deportes
+  const menu = features().sports ? MENU : MENU.filter(m => m[0] !== 'sports');
 
   useEffect(() => {
     if (!active) return;
@@ -59,7 +63,7 @@ export default function Main({ active }: { active: boolean }) {
       <View style={s.menu}>
         <Logo size={64} />
         <View style={s.items}>
-          {MENU.map(([key, label]) => (
+          {menu.map(([key, label]) => (
             <Focusable key={key} onPress={() => setSection(key)} style={f => [s.item, f && s.itemF]}>
               {f => <Text style={[s.itemText, key === section && s.itemOn, f && s.itemTextF]}>{label}</Text>}
             </Focusable>
@@ -70,7 +74,7 @@ export default function Main({ active }: { active: boolean }) {
       <Modal visible={exitAsk} transparent animationType="fade" onRequestClose={() => setExitAsk(false)}>
         <View style={s.dlgBack}>
           <View style={s.dlg}>
-            <Text style={s.dlgTitle}>¿Quieres salir de LatMpx TV+?</Text>
+            <Text style={s.dlgTitle}>¿Quieres salir de {brandName()}?</Text>
             <View style={s.dlgBtns}>
               <Button label="Salir" primary onPress={() => back.exitApp()} />
               <Button label="Cancelar" preferred onPress={() => setExitAsk(false)} />
@@ -82,19 +86,21 @@ export default function Main({ active }: { active: boolean }) {
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
-  content: { flex: 1 },
-  menu: { position: 'absolute', left: 0, top: 0, right: 0, height: px(110), flexDirection: 'row', alignItems: 'center', paddingHorizontal: SIDE, backgroundColor: 'rgba(0,0,0,0.6)' },
-  items: { flexDirection: 'row', marginLeft: px(40), flex: 1 },
-  item: { paddingHorizontal: px(20), height: px(56), justifyContent: 'center', borderRadius: px(28), marginRight: px(4) },
-  itemF: { backgroundColor: '#fff' },
-  itemText: { color: '#e5e5e5', fontSize: px(28) },
-  itemOn: { color: '#fff', fontWeight: '800' },
-  itemTextF: { color: '#000' },
-  loading: { color: C.sub, fontSize: px(22) },
-  dlgBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },
-  dlg: { backgroundColor: C.bg2, borderRadius: px(12), padding: px(50), width: px(760) },
-  dlgTitle: { color: '#fff', fontSize: px(38), fontWeight: '800', marginBottom: px(30) },
-  dlgBtns: { flexDirection: 'row' },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: C.bg },
+    content: { flex: 1 },
+    menu: { position: 'absolute', left: 0, top: 0, right: 0, height: px(110), flexDirection: 'row', alignItems: 'center', paddingHorizontal: SIDE, backgroundColor: 'rgba(0,0,0,0.6)' },
+    items: { flexDirection: 'row', marginLeft: px(40), flex: 1 },
+    item: { paddingHorizontal: px(20), height: px(56), justifyContent: 'center', borderRadius: px(28), marginRight: px(4) },
+    itemF: { backgroundColor: '#fff' },
+    itemText: { color: '#e5e5e5', fontSize: px(28) },
+    itemOn: { color: '#fff', fontWeight: '800' },
+    itemTextF: { color: '#000' },
+    loading: { color: C.sub, fontSize: px(22) },
+    dlgBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },
+    dlg: { backgroundColor: C.bg2, borderRadius: px(12), padding: px(50), width: px(760) },
+    dlgTitle: { color: '#fff', fontSize: px(38), fontWeight: '800', marginBottom: px(30) },
+    dlgBtns: { flexDirection: 'row' },
+  }),
+);

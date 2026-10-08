@@ -5,7 +5,7 @@ import { Message } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
 import { digits } from '../lib/util';
 import { useAppState } from '../state';
-import { C, px } from '../theme';
+import { C, px, themed } from '../theme';
 import { ItemGrid } from './Grid';
 
 export default function MyList() {
@@ -25,6 +25,8 @@ export default function MyList() {
   return <ItemGrid items={items} header={<Text style={s.title}>Mi lista</Text>} />;
 }
 
-const s = StyleSheet.create({
-  title: { color: C.text, fontSize: px(48), fontWeight: '800', marginTop: px(130), marginBottom: px(10) },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    title: { color: C.text, fontSize: px(48), fontWeight: '800', marginTop: px(130), marginBottom: px(10) },
+  }),
+);

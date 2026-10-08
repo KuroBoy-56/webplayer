@@ -8,7 +8,7 @@ import { loadSports, matchSports, SportsData } from '../data/sports';
 import { clock, int, localDay, nowSec, parseIso, str } from '../lib/util';
 import { useNav } from '../nav';
 import { useAppState } from '../state';
-import { C, px, SIDE } from '../theme';
+import { C, px, SIDE, themed } from '../theme';
 
 let cache: { data: SportsData; at: number } | null = null;
 
@@ -152,25 +152,27 @@ export default function Sports() {
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, paddingTop: px(130) },
-  chips: { flexDirection: 'row', paddingHorizontal: SIDE, marginBottom: px(14) },
-  sports: { flexGrow: 0, marginBottom: px(20) },
-  chip: { height: px(56), paddingHorizontal: px(28), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: px(3), borderColor: 'transparent' },
-  chipOn: { borderColor: C.red },
-  chipF: { backgroundColor: '#fff' },
-  chipText: { color: '#fff', fontSize: px(26), fontWeight: '700' },
-  toast: { color: '#e87c03', fontSize: px(26), marginLeft: SIDE, marginBottom: px(10) },
-  ev: { height: px(110), flexDirection: 'row', alignItems: 'center', backgroundColor: C.bg2, borderRadius: px(8), marginBottom: px(10), paddingHorizontal: px(24) },
-  evF: { backgroundColor: '#fff', transform: [{ scale: 1.02 }] },
-  time: { color: '#fff', fontSize: px(28), fontWeight: '800', width: px(170) },
-  timeLive: { color: C.red },
-  mid: { flex: 1 },
-  league: { color: C.sub, fontSize: px(22) },
-  teams: { flexDirection: 'row', alignItems: 'center', marginTop: px(6) },
-  badge: { width: px(42), height: px(42), marginHorizontal: px(10) },
-  team: { color: '#fff', fontSize: px(30), fontWeight: '700', maxWidth: px(480) },
-  score: { color: '#fff', fontSize: px(30), fontWeight: '800', marginHorizontal: px(20) },
-  chan: { color: C.green, fontSize: px(24), fontWeight: '700', width: px(420), textAlign: 'right' },
-  chanNone: { color: C.dim },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    root: { flex: 1, paddingTop: px(130) },
+    chips: { flexDirection: 'row', paddingHorizontal: SIDE, marginBottom: px(14) },
+    sports: { flexGrow: 0, marginBottom: px(20) },
+    chip: { height: px(56), paddingHorizontal: px(28), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: px(3), borderColor: 'transparent' },
+    chipOn: { borderColor: C.red },
+    chipF: { backgroundColor: '#fff' },
+    chipText: { color: '#fff', fontSize: px(26), fontWeight: '700' },
+    toast: { color: '#e87c03', fontSize: px(26), marginLeft: SIDE, marginBottom: px(10) },
+    ev: { height: px(110), flexDirection: 'row', alignItems: 'center', backgroundColor: C.bg2, borderRadius: px(8), marginBottom: px(10), paddingHorizontal: px(24) },
+    evF: { backgroundColor: '#fff', transform: [{ scale: 1.02 }] },
+    time: { color: '#fff', fontSize: px(28), fontWeight: '800', width: px(170) },
+    timeLive: { color: C.red },
+    mid: { flex: 1 },
+    league: { color: C.sub, fontSize: px(22) },
+    teams: { flexDirection: 'row', alignItems: 'center', marginTop: px(6) },
+    badge: { width: px(42), height: px(42), marginHorizontal: px(10) },
+    team: { color: '#fff', fontSize: px(30), fontWeight: '700', maxWidth: px(480) },
+    score: { color: '#fff', fontSize: px(30), fontWeight: '800', marginHorizontal: px(20) },
+    chan: { color: C.green, fontSize: px(24), fontWeight: '700', width: px(420), textAlign: 'right' },
+    chanNone: { color: C.dim },
+  }),
+);

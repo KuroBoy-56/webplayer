@@ -8,6 +8,8 @@ export type PlayParams =
   | { kind: 'live'; channel: Item; channels: Item[]; index: number };
 
 export type Route =
+  | { name: 'distributor'; message?: string }
+  | { name: 'tenant_retry'; message: string }
   | { name: 'login' }
   | { name: 'main' }
   | { name: 'detail'; item: Item }
@@ -19,7 +21,9 @@ export type Nav = {
   push: (r: Route) => void;
   pop: () => void;
   reset: (r: Route) => void;
+  // aplica la marca del distribuidor (logo, nombre y colores) y abre r
+  rebrand: (r: Route) => void;
 };
 
-export const NavContext = createContext<Nav>({ push: () => {}, pop: () => {}, reset: () => {} });
+export const NavContext = createContext<Nav>({ push: () => {}, pop: () => {}, reset: () => {}, rebrand: () => {} });
 export const useNav = () => useContext(NavContext);

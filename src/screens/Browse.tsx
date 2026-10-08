@@ -8,7 +8,7 @@ import { catalog, Item, Row } from '../data/catalog';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, Progress, toggleFav, useAppState } from '../state';
-import { C, px, SIDE } from '../theme';
+import { C, px, SIDE, themed } from '../theme';
 
 // fila "Continuar viendo" a partir del progreso guardado en el panel
 function continueRow(progress: Progress[], only?: 'vod' | 'series'): Row | null {
@@ -137,15 +137,17 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
   );
 }
 
-const s = StyleSheet.create({
-  hero: { height: px(840), marginBottom: px(-120) },
-  heroImg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
-  heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(420) },
-  heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1100), backgroundColor: 'rgba(0,0,0,0.45)' },
-  heroText: { position: 'absolute', left: SIDE, top: px(220), width: px(980) },
-  heroKind: { color: C.red, fontSize: px(24), fontWeight: '800', marginBottom: px(8) },
-  heroTitle: { color: '#fff', fontSize: px(76), fontWeight: '900', lineHeight: px(84) },
-  heroMeta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },
-  heroPlot: { color: '#ddd', fontSize: px(28), lineHeight: px(38), marginTop: px(16) },
-  heroBtns: { flexDirection: 'row', marginTop: px(30) },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    hero: { height: px(840), marginBottom: px(-120) },
+    heroImg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
+    heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(420) },
+    heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1100), backgroundColor: 'rgba(0,0,0,0.45)' },
+    heroText: { position: 'absolute', left: SIDE, top: px(220), width: px(980) },
+    heroKind: { color: C.red, fontSize: px(24), fontWeight: '800', marginBottom: px(8) },
+    heroTitle: { color: '#fff', fontSize: px(76), fontWeight: '900', lineHeight: px(84) },
+    heroMeta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },
+    heroPlot: { color: '#ddd', fontSize: px(28), lineHeight: px(38), marginTop: px(16) },
+    heroBtns: { flexDirection: 'row', marginTop: px(30) },
+  }),
+);

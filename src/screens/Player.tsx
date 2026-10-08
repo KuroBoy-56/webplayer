@@ -12,7 +12,7 @@ import { pref } from '../lib/storage';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { getState, isFav, saveProgress, toggleFav } from '../state';
-import { C, px } from '../theme';
+import { C, px, themed } from '../theme';
 
 type Track = { kind: 'audio' | 'text'; index: number; label: string; on: boolean };
 
@@ -509,30 +509,32 @@ export default function Player({ params }: { params: PlayParams }) {
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
-  video: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 0 },
-  captions: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 2 },
-  center: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 5 },
-  spinner: { width: px(90), height: px(90), borderRadius: px(45), borderWidth: px(8), borderColor: 'rgba(255,255,255,0.25)', borderTopColor: C.red },
-  status: { color: C.green, fontSize: px(28), marginTop: px(20) },
-  error: { color: '#fff', fontSize: px(38), fontWeight: '700', textAlign: 'center' },
-  overlay: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, justifyContent: 'space-between', zIndex: 6 },
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: px(80), paddingTop: px(50), paddingBottom: px(40), backgroundColor: 'rgba(0,0,0,0.55)' },
-  chLogo: { width: px(130), height: px(74), marginRight: px(24) },
-  title: { color: '#fff', fontSize: px(44), fontWeight: '800', flex: 1 },
-  star: { color: '#f5c518', fontSize: px(40) },
-  bottom: { paddingHorizontal: px(80), paddingBottom: px(60), paddingTop: px(40), backgroundColor: 'rgba(0,0,0,0.6)' },
-  bar: { height: px(8), backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: px(4), marginTop: px(12) },
-  barFill: { height: '100%', backgroundColor: C.red, borderRadius: px(4) },
-  times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: px(10) },
-  time: { color: '#fff', fontSize: px(28) },
-  now: { color: C.red, fontSize: px(26), fontWeight: '800' },
-  prog: { color: '#fff', fontSize: px(34), fontWeight: '700', marginTop: px(4) },
-  hint: { color: C.sub, fontSize: px(24), marginTop: px(14) },
-  menu: { position: 'absolute', right: 0, top: 0, bottom: 0, width: px(640), backgroundColor: 'rgba(20,20,20,0.95)', padding: px(50), zIndex: 10 },
-  menuTitle: { color: '#fff', fontSize: px(38), fontWeight: '800', marginBottom: px(24) },
-  opt: { height: px(72), justifyContent: 'center', paddingHorizontal: px(20), borderRadius: px(6), marginBottom: px(6) },
-  optF: { backgroundColor: '#fff' },
-  optText: { color: '#fff', fontSize: px(28) },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: '#000' },
+    video: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 0 },
+    captions: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 2 },
+    center: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 5 },
+    spinner: { width: px(90), height: px(90), borderRadius: px(45), borderWidth: px(8), borderColor: 'rgba(255,255,255,0.25)', borderTopColor: C.red },
+    status: { color: C.green, fontSize: px(28), marginTop: px(20) },
+    error: { color: '#fff', fontSize: px(38), fontWeight: '700', textAlign: 'center' },
+    overlay: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, justifyContent: 'space-between', zIndex: 6 },
+    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: px(80), paddingTop: px(50), paddingBottom: px(40), backgroundColor: 'rgba(0,0,0,0.55)' },
+    chLogo: { width: px(130), height: px(74), marginRight: px(24) },
+    title: { color: '#fff', fontSize: px(44), fontWeight: '800', flex: 1 },
+    star: { color: '#f5c518', fontSize: px(40) },
+    bottom: { paddingHorizontal: px(80), paddingBottom: px(60), paddingTop: px(40), backgroundColor: 'rgba(0,0,0,0.6)' },
+    bar: { height: px(8), backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: px(4), marginTop: px(12) },
+    barFill: { height: '100%', backgroundColor: C.red, borderRadius: px(4) },
+    times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: px(10) },
+    time: { color: '#fff', fontSize: px(28) },
+    now: { color: C.red, fontSize: px(26), fontWeight: '800' },
+    prog: { color: '#fff', fontSize: px(34), fontWeight: '700', marginTop: px(4) },
+    hint: { color: C.sub, fontSize: px(24), marginTop: px(14) },
+    menu: { position: 'absolute', right: 0, top: 0, bottom: 0, width: px(640), backgroundColor: 'rgba(20,20,20,0.95)', padding: px(50), zIndex: 10 },
+    menuTitle: { color: '#fff', fontSize: px(38), fontWeight: '800', marginBottom: px(24) },
+    opt: { height: px(72), justifyContent: 'center', paddingHorizontal: px(20), borderRadius: px(6), marginBottom: px(6) },
+    optF: { backgroundColor: '#fff' },
+    optText: { color: '#fff', fontSize: px(28) },
+  }),
+);
