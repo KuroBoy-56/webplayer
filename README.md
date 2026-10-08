@@ -18,6 +18,7 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Menú superior**: Inicio, Series, Películas, TV en vivo, Deportes, Mi lista, Buscar, Cuenta.
   *Atrás* vuelve a Inicio y, en Inicio, pregunta si quieres salir.
 - **Ficha** con sinopsis, reparto, temporadas, episodios con su avance y "Más títulos como este".
+- **Actores**: en la ficha, el reparto (fotos de TMDB) abre la página del actor con su filmografía, solo los títulos que el servidor tiene (título normalizado y año ±1, como la app de Windows y la web). Clave TMDB del panel o la incorporada.
 - **Reproductor nativo de Vega** (MP4, MKV, AVI, MOV, MPEG-TS): continuar donde quedó,
   ◀▶ 10 s, OK pausa, ▼ o MENÚ para audio y subtítulos, idioma preferido automático y
   siguiente episodio solo.
@@ -25,7 +26,7 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   favoritos, cambio de canal con ▲▼ dentro del reproductor.
 - **Deportes**: partidos de hoy y mañana con el canal encontrado automáticamente
   (mismas reglas `match` de `api/sports.php`).
-- **Progreso y Mi lista sincronizados** con `api/progress.php`: lo que ves en la TV sigue en la web y el móvil.
+- **Progreso y Mi lista sincronizados** con `api/progress.php`: lo que ves en la TV sigue en la web y el móvil, aunque cada app haya entrado por otra DNS del mismo servicio (el panel los une). Se vuelven a leer al regresar a la app.
 - **Control parental**: oculta adultos; se desbloquea con el PIN del panel (0000 por defecto).
 
 ## Subir a la Amazon Appstore

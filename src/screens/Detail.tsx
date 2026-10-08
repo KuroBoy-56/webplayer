@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem, playEpisodes, playMovie } from '../actions';
+import { CastMember, castFor } from '../api/tmdb';
 import { SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
 import { Button, Focusable } from '../components/ui';
 import { RowView } from '../components/Tiles';
@@ -18,6 +19,7 @@ export default function Detail({ item }: { item: Item }) {
   const [ser, setSer] = useState<SeriesInfo | null>(null);
   const [season, setSeason] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [cast, setCast] = useState<CastMember[]>([]);
 
   useEffect(() => {
     const s = getState().session;
@@ -41,6 +43,18 @@ export default function Detail({ item }: { item: Item }) {
   }, [ser]);
 
   const info = item.kind === 'series' ? ser : vod;
+
+  // reparto con foto (TMDB): al elegir a alguien se abre su filmografía en el servidor
+  useEffect(() => {
+    if (loading) return;
+    let alive = true;
+    setCast([]);
+    castFor(item, info?.tmdb || '', info?.year || item.year).then(c => alive && setCast(c));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, loading]);
   const backdrop = info?.backdrop || item.backdrop || info?.poster || item.poster;
   const fav = isFav(item.kind, item.id);
   void st.rev;
@@ -86,7 +100,7 @@ export default function Detail({ item }: { item: Item }) {
           <Text style={s.plot} numberOfLines={5}>
             {info?.plot || item.plot || (loading ? 'Cargando…' : '')}
           </Text>
-          {info?.cast ? (
+          {info?.cast && !cast.length ? (
             <Text style={s.small} numberOfLines={2}>
               Reparto: {info.cast}
             </Text>
@@ -152,6 +166,37 @@ export default function Detail({ item }: { item: Item }) {
           </View>
         ) : null}
 
+        {cast.length ? (
+          <View style={{ marginTop: px(30) }}>
+            <Text style={s.rowTitle}>Reparto</Text>
+            <FlatList
+              horizontal
+              data={cast}
+              keyExtractor={a => String(a.id)}
+              contentContainerStyle={{ paddingHorizontal: SIDE, paddingRight: px(200) }}
+              renderItem={({ item: a }) => (
+                <Focusable onPress={() => nav.push({ name: 'actor', personId: a.id, actorName: a.name })} style={s.actor}>
+                  {f => (
+                    <>
+                      <View style={[s.actorImgBox, f && s.actorImgF]}>
+                        {a.photo ? <Image source={{ uri: a.photo }} style={s.actorImg} resizeMode="cover" /> : <Text style={s.actorInitial}>{a.name.slice(0, 1)}</Text>}
+                      </View>
+                      <Text style={[s.actorName, f && { color: '#fff' }]} numberOfLines={2}>
+                        {a.name}
+                      </Text>
+                      {a.character ? (
+                        <Text style={s.actorChar} numberOfLines={1}>
+                          {a.character}
+                        </Text>
+                      ) : null}
+                    </>
+                  )}
+                </Focusable>
+              )}
+            />
+          </View>
+        ) : null}
+
         {similar.length ? (
           <View style={{ marginTop: px(30) }}>
             <RowView row={{ title: 'Más títulos como este', type: 'poster', items: similar }} onItem={it => openItem(nav, it)} onSpecial={() => {}} />
@@ -185,4 +230,12 @@ const s = StyleSheet.create({
   epPlot: { color: C.sub, fontSize: px(22), marginTop: px(4) },
   bar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(7), backgroundColor: 'rgba(255,255,255,0.35)' },
   barFill: { height: '100%', backgroundColor: C.red },
+  rowTitle: { color: '#fff', fontSize: px(34), fontWeight: '800', marginLeft: SIDE, marginBottom: px(14) },
+  actor: { width: px(170), marginRight: px(26), alignItems: 'center' },
+  actorImgBox: { width: px(140), height: px(140), borderRadius: px(70), overflow: 'hidden', backgroundColor: C.card, borderWidth: px(4), borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
+  actorImgF: { borderColor: '#fff', transform: [{ scale: 1.08 }] },
+  actorImg: { width: '100%', height: '100%' },
+  actorInitial: { color: '#fff', fontSize: px(56), fontWeight: '800' },
+  actorName: { color: '#e5e5e5', fontSize: px(22), fontWeight: '700', marginTop: px(10), textAlign: 'center' },
+  actorChar: { color: C.dim, fontSize: px(20), marginTop: px(2), textAlign: 'center' },
 });

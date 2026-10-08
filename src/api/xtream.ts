@@ -1,7 +1,7 @@
 // API de Xtream Codes del proveedor.
 import { b64Decode } from '../lib/crypto';
 import { http, json } from '../lib/http';
-import { enc, int, nowSec, parseIso, str } from '../lib/util';
+import { digits, enc, int, nowSec, parseIso, str } from '../lib/util';
 import { cloud, Server, Session } from './panel';
 
 export function api(s: { base: string; user: string; pass: string }, action = '', extra = ''): string {
@@ -97,6 +97,7 @@ export function liveUrl(s: Session, id: string, fmt: string): string {
 }
 
 export type VodInfo = {
+  tmdb: string;
   plot: string;
   cast: string;
   director: string;
@@ -118,6 +119,7 @@ export async function vodInfo(s: Session, id: string): Promise<VodInfo | null> {
   const md = obj(j.movie_data);
   const bd = Array.isArray(info.backdrop_path) && info.backdrop_path.length ? str(info.backdrop_path[0]) : '';
   return {
+    tmdb: digits(str(info.tmdb_id) || str(info.tmdb)),
     plot: str(info.plot) || str(info.description),
     cast: str(info.cast) || str(info.actors),
     director: str(info.director),
@@ -132,7 +134,7 @@ export async function vodInfo(s: Session, id: string): Promise<VodInfo | null> {
 }
 
 export type Episode = { id: string; num: number; season: number; title: string; ext: string; image: string; plot: string; duration: string };
-export type SeriesInfo = { plot: string; cast: string; director: string; genre: string; backdrop: string; poster: string; year: string; rating: string; seasons: { season: number; episodes: Episode[] }[] };
+export type SeriesInfo = { tmdb: string; plot: string; cast: string; director: string; genre: string; backdrop: string; poster: string; year: string; rating: string; seasons: { season: number; episodes: Episode[] }[] };
 
 function episodeOf(e: any, season: number): Episode {
   const ei = obj(e?.info);
@@ -171,6 +173,7 @@ export async function seriesInfo(s: Session, id: string): Promise<SeriesInfo | n
   }
   const bd = Array.isArray(info.backdrop_path) && info.backdrop_path.length ? str(info.backdrop_path[0]) : '';
   return {
+    tmdb: digits(str(info.tmdb_id) || str(info.tmdb)),
     plot: str(info.plot),
     cast: str(info.cast),
     director: str(info.director),

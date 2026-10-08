@@ -21,8 +21,9 @@ function continueRow(progress: Progress[], only?: 'vod' | 'series'): Row | null 
         seen.add('v' + it.id);
         items.push(it);
       }
-    } else if (p.type === 'episode' && only !== 'vod') {
-      const it = catalog.find('series', digits(p.seriesId));
+    } else if ((p.type === 'episode' || (p.type as string) === 'series') && only !== 'vod') {
+      // 'series' lo guardan otras apps (Windows) con el id de la serie
+      const it = catalog.find('series', digits(p.type === 'episode' ? p.seriesId : p.seriesId || p.id));
       if (it && !seen.has('s' + it.id)) {
         seen.add('s' + it.id);
         items.push(it);
@@ -111,7 +112,7 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
     const map = new Map<string, number>();
     for (const p of st.progress) {
       if (p.duration > 0) {
-        const key = p.type === 'movie' ? 'vod' + digits(p.id) : 'series' + digits(p.seriesId);
+        const key = p.type === 'movie' ? 'vod' + digits(p.id) : 'series' + digits(p.type === 'episode' ? p.seriesId : p.seriesId || p.id);
         if (!map.has(key)) map.set(key, p.position / p.duration);
       }
     }

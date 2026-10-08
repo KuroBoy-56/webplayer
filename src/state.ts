@@ -123,13 +123,14 @@ export function refreshCatalog() {
 
 // ---------- nube ----------
 
-// segundos de la última vez que se guardó (ts en microsegundos o updatedAt ISO)
+// segundos de la última vez que se guardó (ts del panel con microsegundos, o updatedAt ISO)
 function progressSeconds(e: any): number {
   const v = typeof e.ts === 'number' ? e.ts : parseFloat(str(e.ts));
   if (Number.isFinite(v) && v > 0) {
-    if (v > 1e14) return Math.floor(v / 1e6);
-    if (v > 1e11) return Math.floor(v / 1e3);
-    return Math.floor(v);
+    // con decimales: dos guardados del mismo segundo mantienen su orden
+    if (v > 1e14) return v / 1e6;
+    if (v > 1e11) return v / 1e3;
+    return v;
   }
   return parseIso(str(e.updatedAt));
 }
@@ -213,7 +214,7 @@ export function saveProgress(p: Progress, force: boolean) {
     if (same) removed.push(e.title);
     else out.push(e);
   }
-  if (!done) out.unshift({ ...p, order: now });
+  if (!done) out.unshift({ ...p, order: Date.now() / 1000 });
   const send = done || force || now - (lastSent[p.title] || 0) >= 30;
   for (const t of removed) cloudPost({ action: 'delete', title: t });
   if (!send) {

@@ -1,10 +1,11 @@
 // Navegación por pila: las pantallas de abajo quedan montadas (ocultas) para volver
 // al mismo lugar al pulsar Atrás.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BackHandler, StatusBar, StyleSheet, View } from 'react-native';
+import { AppState, BackHandler, StatusBar, StyleSheet, View } from 'react-native';
 import { Logo, Spinner } from './components/ui';
 import { loadStorage } from './lib/storage';
 import { Nav, NavContext, Route } from './nav';
+import Actor from './screens/Actor';
 import Detail from './screens/Detail';
 import Grid from './screens/Grid';
 import Login from './screens/Login';
@@ -21,6 +22,8 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
       return <Main active={active} />;
     case 'detail':
       return <Detail item={route.item} />;
+    case 'actor':
+      return <Actor personId={route.personId} name={route.actorName} />;
     case 'grid':
       return <Grid title={route.title} mode={route.mode} keyName={route.key} kind={route.kind} />;
     case 'player':
@@ -43,6 +46,17 @@ export default function App() {
       loadCloud();
     }
   }, [top]);
+
+  // al volver a la app: Continuar viendo y Mi lista otra vez desde el panel (pudo verse en otra app)
+  useEffect(() => {
+    let last = Date.now();
+    const sub = AppState.addEventListener('change', st => {
+      if (st !== 'active' || !getState().session || Date.now() - last < 60000) return;
+      last = Date.now();
+      loadCloud();
+    });
+    return () => sub.remove();
+  }, []);
 
   const nav: Nav = useMemo(
     () => ({

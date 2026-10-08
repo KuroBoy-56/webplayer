@@ -11,6 +11,7 @@ export type Route =
   | { name: 'login' }
   | { name: 'main' }
   | { name: 'detail'; item: Item }
+  | { name: 'actor'; personId: number; actorName: string }
   | { name: 'grid'; title: string; mode: 'cat' | 'platform' | 'genre' | 'recent'; key: string; kind?: 'vod' | 'series' }
   | { name: 'player'; params: PlayParams };
 
