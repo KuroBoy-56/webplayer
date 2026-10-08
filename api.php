@@ -25,6 +25,31 @@ function out($data)
 }
 
 switch ($action) {
+    case 'alerta':
+        // Aviso del panel (Alertas): bienvenida o vencimiento, igual que en las apps
+        header('Cache-Control: no-store');
+        $aq = http_build_query([
+            'format' => 'json', 'user' => $username, 'pass' => $password,
+            'dns' => $get_dns, 'title' => (string)($_SESSION['server_name'] ?? ''),
+        ]);
+        $raw = wp_panel_request('alerta.php?' . $aq, null, [], 10);
+        $aj = is_string($raw) ? json_decode($raw, true) : null;
+        if (!is_array($aj) || !in_array($aj['type'] ?? '', ['welcome', 'expiry'], true)) out(['show' => false]);
+        $ip = (string)($aj['image_path'] ?? '');
+        $img = '';
+        if ($aj['type'] === 'welcome' && preg_match('~^img/alertas/[A-Za-z0-9._-]+$~', $ip)) {
+            $img = wp_img(preg_replace('~api/$~', '', wp_panel_base()) . $ip, '');
+        }
+        out([
+            'show' => true,
+            'type' => $aj['type'],
+            'days' => isset($aj['days']) ? (int)$aj['days'] : null,
+            'title' => (string)($aj['title'] ?? ''),
+            'message' => (string)($aj['message'] ?? ''),
+            'image' => $img,
+            'button' => (string)($aj['button'] ?? 'ENTENDIDO'),
+        ]);
+
     case 'posters':
         // Carátulas de TMDB en alta calidad para las tarjetas visibles
         header('Cache-Control: no-store');

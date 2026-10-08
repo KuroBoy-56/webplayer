@@ -177,7 +177,7 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 
 **Sin sección de administración**
 - Se quitaron `setup.php`, `test.php`, `includes/admin/`, `includes/dns/`, `includes/notifications/`, `includes/admin_guard.php`, `includes/portal.php`, `database.php`, `epgjob.php` y el acceso de administrador del login.
-- Las notificaciones locales se quitaron (el reproductor no las mostraba). El aviso de vencimiento del panel (`api/alerta.php`) es una pantalla para las apps y no se usa aquí.
+- Las notificaciones locales se quitaron (el reproductor no las mostraba). El aviso del panel (`api/alerta.php`) ahora sí se muestra: ver "Aviso de bienvenida y vencimiento" al final.
 - Puedes borrar del hosting los archivos viejos: `includes/admin/`, `includes/dns/`, `includes/notifications/`, `progress.json`, `api/history.json`, `api/live_favorites.json`, `includes/userdata.sqlite`, `setup.php`, `test.php`, `database.php` y `epgjob.php`.
 
 **DNS desde el panel**
@@ -289,3 +289,9 @@ Se probó en Chromium, en PC y en celular, con un servidor Xtream simulado y en 
 - **Corregido: la web no mostraba el progreso ni Mi lista guardados en otras apps.** El login entra por la DNS que responde primero, así que cada vez podía ser otra DNS, y el panel guardaba los datos por usuario + DNS. Ahora el panel guarda por usuario + **servicio**: todas las DNS del mismo servicio comparten "Continuar viendo" y "Mi lista" (el panel lo detecta solo o con el campo "Servicio / grupo" de la página DNS del panel). La web no necesita configuración nueva.
 - "Continuar viendo" y la cuenta se ordenan por la hora exacta del último guardado (antes, por segundos, dos guardados del mismo segundo podían salir en otro orden).
 - **Actores:** en la ficha de una película o serie, tocar a alguien del elenco abre `actor.php` con su foto, biografía y **solo los títulos que tu servidor tiene** (filmografía de TMDB emparejada por título normalizado y año ±1, igual que la app de Windows). Al tocar un título se abre su ficha. Usa la clave TMDB del panel y, si falta o no sirve, la incorporada.
+
+## Aviso de bienvenida y vencimiento (8 de octubre)
+- Al entrar, la web muestra el aviso que se configura en **Alertas** del panel (`admin_alertas.php`), igual que las apps: si a la cuenta le quedan 3, 2 o 1 días sale el texto de ese día, si quedan 0 o está vencida el de 0 días; si no, la bienvenida con el texto general y la imagen.
+- Sale una vez por sesión del navegador: al abrir la web y cada vez que se inicia sesión, con el diseño de la web y un botón **Entendido** (también se cierra con Esc o Enter).
+- `api.php?action=alerta` le pide el aviso al panel (`api/alerta.php?format=json`) desde el hosting; la contraseña nunca pasa por el navegador. La imagen pasa por `img.php` si la web está en https y el panel en http.
+- Necesita el `api/alerta.php` nuevo del panel (con `format=json`). Archivos: `api.php`, `header.php`, `assets/nf/alert.js`, `assets/nf/app.css`.

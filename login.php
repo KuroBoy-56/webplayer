@@ -172,6 +172,7 @@ $remember = isset($_COOKIE['username']) ? (string)$_COOKIE['username'] : '';
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="preconnect" href="https://image.tmdb.org">
     <link rel="stylesheet" href="assets/nf/app.css?v=6">
+<script>try{sessionStorage.removeItem("nfAlertShown")}catch(e){}</script>
 </head>
 <body class="nf-login-page">
     <div class="nf-login-wall" aria-hidden="true">
