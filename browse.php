@@ -53,6 +53,14 @@ if ($genre && !isset($availGenres[$genre])) $availGenres[$genre] = $genres[$genr
 <div class="nf-browse-head" style="--accent: <?php echo e($accent); ?>55">
     <h1><?php if ($logo): ?><img src="<?php echo e($logo); ?>" alt=""><?php endif; ?><?php echo e($title); ?></h1>
     <p><?php echo e($subtitle); ?></p>
+    <?php if ($platform): ?>
+    <div class="nf-psearch<?php echo $q !== '' ? ' open' : ''; ?>" id="fPSearch">
+        <input class="nf-psearch-in" id="fQ" type="search" placeholder="Buscar en <?php echo e($platforms[$platform]['label']); ?>..." aria-label="Filtrar por nombre" value="<?php echo e($q); ?>" autocomplete="off">
+        <button type="button" class="nf-psearch-btn" id="fPSearchBtn" aria-label="Buscar por nombre" title="Buscar por nombre">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        </button>
+    </div>
+    <?php endif; ?>
 </div>
 
 <div class="nf-filterbar">
@@ -69,7 +77,9 @@ if ($genre && !isset($availGenres[$genre])) $availGenres[$genre] = $genres[$genr
             <option value="az" <?php echo $sort === 'az' ? 'selected' : ''; ?>>A - Z</option>
             <option value="rating" <?php echo $sort === 'rating' ? 'selected' : ''; ?>>Mejor valorados</option>
         </select>
+        <?php if (!$platform): ?>
         <input class="nf-input" id="fQ" type="search" placeholder="Filtrar por título..." value="<?php echo e($q); ?>">
+        <?php endif; ?>
         <span class="nf-count" id="fCount"></span>
     </div>
     <?php if ($cat === ''): ?>
@@ -136,11 +146,33 @@ document.addEventListener('DOMContentLoaded', function () {
     seg('fGenre', 'genre');
     document.getElementById('fSort').addEventListener('change', function () { state.sort = this.value; sync(); });
     var t;
-    document.getElementById('fQ').addEventListener('input', function () {
-        var v = this.value.trim();
+    var fq = document.getElementById('fQ');
+    function fold(s) {
+        s = String(s || '').toLowerCase();
+        return s.normalize ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : s;
+    }
+    function applyQ(v) {
+        // filtro instantáneo sobre lo ya cargado; luego el servidor trae todos los que coinciden
+        var n = fold(v);
+        Array.prototype.forEach.call(document.querySelectorAll('#fGrid .nf-card'), function (c) {
+            c.style.display = !n || fold(c.getAttribute('title')).indexOf(n) !== -1 ? '' : 'none';
+        });
         clearTimeout(t);
-        t = setTimeout(function () { state.q = v; sync(); }, 350);
-    });
+        t = setTimeout(function () { if (state.q !== v) { state.q = v; sync(); } }, 350);
+    }
+    fq.addEventListener('input', function () { applyQ(this.value.trim()); });
+    var ps = document.getElementById('fPSearch');
+    if (ps) {
+        document.getElementById('fPSearchBtn').addEventListener('click', function () {
+            if (!ps.classList.contains('open')) { ps.classList.add('open'); fq.focus(); return; }
+            if (fq.value) { fq.value = ''; applyQ(''); }
+            ps.classList.remove('open');
+        });
+        fq.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { fq.value = ''; applyQ(''); ps.classList.remove('open'); fq.blur(); }
+        });
+        fq.addEventListener('blur', function () { if (!fq.value) ps.classList.remove('open'); });
+    }
     grid.reset();
 });
 </script>

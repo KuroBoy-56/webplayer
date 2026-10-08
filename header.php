@@ -41,7 +41,7 @@ if (!function_exists('wp_nav_cls')) {
     <title><?php echo e($page_title); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
-    <link rel="stylesheet" href="assets/nf/app.css?v=6">
+    <link rel="stylesheet" href="assets/nf/app.css?v=7">
     <script>window.NF={imgErr:function(i){i.onerror=null;i.src='assets/nf/noposter.svg';i.classList.add('ok');var c=i.closest&&i.closest('.nf-card');if(c)c.classList.add('noimg');}};</script>
     <script src="assets/nf/app.js?v=4" defer></script>
     <?php if (!empty($wp_head_extra)) echo $wp_head_extra; ?>

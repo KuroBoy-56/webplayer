@@ -327,6 +327,22 @@ button { font-family: inherit; }
 }
 .nf-input:focus { border-color: #fff; }
 .nf-count { color: var(--nf-gray2); font-size: 13px; margin-left: auto; }
+/* lupa de plataforma (arriba a la derecha) */
+.nf-psearch {
+    position: absolute; right: var(--nf-pad); top: calc(var(--nf-header) + 26px); display: flex; align-items: center;
+    border: 1px solid transparent; border-radius: 4px; transition: background .2s, border-color .2s;
+}
+.nf-psearch.open { background: rgba(0,0,0,.85); border-color: #fff; }
+.nf-psearch-in {
+    width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #fff; font-size: 15px; opacity: 0;
+    transition: width .25s ease, padding .25s ease, opacity .2s;
+}
+.nf-psearch.open .nf-psearch-in { width: 260px; padding: 9px 4px 9px 12px; opacity: 1; }
+.nf-psearch-in::-webkit-search-cancel-button { filter: invert(1); }
+.nf-psearch-btn {
+    background: transparent; border: 0; color: #fff; cursor: pointer; padding: 8px; display: flex; border-radius: 4px; order: -1;
+}
+.nf-psearch-btn:hover, .nf-psearch-btn:focus-visible { background: rgba(255,255,255,.12); outline: 0; }
 
 /* ==========================================================
    DETALLE (película / serie)
@@ -521,6 +537,10 @@ button:disabled { cursor: progress; opacity: .85; }
     .nf-filterbar .row1 { gap: 8px; }
     .nf-input { min-width: 0; flex: 1; }
     .nf-count { width: 100%; margin: 0; }
+    .nf-browse-head h1 { padding-right: 46px; }
+    .nf-psearch { top: calc(var(--nf-header) + 56px); }
+    .nf-psearch.open { left: var(--nf-pad); z-index: 5; }
+    .nf-psearch.open .nf-psearch-in { width: auto; flex: 1; min-width: 0; }
 
     .nf-detail-hero { min-height: 0; display: block; }
     .nf-detail-bg { position: relative; inset: auto; height: 62vw; max-height: 420px; }
