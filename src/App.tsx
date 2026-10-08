@@ -1,7 +1,9 @@
 // Navegación por pila: las pantallas de abajo quedan montadas (ocultas) para volver
 // al mismo lugar al pulsar Atrás.
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, BackHandler, StatusBar, StyleSheet, View } from 'react-native';
+import { fetchAlert, PanelAlert } from './api/alerts';
+import AlertDialog from './components/AlertDialog';
 import { Logo, Spinner } from './components/ui';
 import { loadStorage } from './lib/storage';
 import { Nav, NavContext, Route } from './nav';
@@ -40,10 +42,21 @@ export default function App() {
 
   // al entrar: catálogo y nube (progreso y Mi lista)
   const top = stack ? stack[0].name : '';
+  // aviso del panel: una vez por arranque de la app y otra vez tras iniciar sesión
+  const [alert, setAlert] = useState<PanelAlert | null>(null);
+  const alertDone = useRef(false);
   useEffect(() => {
-    if (top === 'main' && getState().session) {
+    const ses = getState().session;
+    if (top === 'main' && ses) {
       loadCatalog();
       loadCloud();
+      if (!alertDone.current) {
+        alertDone.current = true;
+        fetchAlert(ses).then(a => a && setAlert(a)).catch(() => {});
+      }
+    } else if (top === 'login') {
+      alertDone.current = false;
+      setAlert(null);
     }
   }, [top]);
 
@@ -103,6 +116,7 @@ export default function App() {
           );
         })}
       </View>
+      <AlertDialog alert={alert} onClose={() => setAlert(null)} />
     </NavContext.Provider>
   );
 }

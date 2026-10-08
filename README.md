@@ -27,6 +27,7 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Deportes**: partidos de hoy y mañana con el canal encontrado automáticamente
   (mismas reglas `match` de `api/sports.php`).
 - **Progreso y Mi lista sincronizados** con `api/progress.php`: lo que ves en la TV sigue en la web y el móvil, aunque cada app haya entrado por otra DNS del mismo servicio (el panel los une). Se vuelven a leer al regresar a la app.
+- **Aviso del panel al abrir la app** (`api/alerta.php?format=json`, página **Alertas** del panel): bienvenida con el texto general y la imagen, o aviso de vencimiento con el texto de 3, 2, 1 o 0 días. Una vez por arranque y otra vez tras iniciar sesión; botón **Entendido** enfocado, *Atrás* también lo cierra.
 - **Control parental**: oculta adultos; se desbloquea con el PIN del panel (0000 por defecto).
 
 ## Subir a la Amazon Appstore
