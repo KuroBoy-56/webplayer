@@ -109,7 +109,7 @@ function wp_title_lookup(array $idx, array $titles, $year)
 function wp_tmdb_keys()
 {
     $keys = [];
-    $panel = wp_cache_get('panel|tmdbkey', 30 * 86400, $stale);
+    $panel = wp_cache_get(wp_panel_ck('panel|tmdbkey'), 30 * 86400, $stale);
     $panel = is_string($panel) ? $panel : (is_string($stale) ? $stale : '');
     if (preg_match('/^[0-9a-f]{32}$/i', $panel)) $keys[] = $panel;
     if (WP_TMDB_KEY && !in_array(WP_TMDB_KEY, $keys, true)) $keys[] = WP_TMDB_KEY;

@@ -99,6 +99,10 @@ function wp_platform_tiles()
 
 function wp_footer_html()
 {
+    $cfg = wp_tenant_cfg();
+    if ($cfg !== null && !empty($cfg['name'])) {
+        return '<footer class="nf-footer"><p>© ' . date('Y') . ' ' . e($cfg['name']) . '</p></footer>';
+    }
     return '<footer class="nf-footer"><p>© ' . date('Y') . ' <a href="https://www.latmpx.com" target="_blank" rel="noopener">Garevyn TV</a></p></footer>';
 }
 

@@ -7,7 +7,7 @@ $slug = ($_GET["slug"] ?? 'movie') === 'series' ? 'series' : 'movie';
 $ext = strtolower(preg_replace('/[^a-z0-9]/i', '', (string)($_GET["ext"] ?? '')));
 $restart = isset($_GET["restart"]) ? (int)$_GET["restart"] : 0;
 $series_id_get = preg_replace('/[^0-9]/', '', (string)($_GET['series_id'] ?? '0')) ?: '0';
-$logo_url = "assets/img/Logo.png";
+$logo_url = wp_brand_logo();
 
 if ($id === '') {
     header('Location: homex.php');

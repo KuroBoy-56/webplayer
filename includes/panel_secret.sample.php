@@ -4,4 +4,6 @@
 // includes/panel_secret.php nunca se sube a GitHub (está en .gitignore).
 return [
     'master_key_hex' => '',
+    // Opcional: carpeta api/ de otro panel (termina en "/"), p. ej. para pruebas.
+    // 'panel_url' => 'https://mi-panel.com/api/',
 ];

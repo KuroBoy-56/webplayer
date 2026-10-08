@@ -1,6 +1,11 @@
 <?php
 include "session.php";
 include "config.php";
+// el distribuidor puede tener la sección de deportes apagada
+if (!wp_tenant_feature('sports')) {
+    header('Location: homex');
+    exit;
+}
 
 /* ---- "TV en vivo": busca el canal que transmite el partido ---- */
 function sp_tokens($s)

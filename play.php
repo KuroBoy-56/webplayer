@@ -26,7 +26,9 @@ if (wp_is_https() && $_SERVER['REQUEST_METHOD'] === 'GET' && empty($_GET['h'])) 
 $get_dns = rtrim((string)$d['srv'], '/');
 $username = (string)$d['usr'];
 $password = (string)($d['pwd'] ?? '');
-$_SESSION = ['server' => $get_dns, 'username' => $username, 'password' => $password, 'panel_token2' => (string)($d['pt'] ?? '')];
+// número de distribuidor de la sesión que abrió el enlace (el token del panel es de ese número)
+wp_panel_set_tenant((string)($d['dt'] ?? ''));
+$_SESSION = ['server' => $get_dns, 'username' => $username, 'password' => $password, 'dist' => wp_panel_tenant(), wp_panel_token_key() => (string)($d['pt'] ?? '')];
 
 /* ---------- Guardar progreso (misma lógica que save_progress.php) ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

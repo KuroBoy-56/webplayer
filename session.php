@@ -18,6 +18,8 @@ if (!defined('WP_SESSION_LOADED')) {
         }
         exit;
     }
+    // Distribuidor de la sesión (guardián: la revisión al panel se hace como mucho cada 10 min)
+    wp_tenant_guard($wp_sess);
     $get_dns = rtrim($wp_sess['server'], '/');
     $username = $wp_sess['username'];
     $password = $wp_sess['password'];

@@ -13,6 +13,7 @@ if (defined('WP_PANEL_LOADED')) {
 }
 define('WP_PANEL_LOADED', true);
 require_once __DIR__ . '/core.php';
+require_once __DIR__ . '/tenant.php';
 
 // Dirección del panel codificada (XOR "KURO" -> base64 -> hex)
 define('WP_PANEL_ENC', '4979456d507a6876665741734e4341715053773850796f374e794d34657a3475507a67694e32553250534a6b4f444d38507a41675944733050436f6e656a4d2f496e6f6949796f734e7a30554e43496d5a53553650773d3d');
@@ -23,6 +24,9 @@ function wp_panel_base()
 {
     static $base = null;
     if ($base !== null) return $base;
+    // panel_secret.php puede traer 'panel_url' (pruebas o panel en otra dirección)
+    $own = trim((string)(wp_panel_config()['panel_url'] ?? ''));
+    if (preg_match('~^https?://[^\s]+/$~i', $own)) return $base = $own;
     $bin = base64_decode((string)@hex2bin(WP_PANEL_ENC), true);
     $key = 'KURO';
     $url = '';
@@ -167,23 +171,40 @@ function wp_panel_request($endpoint, $body = null, array $headers = [], $timeout
 /* DNS desde el panel (caché 10 min + última copia buena)               */
 /* ------------------------------------------------------------------ */
 
-function wp_panel_last_dns_file()
+/** Última lista buena: dns_last.json con Omitir, dns_last_NNNNNN.json por distribuidor. */
+function wp_panel_last_dns_file($code = null)
 {
-    return wp_cache_dir('panel') . '/dns_last.json';
+    $code = $code === null ? wp_panel_tenant() : (string)$code;
+    return wp_cache_dir('panel') . '/dns_last' . ($code === '' ? '' : '_' . $code) . '.json';
+}
+
+/** Cuerpo cifrado de fetch_dns (igual que antes con Omitir; con número lleva tenant + app). */
+function wp_panel_dns_payload($code = null)
+{
+    $f = wp_panel_tenant_fields($code);
+    return json_encode($f ? $f + ['t' => time()] : ['app' => 'webplayer', 't' => time()]);
 }
 
 /** Lista de URLs de DNS tal como las entrega el panel. */
 function wp_panel_dns_urls()
 {
-    static $memo = null;
-    if ($memo !== null) return $memo;
-    $urls = wp_cache_get('panel|dns', WP_PANEL_DNS_TTL, $stale);
-    if (is_array($urls) && $urls) return $memo = $urls;
+    static $memo = [];
+    $tc = wp_panel_tenant();
+    if (isset($memo[$tc])) return $memo[$tc];
+    // la caché es por número de distribuidor: dos distribuidores nunca se mezclan
+    $urls = wp_cache_get(wp_panel_ck('panel|dns', $tc), WP_PANEL_DNS_TTL, $stale);
+    if (is_array($urls) && $urls) return $memo[$tc] = $urls;
 
     $fresh = null;
     if (wp_panel_ready()) {
-        $payload = wp_panel_encrypt(json_encode(['app' => 'webplayer', 't' => time()]));
+        $payload = wp_panel_encrypt(wp_panel_dns_payload($tc));
         $body = $payload ? wp_panel_request('login.php', http_build_query(['action' => 'fetch_dns', 'data' => $payload]), [], 8, $code) : null;
+        $err = ($body !== null && $tc !== '' && $code >= 400) ? json_decode($body, true) : null;
+        if (is_array($err) && wp_tenant_is_hard((string)($err['code'] ?? ''))) {
+            // distribuidor vencido/suspendido: no se usa la copia vieja
+            wp_tenant_mark_error($tc, (string)$err['code']);
+            return $memo[$tc] = [];
+        }
         if ($body !== null && $code === 200) {
             $plain = wp_panel_decrypt($body);
             $list = $plain !== null ? json_decode($plain, true) : null;
@@ -200,19 +221,25 @@ function wp_panel_dns_urls()
         }
     }
     if ($fresh) {
-        wp_cache_set('panel|dns', $fresh);
-        @file_put_contents(wp_panel_last_dns_file(), json_encode($fresh, JSON_UNESCAPED_SLASHES), LOCK_EX);
-        return $memo = $fresh;
+        wp_cache_set(wp_panel_ck('panel|dns', $tc), $fresh);
+        @file_put_contents(wp_panel_last_dns_file($tc), json_encode($fresh, JSON_UNESCAPED_SLASHES), LOCK_EX);
+        return $memo[$tc] = $fresh;
     }
     // El panel no respondió: se usa la última lista buena
-    if (is_array($stale) && $stale) return $memo = $stale;
-    $last = wp_json_file(wp_panel_last_dns_file());
-    return $memo = (is_array($last) ? array_values($last) : []);
+    if (is_array($stale) && $stale) return $memo[$tc] = $stale;
+    $last = wp_json_file(wp_panel_last_dns_file($tc));
+    return $memo[$tc] = (is_array($last) ? array_values($last) : []);
 }
 
 /* ------------------------------------------------------------------ */
 /* Token por usuario (progress.php acción auth)                        */
 /* ------------------------------------------------------------------ */
+
+/** Cuerpo de progress.php acción auth (con número: + tenant + app; el token los lleva). */
+function wp_panel_auth_body($user, $pass, $dns = '', $code = null)
+{
+    return ['action' => 'auth', 'user' => (string)$user, 'pass' => (string)$pass, 'dns' => (string)$dns] + wp_panel_tenant_fields($code);
+}
 
 /**
  * Pide un token al panel con el usuario, la contraseña y el DNS de la línea:
@@ -221,27 +248,36 @@ function wp_panel_dns_urls()
 function wp_panel_auth($user, $pass, $dns = '')
 {
     if (!wp_panel_ready() || $user === '' || $pass === '') return '';
-    $body = wp_panel_request('progress.php', ['action' => 'auth', 'user' => (string)$user, 'pass' => (string)$pass, 'dns' => (string)$dns], [], 8, $code);
+    $body = wp_panel_request('progress.php', wp_panel_auth_body($user, $pass, $dns), [], 8, $code);
     $j = $body !== null ? json_decode($body, true) : null;
+    if ($code === 403 && is_array($j)) wp_tenant_mark_error(wp_panel_tenant(), (string)($j['code'] ?? ''));
     return (is_array($j) && !empty($j['token']) && is_string($j['token'])) ? $j['token'] : '';
+}
+
+/** Clave del token en la sesión: una por número de distribuidor (nunca se reutiliza el de otro). */
+function wp_panel_token_key($code = null)
+{
+    $code = $code === null ? wp_panel_tenant() : (string)$code;
+    return $code === '' ? 'panel_token2' : 'panel_token2_' . $code;
 }
 
 function wp_panel_token()
 {
-    return (string)($_SESSION['panel_token2'] ?? '');
+    return (string)($_SESSION[wp_panel_token_key()] ?? '');
 }
 
 /** Guarda un token nuevo en la sesión (si todavía se puede escribir). */
 function wp_panel_store_token($token)
 {
-    $_SESSION['panel_token2'] = $token;
+    $tk = wp_panel_token_key();
+    $_SESSION[$tk] = $token;
     // play.php (reproductor http) no tiene sesión que guardar
     if (defined('WP_HANDOFF') || session_status() === PHP_SESSION_ACTIVE) return;
     if (headers_sent()) return;
     $mem = $_SESSION;
     wp_session_start();
     if (session_status() === PHP_SESSION_ACTIVE) {
-        if (($_SESSION['username'] ?? '') === ($mem['username'] ?? '')) $_SESSION['panel_token2'] = $token;
+        if (($_SESSION['username'] ?? '') === ($mem['username'] ?? '')) $_SESSION[$tk] = $token;
         $all = $_SESSION;
         session_write_close();
         $_SESSION = $all;
@@ -270,6 +306,11 @@ function wp_panel_call($endpoint, $body = null, $timeout = 8)
             $token = '';
             continue;
         }
+        if ($code === 403 && $res !== null) {
+            // distribuidor vencido/suspendido: el guardián vuelve a pedir el número
+            $e = json_decode($res, true);
+            if (is_array($e)) wp_tenant_mark_error(wp_panel_tenant(), (string)($e['code'] ?? ''));
+        }
         if ($res === null || $code < 200 || $code >= 300) return null;
         $j = json_decode($res, true);
         return is_array($j) ? $j : null;
@@ -290,8 +331,8 @@ function wp_panel_userdata($refresh = false)
     $j = wp_panel_call('progress.php?v=2&_=' . str_replace('.', '', (string)microtime(true)), null, 6);
     // clave TMDB del panel (la usa la página de actor; si falta, la incorporada)
     if (is_array($j) && is_string($j['tmdbKey'] ?? null) && preg_match('/^[0-9a-f]{32}$/i', trim($j['tmdbKey']))
-        && wp_cache_get('panel|tmdbkey', 86400) !== trim($j['tmdbKey'])) {
-        wp_cache_set('panel|tmdbkey', trim($j['tmdbKey']));
+        && wp_cache_get(wp_panel_ck('panel|tmdbkey'), 86400) !== trim($j['tmdbKey'])) {
+        wp_cache_set(wp_panel_ck('panel|tmdbkey'), trim($j['tmdbKey']));
     }
     $memo = [
         'progress' => (is_array($j) && is_array($j['progress'] ?? null)) ? $j['progress'] : [],
@@ -435,11 +476,12 @@ function wp_panel_epg(array $channels, $ttl = 900)
 /** {events: [...], sports: {...}, match: {...}} con caché de 10 min y última copia buena. */
 function wp_panel_sports()
 {
-    $data = wp_cache_get('panel|sports', 600, $stale);
+    // cada distribuidor elige sus deportes: caché por número
+    $data = wp_cache_get(wp_panel_ck('panel|sports'), 600, $stale);
     if (is_array($data)) return $data;
     $j = wp_panel_call('sports.php', null, 12);
     if (is_array($j) && is_array($j['events'] ?? null)) {
-        wp_cache_set('panel|sports', $j);
+        wp_cache_set(wp_panel_ck('panel|sports'), $j);
         return $j;
     }
     return is_array($stale) ? $stale : ['events' => []];

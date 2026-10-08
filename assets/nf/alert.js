@@ -21,7 +21,7 @@
         box.setAttribute('aria-labelledby', 'nfAlertTitle');
         box.innerHTML =
             '<div class="nf-alert-card">' +
-            '<img class="nf-alert-logo" src="assets/img/Logo.png" alt="">' +
+            '<img class="nf-alert-logo" src="' + esc(a.logo || 'assets/img/Logo.png') + '" alt="" onerror="this.onerror=null;this.src=\'assets/img/Logo.png\'">' +
             '<h2 class="nf-alert-title" id="nfAlertTitle">' + esc(a.title) + '</h2>' +
             (a.message ? '<p class="nf-alert-msg">' + esc(a.message) + '</p>' : '') +
             (a.image ? '<img class="nf-alert-img" src="' + esc(a.image) + '" alt="" onerror="this.remove()">' : '') +

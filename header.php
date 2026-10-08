@@ -22,6 +22,10 @@ $page_title = $page_title ?? (isset($pagename) ? $pagename : 'Inicio');
 $search_query = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
 $wp_user_initial = mb_substr((string)$username, 0, 1, 'UTF-8');
 $wp_server_name = $_SESSION['server_name'] ?? '';
+// Marca del distribuidor (Omitir: logo, nombre y colores de siempre)
+$wp_dist_cfg = wp_tenant_cfg();
+$wp_dist_pal = wp_tenant_palette($wp_dist_cfg);
+$wp_show_sports = wp_tenant_feature('sports');
 
 if (!function_exists('wp_nav_cls')) {
     function wp_nav_cls($k)
@@ -36,15 +40,17 @@ if (!function_exists('wp_nav_cls')) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#141414">
+    <meta name="theme-color" content="<?php echo e($wp_dist_pal ? $wp_dist_pal['bg'] : '#141414'); ?>">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title><?php echo e($page_title); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
     <link rel="stylesheet" href="assets/nf/app.css?v=9">
+    <?php echo wp_tenant_css($wp_dist_cfg); ?>
+    <?php if (wp_panel_tenant() !== '' || wp_dist_choice() === 'skip') echo wp_brand_store_script($wp_dist_cfg); ?>
     <script>window.NF={imgErr:function(i){i.onerror=null;i.src='assets/nf/noposter.svg';i.classList.add('ok');var c=i.closest&&i.closest('.nf-card');if(c)c.classList.add('noimg');}};</script>
     <script src="assets/nf/app.js?v=4" defer></script>
-    <script src="assets/nf/alert.js?v=1" defer></script>
+    <script src="assets/nf/alert.js?v=2" defer></script>
     <?php if (!empty($wp_head_extra)) echo $wp_head_extra; ?>
 </head>
 <body class="nf-app <?php echo e($body_class ?? ''); ?>" data-tz="<?php echo e(date_default_timezone_get()); ?>">
@@ -52,7 +58,7 @@ if (!function_exists('wp_nav_cls')) {
 
 <header class="nf-header" id="nfHeader">
     <a class="nf-logo logo-btn" href="homex.php" id="btnToggleNav" aria-label="Inicio">
-        <img src="assets/img/Logo.png" alt="Logo">
+        <img src="<?php echo e(wp_brand_logo($wp_dist_cfg)); ?>" alt="<?php echo e(wp_brand_name('Logo', $wp_dist_cfg)); ?>" onerror="this.onerror=null;this.src='assets/img/Logo.png'">
     </a>
     <nav>
         <ul class="nf-nav">
@@ -60,7 +66,7 @@ if (!function_exists('wp_nav_cls')) {
             <li><a href="seriesondemand.php"<?php echo wp_nav_cls('series'); ?>>Series</a></li>
             <li><a href="moviesondemand.php"<?php echo wp_nav_cls('movies'); ?>>Películas</a></li>
             <li><a href="tvguide.php"<?php echo wp_nav_cls('live'); ?>>TV en vivo</a></li>
-            <li><a href="sportsschedule.php"<?php echo wp_nav_cls('sports'); ?>>Deportes</a></li>
+            <?php if ($wp_show_sports): ?><li><a href="sportsschedule.php"<?php echo wp_nav_cls('sports'); ?>>Deportes</a></li><?php endif; ?>
             <li><a href="browse.php"<?php echo wp_nav_cls('browse'); ?>>Explorar</a></li>
         </ul>
     </nav>
@@ -85,7 +91,7 @@ if (!function_exists('wp_nav_cls')) {
                 <div class="who"><b><?php echo e($username); ?></b><?php echo $wp_server_name ? 'Servidor: ' . e($wp_server_name) : ''; ?></div>
                 <a href="myaccount.php"><i class="fas fa-user"></i> Mi cuenta</a>
                 <a href="settings.php"><i class="fas fa-cog"></i> Ajustes</a>
-                <a href="sportsschedule.php"><i class="fas fa-futbol"></i> Deportes</a>
+                <?php if ($wp_show_sports): ?><a href="sportsschedule.php"><i class="fas fa-futbol"></i> Deportes</a><?php endif; ?>
                 <div class="sep"><a href="logout.php" data-noprefetch><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a></div>
             </div>
         </div>
@@ -97,7 +103,7 @@ if (!function_exists('wp_nav_cls')) {
     <a href="seriesondemand.php"<?php echo wp_nav_cls('series'); ?>>Series</a>
     <a href="moviesondemand.php"<?php echo wp_nav_cls('movies'); ?>>Películas</a>
     <a href="browse.php"<?php echo wp_nav_cls('browse'); ?>>Categorías</a>
-    <a href="sportsschedule.php"<?php echo wp_nav_cls('sports'); ?>>Deportes</a>
+    <?php if ($wp_show_sports): ?><a href="sportsschedule.php"<?php echo wp_nav_cls('sports'); ?>>Deportes</a><?php endif; ?>
 </nav>
 <?php endif; ?>
 

@@ -28,11 +28,14 @@ switch ($action) {
     case 'alerta':
         // Aviso del panel (Alertas): bienvenida o vencimiento, igual que en las apps
         header('Cache-Control: no-store');
+        // el distribuidor puede tener las alertas apagadas
+        if (!wp_tenant_feature('alerts')) out(['show' => false]);
         $aq = http_build_query([
             'format' => 'json', 'user' => $username, 'pass' => $password,
             'dns' => $get_dns, 'title' => (string)($_SESSION['server_name'] ?? ''),
         ]);
-        $raw = wp_panel_request('alerta.php?' . $aq, null, [], 10);
+        // con número de distribuidor: &t=NNNNNN&app=web (textos de ese distribuidor)
+        $raw = wp_panel_request(wp_panel_tenant_query('alerta.php?' . $aq), null, [], 10);
         $aj = is_string($raw) ? json_decode($raw, true) : null;
         if (!is_array($aj) || !in_array($aj['type'] ?? '', ['welcome', 'expiry'], true)) out(['show' => false]);
         $ip = (string)($aj['image_path'] ?? '');
@@ -48,6 +51,7 @@ switch ($action) {
             'message' => (string)($aj['message'] ?? ''),
             'image' => $img,
             'button' => (string)($aj['button'] ?? 'ENTENDIDO'),
+            'logo' => wp_brand_logo(),
         ]);
 
     case 'posters':

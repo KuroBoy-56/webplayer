@@ -17,6 +17,10 @@ $days_left = ($exp && is_numeric($exp)) ? (int)floor(((int)$exp - time()) / 8640
 // Lo que el usuario está viendo (guardado en el panel, igual que en las apps)
 $history_items = array_values(wp_user_progress($username));
 usort($history_items, function ($a, $b) { return ($b['_when'] ?? 0) <=> ($a['_when'] ?? 0); });
+// Distribuidor (número guardado en este navegador)
+$dist_cfg = wp_tenant_cfg();
+$dist_code = wp_panel_tenant();
+$dist_exp = $dist_cfg ? wp_tenant_expiry_text($dist_cfg) : '';
 $body_class = 'nf-solid';
 include "header.php";
 ?>
@@ -50,9 +54,14 @@ include "header.php";
             <?php if ($max_conn !== ''): ?><div class="ac-item"><small>Conexiones</small><b><?php echo e($active_conn); ?> / <?php echo e($max_conn); ?></b></div><?php endif; ?>
             <?php if (!empty($_SESSION['server_name'])): ?><div class="ac-item"><small>Servidor</small><b><?php echo e($_SESSION['server_name']); ?></b></div><?php endif; ?>
             <?php if ($created): ?><div class="ac-item"><small>Cliente desde</small><b><?php echo e($created); ?></b></div><?php endif; ?>
+            <?php if ($dist_code !== ''): ?>
+            <div class="ac-item"><small>Distribuidor</small><b><?php echo e(($dist_cfg && $dist_cfg['name'] ? $dist_cfg['name'] . ' ' : '') . '(' . $dist_code . ')'); ?></b></div>
+            <div class="ac-item"><small>Vence</small><b><?php echo $dist_exp !== '' ? e($dist_exp) : 'Sin vencimiento'; ?></b><?php if ($dist_exp !== ''): ?><div style="color:#999;font-size:13px;margin-top:4px">Hora de Panamá</div><?php endif; ?></div>
+            <?php endif; ?>
         </div>
         <div class="ac-acts">
             <a class="nf-btn nf-btn-dark" href="settings.php"><i class="fas fa-cog"></i> Ajustes</a>
+            <a class="nf-btn nf-btn-dark" href="logout.php?dist=1" data-noprefetch onclick="try{localStorage.removeItem('wp_dist_brand')}catch(e){}"><i class="fas fa-exchange-alt"></i> Cambiar distribuidor</a>
             <a class="nf-btn nf-btn-dark" href="logout.php" data-noprefetch><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
         </div>
         <div class="ac-hist history-section">
