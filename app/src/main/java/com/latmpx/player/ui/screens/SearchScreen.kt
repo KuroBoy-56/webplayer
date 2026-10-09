@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.latmpx.player.data.Platforms
+import com.latmpx.player.ui.components.tvTextInput
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.theme.NfBg
 import com.latmpx.player.ui.theme.NfGray2
@@ -39,12 +40,12 @@ fun SearchScreen(state: AppState) {
     Column(Modifier.fillMaxSize().background(NfBg)) {
         OutlinedTextField(
             value = q, onValueChange = { q = it }, singleLine = true, placeholder = { Text("Títulos, películas, series") },
-            leadingIcon = { Icon(Icons.Filled.Search, null) }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            leadingIcon = { Icon(Icons.Filled.Search, null) }, keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Search)),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.White, unfocusedBorderColor = Color(0xFF444444), focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                 focusedContainerColor = Color(0xFF2A2A2A), unfocusedContainerColor = Color(0xFF2A2A2A), unfocusedPlaceholderColor = NfGray2, focusedPlaceholderColor = NfGray2,
             ),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = sidePad(), vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = sidePad(), vertical = 14.dp).then(Modifier.tvTextInput()),
         )
         if (q.trim().length >= 2) Grid(state, results) else Empty("Busca por nombre entre todas las películas y series")
     }

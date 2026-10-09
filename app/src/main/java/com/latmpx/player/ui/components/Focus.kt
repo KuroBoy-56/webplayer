@@ -20,6 +20,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 /** true cuando la app corre en un televisor */
 val LocalIsTv = compositionLocalOf { false }
@@ -50,4 +57,24 @@ fun FocusBox(
             .then(if (focused) Modifier.border(3.dp, Color.White, shape) else Modifier)
             .combinedClickable(interactionSource = src, indication = null, onLongClick = onLongClick, onClick = onClick),
     ) { content(focused) }
+}
+
+/**
+ * Campos de texto en TV: el teclado no se abre solo al pasar por el campo con el control
+ * (antes aparecía en pantalla completa y atrapaba el foco); se abre con OK. En el celular no cambia nada.
+ */
+@Composable
+fun tvKeyboard(opts: KeyboardOptions = KeyboardOptions.Default): KeyboardOptions =
+    if (LocalIsTv.current) opts.copy(showKeyboardOnFocus = false) else opts
+
+/** TV: OK sobre el campo de texto abre el teclado (usar junto con [tvKeyboard]) */
+@Composable
+fun Modifier.tvTextInput(): Modifier {
+    if (!LocalIsTv.current) return this
+    val kb = LocalSoftwareKeyboardController.current
+    return this.onPreviewKeyEvent { e ->
+        val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+        if (ok && e.type == KeyEventType.KeyUp) kb?.show()
+        ok
+    }
 }

@@ -8,6 +8,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -209,12 +210,25 @@ object Xtream {
     /** Guía corta del canal (ahora / siguiente). Los títulos llegan en base64. */
     suspend fun shortEpg(s: Session, streamId: Int, limit: Int = 6): List<EpgEntry> {
         val j = Net.obj(api(s, "get_short_epg", "&stream_id=$streamId&limit=$limit")) ?: return emptyList()
+        return listings(j).filter { it.end > System.currentTimeMillis() }
+    }
+
+    /**
+     * Guía completa del canal (get_simple_data_table): todo lo que guarda el servidor, también lo ya emitido
+     * (la TV la usa para la línea de tiempo de ayer a pasado mañana).
+     */
+    suspend fun fullEpg(s: Session, streamId: Int): List<EpgEntry> {
+        val j = Net.obj(api(s, "get_simple_data_table", "&stream_id=$streamId")) ?: return emptyList()
+        return listings(j)
+    }
+
+    private fun listings(j: JSONObject): List<EpgEntry> {
         val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         return j.optJSONArray("epg_listings").mapObj { e ->
             val start = e.s("start_timestamp").toLongOrNull()?.times(1000) ?: runCatching { fmt.parse(e.s("start"))?.time }.getOrNull() ?: return@mapObj null
             val end = e.s("stop_timestamp").toLongOrNull()?.times(1000) ?: runCatching { fmt.parse(e.s("end"))?.time }.getOrNull() ?: start
-            EpgEntry(b64(e.s("title")), b64(e.s("description")), start, end)
-        }.filter { it.end > System.currentTimeMillis() }
+            if (end <= start) null else EpgEntry(b64(e.s("title")), b64(e.s("description")), start, end)
+        }.sortedBy { it.start }.distinctBy { it.start }
     }
 
     private fun b64(x: String): String {

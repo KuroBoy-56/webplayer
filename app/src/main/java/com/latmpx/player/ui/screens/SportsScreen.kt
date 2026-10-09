@@ -54,6 +54,7 @@ import com.latmpx.player.data.Sports
 import com.latmpx.player.data.SportsData
 import com.latmpx.player.data.Xtream
 import com.latmpx.player.player.Play
+import com.latmpx.player.ui.components.tvTextInput
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.components.Chip
 import com.latmpx.player.ui.components.FocusBox
@@ -219,12 +220,12 @@ private fun FilterBar(
             }
             OutlinedTextField(
                 value = q, onValueChange = onQ, singleLine = true, placeholder = { Text("Buscar equipo o liga", fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Filled.Search, null) }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                leadingIcon = { Icon(Icons.Filled.Search, null) }, keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Search)),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color.White, unfocusedBorderColor = Color(0xFF555555), focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                     focusedContainerColor = Color.Black, unfocusedContainerColor = Color.Black, unfocusedPlaceholderColor = SpMute, focusedPlaceholderColor = SpMute,
                 ),
-                modifier = Modifier.weight(1f).padding(start = 12.dp),
+                modifier = Modifier.weight(1f).padding(start = 12.dp).then(Modifier.tvTextInput()),
             )
         }
         val chips = listOf("" to "Todos $total") + d.sports.entries.filter { (counts[it.key] ?: 0) > 0 }
