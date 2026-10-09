@@ -136,8 +136,9 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
         done = true
     }
     // el foco entra a la cartelera una sola vez por visita a la sección, cuando ya hay botones
+    val onTop = com.latmpx.player.ui.LocalLayerOnTop.current
     LaunchedEffect(heroes.isNotEmpty(), done) {
-        if ((heroes.isNotEmpty() || done) && state.billboardFocusedTab != state.tab) {
+        if (onTop && (heroes.isNotEmpty() || done) && state.billboardFocusedTab != state.tab) {
             state.billboardFocusedTab = state.tab
             delay(60)
             runCatching { play.requestFocus() }

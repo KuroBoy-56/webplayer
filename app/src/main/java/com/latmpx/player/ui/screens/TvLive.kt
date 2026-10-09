@@ -94,18 +94,19 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 /* paleta oscura "premium" (estilo TiviMate) con el rojo de la web */
-private val LvBg = Color(0xFF0B0B0F)
-private val LvPanel = Color(0xFF111117)
-private val LvFocus = Color(0xFF22222C)
-private val LvActive = Color(0xFF17171F)
-private val LvLine = Color(0xFF1E1E27)
-private val LvLogo = Color(0xFF16161D)
-private val LvDim = Color(0xFF8A8A96)
-private val LvText = Color(0xFFEDEDF2)
+internal val LvBg = Color(0xFF0B0B0F)
+internal val LvPanel = Color(0xFF111117)
+internal val LvFocus = Color(0xFF22222C)
+internal val LvActive = Color(0xFF17171F)
+internal val LvLine = Color(0xFF1E1E27)
+internal val LvLogo = Color(0xFF16161D)
+internal val LvDim = Color(0xFF8A8A96)
+internal val LvText = Color(0xFFEDEDF2)
 
 /**
  * TV en vivo para televisor al estilo TiviMate: categorías a la izquierda, canales con número, logo, programa actual
- * y barra de avance al centro; a la derecha la vista previa en vivo del canal SELECCIONADO con su guía (ahora y siguientes).
+ * y barra de avance al centro; a la derecha la vista previa en vivo del canal SELECCIONADO y debajo su guía de ayer a pasado mañana
+ * (línea de tiempo enfocable: derecha desde un canal entra directo al programa en sintonía, ver TvEpgTimeline.kt).
  * Recorrer la lista no cambia la vista previa: OK sobre un canal lo selecciona y empieza a verse a la derecha;
  * OK otra vez sobre el canal que ya se ve lo abre a pantalla completa (reproductor de siempre).
  * Mantener OK o MENÚ marca favorito; se recuerda el último canal visto y el foco vuelve a él.
@@ -149,18 +150,30 @@ fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
     val selected = remember(all, selectedId) { all.firstOrNull { it.id == selectedId } }
     // guía del servidor IPTV (get_short_epg) ya consultada; si no tiene, la del panel (epg.php)
     val providerEpg = remember { mutableStateMapOf<Int, List<EpgEntry>>() }
-    // la guía de la derecha es la del canal seleccionado (la del enfocado se ve en su fila)
+    // guía bajo la miniatura: la del canal seleccionado, de ayer a pasado mañana.
+    // Primero la completa del servidor IPTV (get_simple_data_table), si no la corta (get_short_epg) y si tampoco, la del panel (epg.php)
     val guide by produceState<List<EpgEntry>?>(null, selected?.id) {
         val ch = selected ?: run { value = emptyList(); return@produceState }
-        value = providerEpg[ch.id] ?: PanelEpg.cached(ch.id)
-        var g = providerEpg[ch.id] ?: runCatching { Xtream.shortEpg(s, ch.id, 10) }.getOrDefault(emptyList())
-        if (g.isNotEmpty()) providerEpg[ch.id] = g
-        else {
+        val (from, to) = epgWindow(System.currentTimeMillis())
+        val inWindow: (List<EpgEntry>) -> List<EpgEntry> = { l -> l.filter { it.end > from && it.start < to } }
+        value = GuideCache.get(ch.id)
+        if (value != null) return@produceState
+        var g = inWindow(runCatching { Xtream.fullEpg(s, ch.id) }.getOrDefault(emptyList()))
+        if (g.none { it.end > System.currentTimeMillis() }) {
+            val short = runCatching { Xtream.shortEpg(s, ch.id, 60) }.getOrDefault(emptyList())
+            g = inWindow((g + short).sortedBy { it.start }.distinctBy { it.start })
+        }
+        if (g.isEmpty()) {
             val i = shown.indexOfFirst { it.id == ch.id }.coerceAtLeast(0)
-            g = PanelEpg.guide(ch, shown.subList(i, minOf(shown.size, i + 400)))
+            g = inWindow(PanelEpg.full(ch, shown.subList(i, minOf(shown.size, i + 400))))
+        }
+        if (g.isNotEmpty()) {
+            GuideCache.put(ch.id, g)
+            providerEpg[ch.id] = g.filter { it.end > System.currentTimeMillis() }
         }
         value = g
     }
+    val timelineEntry = remember { FocusRequester() }
 
     // vista previa en vivo (se suelta antes de abrir la pantalla completa y al salir de la app)
     val preview = remember { LivePreview(ctx) }
@@ -233,20 +246,28 @@ fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
                         playing = ch.id == selectedId, fav = Cloud.isFav(ch.key), provider = providerEpg[ch.id],
                         modifier = if (ch.id == lastId) Modifier.focusRequester(lastReq) else Modifier,
                         onFocus = { focusedId = ch.id }, onClick = { play(i) }, onFav = { toggleFav(ch) },
+                        onRight = { guide.orEmpty().isNotEmpty() && runCatching { timelineEntry.requestFocus() }.isSuccess },
                     )
                 }
             }
         }
         /* ---------- vista previa y guía ---------- */
-        Column(Modifier.weight(1f).fillMaxHeight().background(Brush.verticalGradient(listOf(LvPanel, LvBg))).padding(16.dp)) {
-            PreviewBox(preview, selected, selected?.let { numbers[it.id] } ?: 0)
-            if (selected != null) GuidePanel(selected, guide, now, Modifier.weight(1f))
-            else Text("Presiona OK sobre un canal para verlo aquí", color = LvDim, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(top = 14.dp))
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                KeyHint("OK", "Ver canal")
-                KeyHint("OK otra vez", "Pantalla completa")
-                KeyHint("Mantén OK", "Favorito")
-            }
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().background(Brush.verticalGradient(listOf(LvPanel, LvBg))).padding(16.dp)) {
+          // la miniatura deja sitio a la guía: a lo sumo 46 % del alto
+          val previewH = minOf(maxWidth * (9f / 16f), maxHeight * 0.46f)
+          Column(Modifier.fillMaxSize()) {
+            PreviewBox(preview, selected, selected?.let { numbers[it.id] } ?: 0, Modifier.fillMaxWidth().height(previewH))
+            // debajo de la miniatura: la guía del canal (antes aquí iban las instrucciones de las teclas)
+            TvEpgTimeline(
+                selected, guide, now, timelineEntry,
+                onWatch = {
+                    val i = shown.indexOfFirst { it.id == selectedId }
+                    if (i >= 0) play(i)
+                    else all.indexOfFirst { it.id == selectedId }.takeIf { it >= 0 }?.let { preview.release(); Play.live(ctx, all, it) }
+                },
+                modifier = Modifier.weight(1f),
+            )
+          }
         }
     }
 }
@@ -272,7 +293,7 @@ private fun CategoryRow(name: String, count: Int, selected: Boolean, onSelect: (
 @Composable
 private fun LvChannelRow(
     ch: Item, number: Int, index: Int, shown: List<Item>, now: Long, playing: Boolean, fav: Boolean, provider: List<EpgEntry>?,
-    modifier: Modifier, onFocus: () -> Unit, onClick: () -> Unit, onFav: () -> Unit,
+    modifier: Modifier, onFocus: () -> Unit, onClick: () -> Unit, onFav: () -> Unit, onRight: () -> Boolean,
 ) {
     // guía del panel por lotes: la primera fila visible pide también las siguientes (hasta 400)
     val panel by produceState(PanelEpg.cached(ch.id), ch.id) {
@@ -282,7 +303,14 @@ private fun LvChannelRow(
     TvFocusable(
         onClick = onClick, onLongClick = onFav, onFocus = onFocus, scale = 1f, border = false, shape = RoundedCornerShape(8.dp),
         modifier = modifier.fillMaxWidth().padding(vertical = 2.dp)
-            .onPreviewKeyEvent { e -> if (e.type == KeyEventType.KeyDown && e.key == Key.Menu) { onFav(); true } else false },
+            .onPreviewKeyEvent { e ->
+                when {
+                    e.type == KeyEventType.KeyDown && e.key == Key.Menu -> { onFav(); true }
+                    // derecha: a la guía bajo la miniatura, directo al programa en sintonía
+                    e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight -> onRight()
+                    else -> false
+                }
+            },
     ) { f ->
         Row(
             Modifier.fillMaxWidth()
@@ -314,9 +342,9 @@ private fun LvChannelRow(
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
-private fun PreviewBox(preview: LivePreview, ch: Item?, number: Int) {
+private fun PreviewBox(preview: LivePreview, ch: Item?, number: Int, modifier: Modifier) {
     val shape = RoundedCornerShape(10.dp)
-    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(shape).background(Color.Black).border(1.dp, Color(0x22FFFFFF), shape)) {
+    Box(modifier.clip(shape).background(Color.Black).border(1.dp, Color(0x22FFFFFF), shape)) {
         val player = preview.player
         if (player != null) AndroidView(
             factory = { c ->
@@ -356,51 +384,6 @@ private fun PreviewBox(preview: LivePreview, ch: Item?, number: Int) {
     }
 }
 
-/** programa actual (título, horario, minutos restantes, avance y sinopsis) y los siguientes */
-@Composable
-private fun GuidePanel(ch: Item, guide: List<EpgEntry>?, now: Long, modifier: Modifier) {
-    val list = guide.orEmpty().filter { it.end > now }
-    val cur = list.firstOrNull { it.start <= now }
-    val next = list.filter { it !== cur }.take(4)
-    Column(modifier.fillMaxWidth().padding(top = 14.dp)) {
-        when {
-            guide == null -> Text("Cargando guía…", color = LvDim, fontSize = 14.sp)
-            list.isEmpty() -> Text("Sin guía de programación para ${ch.name}", color = LvDim, fontSize = 14.sp)
-            else -> {
-                if (cur != null) {
-                    Text("AHORA", color = NfRed, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                    Text(cur.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-                    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("${lvHm(cur.start)} – ${lvHm(cur.end)}", color = Color(0xFFCFCFD8), fontSize = 13.sp)
-                        Spacer(Modifier.width(10.dp))
-                        Text("quedan ${((cur.end - now) / 60_000).coerceAtLeast(1)} min", color = LvDim, fontSize = 13.sp)
-                    }
-                    EpgBar(cur, now, Modifier.fillMaxWidth().padding(top = 8.dp))
-                    if (cur.desc.isNotBlank()) Text(cur.desc, color = Color(0xFFB4B4BE), fontSize = 13.sp, lineHeight = 18.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                }
-                if (next.isNotEmpty()) {
-                    Text("A CONTINUACIÓN", color = LvDim, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
-                    next.forEach { p ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(lvHm(p.start), color = Color(0xFFCFCFD8), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(54.dp))
-                            Text(p.title, color = LvText, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        }
-                        Box(Modifier.fillMaxWidth().height(1.dp).background(LvLine))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun KeyHint(key: String, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(key, color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(Color(0xFFDDDDDD), RoundedCornerShape(3.dp)).padding(horizontal = 5.dp, vertical = 1.dp))
-        Text(" $label", color = LvDim, fontSize = 11.sp)
-    }
-}
-
 @Composable
 private fun EpgBar(p: EpgEntry, now: Long, modifier: Modifier) {
     val pct = if (p.end > p.start) ((now - p.start).toFloat() / (p.end - p.start)).coerceIn(0f, 1f) else 0f
@@ -420,5 +403,9 @@ private fun ChannelLogoBox(url: String, modifier: Modifier, transparent: Boolean
     }
 }
 
-private val lvHmFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
-private fun lvHm(ms: Long): String = lvHmFmt.format(ms)
+/** guías ya armadas para la línea de tiempo (10 min), así volver a un canal no la vuelve a pedir */
+private object GuideCache {
+    private val map = java.util.concurrent.ConcurrentHashMap<Int, Pair<Long, List<EpgEntry>>>()
+    fun get(id: Int): List<EpgEntry>? = map[id]?.takeIf { System.currentTimeMillis() - it.first < 600_000 }?.second
+    fun put(id: Int, g: List<EpgEntry>) { map[id] = System.currentTimeMillis() to g }
+}

@@ -226,28 +226,33 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
         if (!state.pop()) state.tab = Tab.HOME
     }
     val top = state.stack.lastOrNull()
-    val content: @Composable () -> Unit = {
-        when (top) {
-            is Route.Detail -> DetailScreen(state, top.item)
-            is Route.Browse -> BrowseScreen(state, top.title, top.kind, top.categoryIds)
-            is Route.PlatformPage -> BrowseScreen(state, top.platform.label, null, emptySet(), top.platform)
-            is Route.ActorPage -> ActorScreen(state, top)
-            is Route.Saved -> SavedScreen(state, top.continueWatching)
-            null -> when (state.tab) {
-                Tab.HOME -> HomeScreen(state)
-                Tab.MOVIES -> CatalogScreen(state, Kind.MOVIE)
-                Tab.SERIES -> CatalogScreen(state, Kind.SERIES)
-                Tab.LIVE -> LiveScreen(state)
-                Tab.SPORTS -> if (Tenant.sportsEnabled) SportsScreen(state) else HomeScreen(state)
-                Tab.MYLIST -> MyListScreen(state)
-                Tab.SEARCH -> SearchScreen(state)
-                Tab.ACCOUNT -> AccountScreen(state, onLogout, onChangeDistributor)
-            }
+    val routeContent: @Composable (Route) -> Unit = { r ->
+        when (r) {
+            is Route.Detail -> DetailScreen(state, r.item)
+            is Route.Browse -> BrowseScreen(state, r.title, r.kind, r.categoryIds)
+            is Route.PlatformPage -> BrowseScreen(state, r.platform.label, null, emptySet(), r.platform)
+            is Route.ActorPage -> ActorScreen(state, r)
+            is Route.Saved -> SavedScreen(state, r.continueWatching)
         }
     }
+    val tabContent: @Composable () -> Unit = {
+        when (state.tab) {
+            Tab.HOME -> HomeScreen(state)
+            Tab.MOVIES -> CatalogScreen(state, Kind.MOVIE)
+            Tab.SERIES -> CatalogScreen(state, Kind.SERIES)
+            Tab.LIVE -> LiveScreen(state)
+            Tab.SPORTS -> if (Tenant.sportsEnabled) SportsScreen(state) else HomeScreen(state)
+            Tab.MYLIST -> MyListScreen(state)
+            Tab.SEARCH -> SearchScreen(state)
+            Tab.ACCOUNT -> AccountScreen(state, onLogout, onChangeDistributor)
+        }
+    }
+    val content: @Composable () -> Unit = { if (top != null) routeContent(top) else tabContent() }
     if (tv) {
         // TV: menú superior como el reproductor web
-        TvShell(state) { content() }
+        // TV: menú superior como el reproductor web; las fichas se apilan encima sin destruir lo de abajo
+        // (al volver, la sección sigue donde estaba y el foco regresa a la tarjeta que se abrió)
+        TvShell(state, base = tabContent, route = routeContent)
     } else {
         // teléfono: barra inferior como la app de Netflix
         val phoneTabs = listOf(Tab.HOME, Tab.SERIES, Tab.MOVIES, Tab.LIVE, Tab.ACCOUNT)

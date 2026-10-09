@@ -34,6 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -51,6 +54,9 @@ import com.latmpx.player.ui.theme.NfBg
 import com.latmpx.player.ui.theme.NfGray2
 import com.latmpx.player.ui.theme.NfRed
 
+/** false dentro de una pantalla tapada por una ficha: no debe pedir el foco (se lo robaría a la de arriba) */
+val LocalLayerOnTop = androidx.compose.runtime.compositionLocalOf { true }
+
 /** Secciones del menú superior de TV, en el mismo orden que el reproductor web. */
 private val tvTabs = listOf(Tab.HOME, Tab.SERIES, Tab.MOVIES, Tab.LIVE, Tab.SPORTS, Tab.MYLIST)
 private val overlayTabs = setOf(Tab.HOME, Tab.SERIES, Tab.MOVIES)
@@ -60,7 +66,7 @@ private val overlayTabs = setOf(Tab.HOME, Tab.SERIES, Tab.MOVIES)
  * Atrás: cierra la ficha abierta; en una sección sube al menú; en el menú pregunta si salir.
  */
 @Composable
-fun TvShell(state: AppState, content: @Composable () -> Unit) {
+fun TvShell(state: AppState, base: @Composable () -> Unit, route: @Composable (Route) -> Unit) {
     val ctx = LocalContext.current
     val tabFocus = remember { Tab.entries.associateWith { FocusRequester() } }
     var menuFocused by remember { mutableStateOf(false) }
@@ -68,10 +74,12 @@ fun TvShell(state: AppState, content: @Composable () -> Unit) {
     var askExit by remember { mutableStateOf(false) }
     val top = state.stack.lastOrNull()
 
-    // al volver de una ficha (o cambiar de sección) el foco nunca queda perdido: si nada lo tomó, va al menú
+    // al cambiar de sección el foco nunca queda perdido: si nada lo tomó, va al menú
+    // (con una ficha encima, de eso se encarga su capa: ver TvLayer)
     LaunchedEffect(top, state.tab) {
+        if (top != null) return@LaunchedEffect
         kotlinx.coroutines.delay(350)
-        if (!menuFocused && !contentFocused) runCatching { tabFocus.getValue(state.tab).requestFocus() }
+        if (state.stack.isEmpty() && !menuFocused && !contentFocused) runCatching { tabFocus.getValue(state.tab).requestFocus() }
     }
 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -90,28 +98,62 @@ fun TvShell(state: AppState, content: @Composable () -> Unit) {
         }
     }
 
-    // Inicio, Series y Películas: el menú va encima del destacado (transparente y sólido al bajar), como .nf-header de la web
-    val overlay = top == null && state.tab in overlayTabs
     Box(Modifier.fillMaxSize().background(NfBg)) {
-        if (overlay) {
-            Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }) { content() }
-            androidx.compose.animation.AnimatedVisibility(
-                visible = !state.tvHeaderHidden,
-                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it },
-                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it },
-            ) {
-                TvTopBar(state, tabFocus, Modifier.onFocusChanged { menuFocused = it.hasFocus }, solid = false)
-            }
-        } else Column(Modifier.fillMaxSize()) {
-            // la ficha de un contenido ocupa toda la pantalla, sin menú
-            if (top == null) {
+        // sección (con su menú): sigue viva debajo de las fichas abiertas
+        TvLayer(visible = top == null) {
+            // Inicio, Series y Películas: el menú va encima del destacado (transparente y sólido al bajar), como .nf-header de la web
+            if (state.tab in overlayTabs) {
+                Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }) { base() }
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = !state.tvHeaderHidden,
+                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it },
+                        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it },
+                    ) {
+                        TvTopBar(state, tabFocus, Modifier.onFocusChanged { menuFocused = it.hasFocus }, solid = false)
+                    }
+                }
+            } else Column(Modifier.fillMaxSize()) {
                 TvTopBar(state, tabFocus, Modifier.onFocusChanged { menuFocused = it.hasFocus }, solid = true)
+                Box(Modifier.weight(1f).fillMaxWidth().onFocusChanged { contentFocused = it.hasFocus }) { base() }
             }
-            Box(Modifier.weight(1f).fillMaxWidth().onFocusChanged { contentFocused = it.hasFocus }) { content() }
+        }
+        // fichas apiladas (película, actor, "Ver todo"…): a pantalla completa, sin menú; solo la de arriba se ve
+        state.stack.forEachIndexed { i, r ->
+            androidx.compose.runtime.key(i, r) {
+                TvLayer(visible = i == state.stack.lastIndex) { Box(Modifier.fillMaxSize().background(NfBg)) { route(r) } }
+            }
         }
     }
 
     if (askExit) ExitDialog(onStay = { askExit = false }, onExit = { (ctx as? Activity)?.finishAffinity() })
+}
+
+/**
+ * Capa de la pila de pantallas de la TV. Las capas tapadas siguen compuestas (conservan scroll y estado)
+ * pero no se colocan, así no se dibujan ni el control puede llegar a ellas. Cuando una capa queda arriba
+ * y nada suyo tiene el foco, lo recupera: vuelve al elemento que lo tenía antes (focusRestorer) o al primero.
+ */
+@Composable
+private fun TvLayer(visible: Boolean, content: @Composable () -> Unit) {
+    val req = remember { FocusRequester() }
+    var hasFocus by remember { mutableStateOf(false) }
+    Box(
+        Modifier.fillMaxSize()
+            .then(if (visible) Modifier else Modifier.layout { m, c -> val p = m.measure(c); layout(p.width, p.height) {} })
+            .focusRequester(req)
+            .onFocusChanged { hasFocus = it.hasFocus }
+            .focusRestorer(FocusRequester.Default)
+            .focusGroup(),
+    ) { androidx.compose.runtime.CompositionLocalProvider(LocalLayerOnTop provides visible) { content() } }
+    LaunchedEffect(visible) {
+        if (!visible) return@LaunchedEffect
+        // primero se deja que la pantalla pida su propio foco (botón Reproducir, primer canal…)
+        kotlinx.coroutines.delay(90)
+        if (!hasFocus) runCatching { req.requestFocus() }
+        kotlinx.coroutines.delay(260)
+        if (!hasFocus) runCatching { req.requestFocus() }
+    }
 }
 
 @Composable

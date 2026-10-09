@@ -63,9 +63,10 @@ fun TvActorScreen(state: AppState, actor: Route.ActorPage) {
     val pad = tvPad()
     val progress = remember(state.refresh, Cloud.rev) { Cloud.progressList().associateBy { it.key.split(":").take(2).joinToString(":") } }
     val first = remember { FocusRequester() }
+    val onTop = com.latmpx.player.ui.LocalLayerOnTop.current
     // el foco entra al primer título en cuanto hay resultados
     LaunchedEffect(p?.items?.isNotEmpty()) {
-        if (p?.items?.isNotEmpty() == true) { delay(80); runCatching { first.requestFocus() } }
+        if (p?.items?.isNotEmpty() == true && onTop) { delay(80); runCatching { first.requestFocus() } }
     }
 
     LazyVerticalGrid(

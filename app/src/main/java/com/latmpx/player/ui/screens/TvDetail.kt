@@ -114,7 +114,8 @@ fun TvDetailScreen(state: AppState, media: Item) {
     val progress = remember(state.refresh, Cloud.rev, media.key) { Cloud.progress(media.key) }
     val lastEp = remember(state.refresh, Cloud.rev, media.key) { if (media.kind == Kind.SERIES) Cloud.seriesProgress(media.id) else null }
     val playFocus = remember { FocusRequester() }
-    LaunchedEffect(media.key, d != null) { runCatching { playFocus.requestFocus() } }
+    val onTop = com.latmpx.player.ui.LocalLayerOnTop.current
+    LaunchedEffect(media.key, d != null) { if (onTop) runCatching { playFocus.requestFocus() } }
 
     val det = d
     val seasons = det?.seasons.orEmpty()
