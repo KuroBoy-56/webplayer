@@ -57,6 +57,7 @@ import com.latmpx.player.data.Store
 import com.latmpx.player.data.Tenant
 import com.latmpx.player.data.Tmdb
 import com.latmpx.player.data.Xtream
+import com.latmpx.player.ui.components.tvTextInput
 import com.latmpx.player.ui.components.Chip
 import com.latmpx.player.ui.components.DnsButton
 import com.latmpx.player.ui.components.FocusBox
@@ -159,13 +160,13 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                         
                         OutlinedTextField(
                             value = user, onValueChange = { user = it }, label = { Text("Usuario") }, singleLine = true, colors = fieldColors,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Next)), modifier = Modifier.fillMaxWidth().then(Modifier.tvTextInput()),
                         )
                         OutlinedTextField(
                             value = pass, onValueChange = { pass = it }, label = { Text("Contraseña") }, singleLine = true, colors = fieldColors,
                             visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { }), modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)),
+                            keyboardActions = KeyboardActions(onDone = { }), modifier = Modifier.fillMaxWidth().then(Modifier.tvTextInput()),
                         )
                         
                         Column(Modifier.fillMaxWidth().background(Color(0x33FFFFFF), RoundedCornerShape(4.dp)).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {

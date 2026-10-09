@@ -28,6 +28,12 @@ object PanelEpg {
         return fetching.withLock { load(ch, neighbors) }
     }
 
+    /** toda la guía del panel para el canal (también lo que ya empezó), para la línea de tiempo de la TV */
+    suspend fun full(ch: Item, neighbors: List<Item>): List<EpgEntry> {
+        guide(ch, neighbors)
+        return cache[ch.id].orEmpty()
+    }
+
     /** guía ya descargada (sin red) o null */
     fun cached(id: Int): List<EpgEntry>? = cache[id]?.let { current(it) }
 
