@@ -232,6 +232,21 @@ async function panelLogin(action: string, payload: Record<string, any>): Promise
   return r.code === 0 ? { ...r, error: 'No se pudo conectar con el panel.' } : r;
 }
 
+// respuesta de login.php que se pidió con "enc": 1: el éxito (200) llega cifrado igual que
+// fetch_dns (usuario y contraseña de la línea nunca en claro); un panel antiguo responde JSON
+// normal y los errores siempre son JSON normal
+function loginReply(r: HttpResult): any {
+  const body = r.body.trim();
+  if (!r.ok || !body || body.startsWith('{')) return json(r);
+  const plain = panelDecrypt(body);
+  if (!plain) return null;
+  try {
+    return JSON.parse(plain);
+  } catch {
+    return null;
+  }
+}
+
 function panelError(r: HttpResult & { error?: string }, fallback: string): string {
   if (r.error) return r.error;
   const j = json(r);
@@ -249,7 +264,7 @@ function panelError(r: HttpResult & { error?: string }, fallback: string): strin
 // línea activada para este equipo en el panel
 export async function panelCheckMac(deviceId: string) {
   if (!hasMasterKey()) return null;
-  const j = json(await panelLogin('check_mac', { mac_address: deviceId }));
+  const j = loginReply(await panelLogin('check_mac', { mac_address: deviceId, enc: 1 }));
   if (!j || j.exists !== true) return null;
   return lineFromUrl('Servidor', str(j.url), str(j.username), str(j.password));
 }
@@ -273,8 +288,8 @@ export function resellerCode(text: string): string {
 // queda a su nombre en el panel); cualquier otra cosa no se envía.
 export async function panelDemo(deviceId: string, reseller = ''): Promise<{ ok: boolean; user?: string; pass?: string; error?: string; code: number }> {
   const code = resellerCode(reseller);
-  const r = await panelLogin('auto_demo', code ? { mac_address: deviceId, reseller: code } : { mac_address: deviceId });
-  const j = json(r);
+  const r = await panelLogin('auto_demo', code ? { mac_address: deviceId, reseller: code, enc: 1 } : { mac_address: deviceId, enc: 1 });
+  const j = loginReply(r);
   if (r.ok && j && str(j.status) === 'ok' && str(j.username)) return { ok: true, user: str(j.username), pass: str(j.password), code: r.code };
   let fb = 'No se pudo crear la demo';
   if (r.code === 403) fb = 'Demo ya utilizada en este dispositivo o dispositivo ya registrado.';

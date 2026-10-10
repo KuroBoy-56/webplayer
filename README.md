@@ -121,6 +121,8 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
   HLS del motor del panel (audio cambiado) se reproduce con un lector propio por MSE (`src/player/hls.ts`).
 - Autodemo, registrar el equipo y la activación por código MAC usan `login.php` con la llave
   maestra, que no va en el código: se agrega al compilar (ver [config/README.md](config/README.md)).
-  Sin llave esos botones no aparecen.
+  Sin llave esos botones no aparecen. `check_mac` y `auto_demo` piden la respuesta cifrada
+  (`"enc": 1`): el usuario y la contraseña de la línea llegan con AES-GCM, nunca en claro (con un
+  panel antiguo se sigue aceptando el JSON normal).
 - La app no se ha probado en un Fire TV real todavía: se compiló y se revisó el código,
   pero el contenedor de desarrollo no llega al panel ni tiene un equipo Vega.
