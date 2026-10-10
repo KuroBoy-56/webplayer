@@ -1,6 +1,9 @@
 <?php
-/* Estado del hosting: conexión con el panel (progreso y favoritos), procesos y ffmpeg. Solo con sesión iniciada. */
+/* Estado del hosting: conexión con el panel (progreso y favoritos) y ffmpeg. Solo con sesión iniciada.
+ * Cada usuario ve solo lo suyo: sus guardados de progreso, nunca los de otros. Los procesos del hosting
+ * y detener conversiones se manejan desde el panel (Guía EPG › motor multimedia). */
 include "session.php";
+require_once __DIR__ . '/includes/progress_save.php';
 @set_time_limit(60);
 
 function st_try($url, $verify)
@@ -18,12 +21,6 @@ function st_try($url, $verify)
 }
 
 $msg = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['do'] ?? '') === 'kill') {
-    $n = 0;
-    if (wp_fn_ok('exec')) { @exec('pkill -u "$(id -un)" -x ffmpeg; pkill -u "$(id -un)" -x ffprobe; echo ok', $o); $n = 1; }
-    elseif (wp_fn_ok('shell_exec')) { @shell_exec('pkill -u "$(id -un)" -x ffmpeg; pkill -u "$(id -un)" -x ffprobe'); $n = 1; }
-    $msg = $n ? 'Conversiones detenidas.' : 'El hosting no permite detener procesos desde PHP.';
-}
 
 $base = wp_panel_base();
 $host = (string)parse_url($base, PHP_URL_HOST);
@@ -34,11 +31,6 @@ $rows = [
 ];
 $ud = wp_panel_userdata(true);
 
-$ps = '';
-if (wp_fn_ok('exec')) { @exec('ps -u "$(id -un)" -o pid=,etime=,comm= 2>/dev/null', $pl); $ps = implode("\n", (array)$pl); }
-elseif (wp_fn_ok('shell_exec')) $ps = (string)@shell_exec('ps -u "$(id -un)" -o pid=,etime=,comm= 2>/dev/null');
-$lines = array_filter(array_map('trim', explode("\n", $ps)));
-$nff = count(array_filter($lines, function ($l) { return preg_match('/ff(mpeg|probe)$/', $l); }));
 
 $page_title = 'Estado';
 include "header.php";
@@ -71,7 +63,13 @@ include "header.php";
         <?php endforeach; ?>
     </table></div>
     <h2 style="font-size:18px;margin-top:22px">Últimos guardados de progreso</h2>
-    <?php $plog = wp_cache_get('progress|log', 864000); $plog = is_array($plog) ? $plog : []; ?>
+    <?php
+    $plog = wp_cache_get('progress|log', 864000);
+    $me = wp_progress_log_owner($username);
+    $plog = array_slice(array_values(array_filter(is_array($plog) ? $plog : [], function ($l) use ($me) {
+        return is_array($l) && isset($l['u']) && hash_equals((string)$l['u'], $me);
+    })), 0, 30);
+    ?>
     <?php if (!$plog): ?><p style="color:#e87c03">Ningún intento de guardado ha llegado al hosting.</p><?php else: ?>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
         <?php foreach ($plog as $l): ?>
@@ -85,10 +83,6 @@ include "header.php";
         <?php endforeach; ?>
     </table></div>
     <?php endif; ?>
-    <h2 style="font-size:18px;margin-top:22px">Procesos de tu cuenta en el hosting</h2>
-    <p style="color:#aaa"><?php echo $lines ? 'Procesos activos: <b>' . count($lines) . '</b> · ffmpeg/ffprobe: <b>' . $nff . '</b>' : 'El hosting no deja ver los procesos.'; ?></p>
-    <?php if ($lines): ?><pre style="background:#111;padding:10px;max-height:240px;overflow:auto;font-size:12px"><?php echo e(implode("\n", array_slice($lines, 0, 60))); ?></pre><?php endif; ?>
-    <form method="post"><input type="hidden" name="do" value="kill"><button class="nf-btn nf-btn-red" type="submit">Detener todas las conversiones (ffmpeg)</button></form>
     <p style="color:#aaa;margin-top:16px">ffmpeg: <b><?php echo wp_bin('ffmpeg') ? 'instalado' : 'NO instalado'; ?></b> · ffprobe: <b><?php echo wp_bin('ffprobe') ? 'instalado' : 'NO instalado'; ?></b> · ejecutar programas: <b><?php echo e(wp_exec_mode() ?: 'bloqueado'); ?></b></p>
     <p style="color:#aaa">PHP <?php echo e(PHP_VERSION); ?> · página en <?php echo wp_is_https() ? 'https' : 'http'; ?></p>
 </section>

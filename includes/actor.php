@@ -105,14 +105,15 @@ function wp_title_lookup(array $idx, array $titles, $year)
     return null;
 }
 
-/** Clave TMDB: la del panel (llega con Continuar viendo) o la incorporada. */
+/** Clave TMDB: la del panel (llega con Continuar viendo) o la de includes/panel_secret.php. */
 function wp_tmdb_keys()
 {
     $keys = [];
     $panel = wp_cache_get(wp_panel_ck('panel|tmdbkey'), 30 * 86400, $stale);
     $panel = is_string($panel) ? $panel : (is_string($stale) ? $stale : '');
     if (preg_match('/^[0-9a-f]{32}$/i', $panel)) $keys[] = $panel;
-    if (WP_TMDB_KEY && !in_array(WP_TMDB_KEY, $keys, true)) $keys[] = WP_TMDB_KEY;
+    $own = wp_tmdb_key();
+    if ($own && !in_array($own, $keys, true)) $keys[] = $own;
     return $keys;
 }
 

@@ -17,9 +17,28 @@ define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 
 
-// Clave de TMDB (carátulas, fondos, elenco y tráileres)
-if (!defined('WP_TMDB_KEY')) {
-    define('WP_TMDB_KEY', '0c23c3f0458f0f9e4d0a35048d3a199a');
+/**
+ * Clave de TMDB (carátulas, fondos, elenco y tráileres). No va en el código:
+ * 'tmdb_key' de includes/panel_secret.php (no se sube a GitHub) o, si falta,
+ * la clave TMDB que manda el panel (se guarda al iniciar sesión). Sin ninguna
+ * la web funciona igual, sin datos de TMDB.
+ */
+function wp_tmdb_key()
+{
+    static $key = null;
+    if ($key !== null) return $key;
+    $k = defined('WP_TMDB_KEY') ? (string)constant('WP_TMDB_KEY') : '';
+    $file = __DIR__ . '/panel_secret.php';
+    if ($k === '' && is_file($file)) {
+        $cfg = include $file;
+        if (is_array($cfg)) $k = trim((string)($cfg['tmdb_key'] ?? ''));
+    }
+    if (!preg_match('/^[0-9a-f]{32}$/i', $k) && function_exists('wp_panel_ck')) {
+        $p = wp_cache_get(wp_panel_ck('panel|tmdbkey'), 30 * 86400, $stale);
+        $k = is_string($p) ? $p : (is_string($stale) ? $stale : '');
+    }
+    if (!preg_match('/^[0-9a-f]{32}$/i', $k)) return ''; // sin guardar: el panel puede mandarla después
+    return $key = $k;
 }
 
 // Duración de los enlaces firmados del proxy (segundos)
@@ -1089,7 +1108,7 @@ function wp_tmdb_pick(array $results, $q, $year)
  */
 function wp_tmdb_find($type, $name, $year = '', $tmdbId = '')
 {
-    if (!WP_TMDB_KEY) return null;
+    if (!wp_tmdb_key()) return null;
     list($q, $y2) = wp_tmdb_parse($name);
     $year = preg_replace('/\D/', '', (string)$year) ?: $y2;
     $tmdbId = preg_replace('/\D/', '', (string)$tmdbId);
@@ -1097,7 +1116,7 @@ function wp_tmdb_find($type, $name, $year = '', $tmdbId = '')
     $hit = wp_cache_get($ck, 2592000);
     if (is_array($hit) && ($hit['r'] || time() - (int)($hit['t'] ?? 0) < 172800)) return $hit['r'];
     $base = 'https://api.themoviedb.org/3/';
-    $key = 'api_key=' . WP_TMDB_KEY;
+    $key = 'api_key=' . wp_tmdb_key();
     $r = null;
     $netOk = false;
     if ($tmdbId) {
@@ -1146,11 +1165,11 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '')
     $d = wp_cache_get($ck, 604800);
     if (is_array($d) && ($d['id'] || time() - (int)($d['_t'] ?? 0) < 172800)) return $d;
     $d = ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', '_t' => time()];
-    if (!WP_TMDB_KEY) return $d;
+    if (!wp_tmdb_key()) return $d;
     $r = wp_tmdb_find($type, $title, $year, $tmdbId);
     if (!$r) { wp_cache_set($ck, $d); return $d; }
     $rtype = $r['_type'] ?? $type;
-    $body = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $r['id'] . '?api_key=' . WP_TMDB_KEY
+    $body = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $r['id'] . '?api_key=' . wp_tmdb_key()
         . '&language=es-MX&append_to_response=credits,aggregate_credits,videos,images&include_video_language=es,en,null&include_image_language=es,en,null', 7);
     $j = $body ? json_decode($body, true) : null;
     if (!is_array($j) || empty($j['id'])) $j = $r;
@@ -1165,7 +1184,7 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '')
     if ($d['overview'] === '') {
         // sin descripción en español: se intenta España y luego inglés
         foreach (['es-ES', 'en-US'] as $lang) {
-            $b2 = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $j['id'] . '?api_key=' . WP_TMDB_KEY . '&language=' . $lang, 5);
+            $b2 = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $j['id'] . '?api_key=' . wp_tmdb_key() . '&language=' . $lang, 5);
             $j2 = $b2 ? json_decode($b2, true) : null;
             if (!empty($j2['overview'])) { $d['overview'] = trim($j2['overview']); break; }
         }
@@ -1210,12 +1229,12 @@ function wp_tmdb_posters(array $items)
         }
         if (!$tm && $q === '') continue;
         $url = $tm
-            ? 'https://api.themoviedb.org/3/' . $type . '/' . $tm . '?api_key=' . WP_TMDB_KEY . '&language=es-MX'
-            : 'https://api.themoviedb.org/3/search/' . $type . '?api_key=' . WP_TMDB_KEY . '&language=es-MX&include_adult=false&query=' . urlencode($q)
+            ? 'https://api.themoviedb.org/3/' . $type . '/' . $tm . '?api_key=' . wp_tmdb_key() . '&language=es-MX'
+            : 'https://api.themoviedb.org/3/search/' . $type . '?api_key=' . wp_tmdb_key() . '&language=es-MX&include_adult=false&query=' . urlencode($q)
                 . ($y ? ($type === 'tv' ? '&first_air_date_year=' : '&primary_release_year=') . (int)$y : '');
         $need[$it['k']] = ['ck' => $ck, 'url' => $url, 'tm' => $tm, 'q' => $q, 'y' => $y, 'type' => $type, 'n' => $it['n'] ?? ''];
     }
-    if ($need && WP_TMDB_KEY) {
+    if ($need && wp_tmdb_key()) {
         $urls = [];
         foreach ($need as $k => $n) $urls[$k] = $n['url'];
         foreach (wp_http_multi($urls, 6) as $k => $body) {

@@ -182,7 +182,7 @@ if (!empty($_SESSION['username']) && !empty($_SESSION['server']) && !isset($_GET
 }
 session_write_close();
 
-$api_key = WP_TMDB_KEY;
+$api_key = wp_tmdb_key();
 $movies = getMoviesFromEndpoint($api_key);
 $movies = is_array($movies) ? array_slice($movies, 0, 48) : [];
 $remember = isset($_COOKIE['username']) ? (string)$_COOKIE['username'] : '';

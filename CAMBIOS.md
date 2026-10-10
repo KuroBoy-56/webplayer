@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Seguridad (10 de octubre)
+- **Clave de TMDB fuera del código.** Ya no está escrita en `includes/core.php`. Se lee de `'tmdb_key'` en `includes/panel_secret.php` (no se sube a GitHub) y, si falta, se usa la clave TMDB que manda el panel. **Cambia la clave vieja en tu cuenta de TMDB**: quedó en el historial de GitHub y en los `webplayer.zip` anteriores.
+- **Estado (`estado.php`) solo muestra lo tuyo.** "Últimos guardados de progreso" lista solo los guardados del usuario que tiene la sesión abierta (cada entrada lleva una huella del usuario, no su nombre). La lista de procesos del hosting y el botón para detener todas las conversiones salieron de esta página: se manejan desde el panel (Guía EPG › motor multimedia).
+- Con la web player en **http** (sin SSL) el navegador sigue leyendo el video directo del servidor IPTV con la dirección `/movie/usuario/contraseña/…`, igual que cualquier app Xtream: así el video no pasa por el hosting. Con **https** el video va por el enlace firmado y no se ve. Para que no se vea, usa la web con SSL.
+
 ## 1. Login con varias DNS
 - El formulario muestra solo usuario, contraseña e Ingresar. Ya no aparece el selector de DNS.
 - Al ingresar se consultan **todas las DNS en paralelo** y se entra con la primera que acepta los datos (en las pruebas tardó 0,16 s con 3 servidores).

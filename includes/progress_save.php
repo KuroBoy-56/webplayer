@@ -1,7 +1,13 @@
 <?php
 /* Guarda "Continuar viendo" en el panel (api/progress.php). Nada se guarda en el hosting.
  * Lo usan save_progress.php (sesión normal) y play.php (reproductor http). */
-/** Guarda y deja un registro de los últimos 30 intentos (se ve en estado.php). */
+/** Dueño de una entrada del registro: huella del usuario (no se guarda el nombre). */
+function wp_progress_log_owner($username)
+{
+    return substr(hash_hmac('sha256', strtolower(trim((string)$username)), wp_secret()), 0, 16);
+}
+
+/** Guarda y deja un registro de los últimos intentos (estado.php muestra a cada usuario solo los suyos). */
 function wp_progress_save(array $in, $username)
 {
     $GLOBALS['wp_progress_why'] = '';
@@ -11,8 +17,8 @@ function wp_progress_save(array $in, $username)
     array_unshift($log, ['t' => time(), 'id' => (string)($in['id'] ?? ''), 'slug' => (string)($in['slug'] ?? ''),
         'pos' => (int)($in['current_time'] ?? 0), 'dur' => (int)($in['total_time'] ?? 0), 'ok' => !empty($r['ok']),
         'why' => (string)$GLOBALS['wp_progress_why'], 'title' => (string)($GLOBALS['wp_progress_title'] ?? ''),
-        'err' => (string)($GLOBALS['wp_panel_last_error'] ?? '')]);
-    wp_cache_set('progress|log', array_slice($log, 0, 30));
+        'err' => (string)($GLOBALS['wp_panel_last_error'] ?? ''), 'u' => wp_progress_log_owner($username)]);
+    wp_cache_set('progress|log', array_slice($log, 0, 200));
     return $r;
 }
 

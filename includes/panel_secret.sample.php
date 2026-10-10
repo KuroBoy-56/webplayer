@@ -6,4 +6,6 @@ return [
     'master_key_hex' => '',
     // Opcional: carpeta api/ de otro panel (termina en "/"), p. ej. para pruebas.
     // 'panel_url' => 'https://mi-panel.com/api/',
+    // Opcional: clave de TMDB (32 caracteres). Sin ella se usa la que manda el panel.
+    // 'tmdb_key' => '',
 ];
