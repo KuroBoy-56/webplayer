@@ -349,6 +349,13 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun showErrorDialog(q: QueueEntry, e: PlaybackException) {
+        // al panel (Errores de las apps): qué contenido, qué error y el detalle técnico
+        com.latmpx.player.data.ErrorReport.report(
+            "playback",
+            "No se pudo reproducir (${e.errorCodeName}): ${q.title}".take(300),
+            "tipo=${kind.name} id=${q.id} ext=${q.ext}\n" + (e.cause?.toString().orEmpty()) + "\n" + e.stackTraceToString(),
+            "Reproductor",
+        )
         if (isFinishing) return
         val decoding = e.errorCode in 4000..4999
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)

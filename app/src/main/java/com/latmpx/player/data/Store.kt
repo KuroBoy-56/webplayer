@@ -72,6 +72,10 @@ object Store {
         set(v) = p.edit().putStringSet("blocked_cats", v).apply()
 
     /* ---------- identificador de respaldo para equipos sin Android ID ---------- */
+    /** id del equipo (Device.id), lo carga App al iniciar: para las estadísticas del panel */
+    @Volatile var deviceIdCache: String = ""
+    fun deviceIdOrEmpty(): String = deviceIdCache
+
     fun fallbackDeviceId(): String {
         p.getString("device_id", null)?.takeIf { it.isNotEmpty() }?.let { return it }
         val b = ByteArray(8).also { SecureRandom().nextBytes(it) }
@@ -94,6 +98,11 @@ object Store {
     var demoUsed: Boolean
         get() = p.getBoolean(tenantKey("demo_used"), false)
         set(v) = p.edit().putBoolean(tenantKey("demo_used"), v).apply()
+
+    /** se escribió el código de la pantalla falsa: este equipo ya no la ve */
+    var fakeUnlocked: Boolean
+        get() = p.getBoolean("fake_unlocked", false)
+        set(v) = p.edit().putBoolean("fake_unlocked", v).apply()
 
     fun logout() = p.edit().remove("session").remove(tenantKey("cloud_token2")).apply()
 

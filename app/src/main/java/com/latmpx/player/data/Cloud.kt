@@ -40,7 +40,8 @@ object Cloud {
     private suspend fun token(s: Session): String? {
         Store.cloudToken?.takeIf { it.isNotEmpty() }?.let { return it }
         // con distribuidor el token lleva su número y la app (t, a); Omitir = igual que antes
-        val r = Net.postJson(api(), Tenant.tag(JSONObject().put("action", "auth").put("user", s.user).put("pass", s.pass).put("dns", s.base)))
+        val r = Net.postJson(api(), Tenant.tag(JSONObject().put("action", "auth").put("user", s.user).put("pass", s.pass).put("dns", s.base)
+            .put("platform", Tenant.APP).put("device", Store.deviceIdOrEmpty())))
         val j = r.json()
         Tenant.onPanelError(j)
         rememberTmdbKey(j)
@@ -171,6 +172,7 @@ object Cloud {
             .put("id", if (isSeries) parts.getOrElse(2) { "" } else parts.getOrElse(1) { "" })
             .put("seriesId", if (isSeries) parts.getOrElse(1) { "" } else "")
             .put("categoryId", p.categoryId)
+            .put("platform", Tenant.APP).put("device", Store.deviceIdOrEmpty())
         post(body)
     }
 

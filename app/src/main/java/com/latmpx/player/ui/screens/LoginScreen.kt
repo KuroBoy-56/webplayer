@@ -88,6 +88,8 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
     var demoUsed by remember { mutableStateOf(Store.demoUsed) }
     val firstFocus = remember { FocusRequester() }
     var posters by remember { mutableStateOf<List<String>>(emptyList()) }
+    // pantalla falsa del panel (equipo nuevo): hasta escribir el código o hasta que lo registren
+    var fake by remember { mutableStateOf<com.latmpx.player.data.FakeScreen?>(null) }
 
     suspend fun connect(line: Panel.Line) {
         status = "Conectando con ${line.name}…"
@@ -123,8 +125,23 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
     LaunchedEffect(Store.tmdbKey) { posters = Tmdb.nowPlaying(Store.tmdbKey) }
     LaunchedEffect(Unit) {
         resolve()
+        if (lines.isEmpty() && !Store.fakeUnlocked) fake = Panel.fakeScreen
         if (lines.isEmpty() && PanelCrypto.hasKey()) Panel.fetchDns().value?.let { dns = it }
-        if (tv) runCatching { firstFocus.requestFocus() }
+        if (tv && fake == null) runCatching { firstFocus.requestFocus() }
+    }
+    // con la pantalla falsa se pregunta cada 30 s: si el distribuidor registra el equipo, la app se abre sola
+    LaunchedEffect(fake) {
+        while (fake != null) {
+            kotlinx.coroutines.delay(30_000)
+            val c = Panel.checkMac(deviceId)
+            val line = c.value
+            if (line != null) { fake = null; connect(line); break }
+            if (c.error == null && Panel.fakeScreen == null) fake = null
+        }
+    }
+    fake?.let { f ->
+        com.latmpx.player.ui.screens.FakeScreenView(f, deviceId) { Store.fakeUnlocked = true; fake = null }
+        return
     }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
@@ -191,7 +208,7 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             // el distribuidor puede no tener demo (sin DNS): entonces no se muestra el botón
                             if (Tenant.demoEnabled) HeroButton(if (demoUsed) "Autodemo" else "Autodemo", Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
-                                if (demoUsed) { err = "La demo ya se usó"; return@HeroButton }
+                                // el panel decide (si el dueño borró el registro, el equipo puede pedir otra demo)
                                 act {
                                     status = "Creando demo…"
                                     // un código de revendedor escrito en Contraseña deja la demo a su nombre
@@ -202,7 +219,7 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                                         if (r.code == 403) { demoUsed = true; Store.demoUsed = true }
                                         return@act
                                     }
-                                    Store.demoUsed = true; demoUsed = true
+                                    Store.demoUsed = false; demoUsed = false
                                     if (!resolve() && err == null) {
                                         val d = dns.ifEmpty { Panel.fetchDns().value.orEmpty() }
                                         val first = d.firstOrNull()
