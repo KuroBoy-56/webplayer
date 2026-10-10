@@ -108,7 +108,9 @@ $multi_audio = wp_content_multi_audio($kind, $id, $exts, true);
 // pistas aún desconocidas: el reproductor las pide en segundo plano (tracks.php) sin retrasar la página
 $tracks_url = ($multi_audio === null && wp_content_direct($kind, $id, $exts)) ? wp_proxy_url(wp_tracks_target($kind, $id, $exts), 'tracks.php') : '';
 $multi_audio = $multi_audio === true;
-if (wp_bin('ffprobe') && wp_bin('ffmpeg')) {
+require_once __DIR__ . '/includes/media_admin.php';
+// el dueño puede apagar el motor desde el panel (Guía EPG): entonces el video va directo
+if (wp_media_enabled() && wp_bin('ffprobe') && wp_bin('ffmpeg')) {
     $mb = wp_proxy_url($raw_url, 'media.php');
     $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'hls' => $mb . '&do=hls', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
     // sin varios audios conocidos: ffmpeg no se usa salvo que el iPhone descubra varios audios y el motor MP4 no pueda con ellos

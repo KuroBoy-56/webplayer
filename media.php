@@ -16,6 +16,12 @@ if (!wp_verify_signed($url) || !isset($_GET['e'])) {
     exit;
 }
 $do = $_GET['do'] ?? 'probe';
+// motor apagado desde el panel (Guía EPG): el reproductor sigue con el video directo
+require_once __DIR__ . '/includes/media_admin.php';
+if (!wp_media_enabled() && $do !== 'seg') {
+    http_response_code(503);
+    exit;
+}
 // DNS elegido por el usuario: ffmpeg no usa curl, se le pasa la IP resuelta y la cabecera Host
 list($ffurl, $ffhdr) = wp_doh_ffmpeg($url);
 
