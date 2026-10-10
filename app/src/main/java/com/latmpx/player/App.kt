@@ -13,6 +13,8 @@ class App : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         Store.init(this)
+        Store.deviceIdCache = runCatching { Device.id(this) }.getOrDefault("")
+        com.latmpx.player.data.ErrorReport.init(this) // cierres inesperados y errores al panel (Errores de las apps)
         com.latmpx.player.data.Tenant.init() // marca del distribuidor guardada: se aplica antes de la primera pantalla
         com.latmpx.player.data.Posters.init(this)
         com.latmpx.player.data.CatalogCache.init(this)

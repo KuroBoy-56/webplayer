@@ -24,6 +24,8 @@ object Panel {
     /** POST a login.php con el JSON cifrado. Devuelve el cuerpo crudo o el error. Con distribuidor lleva "tenant" + "app". */
     private suspend fun login(action: String, payload: JSONObject, tag: Boolean = true): Answer<Net.Resp> {
         if (tag) Tenant.tag(payload)
+        // en qué equipo está esta MAC (Clientes MAC › Dispositivo) y la pantalla falsa de esta app
+        payload.put("platform", Tenant.APP)
         // check_mac y auto_demo traen la línea (usuario y contraseña): se piden cifradas
         val secret = action == "check_mac" || action == "auto_demo"
         if (secret) payload.put("enc", 1)
@@ -64,6 +66,10 @@ object Panel {
         }
     }
 
+    /** pantalla falsa que mandó el último check_mac (null = ninguna) */
+    @Volatile var fakeScreen: FakeScreen? = null
+        private set
+
     /** ¿El equipo ya tiene una línea activa en el panel? */
     suspend fun checkMac(deviceId: String): Answer<Line> {
         val a = login("check_mac", device(deviceId))
@@ -71,6 +77,7 @@ object Panel {
         // con distribuidor: un error del panel (vencido, suspendido…) se muestra en vez de "no hay línea"
         if (Tenant.active && r.code in 400..499) return Answer(null, errorOf(r, "El panel rechazó la solicitud"))
         val j = r.json() ?: return Answer(null, errorOf(r, "Respuesta no válida del panel"))
+        fakeScreen = FakeScreen.parse(j)
         if (!j.optBoolean("exists", false)) return Answer(null)
         val line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))
         return Answer(line)
