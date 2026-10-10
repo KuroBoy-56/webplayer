@@ -238,7 +238,9 @@ function wp_panel_dns_urls()
 /** Cuerpo de progress.php acción auth (con número: + tenant + app; el token los lleva). */
 function wp_panel_auth_body($user, $pass, $dns = '', $code = null)
 {
-    return ['action' => 'auth', 'user' => (string)$user, 'pass' => (string)$pass, 'dns' => (string)$dns] + wp_panel_tenant_fields($code);
+    // platform + client_ip: el panel cuenta la web en el mapa y las estadísticas del Dashboard
+    return ['action' => 'auth', 'user' => (string)$user, 'pass' => (string)$pass, 'dns' => (string)$dns,
+        'platform' => WP_APP_ID, 'client_ip' => wp_client_ip()] + wp_panel_tenant_fields($code);
 }
 
 /**
@@ -343,7 +345,7 @@ function wp_panel_userdata($refresh = false)
 
 function wp_panel_post($action, array $data)
 {
-    $j = wp_panel_call('progress.php', ['action' => $action] + $data, 8);
+    $j = wp_panel_call('progress.php', ['action' => $action, 'platform' => WP_APP_ID, 'client_ip' => wp_client_ip()] + $data, 8);
     if (is_array($j) && empty($j['success'])) $GLOBALS['wp_panel_last_error'] = 'respuesta: ' . substr(json_encode($j, JSON_UNESCAPED_UNICODE), 0, 120);
     elseif ($j === null && empty($GLOBALS['wp_panel_last_error'])) $GLOBALS['wp_panel_last_error'] = 'sin respuesta o token rechazado';
     return is_array($j) && !empty($j['success']);

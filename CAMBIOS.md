@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Pantalla falsa, errores y estadísticas del panel (10 de octubre)
+- **Pantalla falsa.** Si en el panel (Pantalla Falsa) está marcada la app **Web**, quien abre la web sin sesión ve la pantalla configurada (calculadora, carrusel, imagen, video o una página web dentro de un marco aislado) en vez del login. El código del panel seguido de **=** (o Enter; en imagen/video/web, mantener pulsado 3 s para escribirlo) abre el login. El código se comprueba en el servidor (nunca va en la página ni en la caché; 20 intentos cada 10 minutos) y el navegador queda desbloqueado un año con una cookie firmada; si el dueño cambia el código, la pantalla vuelve a salir. Quien ya tiene sesión no la ve. Archivos: `includes/fake_screen.php`, `includes/fake_screen_view.php`.
+- **Errores al panel.** Los errores fatales de PHP y los videos que no se pudieron reproducir llegan cifrados a **Errores de las apps** del panel (solo el dueño), con usuario, navegador y hora; la contraseña nunca. El navegador los manda por `report.php` (solo con sesión iniciada, 30 cada 10 minutos). Archivo: `includes/error_report.php`.
+- **Estadísticas.** El progreso y el inicio de sesión mandan `platform: web` y la IP del visitante, así la web cuenta en el mapa y en "clientes más activos" del Dashboard.
+- Necesita el panel actualizado (acción `fake_screen` de `api/login.php`). Con un panel anterior todo sigue como antes.
+
 ## Conversión de audio que no terminaba (10 de octubre)
 - **Antes:** al elegir otro idioma (o con audio Dolby/DTS) el video quedaba "Convirtiendo" para siempre cuando el servidor IPTV dejaba de mandar datos: ffmpeg esperaba sin límite, `media.php` esperaba a ffmpeg sin límite y el reproductor nunca recibía el video. El ffmpeg colgado seguía vivo en el hosting aunque se cerrara el video.
 - **Ahora:** ffmpeg corta una lectura sin datos a los 15 s y se reconecta en el mismo punto (`-rw_timeout` + `-reconnect`), así la conversión sigue aunque el servidor se trabe. `media.php` lee sin bloquearse: si ffmpeg no entrega nada en 40 s (o se queda 45 s sin datos a mitad del video) lo detiene y responde un error, y el reproductor pasa al modo compatible o vuelve al video directo. No quedan procesos colgados.

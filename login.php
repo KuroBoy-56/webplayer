@@ -7,6 +7,9 @@ wp_security_headers();
 // Pantalla "Número de distribuidor": Continuar (valida con el panel) u Omitir
 wp_tenant_login_post();
 
+// Pantalla falsa del panel para visitantes nuevos: el código se comprueba aquí (POST fake_unlock)
+wp_fake_unlock_post();
+
 // La llave del panel es obligatoria (includes/panel_secret.php, no se sube a GitHub)
 $panel_ready = wp_panel_ready();
 $panel_msg = 'Falta configurar la conexión con el panel: configura includes/panel_secret.php (copia includes/panel_secret.sample.php y pon la llave maestra del panel).';
@@ -181,6 +184,10 @@ if (!empty($_SESSION['username']) && !empty($_SESSION['server']) && !isset($_GET
     exit;
 }
 session_write_close();
+
+// visitante nuevo (sin sesión) y la app "Web" marcada en Pantalla Falsa: se muestra eso en vez del login
+$fake = wp_fake_screen_cfg();
+if ($fake !== null && !wp_fake_unlocked($fake)) wp_fake_screen_render($fake);
 
 $api_key = wp_tmdb_key();
 $movies = getMoviesFromEndpoint($api_key);

@@ -761,6 +761,8 @@
             + (o.diagUrl ? ' · <a href="' + o.diagUrl + '">Diagnóstico</a>' : '') + (location.protocol === 'https:' ? ' · https' : ' · http') + (/play\.php/.test(location.pathname) ? ' · p' : '') + '</p>';
         this.msg.innerHTML = h;
         this.msg.classList.add('show');
+        NFPlayer.report('playback', 'No se pudo reproducir: ' + (o.title || '') + (o.subtitle ? ' · ' + o.subtitle : ''),
+            (this._whys || []).join(' · ') + ' · ' + (o.ext || '?') + (this.live ? ' · en vivo' : '') + ' · ' + navigator.userAgent);
         this.msg.querySelector('[data-act=retry]').addEventListener('click', function () { self.hideMsg(); self._rescued = self._fullTried = self._safeTried = false; if (self._media0) self.o.media = self._media0; self.idx = -1; self.next(); });
         var f = this.msg.querySelector('[data-act=fix]');
         if (f) f.addEventListener('click', function () { self.fix(); });
@@ -1321,6 +1323,15 @@
         if (/iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios';
         return /Windows/i.test(ua) ? 'win' : (/Mac/i.test(ua) ? 'mac' : 'pc');
     }
+    // error del reproductor -> panel «Errores de las apps» (report.php, solo con sesión; nunca la URL del video)
+    NFPlayer.report = function (kind, message, detail) {
+        try {
+            if (!/^https?:$/.test(location.protocol) || /play\.php/.test(location.pathname)) return;
+            fetch('report.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kind: kind, message: String(message).slice(0, 400), detail: String(detail || '').slice(0, 4000), screen: location.pathname }) }).catch(function () {});
+        } catch (e) { }
+    };
+
     NFPlayer.canVlc = function (o) { return !!(vlcRaw(o) || o.vlcPc); };
 
     /* compatibilidad con código anterior */

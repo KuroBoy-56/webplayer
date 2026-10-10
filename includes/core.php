@@ -1273,6 +1273,8 @@ function wp_lang_name($code)
 }
 
 require_once __DIR__ . '/panel.php';
+require_once __DIR__ . '/error_report.php';
+require_once __DIR__ . '/fake_screen.php';
 require_once __DIR__ . '/handoff.php';
 require_once __DIR__ . '/doh.php';
 require_once __DIR__ . '/media_core.php';
