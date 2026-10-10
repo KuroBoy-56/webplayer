@@ -240,16 +240,7 @@ private fun DistError(text: String) {
 
 @Composable
 private fun DistButton(text: String, primary: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(4.dp), focusScale = 1.03f) { f ->
-        val bg = when {
-            primary -> NfRed
-            f -> Color.White
-            else -> Color(0x806D6D6E)
-        }
-        Box(Modifier.fillMaxWidth().height(48.dp).background(bg), contentAlignment = Alignment.Center) {
-            Text(text, color = if (primary) NfOnRed else if (f) Color.Black else Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
-    }
+    com.latmpx.player.ui.components.AppButton(text, modifier, primary = primary, onClick = onClick)
 }
 
 /** TV: los 6 dígitos escritos */

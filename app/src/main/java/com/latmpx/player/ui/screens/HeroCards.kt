@@ -154,14 +154,5 @@ fun heroTags(state: AppState, item: Item): String {
 
 @Composable
 private fun CardButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(6.dp), focusScale = 1.04f) { f ->
-        Row(
-            Modifier.fillMaxWidth().background(if (primary) Color.White else if (f) Color(0x99FFFFFF) else Color(0x66595959)).padding(vertical = 10.dp),
-            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val c = if (primary) Color.Black else Color.White
-            Icon(icon, null, tint = c, modifier = Modifier.size(22.dp))
-            Text(text, color = c, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(start = 6.dp), maxLines = 1)
-        }
-    }
+    com.latmpx.player.ui.components.AppButton(text, modifier, primary = primary, icon = icon, minHeight = 44.dp, fontSize = 15.sp, onClick = onClick)
 }

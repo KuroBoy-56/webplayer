@@ -278,14 +278,6 @@ fun Hero(state: AppState, item: Item, tv: Boolean) {
 
 @Composable
 fun HeroButton(text: String, icon: ImageVector, primary: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(4.dp), focusScale = 1.06f) { f ->
-        Row(
-            Modifier.background(if (primary) Color.White else if (f) Color(0xCCFFFFFF) else Color(0x806D6D6E)).padding(horizontal = 18.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val c = if (primary || f) Color.Black else Color.White
-            Icon(icon, null, tint = c)
-            Text(text, color = c, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(start = 6.dp))
-        }
-    }
+    // mismo botón en toda la app (color del distribuidor en el principal)
+    com.latmpx.player.ui.components.AppButton(text, modifier, primary = primary, icon = icon, minHeight = 44.dp, fontSize = 15.sp, onClick = onClick)
 }

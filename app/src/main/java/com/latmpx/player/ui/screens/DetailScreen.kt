@@ -286,16 +286,7 @@ private fun openTrailer(ctx: android.content.Context, id: String) {
 
 @Composable
 private fun WideButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, primary: Boolean, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(5.dp), focusScale = 1.02f) { f ->
-        Row(
-            Modifier.fillMaxWidth().background(if (primary) Color.White else if (f) Color(0x80FFFFFF) else Color(0xFF2E2E2E)).padding(vertical = 11.dp),
-            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val c = if (primary) Color.Black else Color.White
-            androidx.compose.material3.Icon(icon, null, tint = c, modifier = Modifier.size(24.dp))
-            Text(text, color = c, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(start = 6.dp))
-        }
-    }
+    com.latmpx.player.ui.components.AppButton(text, Modifier.fillMaxWidth(), primary = primary, icon = icon, onClick = onClick)
 }
 
 @Composable

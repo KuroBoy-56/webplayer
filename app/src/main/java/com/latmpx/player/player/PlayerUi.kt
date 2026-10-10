@@ -1,6 +1,7 @@
 package com.latmpx.player.player
 
 import androidx.compose.animation.AnimatedVisibility
+import com.latmpx.player.ui.theme.NfRed
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -86,7 +87,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import kotlinx.coroutines.delay
 import java.util.Locale
 
-private val Red = Color(0xFFE50914)
+/** color del distribuidor (rojo sin distribuidor) */
+private val Red: Color get() = NfRed
 private val Dim = Color(0xFFB3B3B3)
 
 enum class PlayerPanel { TRACKS, SPEED, EPISODES }
