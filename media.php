@@ -10,6 +10,13 @@
  */
 require_once __DIR__ . '/includes/core.php';
 
+/* Si el servidor IPTV deja de mandar datos, ffmpeg corta la lectura a los 15 s y se reconecta
+ * (-reconnect) en vez de esperar para siempre: antes la conversión quedaba "Convirtiendo" sin fin. */
+const WP_FF_RW_TIMEOUT = '15000000';
+/* Sin datos de ffmpeg durante este tiempo la conversión se da por colgada y se detiene (segundos). */
+const WP_TC_FIRST_WAIT = 40;
+const WP_TC_IDLE_WAIT = 45;
+
 $url = null;
 if (!wp_verify_signed($url) || !isset($_GET['e'])) {
     http_response_code(403);
@@ -37,16 +44,19 @@ if ($do === 'probe') {
 }
 
 /** segundo exacto del fotograma clave donde arranca la conversión (el video copiado solo puede empezar ahí) */
-function wp_media_kf($url, $t)
+function wp_media_kf($url, $t, $cacheOnly = false)
 {
     if ($t <= 0) return 0.0;
     $ck = 'kf|' . md5($url) . '|' . $t;
     $hit = wp_cache_get($ck, 86400 * 7);
     if ($hit !== null) return (float)$hit;
+    // el reproductor lo pide mientras se convierte: otra conexión al servidor IPTV podría cortar la conversión
+    if ($cacheOnly) return (float)$t;
     $fp = wp_bin('ffprobe');
     list($in, $hdr) = wp_doh_ffmpeg($url);
-    $out = $fp ? wp_run(array_merge([$fp, '-v', 'error', '-user_agent', WP_UA], $hdr, ['-read_intervals', $t . '%+#1', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time', '-of', 'csv=p=0', $in]), 20) : '';
-    $k = is_string($out) && preg_match('/^\s*([0-9.]+)/', $out, $m) ? (float)$m[1] : (float)$t;
+    $out = $fp ? wp_run(array_merge([$fp, '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', WP_FF_RW_TIMEOUT], $hdr, ['-read_intervals', $t . '%+#1', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time', '-of', 'csv=p=0', $in]), 20) : '';
+    if (!is_string($out) || !preg_match('/^\s*([0-9.]+)/', $out, $m)) return (float)$t; // sin respuesta: no se guarda
+    $k = (float)$m[1];
     if ($k > $t || $k < $t - 60) $k = (float)$t;
     wp_cache_set($ck, $k);
     return $k;
@@ -56,7 +66,7 @@ if ($do === 'kf') {
     header('Content-Type: application/json');
     header('Cache-Control: private, max-age=86400');
     $t = max(0, (int)($_GET['t'] ?? 0));
-    echo json_encode(['k' => empty($_GET['v']) ? wp_media_kf($url, $t) : (float)$t]);
+    echo json_encode(['k' => empty($_GET['v']) ? wp_media_kf($url, $t, !empty($_GET['c'])) : (float)$t]);
     exit;
 }
 
@@ -156,7 +166,8 @@ if ($do === 'hls' || $do === 'seg') {
         @touch($dir . '/ping');
         $probe = $live ? null : wp_probe($url);
         $vcodec = $probe['video'] ?? '';
-        $cmd = [$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'];
+        if ($t > 0 && !$live && $v === '') wp_media_kf($url, $t); // antes de abrir la conversión (ver do=tc)
+        $cmd = [$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', WP_FF_RW_TIMEOUT, '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'];
         if ($t > 0 && !$live) array_push($cmd, '-ss', (string)$t);
         array_push($cmd, '-fflags', '+genpts+discardcorrupt', '-err_detect', 'ignore_err');
         if ($ffhdr) array_push($cmd, ...$ffhdr);
@@ -251,8 +262,11 @@ $vtc = !empty($_GET['v']);
 $vsafe = ($_GET['v'] ?? '') === '2';
 $probe = wp_probe($url);
 $vcodec = $probe['video'] ?? '';
+// fotograma clave de inicio antes de abrir la conversión (una conexión a la vez al servidor IPTV);
+// el reproductor lo lee después de la caché (do=kf&c=1)
+if ($t > 0 && !$vtc) wp_media_kf($url, $t);
 
-$cmd = [$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'];
+$cmd = [$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', WP_FF_RW_TIMEOUT, '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'];
 // con video copiado ffmpeg arranca en el fotograma clave anterior a t; el reproductor pide ese segundo exacto (do=kf) para cuadrar el tiempo
 if ($t > 0) array_push($cmd, '-ss', (string)$t);
 // archivos dañados o con marcas de tiempo rotas: se ignoran los paquetes corruptos en vez de detener la conversión
@@ -292,21 +306,33 @@ header('Accept-Ranges: none');
 $sent = 0;
 $errFile = wp_cache_dir() . '/ff_' . $who . '.err';
 // hasta 3 intentos: si el servidor IPTV todavía cuenta la conexión anterior del navegador, rechaza la primera
-for ($try = 0; $try < 3 && $sent === 0; $try++) {
+// (un servidor que no manda nada no se reintenta: el reproductor ya pasa a otro modo)
+$stalled = false;
+for ($try = 0; $try < 3 && $sent === 0 && !$stalled; $try++) {
     if ($try > 0) { sleep(2); if (connection_aborted()) break; }
     $pr = wp_spawn_stream($cmd, $errFile, $pidFile);
     if (!$pr) break;
     $myPid = (int)@file_get_contents($pidFile);
-    $idle = 0;
+    // lectura sin bloquear: si ffmpeg se queda sin datos (servidor IPTV colgado) se detiene a tiempo
+    // y el reproductor pasa a otro modo, en vez de quedarse "Convirtiendo" para siempre
+    @stream_set_blocking($pr['h'], false);
+    $last = microtime(true);
     while (true) {
-        $chunk = @fread($pr['h'], 65536);
+        $r = [$pr['h']]; $w = null; $x = null;
+        $n = @stream_select($r, $w, $x, 1, 0);
+        $chunk = $n ? @fread($pr['h'], 262144) : '';
         if ($chunk === false) break;
         if ($chunk === '') {
             if (feof($pr['h'])) break;
             if (!$pr['alive']()) { $chunk = (string)@stream_get_contents($pr['h']); if ($chunk === '') break; }
-            else { usleep(20000); if (++$idle > 3000) break; continue; } // 60 s sin datos
+            else {
+                $wait = $sent === 0 ? WP_TC_FIRST_WAIT : WP_TC_IDLE_WAIT;
+                if (microtime(true) - $last > $wait) { @file_put_contents($errFile, "sin datos de ffmpeg en {$wait} s\n", FILE_APPEND); $stalled = true; break; }
+                if (connection_aborted()) break;
+                continue;
+            }
         }
-        $idle = 0;
+        $last = microtime(true);
         echo $chunk;
         @flush();
         $sent += strlen($chunk);

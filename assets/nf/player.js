@@ -1193,13 +1193,19 @@
             v.src = src;
             if (!wasPaused) self.autoplay();
         }, hadDirect ? 1200 : 50);
-        // el video copiado arranca en el fotograma clave anterior: se ajusta el tiempo real
+        // el video copiado arranca en el fotograma clave anterior: se ajusta el tiempo real. El servidor lo calcula
+        // antes de convertir; se lee de su caché cuando ya llegan datos (c=1: sin abrir otra conexión al servidor IPTV)
         if (t >= 1) {
             var tc = this.tc;
-            fetch(m.tc.replace('do=tc', 'do=kf') + '&t=' + Math.floor(t) + (vt ? '&v=1' : ''), { credentials: 'same-origin' })
-                .then(function (r) { return r.json(); })
-                .then(function (j) { if (self.tc === tc && j && isFinite(j.k)) { tc.off = +j.k; self.applySub(); self.updTime && self.updTime(); } })
-                .catch(function () {});
+            var askKf = function () {
+                v.removeEventListener('loadeddata', askKf);
+                if (self.tc !== tc) return;
+                fetch(m.tc.replace('do=tc', 'do=kf') + '&t=' + Math.floor(t) + (vt ? '&v=1' : '') + '&c=1', { credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (j) { if (self.tc === tc && j && isFinite(j.k)) { tc.off = +j.k; self.applySub(); self.updTime && self.updTime(); } })
+                    .catch(function () {});
+            };
+            v.addEventListener('loadeddata', askKf);
         }
         this.loadTimer = setTimeout(function () { if (v.readyState < 2 && self.tc) { if (self.tc.vt !== 2 && !self._safeTried) { self._safeTried = true; self.toastMsg('Probando un modo de reproducción más compatible…'); self.startTc(self.T(), self.tc.a, 2); return; } self.tc = null; self.o.media = null; self.toastMsg('La conversión tardó demasiado'); self.idx--; self.next(); } }, 45000);
     };

@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Conversión de audio que no terminaba (10 de octubre)
+- **Antes:** al elegir otro idioma (o con audio Dolby/DTS) el video quedaba "Convirtiendo" para siempre cuando el servidor IPTV dejaba de mandar datos: ffmpeg esperaba sin límite, `media.php` esperaba a ffmpeg sin límite y el reproductor nunca recibía el video. El ffmpeg colgado seguía vivo en el hosting aunque se cerrara el video.
+- **Ahora:** ffmpeg corta una lectura sin datos a los 15 s y se reconecta en el mismo punto (`-rw_timeout` + `-reconnect`), así la conversión sigue aunque el servidor se trabe. `media.php` lee sin bloquearse: si ffmpeg no entrega nada en 40 s (o se queda 45 s sin datos a mitad del video) lo detiene y responde un error, y el reproductor pasa al modo compatible o vuelve al video directo. No quedan procesos colgados.
+- El fotograma clave de inicio se calcula antes de abrir la conversión (una sola conexión al servidor IPTV a la vez); el reproductor lo lee de la caché cuando ya llegan datos (`do=kf&c=1`).
+- Probado con un servidor de prueba que se traba cada 20 MB (antes: colgado para siempre; ahora: la película completa), uno que nunca responde (antes: colgado; ahora: error a los ~70 s y vuelve al video directo) y uno que acepta una sola conexión.
+
 ## Seguridad (10 de octubre)
 - **Clave de TMDB fuera del código.** Ya no está escrita en `includes/core.php`. Se lee de `'tmdb_key'` en `includes/panel_secret.php` (no se sube a GitHub) y, si falta, se usa la clave TMDB que manda el panel. **Cambia la clave vieja en tu cuenta de TMDB**: quedó en el historial de GitHub y en los `webplayer.zip` anteriores.
 - **Estado (`estado.php`) solo muestra lo tuyo.** "Últimos guardados de progreso" lista solo los guardados del usuario que tiene la sesión abierta (cada entrada lleva una huella del usuario, no su nombre). La lista de procesos del hosting y el botón para detener todas las conversiones salieron de esta página: se manejan desde el panel (Guía EPG › motor multimedia).
