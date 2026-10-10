@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import PinDialog from '../components/PinDialog';
-import { Focusable } from '../components/ui';
+import { Button } from '../components/ui';
 import { catalog } from '../data/catalog';
 import { panelSubmit } from '../api/panel';
 import { hasMasterKey } from '../lib/aes';
@@ -26,14 +26,9 @@ const SUBS = [
 
 function Setting({ label, value, onPress }: { label: string; value: string; onPress: () => void }) {
   return (
-    <Focusable onPress={onPress} style={f => [s.set, f && s.setF]}>
-      {f => (
-        <>
-          <Text style={[s.setLabel, f && { color: '#000' }]}>{label}</Text>
-          <Text style={[s.setValue, f && { color: '#333' }]}>{value}</Text>
-        </>
-      )}
-    </Focusable>
+    <View style={s.set}>
+      <Button label={label} value={value} width={px(1000)} big last onPress={onPress} />
+    </View>
   );
 }
 
@@ -156,15 +151,12 @@ export default function Account() {
 const s = themed(() =>
   StyleSheet.create({
     root: { paddingTop: px(130), paddingHorizontal: SIDE, paddingBottom: px(100) },
-    title: { color: '#fff', fontSize: px(48), fontWeight: '800' },
-    card: { backgroundColor: C.bg2, borderRadius: px(10), padding: px(30), marginTop: px(20), width: px(1000) },
+    title: { color: C.text, fontSize: px(48), fontWeight: '800' },
+    card: { backgroundColor: C.bg2, borderRadius: px(12), padding: px(30), marginTop: px(20), width: px(1000) },
     row: { color: C.sub, fontSize: px(28), marginBottom: px(10) },
-    val: { color: '#fff', fontWeight: '700' },
-    sub: { color: '#fff', fontSize: px(36), fontWeight: '800', marginTop: px(40), marginBottom: px(14) },
-    set: { width: px(1000), height: px(84), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: px(28), backgroundColor: C.bg2, borderRadius: px(8), marginBottom: px(10) },
-    setF: { backgroundColor: '#fff' },
-    setLabel: { color: '#fff', fontSize: px(28), fontWeight: '700' },
-    setValue: { color: C.sub, fontSize: px(26) },
+    val: { color: C.text, fontWeight: '700' },
+    sub: { color: C.text, fontSize: px(36), fontWeight: '800', marginTop: px(40), marginBottom: px(14) },
+    set: { marginBottom: px(12) },
     ver: { color: C.dim, fontSize: px(22), marginTop: px(40) },
   }),
 );

@@ -8,7 +8,7 @@ import { catalog, Item } from '../data/catalog';
 import { fold } from '../lib/util';
 import { useNav } from '../nav';
 import { useAppState } from '../state';
-import { C, px, SIDE, themed } from '../theme';
+import { alpha, C, px, SIDE, themed } from '../theme';
 
 export const COLS = 7;
 
@@ -86,7 +86,7 @@ export default function Grid({ title, mode, keyName, kind }: { title: string; mo
               />
             ) : null}
             <Focusable onPress={toggle} style={f => [s.magBtn, f && s.magBtnF]}>
-              {f => (q ? <Text style={[s.clear, f && s.clearF]}>✕</Text> : <MagnifierIcon color={f ? '#000' : '#fff'} />)}
+              {f => (q ? <Text style={[s.clear, f && s.clearF]}>✕</Text> : <MagnifierIcon color={f ? C.onFocus : C.text} />)}
             </Focusable>
           </View>
         ) : null}
@@ -104,16 +104,16 @@ const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg, paddingTop: px(60) },
     head: { flexDirection: 'row', alignItems: 'center', marginHorizontal: SIDE, marginBottom: px(10), minHeight: px(80) },
-    title: { flex: 1, color: '#fff', fontSize: px(52), fontWeight: '800' },
+    title: { flex: 1, color: C.text, fontSize: px(52), fontWeight: '800' },
     searchBox: { flexDirection: 'row', alignItems: 'center', marginLeft: px(20) },
-    input: { width: px(520), height: px(72), backgroundColor: '#333', borderRadius: px(6), color: '#fff', fontSize: px(30), paddingHorizontal: px(24), marginRight: px(14) },
-    magBtn: { width: px(72), height: px(72), borderRadius: px(36), alignItems: 'center', justifyContent: 'center', borderWidth: px(3), borderColor: 'transparent' },
-    magBtnF: { backgroundColor: '#fff', borderColor: '#fff', transform: [{ scale: 1.1 }] },
+    input: { width: px(520), height: px(72), backgroundColor: C.card, borderRadius: px(8), color: C.text, fontSize: px(30), paddingHorizontal: px(24), marginRight: px(14) },
+    magBtn: { width: px(72), height: px(72), borderRadius: px(36), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: alpha(C.focus, 0.2), backgroundColor: alpha(C.focus, 0.15) },
+    magBtnF: { backgroundColor: C.focus, borderColor: C.focus, transform: [{ scale: 1.1 }] },
     mag: { width: px(40), height: px(40) },
     magRing: { position: 'absolute', left: 0, top: 0, width: px(28), height: px(28), borderRadius: px(14), borderWidth: px(4) },
     magHandle: { position: 'absolute', left: px(22), top: px(28), width: px(16), height: px(5), borderRadius: px(3), transform: [{ rotate: '45deg' }] },
-    clear: { color: '#fff', fontSize: px(34), fontWeight: '700' },
-    clearF: { color: '#000' },
+    clear: { color: C.text, fontSize: px(34), fontWeight: '700' },
+    clearF: { color: C.onFocus },
     count: { color: C.sub, fontSize: px(30), fontWeight: '400' },
   }),
 );

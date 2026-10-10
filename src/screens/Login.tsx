@@ -1,7 +1,7 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
-import { panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit } from '../api/panel';
+import { panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
 import { loginAll } from '../api/xtream';
 import { Button, Logo } from '../components/ui';
 import { http, json } from '../lib/http';
@@ -11,7 +11,7 @@ import { features, scoped } from '../lib/tenant';
 import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
 import { deviceId, setSession } from '../state';
-import { C, px, themed } from '../theme';
+import { alpha, C, px, themed } from '../theme';
 
 async function tmdbPosters(): Promise<string[]> {
   const key = read(scoped('tmdb_key'));
@@ -81,10 +81,13 @@ export default function Login() {
       return;
     }
     setError('');
-    setBusy('Creando tu demo de 24 horas…');
-    const d = await panelDemo(dev);
+    // el código de un revendedor escrito en Contraseña deja la demo a su nombre en el panel
+    const reseller = resellerCode(pass);
+    setBusy(reseller ? 'Creando tu demo de 24 horas (revendedor ' + reseller + ')…' : 'Creando tu demo de 24 horas…');
+    const d = await panelDemo(dev, reseller);
     if (!d.ok) {
       setBusy('');
+      // 404 (código de revendedor que no existe): la demo sigue disponible
       if (d.code === 403) write(scoped('demo_used'), '1');
       setError(d.error || 'No se pudo crear la demo');
       return;
@@ -99,6 +102,8 @@ export default function Login() {
     const ln = assigned[0];
     enter(ln.user, ln.pass, assigned.filter(a => a.user === ln.user).map(a => ({ name: a.name, base: a.base })));
   };
+
+  const canDemo = hasMasterKey() && features().demo;
 
   return (
     <View style={s.root}>
@@ -142,11 +147,12 @@ export default function Login() {
         {busy ? <Text style={s.busy}>{busy}</Text> : null}
         <View style={s.btns}>
           <Button label={busy ? 'Entrando…' : 'Ingresar'} primary onPress={() => !busy && enter(user, pass)} />
-          {hasMasterKey() && features().demo ? <Button label="Autodemo" onPress={() => !busy && demo()} /> : null}
+          {canDemo ? <Button label="Autodemo" last onPress={() => !busy && demo()} /> : null}
         </View>
+        {canDemo ? <Text style={s.tip}>¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.</Text> : null}
         {assigned.length ? (
           <View style={s.btns}>
-            <Button label={'Entrar con la cuenta de este equipo (' + assigned[0].user + ')'} small onPress={() => !busy && enterAssigned()} />
+            <Button label={'Entrar con la cuenta de este equipo (' + assigned[0].user + ')'} small last onPress={() => !busy && enterAssigned()} />
           </View>
         ) : null}
         <Text style={s.device}>Código del equipo: {dev}</Text>
@@ -157,17 +163,18 @@ export default function Login() {
 
 const s = themed(() =>
   StyleSheet.create({
-    root: { flex: 1, backgroundColor: '#000' },
+    root: { flex: 1, backgroundColor: C.bg },
     mosaic: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, flexDirection: 'row', flexWrap: 'wrap', transform: [{ rotate: '-8deg' }, { scale: 1.3 }] },
     mosaicImg: { width: px(192), height: px(288), margin: px(4), borderRadius: px(6) },
-    shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.72)' },
+    shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha(C.bg, 0.72) },
     top: { position: 'absolute', left: px(80), top: px(40) },
-    box: { alignSelf: 'center', marginTop: px(150), width: px(760), backgroundColor: 'rgba(0,0,0,0.78)', borderRadius: px(10), padding: px(60) },
-    title: { color: '#fff', fontSize: px(52), fontWeight: '800', marginBottom: px(30) },
-    input: { height: px(84), backgroundColor: '#333', borderRadius: px(6), color: '#fff', fontSize: px(32), paddingHorizontal: px(24), marginBottom: px(22) },
+    box: { alignSelf: 'center', marginTop: px(150), width: px(760), backgroundColor: alpha(C.bg2, 0.9), borderRadius: px(12), padding: px(60) },
+    title: { color: C.text, fontSize: px(52), fontWeight: '800', marginBottom: px(30) },
+    input: { height: px(84), backgroundColor: C.card, borderRadius: px(8), color: C.text, fontSize: px(32), paddingHorizontal: px(24), marginBottom: px(22) },
     error: { color: '#e87c03', fontSize: px(26), marginBottom: px(14) },
     busy: { color: C.sub, fontSize: px(26), marginBottom: px(14) },
     btns: { flexDirection: 'row', marginTop: px(12) },
+    tip: { color: C.dim, fontSize: px(22), marginTop: px(14) },
     device: { color: C.dim, fontSize: px(24), marginTop: px(30) },
   }),
 );

@@ -6,7 +6,7 @@ import { BackHandler, Modal, StyleSheet, Text, View } from 'react-native';
 import { Button, Focusable, Logo } from '../components/ui';
 import { brandName, features, useBrandRev } from '../lib/tenant';
 import { useAppState } from '../state';
-import { C, px, SIDE, themed } from '../theme';
+import { alpha, C, px, SIDE, themed } from '../theme';
 import Account from './Account';
 import Browse from './Browse';
 import Live from './Live';
@@ -65,7 +65,12 @@ export default function Main({ active }: { active: boolean }) {
         <View style={s.items}>
           {menu.map(([key, label]) => (
             <Focusable key={key} onPress={() => setSection(key)} style={f => [s.item, f && s.itemF]}>
-              {f => <Text style={[s.itemText, key === section && s.itemOn, f && s.itemTextF]}>{label}</Text>}
+              {f => (
+                <>
+                  <Text style={[s.itemText, key === section && s.itemOn, f && s.itemTextF]}>{label}</Text>
+                  {key === section && !f ? <View style={s.itemBar} /> : null}
+                </>
+              )}
             </Focusable>
           ))}
         </View>
@@ -77,7 +82,7 @@ export default function Main({ active }: { active: boolean }) {
             <Text style={s.dlgTitle}>¿Quieres salir de {brandName()}?</Text>
             <View style={s.dlgBtns}>
               <Button label="Salir" primary onPress={() => back.exitApp()} />
-              <Button label="Cancelar" preferred onPress={() => setExitAsk(false)} />
+              <Button label="Cancelar" preferred last onPress={() => setExitAsk(false)} />
             </View>
           </View>
         </View>
@@ -90,17 +95,18 @@ const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg },
     content: { flex: 1 },
-    menu: { position: 'absolute', left: 0, top: 0, right: 0, height: px(110), flexDirection: 'row', alignItems: 'center', paddingHorizontal: SIDE, backgroundColor: 'rgba(0,0,0,0.6)' },
+    menu: { position: 'absolute', left: 0, top: 0, right: 0, height: px(110), flexDirection: 'row', alignItems: 'center', paddingHorizontal: SIDE, backgroundColor: alpha(C.bg, 0.7) },
     items: { flexDirection: 'row', marginLeft: px(40), flex: 1 },
-    item: { paddingHorizontal: px(20), height: px(56), justifyContent: 'center', borderRadius: px(28), marginRight: px(4) },
-    itemF: { backgroundColor: '#fff' },
-    itemText: { color: '#e5e5e5', fontSize: px(28) },
-    itemOn: { color: '#fff', fontWeight: '800' },
-    itemTextF: { color: '#000' },
+    item: { paddingHorizontal: px(20), height: px(56), justifyContent: 'center', alignItems: 'center', borderRadius: px(28), marginRight: px(4) },
+    itemF: { backgroundColor: C.focus },
+    itemText: { color: C.sub, fontSize: px(28) },
+    itemOn: { color: C.text, fontWeight: '800' },
+    itemTextF: { color: C.onFocus },
+    itemBar: { position: 'absolute', left: px(20), right: px(20), bottom: px(4), height: px(4), borderRadius: px(2), backgroundColor: C.red },
     loading: { color: C.sub, fontSize: px(22) },
     dlgBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },
     dlg: { backgroundColor: C.bg2, borderRadius: px(12), padding: px(50), width: px(760) },
-    dlgTitle: { color: '#fff', fontSize: px(38), fontWeight: '800', marginBottom: px(30) },
+    dlgTitle: { color: C.text, fontSize: px(38), fontWeight: '800', marginBottom: px(30) },
     dlgBtns: { flexDirection: 'row' },
   }),
 );

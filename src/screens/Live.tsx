@@ -4,12 +4,12 @@ import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem } from '../actions';
 import { channelEpg, EpgEntry } from '../api/xtream';
 import PinDialog from '../components/PinDialog';
-import { Focusable, Message, Spinner } from '../components/ui';
+import { Button, Focusable, Message, Spinner } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
 import { clock, digits, nowSec } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, toggleFav, useAppState } from '../state';
-import { C, px, themed } from '../theme';
+import { alpha, C, px, themed } from '../theme';
 
 export default function Live() {
   const nav = useNav();
@@ -56,11 +56,11 @@ export default function Live() {
             style={f => [s.cat, c.id === cat && s.catOn, f && s.catF]}>
             {f => (
               <>
-                <Text style={[s.catText, f && { color: '#000' }]} numberOfLines={1}>
+                <Text style={[s.catText, f && { color: C.onFocus }]} numberOfLines={1}>
                   {c.locked ? '🔒 ' : ''}
                   {c.name}
                 </Text>
-                {c.id !== 'fav' ? <Text style={[s.catCount, f && { color: '#333' }]}>{c.count}</Text> : null}
+                {c.id !== 'fav' ? <Text style={[s.catCount, f && { color: C.onFocus }]}>{c.count}</Text> : null}
               </>
             )}
           </Focusable>
@@ -77,9 +77,9 @@ export default function Live() {
               <Focusable onPress={() => openItem(nav, c, channels)} onFocus={() => setFocused(c)} style={f => [s.ch, f && s.chF]}>
                 {f => (
                   <>
-                    <Text style={[s.chNum, f && { color: '#000' }]}>{c.num || index + 1}</Text>
+                    <Text style={[s.chNum, f && { color: C.onFocus }]}>{c.num || index + 1}</Text>
                     <View style={s.logoBox}>{c.poster ? <Image source={{ uri: c.poster }} style={s.logo} resizeMode="contain" /> : null}</View>
-                    <Text style={[s.chName, f && { color: '#000' }]} numberOfLines={1}>
+                    <Text style={[s.chName, f && { color: C.onFocus }]} numberOfLines={1}>
                       {c.name}
                     </Text>
                     {isFav('live', c.id) ? <Text style={s.star}>★</Text> : null}
@@ -121,9 +121,13 @@ export default function Live() {
                   {clock(e.s)}  {e.t}
                 </Text>
               ))}
-            <Focusable onPress={() => toggleFav('live', focused.id, focused.name, focused.poster, focused.cat)} style={f => [s.favBtn, f && s.favBtnF]}>
-              {f => <Text style={[s.favText, f && { color: '#000' }]}>{isFav('live', focused.id) ? '★ Quitar de favoritos' : '☆ Agregar a favoritos'}</Text>}
-            </Focusable>
+            <View style={s.favBtn}>
+              <Button
+                label={isFav('live', focused.id) ? '★ Quitar de favoritos' : '☆ Agregar a favoritos'}
+                last
+                onPress={() => toggleFav('live', focused.id, focused.name, focused.poster, focused.cat)}
+              />
+            </View>
           </>
         ) : (
           <Text style={s.desc}>Elige un canal para ver la guía.</Text>
@@ -146,29 +150,27 @@ const s = themed(() =>
     root: { flex: 1, flexDirection: 'row', paddingTop: px(130), paddingLeft: px(60) },
     cats: { width: px(440), flexGrow: 0 },
     cat: { height: px(70), flexDirection: 'row', alignItems: 'center', paddingHorizontal: px(22), borderRadius: px(6), marginBottom: px(6) },
-    catOn: { backgroundColor: 'rgba(229,9,20,0.35)' },
-    catF: { backgroundColor: '#fff' },
-    catText: { color: '#fff', fontSize: px(26), flex: 1 },
+    catOn: { backgroundColor: alpha(C.red, 0.35) },
+    catF: { backgroundColor: C.focus },
+    catText: { color: C.text, fontSize: px(26), flex: 1 },
     catCount: { color: C.dim, fontSize: px(22), marginLeft: px(10) },
     list: { width: px(760), marginLeft: px(24) },
-    ch: { height: px(88), flexDirection: 'row', alignItems: 'center', paddingHorizontal: px(18), borderRadius: px(6), marginBottom: px(8), backgroundColor: 'rgba(255,255,255,0.05)' },
-    chF: { backgroundColor: '#fff', transform: [{ scale: 1.03 }] },
+    ch: { height: px(88), flexDirection: 'row', alignItems: 'center', paddingHorizontal: px(18), borderRadius: px(6), marginBottom: px(8), backgroundColor: alpha(C.text, 0.05) },
+    chF: { backgroundColor: C.focus, transform: [{ scale: 1.03 }] },
     chNum: { color: C.dim, fontSize: px(24), width: px(70) },
     logoBox: { width: px(110), height: px(64), marginRight: px(18), justifyContent: 'center' },
     logo: { width: '100%', height: '100%' },
-    chName: { color: '#fff', fontSize: px(28), flex: 1 },
+    chName: { color: C.text, fontSize: px(28), flex: 1 },
     star: { color: '#f5c518', fontSize: px(28), marginLeft: px(10) },
     guide: { flex: 1, marginLeft: px(30), marginRight: px(60), backgroundColor: C.bg2, borderRadius: px(10), padding: px(30), marginBottom: px(40) },
     guideLogo: { width: px(200), height: px(110), marginBottom: px(14) },
-    guideName: { color: '#fff', fontSize: px(36), fontWeight: '800' },
+    guideName: { color: C.text, fontSize: px(36), fontWeight: '800' },
     live: { color: C.red, fontSize: px(24), fontWeight: '800', marginTop: px(16) },
-    prog: { color: '#fff', fontSize: px(30), fontWeight: '700', marginTop: px(6) },
-    bar: { height: px(6), backgroundColor: '#444', marginTop: px(12), borderRadius: px(3) },
+    prog: { color: C.text, fontSize: px(30), fontWeight: '700', marginTop: px(6) },
+    bar: { height: px(6), backgroundColor: alpha(C.text, 0.25), marginTop: px(12), borderRadius: px(3) },
     barFill: { height: '100%', backgroundColor: C.red, borderRadius: px(3) },
     desc: { color: C.sub, fontSize: px(24), marginTop: px(14), lineHeight: px(34) },
-    next: { color: '#ddd', fontSize: px(24), marginTop: px(10) },
-    favBtn: { marginTop: px(24), height: px(60), borderRadius: px(6), justifyContent: 'center', paddingHorizontal: px(20), backgroundColor: 'rgba(255,255,255,0.12)' },
-    favBtnF: { backgroundColor: '#fff' },
-    favText: { color: '#fff', fontSize: px(26), fontWeight: '700' },
+    next: { color: C.sub, fontSize: px(24), marginTop: px(10) },
+    favBtn: { marginTop: px(24), flexDirection: 'row' },
   }),
 );

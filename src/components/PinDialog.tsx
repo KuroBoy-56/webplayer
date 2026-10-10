@@ -38,7 +38,7 @@ export default function PinDialog({ visible, onClose, onOk }: { visible: boolean
           {err ? <Text style={s.err}>{err}</Text> : null}
           <View style={s.btns}>
             <Button label="Aceptar" primary onPress={check} />
-            <Button label="Cancelar" onPress={onClose} />
+            <Button label="Cancelar" last onPress={onClose} />
           </View>
         </View>
       </View>
@@ -50,9 +50,9 @@ const s = themed(() =>
   StyleSheet.create({
     back: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },
     box: { width: px(700), backgroundColor: C.bg2, borderRadius: px(12), padding: px(50) },
-    title: { color: '#fff', fontSize: px(44), fontWeight: '800' },
+    title: { color: C.text, fontSize: px(44), fontWeight: '800' },
     sub: { color: C.sub, fontSize: px(26), marginTop: px(10), marginBottom: px(24) },
-    input: { height: px(84), backgroundColor: '#333', color: '#fff', fontSize: px(40), borderRadius: px(6), paddingHorizontal: px(24), letterSpacing: px(12) },
+    input: { height: px(84), backgroundColor: C.card, color: C.text, fontSize: px(40), borderRadius: px(8), paddingHorizontal: px(24), letterSpacing: px(12) },
     err: { color: '#e87c03', fontSize: px(26), marginTop: px(12) },
     btns: { flexDirection: 'row', marginTop: px(28) },
   }),

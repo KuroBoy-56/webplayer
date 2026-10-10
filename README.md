@@ -12,6 +12,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Inicio de sesión** solo con usuario y contraseña: se prueba a la vez en todos los DNS
   del panel y entra en el que coincida. Si el panel tiene una cuenta asignada a este equipo
   aparece un botón para entrar con ella. Fondo con carteles de estreno (TMDB del panel).
+- **Autodemo con código de revendedor**: si en *Contraseña* hay un código de 6 letras y números
+  (con al menos una letra, p. ej. `RV7K2M`), *Autodemo* lo envía en mayúsculas (`reseller` dentro de
+  `auto_demo`) y la demo queda a nombre de ese revendedor en el panel. Solo números o cualquier otra
+  cosa no se envía. Código que no existe: se muestra el aviso del panel y la demo sigue disponible.
+- **Botones iguales a Roku, Windows y la web**: un solo componente en toda la app (inicio de sesión,
+  distribuidor, avisos, diálogos, Cuenta y menú del reproductor). Principal = color del distribuidor
+  (rojo sin distribuidor) con texto de contraste; secundario = blanco translúcido con borde fino; con
+  el foco del control, borde blanco de 3 px y crece un poco con una animación corta.
 - **Inicio estilo Netflix**: portada grande, Continuar viendo, Mi lista, Top 10,
   plataformas (Netflix, Disney+, HBO Max, Prime, Marvel, Navidad, Halloween…) y géneros
   (Acción, Suspenso, Aventura, Anime, Drama…), igual que la web.
@@ -19,9 +27,16 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   *Atrás* vuelve a Inicio y, en Inicio, pregunta si quieres salir.
 - **Ficha** con sinopsis, reparto, temporadas, episodios con su avance y "Más títulos como este".
 - **Actores**: en la ficha, el reparto (fotos de TMDB) abre la página del actor con su filmografía, solo los títulos que el servidor tiene (título normalizado y año ±1, como la app de Windows y la web). Clave TMDB del panel o la incorporada.
-- **Reproductor nativo de Vega** (MP4, MKV, AVI, MOV, MPEG-TS): continuar donde quedó,
-  ◀▶ 10 s, OK pausa, ▼ o MENÚ para audio y subtítulos, idioma preferido automático y
-  siguiente episodio solo.
+- **Reproductor nativo de Vega** (MP4, MKV, AVI, MOV, MPEG-TS) sin límite de resolución ni de
+  bitrate (4K si el equipo y el archivo lo tienen): continuar donde quedó, ◀▶ 10 s, OK pausa,
+  ▼ o MENÚ para audio y subtítulos, idioma preferido automático y siguiente episodio solo.
+- **Audio y subtítulos como en Roku**: se lee la cabecera del MKV/MP4 para listar todas las pistas
+  con su idioma (Español latino, Inglés…) y su códec. El cambio de audio se comprueba en el
+  reproductor; si el equipo no lo toma o no decodifica ese audio (DTS, TrueHD…), lo prepara el
+  **motor del panel** (`api/media_vega.php`: video sin cambios + ese audio en AAC, HLS por Media
+  Source Extensions desde el segundo actual). Los subtítulos de texto del archivo se eligen en el
+  reproductor o, si el equipo no los muestra, el panel los convierte a WebVTT y se dibujan encima del
+  video. *Desactivados* los quita. El panel necesita ffmpeg (Guía EPG).
 - **TV en vivo**: categorías, canales, guía EPG (proveedor y, si no hay, la del panel),
   favoritos, cambio de canal con ▲▼ dentro del reproductor.
 - **Deportes**: partidos de hoy y mañana con el canal encontrado automáticamente
@@ -37,6 +52,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   borra (con la sesión) y vuelve a pedirlo con el motivo; sin conexión sigue con lo guardado
   hasta 72 h. **Cuenta › Cambiar distribuidor** cierra sesión y pide otro número. Necesita la
   llave del panel (sin llave, *Continuar* avisa y *Omitir* sigue funcionando).
+  Con distribuidor, todo sigue su marca: pantalla de inicio (su fondo con su logo al centro; sin logo,
+  su nombre), menú superior, inicio de sesión, Cuenta, avisos, reproductor, anillos de foco y barras
+  de progreso. Con *Omitir* todo queda como siempre.
 - **Control parental**: oculta adultos; se desbloquea con el PIN del panel (0000 por defecto).
 
 ## Subir a la Amazon Appstore
@@ -98,8 +116,9 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
 
 ## Límites conocidos
 
-- La TV en vivo usa MPEG-TS (`.ts`), que el reproductor de Vega abre directo. HLS (`.m3u8`)
-  necesitaría integrar Shaka Player; no hace falta mientras el proveedor sirva `.ts`.
+- La TV en vivo usa MPEG-TS (`.ts`), que el reproductor de Vega abre directo. HLS (`.m3u8`) del
+  proveedor necesitaría integrar Shaka Player; no hace falta mientras el proveedor sirva `.ts`. El
+  HLS del motor del panel (audio cambiado) se reproduce con un lector propio por MSE (`src/player/hls.ts`).
 - Autodemo, registrar el equipo y la activación por código MAC usan `login.php` con la llave
   maestra, que no va en el código: se agrega al compilar (ver [config/README.md](config/README.md)).
   Sin llave esos botones no aparecen.

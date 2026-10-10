@@ -68,10 +68,10 @@ const s = themed(() =>
     head: { flexDirection: 'row', marginBottom: px(30) },
     photo: { width: px(240), height: px(360), borderRadius: px(10), backgroundColor: C.card, marginRight: px(40) },
     txt: { flex: 1, maxWidth: px(1300), justifyContent: 'flex-end' },
-    name: { color: '#fff', fontSize: px(60), fontWeight: '900' },
+    name: { color: C.text, fontSize: px(60), fontWeight: '900' },
     meta: { color: C.sub, fontSize: px(26), marginTop: px(8) },
-    bio: { color: '#e5e5e5', fontSize: px(26), lineHeight: px(38), marginTop: px(16) },
-    h2: { color: '#fff', fontSize: px(36), fontWeight: '800', marginTop: px(26) },
+    bio: { color: C.text, fontSize: px(26), lineHeight: px(38), marginTop: px(16) },
+    h2: { color: C.text, fontSize: px(36), fontWeight: '800', marginTop: px(26) },
     count: { color: C.sub, fontWeight: '400' },
   }),
 );

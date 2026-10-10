@@ -37,6 +37,10 @@ export function panelApiBase(): string {
 // Llama al panel por https y, si el certificado del hosting falla, por http (igual que la web).
 // El modo que funciona se recuerda.
 let panelMode = '';
+// esquema con el que respondió el panel ('' si aún no se sabe)
+export function panelScheme(): string {
+  return panelMode;
+}
 export async function panel(file: string, method = 'GET', body = '', type = '', query = ''): Promise<HttpResult> {
   const base = panelApiBase();
   if (!base) return { code: 0, body: '', ok: false };
@@ -165,7 +169,7 @@ export function bindSession(fn: () => Session | null): void {
 }
 
 // el token es de cada distribuidor (con Omitir, la clave de siempre)
-async function cloudToken(forceNew = false): Promise<string> {
+export async function cloudToken(forceNew = false): Promise<string> {
   const key = scoped('cloud_token2');
   if (!forceNew) {
     const t = read(key);
@@ -258,14 +262,24 @@ export async function panelSubmit(deviceId: string, user: string, pass: string, 
   return { ok: false, error: panelError(r, 'No se pudo registrar el equipo') };
 }
 
-// demo de 24 horas, una por equipo
-export async function panelDemo(deviceId: string): Promise<{ ok: boolean; user?: string; pass?: string; error?: string; code: number }> {
-  const r = await panelLogin('auto_demo', { mac_address: deviceId });
+// código de demo de un revendedor: 6 letras y números con al menos una letra (solo números sería
+// un número de distribuidor)
+export function resellerCode(text: string): string {
+  const t = text.trim();
+  return /^(?=.*[A-Za-z])[A-Za-z0-9]{6}$/.test(t) ? t.toUpperCase() : '';
+}
+
+// demo de 24 horas, una por equipo. reseller: código del revendedor escrito en Contraseña (la demo
+// queda a su nombre en el panel); cualquier otra cosa no se envía.
+export async function panelDemo(deviceId: string, reseller = ''): Promise<{ ok: boolean; user?: string; pass?: string; error?: string; code: number }> {
+  const code = resellerCode(reseller);
+  const r = await panelLogin('auto_demo', code ? { mac_address: deviceId, reseller: code } : { mac_address: deviceId });
   const j = json(r);
   if (r.ok && j && str(j.status) === 'ok' && str(j.username)) return { ok: true, user: str(j.username), pass: str(j.password), code: r.code };
   let fb = 'No se pudo crear la demo';
   if (r.code === 403) fb = 'Demo ya utilizada en este dispositivo o dispositivo ya registrado.';
   if (r.code === 429) fb = 'Demasiadas demos desde esta conexión. Inténtalo mañana.';
+  if (r.code === 404 && code) fb = 'El código de revendedor no existe o no está activo.';
   return { ok: false, error: panelError(r, fb), code: r.code };
 }
 

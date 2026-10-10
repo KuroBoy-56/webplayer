@@ -8,7 +8,7 @@ import { loadSports, matchSports, SportsData } from '../data/sports';
 import { clock, int, localDay, nowSec, parseIso, str } from '../lib/util';
 import { useNav } from '../nav';
 import { useAppState } from '../state';
-import { C, px, SIDE, themed } from '../theme';
+import { alpha, C, px, SIDE, themed } from '../theme';
 
 let cache: { data: SportsData; at: number } | null = null;
 
@@ -20,7 +20,7 @@ const isFinal = (st: string) => {
 function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
   return (
     <Focusable onPress={onPress} onFocus={onPress} style={f => [s.chip, on && s.chipOn, f && s.chipF]}>
-      {f => <Text style={[s.chipText, f && { color: '#000' }]}>{label}</Text>}
+      {f => <Text style={[s.chipText, f && { color: C.onFocus }]}>{label}</Text>}
     </Focusable>
   );
 }
@@ -117,26 +117,26 @@ export default function Sports() {
                 style={f => [s.ev, f && s.evF]}>
                 {f => (
                   <>
-                    <Text style={[s.time, r.live && s.timeLive, f && !r.live && { color: '#000' }]}>{r.time}</Text>
+                    <Text style={[s.time, r.live && s.timeLive, f && !r.live && { color: C.onFocus }]}>{r.time}</Text>
                     <View style={s.mid}>
-                      <Text style={[s.league, f && { color: '#555' }]} numberOfLines={1}>
+                      <Text style={[s.league, f && { color: C.onFocus }]} numberOfLines={1}>
                         {str(e.lg) || label(str(e.sp))}
                       </Text>
                       <View style={s.teams}>
                         {str(e.hb) ? <Image source={{ uri: str(e.hb) }} style={s.badge} /> : null}
-                        <Text style={[s.team, f && { color: '#000' }]} numberOfLines={1}>
+                        <Text style={[s.team, f && { color: C.onFocus }]} numberOfLines={1}>
                           {home}
                         </Text>
-                        {away ? <Text style={[s.score, f && { color: '#000' }]}>{r.score}</Text> : null}
+                        {away ? <Text style={[s.score, f && { color: C.onFocus }]}>{r.score}</Text> : null}
                         {away ? (
-                          <Text style={[s.team, f && { color: '#000' }]} numberOfLines={1}>
+                          <Text style={[s.team, f && { color: C.onFocus }]} numberOfLines={1}>
                             {away}
                           </Text>
                         ) : null}
                         {str(e.ab) ? <Image source={{ uri: str(e.ab) }} style={s.badge} /> : null}
                       </View>
                     </View>
-                    <Text style={[s.chan, !ch && s.chanNone, f && { color: '#000' }]} numberOfLines={1}>
+                    <Text style={[s.chan, !ch && s.chanNone, f && { color: C.onFocus }]} numberOfLines={1}>
                       {map === null ? 'Buscando…' : ch ? '▶ ' + ch.name : 'Sin canal'}
                     </Text>
                   </>
@@ -157,21 +157,21 @@ const s = themed(() =>
     root: { flex: 1, paddingTop: px(130) },
     chips: { flexDirection: 'row', paddingHorizontal: SIDE, marginBottom: px(14) },
     sports: { flexGrow: 0, marginBottom: px(20) },
-    chip: { height: px(56), paddingHorizontal: px(28), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: px(3), borderColor: 'transparent' },
+    chip: { height: px(56), paddingHorizontal: px(28), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: alpha(C.focus, 0.12), borderWidth: px(3), borderColor: 'transparent' },
     chipOn: { borderColor: C.red },
-    chipF: { backgroundColor: '#fff' },
-    chipText: { color: '#fff', fontSize: px(26), fontWeight: '700' },
+    chipF: { backgroundColor: C.focus },
+    chipText: { color: C.text, fontSize: px(26), fontWeight: '700' },
     toast: { color: '#e87c03', fontSize: px(26), marginLeft: SIDE, marginBottom: px(10) },
     ev: { height: px(110), flexDirection: 'row', alignItems: 'center', backgroundColor: C.bg2, borderRadius: px(8), marginBottom: px(10), paddingHorizontal: px(24) },
-    evF: { backgroundColor: '#fff', transform: [{ scale: 1.02 }] },
-    time: { color: '#fff', fontSize: px(28), fontWeight: '800', width: px(170) },
+    evF: { backgroundColor: C.focus, transform: [{ scale: 1.02 }] },
+    time: { color: C.text, fontSize: px(28), fontWeight: '800', width: px(170) },
     timeLive: { color: C.red },
     mid: { flex: 1 },
     league: { color: C.sub, fontSize: px(22) },
     teams: { flexDirection: 'row', alignItems: 'center', marginTop: px(6) },
     badge: { width: px(42), height: px(42), marginHorizontal: px(10) },
-    team: { color: '#fff', fontSize: px(30), fontWeight: '700', maxWidth: px(480) },
-    score: { color: '#fff', fontSize: px(30), fontWeight: '800', marginHorizontal: px(20) },
+    team: { color: C.text, fontSize: px(30), fontWeight: '700', maxWidth: px(480) },
+    score: { color: C.text, fontSize: px(30), fontWeight: '800', marginHorizontal: px(20) },
     chan: { color: C.green, fontSize: px(24), fontWeight: '700', width: px(420), textAlign: 'right' },
     chanNone: { color: C.dim },
   }),

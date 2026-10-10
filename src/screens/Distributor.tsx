@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { panelTenantConfig } from '../api/panel';
-import { Button, Focusable, Logo } from '../components/ui';
+import { Button, Logo } from '../components/ui';
 import { chooseSkip, saveBrand } from '../lib/tenant';
 import { nowSec } from '../lib/util';
 import { useNav } from '../nav';
@@ -14,9 +14,9 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Borrar', '0', '⌫']
 
 function Key({ label, onPress, preferred }: { label: string; onPress: () => void; preferred?: boolean }) {
   return (
-    <Focusable onPress={onPress} preferred={preferred} style={f => [s.key, f && s.keyF]}>
-      {f => <Text style={[s.keyText, label.length > 1 && s.keyWord, f && s.keyTextF]}>{label}</Text>}
-    </Focusable>
+    <View style={s.key}>
+      <Button label={label} big fontSize={label.length === 1 ? px(36) : undefined} width={px(204)} last preferred={preferred} onPress={onPress} />
+    </View>
   );
 }
 
@@ -84,7 +84,7 @@ export default function Distributor({ message }: { message?: string }) {
         {busy ? <Text style={s.busy}>Comprobando el número…</Text> : null}
         <View style={s.btns}>
           <Button label={busy ? 'Comprobando…' : 'Continuar'} primary onPress={go} />
-          <Button label="Omitir" onPress={skip} />
+          <Button label="Omitir" last onPress={skip} />
         </View>
       </View>
     </View>
@@ -117,7 +117,7 @@ export function TenantRetry({ message }: { message: string }) {
         <Text style={s.hint}>{msg}</Text>
         {busy ? <Text style={s.busy}>Comprobando…</Text> : null}
         <View style={s.btns}>
-          <Button label={busy ? 'Comprobando…' : 'Reintentar'} primary preferred onPress={retry} />
+          <Button label={busy ? 'Comprobando…' : 'Reintentar'} primary preferred last onPress={retry} />
         </View>
       </View>
     </View>
@@ -126,21 +126,17 @@ export function TenantRetry({ message }: { message: string }) {
 
 const s = themed(() =>
   StyleSheet.create({
-    root: { flex: 1, backgroundColor: '#000' },
+    root: { flex: 1, backgroundColor: C.bg },
     top: { position: 'absolute', left: px(80), top: px(40) },
-    box: { alignSelf: 'center', marginTop: px(90), width: px(760), backgroundColor: C.bg2, borderRadius: px(10), padding: px(60) },
+    box: { alignSelf: 'center', marginTop: px(90), width: px(760), backgroundColor: C.bg2, borderRadius: px(12), padding: px(60) },
     title: { color: C.text, fontSize: px(52), fontWeight: '800', marginBottom: px(14) },
     hint: { color: C.sub, fontSize: px(26), marginBottom: px(30) },
     slots: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: px(30) },
-    slot: { width: px(92), height: px(104), backgroundColor: '#333', borderRadius: px(6), alignItems: 'center', justifyContent: 'center', borderWidth: px(3), borderColor: 'transparent' },
+    slot: { width: px(92), height: px(104), backgroundColor: C.card, borderRadius: px(8), alignItems: 'center', justifyContent: 'center', borderWidth: px(3), borderColor: 'transparent' },
     slotOn: { borderColor: C.red },
-    slotText: { color: '#fff', fontSize: px(52), fontWeight: '800' },
+    slotText: { color: C.text, fontSize: px(52), fontWeight: '800' },
     pad: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: px(10) },
-    key: { width: px(204), height: px(76), borderRadius: px(8), backgroundColor: 'rgba(109,109,110,0.7)', alignItems: 'center', justifyContent: 'center', marginBottom: px(14) },
-    keyF: { backgroundColor: '#fff', transform: [{ scale: 1.06 }] },
-    keyText: { color: '#fff', fontSize: px(36), fontWeight: '700' },
-    keyWord: { fontSize: px(26) },
-    keyTextF: { color: '#000' },
+    key: { marginBottom: px(14) },
     error: { color: '#e87c03', fontSize: px(26), marginBottom: px(14) },
     busy: { color: C.sub, fontSize: px(26), marginBottom: px(14) },
     btns: { flexDirection: 'row', marginTop: px(12) },

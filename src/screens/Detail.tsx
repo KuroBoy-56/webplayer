@@ -10,7 +10,7 @@ import { catalog, Item } from '../data/catalog';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, progressMovie, progressSeries, toggleFav, useAppState } from '../state';
-import { C, px, SIDE, themed } from '../theme';
+import { alpha, C, px, SIDE, themed } from '../theme';
 
 export default function Detail({ item }: { item: Item }) {
   const nav = useNav();
@@ -115,7 +115,7 @@ export default function Detail({ item }: { item: Item }) {
             ) : (
               <Button label={resumeEp ? 'Continuar' : 'Reproducir'} icon="▶" primary preferred onPress={playSeries} />
             )}
-            <Button label={fav ? 'En mi lista' : 'Mi lista'} icon={fav ? '✓' : '+'} onPress={() => toggleFav(item.kind, item.id, item.name, item.poster, item.cat)} />
+            <Button label={fav ? 'En mi lista' : 'Mi lista'} icon={fav ? '✓' : '+'} last onPress={() => toggleFav(item.kind, item.id, item.name, item.poster, item.cat)} />
           </View>
         </View>
 
@@ -129,7 +129,7 @@ export default function Detail({ item }: { item: Item }) {
               style={{ marginTop: px(30) }}
               renderItem={({ item: sn, index }) => (
                 <Focusable onFocus={() => setSeason(index)} onPress={() => setSeason(index)} style={f => [s.season, index === season && s.seasonOn, f && s.seasonF]}>
-                  {f => <Text style={[s.seasonText, f && { color: '#000' }]}>Temporada {sn.season}</Text>}
+                  {f => <Text style={[s.seasonText, f && { color: C.onFocus }]}>Temporada {sn.season}</Text>}
                 </Focusable>
               )}
             />
@@ -181,7 +181,7 @@ export default function Detail({ item }: { item: Item }) {
                       <View style={[s.actorImgBox, f && s.actorImgF]}>
                         {a.photo ? <Image source={{ uri: a.photo }} style={s.actorImg} resizeMode="cover" /> : <Text style={s.actorInitial}>{a.name.slice(0, 1)}</Text>}
                       </View>
-                      <Text style={[s.actorName, f && { color: '#fff' }]} numberOfLines={2}>
+                      <Text style={[s.actorName, f && { color: C.text }]} numberOfLines={2}>
                         {a.name}
                       </Text>
                       {a.character ? (
@@ -211,33 +211,33 @@ const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg },
     bg: { position: 'absolute', left: 0, top: 0, right: 0, height: px(1080) },
-    shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,20,20,0.72)' },
+    shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha(C.bg, 0.75) },
     head: { paddingLeft: SIDE, paddingTop: px(110), width: px(1300) },
-    title: { color: '#fff', fontSize: px(72), fontWeight: '900' },
+    title: { color: C.text, fontSize: px(72), fontWeight: '900' },
     meta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },
     genre: { color: C.sub, fontSize: px(26), marginTop: px(8) },
-    plot: { color: '#e5e5e5', fontSize: px(30), lineHeight: px(42), marginTop: px(18) },
+    plot: { color: C.text, fontSize: px(30), lineHeight: px(42), marginTop: px(18) },
     small: { color: C.sub, fontSize: px(24), marginTop: px(10) },
     btns: { flexDirection: 'row', marginTop: px(34) },
-    season: { paddingHorizontal: px(26), height: px(56), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: px(3), borderColor: 'transparent' },
+    season: { paddingHorizontal: px(26), height: px(56), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: alpha(C.focus, 0.12), borderWidth: px(3), borderColor: 'transparent' },
     seasonOn: { borderColor: C.red },
-    seasonF: { backgroundColor: '#fff' },
-    seasonText: { color: '#fff', fontSize: px(26), fontWeight: '700' },
+    seasonF: { backgroundColor: C.focus },
+    seasonText: { color: C.text, fontSize: px(26), fontWeight: '700' },
     ep: { width: px(400), marginRight: px(22), borderWidth: px(4), borderColor: 'transparent', borderRadius: px(8), padding: px(4) },
-    epF: { borderColor: '#fff', transform: [{ scale: 1.05 }] },
+    epF: { borderColor: C.focus, transform: [{ scale: 1.05 }] },
     epImgBox: { width: '100%', height: px(220), backgroundColor: C.card, borderRadius: px(6), overflow: 'hidden' },
     epImg: { width: '100%', height: '100%' },
-    epTitle: { color: '#fff', fontSize: px(26), fontWeight: '700', marginTop: px(10) },
+    epTitle: { color: C.text, fontSize: px(26), fontWeight: '700', marginTop: px(10) },
     epPlot: { color: C.sub, fontSize: px(22), marginTop: px(4) },
-    bar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(7), backgroundColor: 'rgba(255,255,255,0.35)' },
+    bar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(7), backgroundColor: alpha(C.text, 0.35) },
     barFill: { height: '100%', backgroundColor: C.red },
-    rowTitle: { color: '#fff', fontSize: px(34), fontWeight: '800', marginLeft: SIDE, marginBottom: px(14) },
+    rowTitle: { color: C.text, fontSize: px(34), fontWeight: '800', marginLeft: SIDE, marginBottom: px(14) },
     actor: { width: px(170), marginRight: px(26), alignItems: 'center' },
     actorImgBox: { width: px(140), height: px(140), borderRadius: px(70), overflow: 'hidden', backgroundColor: C.card, borderWidth: px(4), borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
-    actorImgF: { borderColor: '#fff', transform: [{ scale: 1.08 }] },
+    actorImgF: { borderColor: C.focus, transform: [{ scale: 1.08 }] },
     actorImg: { width: '100%', height: '100%' },
-    actorInitial: { color: '#fff', fontSize: px(56), fontWeight: '800' },
-    actorName: { color: '#e5e5e5', fontSize: px(22), fontWeight: '700', marginTop: px(10), textAlign: 'center' },
+    actorInitial: { color: C.text, fontSize: px(56), fontWeight: '800' },
+    actorName: { color: C.sub, fontSize: px(22), fontWeight: '700', marginTop: px(10), textAlign: 'center' },
     actorChar: { color: C.dim, fontSize: px(20), marginTop: px(2), textAlign: 'center' },
   }),
 );

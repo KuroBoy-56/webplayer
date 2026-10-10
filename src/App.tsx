@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, BackHandler, StatusBar, StyleSheet, View } from 'react-native';
 import { fetchAlert, PanelAlert } from './api/alerts';
 import AlertDialog from './components/AlertDialog';
-import { Spinner } from './components/ui';
+import { Logo } from './components/ui';
 import { loadStorage } from './lib/storage';
 import { applyBrand, distChoice, features, onTenantProblem, tenantCode } from './lib/tenant';
 import { Nav, NavContext, Route } from './nav';
@@ -41,17 +41,26 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
 
 export default function App() {
   const [stack, setStack] = useState<Route[] | null>(null);
+  // pantalla de inicio: fondo y logo del distribuidor (o los de la app con Omitir)
+  const [splash, setSplash] = useState(true);
   // cambia cuando cambian los colores: se vuelven a montar las pantallas con los nuevos estilos
   const [skin, setSkin] = useState(0);
 
   useEffect(() => {
+    const started = Date.now();
+    let timer: ReturnType<typeof setTimeout> | null = null;
     loadStorage().then(() => {
       // marca guardada del distribuidor antes de la primera pantalla
       applyBrand();
       const logged = restoreSession();
       if (!distChoice()) setStack([{ name: 'distributor' }]);
       else setStack([logged ? { name: 'main' } : { name: 'login' }]);
+      // el logo se ve al menos un momento (la primera pantalla ya se arma debajo)
+      timer = setTimeout(() => setSplash(false), Math.max(0, 1500 - (Date.now() - started)));
     });
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   // al entrar: catálogo y nube (progreso y Mi lista)
@@ -147,12 +156,8 @@ export default function App() {
   }, [onBack]);
 
   if (!stack) {
-    // mientras se lee lo guardado: sin logo (aún no se sabe si es el de un distribuidor)
-    return (
-      <View style={s.root}>
-        <Spinner />
-      </View>
-    );
+    // mientras se lee lo guardado: solo el fondo (aún no se sabe si hay un distribuidor)
+    return <View style={s.root} />;
   }
 
   return (
@@ -169,7 +174,13 @@ export default function App() {
           );
         })}
       </View>
-      <AlertDialog alert={alert} onClose={() => setAlert(null)} />
+      {splash ? (
+        <View style={[StyleSheet.absoluteFill, s.root]}>
+          <Logo size={300} />
+        </View>
+      ) : (
+        <AlertDialog alert={alert} onClose={() => setAlert(null)} />
+      )}
     </NavContext.Provider>
   );
 }

@@ -8,7 +8,7 @@ import { catalog, Item, Row } from '../data/catalog';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, Progress, toggleFav, useAppState } from '../state';
-import { C, px, SIDE, themed } from '../theme';
+import { alpha, C, px, SIDE, themed } from '../theme';
 
 // fila "Continuar viendo" a partir del progreso guardado en el panel
 function continueRow(progress: Progress[], only?: 'vod' | 'series'): Row | null {
@@ -53,7 +53,8 @@ function Billboard({ hero }: { hero: Item }) {
   return (
     <View style={s.hero}>
       {hero.backdrop || hero.poster ? <Image source={{ uri: hero.backdrop || hero.poster }} style={s.heroImg} resizeMode="cover" /> : null}
-      <Image source={require('../../assets/image/grad_bottom.png')} style={s.heroGrad} resizeMode="stretch" />
+      {/* degradado teñido con el fondo del distribuidor */}
+      <Image source={require('../../assets/image/grad_bottom.png')} style={[s.heroGrad, { tintColor: C.bg }]} resizeMode="stretch" />
       <View style={s.heroShade} />
       <View style={s.heroText}>
         <Text style={s.heroKind}>{hero.kind === 'series' ? 'S E R I E' : 'P E L Í C U L A'}</Text>
@@ -77,7 +78,7 @@ function Billboard({ hero }: { hero: Item }) {
             onPress={() => (hero.kind === 'vod' ? playMovie(nav, hero, hero.ext) : openItem(nav, hero))}
           />
           <Button label="Más información" icon="ⓘ" onPress={() => openItem(nav, hero)} />
-          <Button label={fav ? 'En mi lista' : 'Mi lista'} icon={fav ? '✓' : '+'} onPress={() => toggleFav(hero.kind, hero.id, hero.name, hero.poster, hero.cat)} />
+          <Button label={fav ? 'En mi lista' : 'Mi lista'} icon={fav ? '✓' : '+'} last onPress={() => toggleFav(hero.kind, hero.id, hero.name, hero.poster, hero.cat)} />
         </View>
       </View>
     </View>
@@ -142,12 +143,12 @@ const s = themed(() =>
     hero: { height: px(840), marginBottom: px(-120) },
     heroImg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
     heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(420) },
-    heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1100), backgroundColor: 'rgba(0,0,0,0.45)' },
+    heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1100), backgroundColor: alpha(C.bg, 0.5) },
     heroText: { position: 'absolute', left: SIDE, top: px(220), width: px(980) },
     heroKind: { color: C.red, fontSize: px(24), fontWeight: '800', marginBottom: px(8) },
-    heroTitle: { color: '#fff', fontSize: px(76), fontWeight: '900', lineHeight: px(84) },
+    heroTitle: { color: C.text, fontSize: px(76), fontWeight: '900', lineHeight: px(84) },
     heroMeta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },
-    heroPlot: { color: '#ddd', fontSize: px(28), lineHeight: px(38), marginTop: px(16) },
+    heroPlot: { color: C.text, fontSize: px(28), lineHeight: px(38), marginTop: px(16) },
     heroBtns: { flexDirection: 'row', marginTop: px(30) },
   }),
 );

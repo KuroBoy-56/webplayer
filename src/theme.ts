@@ -14,7 +14,9 @@ const BASE = {
   text: '#ffffff',
   sub: '#b3b3b3',
   dim: '#808080',
+  // anillo y fondo del elemento enfocado, y el texto encima de ese fondo
   focus: '#ffffff',
+  onFocus: '#000000',
   green: '#46d369',
 };
 
@@ -82,6 +84,8 @@ export function paletteColors(p: Palette | null): typeof BASE {
     text: p.text,
     sub: alpha(p.text, 0.65),
     dim: alpha(p.text, 0.45),
+    focus: p.text,
+    onFocus: p.bg,
   };
 }
 

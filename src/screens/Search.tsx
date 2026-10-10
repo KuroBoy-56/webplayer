@@ -36,7 +36,7 @@ export default function Search() {
 const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, paddingTop: px(130) },
-    input: { marginHorizontal: SIDE, height: px(84), backgroundColor: '#333', borderRadius: px(6), color: '#fff', fontSize: px(34), paddingHorizontal: px(28), marginBottom: px(20) },
+    input: { marginHorizontal: SIDE, height: px(84), backgroundColor: C.card, borderRadius: px(8), color: C.text, fontSize: px(34), paddingHorizontal: px(28), marginBottom: px(20) },
     none: { color: C.sub, fontSize: px(28), marginLeft: SIDE },
   }),
 );

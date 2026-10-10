@@ -1,0 +1,653 @@
+// Fuente del video, audio y subtítulos del reproductor (misma lógica que PlayerTracks.brs de Roku).
+// - Pistas que informa el reproductor de Vega (audioTracks / textTracks): se eligen ahí y se comprueba
+//   que el cambio quedó; el búfer se vuelve a llenar en el mismo segundo para que se oiga enseguida.
+// - Pistas leídas de la cabecera del MKV/MP4 (probe.ts): idioma y códec de cada una.
+// - Audio que el equipo no puede cambiar o decodificar (DTS, TrueHD…): el motor del panel lo prepara
+//   en AAC y llega como HLS desde el segundo actual (hls.ts). Subtítulos que el equipo no muestra:
+//   el panel los convierte a WebVTT y se dibujan encima del video.
+import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
+import { Engine, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
+import { codecKey, codecName, imageSub, langKey, langName, sameLang, trackLang } from '../lib/lang';
+import { Probe, probeTracks } from '../lib/probe';
+import { pref, setPref } from '../lib/storage';
+import { Cue, cueAt, parseVtt } from '../lib/vtt';
+import { PanelHls } from './hls';
+
+export type MenuItem = { kind: 'audio' | 'text' | 'panel'; key: string; label: string; on: boolean };
+
+type AudioItem = { key: string; label: string; lang: string; codec: string; native?: number; probe?: number };
+type SubItem = { key: string; label: string; lang: string; image: boolean; native?: number; probe?: number };
+
+export type Hooks = {
+  toast: (msg: string) => void;
+  status: (msg: string) => void;
+  changed: () => void;
+  subText: (text: string) => void;
+  // no se puede seguir (el video directo falló y el panel tampoco pudo)
+  fatal: (msg: string) => void;
+};
+
+const decodeCache: Record<string, boolean> = {};
+
+// ¿el reproductor de Vega decodifica este audio? (consulta las capacidades del equipo)
+export function nativeAudioOk(codec: string, container: string): boolean {
+  const k = codecKey(codec);
+  if (!k) return true;
+  if (k === 'truehd') return false;
+  // el lector de MKV del equipo no trae DTS
+  if (container === 'mkv' && k === 'dts') return false;
+  const mime: Record<string, string> = { aac: 'mp4a.40.2', ac3: 'ac-3', eac3: 'ec-3', dts: 'dtsc', mp3: 'mp3', opus: 'Opus', flac: 'fLaC' };
+  if (!mime[k]) return true;
+  if (!(k in decodeCache)) {
+    try {
+      decodeCache[k] = MediaSource.isTypeSupported('audio/mp4; codecs="' + mime[k] + '"');
+    } catch {
+      decodeCache[k] = true;
+    }
+  }
+  return decodeCache[k];
+}
+
+function rememberLang(key: string, lang: string) {
+  const k = langKey(lang);
+  if (k === 'es' || k === 'en') setPref(key, k);
+}
+
+export class Playback {
+  private url = '';
+  private live = false;
+  private gen = 0;
+  private probe: Probe | null = null;
+  private probing = false;
+  private resumeAt = 0;
+  private remux: { a: number; label: string } | null = null;
+  private hls: PanelHls | null = null;
+  private offset = 0;
+  // el HLS del panel ya suena (antes sigue el video directo mientras se prepara)
+  private remuxLive = false;
+  private remuxFrom = 0;
+  private realDur = 0;
+  private engine: Engine | null = null;
+  private audioKey = '';
+  private subKey = '';
+  private audioApplied = false;
+  private subApplied = false;
+  private pendingNative = -1;
+  private ext: { s: number; cues: Cue[] } | null = null;
+  private subWait: { s: number; tries: number; label: string } | null = null;
+  private subTimer: ReturnType<typeof setInterval> | null = null;
+  private prefsTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastSub = '';
+
+  constructor(private v: VideoPlayer, private hooks: Hooks) {}
+
+  // ---------- fuente ----------
+
+  load(url: string, resume: number, live: boolean): void {
+    this.gen++;
+    this.stopHls();
+    this.url = url;
+    this.live = live;
+    this.probe = null;
+    this.probing = false;
+    this.remux = null;
+    this.offset = 0;
+    this.realDur = 0;
+    this.audioKey = '';
+    this.subKey = '';
+    this.audioApplied = false;
+    this.subApplied = false;
+    this.pendingNative = -1;
+    this.setExt(null);
+    this.subWait = null;
+    this.direct(resume);
+  }
+
+  private direct(at: number): void {
+    this.stopHls();
+    this.offset = 0;
+    this.resumeAt = at;
+    this.v.src = this.url;
+    this.v.play();
+  }
+
+  private stopHls(): void {
+    this.hls?.destroy();
+    this.hls = null;
+    this.remuxLive = false;
+  }
+
+  destroy(): void {
+    this.gen++;
+    this.stopHls();
+    this.setExt(null);
+    if (this.prefsTimer) clearTimeout(this.prefsTimer);
+  }
+
+  // segundo real del contenido (el HLS del panel empieza en offset)
+  realPos(): number {
+    return this.offset + (this.v.currentTime || 0);
+  }
+
+  duration(): number {
+    if (this.remux) {
+      if (this.realDur > 0) return this.realDur;
+      return this.hls?.done() ? this.offset + this.hls.listed() : 0;
+    }
+    const d = this.v.duration;
+    if (Number.isFinite(d) && d > 0) this.realDur = d;
+    return Number.isFinite(d) && d > 0 ? d : 0;
+  }
+
+  async seek(t: number): Promise<void> {
+    const target = Math.max(0, t);
+    if (this.remux && !this.remuxLive) {
+      // preparando: solo se mueve el video directo (el HLS empezará donde se pidió)
+      if (this.offset === 0 && !this.hls?.attached) this.v.currentTime = target;
+      return;
+    }
+    if (this.remux && this.hls) {
+      const rel = target - this.offset;
+      if (rel >= 0 && (await this.hls.seekTo(rel))) return;
+      // aún no convertido: el panel lo prepara desde ese segundo
+      this.startRemux(target);
+      return;
+    }
+    this.v.currentTime = target;
+  }
+
+  // loadedmetadata
+  onMeta(): void {
+    if (this.resumeAt > 0) {
+      this.v.currentTime = this.resumeAt;
+      this.resumeAt = 0;
+    }
+    if (this.pendingNative >= 0) {
+      const i = this.pendingNative;
+      this.pendingNative = -1;
+      setTimeout(() => this.enableNative(i), 300);
+    }
+    this.schedulePrefs();
+  }
+
+  // primera vez "playing": se lee la cabecera del archivo (como Roku, ya con el video andando)
+  onPlaying(): void {
+    if (this.live || this.probe || this.probing) return;
+    this.probing = true;
+    const g = this.gen;
+    probeTracks(this.url).then(p => {
+      if (g !== this.gen) return;
+      this.probe = p;
+      if (p.ok) {
+        if (!this.audioKey) this.audioApplied = false;
+        else this.checkDecodable();
+        if (!this.subKey) this.subApplied = false;
+        this.applyPrefs();
+        if (p.audio.length > 1) this.hooks.toast(p.audio.length + ' idiomas de audio en este video: pulsa ▼ para cambiar');
+      }
+      this.hooks.changed();
+    });
+  }
+
+  // error del reproductor: si el audio del archivo no lo decodifica el equipo, lo prepara el panel
+  async onError(): Promise<boolean> {
+    if (this.live) return false;
+    if (this.remux) {
+      // el video directo falló mientras el panel prepara el audio: sigue la preparación
+      if (!this.hls?.attached) return true;
+      this.remuxFailed('el reproductor no pudo abrirlo');
+      return true;
+    }
+    const g = this.gen;
+    if (!this.probe) this.probe = await probeTracks(this.url);
+    if (g !== this.gen || !this.probe.ok || !this.probe.audio.length) return false;
+    const items = this.audioItems();
+    const def = items[this.probeDefault()];
+    if (!def || def.probe === undefined || this.decodable(def)) return false;
+    // el panel lo convierte a AAC: de una vez el idioma preferido
+    const want = this.preferredAudio(items) || def;
+    this.toRemux(want.probe ?? def.probe, want.label, true, Math.floor(this.resumeAt || this.realPos()));
+    return true;
+  }
+
+  // ---------- listas ----------
+
+  private nativeAudio(): { label: string; language: string; enabled: boolean }[] {
+    const at = (this.v as any).audioTracks;
+    const out = [];
+    for (let i = 0; at && i < at.length; i++) {
+      const t = at[i];
+      out.push({ label: t?.label || '', language: t?.language || '', enabled: !!t?.enabled });
+    }
+    return out;
+  }
+
+  private nativeSubs(): { index: number; label: string; language: string; showing: boolean }[] {
+    const tt = (this.v as any).textTracks;
+    const out = [];
+    for (let i = 0; tt && i < tt.length; i++) {
+      const t = tt[i];
+      if (!t || (t.kind && t.kind !== 'subtitles' && t.kind !== 'captions')) continue;
+      out.push({ index: i, label: t.label || '', language: t.language || '', showing: t.mode === 'showing' });
+    }
+    return out;
+  }
+
+  // pista nativa con el mismo idioma: solo si es la única de ese idioma en los dos lados
+  private byLang<T extends { language: string; label: string }>(nat: T[], list: { lang: string; name: string }[], i: number): number {
+    const lang = trackLang(list[i].lang, list[i].name);
+    if (!lang || list.filter(x => trackLang(x.lang, x.name) === lang).length !== 1) return -1;
+    const m = nat.map((t, j) => (trackLang(t.language, t.label) === lang ? j : -1)).filter(j => j >= 0);
+    return m.length === 1 ? m[0] : -1;
+  }
+
+  private audioItems(): AudioItem[] {
+    const nat = this.nativeAudio();
+    const pr = this.probe?.ok ? this.probe.audio : [];
+    if (pr.length && pr.length >= nat.length) {
+      return pr.map((t, i) => {
+        const n = nat.length === pr.length ? i : this.byLang(nat, pr, i);
+        return {
+          key: 'p:' + i,
+          label: langName(t.lang, t.name) + (t.codec ? '  (' + codecName(t.codec) + ')' : ''),
+          lang: trackLang(t.lang, t.name),
+          codec: t.codec,
+          probe: i,
+          native: n >= 0 ? n : undefined,
+        };
+      });
+    }
+    return nat.map((t, i) => ({ key: 'n:' + i, label: langName(t.language, t.label) || 'Audio ' + (i + 1), lang: trackLang(t.language, t.label), codec: '', native: i }));
+  }
+
+  private subItems(): SubItem[] {
+    const nat = this.nativeSubs();
+    const pr = this.probe?.ok ? this.probe.subs : [];
+    if (pr.length && pr.length >= nat.length) {
+      return pr.map((t, i) => {
+        const n = nat.length === pr.length ? i : this.byLang(nat, pr, i);
+        let label = langName(t.lang, t.name);
+        if (t.forced) label += ' · forzados';
+        if (imageSub(t.codec)) label += ' · imagen';
+        return { key: 'p:' + i, label, lang: trackLang(t.lang, t.name), image: imageSub(t.codec), probe: i, native: n >= 0 ? nat[n].index : undefined };
+      });
+    }
+    return nat.map((t, i) => ({ key: 'n:' + i, label: langName(t.language, t.label) || 'Subtítulos ' + (i + 1), lang: trackLang(t.language, t.label), image: false, native: t.index }));
+  }
+
+  private probeDefault(): number {
+    const a = this.probe?.audio || [];
+    const i = a.findIndex(t => t.def);
+    return i >= 0 ? i : 0;
+  }
+
+  private enabledNative(): number {
+    return this.nativeAudio().findIndex(t => t.enabled);
+  }
+
+  private audioOn(items: AudioItem[]): AudioItem | undefined {
+    if (this.remux) return items.find(i => i.probe === this.remux!.a);
+    const n = this.enabledNative();
+    if (n >= 0) {
+      const m = items.find(i => i.native === n);
+      if (m) return m;
+    }
+    return items.find(i => i.key === this.audioKey) || (this.probe?.ok ? items[this.probeDefault()] : items[0]);
+  }
+
+  private preferredAudio(items: AudioItem[]): AudioItem | undefined {
+    const p = pref('audio_lang', 'es');
+    return p ? items.find(i => sameLang(i.lang, p)) : undefined;
+  }
+
+  private decodable(it: AudioItem): boolean {
+    return it.probe === undefined || nativeAudioOk(it.codec, this.probe?.container || '');
+  }
+
+  // menú de audio y subtítulos
+  menu(): MenuItem[] {
+    const out: MenuItem[] = [];
+    const a = this.audioItems();
+    const on = this.audioOn(a);
+    for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: it === on });
+    // como "Reabrir en modo compatible" de Roku: si el equipo no cambió el idioma, lo hace el panel
+    if (!this.live && !this.remux && this.probe?.ok && a.length > 1) out.push({ kind: 'panel', key: 'panel', label: '¿No cambia el idioma? Prepararlo con el panel', on: false });
+    const subs = this.subItems();
+    const showing = this.nativeSubs().find(t => t.showing);
+    out.push({ kind: 'text', key: 'off', label: 'Desactivados', on: this.subKey === 'off' || (!this.ext && !showing) });
+    for (const it of subs) {
+      const isOn = this.ext ? it.probe === this.ext.s : this.subKey !== 'off' && !!showing && it.native === showing.index;
+      out.push({ kind: 'text', key: it.key, label: it.label + (this.subWait?.s === it.probe ? ' (preparando…)' : ''), on: isOn });
+    }
+    return out;
+  }
+
+  select(m: MenuItem): void {
+    if (m.kind === 'panel') {
+      const a = this.audioItems();
+      const it = a.find(i => i.key === this.audioKey) || this.audioOn(a);
+      if (it && it.probe !== undefined) this.toRemux(it.probe, it.label, true);
+      return;
+    }
+    if (m.kind === 'audio') {
+      const it = this.audioItems().find(i => i.key === m.key);
+      if (it) this.pickAudio(it, true);
+    } else {
+      this.pickSub(m.key === 'off' ? null : this.subItems().find(i => i.key === m.key) || null, true);
+    }
+  }
+
+  // ---------- idioma preferido (Cuenta › Ajustes) ----------
+
+  // nuevas pistas: se espera un momento a que lleguen todas
+  schedulePrefs(): void {
+    if (this.prefsTimer) clearTimeout(this.prefsTimer);
+    const g = this.gen;
+    this.prefsTimer = setTimeout(() => g === this.gen && this.applyPrefs(), 700);
+  }
+
+  private applyPrefs(): void {
+    this.autoAudio();
+    this.autoSubs();
+    this.hooks.changed();
+  }
+
+  private autoAudio(): void {
+    if (this.audioApplied || this.audioKey || this.remux) return;
+    const items = this.audioItems();
+    if (!items.length) return;
+    const cur = this.audioOn(items);
+    const want = this.preferredAudio(items);
+    // el audio que suena el equipo no lo puede decodificar (DTS…): hace falta el panel
+    const stuck = cur && !this.decodable(cur);
+    if (items.length < 2 && !stuck) return;
+    this.audioApplied = true;
+    const pick = want && this.decodable(want) ? want : stuck ? items.find(i => this.decodable(i) && sameLang(i.lang, cur!.lang)) || want || cur : want;
+    if (pick && pick !== cur) this.pickAudio(pick, false);
+    else if (stuck && cur) this.pickAudio(cur, false);
+  }
+
+  // ya se eligió un audio antes de conocer los códecs: si el equipo no lo decodifica, otro del
+  // mismo idioma o el panel
+  private checkDecodable(): void {
+    if (this.remux) return;
+    const items = this.audioItems();
+    const cur = this.audioOn(items);
+    if (!cur || this.decodable(cur)) return;
+    const alt = items.find(i => i !== cur && i.native !== undefined && this.decodable(i) && sameLang(i.lang, cur.lang));
+    this.pickAudio(alt || cur, false);
+  }
+
+  private autoSubs(): void {
+    if (this.subApplied || this.subKey) return;
+    const items = this.subItems();
+    if (!items.length) return;
+    this.subApplied = true;
+    const p = pref('subs_lang', 'off');
+    const want = p !== 'off' ? items.find(i => sameLang(i.lang, p) && i.native !== undefined) : undefined;
+    this.pickSub(want || null, false);
+  }
+
+  // ---------- audio ----------
+
+  private enableNative(i: number): void {
+    const at = (this.v as any).audioTracks;
+    if (!at || !at[i]) return;
+    try {
+      // primero la nueva (así nunca queda sin audio) y después se apagan las demás
+      at[i].enabled = true;
+      for (let j = 0; j < at.length; j++) if (j !== i && at[j].enabled) at[j].enabled = false;
+    } catch {
+      // el reproductor no permitió el cambio: lo detecta la comprobación
+    }
+    // el búfer ya tenía el audio anterior: se vuelve al mismo punto
+    if (!this.live) {
+      const t = this.v.currentTime || 0;
+      if (t > 1) this.v.currentTime = t;
+    }
+  }
+
+  private pickAudio(it: AudioItem, user: boolean): void {
+    this.audioKey = it.key;
+    if (user) rememberLang('audio_lang', it.lang);
+    const ok = this.decodable(it);
+    if (it.native !== undefined && ok) {
+      if (this.remux) {
+        // de vuelta al video directo en el mismo segundo y con esa pista
+        this.pendingNative = it.native;
+        this.leaveRemux();
+        return;
+      }
+      if (this.enabledNative() === it.native) {
+        if (user) this.hooks.toast('Audio: ' + it.label);
+        this.hooks.changed();
+        return;
+      }
+      this.enableNative(it.native);
+      const g = this.gen;
+      const n = it.native;
+      setTimeout(() => {
+        if (g !== this.gen || this.remux) return;
+        if (this.enabledNative() === n) {
+          if (user) this.hooks.toast('Audio: ' + it.label);
+        } else if (it.probe !== undefined && !this.live && user) {
+          // el equipo no tomó la pista: la prepara el panel
+          this.toRemux(it.probe, it.label, true);
+        } else {
+          this.audioKey = '';
+          if (user) this.hooks.toast('Este equipo no pudo cambiar a ' + it.label + '.');
+        }
+        this.hooks.changed();
+      }, 1500);
+      return;
+    }
+    if (it.probe === undefined || this.live) return;
+    if (this.remux?.a === it.probe) return;
+    // la pista que el equipo ya reproduce sin elegir nada
+    if (ok && this.remux && it.probe === this.probeDefault()) {
+      this.leaveRemux();
+      return;
+    }
+    // el panel trabaja cuando el usuario elige o cuando el equipo no puede decodificar el audio
+    if (!user && ok) {
+      this.audioKey = '';
+      return;
+    }
+    if (!user) this.hooks.toast('Este equipo no reproduce el audio ' + codecName(it.codec) + ': se prepara con el panel…');
+    this.toRemux(it.probe, it.label, user);
+  }
+
+  private async getEngine(): Promise<Engine | null> {
+    if (this.engine) return this.engine;
+    const r = await mediaEngine();
+    if (!r.ok) {
+      this.hooks.toast(r.error);
+      return null;
+    }
+    this.engine = r.engine;
+    return r.engine;
+  }
+
+  private async toRemux(a: number, label: string, announce: boolean, at?: number): Promise<void> {
+    if (this.live || this.remux?.a === a) return;
+    if (!PanelHls.supported()) {
+      this.audioKey = '';
+      this.hooks.toast('Este equipo no puede reproducir el audio que prepara el panel.');
+      this.hooks.changed();
+      return;
+    }
+    const g = this.gen;
+    this.hooks.status('Preparando ' + label + '…');
+    const e = await this.getEngine();
+    if (g !== this.gen) return;
+    if (!e) {
+      this.hooks.status('');
+      this.audioKey = '';
+      this.hooks.changed();
+      return;
+    }
+    const pos = at ?? this.realPos();
+    this.duration();
+    this.remux = { a, label };
+    this.audioKey = 'p:' + a;
+    if (announce) this.hooks.toast('Cambiando a ' + label + '…');
+    this.startRemux(pos);
+  }
+
+  private async startRemux(pos: number): Promise<void> {
+    if (!this.remux || !this.engine) return;
+    const { a, label } = this.remux;
+    // mientras se prepara sigue lo que suena (video directo o el HLS anterior hasta donde llegó)
+    this.stopHls();
+    this.remuxFrom = Math.floor(pos);
+    const h = new PanelHls(this.v, hlsLink(this.engine, this.url, a, pos));
+    this.hls = h;
+    h.onError = msg => this.hls === h && this.remuxFailed(msg);
+    this.hooks.status('Cambiando idioma…');
+    const err = await h.start();
+    if (this.hls !== h) return;
+    if (err) {
+      this.remuxFailed(err);
+      return;
+    }
+    this.offset = Math.floor(pos);
+    this.remuxLive = true;
+    this.resumeAt = 0;
+    this.v.play();
+    this.hooks.status('');
+    this.hooks.toast('Audio: ' + label);
+    this.hooks.changed();
+  }
+
+  // el panel no pudo (sin ffmpeg, servidor caído…): se vuelve al video directo
+  private remuxFailed(msg: string): void {
+    const label = this.remux?.label || '';
+    const attached = !!this.hls?.attached;
+    const pos = this.remuxLive ? this.realPos() : attached ? this.remuxFrom : this.realPos();
+    this.remux = null;
+    this.audioKey = '';
+    this.hooks.status('');
+    this.hooks.toast('No se pudo cambiar a ' + label + ' (' + msg + '). Se sigue con el audio original.');
+    if (attached) this.direct(pos);
+    else {
+      this.stopHls();
+      if ((this.v as any).error) this.hooks.fatal('No se pudo reproducir el audio de este contenido.');
+    }
+    this.hooks.changed();
+  }
+
+  private leaveRemux(): void {
+    const pos = this.realPos();
+    this.remux = null;
+    this.direct(pos);
+    this.hooks.changed();
+  }
+
+  // ---------- subtítulos ----------
+
+  private setNativeSub(index: number): void {
+    const tt = (this.v as any).textTracks;
+    for (let i = 0; tt && i < tt.length; i++) {
+      try {
+        const want = i === index ? 'showing' : 'disabled';
+        if (tt[i].mode !== want) tt[i].mode = want;
+      } catch {
+        // pista sin control
+      }
+    }
+  }
+
+  private setExt(ext: { s: number; cues: Cue[] } | null): void {
+    this.ext = ext;
+    if (this.subTimer) clearInterval(this.subTimer);
+    this.subTimer = null;
+    if (this.lastSub) this.hooks.subText((this.lastSub = ''));
+    if (!ext) return;
+    this.subTimer = setInterval(() => {
+      const t = cueAt(ext.cues, this.realPos());
+      if (t !== this.lastSub) this.hooks.subText((this.lastSub = t));
+    }, 250);
+  }
+
+  private pickSub(it: SubItem | null, user: boolean): void {
+    if (!it) {
+      this.subKey = 'off';
+      this.subWait = null;
+      this.setExt(null);
+      this.setNativeSub(-1);
+      if (user) {
+        setPref('subs_lang', 'off');
+        this.hooks.toast('Subtítulos desactivados');
+      }
+      this.hooks.changed();
+      return;
+    }
+    this.subKey = it.key;
+    if (user) rememberLang('subs_lang', it.lang);
+    if (it.native !== undefined) {
+      this.subWait = null;
+      this.setExt(null);
+      this.setNativeSub(it.native);
+      if (user) this.hooks.toast('Subtítulos: ' + it.label);
+      this.hooks.changed();
+      return;
+    }
+    if (it.probe === undefined || this.live) return;
+    if (this.ext?.s === it.probe) return;
+    // el panel solo trabaja cuando el usuario elige (nunca por el idioma de Ajustes)
+    if (!user) {
+      this.subKey = '';
+      return;
+    }
+    if (it.image) {
+      this.subKey = 'off';
+      this.hooks.toast('Este subtítulo es de imagen y no se puede mostrar en este equipo.');
+      this.hooks.changed();
+      return;
+    }
+    this.extSub(it.probe, it.label);
+  }
+
+  private async extSub(s: number, label: string): Promise<void> {
+    const g = this.gen;
+    const e = await this.getEngine();
+    if (g !== this.gen) return;
+    if (!e) {
+      this.subKey = 'off';
+      this.hooks.changed();
+      return;
+    }
+    this.setNativeSub(-1);
+    this.setExt(null);
+    const wait = { s, tries: 0, label };
+    this.subWait = wait;
+    this.hooks.toast('Preparando subtítulos ' + label + '… (puede tardar un minuto)');
+    this.hooks.changed();
+    while (this.subWait === wait && g === this.gen) {
+      const r = await subCheck(e, this.url, s);
+      if (this.subWait !== wait || g !== this.gen) return;
+      if (r.ready) {
+        const cues = parseVtt(await subText(e, this.url, s));
+        if (this.subWait !== wait || g !== this.gen) return;
+        this.subWait = null;
+        if (!cues.length) {
+          this.subKey = 'off';
+          this.hooks.toast('Este subtítulo está vacío.');
+        } else {
+          this.setExt({ s, cues });
+          this.hooks.toast('Subtítulos: ' + label);
+        }
+        this.hooks.changed();
+        return;
+      }
+      if (r.failed || ++wait.tries > 100) {
+        this.subWait = null;
+        this.subKey = 'off';
+        this.hooks.toast('Este subtítulo no se puede mostrar (es de imagen o el servidor no respondió).');
+        this.hooks.changed();
+        return;
+      }
+      await new Promise<void>(res => setTimeout(res, 3000));
+    }
+  }
+}
