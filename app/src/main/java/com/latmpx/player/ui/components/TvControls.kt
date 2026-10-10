@@ -118,17 +118,5 @@ fun TvSettingsRow(icon: ImageVector, title: String, subtitle: String, modifier: 
 /** Botón de diálogo para TV: blanco con el foco (o rojo si es la acción principal). */
 @Composable
 fun TvDialogButton(text: String, primary: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(8.dp), focusScale = 1.06f) { f ->
-        Text(
-            text, color = if (f && !primary) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp,
-            modifier = Modifier.background(
-                when {
-                    f && primary -> NfRed
-                    f -> Color.White
-                    else -> Color(0xFF333333)
-                },
-                RoundedCornerShape(8.dp),
-            ).padding(horizontal = 22.dp, vertical = 11.dp),
-        )
-    }
+    AppButton(text, modifier, primary = primary, fontSize = 15.sp, onClick = onClick)
 }

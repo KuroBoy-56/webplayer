@@ -93,15 +93,17 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-/* paleta oscura "premium" (estilo TiviMate) con el rojo de la web */
-internal val LvBg = Color(0xFF0B0B0F)
-internal val LvPanel = Color(0xFF111117)
-internal val LvFocus = Color(0xFF22222C)
-internal val LvActive = Color(0xFF17171F)
-internal val LvLine = Color(0xFF1E1E27)
-internal val LvLogo = Color(0xFF16161D)
-internal val LvDim = Color(0xFF8A8A96)
-internal val LvText = Color(0xFFEDEDF2)
+/* paleta oscura "premium" (estilo TiviMate) con el rojo de la web; con un distribuidor que tiene colores se deriva de los suyos */
+private fun lv(default: Color, fromBrand: (com.latmpx.player.ui.theme.BrandPalette) -> Color): Color =
+    if (com.latmpx.player.data.Tenant.brand?.colors == null) default else fromBrand(com.latmpx.player.ui.theme.brandPalette)
+internal val LvBg: Color get() = lv(Color(0xFF0B0B0F)) { androidx.compose.ui.graphics.lerp(it.bg, Color.Black, 0.35f) }
+internal val LvPanel: Color get() = lv(Color(0xFF111117)) { androidx.compose.ui.graphics.lerp(it.bg, Color.Black, 0.15f) }
+internal val LvFocus: Color get() = lv(Color(0xFF22222C)) { androidx.compose.ui.graphics.lerp(it.surface, it.text, 0.12f) }
+internal val LvActive: Color get() = lv(Color(0xFF17171F)) { it.surface }
+internal val LvLine: Color get() = lv(Color(0xFF1E1E27)) { androidx.compose.ui.graphics.lerp(it.surface, it.text, 0.06f) }
+internal val LvLogo: Color get() = lv(Color(0xFF16161D)) { it.card }
+internal val LvDim: Color get() = lv(Color(0xFF8A8A96)) { it.gray }
+internal val LvText: Color get() = lv(Color(0xFFEDEDF2)) { it.text }
 
 /**
  * TV en vivo para televisor al estilo TiviMate: categorías a la izquierda, canales con número, logo, programa actual

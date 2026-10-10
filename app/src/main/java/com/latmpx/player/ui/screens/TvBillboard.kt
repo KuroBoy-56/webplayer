@@ -252,35 +252,6 @@ private fun HeroBackdrop(h: TvHero) {
  */
 @Composable
 fun NfButton(text: String, icon: ImageVector?, white: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val src = remember { MutableInteractionSource() }
-    val f by src.collectIsFocusedAsState()
-    val sc by animateFloatAsState(if (f) 1.06f else 1f, label = "nfbtn")
-    val shape = RoundedCornerShape(6.dp)
-    val bg = when {
-        white -> Color.White
-        f -> Color(0xE68C8C8D)
-        else -> Color(0xB36D6D6E)
-    }
-    val fg = if (white) Color.Black else Color.White
-    Box(
-        modifier
-            .zIndex(if (f) 1f else 0f)
-            .graphicsLayer { scaleX = sc; scaleY = sc }
-            .border(2.dp, if (f) Color.White else Color.Transparent, RoundedCornerShape(9.dp))
-            .padding(3.dp)
-            .clip(shape)
-            .background(bg)
-            .clickable(interactionSource = src, indication = null, onClick = onClick)
-            .height(46.dp)
-            .padding(start = if (icon != null) 18.dp else 24.dp, end = 24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) {
-                Icon(icon, null, tint = fg, modifier = Modifier.size(28.dp))
-                Spacer(Modifier.width(10.dp))
-            }
-            Text(text, color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp, lineHeight = 22.sp, maxLines = 1, softWrap = false)
-        }
-    }
+    // mismo botón que el resto de las apps: el "blanco" de antes es el principal con el color del distribuidor
+    com.latmpx.player.ui.components.AppButton(text, modifier, primary = white, icon = icon, minHeight = 46.dp, fontSize = 18.sp, onClick = onClick)
 }

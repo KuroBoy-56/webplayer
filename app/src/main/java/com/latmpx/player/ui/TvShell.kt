@@ -266,16 +266,5 @@ private fun ExitDialog(onStay: () -> Unit, onExit: () -> Unit) {
 
 @Composable
 private fun DialogButton(text: String, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(8.dp), focusScale = 1.08f) { f ->
-        val bg = when {
-            f && primary -> Color.White
-            f -> NfRed
-            else -> Color(0xFF333333)
-        }
-        Text(
-            text, color = if (f && primary) Color.Black else Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.background(bg, RoundedCornerShape(8.dp)).widthIn(min = 170.dp).padding(horizontal = 26.dp, vertical = 13.dp),
-            textAlign = TextAlign.Center,
-        )
-    }
+    com.latmpx.player.ui.components.AppButton(text, modifier.widthIn(min = 170.dp), primary = primary, fontSize = 17.sp, onClick = onClick)
 }

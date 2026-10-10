@@ -81,6 +81,7 @@ Al abrir la app por primera vez sale **Número de distribuidor** (mismo diseño 
 - Funciones: `demo=false` oculta **Autodemo**, `alerts=false` no muestra el aviso, `sports=false` oculta **Deportes**.
 - Marca: el logo (`logo_url`, con Coil) reemplaza a `LogoHeader`; un distribuidor sin logo (o si no carga) muestra su nombre, nunca el logo de la app; la paleta `{accent, bg, surface, text}` reemplaza a los colores `Nf*` de `ui/theme/Theme.kt` (texto sobre acento negro o blanco según luminancia, texto secundario al 65 %, tarjetas = superficie 8 % hacia el texto).
 - **Botones iguales a Roku, Vega OS, Windows y la web** (`ui/components/AppButton.kt`, un solo botón en inicio de sesión, distribuidor, avisos, portada, ficha y Cuenta): principal = color del distribuidor (rojo sin distribuidor) con texto de contraste; secundario = blanco translúcido con borde fino; con el foco del control borde blanco de 3 px y crece un 5 % con una animación corta. El reproductor (barra, EN VIVO, carga) también usa el color del distribuidor.
+- **TV:** los botones del destacado y de la ficha (`NfButton`), los diálogos (`TvDialogButton`, salir) usan el mismo `AppButton`; la TV en vivo estilo TiviMate toma fondo, paneles, foco y texto de los colores del distribuidor (sin distribuidor, la paleta oscura de siempre).
 - **Cuenta → Cambiar distribuidor:** muestra distribuidor, número y vencimiento; borra todo, cierra sesión y vuelve a pedir el número.
 
 ## Datos que viven en el panel
