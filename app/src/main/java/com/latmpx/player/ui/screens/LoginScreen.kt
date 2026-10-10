@@ -58,6 +58,7 @@ import com.latmpx.player.data.Tenant
 import com.latmpx.player.data.Tmdb
 import com.latmpx.player.data.Xtream
 import com.latmpx.player.ui.components.tvTextInput
+import com.latmpx.player.ui.components.AppButton
 import com.latmpx.player.ui.components.Chip
 import com.latmpx.player.ui.components.DnsButton
 import com.latmpx.player.ui.components.FocusBox
@@ -193,7 +194,8 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                                 if (demoUsed) { err = "La demo ya se usó"; return@HeroButton }
                                 act {
                                     status = "Creando demo…"
-                                    val r = Panel.autoDemo(deviceId)
+                                    // un código de revendedor escrito en Contraseña deja la demo a su nombre
+                                    val r = Panel.autoDemo(deviceId, pass)
                                     val cred = r.value
                                     if (cred == null) {
                                         err = r.error
@@ -242,9 +244,5 @@ private fun ErrorBanner(text: String) {
 
 @Composable
 private fun RedButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(4.dp), focusScale = 1.03f) { f ->
-        Box(Modifier.fillMaxWidth().height(48.dp).background(if (f) (if (Tenant.brand?.colors == null) Color(0xFFF6121D) else lerp(NfRed, Color.White, 0.12f)) else NfRed), contentAlignment = Alignment.Center) {
-            Text(text, color = NfOnRed, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
-    }
+    AppButton(text, modifier.fillMaxWidth(), primary = true, onClick = onClick)
 }

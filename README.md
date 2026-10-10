@@ -56,9 +56,11 @@ Se envía siempre en el campo `mac_address`.
    Si el equipo tiene una lista entra solo; si tiene varias, se elige.
 2. `api/login.php` — `POST action=… & data=base64(salt16 + iv12 + AES-256-GCM + tag16)` con llave HKDF-SHA256 de la llave maestra:
    - `check_mac`: respaldo para saber si el equipo ya está activado.
+   - `check_mac` y `auto_demo` mandan `"enc": 1`: el panel responde la línea (usuario y contraseña) cifrada como `fetch_dns` y la app la descifra; un panel viejo sigue respondiendo JSON.
    - `fetch_dns`: lista de servidores (respuesta cifrada) para el selector "Servidor 1, 2…".
    - `submit_url`: activa el equipo con usuario + contraseña + servidor.
    - `auto_demo`: botón **Demo automática (24 h)**. Una sola demo por equipo para siempre: `403` muestra el mensaje y desactiva el botón; `429` (más de 3 demos por conexión al día) y `400` muestran el mensaje del panel.
+     **Autodemo con código de revendedor:** si en **Contraseña** hay un código de 6 letras y números (con al menos una letra, p. ej. `RV7K2M`), va en mayúsculas como `reseller` y la demo queda a nombre de ese revendedor en el panel. Solo números nunca se envía (es un número de distribuidor). Un código que no existe responde `404`: se muestra el aviso y la demo sigue disponible.
 3. Con la línea elegida la app usa el `player_api.php` del servidor IPTV (Xtream Codes).
 
 En la pantalla de activación se ve el código MAC para que el distribuidor lo active en el panel, y el botón **Comprobar activación** vuelve a preguntar.
@@ -72,7 +74,8 @@ Al abrir la app por primera vez sale **Número de distribuidor** (mismo diseño 
 - Con número, todas las llamadas llevan el distribuidor: `"tenant"` + `"app"` en los payload de `login.php` y en el `auth` de `progress.php` (el token, uno por número, sirve para `epg.php` y `sports.php`); `alerta.php?t=…&app=…`. `auth.php` solo conoce las listas del dueño, así que con número se usa `check_mac`.
 - **Guardián** (`data/Tenant.kt`, `ui/AppRoot.kt`): al abrir la app y al volver a ella pasado `recheck_after` (6 h) se vuelve a pedir `tenant_config`. `tenant_invalid`, `tenant_expired`, `tenant_suspended` o `app_not_linked` (también si llegan en cualquier otra llamada) borran número, marca, sesión y token y vuelven a la pantalla del número con el mensaje. Sin conexión se sigue con la copia hasta 72 h; después, pantalla **Reintentar**. El vencimiento (`expires_at`, hora de Panamá) también se comprueba en el equipo.
 - Funciones: `demo=false` oculta **Autodemo**, `alerts=false` no muestra el aviso, `sports=false` oculta **Deportes**.
-- Marca: el logo (`logo_url`, con Coil y respaldo al logo de la app) reemplaza a `LogoHeader`; la paleta `{accent, bg, surface, text}` reemplaza a los colores `Nf*` de `ui/theme/Theme.kt` (texto sobre acento negro o blanco según luminancia, texto secundario al 65 %, tarjetas = superficie 8 % hacia el texto).
+- Marca: el logo (`logo_url`, con Coil) reemplaza a `LogoHeader`; un distribuidor sin logo (o si no carga) muestra su nombre, nunca el logo de la app; la paleta `{accent, bg, surface, text}` reemplaza a los colores `Nf*` de `ui/theme/Theme.kt` (texto sobre acento negro o blanco según luminancia, texto secundario al 65 %, tarjetas = superficie 8 % hacia el texto).
+- **Botones iguales a Roku, Vega OS, Windows y la web** (`ui/components/AppButton.kt`, un solo botón en inicio de sesión, distribuidor, avisos, portada, ficha y Cuenta): principal = color del distribuidor (rojo sin distribuidor) con texto de contraste; secundario = blanco translúcido con borde fino; con el foco del control borde blanco de 3 px y crece un 5 % con una animación corta. El reproductor (barra, EN VIVO, carga) también usa el color del distribuidor.
 - **Cuenta → Cambiar distribuidor:** muestra distribuidor, número y vencimiento; borra todo, cierra sesión y vuelve a pedir el número.
 
 ## Datos que viven en el panel

@@ -68,7 +68,7 @@ fun PanelAlertDialog(alert: Alerts.Alert, onClose: () -> Unit) {
                     LogoHeader(height = if (tv) 40.dp else 34.dp)
                     Spacer(Modifier.height(18.dp))
                     Text(
-                        alert.title, color = if (alert.expiry) Color(0xFFF6121D) else Color.White,
+                        alert.title, color = if (alert.expiry) NfRed else Color.White,
                         fontSize = if (tv) 26.sp else 22.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center,
                     )
                     if (alert.message.isNotBlank()) Text(
@@ -80,12 +80,7 @@ fun PanelAlertDialog(alert: Alerts.Alert, onClose: () -> Unit) {
                         modifier = Modifier.padding(top = 18.dp).fillMaxWidth().heightIn(max = if (tv) 220.dp else 260.dp).clip(RoundedCornerShape(8.dp)),
                     )
                     Spacer(Modifier.height(24.dp))
-                    FocusBox(onClick = onClose, modifier = Modifier.fillMaxWidth().focusRequester(ok), shape = RoundedCornerShape(8.dp), focusScale = 1.04f) { f ->
-                        Text(
-                            alert.button.uppercase(), color = Color.Black, fontSize = 17.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().background(if (f || !tv) Color.White else Color(0xFFB3B3B3), RoundedCornerShape(8.dp)).padding(vertical = 13.dp),
-                        )
-                    }
+                    AppButton(alert.button.uppercase(), Modifier.fillMaxWidth().focusRequester(ok), primary = true, fontSize = 17.sp, onClick = onClose)
                 }
             }
         }

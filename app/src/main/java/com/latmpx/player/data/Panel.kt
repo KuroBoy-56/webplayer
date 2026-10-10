@@ -24,6 +24,9 @@ object Panel {
     /** POST a login.php con el JSON cifrado. Devuelve el cuerpo crudo o el error. Con distribuidor lleva "tenant" + "app". */
     private suspend fun login(action: String, payload: JSONObject, tag: Boolean = true): Answer<Net.Resp> {
         if (tag) Tenant.tag(payload)
+        // check_mac y auto_demo traen la línea (usuario y contraseña): se piden cifradas
+        val secret = action == "check_mac" || action == "auto_demo"
+        if (secret) payload.put("enc", 1)
         val data = try {
             PanelCrypto.encrypt(payload.toString())
         } catch (e: PanelCrypto.MissingKey) {
@@ -33,7 +36,19 @@ object Panel {
         }
         val r = Net.postForm(PanelUrl.api("login.php"), mapOf("action" to action, "data" to data))
         if (r.code == 0) return Answer(null, NO_PANEL)
+        // respuesta cifrada (panel nuevo) -> JSON; un panel viejo la manda en JSON y queda igual. Los errores siempre llegan en JSON.
+        if (secret && r.code == 200 && r.body.isNotBlank() && !r.body.trimStart().startsWith("{")) {
+            val dec = runCatching { PanelCrypto.decrypt(r.body) }.getOrNull()
+                ?: return Answer(null, "La llave de la app no coincide con la del panel")
+            return Answer(r.copy(body = dec))
+        }
         return Answer(r)
+    }
+
+    /** código de demo de un revendedor: 6 letras y números con al menos una letra (nunca solo números: eso es un distribuidor) */
+    fun isResellerCode(s: String): Boolean {
+        val t = s.trim()
+        return t.length == 6 && t.all { it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' } && t.any { it.isLetter() }
     }
 
     private fun errorOf(r: Net.Resp, fallback: String): String {
@@ -87,14 +102,17 @@ object Panel {
         return Answer(null, errorOf(r, "No se pudo activar el equipo"))
     }
 
-    /** Demo automática de 24 h (una sola vez por equipo). */
-    suspend fun autoDemo(deviceId: String): Answer<Pair<String, String>> {
-        val a = login("auto_demo", device(deviceId))
+    /** Demo automática (una sola vez por equipo). Con el código de un revendedor la demo queda a su nombre en el panel. */
+    suspend fun autoDemo(deviceId: String, reseller: String = ""): Answer<Pair<String, String>> {
+        val p = device(deviceId)
+        if (isResellerCode(reseller)) p.put("reseller", reseller.trim().uppercase())
+        val a = login("auto_demo", p)
         val r = a.value ?: return Answer(null, a.error)
         val j = r.json()
         if (r.ok && j?.s("status") == "ok" && j.s("username").isNotEmpty()) return Answer(j.s("username") to j.s("password"), code = r.code)
         val fallback = when (r.code) {
             403 -> "Demo ya utilizado en este dispositivo o dispositivo ya registrado."
+            404 -> "Código de revendedor no válido o sin demo disponible."
             429 -> "Demasiadas demos desde esta conexión. Inténtalo mañana."
             else -> "No se pudo crear la demo"
         }

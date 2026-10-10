@@ -184,14 +184,18 @@ fun LogoHeader(modifier: Modifier = Modifier, height: Dp = 34.dp) {
     val name = com.latmpx.player.data.Tenant.nameOr("LatMpx")
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         val url = brand?.logoUrl.orEmpty()
-        if (url.isEmpty()) {
-            Image(painterResource(R.drawable.logo), name, modifier = Modifier.height(height).clip(RoundedCornerShape(4.dp)))
-        } else {
-            // logo del distribuidor (Coil lo guarda en caché); si no carga, el logo de la app
-            val fallback = painterResource(R.drawable.logo)
-            AsyncImage(
+        var failed by androidx.compose.runtime.remember(url) { androidx.compose.runtime.mutableStateOf(false) }
+        when {
+            brand == null -> Image(painterResource(R.drawable.logo), name, modifier = Modifier.height(height).clip(RoundedCornerShape(4.dp)))
+            // distribuidor sin logo (o si no carga): su nombre, nunca el logo de la app
+            url.isEmpty() || failed -> Text(
+                name, color = com.latmpx.player.ui.theme.NfRed, fontWeight = FontWeight.Black, maxLines = 1,
+                fontSize = (height.value * 0.6f).sp, modifier = Modifier.widthIn(max = height * 6),
+            )
+            // logo del distribuidor (Coil lo guarda en caché)
+            else -> AsyncImage(
                 model = url, contentDescription = name, contentScale = ContentScale.Fit,
-                placeholder = fallback, error = fallback, fallback = fallback,
+                onError = { failed = true },
                 modifier = Modifier.height(height).widthIn(max = height * 5).clip(RoundedCornerShape(4.dp)),
             )
         }
