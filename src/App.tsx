@@ -15,7 +15,15 @@ import Grid from './screens/Grid';
 import Login from './screens/Login';
 import Main from './screens/Main';
 import Player from './screens/Player';
-import { checkTenant, getState, Guard, loadCatalog, loadCloud, restoreSession, tenantCheckDue } from './state';
+import { bindReportContext, installCrashReporter } from './api/report';
+import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, restoreSession, tenantCheckDue } from './state';
+
+// errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
+installCrashReporter();
+bindReportContext(() => {
+  const s = getState().session;
+  return { device: deviceId(), user: s?.user || '', server: s?.base || '' };
+});
 import { C, themed } from './theme';
 
 function Screen({ route, active }: { route: Route; active: boolean }) {

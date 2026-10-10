@@ -229,7 +229,7 @@ export function saveProgress(p: Progress, force: boolean) {
     return;
   }
   const { order, ...body } = p;
-  cloudPost({ action: 'save', ...body });
+  cloudPost({ action: 'save', ...body, platform: 'vega', device: read('device_id') });
 }
 
 export function removeProgress(title: string) {

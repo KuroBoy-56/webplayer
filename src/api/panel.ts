@@ -177,7 +177,7 @@ export async function cloudToken(forceNew = false): Promise<string> {
   }
   const s = sessionRef();
   if (!s) return '';
-  const r = await panel('progress.php', 'POST', JSON.stringify({ action: 'auth', user: s.user, pass: s.pass, dns: s.base, ...tenantFields() }), 'application/json');
+  const r = await panel('progress.php', 'POST', JSON.stringify({ action: 'auth', user: s.user, pass: s.pass, dns: s.base, ...tenantFields(), platform: APP_ID, device: read('device_id') }), 'application/json');
   tenantProblem(r);
   const j = json(r);
   if (!j || !str(j.token)) return '';
@@ -226,7 +226,8 @@ export function forgetCloud(): void {
 
 // POST a login.php con el JSON cifrado (con distribuidor lleva "tenant" y "app")
 async function panelLogin(action: string, payload: Record<string, any>): Promise<HttpResult & { error?: string }> {
-  const data = panelEncrypt(JSON.stringify({ ...payload, ...tenantFields() }));
+  // platform: en qué equipo está esta MAC (Clientes MAC › Dispositivo) y la pantalla falsa de esta app
+  const data = panelEncrypt(JSON.stringify({ ...payload, ...tenantFields(), platform: APP_ID }));
   if (!data) return { code: -1, body: '', ok: false, error: 'Esta versión no tiene la llave del panel.' };
   const r = await panel('login.php', 'POST', formBody({ action, data }), 'application/x-www-form-urlencoded');
   return r.code === 0 ? { ...r, error: 'No se pudo conectar con el panel.' } : r;
@@ -261,10 +262,31 @@ function panelError(r: HttpResult & { error?: string }, fallback: string): strin
   return msg || fallback;
 }
 
+// pantalla falsa del panel (Pantalla Falsa, solo el dueño) para equipos nuevos de esta app
+export type FakeScreen = { type: 'calculator' | 'carrusel' | 'image' | 'video' | 'web'; url: string; images: string[]; interval: number; unlock: string };
+let fakeScreen: FakeScreen | null = null;
+export function lastFakeScreen(): FakeScreen | null {
+  return fakeScreen;
+}
+function parseFake(j: any): FakeScreen | null {
+  const f = j && typeof j === 'object' ? j.fake_screen : null;
+  if (!f || f.show !== true) return null;
+  const types = ['calculator', 'carrusel', 'image', 'video', 'web'];
+  const http = (u: any) => /^https?:\/\//i.test(str(u));
+  return {
+    type: (types.includes(str(f.type)) ? str(f.type) : 'calculator') as FakeScreen['type'],
+    url: http(f.url) ? str(f.url) : '',
+    images: Array.isArray(f.images) ? f.images.filter(http).map(str) : [],
+    interval: Math.min(120, Math.max(1, Number(f.interval) || 5)),
+    unlock: str(f.unlock).replace(/\D/g, ''),
+  };
+}
+
 // línea activada para este equipo en el panel
 export async function panelCheckMac(deviceId: string) {
   if (!hasMasterKey()) return null;
   const j = loginReply(await panelLogin('check_mac', { mac_address: deviceId, enc: 1 }));
+  fakeScreen = parseFake(j);
   if (!j || j.exists !== true) return null;
   return lineFromUrl('Servidor', str(j.url), str(j.username), str(j.password));
 }

@@ -1,7 +1,8 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
-import { panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
+import { FakeScreen as Fake, lastFakeScreen, panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
+import FakeScreen from '../components/FakeScreen';
 import { loginAll } from '../api/xtream';
 import { Button, Logo } from '../components/ui';
 import { http, json } from '../lib/http';
@@ -35,6 +36,8 @@ export default function Login() {
   const [assigned, setAssigned] = useState<{ name: string; base: string; user: string; pass: string }[]>([]);
   const passRef = useRef<TextInput>(null);
   const dev = deviceId();
+  // pantalla falsa del panel (equipo nuevo): hasta escribir el código o hasta que lo registren
+  const [fake, setFake] = useState<Fake | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -47,6 +50,7 @@ export default function Login() {
       if (!lines.length) {
         const ln = await panelCheckMac(dev);
         if (ln) lines = [ln];
+        else if (read('fake_unlocked') !== '1') setFake(lastFakeScreen());
       }
       if (alive && lines.length) setAssigned(lines);
     });
@@ -54,6 +58,20 @@ export default function Login() {
       alive = false;
     };
   }, [dev]);
+
+  // con la pantalla falsa se pregunta cada 30 s: si registran el equipo, la app entra sola
+  useEffect(() => {
+    if (!fake) return;
+    const t = setInterval(async () => {
+      const ln = await panelCheckMac(dev);
+      if (ln) {
+        setFake(null);
+        enter(ln.user, ln.pass, [{ name: ln.name, base: ln.base }]);
+      } else if (!lastFakeScreen()) setFake(null);
+    }, 30000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fake, dev]);
 
   const enter = async (u: string, p: string, servers?: { name: string; base: string }[]) => {
     if (!u.trim() || !p.trim()) {
@@ -76,10 +94,7 @@ export default function Login() {
   };
 
   const demo = async () => {
-    if (read(scoped('demo_used')) === '1') {
-      setError('La demo ya se usó en este equipo.');
-      return;
-    }
+    // el panel decide (si el dueño borró el registro, el equipo puede pedir otra demo)
     setError('');
     // el código de un revendedor escrito en Contraseña deja la demo a su nombre en el panel
     const reseller = resellerCode(pass);
@@ -104,6 +119,19 @@ export default function Login() {
   };
 
   const canDemo = hasMasterKey() && features().demo;
+
+  if (fake) {
+    return (
+      <FakeScreen
+        screen={fake}
+        device={dev}
+        onUnlock={() => {
+          write('fake_unlocked', '1');
+          setFake(null);
+        }}
+      />
+    );
+  }
 
   return (
     <View style={s.root}>

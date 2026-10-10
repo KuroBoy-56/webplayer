@@ -5,6 +5,7 @@
 // TV en vivo: cambio de canal con arriba/abajo y guía.
 import { HWEvent, useTVEventHandler } from '@amazon-devices/react-native-kepler';
 import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
+import { reportError } from '../api/report';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Image, StyleSheet, Text, View } from 'react-native';
 import { channelEpg, EpgEntry, episodeUrl, liveUrl, movieUrl } from '../api/xtream';
@@ -197,6 +198,7 @@ export default function Player({ params }: { params: PlayParams }) {
         setBuffering(false);
         setStatus('');
         setError(params.kind === 'live' ? 'Este canal no está disponible en este momento.' : 'No se pudo reproducir este contenido.');
+        reportError('playback', 'No se pudo reproducir (' + params.kind + ')', 'kind=' + params.kind + ' index=' + indexRef.current, 'Reproductor');
       });
     };
     const onTrack = () => {
