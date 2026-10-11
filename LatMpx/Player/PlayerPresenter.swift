@@ -31,7 +31,9 @@ enum PlayerPresenter {
         if let h = host {
             shownId = nil
             host = nil
+            PlayerDiag.log("dismiss")
             h.dismiss(animated: true) {
+                PlayerDiag.log("dismiss terminado")
                 if let r = state.play { present(r, state, tenant) } else { restoreOrientation() }
             }
             return

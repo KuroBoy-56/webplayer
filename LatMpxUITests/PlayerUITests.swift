@@ -14,6 +14,10 @@ final class PlayerUITests: XCTestCase {
 
     private func launch(_ urls: String, live: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
+        if let dir = ProcessInfo.processInfo.environment["SHOTS"], !dir.isEmpty {
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            app.launchEnvironment["LATMPX_DIAG"] = dir + "/diag-" + name.filter { $0.isLetter || $0.isNumber } + ".txt"
+        }
         app.launchArguments = ["-dist_choice", "skip", "-ui_test_player", urls] + (live ? ["-ui_test_live", "YES"] : [])
         app.launch()
         return app
@@ -48,7 +52,9 @@ final class PlayerUITests: XCTestCase {
         return cond()
     }
 
-    private func value(_ e: XCUIElement) -> String { (e.value as? String) ?? "" }
+    private func value(_ e: XCUIElement) -> String { e.exists ? ((e.value as? String) ?? "") : "" }
+
+    private func note(_ s: String) { print("TIEMPO \(name): \(s)") }
 
     func testMoviePlaysPausesSeeksAndCloses() {
         let app = launch(movie)
@@ -81,8 +87,10 @@ final class PlayerUITests: XCTestCase {
         XCTAssertNotEqual(app.staticTexts["player.time"].label, before, "adelantar no cambió el tiempo")
 
         controls(app)
+        let c0 = Date()
         app.buttons["player.close"].tap()
         XCTAssertTrue(wait(5) { !app.buttons["player.close"].exists }, "no se pudo salir del reproductor")
+        note(String(format: "película cerrada en %.2f s", Date().timeIntervalSince(c0)))
         RunLoop.current.run(until: Date().addingTimeInterval(1.5))
         shot("5-pelicula-cerrada")
         let g = app.windows.firstMatch.frame
@@ -110,7 +118,9 @@ final class PlayerUITests: XCTestCase {
         controls(app)
         shot("8-servidor-sin-respuesta")
         let t0 = Date()
+        note("toco cerrar")
         app.buttons["player.close"].tap()
+        note(String(format: "tap terminado en %.2f s", Date().timeIntervalSince(t0)))
         XCTAssertTrue(wait(5) { !app.buttons["player.close"].exists }, "la pantalla quedó pegada con un servidor que no responde")
         XCTAssertLessThan(Date().timeIntervalSince(t0), 6)
         shot("9-servidor-cerrado")

@@ -63,10 +63,14 @@ final class PlayerModel: ObservableObject {
     /** suelta el reproductor actual (sin esperar) y deja uno nuevo listo */
     private func freshPlayer() {
         let old = player
+        PlayerDiag.phase("nuevo VLCMediaPlayer")
         player = VLCMediaPlayer()
+        PlayerDiag.phase("drawable nuevo")
         player.drawable = surface
+        PlayerDiag.phase("drawable viejo = nil")
         old.drawable = nil
         VLCRetire.stop(old)
+        PlayerDiag.phase("")
     }
 
     func start() {
@@ -82,8 +86,11 @@ final class PlayerModel: ObservableObject {
         stopped = true
         save(force: true)
         timer?.invalidate(); timer = nil
+        PlayerDiag.log("stop")
+        PlayerDiag.phase("stop: drawable = nil")
         player.drawable = nil
         VLCRetire.stop(player)
+        PlayerDiag.phase("")
     }
 
     private func load(_ i: Int) {
@@ -129,19 +136,27 @@ final class PlayerModel: ObservableObject {
         m.addOption(":network-caching=\(kind == .live ? 2500 : 1500)")
         m.addOption(":http-user-agent=\(Net.ua)")
         m.addOption(":http-reconnect")
+        PlayerDiag.log("abrir \(urlIdx): \(u.host ?? "")")
         freshPlayer()
+        PlayerDiag.phase("media = m")
         player.media = m
         openedAt = Date()
         buffering = true
+        PlayerDiag.phase("play()")
         player.play()
+        PlayerDiag.phase("")
         if fill { applyFill(fillSize) }
     }
 
     private func tick() {
+        PlayerDiag.phase("tick: state")
+        defer { PlayerDiag.phase("") }
         let st = player.state
         playing = player.isPlaying
         buffering = st == .opening || st == .buffering && !player.isPlaying
+        PlayerDiag.phase("tick: time")
         let t = Int64(player.time.intValue)
+        PlayerDiag.phase("tick: length")
         if t > 0 { time = t }
         if let l = player.media?.length.intValue, l > 0 { length = Int64(l) }
         if player.isPlaying {
@@ -153,16 +168,19 @@ final class PlayerModel: ObservableObject {
             if Date().timeIntervalSince(lastSave) >= 10 { save() }
         }
         switch st {
-        case .error: failed()
+        case .error: if error == nil { failed() }
         case .ended: ended()
         case .opening, .buffering, .stopped:
             // canal o video que no arranca en 25 s: se prueba la siguiente dirección
-            if !everPlayed && Date().timeIntervalSince(openedAt) > 25 { failed() }
+            if !everPlayed && error == nil && Date().timeIntervalSince(openedAt) > 25 { failed() }
         default: break
         }
     }
 
     private func failed() {
+        PlayerDiag.log("falló \(urlIdx) estado \(player.state.rawValue)")
+        // ya se mostró el error: no se vuelve a crear un reproductor en cada vuelta del reloj
+        if error != nil { return }
         if urlIdx + 1 < urls.count {
             urlIdx += 1
             open(urls[urlIdx])

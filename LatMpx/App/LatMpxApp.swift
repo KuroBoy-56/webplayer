@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         Store.boot()
         ErrorReport.boot()
+        PlayerDiag.watchdog()
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         return true
     }

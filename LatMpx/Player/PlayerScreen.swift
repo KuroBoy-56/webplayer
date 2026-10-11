@@ -74,6 +74,7 @@ struct PlayerScreen: View {
     }
 
     private func close() {
+        PlayerDiag.log("cerrar")
         m.stop()
         if state.play?.id == m.request.id { state.play = nil }
     }

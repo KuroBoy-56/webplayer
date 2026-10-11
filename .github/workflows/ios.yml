@@ -156,10 +156,21 @@ jobs:
           TEST_RUNNER_SHOTS="$PWD/uishots" xcodebuild -workspace LatMpx.xcworkspace -scheme LatMpx -configuration Debug \
             -sdk iphonesimulator -destination "id=$DEV" -derivedDataPath build -resultBundlePath uitest.xcresult \
             CODE_SIGNING_ALLOWED=NO test > uitest.log 2>&1 || status=$?
-          grep -E "error:|Test Case|XCTAssert|failed|passed|TEST (SUCCEEDED|FAILED)" uitest.log | head -80 || true
+          grep -E "error:|Test Case|XCTAssert|failed|passed|TIEMPO|TEST (SUCCEEDED|FAILED)" uitest.log | head -80 || true
+          grep -E "Wait for .* to idle|Tap .* (Button|Coordinate)|Checking existence" uitest.log | head -60 || true
+          for f in uishots/diag-*.txt; do echo "== $f"; cat "$f"; done 2>/dev/null || true
           xcrun xcresulttool export attachments --path uitest.xcresult --output-path uishots >/dev/null 2>&1 || true
           ls uishots || true
           exit $status
+      - name: Publicar capturas del simulador
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls shot*.png uishots/*.png >/dev/null 2>&1 || exit 0
+          gh release delete simulador-capturas --yes --cleanup-tag || true
+          gh release create simulador-capturas shot*.png uishots/[0-9]*.png --target "$GITHUB_SHA" --prerelease \
+            --title "Capturas del simulador (prueba automática)" --notes "Pantallas de la prueba del simulador de la rama ios ($GITHUB_SHA). No es una versión para instalar." || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
