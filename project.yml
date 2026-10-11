@@ -27,6 +27,9 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
         SWIFT_OPTIMIZATION_LEVEL: "-O"
+    scheme:
+      testTargets:
+        - LatMpxUITests
     info:
       path: LatMpx/Info.plist
       properties:
@@ -54,3 +57,17 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: Para reproducir canales de servidores IPTV de tu red.
+  # prueba del reproductor en el simulador (GitHub Actions, compilación Debug); no va dentro del .ipa
+  LatMpxUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: LatMpxUITests
+    dependencies:
+      - target: LatMpx
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.latmpx.player.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: LatMpx
+        CODE_SIGN_STYLE: Automatic

@@ -10,8 +10,20 @@ import MobileVLCKit
  */
 struct Track: Hashable { let id: Int32; let name: String }
 
+/**
+ * VLC se detiene siempre en segundo plano: stop() (y cambiar de dirección sobre el mismo reproductor)
+ * espera a que VLC suelte la conexión, y con un servidor que no responde eso tardaba segundos y
+ * congelaba la pantalla (no se podía pausar ni salir). Cada dirección usa un reproductor nuevo.
+ */
+enum VLCRetire {
+    private static let queue = DispatchQueue(label: "latmpx.vlc.stop", qos: .utility, attributes: .concurrent)
+    static func stop(_ p: VLCMediaPlayer) { queue.async { p.stop() } }
+}
+
 final class PlayerModel: ObservableObject {
-    let player = VLCMediaPlayer()
+    private(set) var player = VLCMediaPlayer()
+    private weak var surface: UIView?
+    private var fillSize: CGSize = .zero
     let request: PlayRequest
 
     @Published private(set) var index: Int
@@ -46,7 +58,16 @@ final class PlayerModel: ObservableObject {
         self.index = request.index
     }
 
-    func attach(_ view: UIView) { player.drawable = view }
+    func attach(_ view: UIView) { surface = view; player.drawable = view }
+
+    /** suelta el reproductor actual (sin esperar) y deja uno nuevo listo */
+    private func freshPlayer() {
+        let old = player
+        player = VLCMediaPlayer()
+        player.drawable = surface
+        old.drawable = nil
+        VLCRetire.stop(old)
+    }
 
     func start() {
         load(index)
@@ -61,18 +82,24 @@ final class PlayerModel: ObservableObject {
         stopped = true
         save(force: true)
         timer?.invalidate(); timer = nil
-        player.stop()
+        player.drawable = nil
+        VLCRetire.stop(player)
     }
 
     private func load(_ i: Int) {
-        guard let s = Store.session(), request.queue.indices.contains(i) else { return }
-        index = i
+        guard request.queue.indices.contains(i) else { return }
         let q = request.queue[i]
-        switch kind {
-        case .movie: urls = [Xtream.movieUrl(s, q.id, q.ext)]
-        case .series: urls = [Xtream.episodeUrl(s, q.id, q.ext)]
-        case .live: urls = Xtream.liveUrls(s, q.id); Store.setLastChannel(q.id)
+        if !request.directUrls.isEmpty {
+            urls = request.directUrls
+        } else {
+            guard let s = Store.session() else { return }
+            switch kind {
+            case .movie: urls = [Xtream.movieUrl(s, q.id, q.ext)]
+            case .series: urls = [Xtream.episodeUrl(s, q.id, q.ext)]
+            case .live: urls = Xtream.liveUrls(s, q.id); Store.setLastChannel(q.id)
+            }
         }
+        index = i
         urlIdx = 0
         resumeTo = 0
         if kind != .live, let p = Cloud.shared.progress(q.key), p.position > 30_000, p.duration <= 0 || Double(p.position) < Double(p.duration) * 0.95 {
@@ -84,9 +111,9 @@ final class PlayerModel: ObservableObject {
         loadSeq += 1
         let raw = urls, my = loadSeq
         if SecureDns.current.endpoint.isEmpty { open(raw[0]); return }
-        // DNS elegido en Ajustes: primero la IP que da ese DNS y después la dirección original
+        // DNS elegido en Ajustes: si las direcciones de siempre no abren, se prueba la IP que da ese DNS
         buffering = true
-        player.stop()
+        freshPlayer()
         Task { @MainActor [weak self] in
             let list = await SecureDns.playable(raw)
             guard let self = self, !self.stopped, self.loadSeq == my else { return }
@@ -102,10 +129,12 @@ final class PlayerModel: ObservableObject {
         m.addOption(":network-caching=\(kind == .live ? 2500 : 1500)")
         m.addOption(":http-user-agent=\(Net.ua)")
         m.addOption(":http-reconnect")
+        freshPlayer()
         player.media = m
         openedAt = Date()
         buffering = true
         player.play()
+        if fill { applyFill(fillSize) }
     }
 
     private func tick() {
@@ -126,7 +155,7 @@ final class PlayerModel: ObservableObject {
         switch st {
         case .error: failed()
         case .ended: ended()
-        case .opening, .buffering:
+        case .opening, .buffering, .stopped:
             // canal o video que no arranca en 25 s: se prueba la siguiente dirección
             if !everPlayed && Date().timeIntervalSince(openedAt) > 25 { failed() }
         default: break
@@ -143,13 +172,14 @@ final class PlayerModel: ObservableObject {
             error = kind == .live ? "No se pudo reproducir este canal" : "No se pudo reproducir este video"
             ErrorReport.report("playback", error!, detail: "\(entry.title) · \(kind.rawValue) \(entry.id) · estado \(player.state.rawValue)", screen: "player")
         }
-        player.stop()
+        buffering = false
+        freshPlayer()
     }
 
     private func ended() {
         if kind == .live { failed(); return }
         save(force: true, done: true)
-        if kind == .series && hasNext { load(index + 1) } else { player.stop(); onFinish?() }
+        if kind == .series && hasNext { load(index + 1) } else { freshPlayer(); onFinish?() }
     }
 
     func retry() { error = nil; urlIdx = 0; open(urls.first ?? "") }
@@ -202,6 +232,7 @@ final class PlayerModel: ObservableObject {
 
     /** ajustar (todo el video) o llenar la pantalla (recorta los bordes) */
     func applyFill(_ size: CGSize) {
+        fillSize = size
         if fill && size.width > 0 && size.height > 0 {
             let g = gcd(Int(size.width), Int(size.height))
             player.videoCropGeometry = strdup("\(Int(size.width) / g):\(Int(size.height) / g)")
@@ -215,7 +246,7 @@ final class PlayerModel: ObservableObject {
     /* ---------- progreso en el panel ---------- */
     private func save(force: Bool = false, done: Bool = false) {
         lastSave = Date()
-        guard kind != .live, request.queue.indices.contains(index) else { return }
+        guard kind != .live, request.directUrls.isEmpty, request.queue.indices.contains(index) else { return }
         let q = entry
         let dur = length
         let pos = done ? dur : time

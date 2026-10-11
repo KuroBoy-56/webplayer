@@ -28,6 +28,8 @@ struct PlayRequest: Identifiable {
     var category = ""
     /** abierto al girar el teléfono en TV en vivo: volver a vertical lo cierra */
     var closeOnPortrait = false
+    /** solo la prueba del simulador: direcciones fijas en lugar de las de la línea */
+    var directUrls: [String] = []
 }
 
 final class AppState: ObservableObject {

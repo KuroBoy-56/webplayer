@@ -50,13 +50,19 @@ final class LivePreview: ObservableObject {
     func release() {
         seq += 1
         timer?.invalidate(); timer = nil
-        if let p = player { p.stop(); p.drawable = nil }
+        // en segundo plano: stop() espera a que VLC suelte la conexión y congelaría la lista
+        if let p = player { p.drawable = nil; VLCRetire.stop(p) }
         player = nil
         showingId = 0
     }
 
     private func open() {
-        guard let p = player, urls.indices.contains(urlIdx), let u = URL(string: urls[urlIdx]) else { fail(); return }
+        guard let old = player, urls.indices.contains(urlIdx), let u = URL(string: urls[urlIdx]) else { fail(); return }
+        // cada dirección con un reproductor nuevo (cambiar la de uno que no conecta bloquea)
+        let p = VLCMediaPlayer()
+        p.drawable = view
+        player = p
+        if old.media != nil { old.drawable = nil; VLCRetire.stop(old) }
         let m = VLCMedia(url: u)
         m.addOption(":network-caching=2500")
         m.addOption(":http-user-agent=\(Net.ua)")
@@ -74,7 +80,7 @@ final class LivePreview: ObservableObject {
         }
         switch p.state {
         case .error, .ended: next()
-        case .opening, .buffering, .stopped:
+        case .opening, .buffering, .stopped, .paused:
             if showingId != channelId && Date().timeIntervalSince(openedAt) > 20 { next() }
         default: break
         }
@@ -92,6 +98,6 @@ final class LivePreview: ObservableObject {
 
     deinit {
         timer?.invalidate()
-        player?.stop()
+        if let p = player { VLCRetire.stop(p) }
     }
 }

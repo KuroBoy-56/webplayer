@@ -34,17 +34,16 @@ enum Net {
         return URLSession(configuration: c)
     }()
 
-    static func exec(_ req0: URLRequest) async -> Resp {
-        var req = req0
-        // DNS elegido por el usuario (servidores IPTV por http): se va a la IP con el nombre en Host
-        if let u = req.url, let (nu, host) = await SecureDns.rewrite(u) {
-            req.url = nu
-            req.setValue(host, forHTTPHeaderField: "Host")
-            let r = await send(req)
-            if r.code != 0 { return r }
-            req = req0 // la IP no respondió: el DNS del equipo
-        }
-        return await send(req)
+    static func exec(_ req: URLRequest) async -> Resp {
+        let r = await send(req)
+        // sin respuesta con el DNS del equipo y con un DNS elegido: se prueba la IP que da ese DNS
+        // (con el nombre en Host); con respuesta se usa tal cual, para no romper servidores que van por nombre
+        guard r.code == 0, let u = req.url, let (nu, host) = await SecureDns.rewrite(u) else { return r }
+        var alt = req
+        alt.url = nu
+        alt.setValue(host, forHTTPHeaderField: "Host")
+        let r2 = await send(alt)
+        return r2.code != 0 ? r2 : r
     }
 
     private static func send(_ req: URLRequest) async -> Resp {

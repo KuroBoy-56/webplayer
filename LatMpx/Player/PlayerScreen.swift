@@ -92,7 +92,8 @@ struct PlayerScreen: View {
                 .ignoresSafeArea().allowsHitTesting(false)
             VStack {
                 HStack(spacing: 18) {
-                    Button { close() } label: { Image(systemName: "xmark").font(.system(size: 22, weight: .semibold)) }
+                    Button { close() } label: { Image(systemName: "xmark").font(.system(size: 22, weight: .semibold)).frame(width: 44, height: 44) }
+                        .accessibilityIdentifier("player.close").accessibilityLabel("Cerrar")
                     Text(m.entry.title).font(.system(size: 17, weight: .semibold)).lineLimit(1)
                     Spacer()
                     if m.kind == .live { Button { channels = true } label: { Image(systemName: "list.bullet").font(.system(size: 20)) } }
@@ -106,13 +107,16 @@ struct PlayerScreen: View {
                     if m.kind == .live {
                         Button { m.previous(); autoHide() } label: { Image(systemName: "chevron.up.circle").font(.system(size: 38)) }
                     } else {
-                        Button { m.seek(by: -10); autoHide() } label: { Image(systemName: "gobackward.10").font(.system(size: 34)) }
+                        Button { m.seek(by: -10); autoHide() } label: { Image(systemName: "gobackward.10").font(.system(size: 34)).frame(width: 56, height: 56) }
                     }
-                    Button { m.toggle(); autoHide() } label: { Image(systemName: m.playing ? "pause.fill" : "play.fill").font(.system(size: 46)) }
+                    Button { m.toggle(); autoHide() } label: { Image(systemName: m.playing ? "pause.fill" : "play.fill").font(.system(size: 46)).frame(width: 70, height: 70) }
+                        .accessibilityIdentifier("player.toggle").accessibilityLabel(m.playing ? "Pausar" : "Reproducir")
+                        .accessibilityValue(m.playing ? "playing" : "paused")
                     if m.kind == .live {
                         Button { m.next(); autoHide() } label: { Image(systemName: "chevron.down.circle").font(.system(size: 38)) }
                     } else {
-                        Button { m.seek(by: 10); autoHide() } label: { Image(systemName: "goforward.10").font(.system(size: 34)) }
+                        Button { m.seek(by: 10); autoHide() } label: { Image(systemName: "goforward.10").font(.system(size: 34)).frame(width: 56, height: 56) }
+                            .accessibilityIdentifier("player.forward")
                     }
                 }
                 Spacer()
@@ -125,6 +129,7 @@ struct PlayerScreen: View {
                             .tint(Theme.accent)
                         HStack {
                             Text(fmtTime(scrub.map { Int64(Double(m.length) * $0) } ?? m.time)).font(.system(size: 13, design: .monospaced))
+                                .accessibilityIdentifier("player.time")
                             Spacer()
                             if m.kind == .series && m.hasNext {
                                 Button { m.next() } label: { Label("Siguiente episodio", systemImage: "forward.end.fill").font(.system(size: 14, weight: .semibold)) }
@@ -149,7 +154,7 @@ struct PlayerScreen: View {
             HStack(spacing: 12) {
                 AppButton(text: "Reintentar", height: 42) { m.retry() }.frame(width: 150)
                 if m.kind == .live { AppButton(text: "Siguiente canal", primary: false, height: 42) { m.next() }.frame(width: 170) }
-                AppButton(text: "Salir", primary: false, height: 42) { close() }.frame(width: 110)
+                AppButton(text: "Salir", primary: false, height: 42) { close() }.frame(width: 110).accessibilityIdentifier("player.exit")
             }
         }
         .padding(24).background(Color.black.opacity(0.8)).clipShape(RoundedRectangle(cornerRadius: 12))

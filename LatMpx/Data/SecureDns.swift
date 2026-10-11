@@ -73,12 +73,14 @@ enum SecureDns {
         return (nu, url.port.map { "\(host):\($0)" } ?? host)
     }
 
-    /** direcciones para el reproductor: primero por la IP del DNS elegido y después la original */
+    /**
+     * Direcciones para el reproductor: primero las de siempre y después las mismas por la IP del DNS
+     * elegido (VLC no puede mandar el nombre en Host, así que la IP solo sirve de respaldo).
+     */
     static func playable(_ urls: [String]) async -> [String] {
-        var out = [String]()
+        var out = urls
         for s in urls {
             if let u = URL(string: s), let (nu, _) = await rewrite(u) { out.append(nu.absoluteString) }
-            out.append(s)
         }
         var seen = Set<String>()
         return out.filter { seen.insert($0).inserted }

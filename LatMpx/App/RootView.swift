@@ -61,6 +61,16 @@ struct RootView: View {
 
     private func boot() {
         guard !booted else { return }
+        #if DEBUG
+        // prueba automática del simulador (LatMpxUITests): abre el reproductor con direcciones fijas
+        if let u = UserDefaults.standard.string(forKey: "ui_test_player"), !u.isEmpty {
+            let live = UserDefaults.standard.bool(forKey: "ui_test_live")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                state.play = PlayRequest(kind: live ? .live : .movie, queue: [QueueEntry(id: 0, title: "Prueba", key: "test:0", poster: "", ext: "")],
+                                         index: 0, directUrls: u.components(separatedBy: "|"))
+            }
+        }
+        #endif
         if Store.distChoice.isEmpty { gate = .choose }
         else if Store.distChoice == "code" && tenant.brand == nil { wipe(nil) }
         else { gate = .open }

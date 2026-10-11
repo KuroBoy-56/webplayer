@@ -147,8 +147,24 @@ jobs:
             xcrun simctl io "$PAD" screenshot shot4.png
           fi
           xcrun simctl spawn "$DEV" log show --last 2m --predicate 'process == "LatMpx"' --style compact 2>/dev/null | grep -iE "fault|crash|error" | head -40 || true
+      - name: Probar el reproductor (abrir, pausar, adelantar, salir)
+        run: |
+          DEV=$(xcrun simctl list devices available | grep -E "iPhone 1[5-7]( Pro)? \(" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          test -n "$DEV"
+          mkdir -p uishots
+          status=0
+          TEST_RUNNER_SHOTS="$PWD/uishots" xcodebuild -workspace LatMpx.xcworkspace -scheme LatMpx -configuration Debug \
+            -sdk iphonesimulator -destination "id=$DEV" -derivedDataPath build -resultBundlePath uitest.xcresult \
+            CODE_SIGNING_ALLOWED=NO test > uitest.log 2>&1 || status=$?
+          grep -E "error:|Test Case|XCTAssert|failed|passed|TEST (SUCCEEDED|FAILED)" uitest.log | head -80 || true
+          xcrun xcresulttool export attachments --path uitest.xcresult --output-path uishots >/dev/null 2>&1 || true
+          ls uishots || true
+          exit $status
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: capturas-simulador
-          path: shot*.png
+          path: |
+            shot*.png
+            uishots/
+            uitest.log
