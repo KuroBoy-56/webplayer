@@ -1,0 +1,56 @@
+# Proyecto de Xcode generado con XcodeGen (xcodegen generate). No se sube el .xcodeproj.
+name: LatMpx
+options:
+  bundleIdPrefix: com.latmpx
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: es
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_BITCODE: NO
+targets:
+  LatMpx:
+    type: application
+    platform: iOS
+    sources:
+      - path: LatMpx
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.latmpx.player
+        PRODUCT_NAME: LatMpx
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_FILE: LatMpx/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_OPTIMIZATION_LEVEL: "-O"
+    info:
+      path: LatMpx/Info.plist
+      properties:
+        CFBundleDisplayName: LatMpx TV+
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen:
+          UIColorName: ""
+        UIRequiresFullScreen: false
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIViewControllerBasedStatusBarAppearance: true
+        UIBackgroundModes: [audio]
+        ITSAppUsesNonExemptEncryption: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Los servidores IPTV casi siempre son http:// (el panel y TMDB van por https).
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSLocalNetworkUsageDescription: Para reproducir canales de servidores IPTV de tu red.

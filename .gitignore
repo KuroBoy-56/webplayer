@@ -1,0 +1,13 @@
+# generado
+*.xcodeproj/
+*.xcworkspace/
+Pods/
+Podfile.lock
+build/
+DerivedData/
+Payload/
+*.ipa
+LatMpx/Info.plist
+
+# llave maestra del panel: la escribe tools/write-panel-key.sh (o el flujo de GitHub Actions)
+LatMpx/Data/PanelKey.swift

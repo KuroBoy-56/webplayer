@@ -1,0 +1,78 @@
+name: IPA iOS
+
+# App de iPhone / iPad. Se compila sin firma: el .ipa se instala con Sideloadly o AltStore,
+# que lo firman con tu Apple ID (ver README). Publica siempre en Releases > ipa-latest.
+
+on:
+  push:
+    branches: [ios]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      # la llave maestra no va en el código: el secreto PANEL_MASTER_KEY se escribe solo durante la compilación
+      - name: Configurar panel
+        env:
+          PANEL_MASTER_KEY: ${{ secrets.PANEL_MASTER_KEY }}
+        run: |
+          if [ -z "$PANEL_MASTER_KEY" ]; then echo "::warning::Falta el secreto PANEL_MASTER_KEY: la activación no funcionará"; fi
+          sh tools/write-panel-key.sh
+
+      - name: Generar proyecto
+        run: |
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodegen generate
+          pod install --repo-update
+
+      - name: Compilar
+        run: |
+          set -o pipefail
+          xcodebuild -workspace LatMpx.xcworkspace -scheme LatMpx -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)" || true
+          test "${PIPESTATUS[0]}" = 0
+
+      - name: Resumen de errores
+        if: failure()
+        run: |
+          msg=$(grep -E "error:" build.log | sort -u | head -60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Errores de compilación::$msg"
+
+      - name: Empaquetar .ipa
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
+          test -n "$APP"
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          zip -qry LatMpx.ipa Payload
+          ls -la LatMpx.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LatMpx-ipa
+          path: LatMpx.ipa
+
+      - name: Publicar descarga
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ipa-latest --yes --cleanup-tag || true
+          gh release create ipa-latest LatMpx.ipa --target "$GITHUB_SHA" --title "LatMpx iPhone / iPad (última versión)" \
+            --notes "Compilado automáticamente desde la rama ios ($GITHUB_SHA). Sin firma: instálalo con Sideloadly o AltStore (ver README de la rama ios)." --prerelease
