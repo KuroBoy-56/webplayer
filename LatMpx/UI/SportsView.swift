@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /** Deportes: misma agenda que la web y Android, con los datos de api/sports.php. */
 struct SportsView: View {
@@ -141,7 +142,7 @@ struct SportsView: View {
             let blocked = Store.blockedCats
             let usable = channels.filter { !blocked.contains($0.categoryId) }
             let rules = d.rules
-            let (match, viaTv, firstEvent): (Item?, Bool, Item?) = await Task.detached {
+            let (match, viaTv, firstEvent) = await Task.detached { () -> (Item?, Bool, Item?) in
                 let prepared = Sports.prepare(usable, cats, rules)
                 if let c = channel {
                     if let m = Sports.findByChannel(c.name, prepared).first { return (m, true, nil) }

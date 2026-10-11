@@ -108,7 +108,7 @@ struct DetailView: View {
     @ViewBuilder private func castRow(_ pad: CGFloat) -> some View {
         let people: [(String, String, String)] = {
             if let c = tmdb?.cast, !c.isEmpty { return c.map { ($0.name, $0.character, $0.profile) } }
-            return (det?.cast ?? "").split(separator: ",").map { ($0.trimmed, "", "") }.filter { !$0.0.isEmpty }
+            return (det?.cast ?? "").split(separator: ",").map { (String($0).trimmed, "", "") }.filter { !$0.0.isEmpty }
         }()
         if !people.isEmpty {
             Text("Elenco").font(.system(size: 18, weight: .bold)).foregroundColor(.white).padding(.horizontal, pad).padding(.top, 8)

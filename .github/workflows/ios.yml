@@ -43,12 +43,13 @@ jobs:
 
       - name: Compilar
         run: |
-          set -o pipefail
+          status=0
           xcodebuild -workspace LatMpx.xcworkspace -scheme LatMpx -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tee build.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)" || true
-          test "${PIPESTATUS[0]}" = 0
+            build > build.log 2>&1 || status=$?
+          grep -E "error:|BUILD (SUCCEEDED|FAILED)" build.log | sort -u | head -150 || true
+          exit $status
 
       - name: Resumen de errores
         if: failure()
@@ -60,6 +61,7 @@ jobs:
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
           test -n "$APP"
+          test -f "$APP/LatMpx"
           rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
           zip -qry LatMpx.ipa Payload
           ls -la LatMpx.ipa
