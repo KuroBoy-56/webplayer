@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Combine
 
 /**
  * El reproductor lo presenta UIKit (no fullScreenCover): en iPhone la pantalla pide solo horizontal y
@@ -23,6 +24,21 @@ private final class PlayerHostController: UIHostingController<AnyView> {
 enum PlayerPresenter {
     private static weak var host: UIViewController?
     private static var shownId: UUID?
+
+    private static var sub: AnyCancellable?
+
+    /**
+     * Sigue a state.play directamente. No basta con un onChange de la pantalla principal: mientras el
+     * reproductor la tapa entera iOS la saca de la ventana y SwiftUI deja de avisar sus cambios, así que
+     * al tocar "cerrar" el reproductor se detenía pero nunca se quitaba (se quedaba pegado).
+     */
+    static func bind(_ state: AppState, _ tenant: Tenant) {
+        guard sub == nil else { return }
+        sub = state.$play.map { $0?.id }.removeDuplicates().sink { _ in
+            // en la siguiente vuelta, cuando state.play ya tiene el valor nuevo
+            Task { @MainActor in sync(state, tenant) }
+        }
+    }
 
     /** muestra u oculta el reproductor según state.play */
     static func sync(_ state: AppState, _ tenant: Tenant) {

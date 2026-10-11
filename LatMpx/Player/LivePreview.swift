@@ -16,6 +16,7 @@ final class LivePreview: ObservableObject {
     private var timer: Timer?
     private var seq = 0
     private var channelId = 0
+    private var connecting = false
 
     /** canal que ya muestra imagen / canal que no se pudo reproducir */
     @Published private(set) var showingId = 0
@@ -63,6 +64,7 @@ final class LivePreview: ObservableObject {
         p.drawable = view
         player = p
         if old.media != nil { old.drawable = nil; VLCRetire.stop(old) }
+        connecting = false
         let m = VLCMedia(url: u)
         m.addOption(":network-caching=2500")
         m.addOption(":http-user-agent=\(Net.ua)")
@@ -78,8 +80,10 @@ final class LivePreview: ObservableObject {
             if showingId != channelId { showingId = channelId }
             return
         }
+        if p.state == .opening || p.state == .buffering { connecting = true }
         switch p.state {
         case .error, .ended: next()
+        case .stopped where connecting: next()
         case .opening, .buffering, .stopped, .paused:
             if showingId != channelId && Date().timeIntervalSince(openedAt) > 20 { next() }
         default: break

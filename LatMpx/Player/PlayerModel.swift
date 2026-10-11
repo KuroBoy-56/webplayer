@@ -80,6 +80,8 @@ final class PlayerModel: ObservableObject {
 
     private var stopped = false
     private var loadSeq = 0
+    /** la dirección actual ya pasó por "abriendo" (para notar cuando VLC se detiene sin imagen) */
+    private var connecting = false
 
     func stop() {
         if stopped { return }
@@ -138,6 +140,7 @@ final class PlayerModel: ObservableObject {
         m.addOption(":http-reconnect")
         PlayerDiag.log("abrir \(urlIdx): \(u.host ?? "")")
         freshPlayer()
+        connecting = false
         PlayerDiag.phase("media = m")
         player.media = m
         openedAt = Date()
@@ -167,8 +170,12 @@ final class PlayerModel: ObservableObject {
             if !appliedLang && time > 1500 { appliedLang = true; readTracks(); applyPreferredLanguages() }
             if Date().timeIntervalSince(lastSave) >= 10 { save() }
         }
+        if st == .opening || st == .buffering { connecting = true }
         switch st {
         case .error: if error == nil { failed() }
+        case .stopped where connecting && !everPlayed && error == nil:
+            // VLC se detuvo sin dar imagen (dirección rechazada): la siguiente al momento, sin esperar 25 s
+            failed()
         case .ended: ended()
         case .opening, .buffering, .stopped:
             // canal o video que no arranca en 25 s: se prueba la siguiente dirección

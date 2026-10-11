@@ -6,7 +6,7 @@ import XCTest
  * también mientras un servidor no contesta (antes se quedaba congelada al salir).
  */
 final class PlayerUITests: XCTestCase {
-    private let movie = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    private let movie = "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8"
     private let live = "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
     private let dead = "http://10.255.255.1/live/a.ts|http://10.255.255.1/live/b.ts"
 
@@ -59,6 +59,7 @@ final class PlayerUITests: XCTestCase {
     func testMoviePlaysPausesSeeksAndCloses() {
         let app = launch(movie)
         XCTAssertTrue(app.buttons["player.close"].waitForExistence(timeout: 30), "no se abrió el reproductor")
+        XCTAssertTrue(app.otherElements["player.screen"].exists, "no se encuentra la pantalla del reproductor")
         shot("1-pelicula-abierta")
         let toggle = app.buttons["player.toggle"]
         let playing = wait(60) { controls(app); return value(toggle) == "playing" }
@@ -89,7 +90,7 @@ final class PlayerUITests: XCTestCase {
         controls(app)
         let c0 = Date()
         app.buttons["player.close"].tap()
-        XCTAssertTrue(wait(5) { !app.buttons["player.close"].exists }, "no se pudo salir del reproductor")
+        XCTAssertTrue(wait(5) { !app.otherElements["player.screen"].exists }, "no se pudo salir del reproductor")
         note(String(format: "película cerrada en %.2f s", Date().timeIntervalSince(c0)))
         RunLoop.current.run(until: Date().addingTimeInterval(1.5))
         shot("5-pelicula-cerrada")
@@ -106,7 +107,7 @@ final class PlayerUITests: XCTestCase {
         XCTAssertTrue(playing, "el canal no empezó a reproducirse")
         controls(app)
         app.buttons["player.close"].tap()
-        XCTAssertTrue(wait(5) { !app.buttons["player.close"].exists }, "no se pudo salir del canal")
+        XCTAssertTrue(wait(5) { !app.otherElements["player.screen"].exists }, "no se pudo salir del canal")
         shot("7-canal-cerrado")
     }
 
@@ -121,7 +122,7 @@ final class PlayerUITests: XCTestCase {
         note("toco cerrar")
         app.buttons["player.close"].tap()
         note(String(format: "tap terminado en %.2f s", Date().timeIntervalSince(t0)))
-        XCTAssertTrue(wait(5) { !app.buttons["player.close"].exists }, "la pantalla quedó pegada con un servidor que no responde")
+        XCTAssertTrue(wait(5) { !app.otherElements["player.screen"].exists }, "la pantalla quedó pegada con un servidor que no responde")
         XCTAssertLessThan(Date().timeIntervalSince(t0), 6)
         shot("9-servidor-cerrado")
     }

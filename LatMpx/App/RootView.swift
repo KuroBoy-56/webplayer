@@ -56,7 +56,7 @@ struct RootView: View {
             Task { let a = await Alerts.forLaunch(s); await MainActor.run { alert = a } }
             await state.loadCatalog(s)
         }
-        .onChange(of: state.play?.id) { _ in PlayerPresenter.sync(state, tenant) }
+        .onAppear { PlayerPresenter.bind(state, tenant) }
     }
 
     private func boot() {

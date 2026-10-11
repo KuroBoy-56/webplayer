@@ -47,6 +47,8 @@ struct PlayerScreen: View {
                 if controls && m.error == nil { overlay }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("player.screen")
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .toast($m.toast)
