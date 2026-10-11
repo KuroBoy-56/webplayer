@@ -15,7 +15,7 @@ permissions:
 
 env:
   # llave del panel para Autodemo y registro del equipo (opcional; ver config/README.md)
-  PANEL_KEY: ${{ secrets.PANEL_KEY }}
+  PANEL_KEY: ${{ secrets.PANEL_KEY || secrets.PANEL_MASTER_KEY }}
   # SDK de Vega fijado; si Amazon lo retira se prueba con la última versión
   VEGA_SDK_PINNED: '0.24.12112'
 
