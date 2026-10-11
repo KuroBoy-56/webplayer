@@ -1,7 +1,6 @@
 package com.latmpx.player.player
 
 import android.app.AlertDialog
-import android.app.PictureInPictureParams
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Color
@@ -11,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.Rational
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -73,6 +71,7 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var view: PlayerView
     private lateinit var ui2: PlayerUiModel
     private var tv = false
+    private lateinit var pip: PlayerPip
     private lateinit var selector: DefaultTrackSelector
     private val ui = Handler(Looper.getMainLooper())
 
@@ -117,6 +116,7 @@ class PlayerActivity : ComponentActivity() {
 
         tv = Device.isTv(this)
         buildPlayer()
+        pip = PlayerPip(this, player, tv).also { it.register() }
         ui2 = PlayerUiModel(player, kind == Kind.LIVE, tv).apply {
             episodes = if (kind == Kind.SERIES) queue.map { q -> q.title.removePrefix(saveTitle).trim().trimStart('·').trim().ifEmpty { q.title } } else emptyList()
             resize = Store.resizeMode
@@ -155,6 +155,7 @@ class PlayerActivity : ComponentActivity() {
             pickEpisode = { i -> saveProgress(force = true); player.seekTo(i, C.TIME_UNSET); player.prepare(); player.play() },
             zap = { d -> zap(d) },
             resize = { r -> view.resizeMode = r; ui2.resize = r; Store.resizeMode = r },
+            pip = if (pip.supported) ({ ui2.panel = null; pip.enter() }) else null,
         )
         setContent {
             Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
@@ -279,6 +280,11 @@ class PlayerActivity : ComponentActivity() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (::ui2.isInitialized) { ui2.playing = isPlaying; if (!isPlaying) ui2.poke() }
                 if (!isPlaying) saveProgress(force = true)
+                if (::pip.isInitialized) pip.update()
+            }
+
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                if (::pip.isInitialized) pip.update()
             }
 
             override fun onPlaybackStateChanged(state: Int) {
@@ -470,14 +476,14 @@ class PlayerActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         // teléfono: al salir con el botón de inicio sigue en ventana flotante
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !Device.isTv(this) && ::player.isInitialized && player.isPlaying) {
-            runCatching { enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) }
-        }
+        if (::pip.isInitialized) pip.onUserLeaveHint()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (::ui2.isInitialized) { ui2.visible = !isInPictureInPictureMode; ui2.panel = null }
+        // se cerró la ventanita con la X (la actividad queda detenida): se sale del reproductor
+        if (!isInPictureInPictureMode && lifecycle.currentState == androidx.lifecycle.Lifecycle.State.CREATED) finish()
     }
 
     override fun onStop() {
@@ -487,6 +493,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (::pip.isInitialized) pip.unregister()
         ui.removeCallbacksAndMessages(null)
         if (::player.isInitialized) { saveProgress(force = true); player.release() }
         super.onDestroy()
