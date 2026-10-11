@@ -3,6 +3,7 @@
 # El archivo no se sube a git. Sin la llave la app compila, pero la activación no funciona.
 set -eu
 out="$(dirname "$0")/../LatMpx/Data/PanelKey.swift"
+mkdir -p "$(dirname "$out")"
 key="${PANEL_MASTER_KEY:-}"
 mask=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
 python3 - "$key" "$mask" "$out" <<'PY'
