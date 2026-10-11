@@ -18,6 +18,8 @@ struct LoginView: View {
     @State private var posters: [String] = []
     @State private var fake: FakeScreen?
     @State private var started = false
+    /** ojito: ver la contraseña en texto o volver a ocultarla */
+    @State private var showPass = false
 
     var body: some View {
         if let f = fake {
@@ -97,13 +99,24 @@ struct LoginView: View {
     }
 
     private func field(_ label: String, text: Binding<String>, secure: Bool) -> some View {
-        Group {
-            if secure { SecureField("", text: text, prompt: Text(label).foregroundColor(Theme.muted)) }
-            else { TextField("", text: text, prompt: Text(label).foregroundColor(Theme.muted)) }
+        HStack(spacing: 8) {
+            Group {
+                if secure && !showPass { SecureField("", text: text, prompt: Text(label).foregroundColor(Theme.muted)) }
+                else { TextField("", text: text, prompt: Text(label).foregroundColor(Theme.muted)) }
+            }
+            .textInputAutocapitalization(.never).autocorrectionDisabled()
+            .textContentType(.none)
+            .foregroundColor(.white)
+            if secure {
+                Button { showPass.toggle() } label: {
+                    Image(systemName: showPass ? "eye.slash" : "eye").font(.system(size: 18)).foregroundColor(Theme.muted)
+                        .frame(width: 36, height: 36).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(showPass ? "Ocultar contraseña" : "Ver contraseña")
+            }
         }
-        .textInputAutocapitalization(.never).autocorrectionDisabled()
-        .textContentType(.none)
-        .foregroundColor(.white).padding(.horizontal, 14).frame(height: 52)
+        .padding(.leading, 14).padding(.trailing, secure ? 6 : 14).frame(height: 52)
         .background(Color(hex: 0x333333)).clipShape(RoundedRectangle(cornerRadius: 4))
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(hex: 0x555555)))
     }

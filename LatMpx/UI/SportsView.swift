@@ -122,11 +122,11 @@ struct SportsView: View {
     }
 
     private func card(_ e: SportEvent, _ d: SportsData) -> some View {
-        SportCard(event: e, info: d.sports[e.sport], now: now) { e.tv.isEmpty ? watch(e, nil, false) : (pick = e) }
+        SportCard(event: e, info: d.sports[e.sport], now: now) { e.tv.isEmpty ? watch(e, nil, false, fromMenu: false) : (pick = e) }
     }
 
     /** channel = canal elegido del menú; byEvent = buscar solo por equipos / nombre del evento */
-    private func watch(_ e: SportEvent, _ channel: TvChannel?, _ byEvent: Bool) {
+    private func watch(_ e: SportEvent, _ channel: TvChannel?, _ byEvent: Bool, fromMenu: Bool = true) {
         guard let d = data, let s = state.session else { return }
         let st = Sports.status(e, d.sports[e.sport], now)
         let today = dayKey(e.start) == dayKey(now)
@@ -135,8 +135,11 @@ struct SportsView: View {
             return
         }
         busy = true
+        pick = nil
         Task { @MainActor in
             defer { busy = false }
+            // el menú termina de cerrarse antes de abrir el reproductor (si no, iOS puede no mostrarlo)
+            if fromMenu { try? await Task.sleep(nanoseconds: 450_000_000) }
             let channels = state.live.isEmpty ? await Xtream.items(s, .live) : state.live
             let cats = state.liveCats.isEmpty ? await Xtream.categories(s, .live) : state.liveCats
             let blocked = Store.blockedCats
