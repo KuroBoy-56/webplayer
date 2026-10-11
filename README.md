@@ -35,6 +35,8 @@ Con un Apple ID gratuito la firma dura **7 días**: vuelve a instalarlo con Side
 
 GitHub Actions (`.github/workflows/ios.yml`, en cada push a `ios`) compila en macOS y publica `LatMpx.ipa` en **Releases › ipa-latest**.
 
+En el mismo flujo, la prueba del simulador (`LatMpxUITests`, compilación Debug) abre un video y un canal de prueba, pausa, adelanta y sale, y comprueba que con un servidor que no responde se puede salir al instante. Sus capturas quedan en **Releases › simulador-capturas** (no es una versión para instalar). El reproductor detiene VLC en segundo plano y `PlayerPresenter` sigue a `state.play` directamente, así cerrar nunca deja la pantalla pegada.
+
 La llave maestra del panel no va en el código: el secreto **`PANEL_MASTER_KEY`** (Settings › Secrets and variables › Actions del repositorio) se escribe en `LatMpx/Data/PanelKey.swift` (ignorado por git) solo durante la compilación. Sin el secreto la app compila pero no puede activar equipos (lo avisa en el inicio de sesión).
 
 En una Mac:
