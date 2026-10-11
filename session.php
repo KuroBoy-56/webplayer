@@ -20,6 +20,9 @@ if (!defined('WP_SESSION_LOADED')) {
     }
     // Distribuidor de la sesión (guardián: la revisión al panel se hace como mucho cada 10 min)
     wp_tenant_guard($wp_sess);
+    // Línea vigente (contraseña, vencimiento, estado): como mucho cada 15 min
+    require_once __DIR__ . '/includes/line_guard.php';
+    wp_line_guard($wp_sess);
     $get_dns = rtrim($wp_sess['server'], '/');
     $username = $wp_sess['username'];
     $password = $wp_sess['password'];

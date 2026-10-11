@@ -42,20 +42,90 @@ function sp_team_score($chan, $team)
     return $best;
 }
 
-function sp_find_channel($h, $a, $lg, $ev)
+/** canales de la lista en vivo (cacheada 30 min) con sus carpetas de eventos */
+function sp_live_index()
 {
-    $cats = wp_category_names('live');
+    static $ix = null;
+    if ($ix !== null) return $ix;
     $eventCats = [];
-    foreach ($cats as $cid => $cn) if (preg_match('/event|ppv|pay per view|deportes? en vivo|live sport|partidos? (de )?hoy/i', wp_norm($cn))) $eventCats[$cid] = $cn;
-    $streams = xt_get('get_live_streams', [], 1800, 30);
+    foreach (wp_category_names('live') as $cid => $cn) if (preg_match('/event|ppv|pay per view|deportes? en vivo|live sport|partidos? (de )?hoy/i', wp_norm($cn))) $eventCats[$cid] = $cn;
+    $chans = [];
+    $keys = [];   // nombre compacto ("espn2") => canales
+    $words = [];  // palabra del nombre sin calidad/país => canales
+    foreach ((array)xt_get('get_live_streams', [], 1800, 30) as $st) {
+        if (!is_array($st) || empty($st['stream_id'])) continue;
+        $name = (string)($st['name'] ?? '');
+        $norm = trim(preg_replace('/[^a-z0-9]+/', ' ', wp_norm($name)));
+        $key = sp_channel_key($norm, true);
+        $i = count($chans);
+        $chans[] = ['id' => (string)$st['stream_id'], 'cat' => (string)($st['category_id'] ?? ''), 'name' => $name, 'norm' => $norm, 'key' => $key];
+        if ($key) {
+            $keys[implode('', $key)][] = $i;
+            foreach (array_unique($key) as $w) $words[$w][] = $i;
+        }
+    }
+    return $ix = ['chans' => $chans, 'eventCats' => $eventCats, 'keys' => $keys, 'words' => $words];
+}
+
+function sp_chan_url($c)
+{
+    return 'tvguide.php?id=' . rawurlencode($c['id']) . '&slug=live&category_id=' . rawurlencode($c['cat']);
+}
+
+/** nombre de un canal sin calidad ni país, con el número pegado ("MX: ESPN 2 HD" → ["espn2"]); igual que las apps */
+function sp_channel_key($name, $isNorm = false)
+{
+    static $noise = null;
+    if ($noise === null) $noise = array_flip(['hd', 'fhd', 'uhd', 'sd', '4k', '8k', 'hq', 'hevc', 'h264', 'h265', '1080', '1080p', '720', '720p', '50fps', '60fps', 'fps', 'backup', 'bk', 'alt', 'vip', 'op1', 'op2', 'tv', 'channel', 'canal',
+        'mx', 'mex', 'mexico', 'us', 'usa', 'eeuu', 'ar', 'arg', 'argentina', 'co', 'col', 'colombia', 'cl', 'chile', 'pe', 'peru', 'ec', 'ecuador', 've', 'venezuela', 'uy', 'uruguay', 'py', 'paraguay', 'bo', 'bolivia',
+        'cr', 'pa', 'panama', 'gt', 'hn', 'sv', 'ni', 'do', 'pr', 'latam', 'latin', 'latino', 'latina', 'lat', 'america', 'es', 'esp', 'spain', 'espana', 'uk', 'gb', 'int', 'intl', 'international',
+        'br', 'bra', 'brasil', 'brazil', 'pt', 'portugal', 'ca', 'can', 'canada', 'fr', 'france', 'it', 'italy', 'de', 'germany', 'nl', 'netherlands', 'au', 'australia', 'nz', 'zealand', 'new', 'ie', 'ireland']);
+    $n = $isNorm ? $name : trim(preg_replace('/[^a-z0-9]+/', ' ', wp_norm($name)));
+    $out = [];
+    foreach (explode(' ', $n) as $t) {
+        if ($t === '' || isset($noise[$t])) continue;
+        $last = count($out) - 1;
+        if (ctype_digit($t) && $last >= 0 && !ctype_digit($out[$last])) $out[$last] .= $t;
+        else $out[] = $t;
+    }
+    return $out;
+}
+
+/** canal del cliente que corresponde al canal que transmite: primero el mismo nombre, luego el que contiene todas sus palabras ("ESPN 2" nunca da "ESPN 3") */
+function sp_find_by_tv($tv)
+{
+    $q = sp_channel_key($tv);
+    $compact = implode('', $q);
+    if (!$q || strlen($compact) < 2) return null;
+    $ix = sp_live_index();
+    $exact = isset($ix['keys'][$compact]);
+    $best = null;
+    $bestScore = PHP_INT_MIN;
+    foreach ($exact ? $ix['keys'][$compact] : ($ix['words'][$q[0]] ?? []) as $i) {
+        $c = $ix['chans'][$i];
+        $k = $c['key'];
+        if ($exact) {
+            $score = 1000 - count($k) * 10 - strlen($c['name']) + ($k === $q ? 100 : 0);
+        } elseif (!array_diff($q, $k)) {
+            $score = 500 - 10 * (count($k) - count($q)) - strlen($c['name']);
+        } else {
+            continue;
+        }
+        if ($score > $bestScore) { $bestScore = $score; $best = $c; }
+    }
+    return $best;
+}
+
+/** mejor canal por equipos (o por el nombre del evento si no hay equipos) */
+function sp_find_by_teams($h, $a, $lg, $ev)
+{
+    $ix = sp_live_index();
     $leagueToks = sp_tokens($lg);
     $single = sp_tokens($h === '' && $a === '' ? $ev : '');
     $best = null;
-    foreach ((array)$streams as $st) {
-        if (!is_array($st) || empty($st['stream_id'])) continue;
-        $cid = (string)($st['category_id'] ?? '');
-        $isEv = isset($eventCats[$cid]);
-        $chan = trim(preg_replace('/[^a-z0-9]+/', ' ', wp_norm($st['name'] ?? '')));
+    foreach ($ix['chans'] as $c) {
+        $isEv = isset($ix['eventCats'][$c['cat']]);
+        $chan = $c['norm'];
         if ($h !== '' || $a !== '') {
             $hs = sp_team_score($chan, $h);
             $as = sp_team_score($chan, $a);
@@ -73,14 +143,33 @@ function sp_find_channel($h, $a, $lg, $ev)
         }
         foreach ($leagueToks as $t) if (preg_match('/(^| )' . preg_quote($t, '/') . '( |$)/', $chan)) { $score += 3; break; }
         if ($isEv) $score += 6;
-        if (!$best || $score > $best['score']) $best = ['score' => $score, 'id' => (string)$st['stream_id'], 'cat' => $cid, 'name' => (string)($st['name'] ?? '')];
+        if (!$best || $score > $best['score']) $best = $c + ['score' => $score];
     }
-    if ($best) return ['ok' => true, 'url' => 'tvguide.php?id=' . rawurlencode($best['id']) . '&slug=live&category_id=' . rawurlencode($best['cat']), 'name' => $best['name']];
+    return $best;
+}
+
+/**
+ * mode=tv: el canal elegido del menú; si el cliente no lo tiene, se busca el partido (aviso "fallback").
+ * mode=auto: los canales que transmiten (en orden), luego los equipos y al final la carpeta de eventos.
+ * mode=teams: solo equipos / nombre del evento.
+ */
+function sp_find_channel($h, $a, $lg, $ev, $mode = 'teams', $tvs = [])
+{
+    if ($mode === 'tv' || $mode === 'auto') {
+        foreach ($tvs as $tv) {
+            $c = sp_find_by_tv($tv);
+            if ($c) return ['ok' => true, 'url' => sp_chan_url($c), 'name' => $c['name'], 'by' => 'tv'];
+        }
+    }
+    $best = sp_find_by_teams($h, $a, $lg, $ev);
+    $miss = $mode === 'tv' && $tvs ? $tvs[0] : '';
+    if ($best) return ['ok' => true, 'url' => sp_chan_url($best), 'name' => $best['name'], 'by' => 'teams', 'missing' => $miss];
+    $eventCats = sp_live_index()['eventCats'];
     if ($eventCats) {
         $cid = (string)array_key_first_compat($eventCats);
-        return ['ok' => true, 'partial' => true, 'url' => 'tvguide.php?category_id=' . rawurlencode($cid), 'name' => $eventCats[$cid]];
+        return ['ok' => true, 'partial' => true, 'url' => 'tvguide.php?category_id=' . rawurlencode($cid), 'name' => $eventCats[$cid], 'missing' => $miss];
     }
-    return ['ok' => false];
+    return ['ok' => false, 'missing' => $miss];
 }
 
 function array_key_first_compat(array $a)
@@ -94,7 +183,14 @@ if (($_GET['ajax'] ?? '') === 'channel') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: private, max-age=300');
     $g = function ($k) { return mb_substr(trim((string)($_GET[$k] ?? '')), 0, 120, 'UTF-8'); };
-    echo json_encode(sp_find_channel($g('h'), $g('a'), $g('lg'), $g('ev')), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $mode = in_array($_GET['mode'] ?? '', ['auto', 'tv', 'teams'], true) ? $_GET['mode'] : 'teams';
+    // canales que transmiten, separados por "|" (como mucho 24, igual que el panel)
+    $tvs = [];
+    foreach (array_slice(explode('|', mb_substr((string)($_GET['tv'] ?? ''), 0, 1500, 'UTF-8')), 0, 24) as $t) {
+        $t = trim($t);
+        if ($t !== '') $tvs[] = mb_substr($t, 0, 80, 'UTF-8');
+    }
+    echo json_encode(sp_find_channel($g('h'), $g('a'), $g('lg'), $g('ev'), $mode, $tvs), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
@@ -263,6 +359,19 @@ include "header.php";
 .sp-foot .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .sp-foot a { flex: none; color: #fff; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 4px; background: rgba(255,255,255,.1); }
 .sp-foot a:hover { background: var(--nf-red); }
+.sp-tvline { font-size: 12px; color: var(--sp-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sp-tvline b { color: #ddd; font-weight: 600; }
+.sp-menu { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.66); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.sp-menu[hidden] { display: none; }
+.sp-menu-box { width: 100%; max-width: 420px; max-height: 80vh; display: flex; flex-direction: column; background: #1c1c1c; border: 1px solid var(--sp-line); border-radius: 10px; overflow: hidden; }
+.sp-menu-box h3 { margin: 0; padding: 16px 18px 6px; font-size: 16px; }
+.sp-menu-box p { margin: 0; padding: 0 18px 10px; font-size: 12.5px; color: var(--sp-mute); }
+.sp-menu-list { overflow-y: auto; padding: 4px 8px 8px; }
+.sp-menu-list button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; background: none; border: 0; color: #fff; font: inherit; font-size: 14px; padding: 11px 12px; border-radius: 6px; cursor: pointer; }
+.sp-menu-list button:hover, .sp-menu-list button:focus-visible { background: rgba(255,255,255,.1); outline: none; }
+.sp-menu-list button.main { font-weight: 700; color: #fff; background: rgba(229,9,20,.18); }
+.sp-menu-list button span { color: var(--sp-mute); font-size: 12px; flex: none; }
+.sp-menu-close { margin: 0 8px 10px; padding: 10px; background: rgba(255,255,255,.08); border: 0; border-radius: 6px; color: #fff; font: inherit; cursor: pointer; }
 
 .sp-empty { text-align: center; padding: 60px 16px; color: var(--sp-mute); }
 .sp-empty b { display: block; color: #fff; font-size: 20px; margin-bottom: 6px; }
@@ -375,6 +484,14 @@ include "header.php";
         if (src) return '<img src="' + esc(src) + '/small" alt="" loading="lazy" data-n="' + ini + '" onerror="spImg(this)">';
         return '<span class="ph">' + ini + '</span>';
     }
+    // canales que transmiten el evento (los manda el panel; no siempre hay)
+    function hasTv(e) { return Array.isArray(e.tv) && e.tv.length > 0; }
+    function tvLine(e) {
+        if (!hasTv(e)) return '';
+        var names = e.tv.slice(0, 3).map(function (c) { return esc(c.n); }).join(' · ');
+        var more = e.tv.length > 3 ? ' +' + (e.tv.length - 3) : '';
+        return '<div class="sp-tvline" title="' + esc(e.tv.map(function (c) { return c.n; }).join(', ')) + '">📺 <b>' + names + '</b>' + more + '</div>';
+    }
     function card(e) {
         var st = status(e), pill;
         if (st === 'live') pill = '<span class="sp-pill live"><span class="sp-dot"></span>En vivo</span>';
@@ -393,8 +510,9 @@ include "header.php";
         var m = META[e.sp] || { n: e.sp, i: '' };
         return '<article class="sp-card' + (st === 'live' ? ' live' : '') + '">' +
             '<div class="sp-top"><span class="lg">' + esc(m.i + ' ' + (e.lg || m.n)) + '</span>' + pill + '</div>' + mid +
+            tvLine(e) +
             '<div class="sp-foot"><span class="v">' + esc(e.v || (st === 'soon' ? fmtT.format(e.t) : '')) + '</span>' +
-            '<a href="tvguide.php" class="sp-tv" data-i="' + EV.indexOf(e) + '">TV en vivo</a></div></article>';
+            '<a href="tvguide.php" class="sp-tv" data-i="' + EV.indexOf(e) + '">' + (hasTv(e) ? 'Ver canales' : 'TV en vivo') + '</a></div></article>';
     }
 
     var today = new Date(), tomorrow = new Date(Date.now() + 86400000);
@@ -460,24 +578,62 @@ include "header.php";
     qi.addEventListener('input', function () { clearTimeout(qt); qt = setTimeout(function () { state.q = qi.value.trim(); render(); }, 150); });
 
 
-    // TV en vivo: abre el canal de eventos que transmite el partido
+    // TV en vivo: abre el canal del cliente que transmite el partido.
+    // Con canales del panel se abre un menú: el evento (prueba los canales y luego los equipos), cada canal o los equipos.
+    var menu = document.createElement('div');
+    menu.className = 'sp-menu'; menu.hidden = true;
+    menu.innerHTML = '<div class="sp-menu-box" role="dialog" aria-modal="true" aria-labelledby="spMenuT"><h3 id="spMenuT"></h3><p></p><div class="sp-menu-list"></div><button type="button" class="sp-menu-close">Cerrar</button></div>';
+    document.body.appendChild(menu);
+    var menuEv = null, menuBtn = null;
+    function closeMenu() { menu.hidden = true; if (menuBtn) menuBtn.focus(); menuEv = null; }
+    menu.addEventListener('click', function (ev) {
+        if (ev.target === menu || ev.target.closest('.sp-menu-close')) { closeMenu(); return; }
+        var o = ev.target.closest('[data-m]'); if (!o || !menuEv) return;
+        var e = menuEv, b = menuBtn, mode = o.getAttribute('data-m'), k = o.getAttribute('data-k');
+        closeMenu();
+        watch(e, b, mode, mode === 'tv' ? [e.tv[+k].n] : null);
+    });
+    document.addEventListener('keydown', function (ev) { if (!menu.hidden && ev.key === 'Escape') closeMenu(); });
+
+    function openMenu(e, b) {
+        menuEv = e; menuBtn = b;
+        menu.querySelector('h3').textContent = e.h && e.a ? e.h + ' vs ' + e.a : (e.ev || 'Evento');
+        menu.querySelector('p').textContent = 'Se transmite por ' + e.tv.length + (e.tv.length === 1 ? ' canal' : ' canales') + '. Elige uno o deja que lo busquemos.';
+        var h = '<button type="button" class="main" data-m="auto">▶ Ver el evento</button>';
+        e.tv.forEach(function (c, i) { h += '<button type="button" data-m="tv" data-k="' + i + '">' + esc(c.n) + (c.c ? '<span>' + esc(c.c) + '</span>' : '') + '</button>'; });
+        h += '<button type="button" data-m="teams">🔎 Buscar por equipos</button>';
+        menu.querySelector('.sp-menu-list').innerHTML = h;
+        menu.hidden = false;
+        menu.querySelector('.sp-menu-list button').focus();
+    }
+
+    function watch(e, b, mode, tvs) {
+        if (b.classList.contains('busy')) return;
+        b.classList.add('busy'); var txt = b.textContent; b.textContent = 'Buscando canal…';
+        if (mode === 'auto') tvs = hasTv(e) ? e.tv.map(function (c) { return c.n; }) : [];
+        var url = 'sportsschedule.php?ajax=channel&mode=' + mode + '&h=' + encodeURIComponent(e.h || '') + '&a=' + encodeURIComponent(e.a || '') +
+            '&lg=' + encodeURIComponent(e.lg || '') + '&ev=' + encodeURIComponent(e.ev || '') + '&tv=' + encodeURIComponent((tvs || []).join('|'));
+        fetch(url, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                var miss = j.missing ? 'No tienes ' + j.missing + '. ' : '';
+                if (!j.ok) { NF.toast(miss + 'No encontramos un canal para este evento'); return; }
+                if (j.partial) { NF.toast(miss + 'Aún no aparece el canal exacto, te mostramos ' + j.name); setTimeout(function () { location.href = j.url; }, 1200); return; }
+                if (miss) { NF.toast(miss + 'Te mostramos ' + j.name); setTimeout(function () { location.href = j.url; }, 1200); return; }
+                location.href = j.url;
+            })
+            .catch(function () { location.href = 'tvguide.php'; })
+            .then(function () { b.classList.remove('busy'); b.textContent = txt; });
+    }
+
     document.addEventListener('click', function (ev) {
         var b = ev.target.closest('.sp-tv'); if (!b) return;
         ev.preventDefault();
         var e = EV[+b.getAttribute('data-i')]; if (!e) return;
         var st = status(e);
         if (e.dk !== keys[0] || st === 'fin' || st === 'pp') { NF.toast(st === 'fin' && e.dk === keys[0] ? 'Este evento ya terminó' : 'El evento no está en línea'); return; }
-        if (b.classList.contains('busy')) return;
-        b.classList.add('busy'); var txt = b.textContent; b.textContent = 'Buscando canal…';
-        fetch('sportsschedule.php?ajax=channel&h=' + encodeURIComponent(e.h || '') + '&a=' + encodeURIComponent(e.a || '') + '&lg=' + encodeURIComponent(e.lg || '') + '&ev=' + encodeURIComponent(e.ev || ''), { credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
-            .then(function (j) {
-                if (!j.ok) { NF.toast('No encontramos un canal para este evento'); return; }
-                if (j.partial) { NF.toast('Aún no aparece el canal exacto, te mostramos ' + j.name); setTimeout(function () { location.href = j.url; }, 900); return; }
-                location.href = j.url;
-            })
-            .catch(function () { location.href = 'tvguide.php'; })
-            .then(function () { b.classList.remove('busy'); b.textContent = txt; });
+        if (hasTv(e)) openMenu(e, b);
+        else watch(e, b, 'teams', null);
     });
 
     // si hoy no queda nada, se abre mañana

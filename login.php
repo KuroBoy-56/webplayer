@@ -257,6 +257,7 @@ $dist_step = $dist_view['step'];
             <p class="nf-dist-now">Distribuidor: <b><?php echo e(($brand_name !== '' ? $brand_name . ' ' : '') . '(' . $dist_view['code'] . ')'); ?></b></p>
             <?php endif; ?>
             <?php $login_err = !$panel_ready ? $panel_msg : ($dist_step === 'login' ? $dist_view['error'] : ''); ?>
+            <?php if ($login_err === '' && $dist_step === 'login' && isset($_GET['line_err'])) { require_once __DIR__ . '/includes/line_guard.php'; $login_err = wp_line_message((string)$_GET['line_err']); } ?>
             <div id="login-error" class="nf-login-error" role="alert"<?php echo $login_err !== '' ? '' : ' hidden'; ?>><?php echo e($login_err); ?></div>
 
             <label class="nf-field">
