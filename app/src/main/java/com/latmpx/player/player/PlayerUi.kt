@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
@@ -129,6 +130,8 @@ class PlayerActions(
     val pickEpisode: (Int) -> Unit,
     val zap: (Int) -> Unit,
     val resize: (Int) -> Unit,
+    /** imagen en imagen (solo celular con Android 8 o más) */
+    val pip: (() -> Unit)? = null,
 )
 
 data class TrackOption(val label: String, val selected: Boolean, val apply: () -> Unit)
@@ -297,6 +300,7 @@ private fun Controls(m: PlayerUiModel, a: PlayerActions) {
             }
             if (m.live) Badge("EN VIVO", Red)
             if (m.quality.isNotEmpty()) { Spacer(Modifier.width(8.dp)); Badge(m.quality, Color(0x33FFFFFF)) }
+            a.pip?.let { enter -> Spacer(Modifier.width(10.dp)); CtrlButton(Icons.Filled.PictureInPictureAlt, "Imagen en imagen", big = false) { enter() } }
         }
 
         // centro: -10, reproducir/pausa, +10 (en vivo: canal anterior/siguiente)
