@@ -39,76 +39,92 @@ struct LivePlayerBox: View {
             Color.black
             PreviewSurface(preview: preview).allowsHitTesting(false)
             if let ch = channel {
-                let showing = active && preview.showingId == ch.id
-                let failed = active && preview.failedId == ch.id
-                if !showing {
-                    ZStack {
-                        Color.black
-                        GeometryReader { g in
-                            ChannelLogo(url: ch.poster, background: .clear)
-                                .frame(width: g.size.width * 0.42, height: g.size.width * 0.42 * 9 / 16)
-                                .position(x: g.size.width / 2, y: g.size.height / 2)
-                        }
-                        LinearGradient(colors: [Color.black.opacity(0.2), Color.black.opacity(0.13), Color.black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
-                    }
-                    .allowsHitTesting(false)
-                    if failed {
-                        VStack(spacing: 10) {
-                            Text("No se pudo reproducir este canal").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
-                            Button(action: onRetry) {
-                                Text("Reintentar").font(.system(size: 13, weight: .bold)).foregroundColor(.black)
-                                    .padding(.horizontal, 14).padding(.vertical, 6).background(Color.white).clipShape(RoundedRectangle(cornerRadius: 4))
-                            }.buttonStyle(.plain)
-                        }
-                    } else if active {
-                        ProgressView().tint(Theme.accent).scaleEffect(1.5).allowsHitTesting(false)
-                    } else {
-                        Button(action: onStart) {
-                            Image(systemName: "play.fill").font(.system(size: 30)).foregroundColor(.white)
-                                .frame(width: 64, height: 64)
-                                .background(Circle().fill(Color.black.opacity(0.6)))
-                                .overlay(Circle().stroke(Color.white.opacity(0.8), lineWidth: 2))
-                        }.buttonStyle(.plain).accessibilityLabel("Ver")
-                    }
-                    if let p = nowProg {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Spacer()
-                            Text("\(hm(p.start)) - \(hm(p.end)) · \(p.title)").font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(1)
-                            ProgressLine(program: p, now: now)
-                        }
-                        .padding(.leading, 12).padding(.trailing, 56).padding(.vertical, 10)
-                        .allowsHitTesting(false)
-                    }
-                }
-                VStack {
-                    HStack {
-                        Text("EN VIVO").font(.system(size: 11, weight: .bold)).foregroundColor(.white)
-                            .padding(.horizontal, 6).padding(.vertical, 2).background(Theme.accent).clipShape(RoundedRectangle(cornerRadius: 3))
-                        Spacer()
-                    }
-                    Spacer()
-                    if active {
-                        HStack {
-                            Spacer()
-                            Button(action: onFull) {
-                                Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
-                                    .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.55)))
-                            }.buttonStyle(.plain).accessibilityLabel("Pantalla completa")
-                        }
-                    }
-                }
-                .padding(10)
+                if !(active && preview.showingId == ch.id) { cover(ch) }
+                chrome
             } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "tv").font(.system(size: 46)).foregroundColor(LiveColors.empty.opacity(0.5))
-                    Text("Selecciona un canal para comenzar a ver").font(.system(size: 14)).foregroundColor(LiveColors.empty).multilineTextAlignment(.center)
-                }
-                .padding(16)
+                placeholder
             }
         }
         .contentShape(Rectangle())
         .onTapGesture { if channel != nil && !active { onStart() } }
         .clipped()
+    }
+
+    /** antes de la primera imagen: logo del canal, estado y lo que se emite */
+    @ViewBuilder private func cover(_ ch: Item) -> some View {
+        ZStack {
+            Color.black
+            GeometryReader { g in
+                ChannelLogo(url: ch.poster, background: .clear)
+                    .frame(width: g.size.width * 0.42, height: g.size.width * 0.42 * 9 / 16)
+                    .position(x: g.size.width / 2, y: g.size.height / 2)
+            }
+            LinearGradient(colors: [Color.black.opacity(0.2), Color.black.opacity(0.13), Color.black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
+        }
+        .allowsHitTesting(false)
+        status(ch)
+        if let p = nowProg { programLine(p) }
+    }
+
+    @ViewBuilder private func status(_ ch: Item) -> some View {
+        if active && preview.failedId == ch.id {
+            VStack(spacing: 10) {
+                Text("No se pudo reproducir este canal").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+                Button(action: onRetry) {
+                    Text("Reintentar").font(.system(size: 13, weight: .bold)).foregroundColor(.black)
+                        .padding(.horizontal, 14).padding(.vertical, 6).background(Color.white).clipShape(RoundedRectangle(cornerRadius: 4))
+                }.buttonStyle(.plain)
+            }
+        } else if active {
+            ProgressView().tint(Theme.accent).scaleEffect(1.5).allowsHitTesting(false)
+        } else {
+            Button(action: onStart) {
+                Image(systemName: "play.fill").font(.system(size: 30)).foregroundColor(.white)
+                    .frame(width: 64, height: 64)
+                    .background(Circle().fill(Color.black.opacity(0.6)))
+                    .overlay(Circle().stroke(Color.white.opacity(0.8), lineWidth: 2))
+            }.buttonStyle(.plain).accessibilityLabel("Ver")
+        }
+    }
+
+    private func programLine(_ p: EpgEntry) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Spacer()
+            Text("\(hm(p.start)) - \(hm(p.end)) · \(p.title)").font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(1)
+            ProgressLine(program: p, now: now)
+        }
+        .padding(.leading, 12).padding(.trailing, 56).padding(.vertical, 10)
+        .allowsHitTesting(false)
+    }
+
+    /** "EN VIVO" arriba y pantalla completa abajo a la derecha */
+    private var chrome: some View {
+        VStack {
+            HStack {
+                Text("EN VIVO").font(.system(size: 11, weight: .bold)).foregroundColor(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 2).background(Theme.accent).clipShape(RoundedRectangle(cornerRadius: 3))
+                Spacer()
+            }
+            Spacer()
+            if active {
+                HStack {
+                    Spacer()
+                    Button(action: onFull) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                            .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.55)))
+                    }.buttonStyle(.plain).accessibilityLabel("Pantalla completa")
+                }
+            }
+        }
+        .padding(10)
+    }
+
+    private var placeholder: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "tv").font(.system(size: 46)).foregroundColor(LiveColors.empty.opacity(0.5))
+            Text("Selecciona un canal para comenzar a ver").font(.system(size: 14)).foregroundColor(LiveColors.empty).multilineTextAlignment(.center)
+        }
+        .padding(16)
     }
 }
 
@@ -182,7 +198,7 @@ struct ProgressLine: View {
     let program: EpgEntry
     let now: Double
     var body: some View {
-        let pct = program.end > program.start ? min(1, max(0, (now - program.start) / (program.end - program.start))) : 0
+        let pct: Double = program.end > program.start ? min(1, max(0, (now - program.start) / (program.end - program.start))) : 0
         GeometryReader { g in
             ZStack(alignment: .leading) {
                 Color(hex: 0x444444)

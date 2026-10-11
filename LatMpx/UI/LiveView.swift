@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UIKit
 
 /**
@@ -68,30 +69,7 @@ struct LiveView: View {
                     .background(Color.black)
                 if let ch = ch { selectedRow(ch) }
                 if let gl = guide, ch != nil, !gl.isEmpty { guidePanel(gl, maxH: g.size.height * 0.24) }
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        catMenu
-                        HStack(alignment: .lastTextBaseline, spacing: 6) {
-                            Text("Canales").font(.system(size: 16, weight: .bold)).foregroundColor(.white)
-                            if !list.isEmpty { Text("(\(list.count))").font(.system(size: 12)).foregroundColor(LiveColors.empty) }
-                            Spacer()
-                        }.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
-                        filterField
-                        if state.loading && state.live.isEmpty {
-                            LoadingView(text: "Cargando canales…").padding(.top, 20)
-                        } else if list.isEmpty {
-                            Text(currentCat == LiveView.favs && q.trimmed.isEmpty ? "Aún no tienes canales favoritos." : "No hay canales en esta sección.")
-                                .font(.system(size: 14)).foregroundColor(LiveColors.empty).multilineTextAlignment(.center).padding(16)
-                        }
-                        ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
-                            LiveRow(channel: c, index: i, shown: list, active: c.id == selId, fav: cloud.isFav(c.key), now: now)
-                                .contentShape(Rectangle())
-                                .onTapGesture { select(c) }
-                                .onLongPressGesture(minimumDuration: 0.5) { toggleFav(c) }
-                        }
-                    }.padding(.bottom, 16)
-                }
-                .scrollDismissesKeyboard(.immediately)
+                channelList(list)
             }
         }
         .background(LiveColors.bg.ignoresSafeArea())
@@ -172,6 +150,33 @@ struct LiveView: View {
     }
 
     /* ---------- partes ---------- */
+    private func channelList(_ list: [Item]) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                catMenu
+                HStack(alignment: .lastTextBaseline, spacing: 6) {
+                    Text("Canales").font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                    if !list.isEmpty { Text("(\(list.count))").font(.system(size: 12)).foregroundColor(LiveColors.empty) }
+                    Spacer()
+                }.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
+                filterField
+                if state.loading && state.live.isEmpty {
+                    LoadingView(text: "Cargando canales…").padding(.top, 20)
+                } else if list.isEmpty {
+                    Text(currentCat == LiveView.favs && q.trimmed.isEmpty ? "Aún no tienes canales favoritos." : "No hay canales en esta sección.")
+                        .font(.system(size: 14)).foregroundColor(LiveColors.empty).multilineTextAlignment(.center).padding(16)
+                }
+                ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
+                    LiveRow(channel: c, index: i, shown: list, active: c.id == selId, fav: cloud.isFav(c.key), now: now)
+                        .contentShape(Rectangle())
+                        .onTapGesture { select(c) }
+                        .onLongPressGesture(minimumDuration: 0.5) { toggleFav(c) }
+                }
+            }.padding(.bottom, 16)
+        }
+        .scrollDismissesKeyboard(.immediately)
+    }
+
     private func selectedRow(_ ch: Item) -> some View {
         let on = cloud.isFav(ch.key)
         return HStack(spacing: 12) {

@@ -15,6 +15,10 @@ La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funcion
 - **Deportes:** agenda de hoy y mañana (`sports.php`). Cada tarjeta muestra los canales que transmiten el partido; **Ver canales** abre un menú: el evento (prueba esos canales y luego los equipos), cada canal o buscar por equipos. "ESPN 2" busca en la lista del cliente el canal que se llama igual sin calidad ni país; si no lo tiene, busca el partido en la carpeta de eventos.
 - **Reproductor VLCKit:** MKV, MP4, HLS, TS, audio AC3/E-AC3/DTS, cambio de idioma y subtítulos, sigue donde se dejó, siguiente episodio automático, cambio de canal deslizando arriba/abajo.
 - **Inicio de sesión centrado** con la firma del distribuidor abajo.
+- **Misma interfaz que Android celular:** barra superior con Series / Películas / Deportes / Mi lista y perfil (Mi cuenta, Ajustes, Deportes, Mi lista); Películas y Series con destacados, recientes, Top 10 y una fila por categoría.
+- **TV en vivo como Android:** miniatura del canal elegido arriba (con "EN VIVO" y lo que se emite), favorito, guía de programas, selector de categorías, buscador y lista de canales con su programa actual. Mantener pulsado un canal lo agrega o quita de favoritos. La pantalla completa se abre con su botón o al girar el teléfono (volver a vertical regresa a la miniatura).
+- **Orientación:** en iPhone la app va en vertical y el reproductor en horizontal (lo presenta UIKit con su propia orientación, sin forzar la escena: así los toques siempre responden). En iPad gira libre.
+- **DNS** (botón en el inicio de sesión y en Ajustes): Automático, Cloudflare, Google, Quad9, AdGuard, NextDNS u OpenDNS. iOS no deja cambiar el DNS del sistema, así que la app resuelve los servidores IPTV (http) con DNS sobre HTTPS y se conecta a esa IP; si no responde usa la dirección original. El panel y TMDB (https) siguen con el DNS del equipo.
 
 ## Instalar el .ipa en tu iPhone (modo desarrollador)
 
@@ -46,5 +50,5 @@ open LatMpx.xcworkspace
 
 - `LatMpx/Data/` — panel (cifrado AES-256-GCM + HKDF y mope, igual que Android), Xtream, distribuidor, sincronización, deportes, TMDB.
 - `LatMpx/UI/` — pantallas (inicio, películas, series, TV en vivo, deportes, cuenta, inicio de sesión, distribuidor, pantalla falsa).
-- `LatMpx/Player/` — reproductor VLCKit.
+- `LatMpx/Player/` — reproductor VLCKit (`PlayerPresenter` lo presenta en horizontal) y la miniatura de TV en vivo (`LivePreview`).
 - `project.yml` (XcodeGen) y `Podfile` (MobileVLCKit).

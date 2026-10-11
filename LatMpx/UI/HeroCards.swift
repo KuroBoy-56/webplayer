@@ -16,46 +16,21 @@ struct HeroCards: View {
     @GestureState private var drag: CGFloat = 0
     private let timer = Timer.publish(every: 6.5, on: .main, in: .common).autoconnect()
 
+    private var cardW: CGFloat { min(width - 60, 420) }
+    private var step: CGFloat { cardW + 14 }
+    private var cardH: CGFloat { cardW / 0.70 }
+    private var current: Item? { items.isEmpty ? nil : items[min(page, items.count - 1)] }
+
     var body: some View {
-        let cardW = min(width - 60, 420)
-        let side = (width - cardW) / 2
-        let step = cardW + 14
-        let cardH = cardW / 0.70
-        let cur = items.isEmpty ? nil : items[min(page, items.count - 1)]
         ZStack(alignment: .top) {
             // fondo: la carátula actual muy difuminada
-            if let c = cur {
+            if let c = current {
                 ItemPoster(item: c).frame(width: width, height: cardH + topPad + 60).blur(radius: 50).opacity(0.75).clipped()
             }
             LinearGradient(colors: [Color.black.opacity(0.6), Color(hex: 0x141414, alpha: 0.4), Theme.bg], startPoint: .top, endPoint: .bottom)
             VStack(spacing: 12) {
-                HStack(spacing: 14) {
-                    ForEach(Array(items.enumerated()), id: \.element.key) { i, it in
-                        let dist = min(1, abs(CGFloat(i - page) + (-drag / step)))
-                        HeroCard(item: it, width: cardW, height: cardH)
-                            .scaleEffect(1 - 0.1 * dist)
-                            .opacity(1 - 0.4 * dist)
-                    }
-                }
-                .frame(width: width, alignment: .leading)
-                .offset(x: side - CGFloat(page) * step + drag)
-                .animation(.interactiveSpring(response: 0.35, dampingFraction: 0.86), value: page)
-                .gesture(
-                    DragGesture(minimumDistance: 12)
-                        .updating($drag) { v, s, _ in s = v.translation.width }
-                        .onEnded { v in
-                            let moved = -(v.predictedEndTranslation.width) / step
-                            let n = page + Int(moved.rounded())
-                            page = max(0, min(items.count - 1, n == page && abs(v.translation.width) > step / 4 ? page + (v.translation.width < 0 ? 1 : -1) : n))
-                        }
-                )
-                if items.count > 1 {
-                    HStack(spacing: 6) {
-                        ForEach(0..<items.count, id: \.self) { i in
-                            Capsule().fill(i == page ? Color.white : Color.white.opacity(0.33)).frame(width: i == page ? 18 : 6, height: 6)
-                        }
-                    }
-                }
+                cards
+                if items.count > 1 { dots }
             }
             .padding(.top, topPad)
         }
@@ -64,6 +39,48 @@ struct HeroCards: View {
         .onReceive(timer) { _ in
             if items.count > 1 && drag == 0 { withAnimation { page = (page + 1) % items.count } }
         }
+    }
+
+    private var cards: some View {
+        let side: CGFloat = (width - cardW) / 2
+        let x: CGFloat = side - CGFloat(page) * step + drag
+        return HStack(spacing: 14) {
+            ForEach(Array(items.enumerated()), id: \.element.key) { i, it in
+                card(i, it)
+            }
+        }
+        .frame(width: width, alignment: .leading)
+        .offset(x: x)
+        .animation(.interactiveSpring(response: 0.35, dampingFraction: 0.86), value: page)
+        .gesture(
+            DragGesture(minimumDistance: 12)
+                .updating($drag) { v, s, _ in s = v.translation.width }
+                .onEnded { v in snap(v.translation.width, v.predictedEndTranslation.width) }
+        )
+    }
+
+    private func card(_ i: Int, _ it: Item) -> some View {
+        let off: CGFloat = CGFloat(i - page) - drag / step
+        let dist: CGFloat = min(1, abs(off))
+        return HeroCard(item: it, width: cardW, height: cardH)
+            .scaleEffect(1 - 0.1 * dist)
+            .opacity(Double(1 - 0.4 * dist))
+    }
+
+    private var dots: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<items.count, id: \.self) { i in
+                Capsule().fill(i == page ? Color.white : Color.white.opacity(0.33)).frame(width: i == page ? 18 : 6, height: 6)
+            }
+        }
+    }
+
+    /** al soltar: la tarjeta hacia la que se lanzó (o la vecina si se arrastró más de un cuarto) */
+    private func snap(_ moved: CGFloat, _ predicted: CGFloat) {
+        let jump: Int = Int((-predicted / step).rounded())
+        var n: Int = page + jump
+        if n == page && abs(moved) > step / 4 { n = page + (moved < 0 ? 1 : -1) }
+        page = max(0, min(items.count - 1, n))
     }
 }
 

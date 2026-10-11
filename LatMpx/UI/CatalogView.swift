@@ -7,7 +7,8 @@ import SwiftUI
 struct CatalogView: View {
     @EnvironmentObject var state: AppState
     let kind: Kind
-    @State private var offset: CGFloat = 0
+    /** la barra se oscurece al bajar (solo cambia al cruzar el límite: no redibuja en cada paso del scroll) */
+    @State private var solid = false
 
     var body: some View {
         GeometryReader { g in
@@ -57,8 +58,8 @@ struct CatalogView: View {
                 }
             }
             .coordinateSpace(name: "cat\(title)")
-            .onPreferenceChange(ScrollOffsetKey.self) { offset = $0 }
-            PhoneTopBar(current: kind == .movie ? .movies : .series, solid: offset > 260, pad: pad)
+            .onPreferenceChange(ScrollOffsetKey.self) { v in if (v > 260) != solid { solid = v > 260 } }
+            PhoneTopBar(current: kind == .movie ? .movies : .series, solid: solid, pad: pad)
         }
     }
 }

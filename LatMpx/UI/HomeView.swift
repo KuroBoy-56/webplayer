@@ -4,7 +4,8 @@ struct HomeView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var cloud: Cloud
     @EnvironmentObject var tenant: Tenant
-    @State private var offset: CGFloat = 0
+    /** la barra se oscurece al bajar (solo cambia al cruzar el límite: no redibuja en cada paso del scroll) */
+    @State private var solid = false
 
     var body: some View {
         GeometryReader { g in
@@ -75,9 +76,9 @@ struct HomeView: View {
             }
           }
           .coordinateSpace(name: "home")
-          .onPreferenceChange(ScrollOffsetKey.self) { offset = $0 }
+          .onPreferenceChange(ScrollOffsetKey.self) { v in if (v > 260) != solid { solid = v > 260 } }
           .refreshable { await Cloud.shared.load() }
-          PhoneTopBar(current: nil, solid: offset > 260, pad: pad)
+          PhoneTopBar(current: nil, solid: solid, pad: pad)
         }
     }
 
