@@ -4,7 +4,7 @@ import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FakeScreen as Fake, lastFakeScreen, panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import { loginAll } from '../api/xtream';
-import { Button, Logo } from '../components/ui';
+import { Button, Focusable, Logo } from '../components/ui';
 import { http, json } from '../lib/http';
 import { hasMasterKey } from '../lib/aes';
 import { read, write } from '../lib/storage';
@@ -30,6 +30,8 @@ export default function Login() {
   const nav = useNav();
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
+  // ojito: ver la contraseña en texto o volver a ocultarla
+  const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState('Comprobando el equipo en el panel…');
   const [error, setError] = useState('');
   const [posters, setPosters] = useState<string[]>([]);
@@ -165,19 +167,24 @@ export default function Login() {
           onSubmitEditing={() => passRef.current?.focus()}
           hasTVPreferredFocus
         />
-        <TextInput
-          ref={passRef}
-          style={s.input}
-          value={pass}
-          onChangeText={setPass}
-          placeholder="Contraseña"
-          placeholderTextColor={C.dim}
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry
-          returnKeyType="go"
-          onSubmitEditing={() => enter(user, pass)}
-        />
+        <View style={s.passRow}>
+          <TextInput
+            ref={passRef}
+            style={[s.input, s.passInput]}
+            value={pass}
+            onChangeText={setPass}
+            placeholder="Contraseña"
+            placeholderTextColor={C.dim}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry={!showPass}
+            returnKeyType="go"
+            onSubmitEditing={() => enter(user, pass)}
+          />
+          <Focusable onPress={() => setShowPass(v => !v)} style={f => [s.eye, f && s.eyeF]}>
+            <Eye open={showPass} />
+          </Focusable>
+        </View>
         {error ? <Text style={s.error}>{error}</Text> : null}
         {busy ? <Text style={s.busy}>{busy}</Text> : null}
         <View style={s.btns}>
@@ -196,6 +203,18 @@ export default function Login() {
   );
 }
 
+// ojo dibujado (sin depender de las fuentes del equipo): tachado = contraseña oculta
+function Eye({ open }: { open: boolean }) {
+  return (
+    <View style={s.eyeIcon}>
+      <View style={s.eyeLid}>
+        <View style={s.eyeDot} />
+      </View>
+      {open ? null : <View style={s.eyeSlash} />}
+    </View>
+  );
+}
+
 const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg },
@@ -206,6 +225,14 @@ const s = themed(() =>
     box: { alignSelf: 'center', marginTop: px(150), width: px(760), backgroundColor: alpha(C.bg2, 0.9), borderRadius: px(12), padding: px(60) },
     title: { color: C.text, fontSize: px(52), fontWeight: '800', marginBottom: px(30) },
     input: { height: px(84), backgroundColor: C.card, borderRadius: px(8), color: C.text, fontSize: px(32), paddingHorizontal: px(24), marginBottom: px(22) },
+    passRow: { position: 'relative' },
+    passInput: { paddingRight: px(120) },
+    eye: { position: 'absolute', right: px(10), top: px(8), width: px(96), height: px(68), borderRadius: px(8), alignItems: 'center', justifyContent: 'center' },
+    eyeF: { backgroundColor: alpha(C.text, 0.2), borderWidth: px(3), borderColor: C.text },
+    eyeIcon: { width: px(52), height: px(34), alignItems: 'center', justifyContent: 'center' },
+    eyeLid: { width: px(48), height: px(30), borderRadius: px(24), borderWidth: px(4), borderColor: C.text, alignItems: 'center', justifyContent: 'center' },
+    eyeDot: { width: px(12), height: px(12), borderRadius: px(6), backgroundColor: C.text },
+    eyeSlash: { position: 'absolute', width: px(58), height: px(4), borderRadius: px(2), backgroundColor: C.text, transform: [{ rotate: '-35deg' }] },
     error: { color: '#e87c03', fontSize: px(26), marginBottom: px(14) },
     busy: { color: C.sub, fontSize: px(26), marginBottom: px(14) },
     btns: { flexDirection: 'row', marginTop: px(12) },

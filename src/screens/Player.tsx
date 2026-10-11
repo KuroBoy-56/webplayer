@@ -228,8 +228,12 @@ export default function Player({ params }: { params: PlayParams }) {
 
     return () => {
       alive = false;
-      save(true);
-      c.destroy();
+      try {
+        save(true);
+        c.destroy();
+      } catch {
+        // nada que guardar o el motor ya estaba cerrado
+      }
       if (hideTimer.current) clearTimeout(hideTimer.current);
       if (toastTimer.current) clearTimeout(toastTimer.current);
       try {
@@ -244,7 +248,13 @@ export default function Player({ params }: { params: PlayParams }) {
         (v as any).textTracks?.removeEventListener?.('addtrack', onTrack);
         v.pause();
         if (surface.current) v.clearSurfaceHandle(surface.current);
-        v.deinitializeSync(3000);
+      } catch {
+        // el reproductor ya estaba cerrado
+      }
+      // se libera en segundo plano: deinitializeSync() bloqueaba la app hasta 3 s al salir de un canal que
+      // todavía conectaba (deportes) y los Atrás que se apretaban mientras tanto llegaban después a la pantalla de abajo
+      try {
+        v.deinitialize().catch(() => {});
       } catch {
         // el reproductor ya estaba cerrado
       }
@@ -270,12 +280,20 @@ export default function Player({ params }: { params: PlayParams }) {
     showOverlay();
   }, [showOverlay]);
 
-  // Atrás: cierra el menú de pistas o sale del reproductor
+  // Atrás: cierra el menú de pistas o sale del reproductor (una sola vez: los Atrás repetidos no pasan a la pantalla de abajo)
+  const leaving = useRef(false);
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (leaving.current) return true;
       if (menu) {
         setMenu(null);
         return true;
+      }
+      leaving.current = true;
+      try {
+        video.current?.pause();
+      } catch {
+        // ya estaba detenido
       }
       nav.pop();
       return true;
