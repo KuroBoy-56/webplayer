@@ -50,6 +50,12 @@ import coil3.compose.AsyncImage
 import com.latmpx.player.data.Item
 import com.latmpx.player.data.Kind
 import com.latmpx.player.data.SportEvent
+import com.latmpx.player.ui.theme.NfRed
+import com.latmpx.player.data.TvChannel
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
 import com.latmpx.player.data.Sports
 import com.latmpx.player.data.SportsData
 import com.latmpx.player.data.Xtream
@@ -103,23 +109,41 @@ fun SportsScreen(state: AppState) {
     val groups = visible.filter { !(showLive && spStatus(it, d.sports[it.sport], now) == SpStatus.LIVE) }
         .groupBy { it.league.ifEmpty { d.sports[it.sport]?.label ?: it.sport } }
 
-    fun openTv(e: SportEvent) {
+    // menú del evento: ver (búsqueda automática), cada canal que lo transmite o buscar por equipos
+    var pick by remember { mutableStateOf<SportEvent?>(null) }
+
+    /** channel = canal elegido del menú; byEvent = buscar solo por equipos / nombre del evento */
+    fun watch(e: SportEvent, channel: TvChannel? = null, byEvent: Boolean = false) {
         val st = spStatus(e, d.sports[e.sport], now)
         if (dayKey(e.start) != keys[0] || st == SpStatus.FIN || st == SpStatus.POSTPONED) {
             Toast.makeText(ctx, if (st == SpStatus.FIN && dayKey(e.start) == keys[0]) "Este evento ya terminó" else "El evento no está en línea", Toast.LENGTH_SHORT).show()
             return
         }
-        Toast.makeText(ctx, "Buscando canal…", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, if (channel != null) "Buscando ${channel.name}…" else "Buscando canal…", Toast.LENGTH_SHORT).show()
         scope.launch {
             val channels = Xtream.items(s, Kind.LIVE)
             val cats = state.liveCats.ifEmpty { Xtream.categories(s, Kind.LIVE) }
             val (match, chans) = withContext(Dispatchers.Default) {
                 val prepared = Sports.prepare(channels, cats, d.rules)
-                Sports.find(e, prepared, d.rules) to prepared
+                val m = when {
+                    channel != null -> Sports.findByChannel(channel.name, prepared).firstOrNull()
+                    byEvent -> Sports.find(e, prepared, d.rules)
+                    else -> Sports.best(e, prepared, d.rules)
+                }
+                m to prepared
             }
             if (match != null) {
                 playInCategory(ctx, channels, match)
                 return@launch
+            }
+            // el canal elegido no está en la lista del cliente: se busca el evento (equipos / nombre) en las carpetas de eventos
+            if (channel != null) {
+                val ev = withContext(Dispatchers.Default) { Sports.find(e, chans, d.rules) }
+                if (ev != null) {
+                    Toast.makeText(ctx, "No tienes ${channel.name}; te mostramos ${ev.name}", Toast.LENGTH_LONG).show()
+                    playInCategory(ctx, channels, ev)
+                    return@launch
+                }
             }
             // sin canal exacto: se abre la primera carpeta de eventos, como la web
             val firstEvent = chans.firstOrNull { it.isEvent }?.item
@@ -128,10 +152,12 @@ fun SportsScreen(state: AppState) {
                 Toast.makeText(ctx, "Aún no aparece el canal exacto, te mostramos $name", Toast.LENGTH_LONG).show()
                 playInCategory(ctx, channels, firstEvent)
             } else {
-                Toast.makeText(ctx, "No encontramos un canal para este evento", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, if (channel != null) "No encontramos ${channel.name} en tu lista" else "No encontramos un canal para este evento", Toast.LENGTH_SHORT).show()
             }
         }
     }
+    fun openTv(e: SportEvent) { if (e.tv.isEmpty()) watch(e) else pick = e }
+    pick?.let { e -> EventChannelsDialog(e, onDismiss = { pick = null }) { ch, byEvent -> pick = null; watch(e, ch, byEvent) } }
 
     val pad = sidePad()
     val compact = !tv && !com.latmpx.player.Device.isTablet(ctx)
@@ -233,6 +259,39 @@ private fun FilterBar(
             counts.keys.filter { it !in d.sports }.map { it to "$it ${counts[it]}" }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(chips, key = { "c" + it.first }) { (k, label) -> Chip(label, sport == k) { onSport(k) } }
+        }
+    }
+}
+
+/** Menú del evento: "Ver el evento" (automático), los canales que lo transmiten y la búsqueda por equipos. */
+@Composable
+private fun EventChannelsDialog(e: SportEvent, onDismiss: () -> Unit, onPick: (TvChannel?, Boolean) -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().background(Color(0xFF1C1C1C), RoundedCornerShape(12.dp)).padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(if (e.home.isNotBlank() && e.away.isNotBlank()) "${e.home} vs ${e.away}" else e.title, color = Color.White, fontSize = 18.sp,
+                fontWeight = FontWeight.Bold, maxLines = 2)
+            Text("Elige dónde verlo", color = SpMute, fontSize = 13.sp)
+            Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                PickRow("▶  Ver el evento", "Busca el mejor canal automáticamente", true) { onPick(null, false) }
+                e.tv.forEach { t -> PickRow("📺  ${t.name}", t.country) { onPick(t, false) } }
+                PickRow("🔎  Buscar por equipos", "En las carpetas de eventos de tu lista") { onPick(null, true) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickRow(title: String, sub: String, primary: Boolean = false, onClick: () -> Unit) {
+    FocusBox(onClick = onClick, shape = RoundedCornerShape(8.dp), focusScale = 1.02f) { f ->
+        Column(
+            Modifier.fillMaxWidth().background(if (f) NfRed else if (primary) Color(0x33E50914) else Color(0x14FFFFFF), RoundedCornerShape(8.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (sub.isNotBlank()) Text(sub, color = if (f) Color.White else SpMute, fontSize = 12.sp, maxLines = 1)
         }
     }
 }

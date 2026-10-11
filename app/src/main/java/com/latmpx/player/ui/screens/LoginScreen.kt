@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -148,10 +151,16 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
         focusedBorderColor = Color.White, unfocusedBorderColor = Color(0xFF555555), focusedTextColor = Color.White, unfocusedTextColor = Color.White,
         focusedLabelColor = Color.White, unfocusedLabelColor = NfGray2, cursorColor = NfRed, focusedContainerColor = Color(0xFF333333), unfocusedContainerColor = Color(0xFF333333),
     )
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+        val viewport = maxHeight
         PosterWall(posters, columns = if (tv) 8 else 4)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = sidePad(), vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        // celular: logo arriba, la caja de inicio de sesión en el medio y la firma del distribuidor abajo
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()
+                .then(if (tv) Modifier else Modifier.heightIn(min = viewport)),
+            verticalArrangement = if (tv) Arrangement.Top else Arrangement.SpaceBetween,
+        ) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = sidePad(), vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 LogoHeader(height = 46.dp)
                 Spacer(Modifier.weight(1f))
             }
@@ -248,7 +257,7 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                 }
             }
             Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} ${Tenant.nameOr("Garevyn TV")}", color = Color(0xFF999999), fontSize = 14.sp,
-                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).background(Color(0x99000000)).padding(20.dp))
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).background(Color(0x99000000)).padding(20.dp).navigationBarsPadding())
         }
     }
 }
