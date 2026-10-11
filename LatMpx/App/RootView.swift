@@ -56,9 +56,7 @@ struct RootView: View {
             Task { let a = await Alerts.forLaunch(s); await MainActor.run { alert = a } }
             await state.loadCatalog(s)
         }
-        .fullScreenCover(item: $state.play) { req in
-            PlayerScreen(request: req).environmentObject(state).environmentObject(tenant)
-        }
+        .onChange(of: state.play?.id) { _ in PlayerPresenter.sync(state, tenant) }
     }
 
     private func boot() {

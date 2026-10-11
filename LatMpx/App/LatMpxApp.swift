@@ -2,11 +2,12 @@ import SwiftUI
 import AVFoundation
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
-    /** el reproductor pide horizontal en iPhone */
-    static var orientationLock: UIInterfaceOrientationMask = .all
+    /** iPhone en vertical (como Android); mientras se ve el reproductor también horizontal. iPad gira libre. */
+    static var playerOpen = false
 
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
-        AppDelegate.orientationLock
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return .all }
+        return AppDelegate.playerOpen ? .allButUpsideDown : .portrait
     }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
@@ -33,16 +34,5 @@ struct LatMpxApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
         }
-    }
-}
-
-/** fuerza horizontal (reproductor en iPhone) o vuelve a dejar girar libremente */
-func setOrientation(landscape: Bool) {
-    let phone = UIDevice.current.userInterfaceIdiom == .phone
-    AppDelegate.orientationLock = landscape && phone ? .landscape : .all
-    guard let scene = UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene }) as? UIWindowScene else { return }
-    if #available(iOS 16.0, *) {
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: AppDelegate.orientationLock)) { _ in }
-        scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
     }
 }

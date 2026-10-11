@@ -6,6 +6,8 @@ private struct VideoSurface: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let v = UIView()
         v.backgroundColor = .black
+        // los toques los recibe la capa de SwiftUI de encima, nunca la vista de VLC
+        v.isUserInteractionEnabled = false
         model.attach(v)
         return v
     }
@@ -15,7 +17,6 @@ private struct VideoSurface: UIViewRepresentable {
 /** Reproductor a pantalla completa: tocar muestra u oculta los controles. */
 struct PlayerScreen: View {
     @EnvironmentObject var state: AppState
-    @Environment(\.dismiss) private var dismiss
     @StateObject private var m: PlayerModel
     @State private var controls = true
     @State private var hideTask: Task<Void, Never>?
@@ -30,26 +31,25 @@ struct PlayerScreen: View {
         GeometryReader { g in
             ZStack {
                 Color.black.ignoresSafeArea()
-                VideoSurface(model: m).ignoresSafeArea()
+                VideoSurface(model: m).ignoresSafeArea().allowsHitTesting(false)
                     .onAppear { size = g.size }
                     .onChange(of: g.size) { s in size = s; m.applyFill(s) }
-                if m.buffering && m.error == nil { ProgressView().tint(.white).scaleEffect(1.6) }
+                // capa de toques: mostrar u ocultar controles y, en canales, deslizar para cambiar
+                Color.clear.contentShape(Rectangle()).ignoresSafeArea()
+                    .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { controls.toggle() }; if controls { autoHide() } }
+                    .gesture(DragGesture(minimumDistance: 40).onEnded { v in
+                        guard m.kind == .live, abs(v.translation.height) > abs(v.translation.width) else { return }
+                        if v.translation.height < 0 { m.next() } else { m.previous() }
+                    })
+                if m.buffering && m.error == nil { ProgressView().tint(.white).scaleEffect(1.6).allowsHitTesting(false) }
                 if let e = m.error { errorBox(e) }
                 if controls && m.error == nil { overlay }
             }
-            .contentShape(Rectangle())
-            .onTapGesture { controls.toggle(); if controls { autoHide() } }
-            .gesture(DragGesture(minimumDistance: 40).onEnded { v in
-                // canales: deslizar arriba / abajo cambia de canal
-                guard m.kind == .live, abs(v.translation.height) > abs(v.translation.width) else { return }
-                if v.translation.height < 0 { m.next() } else { m.previous() }
-            })
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .toast($m.toast)
         .onAppear {
-            setOrientation(landscape: true)
             UIApplication.shared.isIdleTimerDisabled = true
             m.onFinish = { close() }
             m.start()
@@ -58,7 +58,6 @@ struct PlayerScreen: View {
         .onDisappear {
             m.stop()
             UIApplication.shared.isIdleTimerDisabled = false
-            setOrientation(landscape: false)
             state.refresh += 1
         }
         .confirmationDialog("Audio y subtítulos", isPresented: $tracks, titleVisibility: .visible) {
@@ -67,12 +66,15 @@ struct PlayerScreen: View {
             Button("Cancelar", role: .cancel) {}
         }
         .sheet(isPresented: $channels) { channelList }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            // abierto al girar el teléfono en TV en vivo: ponerlo vertical vuelve a la miniatura
+            if m.request.closeOnPortrait && UIDevice.current.orientation == .portrait { close() }
+        }
     }
 
     private func close() {
         m.stop()
-        state.play = nil
-        dismiss()
+        if state.play?.id == m.request.id { state.play = nil }
     }
 
     private func autoHide() {
@@ -85,7 +87,8 @@ struct PlayerScreen: View {
 
     private var overlay: some View {
         ZStack {
-            LinearGradient(colors: [Color.black.opacity(0.7), .clear, .clear, Color.black.opacity(0.8)], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
+            LinearGradient(colors: [Color.black.opacity(0.7), .clear, .clear, Color.black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea().allowsHitTesting(false)
             VStack {
                 HStack(spacing: 18) {
                     Button { close() } label: { Image(systemName: "xmark").font(.system(size: 22, weight: .semibold)) }

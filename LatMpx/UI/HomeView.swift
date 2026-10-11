@@ -4,6 +4,7 @@ struct HomeView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var cloud: Cloud
     @EnvironmentObject var tenant: Tenant
+    @State private var offset: CGFloat = 0
 
     var body: some View {
         GeometryReader { g in
@@ -41,10 +42,12 @@ struct HomeView: View {
         _ = cloud.rev
         _ = state.refresh
 
-        return ScrollView {
+        return ZStack(alignment: .top) {
+          ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                topBar(pad)
-                if !hero.isEmpty { HeroCards(items: hero, width: size.width).padding(.bottom, 8) }
+                ScrollOffsetReader(space: "home")
+                if !hero.isEmpty { HeroCards(items: hero, width: size.width, topPad: 104).padding(.bottom, 8) }
+                else { Color.clear.frame(height: 104) }
                 ShelfRow(title: "Continuar viendo para \(state.session?.user ?? "")", items: cont, pad: pad, onViewAll: { state.push(.saved(true)) }) { _, p in
                     if let it = state.item(from: p) { ContinueCard(item: it, progress: p, width: pw) }
                 }
@@ -70,70 +73,14 @@ struct HomeView: View {
                 }
                 Spacer(minLength: 40)
             }
+          }
+          .coordinateSpace(name: "home")
+          .onPreferenceChange(ScrollOffsetKey.self) { offset = $0 }
+          .refreshable { await Cloud.shared.load() }
+          PhoneTopBar(current: nil, solid: offset > 260, pad: pad)
         }
-        .refreshable { await Cloud.shared.load() }
     }
 
-    /** "Para <usuario>", buscar y perfil; debajo Series / Películas / Deportes / Mi lista */
-    private func topBar(_ pad: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 18) {
-                Text("Para \(state.session?.user ?? "")").font(.system(size: 22, weight: .bold)).foregroundColor(.white).lineLimit(1)
-                Spacer()
-                Button { state.push(.search) } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).foregroundColor(.white) }
-                Button { state.open(.account) } label: {
-                    Text(String((state.session?.user ?? "U").prefix(1)).uppercased()).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
-                        .frame(width: 30, height: 30).background(Theme.accent).clipShape(RoundedRectangle(cornerRadius: 5))
-                }
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    Chip(text: "Series") { state.open(.series) }
-                    Chip(text: "Películas") { state.open(.movies) }
-                    if tenant.sportsEnabled { Chip(text: "Deportes") { state.push(.sports) } }
-                    Chip(text: "Mi lista") { state.push(.saved(false)) }
-                }
-            }
-        }
-        .padding(.horizontal, pad).padding(.top, 8).padding(.bottom, 12)
-    }
-}
-
-/** Destacados: tarjetas grandes que se deslizan, como la app de Netflix */
-struct HeroCards: View {
-    @EnvironmentObject var state: AppState
-    @EnvironmentObject var cloud: Cloud
-    let items: [Item]
-    let width: CGFloat
-    @State private var page = 0
-
-    var body: some View {
-        let w = min(width - 48, 420)
-        TabView(selection: $page) {
-            ForEach(Array(items.enumerated()), id: \.element.key) { i, it in
-                ZStack(alignment: .bottom) {
-                    ItemPoster(item: it).frame(width: w, height: w * 1.4).clipped()
-                    LinearGradient(colors: [.clear, .clear, Color.black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
-                    VStack(spacing: 10) {
-                        Text(it.name).font(.system(size: 22, weight: .black)).foregroundColor(.white).multilineTextAlignment(.center).lineLimit(2)
-                        HStack(spacing: 10) {
-                            AppButton(text: "Reproducir", icon: "play.fill", height: 42) { state.push(.detail(it)) }
-                            AppButton(text: cloud.isFav(it.key) ? "En mi lista" : "Mi lista", icon: cloud.isFav(it.key) ? "checkmark" : "plus", primary: false, height: 42) {
-                                Cloud.shared.toggleFav(it)
-                            }
-                        }
-                    }.padding(16)
-                }
-                .frame(width: w, height: w * 1.4)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.15)))
-                .onTapGesture { state.push(.detail(it)) }
-                .tag(i)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .always))
-        .frame(height: w * 1.4 + 36)
-    }
 }
 
 /** Continuar viendo: carátula con barra roja de avance */

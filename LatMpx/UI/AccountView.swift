@@ -43,6 +43,8 @@ struct AccountView: View {
                             Store.streamFormat = streamFormat
                         }
                         Divider().background(Color(hex: 0x333333))
+                        DnsButton(fill: true)
+                        Divider().background(Color(hex: 0x333333))
                         InfoRow(k: "Versión", v: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
                         Divider().background(Color(hex: 0x333333))
                         HStack {

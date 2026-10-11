@@ -54,6 +54,7 @@ final class PlayerModel: ObservableObject {
     }
 
     private var stopped = false
+    private var loadSeq = 0
 
     func stop() {
         if stopped { return }
@@ -70,7 +71,7 @@ final class PlayerModel: ObservableObject {
         switch kind {
         case .movie: urls = [Xtream.movieUrl(s, q.id, q.ext)]
         case .series: urls = [Xtream.episodeUrl(s, q.id, q.ext)]
-        case .live: urls = Xtream.liveUrls(s, q.id)
+        case .live: urls = Xtream.liveUrls(s, q.id); Store.setLastChannel(q.id)
         }
         urlIdx = 0
         resumeTo = 0
@@ -80,7 +81,19 @@ final class PlayerModel: ObservableObject {
         }
         everPlayed = false; appliedLang = false
         audio = []; subs = []; time = 0; length = 0; error = nil
-        open(urls[0])
+        loadSeq += 1
+        let raw = urls, my = loadSeq
+        if SecureDns.current.endpoint.isEmpty { open(raw[0]); return }
+        // DNS elegido en Ajustes: primero la IP que da ese DNS y después la dirección original
+        buffering = true
+        player.stop()
+        Task { @MainActor [weak self] in
+            let list = await SecureDns.playable(raw)
+            guard let self = self, !self.stopped, self.loadSeq == my else { return }
+            self.urls = list.isEmpty ? raw : list
+            self.urlIdx = 0
+            self.open(self.urls[0])
+        }
     }
 
     private func open(_ url: String) {

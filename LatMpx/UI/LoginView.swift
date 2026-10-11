@@ -83,8 +83,12 @@ struct LoginView: View {
                 }
                 .frame(maxWidth: .infinity).padding(12).background(Color.white.opacity(0.2)).clipShape(RoundedRectangle(cornerRadius: 4))
                 AppButton(text: "Iniciar sesión") { act { await submit() } }
-                if tenant.demoEnabled {
-                    AppButton(text: "Autodemo", icon: "gift.fill", primary: false) { act { await demo() } }
+                // Autodemo y DNS en la misma fila, como Android
+                HStack(spacing: 8) {
+                    if tenant.demoEnabled {
+                        AppButton(text: "Autodemo", icon: "gift.fill", primary: false) { act { await demo() } }
+                    }
+                    DnsButton(fill: true)
                 }
             }
             if busy {

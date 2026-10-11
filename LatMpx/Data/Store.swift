@@ -44,6 +44,17 @@ enum Store {
         set { p.set(newValue, forKey: "dist_last_ok") }
     }
 
+    /** DNS elegido (SecureDns): "auto" = el de la red */
+    static var dns: String {
+        get { p.string(forKey: "dns") ?? "auto" }
+        set { p.set(newValue, forKey: "dns") }
+    }
+
+    /** último canal visto (por línea) */
+    static func lastChannel() -> Int { p.integer(forKey: "last_ch|" + scope()) }
+    static func setLastChannel(_ id: Int) { p.set(id, forKey: "last_ch|" + scope()) }
+    private static func scope() -> String { session().map { "\($0.user)@\($0.base)" } ?? "-" }
+
     static var streamFormat: String {
         get { p.string(forKey: "stream_format") ?? "m3u8" }
         set { p.set(newValue, forKey: "stream_format") }

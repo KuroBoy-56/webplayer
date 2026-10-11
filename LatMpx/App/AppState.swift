@@ -26,6 +26,8 @@ struct PlayRequest: Identifiable {
     var saveTitle = ""
     var savePoster = ""
     var category = ""
+    /** abierto al girar el teléfono en TV en vivo: volver a vertical lo cierra */
+    var closeOnPortrait = false
 }
 
 final class AppState: ObservableObject {
@@ -58,6 +60,20 @@ final class AppState: ObservableObject {
     func reset() {
         stacks = [:]; tab = .home; play = nil
         movies = []; series = []; live = []; movieCats = []; seriesCats = []; liveCats = []
+    }
+
+    /* ---------- títulos por categoría (se calcula una vez por catálogo, no en cada redibujo) ---------- */
+    private var groupCache: [Kind: (Int, [String: [Item]])] = [:]
+
+    /** categoría -> títulos, los más nuevos primero */
+    func grouped(_ kind: Kind) -> [String: [Item]] {
+        let all = kind == .movie ? movies : series
+        let sig = all.count &* 31 &+ (all.first?.id ?? 0)
+        if let c = groupCache[kind], c.0 == sig { return c.1 }
+        var g: [String: [Item]] = [:]
+        for it in all.sorted(by: { $0.added > $1.added }) { g[it.categoryId, default: []].append(it) }
+        groupCache[kind] = (sig, g)
+        return g
     }
 
     /** carpetas que el control parental no oculta */
@@ -97,11 +113,12 @@ final class AppState: ObservableObject {
     }
 
     /** canal: la lista de su categoría permite cambiar de canal en el reproductor */
-    func playLive(_ channels: [Item], _ index: Int) {
+    func playLive(_ channels: [Item], _ index: Int, closeOnPortrait: Bool = false) {
         guard !channels.isEmpty else { return }
         let from = max(0, index - 300), to = min(channels.count, index + 300)
         let win = Array(channels[from..<to])
-        play = PlayRequest(kind: .live, queue: win.map { QueueEntry(id: $0.id, title: $0.name, key: $0.key, poster: $0.poster, ext: "") }, index: index - from)
+        play = PlayRequest(kind: .live, queue: win.map { QueueEntry(id: $0.id, title: $0.name, key: $0.key, poster: $0.poster, ext: "") }, index: index - from,
+                           closeOnPortrait: closeOnPortrait)
     }
 
     /** canal dentro de su categoría (o de la lista completa) */

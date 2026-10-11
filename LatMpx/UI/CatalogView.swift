@@ -1,38 +1,72 @@
 import SwiftUI
 
-/** Películas o Series: categorías arriba y rejilla de carátulas. */
+/**
+ * Películas o Series, igual que Android para celular: destacados, "Agregadas recientemente", Top 10 y una
+ * fila por categoría (con "Ver todo"); arriba la barra con Series / Películas / Deportes / Mi lista.
+ */
 struct CatalogView: View {
     @EnvironmentObject var state: AppState
     let kind: Kind
-    @State private var cat = ""   // "" = todas
-    @State private var q = ""
+    @State private var offset: CGFloat = 0
 
     var body: some View {
         GeometryReader { g in
-            let all = kind == .movie ? state.movies : state.series
-            let cats = state.visible(kind == .movie ? state.movieCats : state.seriesCats)
-            let blocked = Store.blockedCats
-            let ql = q.trimmed.folded
-            let list = all.filter { (cat.isEmpty ? !blocked.contains($0.categoryId) : $0.categoryId == cat)
-                && (ql.isEmpty || $0.name.folded.contains(ql)) }
-                .sorted { $0.added > $1.added }
-            VStack(spacing: 0) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        Chip(text: "Todas", selected: cat.isEmpty) { cat = "" }
-                        ForEach(cats) { c in Chip(text: c.name, selected: cat == c.id) { cat = c.id } }
-                    }.padding(.horizontal, sidePad(g.size)).padding(.vertical, 8)
-                }
-                if state.loading && all.isEmpty { LoadingView(text: "Cargando…") }
-                else if list.isEmpty { EmptyMessage(text: q.isEmpty ? "No hay títulos en esta categoría." : "Sin resultados para \"\(q)\".") }
-                else { PosterGrid(items: list, size: g.size) }
+            let all = state.visibleItems(kind == .movie ? state.movies : state.series)
+            if state.loading && all.isEmpty {
+                LoadingView(text: "Preparando tu catálogo…")
+            } else {
+                content(g.size, all)
             }
         }
         .background(Theme.bg.ignoresSafeArea())
-        .navigationTitle(kind == .movie ? "Películas" : "Series")
-        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $q, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Buscar")
+        .toolbar(.hidden, for: .navigationBar)
     }
+
+    private func content(_ size: CGSize, _ all: [Item]) -> some View {
+        let pad = sidePad(size), pw = posterWidth(size)
+        let recentAll = all.sorted { $0.added > $1.added }
+        let recent = Array(recentAll.prefix(20))
+        let top10 = Array(recentAll.prefix(300).sorted { $0.rating > $1.rating }.prefix(10))
+        let hero = Array(recentAll.prefix(40).sorted { $0.rating > $1.rating }.prefix(6))
+        let cats = state.visible(kind == .movie ? state.movieCats : state.seriesCats)
+        let groups = state.grouped(kind)
+        let rows: [CatRow] = cats.compactMap { c in
+            guard let l = groups[c.id], !l.isEmpty else { return nil }
+            return CatRow(cat: c, items: Array(l.prefix(20)))
+        }
+        let title = kind == .movie ? "Películas" : "Series"
+        return ZStack(alignment: .top) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ScrollOffsetReader(space: "cat\(title)")
+                    if !hero.isEmpty { HeroCards(items: hero, width: size.width, topPad: 104).padding(.bottom, 8) }
+                    else { Color.clear.frame(height: 104) }
+                    ShelfRow(title: "Agregadas recientemente", items: recent, pad: pad, onViewAll: { state.push(.browse("Agregadas recientemente", kind, [])) }) { _, it in
+                        PosterCard(item: it, width: pw) { state.push(.detail(it)) }
+                    }
+                    ShelfRow(title: "Top 10", items: top10, pad: pad) { i, it in
+                        Top10Card(rank: i + 1, item: it, width: pw * 1.15) { state.push(.detail(it)) }
+                    }
+                    ForEach(rows) { row in
+                        ShelfRow(title: row.cat.name, items: row.items, pad: pad, onViewAll: { state.push(.browse(row.cat.name, kind, [row.cat.id])) }) { _, it in
+                            PosterCard(item: it, width: pw) { state.push(.detail(it)) }
+                        }
+                    }
+                    if all.isEmpty { EmptyMessage(text: "No hay \(title.lowercased()) en tu lista.").frame(height: 240) }
+                    Spacer(minLength: 40)
+                }
+            }
+            .coordinateSpace(name: "cat\(title)")
+            .onPreferenceChange(ScrollOffsetKey.self) { offset = $0 }
+            PhoneTopBar(current: kind == .movie ? .movies : .series, solid: offset > 260, pad: pad)
+        }
+    }
+}
+
+struct CatRow: Identifiable {
+    let cat: Category
+    let items: [Item]
+    var id: String { cat.id }
 }
 
 /** rejilla de carátulas (miles de títulos: LazyVGrid solo dibuja lo visible) */
@@ -76,7 +110,7 @@ struct BrowseView: View {
                 }
                 let all = state.visibleItems(kind == .series ? state.series : state.movies)
                 let l = categoryIds.isEmpty ? all : all.filter { categoryIds.contains($0.categoryId) }
-                return Array(l.sorted { $0.added > $1.added }.prefix(categoryIds.isEmpty ? 200 : 100000))
+                return l.sorted { $0.added > $1.added }
             }()
             if list.isEmpty { EmptyMessage(text: "No hay títulos.") } else { PosterGrid(items: list, size: g.size) }
         }
