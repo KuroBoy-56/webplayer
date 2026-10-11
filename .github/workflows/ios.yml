@@ -63,6 +63,18 @@ jobs:
           test -n "$APP"
           test -f "$APP/LatMpx"
           rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          APP="Payload/$(basename "$APP")"
+          # Sideloadly / AltStore solo reemplazan una firma que ya existe: sin firma fallan con
+          # "macho sign/edit failed". Se firma ad hoc (sin certificado) el framework y la app,
+          # y VLCKit se deja solo con arm64 (sin encabezado "fat").
+          for f in "$APP"/Frameworks/*.framework; do
+            bin="$f/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$f/Info.plist")"
+            if lipo -info "$bin" | grep -q "Architectures in the fat file"; then lipo "$bin" -thin arm64 -output "$bin.thin" && mv "$bin.thin" "$bin"; fi
+            codesign --force --sign - --timestamp=none "$f"
+          done
+          codesign --force --sign - --timestamp=none --generate-entitlement-der "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv "$APP/Frameworks/MobileVLCKit.framework" 2>&1 | grep -E "Signature|Format"
           zip -qry LatMpx.ipa Payload
           ls -la LatMpx.ipa
 
