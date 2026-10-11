@@ -112,7 +112,7 @@ final class PlayerUITests: XCTestCase {
     }
 
     /** imagen en imagen: el video pasa a la ventanita del sistema y el reproductor de la app se cierra */
-    func testPictureInPicture() {
+    func testPictureInPicture() throws {
         let app = launch(movie)
         XCTAssertTrue(app.buttons["player.close"].waitForExistence(timeout: 30), "no se abrió el reproductor")
         let toggle = app.buttons["player.toggle"]
@@ -120,14 +120,18 @@ final class PlayerUITests: XCTestCase {
         controls(app)
         guard app.buttons["player.pip"].exists else { XCTFail("no hay botón de imagen en imagen"); return }
         app.buttons["player.pip"].tap()
-        let closed = wait(20) { !app.otherElements["player.screen"].exists }
+        let diagPath = (ProcessInfo.processInfo.environment["SHOTS"] ?? "") + "/diag-" + name.filter { $0.isLetter || $0.isNumber } + ".txt"
+        func diag() -> String { (try? String(contentsOfFile: diagPath)) ?? "" }
+        let closed = wait(20) { !app.otherElements["player.screen"].exists || diag().contains("no soportado") }
         RunLoop.current.run(until: Date().addingTimeInterval(2))
         shot("10-imagen-en-imagen")
-        XCTAssertTrue(closed, "el reproductor no pasó a imagen en imagen")
-        if let dir = ProcessInfo.processInfo.environment["SHOTS"], !dir.isEmpty {
-            let diag = (try? String(contentsOfFile: dir + "/diag-" + name.filter { $0.isLetter || $0.isNumber } + ".txt")) ?? ""
-            XCTAssertTrue(diag.contains("pip iniciado"), "la ventanita no arrancó: \(diag)")
+        // algunos simuladores no tienen imagen en imagen (los iPhone reales sí): ahí solo se comprueba el aviso
+        if diag().contains("no soportado") {
+            XCTAssertTrue(app.otherElements["player.screen"].exists, "sin imagen en imagen el video debe seguir en la app")
+            throw XCTSkip("este simulador no permite imagen en imagen")
         }
+        XCTAssertTrue(closed, "el reproductor no pasó a imagen en imagen")
+        XCTAssertTrue(diag().contains("pip iniciado"), "la ventanita no arrancó: \(diag())")
     }
 
     /** servidor que no contesta: la pantalla debe seguir respondiendo y dejar salir al instante */

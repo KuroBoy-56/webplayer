@@ -83,6 +83,11 @@ struct PlayerScreen: View {
 
     /** pasa el video a la ventanita del sistema y cierra este reproductor; si no se puede, sigue aquí */
     private func startPip() {
+        guard PipManager.supported else {
+            PlayerDiag.log("pip: no soportado en este equipo")
+            m.toast = "Este equipo no permite imagen en imagen"
+            return
+        }
         guard let src = m.pipSource() else {
             m.toast = "Este video no permite imagen en imagen"
             return
@@ -112,10 +117,8 @@ struct PlayerScreen: View {
                     Text(m.entry.title).font(.system(size: 17, weight: .semibold)).lineLimit(1)
                     Spacer()
                     if m.kind == .live { Button { channels = true } label: { Image(systemName: "list.bullet").font(.system(size: 20)) } }
-                    if PipManager.supported {
-                        Button { startPip() } label: { Image(systemName: "pip.enter").font(.system(size: 20)).frame(width: 40, height: 40) }
-                            .accessibilityIdentifier("player.pip").accessibilityLabel("Imagen en imagen")
-                    }
+                    Button { startPip() } label: { Image(systemName: "pip.enter").font(.system(size: 20)).frame(width: 40, height: 40) }
+                        .accessibilityIdentifier("player.pip").accessibilityLabel("Imagen en imagen")
                     Button { m.readTracks(); tracks = true } label: { Image(systemName: "captions.bubble").font(.system(size: 20)) }
                     Button { m.fill.toggle(); m.applyFill(size); state.toast = nil } label: {
                         Image(systemName: m.fill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 20))
