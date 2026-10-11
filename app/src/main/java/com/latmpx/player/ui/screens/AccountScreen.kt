@@ -1,5 +1,7 @@
 package com.latmpx.player.ui.screens
 
+import kotlinx.coroutines.launch
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -56,31 +58,43 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
     var pinDialog by remember { mutableStateOf(false) }
     var pinValue by remember { mutableStateOf("") }
     
-    var pinStep by remember { mutableStateOf(if (com.latmpx.player.data.Store.parentalPin.isEmpty()) "CREATE" else "ENTER") }
+    // PIN parental siempre activo: es el del panel (0000 de fábrica); un cambio se guarda en el panel
+    var pinStep by remember { mutableStateOf("ENTER") }
     var tempPin by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf(false) }
+    var pinMsg by remember { mutableStateOf<String?>(null) }
+    var pinBusy by remember { mutableStateOf(false) }
+    var currentPin by remember { mutableStateOf("") }
+    val pinScope = androidx.compose.runtime.rememberCoroutineScope()
     var blockedCatsState by remember { mutableStateOf(com.latmpx.player.data.Store.blockedCats) }
     
     if (pinDialog) {
         androidx.compose.ui.window.Dialog(onDismissRequest = { pinDialog = false; tempPin = "" }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
             Box(Modifier.widthIn(max = 560.dp).fillMaxWidth(0.6f).background(Brush.verticalGradient(listOf(Color(0xE61A1A1A), Color(0xF2000000))), RoundedCornerShape(16.dp)).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp)).padding(24.dp)) {
                 Column(Modifier.fillMaxWidth()) {
-                    Text(when(pinStep) { "CREATE" -> "Crear PIN"; "ENTER" -> "Ingresar PIN"; "SETTINGS" -> "Control Parental"; "CATS" -> "Carpetas Bloqueadas"; else -> "" }, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+                    Text(when(pinStep) { "CREATE" -> "Nuevo PIN"; "ENTER" -> "Ingresar PIN"; "SETTINGS" -> "Control Parental"; "CATS" -> "Carpetas Bloqueadas"; else -> "" }, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
                     
                     when (pinStep) {
                         "CREATE", "ENTER" -> {
-                            Text(if (pinStep == "CREATE") "Crea un PIN de 4 dígitos:" else "Ingresa tu PIN actual:", color = Color.White)
+                            Text(if (pinStep == "CREATE") "Escribe el nuevo PIN de 4 números (se guarda también en el panel):" else "Ingresa tu PIN (el de fábrica es 0000):", color = Color.White)
                             Spacer(Modifier.height(8.dp))
-                            com.latmpx.player.ui.components.PinPad(tempPin, onChange = { tempPin = it; pinError = false }, error = pinError, onDone = {
-                                if (pinStep == "CREATE" && tempPin.length == 4) {
-                                    com.latmpx.player.data.Store.parentalPin = tempPin
-                                    tempPin = ""
-                                    pinStep = "SETTINGS"
-                                } else if (pinStep == "ENTER" && tempPin == com.latmpx.player.data.Store.parentalPin) {
-                                    tempPin = ""
-                                    pinStep = "SETTINGS"
-                                } else { pinError = true; tempPin = "" }
+                            com.latmpx.player.ui.components.PinPad(tempPin, onChange = { tempPin = it; pinError = false; pinMsg = null }, error = pinError, onDone = {
+                                if (pinBusy || tempPin.length != 4) return@PinPad
+                                if (pinStep == "ENTER") {
+                                    if (tempPin == com.latmpx.player.data.Store.parentalPin) { currentPin = tempPin; tempPin = ""; pinStep = "SETTINGS" }
+                                    else { pinError = true; tempPin = "" }
+                                } else {
+                                    val newPin = tempPin
+                                    pinBusy = true; pinMsg = "Guardando en el panel…"
+                                    pinScope.launch {
+                                        val r = com.latmpx.player.data.Panel.setPin(com.latmpx.player.data.Store.deviceIdOrEmpty(), currentPin, newPin)
+                                        pinBusy = false
+                                        if (r.value != null) { currentPin = newPin; tempPin = ""; pinMsg = null; pinStep = "SETTINGS" }
+                                        else { pinError = true; tempPin = ""; pinMsg = r.error ?: "No se pudo guardar el PIN en el panel" }
+                                    }
+                                }
                             })
+                            pinMsg?.let { Text(it, color = if (pinBusy) Color(0xFFB3B3B3) else Color(0xFFFF8A80), fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp)) }
                         }
                         "SETTINGS" -> {
                             val firstRow = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -89,10 +103,10 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
                             Divider(color = Color(0xFF333333))
                             com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.OndemandVideo, "Carpetas Bloqueadas", "${blockedCatsState.size} carpetas ocultas") { pinStep = "CATS" }
                             Divider(color = Color(0xFF333333))
-                            com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.Lock, "Desactivar Control", "Elimina el PIN y las restricciones") { 
-                                com.latmpx.player.data.Store.parentalPin = ""
+                            com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.Lock, "Mostrar todas las carpetas", "Quita las carpetas bloqueadas (el PIN sigue activo)") {
                                 com.latmpx.player.data.Store.blockedCats = emptySet()
-                                pinDialog = false
+                                blockedCatsState = emptySet()
+                                state.refresh++
                             }
                         }
                         "CATS" -> {
@@ -120,7 +134,7 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
                         if (pinStep != "SETTINGS") {
                             com.latmpx.player.ui.components.TvDialogButton("Cancelar", primary = false) {
                                 if (pinStep == "CATS") { pinStep = "SETTINGS"; blockedCatsState = com.latmpx.player.data.Store.blockedCats }
-                                else { pinDialog = false; tempPin = "" }
+                                else { pinDialog = false; tempPin = ""; pinMsg = null }
                             }
                         }
                         if (pinStep == "CATS") {
@@ -183,10 +197,10 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
         
         Text("Configuración de la aplicación", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
         Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2A), Color(0xFF1A1A1A))), RoundedCornerShape(12.dp)).border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp)).padding(vertical = 8.dp)) {
-            SettingsItem(Icons.Filled.Lock, "Control Parental", if (com.latmpx.player.data.Store.parentalPin.isEmpty()) "Desactivado" else "Activado") {
+            SettingsItem(Icons.Filled.Lock, "Control Parental", "Activado · el PIN lo administra el panel") {
                 pinValue = com.latmpx.player.data.Store.parentalPin
                 // siempre se pide el PIN al abrir (antes se quedaba en el menú ya desbloqueado)
-                pinStep = if (com.latmpx.player.data.Store.parentalPin.isEmpty()) "CREATE" else "ENTER"
+                pinStep = "ENTER"; pinError = false; pinMsg = null
                 tempPin = ""
                 pinDialog = true
             }

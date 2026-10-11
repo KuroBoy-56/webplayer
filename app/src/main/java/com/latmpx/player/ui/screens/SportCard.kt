@@ -134,10 +134,17 @@ fun SportCardView(e: SportEvent, info: SportInfo?, now: Long, compact: Boolean, 
             } else {
                 Text(e.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
+            // dónde se transmite (los de la región primero)
+            if (e.tv.isNotEmpty()) {
+                val shown = e.tv.take(3).joinToString(" · ") { it.name }
+                val more = e.tv.size - 3
+                Text("📺 $shown" + if (more > 0) "  +$more" else "", color = Color(0xFFDDDDDD), fontSize = 12.5.sp, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(e.venue.ifEmpty { if (st == SpStatus.SOON) spTime(e.start) else "" }, color = SpMute, fontSize = 12.5.sp, maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Text("TV en vivo", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
+                Text(if (e.tv.isNotEmpty()) "Ver canales" else "TV en vivo", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.background(if (f) NfRed else Color(0x1AFFFFFF), RoundedCornerShape(4.dp)).padding(horizontal = 10.dp, vertical = 5.dp))
             }
         }

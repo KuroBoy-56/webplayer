@@ -70,6 +70,12 @@ Se envía siempre en el campo `mac_address`.
 
 En la pantalla de activación se ve el código MAC para que el distribuidor lo active en el panel, y el botón **Comprobar activación** vuelve a preguntar.
 
+**Siempre con el panel (sin usuario ni contraseña guardados):** la sesión vive solo en memoria. Cada vez que se abre la app se le pide la línea al panel (`auth.php` / `check_mac`) y se comprueba en el servidor IPTV (`user_info`: usuario y contraseña correctos y cuenta activa); solo así entra sola. Si el equipo no está registrado, la línea venció o el panel no responde, se queda en el inicio de sesión con el aviso. Al volver a la app (como mucho cada 15 min) se vuelve a preguntar: si el dueño quitó la línea del equipo, vuelve al inicio de sesión. Las versiones anteriores guardaban la sesión en el equipo: se borra al actualizar.
+
+**PIN parental (siempre activo):** es el del panel (`check_mac` → `pin`, o `parent_control` de `auth.php`; 0000 de fábrica). En **Cuenta → Control Parental** se pide el PIN; **Cambiar PIN** lo guarda en el panel (`login.php` acción `set_pin`, cifrada, con el PIN actual) y solo si el panel lo acepta cambia en el equipo, así el dueño ve en Clientes MAC el PIN que puso el cliente y puede volverlo a 0000. Ya no se puede desactivar.
+
+**Inicio de sesión:** en el celular el logo queda arriba, la caja de inicio de sesión en el medio de la pantalla y la firma del distribuidor (© año nombre) abajo; con el teclado abierto la página se desplaza.
+
 ## Distribuidor (número de 6 dígitos)
 
 Al abrir la app por primera vez sale **Número de distribuidor** (mismo diseño que el inicio de sesión; en TV con teclado numérico en pantalla o los números del control). La elección se guarda en el equipo y no se vuelve a preguntar: con sesión entra directo al inicio, sin sesión al login.
@@ -96,7 +102,7 @@ Todas estas llamadas usan un token: la app hace `POST progress.php {"action":"au
 |---|---|
 | `api/progress.php` | **Continuar viendo** y **Mi lista / canales favoritos**. `GET ?v=2` → `{progress, favorites}`; `POST` `save`, `delete`, `fav_add`, `fav_remove`. Mismo formato que la web: película por nombre (`type: movie`), serie una sola entrada por serie (`type: episode`, `id` del episodio, `seriesId`). Al 95 % se borra. Nada de esto queda solo en el equipo. |
 | `api/epg.php` | Guía de respaldo: primero `get_short_epg` del proveedor; si un canal no trae guía, `POST {channels:[{id, epg, name}]}` en lotes de hasta 400 canales. |
-| `api/sports.php` | Pestaña **Deportes**: partidos de hoy y mañana con el mismo diseño de la web (Hoy/Mañana, deportes con emoji, escudos, en vivo / marcador / final, botón **TV en vivo**). El canal se busca con las reglas `match` del panel (misma puntuación que la web). |
+| `api/sports.php` | Pestaña **Deportes**: partidos de hoy y mañana con el mismo diseño de la web (Hoy/Mañana, deportes con emoji, escudos, en vivo / marcador / final). Cada tarjeta muestra los canales que transmiten el partido (`tv`, los de la región primero); al tocarla sale el menú **Ver el evento** (automático), cada canal y **Buscar por equipos**. Un canal se busca por su nombre en la lista del cliente sin calidad ni país (`ESPN 2` encuentra `MX: ESPN 2 HD`, nunca `ESPN` ni `ESPN 3`); si el cliente no lo tiene, se busca el evento por equipos o nombre en las carpetas de eventos (reglas `match` del panel). |
 
 **Aviso al abrir la app** (`api/alerta.php?format=json&user&pass&dns&title`, sin token): lo que se configura en **Alertas** del panel. Con 3, 2 o 1 días restantes sale el texto de ese día, con 0 días o vencida el de 0 días (título rojo, sin imagen); si no, la bienvenida con el texto general y la imagen de `img/alertas/`. Sale una vez cada vez que se abre la app y otra vez tras iniciar sesión, con un solo botón **Entendido** (enfocado para el control remoto; atrás también lo cierra). Código: `data/Alerts.kt`, `ui/components/PanelAlert.kt`.
 

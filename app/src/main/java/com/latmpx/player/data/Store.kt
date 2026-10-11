@@ -15,6 +15,7 @@ object Store {
 
     fun init(ctx: Context) {
         p = ctx.getSharedPreferences("latmpx", Context.MODE_PRIVATE)
+        p.edit().remove("session").remove("parental_pin").apply() // usuario/contraseña y PIN local de versiones anteriores
         SecureDns.select(dns)
     }
 
@@ -63,9 +64,10 @@ object Store {
         get() = p.getBoolean("ext_player", false)
         set(v) = p.edit().putBoolean("ext_player", v).apply()
 
+    /** PIN parental: siempre activo; es el del panel (check_mac) y los cambios se guardan allí (set_pin). 0000 = de fábrica */
     var parentalPin: String
-        get() = p.getString("parental_pin", "") ?: ""
-        set(v) = p.edit().putString("parental_pin", v).apply()
+        get() = p.getString(tenantKey("panel_pin2"), null)?.takeIf { it.length == 4 } ?: "0000"
+        set(v) = p.edit().putString(tenantKey("panel_pin2"), v).apply()
 
     var blockedCats: Set<String>
         get() = p.getStringSet("blocked_cats", emptySet()) ?: emptySet()
@@ -86,13 +88,16 @@ object Store {
     }
 
     /* ---------- sesión ---------- */
-    fun saveSession(s: Session) = p.edit().putString("session", JSONObject().apply {
-        put("dns", s.dnsName); put("base", s.base); put("user", s.user); put("pass", s.pass); put("exp", s.expires)
-    }.toString()).apply()
+    // Solo en memoria: el usuario y la contraseña nunca se guardan en el equipo. Cada vez que se
+    // abre la app se le pide la línea al panel (check_mac) y se comprueba en el servidor IPTV.
+    @Volatile private var mem: Session? = null
 
-    fun session(): Session? = p.getString("session", null)?.let { raw ->
-        runCatching { JSONObject(raw).let { Session(it.s("dns"), it.s("base"), it.s("user"), it.s("pass"), it.s("exp")) } }.getOrNull()
+    fun saveSession(s: Session) {
+        mem = s
+        p.edit().remove("session").apply() // versiones anteriores la guardaban: se borra
     }
+
+    fun session(): Session? = mem
 
     /** el panel respondió que la demo ya se usó en este equipo: el botón queda desactivado */
     var demoUsed: Boolean
@@ -104,7 +109,10 @@ object Store {
         get() = p.getBoolean("fake_unlocked", false)
         set(v) = p.edit().putBoolean("fake_unlocked", v).apply()
 
-    fun logout() = p.edit().remove("session").remove(tenantKey("cloud_token2")).apply()
+    fun logout() {
+        mem = null
+        p.edit().remove("session").remove(tenantKey("cloud_token2")).apply()
+    }
 
     /* ---------- token de progress.php / epg.php / sports.php (30 días; uno por distribuidor) ---------- */
     var cloudToken: String?

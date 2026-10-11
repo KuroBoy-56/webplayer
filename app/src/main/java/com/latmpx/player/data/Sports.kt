@@ -25,7 +25,11 @@ data class SportEvent(
     val venue: String,
     val status: String,
     val postponed: Boolean,
+    /** canales donde se transmite (panel: "tv"), los de la región primero */
+    val tv: List<TvChannel> = emptyList(),
 )
+
+data class TvChannel(val name: String, val country: String)
 
 data class SportInfo(val label: String, val icon: String, val minutes: Int)
 
@@ -65,6 +69,7 @@ object Sports {
                 home = e.s("h"), away = e.s("a"), homeBadge = e.s("hb"), awayBadge = e.s("ab"),
                 homeScore = e.s("hs"), awayScore = e.s("as"), start = start, venue = e.s("v"), status = e.s("st"),
                 postponed = e.optBoolean("pp", false),
+                tv = e.optJSONArray("tv").mapObj { t -> t.s("n").takeIf { it.isNotBlank() }?.let { TvChannel(it, t.s("c")) } },
             )
         }.sortedBy { it.start }
         val sports = LinkedHashMap<String, SportInfo>()
@@ -131,7 +136,59 @@ object Sports {
     }
 
     /** Canal ya normalizado con su categoría, para no repetir el trabajo en cada partido. */
-    class Chan(val item: Item, val norm: String, val isEvent: Boolean)
+    class Chan(val item: Item, val norm: String, val isEvent: Boolean) {
+        val key: List<String> by lazy { channelKey(item.name) }
+    }
+
+    /* ---------- búsqueda por el canal que transmite ("ESPN 2" -> los canales ESPN 2 del cliente) ---------- */
+
+    // lo que no distingue un canal de otro: calidad y país/región
+    private val NOISE = setOf("hd", "fhd", "uhd", "sd", "4k", "8k", "hq", "hevc", "h264", "h265", "1080", "1080p", "720", "720p", "50fps", "60fps", "fps",
+        "backup", "bk", "alt", "vip", "op1", "op2", "tv", "channel", "canal",
+        "mx", "mex", "mexico", "us", "usa", "eeuu", "ar", "arg", "argentina", "co", "col", "colombia", "cl", "chile", "pe", "peru", "ec", "ecuador",
+        "ve", "venezuela", "uy", "uruguay", "py", "paraguay", "bo", "bolivia", "cr", "pa", "panama", "gt", "hn", "sv", "ni", "do", "pr",
+        "latam", "latin", "latino", "latina", "lat", "america", "es", "esp", "spain", "espana", "uk", "gb", "int", "intl", "international",
+        "br", "bra", "brasil", "brazil", "pt", "portugal", "ca", "can", "canada", "fr", "france", "it", "italy", "de", "germany",
+        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland")
+
+    /** palabras que identifican el canal; un número va pegado a la palabra anterior ("espn 2" -> "espn2") */
+    fun channelKey(name: String): List<String> {
+        val out = ArrayList<String>()
+        for (t in norm(name).split(' ')) {
+            if (t.isEmpty() || t in NOISE) continue
+            if (t.all(Char::isDigit) && out.isNotEmpty() && !out.last().all(Char::isDigit)) out[out.size - 1] = out.last() + t else out.add(t)
+        }
+        return out
+    }
+
+    /**
+     * Canales del cliente que son el canal que transmite: primero los que se llaman igual (sin calidad
+     * ni país), después los que contienen todas sus palabras. "ESPN 2" nunca da "ESPN" ni "ESPN 3".
+     */
+    fun findByChannel(tvName: String, chans: List<Chan>): List<Item> {
+        val q = channelKey(tvName)
+        if (q.isEmpty() || q.joinToString("").length < 2) return emptyList()
+        val qs = q.toSet()
+        val scored = ArrayList<Pair<Int, Chan>>()
+        for (c in chans) {
+            val k = c.key
+            if (k.isEmpty()) continue
+            val score = when {
+                k == q -> 1000 - k.size
+                k.joinToString("") == q.joinToString("") -> 900 - k.size
+                k.containsAll(qs) -> 500 - 10 * (k.size - q.size)
+                else -> continue
+            }
+            scored.add(score to c)
+        }
+        return scored.sortedWith(compareByDescending<Pair<Int, Chan>> { it.first }.thenBy { it.second.item.name.length }).map { it.second.item }
+    }
+
+    /** El canal del partido: el primero de sus canales de TV que tiene el cliente; si no, por equipos o nombre del evento. */
+    fun best(ev: SportEvent, chans: List<Chan>, r: MatchRules): Item? {
+        for (t in ev.tv) findByChannel(t.name, chans).firstOrNull()?.let { return it }
+        return find(ev, chans, r)
+    }
 
     fun prepare(channels: List<Item>, cats: List<Category>, r: MatchRules): List<Chan> {
         val eventCats = cats.filter { r.eventCategory.containsMatchIn(Platforms.fold(it.name)) }.map { it.id }.toSet()

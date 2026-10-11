@@ -31,6 +31,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -170,9 +171,24 @@ fun AppRoot() {
         }.awaitAll()
         state.loading = false
     }
+    // al volver a la app: si el dueño quitó la línea de este equipo en el panel, se vuelve al inicio de sesión
+    val lastPanelCheck = remember { mutableLongStateOf(System.currentTimeMillis()) }
+    fun revalidate() {
+        val s = state.session ?: return
+        if (System.currentTimeMillis() - lastPanelCheck.longValue < 15 * 60_000L) return
+        lastPanelCheck.longValue = System.currentTimeMillis()
+        scope.launch {
+            val c = com.latmpx.player.data.Panel.checkMac(Store.deviceIdOrEmpty())
+            // sin conexión o error del panel no se cierra la sesión; solo cuando el panel dice que no hay línea
+            if (c.error == null && c.value == null && state.session === s) {
+                Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
+            }
+        }
+    }
     // al volver del reproductor se recarga del panel (otro equipo pudo haber cambiado algo)
     LifecycleResumeEffect(Unit) {
         state.refresh++
+        revalidate()
         if (state.session != null) scope.launch { Cloud.load() }
         if (booted.value && Tenant.active && (Tenant.due() || Tenant.brand?.expired() == true)) guard()
         onPauseOrDispose { }
@@ -190,6 +206,7 @@ fun AppRoot() {
             }
             gate.value == Gate.RETRY -> TenantRetryScreen(retryMsg.value, checking.value, onRetry = { guard() }, onChange = { wipe(null) })
             state.session == null -> LoginScreen { s ->
+                lastPanelCheck.longValue = System.currentTimeMillis()
                 Store.saveSession(s)
                 Xtream.clearCache()
                 state.session = s

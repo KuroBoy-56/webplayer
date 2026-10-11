@@ -29,6 +29,7 @@ object Panel {
         // check_mac y auto_demo traen la línea (usuario y contraseña): se piden cifradas
         val secret = action == "check_mac" || action == "auto_demo"
         if (secret) payload.put("enc", 1)
+        val encReply = secret || action == "set_pin" // set_pin siempre responde cifrado cuando sale bien
         val data = try {
             PanelCrypto.encrypt(payload.toString())
         } catch (e: PanelCrypto.MissingKey) {
@@ -39,7 +40,7 @@ object Panel {
         val r = Net.postForm(PanelUrl.api("login.php"), mapOf("action" to action, "data" to data))
         if (r.code == 0) return Answer(null, NO_PANEL)
         // respuesta cifrada (panel nuevo) -> JSON; un panel viejo la manda en JSON y queda igual. Los errores siempre llegan en JSON.
-        if (secret && r.code == 200 && r.body.isNotBlank() && !r.body.trimStart().startsWith("{")) {
+        if (encReply && r.code == 200 && r.body.isNotBlank() && !r.body.trimStart().startsWith("{")) {
             val dec = runCatching { PanelCrypto.decrypt(r.body) }.getOrNull()
                 ?: return Answer(null, "La llave de la app no coincide con la del panel")
             return Answer(r.copy(body = dec))
@@ -79,6 +80,8 @@ object Panel {
         val j = r.json() ?: return Answer(null, errorOf(r, "Respuesta no válida del panel"))
         fakeScreen = FakeScreen.parse(j)
         if (!j.optBoolean("exists", false)) return Answer(null)
+        // PIN parental del panel: es el que usa la app
+        j.s("pin").takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { Store.parentalPin = it }
         val line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))
         return Answer(line)
     }
@@ -124,6 +127,18 @@ object Panel {
             else -> "No se pudo crear la demo"
         }
         return Answer(null, errorOf(r, fallback), r.code)
+    }
+
+    /** Cambia el PIN parental en el panel (pide el actual). Si el panel no lo acepta, el PIN no cambia. */
+    suspend fun setPin(deviceId: String, oldPin: String, newPin: String): Answer<Unit> {
+        val a = login("set_pin", device(deviceId).put("old_pin", oldPin).put("pin", newPin))
+        val r = a.value ?: return Answer(null, a.error)
+        val j = r.json()
+        if (r.ok && j?.optBoolean("ok") == true) {
+            Store.parentalPin = newPin
+            return Answer(Unit)
+        }
+        return Answer(null, errorOf(r, "El panel no guardó el PIN (${r.code})"), r.code)
     }
 
     /** Respuesta de tenant_config: la configuración descifrada o el código de error (tenant_invalid, offline, no_key…). */
@@ -173,6 +188,7 @@ object Panel {
             ?: return Answer(null, "Respuesta no válida del panel")
         // llave TMDB configurada en el panel: se usa para el fondo de pósters del inicio de sesión
         resp.s("tmdbKey").takeIf { it.isNotEmpty() && it != "missing_tmdb_key" }?.let { Store.tmdbKey = it }
+        resp.s("parent_control").takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { Store.parentalPin = it }
         val lines = resp.optJSONArray("urls").mapObj { o -> lineFromUrl(o.s("name").ifEmpty { "Servidor" }, o.s("url"), "", "") }
         return Answer(lines.distinctBy { "${it.base}|${it.user}" })
     }
