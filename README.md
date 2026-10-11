@@ -40,7 +40,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **TV en vivo**: categorías, canales, guía EPG (proveedor y, si no hay, la del panel),
   favoritos, cambio de canal con ▲▼ dentro del reproductor.
 - **Deportes**: partidos de hoy y mañana con el canal encontrado automáticamente
-  (mismas reglas `match` de `api/sports.php`).
+  (mismas reglas `match` de `api/sports.php`). Debajo de cada partido, **En TV:** los canales que lo
+  transmiten (panel: `tv`). Al pulsarlo sale el menú **Ver el evento** (automático), cada canal y
+  **Buscar por equipos**; un canal se busca por su nombre sin calidad ni país (`ESPN 2` encuentra
+  `MX: ESPN 2 HD`, nunca `ESPN` ni `ESPN 3`) y, si no lo tienes, se busca el evento por equipos o nombre en
+  las carpetas de eventos. Un índice de palabras de los canales evita comparar todos contra todos.
 - **Progreso y Mi lista sincronizados** con `api/progress.php`: lo que ves en la TV sigue en la web y el móvil, aunque cada app haya entrado por otra DNS del mismo servicio (el panel los une). Se vuelven a leer al regresar a la app.
 - **Aviso del panel al abrir la app** (`api/alerta.php?format=json`, página **Alertas** del panel): bienvenida con el texto general y la imagen, o aviso de vencimiento con el texto de 3, 2, 1 o 0 días. Una vez por arranque y otra vez tras iniciar sesión; botón **Entendido** enfocado, *Atrás* también lo cierra.
 - **Número de distribuidor** (primera vez): 6 dígitos con teclado en pantalla. Con número, la
@@ -55,7 +59,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   Con distribuidor, todo sigue su marca: pantalla de inicio (su fondo con su logo al centro; sin logo,
   su nombre), menú superior, inicio de sesión, Cuenta, avisos, reproductor, anillos de foco y barras
   de progreso. Con *Omitir* todo queda como siempre.
-- **Control parental**: oculta adultos; se desbloquea con el PIN del panel (0000 por defecto).
+- **Control parental** (siempre activo): oculta adultos; se desbloquea con el PIN del panel (`check_mac` →
+  `pin`, o `parent_control` de `auth.php`; 0000 de fábrica). **Cuenta › PIN de control parental** lo cambia:
+  pide el actual y lo guarda en el panel (`login.php` acción `set_pin`); solo si el panel lo acepta cambia.
+- **Sin usuario ni contraseña guardados**: la sesión vive solo en memoria. Cada vez que se abre la app se le
+  pide la línea al panel y se comprueba en el servidor IPTV; con una sola línea entra sola. Si el equipo no
+  está registrado o la línea venció, se queda en el inicio de sesión. Al volver a la app (como mucho cada
+  15 min) se pregunta otra vez: si el dueño quitó la línea del equipo, vuelve al inicio de sesión.
 
 ## Panel: dispositivo, pantalla falsa y errores
 

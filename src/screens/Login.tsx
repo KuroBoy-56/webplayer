@@ -30,7 +30,7 @@ export default function Login() {
   const nav = useNav();
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
-  const [busy, setBusy] = useState('');
+  const [busy, setBusy] = useState('Comprobando el equipo en el panel…');
   const [error, setError] = useState('');
   const [posters, setPosters] = useState<string[]>([]);
   const [assigned, setAssigned] = useState<{ name: string; base: string; user: string; pass: string }[]>([]);
@@ -41,7 +41,8 @@ export default function Login() {
 
   useEffect(() => {
     let alive = true;
-    // listas asignadas a este equipo en el panel (entra solo si hay una)
+    // Cada vez que se abre la app: la línea del equipo se le pide al panel (nada guardado en el equipo).
+    // Con una sola línea entra sola después de comprobarla en el servidor IPTV.
     panelPlaylists(dev).then(async r => {
       if (!alive) return;
       tmdbPosters().then(p => alive && setPosters(p));
@@ -52,7 +53,11 @@ export default function Login() {
         if (ln) lines = [ln];
         else if (read('fake_unlocked') !== '1') setFake(lastFakeScreen());
       }
-      if (alive && lines.length) setAssigned(lines);
+      if (!alive) return;
+      setBusy('');
+      if (lines.length) setAssigned(lines);
+      if (lines.length === 1) enter(lines[0].user, lines[0].pass, [{ name: lines[0].name, base: lines[0].base }], true);
+      else if (!lines.length && r.error) setError(r.error);
     });
     return () => {
       alive = false;
@@ -66,14 +71,16 @@ export default function Login() {
       const ln = await panelCheckMac(dev);
       if (ln) {
         setFake(null);
-        enter(ln.user, ln.pass, [{ name: ln.name, base: ln.base }]);
+        enter(ln.user, ln.pass, [{ name: ln.name, base: ln.base }], true);
       } else if (!lastFakeScreen()) setFake(null);
     }, 30000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fake, dev]);
 
-  const enter = async (u: string, p: string, servers?: { name: string; base: string }[]) => {
+  // fromPanel: la línea ya está registrada para este equipo (no se vuelve a registrar: si el dueño la
+  // borró, el equipo no debe reaparecer solo)
+  const enter = async (u: string, p: string, servers?: { name: string; base: string }[], fromPanel = false) => {
     if (!u.trim() || !p.trim()) {
       setError('Escribe tu usuario y contraseña');
       return;
@@ -85,7 +92,7 @@ export default function Login() {
     setBusy('');
     if (r.session) {
       // registra el código del equipo en el panel (igual que Android y Roku)
-      if (hasMasterKey()) panelSubmit(dev, r.session.user, r.session.pass, r.session.base).catch(() => {});
+      if (hasMasterKey() && !fromPanel) panelSubmit(dev, r.session.user, r.session.pass, r.session.base).catch(() => {});
       setSession(r.session);
       nav.reset({ name: 'main' });
     } else {
@@ -115,7 +122,7 @@ export default function Login() {
 
   const enterAssigned = () => {
     const ln = assigned[0];
-    enter(ln.user, ln.pass, assigned.filter(a => a.user === ln.user).map(a => ({ name: a.name, base: a.base })));
+    enter(ln.user, ln.pass, assigned.filter(a => a.user === ln.user).map(a => ({ name: a.name, base: a.base })), true);
   };
 
   const canDemo = hasMasterKey() && features().demo;

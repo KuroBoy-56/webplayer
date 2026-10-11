@@ -29,7 +29,7 @@ export default function PinDialog({ visible, onClose, onOk }: { visible: boolean
           <TextInput
             style={s.input}
             value={pin}
-            onChangeText={t => setPin(t.replace(/[^0-9]/g, '').slice(0, 8))}
+            onChangeText={t => setPin(t.replace(/[^0-9]/g, '').slice(0, 4))}
             keyboardType="number-pad"
             secureTextEntry
             hasTVPreferredFocus

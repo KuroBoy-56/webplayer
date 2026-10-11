@@ -68,17 +68,15 @@ export function useAppState(): State {
 
 bindSession(() => state.session);
 
+// La sesión vive solo en memoria: el usuario y la contraseña nunca se guardan en el equipo. Cada vez
+// que se abre la app el inicio de sesión le pide la línea al panel y la comprueba en el servidor IPTV.
 export function restoreSession(): boolean {
-  const s = readJson<Session>('session');
-  if (s && s.base && s.user) {
-    state = { ...state, session: s };
-    return true;
-  }
+  remove('session'); // versiones anteriores la guardaban
+  remove('parental_pin'); // el PIN es el del panel
   return false;
 }
 
 export function setSession(s: Session) {
-  writeJson('session', s);
   forgetCloud();
   set({ session: s, progress: [], favorites: [] });
 }
@@ -251,9 +249,15 @@ export function deviceId(): string {
   return id;
 }
 
-// PIN de control parental: el elegido en el equipo o el del panel (0000 por defecto)
+// PIN de control parental (siempre activo): el del panel (check_mac / auth.php), 0000 de fábrica.
+// Se cambia en Cuenta y se guarda en el panel (set_pin).
 export function parentalPin(): string {
-  return read('parental_pin') || read(scoped('panel_pin')) || '0000';
+  const p = read(scoped('panel_pin'));
+  return /^\d{4}$/.test(p) ? p : '0000';
+}
+
+export function setPanelPin(pin: string) {
+  if (/^\d{4}$/.test(pin)) write(scoped('panel_pin'), pin);
 }
 
 // ---------- distribuidor (guardián) ----------

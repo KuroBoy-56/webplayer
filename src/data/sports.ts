@@ -61,7 +61,7 @@ function teamScore(chan: string, team: string, r: Rules): number {
   return best;
 }
 
-type Chan = { norm: string; isEvent: boolean; idx: number };
+type Chan = { norm: string; isEvent: boolean; idx: number; key: string[] };
 
 function findChannel(ev: any, chans: Chan[], r: Rules): number {
   const h = str(ev.h).trim();
@@ -104,11 +104,106 @@ export async function loadSports(): Promise<SportsData | null> {
   return { events: j.events, sports: j.sports && typeof j.sports === 'object' ? j.sports : {}, match: j.match };
 }
 
-// evento -> canal en vivo
-export function matchSports(data: SportsData): Record<string, Item> {
-  const out: Record<string, Item> = {};
+// ---------- canal que transmite ("ESPN 2" -> los canales ESPN 2 del cliente) ----------
+
+// lo que no distingue un canal de otro: calidad y país/región
+const NOISE = new Set(['hd', 'fhd', 'uhd', 'sd', '4k', '8k', 'hq', 'hevc', 'h264', 'h265', '1080', '1080p', '720', '720p', '50fps', '60fps', 'fps',
+  'backup', 'bk', 'alt', 'vip', 'op1', 'op2', 'tv', 'channel', 'canal',
+  'mx', 'mex', 'mexico', 'us', 'usa', 'eeuu', 'ar', 'arg', 'argentina', 'co', 'col', 'colombia', 'cl', 'chile', 'pe', 'peru', 'ec', 'ecuador',
+  've', 'venezuela', 'uy', 'uruguay', 'py', 'paraguay', 'bo', 'bolivia', 'cr', 'pa', 'panama', 'gt', 'hn', 'sv', 'ni', 'do', 'pr',
+  'latam', 'latin', 'latino', 'latina', 'lat', 'america', 'es', 'esp', 'spain', 'espana', 'uk', 'gb', 'int', 'intl', 'international',
+  'br', 'bra', 'brasil', 'brazil', 'pt', 'portugal', 'ca', 'can', 'canada', 'fr', 'france', 'it', 'italy', 'de', 'germany',
+  'nl', 'netherlands', 'au', 'australia', 'nz', 'zealand', 'new', 'ie', 'ireland']);
+
+// palabras que identifican el canal; un número va pegado a la palabra anterior ("espn 2" -> "espn2")
+export function channelKey(name: string): string[] {
+  const out: string[] = [];
+  for (const t of norm(name).split(' ')) {
+    if (!t || NOISE.has(t)) continue;
+    if (/^\d+$/.test(t) && out.length && !/^\d+$/.test(out[out.length - 1])) out[out.length - 1] += t;
+    else out.push(t);
+  }
+  return out;
+}
+
+type Index = { chans: Chan[]; words: Map<string, number[]>; keys: Map<string, number[]> };
+
+function addTo(m: Map<string, number[]>, k: string, i: number) {
+  const l = m.get(k);
+  if (!l) m.set(k, [i]);
+  else if (l[l.length - 1] !== i) l.push(i);
+}
+
+// índice de palabras de los canales: cada partido solo compara los canales que comparten alguna
+// palabra con sus equipos o sus canales de TV (no todos contra todos)
+function buildIndex(chans: Chan[]): Index {
+  const words = new Map<string, number[]>();
+  const keys = new Map<string, number[]>();
+  chans.forEach((c, i) => {
+    for (const w of c.norm.split(' ')) if (w.length >= 3) addTo(words, w, i);
+    for (const w of c.key) if (w.length >= 2 && !/^\d+$/.test(w)) addTo(words, w, i);
+    const compact = c.key.join('');
+    if (compact) addTo(keys, compact, i);
+  });
+  return { chans, words, keys };
+}
+
+// canales candidatos para un partido: los que tienen alguna palabra de sus equipos (o del evento)
+function teamCandidates(ev: any, ix: Index, r: Rules): Chan[] {
+  const want = new Set<string>();
+  const h = str(ev.h).trim();
+  const a = str(ev.a).trim();
+  for (const team of [h, a]) {
+    if (!team) continue;
+    const n = norm(team);
+    for (const nm of r.alias[n] ? [n, r.alias[n]] : [n]) {
+      const tk = tokens(nm, r);
+      if (tk.length) tk.forEach(t => want.add(t));
+      else nm.split(' ').filter(w => w.length >= 3).forEach(w => want.add(w));
+    }
+  }
+  if (!h && !a) tokens(str(ev.ev), r).forEach(t => want.add(t));
+  const pos = new Set<number>();
+  want.forEach(w => ix.words.get(w)?.forEach(i => pos.add(i)));
+  return [...pos].sort((x, y) => x - y).map(i => ix.chans[i]);
+}
+
+// el mejor canal del cliente para un canal que transmite: primero el que se llama igual (sin calidad
+// ni país), después el que contiene todas sus palabras. "ESPN 2" nunca da "ESPN" ni "ESPN 3".
+function findByChannel(tvName: string, ix: Index, items: any[]): number {
+  const q = channelKey(tvName);
+  const qs = q.join(' ');
+  const qc = q.join('');
+  if (!q.length || qc.length < 2) return -1;
+  const exact = ix.keys.get(qc);
+  const cand = exact || ix.words.get(q[0]) || [];
+  let best = -1;
+  let bestScore = -999999;
+  for (const ci of cand) {
+    const c = ix.chans[ci];
+    const k = c.key;
+    let score: number;
+    if (k.join(' ') === qs) score = 1000 - k.length;
+    else if (k.join('') === qc) score = 900 - k.length;
+    else if (q.every(t => k.includes(t))) score = 500 - 10 * (k.length - q.length);
+    else continue;
+    score -= str(items[c.idx].name).length / 1000;
+    if (best < 0 || score > bestScore) {
+      best = c.idx;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+export type SportMatch = { best: Item | null; teams: Item | null; tv: { n: string; c: string; ch: Item | null }[] };
+
+// evento -> canales: el primero de sus canales de TV que tiene el cliente, si no por equipos / nombre
+// del evento. folder = primera carpeta de eventos (cuando no hay canal exacto).
+export function matchSports(data: SportsData): { map: Record<string, SportMatch>; folder: Item | null } {
+  const map: Record<string, SportMatch> = {};
   const d = catalog.k.live;
-  if (!d) return out;
+  if (!d) return { map, folder: null };
   const r = rules(data.match);
   const eventCats = new Set(d.cats.filter(c => r.eventRe.test(fold(c.name))).map(c => c.id));
   const vis = new Set(catalog.visibleCats('live').map(c => c.id));
@@ -116,11 +211,25 @@ export function matchSports(data: SportsData): Record<string, Item> {
   d.index.forEach(i => {
     const it = d.items[i];
     const cid = str(it.category_id);
-    if (vis.has(cid)) chans.push({ norm: norm(str(it.name)), isEvent: eventCats.has(cid), idx: i });
+    if (vis.has(cid)) {
+      const n = norm(str(it.name));
+      chans.push({ norm: n, isEvent: eventCats.has(cid), idx: i, key: channelKey(str(it.name)) });
+    }
   });
+  const ix = buildIndex(chans);
   for (const ev of data.events) {
-    const best = findChannel(ev, chans, r);
-    if (best >= 0) out[str(ev.id)] = toItem('live', d.items[best]);
+    const tv: SportMatch['tv'] = [];
+    let best: Item | null = null;
+    for (const t of Array.isArray(ev.tv) ? ev.tv : []) {
+      const i = findByChannel(str(t.n), ix, d.items);
+      const ch = i >= 0 ? toItem('live', d.items[i]) : null;
+      tv.push({ n: str(t.n), c: str(t.c), ch });
+      if (!best && ch) best = ch;
+    }
+    const ti = findChannel(ev, teamCandidates(ev, ix, r), r);
+    const teams = ti >= 0 ? toItem('live', d.items[ti]) : null;
+    map[str(ev.id)] = { best: best || teams, teams, tv };
   }
-  return out;
+  const first = chans.find(c => c.isEvent);
+  return { map, folder: first ? toItem('live', d.items[first.idx]) : null };
 }

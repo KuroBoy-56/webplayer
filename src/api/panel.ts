@@ -148,7 +148,7 @@ export async function panelPlaylists(deviceId: string): Promise<{ lines: (Server
   if (!resp) return { lines: [], error: '' };
   const tmdb = str(resp.tmdbKey);
   if (tmdb && tmdb !== 'missing_tmdb_key') write(scoped('tmdb_key'), tmdb);
-  if (str(resp.parent_control)) write(scoped('panel_pin'), str(resp.parent_control));
+  if (/^\d{4}$/.test(str(resp.parent_control))) write(scoped('panel_pin'), str(resp.parent_control));
   const lines: (Server & { user: string; pass: string })[] = [];
   const seen = new Set<string>();
   for (const o of resp.urls || []) {
@@ -285,10 +285,31 @@ function parseFake(j: any): FakeScreen | null {
 // línea activada para este equipo en el panel
 export async function panelCheckMac(deviceId: string) {
   if (!hasMasterKey()) return null;
-  const j = loginReply(await panelLogin('check_mac', { mac_address: deviceId, enc: 1 }));
+  const r = await panelLogin('check_mac', { mac_address: deviceId, enc: 1 });
+  const j = loginReply(r);
+  // el panel contestó (aunque sea "no hay línea"): sirve para cerrar la sesión al volver a la app
+  lastCheckAnswered = r.code === 200 && !!j;
   fakeScreen = parseFake(j);
   if (!j || j.exists !== true) return null;
+  // PIN parental del panel: es el que usa la app
+  if (/^\d{4}$/.test(str(j.pin))) write(scoped('panel_pin'), str(j.pin));
   return lineFromUrl('Servidor', str(j.url), str(j.username), str(j.password));
+}
+
+let lastCheckAnswered = false;
+export function panelAnswered(): boolean {
+  return lastCheckAnswered;
+}
+
+// cambia el PIN parental en el panel (pide el actual); si el panel no lo acepta, no cambia
+export async function panelSetPin(deviceId: string, oldPin: string, pin: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await panelLogin('set_pin', { mac_address: deviceId, old_pin: oldPin, pin });
+  const j = loginReply(r);
+  if (r.ok && j && j.ok === true) {
+    write(scoped('panel_pin'), pin);
+    return { ok: true };
+  }
+  return { ok: false, error: panelError(r, 'El panel no guardó el PIN (' + r.code + ')') };
 }
 
 // registra el equipo (código MAC) con la cuenta en el panel

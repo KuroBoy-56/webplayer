@@ -16,7 +16,8 @@ import Login from './screens/Login';
 import Main from './screens/Main';
 import Player from './screens/Player';
 import { bindReportContext, installCrashReporter } from './api/report';
-import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, restoreSession, tenantCheckDue } from './state';
+import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, tenantCheckDue } from './state';
+import { panelAnswered, panelCheckMac } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
 installCrashReporter();
@@ -95,10 +96,21 @@ export default function App() {
   // al volver a la app: Continuar viendo y Mi lista otra vez desde el panel (pudo verse en otra app)
   useEffect(() => {
     let last = Date.now();
+    let lastPanel = Date.now();
     const sub = AppState.addEventListener('change', st => {
       if (st !== 'active' || !getState().session || Date.now() - last < 60000) return;
       last = Date.now();
       loadCloud();
+      // como mucho cada 15 min: si el dueño quitó la línea de este equipo, vuelve al inicio de sesión
+      if (Date.now() - lastPanel < 15 * 60000) return;
+      lastPanel = Date.now();
+      const ses = getState().session;
+      panelCheckMac(deviceId()).then(ln => {
+        if (!ln && panelAnswered() && getState().session === ses) {
+          logout();
+          setStack([{ name: 'login' }]);
+        }
+      });
     });
     return () => sub.remove();
   }, []);

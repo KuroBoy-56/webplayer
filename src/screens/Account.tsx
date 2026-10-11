@@ -1,6 +1,7 @@
 // Cuenta y ajustes.
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import ChangePinDialog from '../components/ChangePinDialog';
 import PinDialog from '../components/PinDialog';
 import { Button } from '../components/ui';
 import { catalog } from '../data/catalog';
@@ -42,6 +43,8 @@ export default function Account() {
   const st = useAppState();
   const [, force] = useState(0);
   const [pin, setPin] = useState(false);
+  const [changePin, setChangePin] = useState(false);
+  const [pinMsg, setPinMsg] = useState('');
   const [reg, setReg] = useState('');
   const s0 = st.session;
   const audio = pref('audio_lang', 'es');
@@ -85,6 +88,11 @@ export default function Account() {
           setPref('subs_lang', cycle(SUBS, subs));
           force(x => x + 1);
         }}
+      />
+      <Setting
+        label="PIN de control parental"
+        value={pinMsg || 'Activado · lo administra el panel (Cambiar)'}
+        onPress={() => setChangePin(true)}
       />
       <Setting
         label="Ocultar contenido para adultos"
@@ -134,6 +142,14 @@ export default function Account() {
         }}
       />
       <Text style={s.ver}>{brandName()} para Fire TV (Vega OS) · versión 1.0.0</Text>
+      <ChangePinDialog
+        visible={changePin}
+        onClose={() => setChangePin(false)}
+        onSaved={() => {
+          setChangePin(false);
+          setPinMsg('PIN guardado en el panel');
+        }}
+      />
       <PinDialog
         visible={pin}
         onClose={() => setPin(false)}
