@@ -1,23 +1,70 @@
 import SwiftUI
 
-/** Aviso del panel (bienvenida o vencimiento) con un solo botón. */
+/**
+ * Aviso del panel (bienvenida o vencimiento) con el mismo diseño que Android: franja de color arriba,
+ * logo, título, mensaje e imagen (solo si la trae) y un botón. La tarjeta mide lo que mide su contenido:
+ * un aviso de solo texto queda como una tarjeta horizontal baja, no como un cuadrado; si el texto es muy
+ * largo, se desplaza dentro de la tarjeta.
+ */
 struct PanelAlertView: View {
     let alert: Alerts.Alert
     let onClose: () -> Void
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.7).ignoresSafeArea()
-            VStack(spacing: 16) {
-                Text(alert.title).font(.system(size: 20, weight: .bold)).foregroundColor(alert.expiry ? Color(hex: 0xDC143C) : Color(hex: 0xFFD700)).multilineTextAlignment(.center)
-                if !alert.image.isEmpty { RemoteImage(url: alert.image, mode: .fit, maxPixel: 1200).frame(maxHeight: 220).clipShape(RoundedRectangle(cornerRadius: 8)) }
-                ScrollView { Text(alert.message).font(.system(size: 15)).foregroundColor(.white).multilineTextAlignment(.center).frame(maxWidth: .infinity) }.frame(maxHeight: 240)
-                AppButton(text: alert.button, action: onClose)
+        GeometryReader { g in
+            ZStack {
+                RadialGradient(colors: [Color(hex: 0x1A0003, alpha: 0.8), Color.black.opacity(0.95)], center: .center, startRadius: 0, endRadius: max(g.size.width, g.size.height))
+                    .ignoresSafeArea()
+                card(maxHeight: g.size.height - 40)
+                    .frame(maxWidth: min(480, g.size.width - 40))
             }
-            .padding(24).frame(maxWidth: 420)
-            .background(Color(hex: 0x1A1A1A)).clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.2)))
-            .padding(24)
+            .frame(width: g.size.width, height: g.size.height)
         }
+    }
+
+    private func card(maxHeight: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: alert.expiry ? [Theme.accent, Theme.accent] : [Theme.accent, Color(hex: 0xF5C518)], startPoint: .leading, endPoint: .trailing)
+                .frame(height: 4)
+            ViewThatFits(in: .vertical) {
+                content
+                ScrollView { content }
+            }
+            .frame(maxHeight: maxHeight - 4)
+        }
+        .background(LinearGradient(colors: [Color(hex: 0x1F1F1F), Color(hex: 0x121212)], startPoint: .top, endPoint: .bottom))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.13), lineWidth: 1))
+    }
+
+    private var content: some View {
+        VStack(spacing: 0) {
+            LogoHeader(height: 34)
+            Text(alert.title)
+                .font(.system(size: 22, weight: .black))
+                .foregroundColor(alert.expiry ? Theme.accent : .white)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 18)
+            if !alert.message.trimmed.isEmpty {
+                Text(alert.message)
+                    .font(.system(size: 16))
+                    .lineSpacing(4)
+                    .foregroundColor(Color(hex: 0xB3B3B3))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+            }
+            if !alert.image.isEmpty {
+                RemoteImage(url: alert.image, mode: .fit, maxPixel: 1400)
+                    .frame(maxWidth: .infinity, maxHeight: 260)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.top, 18)
+            }
+            AppButton(text: alert.button.uppercased(), action: onClose)
+                .padding(.top, 24)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
     }
 }

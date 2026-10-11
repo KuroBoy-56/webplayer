@@ -9,6 +9,8 @@ struct DetailView: View {
     let media: Item
     @State private var det: Details?
     @State private var tmdb: Tmdb.Details?
+    /** fotos del elenco buscadas en TMDB por nombre (respaldo para el elenco del servidor sin fotos) */
+    @State private var photos: [String: String] = [:]
     @State private var season = -1
 
     var body: some View {
@@ -22,7 +24,7 @@ struct DetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ZStack(alignment: .bottom) {
-                        RemoteImage(url: backdrop, maxPixel: 1280)
+                        RemoteImage(url: backdrop, maxPixel: 2560)
                             .frame(width: g.size.width, height: min(g.size.width / 1.6, 460)).clipped()
                         LinearGradient(colors: [Color.black.opacity(0.2), Theme.bg.opacity(0.6), Theme.bg], startPoint: .top, endPoint: .bottom).frame(height: 120)
                     }
@@ -97,6 +99,8 @@ struct DetailView: View {
             let d = media.kind == .series ? await Xtream.seriesDetails(s, media) : await Xtream.movieDetails(s, media)
             det = d
             tmdb = await Tmdb.details(type: media.kind == .series ? "tv" : "movie", title: media.name, year: media.year, tmdbId: d.tmdbId)
+            let missing = castPeople.filter { $0.2.isEmpty }.map { $0.0 }
+            if !missing.isEmpty { photos = await Tmdb.personPhotos(missing) }
         }
     }
 
@@ -105,11 +109,14 @@ struct DetailView: View {
         return ""
     }
 
+    /** elenco de TMDB (con fotos) o, si no hay, el que manda el servidor IPTV: (nombre, personaje, foto) */
+    private var castPeople: [(String, String, String)] {
+        if let c = tmdb?.cast, !c.isEmpty { return c.map { ($0.name, $0.character, $0.profile) } }
+        return (det?.cast ?? "").split(separator: ",").map { (String($0).trimmed, "", "") }.filter { !$0.0.isEmpty }
+    }
+
     @ViewBuilder private func castRow(_ pad: CGFloat) -> some View {
-        let people: [(String, String, String)] = {
-            if let c = tmdb?.cast, !c.isEmpty { return c.map { ($0.name, $0.character, $0.profile) } }
-            return (det?.cast ?? "").split(separator: ",").map { (String($0).trimmed, "", "") }.filter { !$0.0.isEmpty }
-        }()
+        let people: [(String, String, String)] = castPeople.map { ($0.0, $0.1, $0.2.isEmpty ? (photos[$0.0] ?? "") : $0.2) }
         if !people.isEmpty {
             Text("Elenco").font(.system(size: 18, weight: .bold)).foregroundColor(.white).padding(.horizontal, pad).padding(.top, 8)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -119,7 +126,7 @@ struct DetailView: View {
                             ZStack {
                                 Color(hex: 0x333333)
                                 if p.2.isEmpty { Text(String(p.0.prefix(1))).font(.system(size: 22, weight: .bold)).foregroundColor(.white) }
-                                else { RemoteImage(url: p.2, maxPixel: 200) }
+                                else { RemoteImage(url: p.2, maxPixel: 360) }
                             }.frame(width: 60, height: 60).clipShape(Circle())
                             Text(p.0).font(.system(size: 12)).foregroundColor(.white).lineLimit(2).multilineTextAlignment(.center)
                             if !p.1.isEmpty { Text(p.1).font(.system(size: 11)).foregroundColor(Theme.muted).lineLimit(1) }

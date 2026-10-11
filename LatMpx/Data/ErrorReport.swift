@@ -19,6 +19,8 @@ enum ErrorReport {
             let body = ErrorReport.base("crash", "\(e.name.rawValue): \(e.reason ?? "")", e.callStackSymbols.joined(separator: "\n"), "")
             try? Data(Json.string(body).utf8).write(to: ErrorReport.crashFile)
         }
+        prepareCrash()
+        for sig in fatalSignals { signal(sig, onFatalSignal) }
         #endif
         // el cierre de la vez anterior
         if let d = try? Data(contentsOf: crashFile), let o = Json.parse(d) as? JObj {
@@ -26,6 +28,49 @@ enum ErrorReport {
             Task.detached { await send(o) }
         }
     }
+
+    #if os(iOS)
+    /*
+     * Cierres por error de Swift o de memoria (no son excepciones): llegan como señal. Dentro del manejador
+     * de una señal no se puede armar JSON, así que el aviso de cada señal se prepara antes (al abrir la app
+     * y al entrar con una línea) y el manejador solo lo escribe en el archivo, que se manda al volver a abrir.
+     */
+    private static let fatalSignals: [Int32] = [SIGSEGV, SIGBUS, SIGILL, SIGTRAP, SIGABRT, SIGFPE]
+    private static let crashBodies: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?> = {
+        let p = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: 32)
+        p.initialize(repeating: nil, count: 32)
+        return p
+    }()
+    private static var crashPath: UnsafeMutablePointer<CChar>?
+    private static var crashReady = false
+
+    private static let onFatalSignal: @convention(c) (Int32) -> Void = { sig in
+        if ErrorReport.crashReady, sig >= 0, sig < 32, let path = ErrorReport.crashPath, let body = ErrorReport.crashBodies[Int(sig)] {
+            // O_EXCL: si ya se guardó una excepción (más detallada), no se pisa
+            let fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+            if fd >= 0 { _ = write(fd, body, strlen(body)); close(fd) }
+        }
+        signal(sig, SIG_DFL)
+        raise(sig)
+    }
+
+    /** vuelve a preparar los avisos de cierre (con la línea actual, sin contraseña) */
+    static func prepareCrash() {
+        let names: [Int32: String] = [SIGSEGV: "SIGSEGV (acceso a memoria inválido)", SIGBUS: "SIGBUS (error de bus)", SIGILL: "SIGILL (instrucción inválida)",
+                                      SIGTRAP: "SIGTRAP (error de Swift)", SIGABRT: "SIGABRT (la app se detuvo)", SIGFPE: "SIGFPE (error aritmético)"]
+        crashReady = false
+        if crashPath == nil { crashPath = strdup(crashFile.path) }
+        for sig in fatalSignals {
+            let body = base("crash", "Cierre inesperado: \(names[sig] ?? "señal \(sig)")", "La app se cerró por la señal \(sig).", "")
+            let old = crashBodies[Int(sig)]
+            crashBodies[Int(sig)] = strdup(Json.string(body))
+            free(old)
+        }
+        crashReady = true
+    }
+    #else
+    static func prepareCrash() {}
+    #endif
 
     /** kind: crash | error | playback | network | panel | warning */
     static func report(_ kind: String, _ message: String, detail: String = "", screen: String = "") {

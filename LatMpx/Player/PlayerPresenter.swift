@@ -58,6 +58,8 @@ enum PlayerPresenter {
     }
 
     private static func present(_ req: PlayRequest, _ state: AppState, _ tenant: Tenant) {
+        // otro video mientras hay uno en imagen en imagen: se cierra la ventanita
+        if PipManager.shared.active && !PipManager.shared.isRestoring { PipManager.shared.stop() }
         guard let top = topController() else { return }
         let view = PlayerScreen(request: req)
             .environmentObject(state)

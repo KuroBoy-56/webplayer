@@ -79,6 +79,7 @@ final class PlayerModel: ObservableObject {
     }
 
     private var stopped = false
+    private var startUsed = false
     private var loadSeq = 0
     /** la dirección actual ya pasó por "abriendo" (para notar cuando VLC se detiene sin imagen) */
     private var connecting = false
@@ -111,7 +112,11 @@ final class PlayerModel: ObservableObject {
         index = i
         urlIdx = 0
         resumeTo = 0
-        if kind != .live, let p = Cloud.shared.progress(q.key), p.position > 30_000, p.duration <= 0 || Double(p.position) < Double(p.duration) * 0.95 {
+        if kind != .live && i == request.index && request.startAt > 0 && !startUsed {
+            // de vuelta de imagen en imagen: donde iba
+            startUsed = true
+            resumeTo = request.startAt
+        } else if kind != .live, let p = Cloud.shared.progress(q.key), p.position > 30_000, p.duration <= 0 || Double(p.position) < Double(p.duration) * 0.95 {
             resumeTo = p.position
             toast = "Continuando desde \(fmtTime(p.position))"
         }
@@ -206,6 +211,23 @@ final class PlayerModel: ObservableObject {
         save(force: true, done: true)
         if kind == .series && hasNext { load(index + 1) } else { freshPlayer(); onFinish?() }
     }
+
+    /* ---------- imagen en imagen ---------- */
+    /** dirección y punto para pasar el video a AVPlayer; nil si el formato no lo permite (MKV, AVI, TS) */
+    func pipSource() -> (String, Int64)? {
+        guard urls.indices.contains(urlIdx) else { return nil }
+        let cur = urls[urlIdx]
+        if kind == .live {
+            // los canales también se sirven en HLS: AVPlayer no abre .ts
+            if let hls = urls.first(where: { $0.lowercased().hasSuffix(".m3u8") }) { return (hls, 0) }
+            return cur.lowercased().hasSuffix(".m3u8") ? (cur, 0) : nil
+        }
+        let ext = URL(string: cur)?.pathExtension.lowercased() ?? ""
+        return ["mp4", "m4v", "mov", "m3u8"].contains(ext) ? (cur, time) : nil
+    }
+
+    func pauseForPip() { if player.isPlaying { player.pause() } }
+    func resumeAfterPip() { if !player.isPlaying { player.play() } }
 
     func retry() { error = nil; urlIdx = 0; open(urls.first ?? "") }
 

@@ -50,6 +50,8 @@ struct LoginView: View {
             }
         }
         .background(Color.black.ignoresSafeArea())
+        // lo que el panel o el servidor IPTV respondieron mal al entrar (el panel no recibe la contraseña)
+        .onChange(of: err) { e in if let e = e, !e.trimmed.isEmpty { ErrorReport.report("panel", e, screen: "login") } }
         .task {
             guard !started else { return }
             started = true

@@ -51,6 +51,7 @@ struct RootView: View {
         }
         .onChange(of: phase) { p in if p == .active { resumed() } }
         .task(id: state.session) {
+            ErrorReport.prepareCrash()
             guard let s = state.session else { return }
             Task { await Cloud.shared.load() }
             Task { let a = await Alerts.forLaunch(s); await MainActor.run { alert = a } }
@@ -79,6 +80,7 @@ struct RootView: View {
     }
 
     private func clearAll() {
+        PipManager.shared.stop()
         Store.logout(); Alerts.reset(); alert = nil; Xtream.clearCache(); Cloud.shared.clear()
         Task { await PanelEpg.shared.clear() }
         state.reset(); state.session = nil

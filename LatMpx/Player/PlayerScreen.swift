@@ -81,6 +81,18 @@ struct PlayerScreen: View {
         if state.play?.id == m.request.id { state.play = nil }
     }
 
+    /** pasa el video a la ventanita del sistema y cierra este reproductor; si no se puede, sigue aquí */
+    private func startPip() {
+        guard let src = m.pipSource() else {
+            m.toast = "Este video no permite imagen en imagen"
+            return
+        }
+        m.pauseForPip()
+        PipManager.shared.start(url: src.0, at: src.1, request: m.request, index: m.index, state: state,
+                                onStarted: { close() },
+                                onFailed: { m.resumeAfterPip(); m.toast = "No se pudo abrir imagen en imagen" })
+    }
+
     private func autoHide() {
         hideTask?.cancel()
         hideTask = Task { @MainActor in
@@ -100,6 +112,10 @@ struct PlayerScreen: View {
                     Text(m.entry.title).font(.system(size: 17, weight: .semibold)).lineLimit(1)
                     Spacer()
                     if m.kind == .live { Button { channels = true } label: { Image(systemName: "list.bullet").font(.system(size: 20)) } }
+                    if PipManager.supported {
+                        Button { startPip() } label: { Image(systemName: "pip.enter").font(.system(size: 20)).frame(width: 40, height: 40) }
+                            .accessibilityIdentifier("player.pip").accessibilityLabel("Imagen en imagen")
+                    }
                     Button { m.readTracks(); tracks = true } label: { Image(systemName: "captions.bubble").font(.system(size: 20)) }
                     Button { m.fill.toggle(); m.applyFill(size); state.toast = nil } label: {
                         Image(systemName: m.fill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 20))

@@ -30,6 +30,8 @@ struct PlayRequest: Identifiable {
     var closeOnPortrait = false
     /** solo la prueba del simulador: direcciones fijas en lugar de las de la línea */
     var directUrls: [String] = []
+    /** seguir desde aquí (ms), por ejemplo al volver de imagen en imagen */
+    var startAt: Int64 = 0
 }
 
 final class AppState: ObservableObject {
@@ -164,5 +166,12 @@ final class AppState: ObservableObject {
             if session == s && !c.isEmpty { put(k, c, k == .movie ? movies : k == .series ? series : live) }
         }
         loading = false
+        // sin nada de un tipo: el servidor IPTV no respondió (o la línea no lo trae)
+        guard session == s else { return }
+        let empty = kinds.filter { (k: Kind) -> Bool in (k == .movie ? movies : k == .series ? series : live).isEmpty }
+        if !empty.isEmpty {
+            let names = empty.map { $0 == .movie ? "películas" : $0 == .series ? "series" : "canales" }.joined(separator: ", ")
+            ErrorReport.report("network", "No se pudo cargar: \(names)", detail: "servidor \(s.dnsName)", screen: "catalogo")
+        }
     }
 }

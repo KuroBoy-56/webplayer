@@ -3,17 +3,64 @@ import Foundation
 /** TMDB con la llave que configura el panel (nunca una llave escrita en la app). */
 enum Tmdb {
     private static var nowPlayingCache: [String]?
-    private static var keyBad = false
+    /** la llave que TMDB rechazó (401); si el panel manda otra, se vuelve a usar */
+    private static var badKey = ""
     private static let lock = NSLock()
     private static var detailCache: [String: Details] = [:]
+    private static var photoCache: [String: String] = [:]
+
+    /** imágenes en alta calidad: fotos del elenco a 632 px de alto y fondos en su tamaño original (Full HD / 4K) */
+    static let profileSize = "h632", backdropSize = "original", posterSize = "w780"
+
+    /** la llave llega del panel junto al token al entrar: si una pantalla la pide antes, se espera unos segundos */
+    private static func key() async -> String {
+        var k = Store.tmdbKey
+        var n = 0
+        while k.isEmpty && n < 16 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            k = Store.tmdbKey
+            n += 1
+        }
+        return k
+    }
 
     private static func get(_ path: String) async -> JObj? {
-        let k = Store.tmdbKey
-        if k.isEmpty || keyBad { return nil }
+        let k = await key()
+        if k.isEmpty || k == lock.locked({ badKey }) { return nil }
         let sep = path.contains("?") ? "&" : "?"
         let r = await Net.get("https://api.themoviedb.org/3/\(path)\(sep)api_key=\(urlEnc(k))", timeout: 15)
-        if r.code == 401 { keyBad = true; return nil }
+        if r.code == 401 { lock.locked { badKey = k }; return nil }
         return r.ok ? r.json() : nil
+    }
+
+    static func image(_ path: String, _ size: String) -> String { path.isEmpty ? "" : "https://image.tmdb.org/t/p/\(size)\(path)" }
+
+    /**
+     * Foto de una persona por su nombre (respaldo cuando el servidor IPTV manda el elenco sin fotos).
+     * Prefiere a quien actúa. "" = TMDB no la tiene o no respondió.
+     */
+    static func personPhoto(_ name: String) async -> String {
+        let q = name.trimmed
+        if q.count < 2 { return "" }
+        let ck = q.folded
+        if let c = lock.locked({ photoCache[ck] }) { return c }
+        guard let res = await get("search/person?language=es-MX&include_adult=false&query=\(urlEnc(q))") else { return "" }
+        let people = res.objs("results")
+        let pick = people.first { $0.s("known_for_department") == "Acting" && !$0.s("profile_path").isEmpty }
+            ?? people.first { !$0.s("profile_path").isEmpty }
+        let url = image(pick?.s("profile_path") ?? "", profileSize)
+        lock.locked { photoCache[ck] = url }
+        return url
+    }
+
+    /** fotos de varios nombres a la vez (hasta 15), nombre → dirección */
+    static func personPhotos(_ names: [String]) async -> [String: String] {
+        await withTaskGroup(of: (String, String).self) { g in
+            for n in names.prefix(15) { g.addTask { (n, await personPhoto(n)) } }
+            var out: [String: String] = [:]
+            for await (n, u) in g where !u.isEmpty { out[n] = u }
+            return out
+        }
     }
 
     static func nowPlaying() async -> [String] {
@@ -97,11 +144,11 @@ enum Tmdb {
         let credits = d.o("credits") ?? d.o("aggregate_credits")
         let cast = (credits?.objs("cast") ?? []).prefix(15).map { c -> CastMember in
             let pr = c.s("profile_path")
-            return CastMember(name: c.s("name"), character: c.s("character"), profile: pr.isEmpty ? "" : "https://image.tmdb.org/t/p/w185\(pr)", id: c.i("id"))
+            return CastMember(name: c.s("name"), character: c.s("character"), profile: image(pr, profileSize), id: c.i("id"))
         }
         let trailer = (d.o("videos")?.objs("results") ?? []).first { $0.s("site") == "YouTube" && $0.s("type") == "Trailer" }?.s("key") ?? ""
-        let out = Details(id: Int(id) ?? 0, poster: pp.isEmpty ? "" : "https://image.tmdb.org/t/p/w500\(pp)",
-                          backdrop: bp.isEmpty ? "" : "https://image.tmdb.org/t/p/w1280\(bp)", overview: d.s("overview"), cast: Array(cast), trailer: trailer)
+        let out = Details(id: Int(id) ?? 0, poster: image(pp, posterSize),
+                          backdrop: image(bp, backdropSize), overview: d.s("overview"), cast: Array(cast), trailer: trailer)
         lock.locked { detailCache[ck] = out }
         return out
     }

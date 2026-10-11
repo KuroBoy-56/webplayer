@@ -111,6 +111,25 @@ final class PlayerUITests: XCTestCase {
         shot("7-canal-cerrado")
     }
 
+    /** imagen en imagen: el video pasa a la ventanita del sistema y el reproductor de la app se cierra */
+    func testPictureInPicture() {
+        let app = launch(movie)
+        XCTAssertTrue(app.buttons["player.close"].waitForExistence(timeout: 30), "no se abrió el reproductor")
+        let toggle = app.buttons["player.toggle"]
+        XCTAssertTrue(wait(60) { controls(app); return value(toggle) == "playing" }, "el video no empezó a reproducirse")
+        controls(app)
+        guard app.buttons["player.pip"].exists else { XCTFail("no hay botón de imagen en imagen"); return }
+        app.buttons["player.pip"].tap()
+        let closed = wait(20) { !app.otherElements["player.screen"].exists }
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
+        shot("10-imagen-en-imagen")
+        XCTAssertTrue(closed, "el reproductor no pasó a imagen en imagen")
+        if let dir = ProcessInfo.processInfo.environment["SHOTS"], !dir.isEmpty {
+            let diag = (try? String(contentsOfFile: dir + "/diag-" + name.filter { $0.isLetter || $0.isNumber } + ".txt")) ?? ""
+            XCTAssertTrue(diag.contains("pip iniciado"), "la ventanita no arrancó: \(diag)")
+        }
+    }
+
     /** servidor que no contesta: la pantalla debe seguir respondiendo y dejar salir al instante */
     func testDeadServerStillLetsYouExit() {
         let app = launch(dead, live: true)

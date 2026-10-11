@@ -72,8 +72,11 @@ jobs:
             if lipo -info "$bin" | grep -q "Architectures in the fat file"; then lipo "$bin" -thin arm64 -output "$bin.thin" && mv "$bin.thin" "$bin"; fi
             codesign --force --sign - --timestamp=none "$f"
           done
+          # sello de integridad del código (LatMpx/App/Integrity.swift); antes de firmar para que quede sellado
+          python3 tools/seal.py write "$APP/LatMpx" "$APP/ic.bin"
           codesign --force --sign - --timestamp=none --generate-entitlement-der "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
+          python3 tools/seal.py check "$APP/LatMpx" "$APP/ic.bin"
           codesign -dv "$APP/Frameworks/MobileVLCKit.framework" 2>&1 | grep -E "Signature|Format"
           zip -qry LatMpx.ipa Payload
           ls -la LatMpx.ipa
