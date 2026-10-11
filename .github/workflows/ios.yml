@@ -30,7 +30,7 @@ jobs:
       # la llave maestra no va en el código: el secreto PANEL_MASTER_KEY se escribe solo durante la compilación
       - name: Configurar panel
         env:
-          PANEL_MASTER_KEY: ${{ secrets.PANEL_MASTER_KEY }}
+          PANEL_MASTER_KEY: ${{ secrets.PANEL_MASTER_KEY || secrets.PANEL_KEY }}
         run: |
           if [ -z "$PANEL_MASTER_KEY" ]; then echo "::warning::Falta el secreto PANEL_MASTER_KEY: la activación no funcionará"; fi
           sh tools/write-panel-key.sh
@@ -78,3 +78,50 @@ jobs:
           gh release delete ipa-latest --yes --cleanup-tag || true
           gh release create ipa-latest LatMpx.ipa --target "$GITHUB_SHA" --title "LatMpx iPhone / iPad (última versión)" \
             --notes "Compilado automáticamente desde la rama ios ($GITHUB_SHA). Sin firma: instálalo con Sideloadly o AltStore (ver README de la rama ios)." --prerelease
+
+  # prueba de humo: la app abre en el simulador de iPhone sin cerrarse (captura de pantalla como artefacto)
+  smoke:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"
+      - name: Generar proyecto
+        env:
+          PANEL_MASTER_KEY: ${{ secrets.PANEL_MASTER_KEY || secrets.PANEL_KEY }}
+        run: |
+          sh tools/write-panel-key.sh
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodegen generate
+          pod install --repo-update
+      - name: Compilar para el simulador
+        run: |
+          status=0
+          xcodebuild -workspace LatMpx.xcworkspace -scheme LatMpx -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build > sim.log 2>&1 || status=$?
+          grep -E "error:|BUILD (SUCCEEDED|FAILED)" sim.log | sort -u | head -80 || true
+          exit $status
+      - name: Abrir en el simulador
+        run: |
+          set -x
+          DEV=$(xcrun simctl list devices available | grep -E "iPhone 1[5-7]( Pro)? \(" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          test -n "$DEV"
+          xcrun simctl boot "$DEV" || true
+          xcrun simctl bootstatus "$DEV" -b
+          APP=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name '*.app' | head -1)
+          xcrun simctl install "$DEV" "$APP"
+          xcrun simctl launch "$DEV" com.latmpx.player
+          sleep 25
+          xcrun simctl io "$DEV" screenshot shot1.png
+          # sigue abierta (no se cerró al iniciar)
+          xcrun simctl spawn "$DEV" launchctl list | grep -i latmpx
+          sleep 20
+          xcrun simctl io "$DEV" screenshot shot2.png
+          xcrun simctl spawn "$DEV" log show --last 2m --predicate 'process == "LatMpx"' --style compact 2>/dev/null | grep -iE "fault|crash|error" | head -40 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-simulador
+          path: shot*.png
