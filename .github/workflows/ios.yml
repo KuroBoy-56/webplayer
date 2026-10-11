@@ -119,6 +119,21 @@ jobs:
           xcrun simctl spawn "$DEV" launchctl list | grep -i latmpx
           sleep 20
           xcrun simctl io "$DEV" screenshot shot2.png
+          # inicio de sesión (como si se hubiera elegido Omitir en el distribuidor)
+          xcrun simctl terminate "$DEV" com.latmpx.player || true
+          xcrun simctl launch "$DEV" com.latmpx.player -dist_choice skip
+          sleep 30
+          xcrun simctl io "$DEV" screenshot shot3.png
+          # iPad
+          PAD=$(xcrun simctl list devices available | grep -E "iPad Pro|iPad Air" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          if [ -n "$PAD" ]; then
+            xcrun simctl boot "$PAD" || true
+            xcrun simctl bootstatus "$PAD" -b
+            xcrun simctl install "$PAD" "$APP"
+            xcrun simctl launch "$PAD" com.latmpx.player -dist_choice skip
+            sleep 30
+            xcrun simctl io "$PAD" screenshot shot4.png
+          fi
           xcrun simctl spawn "$DEV" log show --last 2m --predicate 'process == "LatMpx"' --style compact 2>/dev/null | grep -iE "fault|crash|error" | head -40 || true
       - uses: actions/upload-artifact@v4
         if: always()
