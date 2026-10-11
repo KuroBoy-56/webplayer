@@ -25,6 +25,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -41,6 +43,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
@@ -88,6 +93,9 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
     var dnsIdx by remember { mutableIntStateOf(0) }
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
+    // ojito: ver la contraseña en texto o volver a ocultarla
+    var showPass by remember { mutableStateOf(false) }
+    val eyeFocus = remember { FocusRequester() }
     var demoUsed by remember { mutableStateOf(Store.demoUsed) }
     val firstFocus = remember { FocusRequester() }
     var posters by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -191,9 +199,25 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                         )
                         OutlinedTextField(
                             value = pass, onValueChange = { pass = it }, label = { Text("Contraseña") }, singleLine = true, colors = fieldColors,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (showPass) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                androidx.compose.material3.IconButton(onClick = { showPass = !showPass }, modifier = Modifier.focusRequester(eyeFocus)) {
+                                    androidx.compose.material3.Icon(
+                                        if (showPass) androidx.compose.material.icons.Icons.Filled.VisibilityOff else androidx.compose.material.icons.Icons.Filled.Visibility,
+                                        if (showPass) "Ocultar contraseña" else "Ver contraseña", tint = Color.White,
+                                    )
+                                }
+                            },
                             keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)),
-                            keyboardActions = KeyboardActions(onDone = { }), modifier = Modifier.fillMaxWidth().then(Modifier.tvTextInput()),
+                            keyboardActions = KeyboardActions(onDone = { }),
+                            modifier = Modifier.fillMaxWidth()
+                                // TV: derecha desde la contraseña va al ojito (el campo se queda con las flechas)
+                                .then(if (tv) Modifier.onPreviewKeyEvent { e ->
+                                    if (e.key == androidx.compose.ui.input.key.Key.DirectionRight && e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                        runCatching { eyeFocus.requestFocus() }; true
+                                    } else false
+                                } else Modifier)
+                                .then(Modifier.tvTextInput()),
                         )
                         
                         Column(Modifier.fillMaxWidth().background(Color(0x33FFFFFF), RoundedCornerShape(4.dp)).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {

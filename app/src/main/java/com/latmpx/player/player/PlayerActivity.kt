@@ -88,6 +88,8 @@ class PlayerActivity : ComponentActivity() {
     private var retries = 0
     private var lastRetryAt = 0L
     private var userPickedTracks = false
+    /** última tecla del control (que no sea Atrás): para saber si el usuario está usando los controles */
+    private var lastUserKey = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -165,7 +167,10 @@ class PlayerActivity : ComponentActivity() {
                 when {
                     ui2.panel != null -> { ui2.panel = null; ui2.poke() }
                     ui2.locked -> { ui2.poke() }
-                    tv && ui2.visible -> ui2.visible = false
+                    // TV: el primer Atrás solo oculta los controles si el video se está viendo y el usuario los
+                    // estaba usando. Con el canal cargando, reconectando o con error, sale directo: antes los
+                    // controles volvían a aparecer con cada reintento y Atrás nunca salía del canal (deportes).
+                    tv && ui2.visible && player.isPlaying && System.currentTimeMillis() - lastUserKey < 8_000 -> ui2.visible = false
                     else -> finish()
                 }
             }
@@ -367,6 +372,7 @@ class PlayerActivity : ComponentActivity() {
             .setPositiveButton("Reintentar") { _, _ -> retries = 0; player.prepare(); player.play() }
             .setNeutralButton("Abrir en VLC") { _, _ -> openVlc(player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty(), q.title) }
             .setNegativeButton("Cerrar") { _, _ -> finish() }
+            .setOnCancelListener { finish() } // Atrás sobre el aviso sale del reproductor
             .show()
     }
 
@@ -420,6 +426,7 @@ class PlayerActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (!::ui2.isInitialized) return super.dispatchKeyEvent(event)
         val k = event.keyCode
+        if (event.action == KeyEvent.ACTION_DOWN && k != KeyEvent.KEYCODE_BACK) lastUserKey = System.currentTimeMillis()
         if (event.action == KeyEvent.ACTION_DOWN) {
             // teclas multimedia del control: siempre
             when (k) {
