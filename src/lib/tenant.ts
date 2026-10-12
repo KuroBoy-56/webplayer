@@ -175,7 +175,7 @@ export function chooseSkip(): void {
 // borra el número, la marca y lo guardado para ese distribuidor (sesión aparte: logout())
 export function clearTenant(): void {
   const code = tenantCode();
-  if (code) for (const k of ['cloud_token2', 'servers', 'tmdb_key', 'panel_pin']) remove(k + '@' + code);
+  if (code) for (const k of ['cloud_token2', 'cloud_token2_scope', 'servers', 'tmdb_key', 'panel_pin']) remove(k + '@' + code);
   remove('dist_choice');
   remove('dist_code');
   remove('dist_brand');

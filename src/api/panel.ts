@@ -179,13 +179,17 @@ export function onPanelDemo(fn: () => void): void {
 
 // el token es de cada distribuidor (con Omitir, la clave de siempre)
 export async function cloudToken(forceNew = false): Promise<string> {
+  const s = sessionRef();
+  if (!s) return '';
   const key = scoped('cloud_token2');
+  // el token es de esta cuenta (usuario@servidor); si entra otra, no se reutiliza y se pide uno nuevo
+  const scopeKey = scoped('cloud_token2_scope');
+  const scope = s.user + '@' + s.base;
+  if (read(scopeKey) !== scope) { remove(key); write(scopeKey, scope); }
   if (!forceNew) {
     const t = read(key);
     if (t) return t;
   }
-  const s = sessionRef();
-  if (!s) return '';
   const r = await panel('progress.php', 'POST', JSON.stringify({ action: 'auth', user: s.user, pass: s.pass, dns: s.base, ...tenantFields(), platform: APP_ID, device: read('device_id') }), 'application/json');
   tenantProblem(r);
   const j = json(r);
@@ -232,6 +236,7 @@ export async function cloud(file: string, method: 'GET' | 'POST', payload: Recor
 
 export function forgetCloud(): void {
   remove(scoped('cloud_token2'));
+  remove(scoped('cloud_token2_scope'));
 }
 
 // ---------- login.php (con la llave maestra) ----------
