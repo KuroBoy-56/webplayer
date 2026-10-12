@@ -4,6 +4,10 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Sin demo automática (12 de octubre)
+- La web player **no tiene demo automática**: no hay botón ni se pide una demo al panel. El panel tampoco la ofrece a la web (`tenant_config` responde `features.demo: false` para `app: web` y `auto_demo` con `platform: web` se rechaza). Una línea DEMO creada en el panel o en una app sigue entrando con su usuario y contraseña, en modo DEMO (ver abajo).
+- Archivos: `includes/tenant.php` (ya no lee `features.demo`).
+
 ## Modo DEMO (12 de octubre)
 - **Cómo se sabe.** El panel marca las líneas DEMO con `"demo": true` en la respuesta de `api/progress.php` (acción `auth`, que la web pide al iniciar sesión, y también en `GET ?v=2`). La web lo guarda en la sesión del servidor (`is_demo`); un inicio de sesión normal lo quita. No se guardan credenciales en ningún sitio nuevo. Con un panel anterior (sin el campo) todo sigue como antes.
 - **Sin usuario ni contraseña a la vista.** Con una DEMO el menú de la cuenta dice **Cuenta DEMO** (avatar "D"), **Mi cuenta** muestra *Usuario: DEMO* con la etiqueta **Cuenta DEMO**, el aviso del panel (Alertas) cambia el usuario/contraseña por "DEMO" y el diagnóstico los oculta. Tampoco hay **Descargar contenido** ni **Abrir en VLC** / lista `.m3u` (`playlist.php` responde "No disponible en la DEMO"), porque esos enlaces llevan el usuario y la contraseña. El login no cambia.

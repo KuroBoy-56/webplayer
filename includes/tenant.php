@@ -186,7 +186,6 @@ function wp_tenant_normalize(array $j)
         'expires_date' => is_string($t['expires_date'] ?? null) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $t['expires_date']) ? $t['expires_date'] : null,
         'rev' => (int)($t['rev'] ?? 0),
         'features' => [
-            'demo' => !array_key_exists('demo', $f) || !empty($f['demo']),
             'alerts' => !array_key_exists('alerts', $f) || !empty($f['alerts']),
             'sports' => !array_key_exists('sports', $f) || !empty($f['sports']),
         ],
@@ -287,7 +286,7 @@ function wp_tenant_cfg()
     return $st['state'] === 'ok' ? $st['cfg'] : null;
 }
 
-/** Funciones habilitadas (demo, alerts, sports). Con Omitir: todo como hoy. */
+/** Funciones habilitadas (alerts, sports). Con Omitir: todo como hoy. La web player no tiene demo automática. */
 function wp_tenant_feature($name)
 {
     $cfg = wp_tenant_cfg();
