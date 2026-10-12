@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Conversión que no se queda "Convirtiendo" para siempre (12 de octubre)
+- **Antes:** si la conversión con ffmpeg ya había entregado algo de video y después el servidor IPTV o el hosting se trababa, el `<video>` no emitía ni `error` ni `ended`: el aviso "Convirtiendo" se quedaba infinito y nunca entregaba el video con los audios seleccionables. El único rescate solo actuaba cuando no cargaban ni los primeros datos.
+- **Ahora:** un vigilante (`tcWatch`) revisa cada 5 s que la conversión siga avanzando (el tiempo o lo que se va almacenando). Si ya arrancó y deja de avanzar 25 s, la da por colgada y la rescata de forma acotada: reintenta desde el mismo punto (hasta 3 veces), luego el modo seguro (480p) y, si aún así no, pasa al video http directo / VLC o al aviso de error. Nunca gira sin fin. Una conversión lenta pero que sigue entregando no se corta. Elegir otro idioma pasa por el mismo vigilante.
+- Archivos: `assets/nf/player.js` (`tcWatch`, `recoverTc`).
+
 ## Sin demo automática (12 de octubre)
 - La web player **no tiene demo automática**: no hay botón ni se pide una demo al panel. El panel tampoco la ofrece a la web (`tenant_config` responde `features.demo: false` para `app: web` y `auto_demo` con `platform: web` se rechaza). Una línea DEMO creada en el panel o en una app sigue entrando con su usuario y contraseña, en modo DEMO (ver abajo).
 - Archivos: `includes/tenant.php` (ya no lee `features.demo`).

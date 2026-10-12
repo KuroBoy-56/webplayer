@@ -243,6 +243,7 @@
             if (self.mp4) { if (self.ok) self.lastTime = self.T(); self.fail('mp4 media ' + (v.error ? v.error.code : '')); return; }
             if (self.hls || self.ts || !v.getAttribute('src')) return;
             if (self.tc) {
+                if (self._tcRecovering) return; // el vigilante ya está rescatando esta conversión
                 // la conversión se cortó a mitad de la película (límite del hosting o del servidor IPTV): se retoma donde iba
                 if (self.tc.played && (self.tc.retries || 0) < 6) { self.tc.retries = (self.tc.retries || 0) + 1; var r = self.tc.retries; self.startTc(self.T(), self.tc.a, self.tc.vt); self.tc.retries = r; return; }
                 // el navegador no pudo con el video copiado (HEVC/10 bits en equipos sin soporte): se intenta convertir también el video
@@ -428,6 +429,7 @@
         if (this.ts) { try { this.ts.pause(); this.ts.unload(); this.ts.detachMediaElement(); this.ts.destroy(); } catch (e) {} this.ts = null; }
         if (this.mp4) { try { this.mp4.destroy(); } catch (e) {} this.mp4 = null; }
         clearTimeout(this.loadTimer);
+        clearTimeout(this._tcW);
         this.v.removeAttribute('src');
         try { this.v.load(); } catch (e) {}
     };
@@ -1210,6 +1212,67 @@
             v.addEventListener('loadeddata', askKf);
         }
         this.loadTimer = setTimeout(function () { if (v.readyState < 2 && self.tc) { if (self.tc.vt !== 2 && !self._safeTried) { self._safeTried = true; self.toastMsg('Probando un modo de reproducción más compatible…'); self.startTc(self.T(), self.tc.a, 2); return; } self.tc = null; self.o.media = null; self.toastMsg('La conversión tardó demasiado'); self.idx--; self.next(); } }, 45000);
+        this.tcWatch();
+    };
+
+    /* Vigilante de la conversión: si una conversión que ya arrancó deja de avanzar (ni el tiempo ni lo
+       almacenado crecen) la da por colgada y la rescata, en vez de quedarse "Convirtiendo" para siempre.
+       Antes solo había un rescate cuando no cargaban ni los primeros datos (readyState < 2); si el servidor
+       IPTV o el hosting se trababa a mitad, el <video> no emitía ni "error" ni "ended" y el aviso se quedaba
+       infinito. Una conversión lenta pero que sigue entregando (lo almacenado crece) NO se corta. */
+    NFPlayer.prototype.tcWatch = function () {
+        var self = this, v = this.v;
+        clearTimeout(this._tcW);
+        var bufEnd = function () { try { return v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0; } catch (e) { return 0; } };
+        this._tcMark = { t: v.currentTime || 0, b: bufEnd(), at: Date.now() };
+        this._tcSeen = false; // el arranque lento inicial lo cubre loadTimer; el vigilante actúa tras el 1er avance
+        var STALL = 25000; // sin avanzar nada este tiempo (ya habiendo arrancado) => colgada
+        var tick = function () {
+            if (self.dead || !self.tc) return;
+            var m = self._tcMark, now = Date.now(), cur = v.currentTime || 0, b = bufEnd();
+            // en pausa no cuenta (el usuario la detuvo); si avanzó el tiempo o lo almacenado, se reinicia el reloj
+            if (v.paused || cur > m.t + 0.25 || b > m.b + 0.25) {
+                if (cur > 0.25 || b > 0.25) self._tcSeen = true;
+                self._tcMark = { t: cur, b: b, at: now };
+                self._tcW = setTimeout(tick, 5000);
+                return;
+            }
+            if (!self._tcSeen || now - m.at < STALL) { self._tcW = setTimeout(tick, 5000); return; }
+            // colgada tras haber arrancado: se rescata de forma acotada y luego se pasa a otro modo (nunca gira sin fin)
+            self.recoverTc('colgada');
+        };
+        this._tcW = setTimeout(tick, 5000);
+    };
+
+    /* Rescate de una conversión colgada o cortada, con un tope de intentos. Lo usan el vigilante y el
+       manejador de "error". Reintenta desde el punto actual; luego el modo seguro; luego cambia de modo. */
+    NFPlayer.prototype.recoverTc = function (why) {
+        var self = this, tc = this.tc;
+        if (!tc || this._tcRecovering) return;
+        // la guarda sigue activa un momento tras cambiar el src (el <video> dispara "error" en diferido
+        // al soltar la conversión vieja; así no se lanzan dos rescates a la vez)
+        this._tcRecovering = true;
+        clearTimeout(this._tcW);
+        clearTimeout(this.loadTimer);
+        setTimeout(function () { self._tcRecovering = false; }, 2000);
+        this.log('conversión ' + why + ': rescate ' + ((tc.retries || 0) + 1));
+        if ((tc.retries || 0) < 3) {
+            var r = (tc.retries || 0) + 1;
+            this.toastMsg('Reanudando la conversión…');
+            this.startTc(this.T(), tc.a, tc.vt);
+            if (this.tc) this.tc.retries = r;
+            return;
+        }
+        if (tc.vt !== 2 && !this._safeTried) {
+            this._safeTried = true;
+            this.toastMsg('Probando un modo de reproducción más compatible…');
+            this.startTc(this.T(), tc.a, 2);
+            return;
+        }
+        // no se pudo convertir: se pasa a otra fuente (http directo / VLC) o al aviso de error
+        this.tc = null; this.o.media = null;
+        this.toastMsg('No se pudo convertir este contenido');
+        this.idx--; this.next();
     };
 
     /* detecta video sin sonido (códec de audio no compatible) */
