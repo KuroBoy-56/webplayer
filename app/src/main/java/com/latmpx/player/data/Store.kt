@@ -2,6 +2,8 @@ package com.latmpx.player.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import com.latmpx.player.Device
 import org.json.JSONObject
 import java.security.SecureRandom
@@ -12,8 +14,10 @@ import java.security.SecureRandom
  */
 object Store {
     private lateinit var p: SharedPreferences
+    private lateinit var appCtx: Context
 
     fun init(ctx: Context) {
+        appCtx = ctx.applicationContext
         p = ctx.getSharedPreferences("latmpx", Context.MODE_PRIVATE)
         p.edit().remove("session").remove("parental_pin").apply() // usuario/contraseña y PIN local de versiones anteriores
         SecureDns.select(dns)
@@ -99,6 +103,27 @@ object Store {
 
     fun session(): Session? = mem
 
+    /**
+     * Línea DEMO (botón Autodemo o el panel dice "demo"): la app muestra "DEMO" en lugar del usuario y
+     * nunca la contraseña, y no guarda "Continuar viendo" ni "Mi lista". Solo en memoria: cada inicio
+     * de sesión normal lo apaga.
+     */
+    var demo by androidx.compose.runtime.mutableStateOf(false)
+
+    /** texto a mostrar en lugar del usuario de la línea */
+    fun shownUser(s: Session?): String = if (demo) "DEMO" else s?.user.orEmpty()
+
+    /** demo: avisa que no está disponible y devuelve true (quien llama no sigue) */
+    fun blockedForDemo(): Boolean {
+        if (!demo) return false
+        runCatching {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                android.widget.Toast.makeText(appCtx, "No disponible en la DEMO", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+        return true
+    }
+
     /** el panel respondió que la demo ya se usó en este equipo: el botón queda desactivado */
     var demoUsed: Boolean
         get() = p.getBoolean(tenantKey("demo_used"), false)
@@ -111,6 +136,7 @@ object Store {
 
     fun logout() {
         mem = null
+        demo = false
         p.edit().remove("session").remove(tenantKey("cloud_token2")).apply()
     }
 

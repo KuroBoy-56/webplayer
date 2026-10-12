@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.latmpx.player.data.Store
 import com.latmpx.player.data.Item
 import com.latmpx.player.data.Kind
 import com.latmpx.player.data.Platforms
@@ -115,7 +116,7 @@ fun HomeScreen(state: AppState) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Perfil", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(state.session?.user ?: "", color = Color.White, fontSize = 16.sp)
+                        Text(Store.shownUser(state.session), color = Color.White, fontSize = 16.sp)
                         Text(state.session?.dnsName ?: "", color = NfGray2, fontSize = 13.sp)
                     }
                     Divider(color = Color(0x33FFFFFF))
@@ -160,7 +161,7 @@ fun HomeScreen(state: AppState) {
             } else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 112.dp)
         }
         item {
-            ShelfRow("Continuar viendo para ${state.session?.user.orEmpty()}", cont, pad) { _, p ->
+            ShelfRow("Continuar viendo para ${Store.shownUser(state.session)}", cont, pad) { _, p ->
                 val it = state.itemFromProgress(p) ?: return@ShelfRow
                 ContinueCard(state, it.copy(poster = p.poster.ifEmpty { it.poster }), p, pw)
             }
@@ -203,7 +204,7 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
     Column(Modifier.fillMaxWidth().background(bg).background(Brush.verticalGradient(listOf(Color(0xB3000000), Color.Transparent)))) {
         Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (current == null) {
-                Text("Para " + (state.session?.user ?: ""), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text("Para " + Store.shownUser(state.session), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             } else {
                 LogoHeader(height = 28.dp)
                 Spacer(Modifier.weight(1f))
@@ -211,7 +212,7 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
             Icon(Icons.Filled.Search, "Buscar", tint = Color.White, modifier = Modifier.size(26.dp).clickable { state.tab = Tab.SEARCH })
             Spacer(Modifier.width(18.dp))
             Box(Modifier.size(30.dp).clip(RoundedCornerShape(5.dp)).background(Brush.linearGradient(listOf(NfRed, if (com.latmpx.player.data.Tenant.brand?.colors == null) Color(0xFF8E0B12) else androidx.compose.ui.graphics.lerp(NfRed, Color.Black, 0.4f)))).clickable { onProfile() }, contentAlignment = Alignment.Center) {
-                Text(state.session?.user?.take(1)?.uppercase() ?: "U", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(Store.shownUser(state.session).take(1).uppercase().ifEmpty { "U" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
         }
         Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

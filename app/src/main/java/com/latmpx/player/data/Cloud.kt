@@ -45,6 +45,7 @@ object Cloud {
         val j = r.json()
         Tenant.onPanelError(j)
         rememberTmdbKey(j)
+        rememberDemo(j)
         val t = j?.s("token").orEmpty()
         if (t.isEmpty()) return null
         Store.cloudToken = t
@@ -66,7 +67,13 @@ object Cloud {
         if (r.code == 403 || r.code == 404) Tenant.onPanelError(j)
         j?.s("token")?.takeIf { it.isNotEmpty() }?.let { Store.cloudToken = it }
         rememberTmdbKey(j)
+        rememberDemo(j)
         return r
+    }
+
+    /** el panel dice "demo": true (línea demo): sin progreso ni Mi lista y "DEMO" en lugar del usuario */
+    private fun rememberDemo(j: JSONObject?) {
+        if (j?.optBoolean("demo", false) == true && !Store.demo) io.launch(Dispatchers.Main) { Store.demo = true; rev++ }
     }
 
     /** llave TMDB del panel (settings.tmdb_key) que el panel envía junto al token: la usan las carátulas */
@@ -78,8 +85,11 @@ object Cloud {
     /* ---------- carga ---------- */
 
     suspend fun load() {
+        // demo: no hay "Continuar viendo" ni "Mi lista"
+        if (Store.demo) { withContext(Dispatchers.Main) { synchronized(lock) { progress.clear(); favs.clear() }; rev++ }; return }
         val r = call { t -> Net.get(api() + "?v=2&token=" + enc(t)) } ?: return
         val j = r.json() ?: return
+        if (j.optBoolean("demo", false)) { withContext(Dispatchers.Main) { Store.demo = true; synchronized(lock) { progress.clear(); favs.clear() }; rev++ }; return }
         val pm = LinkedHashMap<String, Progress>()
         j.optJSONObject("progress")?.let { po ->
             po.keys().forEach { title -> po.optJSONObject(title)?.let { o -> parseProgress(title, o)?.let { pm[title] = it } } }
@@ -147,6 +157,7 @@ object Cloud {
      * (pausa, salida del reproductor). Al 95 % se borra, igual que la web.
      */
     fun saveProgress(p: Progress, force: Boolean = false) {
+        if (Store.demo) return // la demo no guarda progreso
         val parts = p.key.split(":")
         val isSeries = parts[0] == "series"
         val done = p.duration > 0 && p.position >= p.duration * 0.95
@@ -184,6 +195,7 @@ object Cloud {
     private fun deleteRemote(title: String) = post(JSONObject().put("action", "delete").put("title", title))
 
     private fun post(body: JSONObject) {
+        if (Store.demo) return // la demo no escribe nada en el panel
         io.launch { call { t -> Net.postJson(api(), JSONObject(body.toString()).put("token", t)) } }
     }
 
@@ -197,6 +209,7 @@ object Cloud {
 
     /** Agrega o quita; devuelve true si quedó en favoritos. */
     fun toggleFav(item: Item): Boolean {
+        if (Store.blockedForDemo()) return false // la demo no guarda Mi lista
         val on = synchronized(lock) {
             if (favs.containsKey(item.key)) {
                 favs.remove(item.key)
