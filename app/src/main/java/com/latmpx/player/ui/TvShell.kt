@@ -195,7 +195,7 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
                     .then(if (f || state.tab == Tab.ACCOUNT) Modifier.border(2.dp, Color.White, RoundedCornerShape(6.dp)) else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(state.session?.user?.take(1)?.uppercase() ?: "U", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text(com.latmpx.player.data.Store.shownUser(state.session).take(1).uppercase().ifEmpty { "U" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
             }
         }
     }
