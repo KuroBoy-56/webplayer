@@ -81,22 +81,6 @@ struct PlayerScreen: View {
         if state.play?.id == m.request.id { state.play = nil }
     }
 
-    /**
-     * Pasa el video al reproductor de iOS (con imagen en imagen, AirPlay y sus controles) en el mismo punto.
-     * Este reproductor se cierra antes; si el de iOS no puede, la app vuelve aquí sola.
-     */
-    private func startPip() {
-        guard let src = m.pipSource() else {
-            m.toast = "Este video no se puede abrir en el reproductor de iOS (MKV, AVI o TS)"
-            return
-        }
-        let req = m.request, idx = m.index, st = state
-        m.stop()
-        PlayerPresenter.handOff(st) {
-            NativePlayer.shared.open(url: src.0, at: src.1, request: req, index: idx, state: st)
-        }
-    }
-
     private func autoHide() {
         hideTask?.cancel()
         hideTask = Task { @MainActor in
@@ -116,8 +100,6 @@ struct PlayerScreen: View {
                     Text(m.entry.title).font(.system(size: 17, weight: .semibold)).lineLimit(1)
                     Spacer()
                     if m.kind == .live { Button { channels = true } label: { Image(systemName: "list.bullet").font(.system(size: 20)) } }
-                    Button { startPip() } label: { Image(systemName: "pip.enter").font(.system(size: 20)).frame(width: 40, height: 40) }
-                        .accessibilityIdentifier("player.pip").accessibilityLabel("Reproductor de iOS e imagen en imagen")
                     Button { m.readTracks(); tracks = true } label: { Image(systemName: "captions.bubble").font(.system(size: 20)) }
                     Button { m.fill.toggle(); m.applyFill(size); state.toast = nil } label: {
                         Image(systemName: m.fill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 20))

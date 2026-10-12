@@ -111,24 +111,6 @@ final class PlayerUITests: XCTestCase {
         shot("7-canal-cerrado")
     }
 
-    /** botón "Reproductor de iOS": el video pasa al reproductor de Apple (con imagen en imagen) y sigue reproduciéndose */
-    func testNativePlayer() {
-        let app = launch(movie)
-        XCTAssertTrue(app.buttons["player.close"].waitForExistence(timeout: 30), "no se abrió el reproductor")
-        let toggle = app.buttons["player.toggle"]
-        XCTAssertTrue(wait(60) { controls(app); return value(toggle) == "playing" }, "el video no empezó a reproducirse")
-        controls(app)
-        guard app.buttons["player.pip"].exists else { XCTFail("no hay botón del reproductor de iOS"); return }
-        app.buttons["player.pip"].tap()
-        let diagPath = (ProcessInfo.processInfo.environment["SHOTS"] ?? "") + "/diag-" + name.filter { $0.isLetter || $0.isNumber } + ".txt"
-        func diag() -> String { (try? String(contentsOfFile: diagPath)) ?? "" }
-        XCTAssertTrue(wait(10) { !app.otherElements["player.screen"].exists }, "el reproductor de la app no se cerró")
-        let playing = wait(40) { diag().contains("nativo: reproduciendo") || diag().contains("nativo: falló") }
-        RunLoop.current.run(until: Date().addingTimeInterval(3))
-        shot("10-reproductor-ios")
-        XCTAssertTrue(playing && diag().contains("nativo: reproduciendo"), "el reproductor de iOS no reprodujo: \(diag())")
-    }
-
     /** servidor que no contesta: la pantalla debe seguir respondiendo y dejar salir al instante */
     func testDeadServerStillLetsYouExit() {
         let app = launch(dead, live: true)
