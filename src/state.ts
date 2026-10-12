@@ -1,7 +1,7 @@
 // Estado global: sesión, carga del catálogo, progreso ("Continuar viendo") y Mi lista,
 // sincronizados con api/progress.php del panel igual que la web, Android y Roku.
 import { useSyncExternalStore } from 'react';
-import { bindSession, cloud, forgetCloud, panelTenantConfig, Session } from './api/panel';
+import { bindSession, cloud, forgetCloud, onPanelDemo, panelTenantConfig, Session } from './api/panel';
 import { Kind, loadKind } from './api/xtream';
 import { catalog } from './data/catalog';
 import { json } from './lib/http';
@@ -31,6 +31,10 @@ type State = {
   error: string;
   progress: Progress[];
   favorites: Fav[];
+  // línea DEMO: no se muestran usuario ni contraseña y no se guardan progreso ni Mi lista
+  demo: boolean;
+  // aviso corto encima de todo (p. ej. "No disponible en la DEMO")
+  notice: string;
   catalogRev: number;
   rev: number;
 };
@@ -42,6 +46,8 @@ let state: State = {
   error: '',
   progress: [],
   favorites: [],
+  demo: false,
+  notice: '',
   catalogRev: 0,
   rev: 0,
 };
@@ -67,6 +73,7 @@ export function useAppState(): State {
 }
 
 bindSession(() => state.session);
+onPanelDemo(markDemo);
 
 // La sesión vive solo en memoria: el usuario y la contraseña nunca se guardan en el equipo. Cada vez
 // que se abre la app el inicio de sesión le pide la línea al panel y la comprueba en el servidor IPTV.
@@ -76,17 +83,40 @@ export function restoreSession(): boolean {
   return false;
 }
 
-export function setSession(s: Session) {
+// demo: la sesión salió del botón Autodemo o el panel la marcó como DEMO (check_mac); un inicio
+// de sesión normal la deja en false
+export function setSession(s: Session, demo = false) {
   forgetCloud();
-  set({ session: s, progress: [], favorites: [] });
+  set({ session: s, progress: [], favorites: [], demo });
 }
+
+// el panel dijo "demo": true (progress.php): desde ahora la sesión es una DEMO
+export function markDemo() {
+  if (state.session && !state.demo) set({ demo: true, progress: [], favorites: [] });
+}
+
+export function isDemo(): boolean {
+  return state.demo;
+}
+
+let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+export function showNotice(msg: string) {
+  if (noticeTimer) clearTimeout(noticeTimer);
+  set({ notice: msg });
+  noticeTimer = setTimeout(() => {
+    noticeTimer = null;
+    set({ notice: '' });
+  }, 3500);
+}
+
+export const DEMO_NOTICE = 'No disponible en la DEMO';
 
 export function logout() {
   remove('session');
   forgetCloud();
   catalog.clear();
   catalog.unlocked = false;
-  set({ session: null, loaded: { vod: false, series: false, live: false }, loading: '', error: '', progress: [], favorites: [] });
+  set({ session: null, loaded: { vod: false, series: false, live: false }, loading: '', error: '', progress: [], favorites: [], demo: false });
 }
 
 // ---------- catálogo ----------
@@ -135,8 +165,10 @@ function progressSeconds(e: any): number {
 }
 
 export async function loadCloud() {
+  // la DEMO no tiene Continuar viendo ni Mi lista
+  if (state.demo) return;
   const j = json(await cloud('progress.php', 'GET', { v: '2' }));
-  if (!j || typeof j !== 'object') return;
+  if (!j || typeof j !== 'object' || state.demo) return;
   const prog = j.progress && typeof j.progress === 'object' && !Array.isArray(j.progress) ? j.progress : {};
   const list: Progress[] = [];
   for (const title of Object.keys(prog)) {
@@ -163,6 +195,8 @@ export async function loadCloud() {
 }
 
 function cloudPost(body: Record<string, any>) {
+  // nada se guarda en el panel con una DEMO (save, delete, fav_add, fav_remove)
+  if (state.demo) return;
   cloud('progress.php', 'POST', body).catch(() => {});
 }
 
@@ -179,6 +213,10 @@ export function isFav(kind: string, id: string): boolean {
 
 // agrega o quita; devuelve true si quedó en la lista
 export function toggleFav(kind: string, id: string, title: string, poster: string, cat: string): boolean {
+  if (state.demo) {
+    showNotice(DEMO_NOTICE);
+    return false;
+  }
   const t = favType(kind);
   const found = isFav(kind, id);
   if (found) {
@@ -203,6 +241,7 @@ export function progressSeries(seriesId: string): Progress | undefined {
 const lastSent: Record<string, number> = {};
 // se envía como máximo cada 30 s por título (force en pausa o al salir); al 95 % se borra
 export function saveProgress(p: Progress, force: boolean) {
+  if (state.demo) return;
   const done = p.duration > 0 && p.position >= p.duration * 0.95;
   const now = nowSec();
   const removed: string[] = [];
@@ -231,6 +270,7 @@ export function saveProgress(p: Progress, force: boolean) {
 }
 
 export function removeProgress(title: string) {
+  if (state.demo) return;
   set({ progress: state.progress.filter(e => e.title !== title) });
   cloudPost({ action: 'delete', title });
 }

@@ -16,6 +16,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   (con al menos una letra, p. ej. `RV7K2M`), *Autodemo* lo envía en mayúsculas (`reseller` dentro de
   `auto_demo`) y la demo queda a nombre de ese revendedor en el panel. Solo números o cualquier otra
   cosa no se envía. Código que no existe: se muestra el aviso del panel y la demo sigue disponible.
+- **Modo DEMO**: la sesión es DEMO si salió del botón *Autodemo* o si el panel responde `"demo": true`
+  (en `check_mac`, en el `auth` de `progress.php` o en su GET `?v=2`); un inicio de sesión normal lo
+  quita. En la DEMO nunca se muestran el usuario ni la contraseña de la línea (*Cuenta* dice
+  «Usuario: DEMO» con la marca «Cuenta DEMO»; el código del equipo sí se ve), no hay Continuar viendo
+  ni Mi lista y no se envía nada a `progress.php` (`save`, `delete`, `fav_add`, `fav_remove`): al
+  pulsar *Mi lista* o *Agregar a favoritos* sale el aviso «No disponible en la DEMO».
 - **Botones iguales a Roku, Windows y la web**: un solo componente en toda la app (inicio de sesión,
   distribuidor, avisos, diálogos, Cuenta y menú del reproductor). Principal = color del distribuidor
   (rojo sin distribuidor) con texto de contraste; secundario = blanco translúcido con borde fino; con

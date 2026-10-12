@@ -1,7 +1,7 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
-import { FakeScreen as Fake, lastFakeScreen, panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
+import { FakeScreen as Fake, lastFakeScreen, Line, panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import { loginAll } from '../api/xtream';
 import { Button, Focusable, Logo } from '../components/ui';
@@ -35,7 +35,7 @@ export default function Login() {
   const [busy, setBusy] = useState('Comprobando el equipo en el panel…');
   const [error, setError] = useState('');
   const [posters, setPosters] = useState<string[]>([]);
-  const [assigned, setAssigned] = useState<{ name: string; base: string; user: string; pass: string }[]>([]);
+  const [assigned, setAssigned] = useState<Line[]>([]);
   const passRef = useRef<TextInput>(null);
   const dev = deviceId();
   // pantalla falsa del panel (equipo nuevo): hasta escribir el código o hasta que lo registren
@@ -58,7 +58,7 @@ export default function Login() {
       if (!alive) return;
       setBusy('');
       if (lines.length) setAssigned(lines);
-      if (lines.length === 1) enter(lines[0].user, lines[0].pass, [{ name: lines[0].name, base: lines[0].base }], true);
+      if (lines.length === 1) enter(lines[0].user, lines[0].pass, [{ name: lines[0].name, base: lines[0].base }], true, lines[0].demo);
       else if (!lines.length && r.error) setError(r.error);
     });
     return () => {
@@ -73,7 +73,7 @@ export default function Login() {
       const ln = await panelCheckMac(dev);
       if (ln) {
         setFake(null);
-        enter(ln.user, ln.pass, [{ name: ln.name, base: ln.base }], true);
+        enter(ln.user, ln.pass, [{ name: ln.name, base: ln.base }], true, ln.demo);
       } else if (!lastFakeScreen()) setFake(null);
     }, 30000);
     return () => clearInterval(t);
@@ -81,8 +81,8 @@ export default function Login() {
   }, [fake, dev]);
 
   // fromPanel: la línea ya está registrada para este equipo (no se vuelve a registrar: si el dueño la
-  // borró, el equipo no debe reaparecer solo)
-  const enter = async (u: string, p: string, servers?: { name: string; base: string }[], fromPanel = false) => {
+  // borró, el equipo no debe reaparecer solo). demo: línea DEMO (Autodemo o "demo": true del panel)
+  const enter = async (u: string, p: string, servers?: { name: string; base: string }[], fromPanel = false, demo = false) => {
     if (!u.trim() || !p.trim()) {
       setError('Escribe tu usuario y contraseña');
       return;
@@ -95,7 +95,7 @@ export default function Login() {
     if (r.session) {
       // registra el código del equipo en el panel (igual que Android y Roku)
       if (hasMasterKey() && !fromPanel) panelSubmit(dev, r.session.user, r.session.pass, r.session.base).catch(() => {});
-      setSession(r.session);
+      setSession(r.session, demo);
       nav.reset({ name: 'main' });
     } else {
       setError(r.error || 'No se pudo iniciar sesión');
@@ -119,12 +119,12 @@ export default function Login() {
     write(scoped('demo_used'), '1');
     const pl = await panelPlaylists(dev);
     const own = pl.lines.filter(l => l.user === d.user);
-    await enter(d.user!, d.pass!, own.length ? own.map(l => ({ name: l.name, base: l.base })) : undefined);
+    await enter(d.user!, d.pass!, own.length ? own.map(l => ({ name: l.name, base: l.base })) : undefined, false, true);
   };
 
   const enterAssigned = () => {
     const ln = assigned[0];
-    enter(ln.user, ln.pass, assigned.filter(a => a.user === ln.user).map(a => ({ name: a.name, base: a.base })), true);
+    enter(ln.user, ln.pass, assigned.filter(a => a.user === ln.user).map(a => ({ name: a.name, base: a.base })), true, ln.demo);
   };
 
   const canDemo = hasMasterKey() && features().demo;
@@ -194,7 +194,7 @@ export default function Login() {
         {canDemo ? <Text style={s.tip}>¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.</Text> : null}
         {assigned.length ? (
           <View style={s.btns}>
-            <Button label={'Entrar con la cuenta de este equipo (' + assigned[0].user + ')'} small last onPress={() => !busy && enterAssigned()} />
+            <Button label={'Entrar con la cuenta de este equipo (' + (assigned[0].demo ? 'DEMO' : assigned[0].user) + ')'} small last onPress={() => !busy && enterAssigned()} />
           </View>
         ) : null}
         <Text style={s.device}>Código del equipo: {dev}</Text>

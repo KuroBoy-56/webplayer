@@ -21,6 +21,7 @@ export default function MyList() {
     return out;
   }, [st.favorites, st.catalogRev]);
 
+  if (st.demo) return <Message text="Mi lista no está disponible en la DEMO." />;
   if (!items.length) return <Message text="Tu lista está vacía. Agrega películas, series o canales con «Mi lista»." />;
   return <ItemGrid items={items} header={<Text style={s.title}>Mi lista</Text>} />;
 }

@@ -58,7 +58,9 @@ export default function Account() {
       <Text style={s.title}>Cuenta</Text>
       {s0 ? (
         <View style={s.card}>
-          <Text style={s.row}>Usuario: <Text style={s.val}>{s0.user}</Text></Text>
+          {/* DEMO: nunca el usuario de la línea */}
+          {st.demo ? <Text style={s.demo}>Cuenta DEMO · Estás usando una DEMO</Text> : null}
+          <Text style={s.row}>Usuario: <Text style={s.val}>{st.demo ? 'DEMO' : s0.user}</Text></Text>
           <Text style={s.row}>Servidor: <Text style={s.val}>{s0.dns}</Text></Text>
           <Text style={s.row}>Vence: <Text style={s.val}>{dateText(s0.exp)}</Text></Text>
           <Text style={s.row}>Conexiones: <Text style={s.val}>{s0.active || '0'} de {s0.max || '1'}</Text></Text>
@@ -171,6 +173,7 @@ const s = themed(() =>
     card: { backgroundColor: C.bg2, borderRadius: px(12), padding: px(30), marginTop: px(20), width: px(1000) },
     row: { color: C.sub, fontSize: px(28), marginBottom: px(10) },
     val: { color: C.text, fontWeight: '700' },
+    demo: { color: C.text, backgroundColor: C.red, alignSelf: 'flex-start', fontSize: px(26), fontWeight: '800', borderRadius: px(6), paddingHorizontal: px(14), paddingVertical: px(4), marginBottom: px(14) },
     sub: { color: C.text, fontSize: px(36), fontWeight: '800', marginTop: px(40), marginBottom: px(14) },
     set: { marginBottom: px(12) },
     ver: { color: C.dim, fontSize: px(22), marginTop: px(40) },

@@ -20,6 +20,9 @@ export type Session = {
 
 export type Server = { name: string; base: string };
 
+// línea del panel; demo: el panel dice que es una DEMO ("demo": true en check_mac)
+export type Line = Server & { user: string; pass: string; demo?: boolean };
+
 const PANEL_HEX =
   '4979456d507a6876665741734e4341715053773850796f374e794d34657a3475507a67694e32553250534a6b4f444d38507a41675944733050436f6e656a4d2f496e6f6949796f734e7a30554e43496d5a53553650773d3d';
 
@@ -130,7 +133,7 @@ export async function panelDnsList(): Promise<Server[]> {
 
 // auth.php: listas que el panel tiene asignadas a este equipo (sin llave). Solo responde con
 // datos del dueño: con distribuidor se usa check_mac (login.php).
-export async function panelPlaylists(deviceId: string): Promise<{ lines: (Server & { user: string; pass: string })[]; error: string }> {
+export async function panelPlaylists(deviceId: string): Promise<{ lines: Line[]; error: string }> {
   if (tenantCode()) return { lines: [], error: '' };
   const r = await panel('auth.php', 'POST', JSON.stringify({ data: mopeEncrypt(JSON.stringify({ mac_address: deviceId })) }), 'application/json');
   if (r.code === 0) return { lines: [], error: 'No se pudo conectar con el panel. Revisa tu conexión a internet.' };
@@ -149,7 +152,7 @@ export async function panelPlaylists(deviceId: string): Promise<{ lines: (Server
   const tmdb = str(resp.tmdbKey);
   if (tmdb && tmdb !== 'missing_tmdb_key') write(scoped('tmdb_key'), tmdb);
   if (/^\d{4}$/.test(str(resp.parent_control))) write(scoped('panel_pin'), str(resp.parent_control));
-  const lines: (Server & { user: string; pass: string })[] = [];
+  const lines: Line[] = [];
   const seen = new Set<string>();
   for (const o of resp.urls || []) {
     const ln = lineFromUrl(str(o?.name) || 'Servidor', str(o?.url));
@@ -168,6 +171,12 @@ export function bindSession(fn: () => Session | null): void {
   sessionRef = fn;
 }
 
+// progress.php responde "demo": true (auth y GET ?v=2) cuando la línea es una DEMO
+let demoHook: () => void = () => {};
+export function onPanelDemo(fn: () => void): void {
+  demoHook = fn;
+}
+
 // el token es de cada distribuidor (con Omitir, la clave de siempre)
 export async function cloudToken(forceNew = false): Promise<string> {
   const key = scoped('cloud_token2');
@@ -180,6 +189,7 @@ export async function cloudToken(forceNew = false): Promise<string> {
   const r = await panel('progress.php', 'POST', JSON.stringify({ action: 'auth', user: s.user, pass: s.pass, dns: s.base, ...tenantFields(), platform: APP_ID, device: read('device_id') }), 'application/json');
   tenantProblem(r);
   const j = json(r);
+  if (j && j.demo === true && sessionRef() === s) demoHook();
   if (!j || !str(j.token)) return '';
   const tmdb = str(j.tmdbKey);
   if (tmdb && tmdb !== 'missing_tmdb_key') write(scoped('tmdb_key'), tmdb);
@@ -196,6 +206,7 @@ function tenantProblem(r: HttpResult): void {
 
 // petición con token; si venció (401) pide otro una vez
 export async function cloud(file: string, method: 'GET' | 'POST', payload: Record<string, any> | null): Promise<HttpResult> {
+  const ses = sessionRef();
   let tok = await cloudToken();
   if (!tok) return { code: 0, body: '', ok: false };
   let r: HttpResult = { code: 0, body: '', ok: false };
@@ -215,6 +226,7 @@ export async function cloud(file: string, method: 'GET' | 'POST', payload: Recor
   tenantProblem(r);
   const j = json(r);
   if (j && typeof j === 'object' && str(j.token)) write(scoped('cloud_token2'), j.token);
+  if (file === 'progress.php' && j && typeof j === 'object' && j.demo === true && sessionRef() === ses) demoHook();
   return r;
 }
 
@@ -283,7 +295,7 @@ function parseFake(j: any): FakeScreen | null {
 }
 
 // línea activada para este equipo en el panel
-export async function panelCheckMac(deviceId: string) {
+export async function panelCheckMac(deviceId: string): Promise<Line | null> {
   if (!hasMasterKey()) return null;
   const r = await panelLogin('check_mac', { mac_address: deviceId, enc: 1 });
   const j = loginReply(r);
@@ -293,7 +305,8 @@ export async function panelCheckMac(deviceId: string) {
   if (!j || j.exists !== true) return null;
   // PIN parental del panel: es el que usa la app
   if (/^\d{4}$/.test(str(j.pin))) write(scoped('panel_pin'), str(j.pin));
-  return lineFromUrl('Servidor', str(j.url), str(j.username), str(j.password));
+  const ln = lineFromUrl('Servidor', str(j.url), str(j.username), str(j.password));
+  return ln ? { ...ln, demo: j.demo === true } : null;
 }
 
 let lastCheckAnswered = false;

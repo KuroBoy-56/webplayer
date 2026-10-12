@@ -1,7 +1,7 @@
 // Navegación por pila: las pantallas de abajo quedan montadas (ocultas) para volver
 // al mismo lugar al pulsar Atrás.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, BackHandler, StatusBar, StyleSheet, View } from 'react-native';
+import { AppState, BackHandler, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { fetchAlert, PanelAlert } from './api/alerts';
 import AlertDialog from './components/AlertDialog';
 import { Logo } from './components/ui';
@@ -16,7 +16,7 @@ import Login from './screens/Login';
 import Main from './screens/Main';
 import Player from './screens/Player';
 import { bindReportContext, installCrashReporter } from './api/report';
-import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, tenantCheckDue } from './state';
+import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, tenantCheckDue, useAppState } from './state';
 import { panelAnswered, panelCheckMac } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
@@ -25,7 +25,7 @@ bindReportContext(() => {
   const s = getState().session;
   return { device: deviceId(), user: s?.user || '', server: s?.base || '' };
 });
-import { C, themed } from './theme';
+import { alpha, C, px, themed } from './theme';
 
 function Screen({ route, active }: { route: Route; active: boolean }) {
   switch (route.name) {
@@ -46,6 +46,17 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
     case 'player':
       return <Player params={route.params} />;
   }
+}
+
+// aviso corto encima de todas las pantallas (p. ej. "No disponible en la DEMO")
+function Notice() {
+  const { notice } = useAppState();
+  if (!notice) return null;
+  return (
+    <View style={s.notice} pointerEvents="none">
+      <Text style={s.noticeText}>{notice}</Text>
+    </View>
+  );
 }
 
 export default function App() {
@@ -201,6 +212,7 @@ export default function App() {
       ) : (
         <AlertDialog alert={alert} onClose={() => setAlert(null)} />
       )}
+      <Notice />
     </NavContext.Provider>
   );
 }
@@ -210,5 +222,7 @@ const s = themed(() =>
     root: { flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' },
     app: { flex: 1, backgroundColor: C.bg },
     hidden: { display: 'none' },
+    notice: { position: 'absolute', bottom: px(120), alignSelf: 'center', maxWidth: px(1300), backgroundColor: alpha(C.bg2, 0.95), borderRadius: px(12), borderLeftWidth: px(6), borderLeftColor: C.red, paddingHorizontal: px(30), paddingVertical: px(16) },
+    noticeText: { color: C.text, fontSize: px(28) },
   }),
 );
