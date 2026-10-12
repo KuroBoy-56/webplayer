@@ -81,21 +81,20 @@ struct PlayerScreen: View {
         if state.play?.id == m.request.id { state.play = nil }
     }
 
-    /** pasa el video a la ventanita del sistema y cierra este reproductor; si no se puede, sigue aquí */
+    /**
+     * Pasa el video al reproductor de iOS (con imagen en imagen, AirPlay y sus controles) en el mismo punto.
+     * Este reproductor se cierra antes; si el de iOS no puede, la app vuelve aquí sola.
+     */
     private func startPip() {
-        guard PipManager.supported else {
-            PlayerDiag.log("pip: no soportado en este equipo")
-            m.toast = "Este equipo no permite imagen en imagen"
-            return
-        }
         guard let src = m.pipSource() else {
-            m.toast = "Este video no permite imagen en imagen"
+            m.toast = "Este video no se puede abrir en el reproductor de iOS (MKV, AVI o TS)"
             return
         }
-        m.pauseForPip()
-        PipManager.shared.start(url: src.0, at: src.1, request: m.request, index: m.index, state: state,
-                                onStarted: { close() },
-                                onFailed: { m.resumeAfterPip(); m.toast = "No se pudo abrir imagen en imagen" })
+        let req = m.request, idx = m.index, st = state
+        m.stop()
+        PlayerPresenter.handOff(st) {
+            NativePlayer.shared.open(url: src.0, at: src.1, request: req, index: idx, state: st)
+        }
     }
 
     private func autoHide() {
@@ -118,7 +117,7 @@ struct PlayerScreen: View {
                     Spacer()
                     if m.kind == .live { Button { channels = true } label: { Image(systemName: "list.bullet").font(.system(size: 20)) } }
                     Button { startPip() } label: { Image(systemName: "pip.enter").font(.system(size: 20)).frame(width: 40, height: 40) }
-                        .accessibilityIdentifier("player.pip").accessibilityLabel("Imagen en imagen")
+                        .accessibilityIdentifier("player.pip").accessibilityLabel("Reproductor de iOS e imagen en imagen")
                     Button { m.readTracks(); tracks = true } label: { Image(systemName: "captions.bubble").font(.system(size: 20)) }
                     Button { m.fill.toggle(); m.applyFill(size); state.toast = nil } label: {
                         Image(systemName: m.fill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 20))

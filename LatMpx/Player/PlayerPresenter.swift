@@ -50,7 +50,9 @@ enum PlayerPresenter {
             PlayerDiag.log("dismiss")
             h.dismiss(animated: true) {
                 PlayerDiag.log("dismiss terminado")
-                if let r = state.play { present(r, state, tenant) } else { restoreOrientation() }
+                if let r = state.play { present(r, state, tenant) }
+                else if let f = afterDismiss { afterDismiss = nil; f() }
+                else { restoreOrientation() }
             }
             return
         }
@@ -59,7 +61,7 @@ enum PlayerPresenter {
 
     private static func present(_ req: PlayRequest, _ state: AppState, _ tenant: Tenant) {
         // otro video mientras hay uno en imagen en imagen: se cierra la ventanita
-        if PipManager.shared.active && !PipManager.shared.isRestoring { PipManager.shared.stop() }
+        if NativePlayer.shared.active { NativePlayer.shared.close() }
         guard let top = topController() else { return }
         let view = PlayerScreen(request: req)
             .environmentObject(state)
@@ -83,7 +85,16 @@ enum PlayerPresenter {
     }
 
     /** de vuelta en la app: iPhone en vertical (igual que Android), iPad gira libre */
-    private static func restoreOrientation() {
+    /** se ejecuta cuando el reproductor de la app terminó de cerrarse (pasar el video al de iOS) */
+    static var afterDismiss: (() -> Void)?
+
+    /** cierra el reproductor de la app y, ya cerrado, hace f */
+    static func handOff(_ state: AppState, then f: @escaping () -> Void) {
+        afterDismiss = f
+        state.play = nil
+    }
+
+    static func restoreOrientation() {
         AppDelegate.playerOpen = false
         guard UIDevice.current.userInterfaceIdiom == .phone else { return }
         guard let scene = UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene }) as? UIWindowScene else { return }

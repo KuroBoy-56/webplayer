@@ -111,27 +111,22 @@ final class PlayerUITests: XCTestCase {
         shot("7-canal-cerrado")
     }
 
-    /** imagen en imagen: el video pasa a la ventanita del sistema y el reproductor de la app se cierra */
-    func testPictureInPicture() throws {
+    /** botón "Reproductor de iOS": el video pasa al reproductor de Apple (con imagen en imagen) y sigue reproduciéndose */
+    func testNativePlayer() {
         let app = launch(movie)
         XCTAssertTrue(app.buttons["player.close"].waitForExistence(timeout: 30), "no se abrió el reproductor")
         let toggle = app.buttons["player.toggle"]
         XCTAssertTrue(wait(60) { controls(app); return value(toggle) == "playing" }, "el video no empezó a reproducirse")
         controls(app)
-        guard app.buttons["player.pip"].exists else { XCTFail("no hay botón de imagen en imagen"); return }
+        guard app.buttons["player.pip"].exists else { XCTFail("no hay botón del reproductor de iOS"); return }
         app.buttons["player.pip"].tap()
         let diagPath = (ProcessInfo.processInfo.environment["SHOTS"] ?? "") + "/diag-" + name.filter { $0.isLetter || $0.isNumber } + ".txt"
         func diag() -> String { (try? String(contentsOfFile: diagPath)) ?? "" }
-        let closed = wait(20) { !app.otherElements["player.screen"].exists || diag().contains("no soportado") }
-        RunLoop.current.run(until: Date().addingTimeInterval(2))
-        shot("10-imagen-en-imagen")
-        // algunos simuladores no tienen imagen en imagen (los iPhone reales sí): ahí solo se comprueba el aviso
-        if diag().contains("no soportado") {
-            XCTAssertTrue(app.otherElements["player.screen"].exists, "sin imagen en imagen el video debe seguir en la app")
-            throw XCTSkip("este simulador no permite imagen en imagen")
-        }
-        XCTAssertTrue(closed, "el reproductor no pasó a imagen en imagen")
-        XCTAssertTrue(diag().contains("pip iniciado"), "la ventanita no arrancó: \(diag())")
+        XCTAssertTrue(wait(10) { !app.otherElements["player.screen"].exists }, "el reproductor de la app no se cerró")
+        let playing = wait(40) { diag().contains("nativo: reproduciendo") || diag().contains("nativo: falló") }
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        shot("10-reproductor-ios")
+        XCTAssertTrue(playing && diag().contains("nativo: reproduciendo"), "el reproductor de iOS no reprodujo: \(diag())")
     }
 
     /** servidor que no contesta: la pantalla debe seguir respondiendo y dejar salir al instante */

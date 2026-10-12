@@ -226,8 +226,6 @@ final class PlayerModel: ObservableObject {
         return ["mp4", "m4v", "mov", "m3u8"].contains(ext) ? (cur, time) : nil
     }
 
-    func pauseForPip() { if player.isPlaying { player.pause() } }
-    func resumeAfterPip() { if !player.isPlaying { player.play() } }
 
     func retry() { error = nil; urlIdx = 0; open(urls.first ?? "") }
 
