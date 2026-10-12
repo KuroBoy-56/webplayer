@@ -52,6 +52,9 @@ final class Cloud: ObservableObject {
 
     /* ---------- token ---------- */
     private func token(_ s: Session) async -> String? {
+        // el token es de esta cuenta (usuario@servidor); si cambió, se descarta y se pide uno nuevo
+        let scope = "\(s.user)@\(s.base)"
+        if Store.cloudTokenScope != scope { Store.cloudToken = nil; Store.cloudTokenScope = scope; clear() }
         if let t = Store.cloudToken, !t.isEmpty { return t }
         var body: JObj = ["action": "auth", "user": s.user, "pass": s.pass, "dns": s.base, "platform": Tenant.app, "device": Device.id]
         Tenant.tag(&body)

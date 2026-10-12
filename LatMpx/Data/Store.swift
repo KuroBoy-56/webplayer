@@ -95,12 +95,20 @@ enum Store {
     static func logout() {
         lock.lock(); mem = nil; lock.unlock()
         p.removeObject(forKey: tenantKey("cloud_token2"))
+        p.removeObject(forKey: tenantKey("cloud_token2_scope"))
     }
 
     /* ---------- token de progress.php / epg.php / sports.php (uno por distribuidor) ---------- */
     static var cloudToken: String? {
         get { p.string(forKey: tenantKey("cloud_token2")) }
         set { if let v = newValue { p.set(v, forKey: tenantKey("cloud_token2")) } else { p.removeObject(forKey: tenantKey("cloud_token2")) } }
+    }
+
+    // usuario@servidor del token guardado: si entra otro usuario, el token no coincide y se pide uno
+    // nuevo (no se reutiliza "Continuar viendo" ni "Mi lista" de la cuenta anterior)
+    static var cloudTokenScope: String? {
+        get { p.string(forKey: tenantKey("cloud_token2_scope")) }
+        set { if let v = newValue { p.set(v, forKey: tenantKey("cloud_token2_scope")) } else { p.removeObject(forKey: tenantKey("cloud_token2_scope")) } }
     }
 
     static var audioLang: String? {
