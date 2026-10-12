@@ -104,7 +104,7 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         PlayerDiag.log("nativo: cerrado")
         saveProgress()
         cleanup()
-        PlayerPresenter.restoreOrientation()
+        restore()
     }
 
     /** el reproductor de iOS no pudo con este video: de vuelta al de la app, donde iba */
@@ -123,7 +123,7 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     }
 
     private func backToApp(_ ms: Int64, _ msg: String) {
-        guard let r = request, let st = state else { PlayerPresenter.restoreOrientation(); return }
+        guard let r = request, let st = state else { restore(); return }
         st.toast = msg
         st.play = PlayRequest(kind: r.kind, queue: r.queue, index: index, saveTitle: r.saveTitle, savePoster: r.savePoster, category: r.category,
                               closeOnPortrait: false, directUrls: r.directUrls, startAt: r.kind == .live ? 0 : ms)
@@ -141,7 +141,7 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         if let v = vc, v.presentingViewController == nil {
             saveProgress()
             cleanup()
-            PlayerPresenter.restoreOrientation()
+            restore()
         }
     }
 
@@ -151,6 +151,8 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         AppDelegate.playerOpen = true
         top.present(v, animated: true) { completion(true) }
     }
+
+    private func restore() { Task { @MainActor in PlayerPresenter.restoreOrientation() } }
 
     /* ---------- progreso ---------- */
     private func currentMs() -> Int64 {
