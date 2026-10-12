@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /** Pestañas de abajo como la app de Netflix; cada una con su propia pila de pantallas. */
 struct MainView: View {
@@ -40,6 +41,8 @@ struct MainView: View {
                 .tabItem { Label("Cuenta", systemImage: "person.crop.circle") }.tag(Tab.account)
         }
         .toast($state.toast)
+        // línea demo: Mi lista y el progreso no se guardan
+        .onReceive(NotificationCenter.default.publisher(for: Cloud.demoBlocked)) { _ in state.toast = "No disponible en la DEMO" }
     }
 
     private func stack<V: View>(_ t: Tab, @ViewBuilder _ root: () -> V) -> some View {

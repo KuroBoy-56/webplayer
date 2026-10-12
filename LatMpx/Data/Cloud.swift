@@ -10,6 +10,13 @@ final class Cloud: ObservableObject {
     static let shared = Cloud()
     /** cambia cada vez que llegan o se modifican datos (la interfaz lo observa) */
     @Published private(set) var rev = 0
+    /**
+     * Línea DEMO (botón Autodemo o el panel dice "demo"): se muestra "DEMO" en lugar del usuario, nunca la
+     * contraseña, y no se guarda ni se muestra "Continuar viendo" ni "Mi lista". Cada inicio de sesión lo decide.
+     */
+    @Published private(set) var demo = false
+    /** aviso para la interfaz: alguien intentó algo que la demo no permite */
+    static let demoBlocked = Notification.Name("LatMpxDemoBlocked")
 
     private let lock = NSLock()
     private var progress: [String: Progress] = [:]   // por título (clave del panel)
@@ -18,6 +25,29 @@ final class Cloud: ObservableObject {
     private var lastSent: [String: Double] = [:]
 
     private func bump() { DispatchQueue.main.async { self.rev += 1 } }
+
+    func setDemo(_ on: Bool) {
+        if Thread.isMainThread { demo = on } else { DispatchQueue.main.async { self.demo = on } }
+    }
+
+    /** el usuario a mostrar: "DEMO" en una línea demo */
+    func shownUser(_ s: Session?) -> String { demo ? "DEMO" : (s?.user ?? "") }
+
+    /** demo: avisa que no está disponible y devuelve true (quien llama no sigue) */
+    func blockedForDemo() -> Bool {
+        if !demo { return false }
+        DispatchQueue.main.async { NotificationCenter.default.post(name: Cloud.demoBlocked, object: nil) }
+        return true
+    }
+
+    private func rememberDemo(_ j: JObj?) {
+        if j?.b("demo") == true && !demo { setDemo(true); clearLists() }
+    }
+
+    private func clearLists() {
+        lock.lock(); progress = [:]; favs = [:]; favOrder = []; lock.unlock()
+        bump()
+    }
     private var api: String { PanelUrl.api("progress.php") }
 
     /* ---------- token ---------- */
@@ -28,6 +58,7 @@ final class Cloud: ObservableObject {
         let j = await Net.postJson(api, body).json()
         _ = Tenant.onPanelError(j)
         rememberTmdbKey(j)
+        rememberDemo(j)
         let t = j?.s("token") ?? ""
         if t.isEmpty { return nil }
         Store.cloudToken = t
@@ -48,6 +79,7 @@ final class Cloud: ObservableObject {
         if r.code == 403 || r.code == 404 { _ = Tenant.onPanelError(j) }
         if let t = j?.s("token"), !t.isEmpty { Store.cloudToken = t }
         rememberTmdbKey(j)
+        rememberDemo(j)
         return r
     }
 
@@ -58,7 +90,10 @@ final class Cloud: ObservableObject {
 
     /* ---------- carga ---------- */
     func load() async {
+        // demo: no hay "Continuar viendo" ni "Mi lista"
+        if demo { clearLists(); return }
         guard let r = await call({ t in await Net.get(self.api + "?v=2&token=" + urlEnc(t)) }), let j = r.json() else { return }
+        if j.b("demo") { return } // rememberDemo ya vació las listas
         var pm: [String: Progress] = [:]
         if let po = j.o("progress") {
             for (title, v) in po { if let o = v as? JObj, let p = parseProgress(title, o) { pm[title] = p } }
@@ -77,6 +112,7 @@ final class Cloud: ObservableObject {
     }
 
     func clear() {
+        setDemo(false)
         lock.lock(); progress = [:]; favs = [:]; favOrder = []; lastSent = [:]; lock.unlock()
         bump()
     }
@@ -126,6 +162,7 @@ final class Cloud: ObservableObject {
 
     /** Guarda la posición; al panel como máximo cada 30 s por título salvo con force. Al 95 % se borra. */
     func saveProgress(_ p: Progress, force: Bool = false) {
+        if demo { return } // la demo no guarda progreso
         let parts = p.key.split(separator: ":").map(String.init)
         let isSeries = parts.first == "series"
         let done = p.duration > 0 && Double(p.position) >= Double(p.duration) * 0.95
@@ -157,6 +194,7 @@ final class Cloud: ObservableObject {
     private func deleteRemote(_ title: String) { post(["action": "delete", "title": title]) }
 
     private func post(_ body: JObj) {
+        if demo { return } // la demo no escribe nada en el panel
         let api = self.api
         Task.detached { _ = await self.call { t in var b = body; b["token"] = t; return await Net.postJson(api, b) } }
     }
@@ -172,6 +210,7 @@ final class Cloud: ObservableObject {
     /** Agrega o quita; devuelve true si quedó en favoritos. */
     @discardableResult
     func toggleFav(_ item: Item) -> Bool {
+        if blockedForDemo() { return false } // la demo no guarda Mi lista
         lock.lock()
         let on: Bool
         if favs[item.key] != nil {

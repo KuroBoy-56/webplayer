@@ -17,11 +17,16 @@ struct AccountView: View {
                     LogoHeader(height: 44)
                     if let s = state.session {
                         HStack(spacing: 16) {
-                            Text(String(s.user.prefix(1)).uppercased()).font(.system(size: 28, weight: .bold)).foregroundColor(.white)
+                            Text(String(cloud.shownUser(s).prefix(1)).uppercased()).font(.system(size: 28, weight: .bold)).foregroundColor(.white)
                                 .frame(width: 64, height: 64).background(Theme.accent).clipShape(RoundedRectangle(cornerRadius: 8))
                             VStack(alignment: .leading) {
-                                Text(s.user).font(.system(size: 24, weight: .bold)).foregroundColor(.white).lineLimit(1)
-                                Text("Suscripción activa").font(.system(size: 14)).foregroundColor(Color(hex: 0x4CAF50))
+                                // demo: nunca el usuario ni la contraseña de la línea
+                                Text(cloud.shownUser(s)).font(.system(size: 24, weight: .bold)).foregroundColor(.white).lineLimit(1)
+                                if cloud.demo {
+                                    Text("Cuenta DEMO · Estás usando una demostración").font(.system(size: 14)).foregroundColor(Color(hex: 0xFFB300))
+                                } else {
+                                    Text("Suscripción activa").font(.system(size: 14)).foregroundColor(Color(hex: 0x4CAF50))
+                                }
                             }
                         }
                         let cont = cloud.progressList()

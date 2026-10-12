@@ -18,6 +18,8 @@ struct LoginView: View {
     @State private var posters: [String] = []
     @State private var fake: FakeScreen?
     @State private var started = false
+    /** la línea que se va a abrir viene del botón Autodemo (aunque el panel no lo diga) */
+    @State private var fromAutodemo = false
     /** ojito: ver la contraseña en texto o volver a ocultarla */
     @State private var showPass = false
 
@@ -68,13 +70,8 @@ struct LoginView: View {
             if !PanelCrypto.hasKey {
                 ErrorBanner(text: "Esta versión de la app no tiene la llave del panel (PANEL_MASTER_KEY). La activación no funcionará hasta instalar una versión configurada.")
             }
-            if lines.count > 1 {
-                Text("Elige tu servicio").font(.system(size: 26, weight: .bold)).foregroundColor(.white)
-                ForEach(Array(lines.enumerated()), id: \.offset) { i, l in
-                    AppButton(text: l.name.isEmpty ? "Servicio \(i + 1)" : l.name, icon: "play.fill", primary: i == 0) { act { await connect(l) } }
-                }
-                if let e = err { ErrorBanner(text: e) }
-            } else {
+            // varias líneas para el equipo: se entra con la primera que funciona (ya no se pregunta)
+            Group {
                 Text("Iniciar sesión").font(.system(size: 28, weight: .bold)).foregroundColor(.white).frame(maxWidth: .infinity, alignment: .leading)
                 if let e = err { ErrorBanner(text: e) }
                 field("Usuario", text: $user, secure: false)
@@ -134,12 +131,24 @@ struct LoginView: View {
         Task { @MainActor in busy = true; await block(); busy = false }
     }
 
-    @MainActor private func connect(_ line: Panel.Line) async {
+    /** true si entró; la demo (Autodemo o el panel dice "demo") se abre en modo DEMO */
+    @MainActor @discardableResult private func connect(_ line: Panel.Line) async -> Bool {
         status = "Conectando con \(line.name)…"
         switch await Xtream.login([(line.name, line.base)], user: line.user, pass: line.pass) {
-        case .ok(let s): onLogged(s)
-        case .fail(let m): err = m
+        case .ok(let s): Cloud.shared.setDemo(line.demo || fromAutodemo); onLogged(s); return true
+        case .fail(let m): err = m; return false
         }
+    }
+
+    /** varias líneas o servidores para el equipo: la primera que funciona, sin preguntar */
+    @MainActor private func connectFirst(_ found: [Panel.Line]) async {
+        var last: String?
+        for l in found {
+            err = nil
+            if await connect(l) { return }
+            last = err
+        }
+        err = last
     }
 
     /** líneas del equipo en el panel; con una sola se entra (después de comprobarla en el servidor) */
@@ -154,8 +163,8 @@ struct LoginView: View {
             if problem == nil { problem = c.error }
         }
         lines = found
-        if found.count == 1 { await connect(found[0]) }
-        else if found.isEmpty, let p = problem, PanelCrypto.hasKey { err = p } // sin llave ya lo dice el aviso de arriba
+        if !found.isEmpty { await connectFirst(found) }
+        else if let p = problem, PanelCrypto.hasKey { err = p } // sin llave ya lo dice el aviso de arriba
         busy = false
         return !found.isEmpty
     }
@@ -169,6 +178,7 @@ struct LoginView: View {
         }
         guard let server = dns.first else { if err == nil { err = "El panel no tiene servidores disponibles" }; return }
         status = "Activando…"
+        fromAutodemo = false
         let r = await Panel.submitUrl(user: u, pass: p, dns: server)
         if r.value == nil { err = r.error; return }
         if !(await resolve()) && err == nil { await connect(Panel.Line(name: "Servidor 1", base: Xtream.normalize(server), user: u, pass: p)) }
@@ -184,6 +194,7 @@ struct LoginView: View {
             return
         }
         Store.demoUsed = false
+        fromAutodemo = true
         if !(await resolve()) && err == nil {
             var d = dns
             if d.isEmpty { d = await Panel.fetchDns().value ?? [] }

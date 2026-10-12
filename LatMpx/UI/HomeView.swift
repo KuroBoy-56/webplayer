@@ -49,7 +49,7 @@ struct HomeView: View {
                 ScrollOffsetReader(space: "home")
                 if !hero.isEmpty { HeroCards(items: hero, width: size.width, topPad: 104).padding(.bottom, 8) }
                 else { Color.clear.frame(height: 104) }
-                ShelfRow(title: "Continuar viendo para \(state.session?.user ?? "")", items: cont, pad: pad, onViewAll: { state.push(.saved(true)) }) { _, p in
+                ShelfRow(title: "Continuar viendo para \(cloud.shownUser(state.session))", items: cont, pad: pad, onViewAll: { state.push(.saved(true)) }) { _, p in
                     if let it = state.item(from: p) { ContinueCard(item: it, progress: p, width: pw) }
                 }
                 ShelfRow(title: "Mi lista", items: favs, pad: pad, onViewAll: { state.push(.saved(false)) }) { _, it in

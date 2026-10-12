@@ -8,6 +8,7 @@ import SwiftUI
 struct PhoneTopBar: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var tenant: Tenant
+    @EnvironmentObject var cloud: Cloud
     let current: Tab?
     var solid = false
     var pad: CGFloat = 16
@@ -17,14 +18,14 @@ struct PhoneTopBar: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 18) {
                 if current == nil {
-                    Text("Para \(state.session?.user ?? "")").font(.system(size: 22, weight: .bold)).foregroundColor(.white).lineLimit(1)
+                    Text("Para \(cloud.shownUser(state.session))").font(.system(size: 22, weight: .bold)).foregroundColor(.white).lineLimit(1)
                 } else {
                     LogoHeader(height: 28)
                 }
                 Spacer()
                 Button { state.push(.search) } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).foregroundColor(.white) }
                 Button { profile = true } label: {
-                    Text(String((state.session?.user ?? "U").prefix(1)).uppercased()).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                    Text(String(cloud.shownUser(state.session).prefix(1)).uppercased()).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
                         .frame(width: 30, height: 30)
                         .background(LinearGradient(colors: [Theme.accent, Theme.accent.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .clipShape(RoundedRectangle(cornerRadius: 5))
@@ -49,7 +50,7 @@ struct PhoneTopBar: View {
             .ignoresSafeArea(edges: .top)
             .animation(.easeInOut(duration: 0.2), value: solid)
         )
-        .sheet(isPresented: $profile) { ProfileSheet().environmentObject(state).environmentObject(tenant) }
+        .sheet(isPresented: $profile) { ProfileSheet().environmentObject(state).environmentObject(tenant).environmentObject(cloud) }
     }
 }
 
@@ -57,13 +58,14 @@ struct PhoneTopBar: View {
 struct ProfileSheet: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var tenant: Tenant
+    @EnvironmentObject var cloud: Cloud
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Perfil").font(.system(size: 20, weight: .bold)).foregroundColor(.white)
             VStack(alignment: .leading, spacing: 4) {
-                Text(state.session?.user ?? "").font(.system(size: 16)).foregroundColor(.white)
+                Text(cloud.shownUser(state.session)).font(.system(size: 16)).foregroundColor(.white)
                 Text(state.session?.dnsName ?? "").font(.system(size: 13)).foregroundColor(Theme.muted)
             }
             Divider().background(Color.white.opacity(0.2))

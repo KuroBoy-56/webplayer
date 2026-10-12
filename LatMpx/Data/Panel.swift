@@ -8,7 +8,8 @@ import Foundation
  */
 enum Panel {
     /** Línea IPTV que el panel tiene asignada a este equipo. */
-    struct Line: Equatable { let name, base, user, pass: String }
+    /** demo: el panel dice que la línea es una demo (se muestra "DEMO", sin progreso ni Mi lista) */
+    struct Line: Equatable { let name, base, user, pass: String; var demo = false }
 
     /** Resultado con mensaje de error en español para mostrar en pantalla. */
     struct Answer<T> {
@@ -81,7 +82,9 @@ enum Panel {
         // PIN parental del panel: es el que usa la app
         let pin = j.s("pin")
         if pin.count == 4 && pin.isDigits { Store.parentalPin = pin }
-        return Answer(value: lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password")))
+        var line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))
+        line?.demo = j.b("demo")
+        return Answer(value: line)
     }
 
     /** Lista de DNS del panel (respuesta cifrada). */

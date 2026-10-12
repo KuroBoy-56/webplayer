@@ -107,6 +107,7 @@ struct LiveView: View {
     private func toggleFav(_ c: Item) {
         var it = c
         it.kind = .live
+        if cloud.demo { _ = Cloud.shared.blockedForDemo(); return }
         let on = Cloud.shared.toggleFav(it)
         state.toast = on ? "Agregado a favoritos" : "Quitado de favoritos"
     }
