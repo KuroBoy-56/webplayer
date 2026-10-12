@@ -253,7 +253,10 @@ function wp_panel_auth($user, $pass, $dns = '')
     $body = wp_panel_request('progress.php', wp_panel_auth_body($user, $pass, $dns), [], 8, $code);
     $j = $body !== null ? json_decode($body, true) : null;
     if ($code === 403 && is_array($j)) wp_tenant_mark_error(wp_panel_tenant(), (string)($j['code'] ?? ''));
-    return (is_array($j) && !empty($j['token']) && is_string($j['token'])) ? $j['token'] : '';
+    $ok = is_array($j) && !empty($j['token']) && is_string($j['token']);
+    // línea DEMO: el panel responde "demo": true (sin el campo = línea normal)
+    $GLOBALS['wp_panel_auth_demo'] = $ok && !empty($j['demo']);
+    return $ok ? $j['token'] : '';
 }
 
 /** Clave del token en la sesión: una por número de distribuidor (nunca se reutiliza el de otro). */
@@ -271,21 +274,58 @@ function wp_panel_token()
 /** Guarda un token nuevo en la sesión (si todavía se puede escribir). */
 function wp_panel_store_token($token)
 {
-    $tk = wp_panel_token_key();
-    $_SESSION[$tk] = $token;
+    wp_panel_session_set(wp_panel_token_key(), $token);
+}
+
+/** Escribe un valor en la sesión ya cerrada por session.php (si todavía se puede escribir). */
+function wp_panel_session_set($key, $value)
+{
+    $_SESSION[$key] = $value;
     // play.php (reproductor http) no tiene sesión que guardar
     if (defined('WP_HANDOFF') || session_status() === PHP_SESSION_ACTIVE) return;
     if (headers_sent()) return;
     $mem = $_SESSION;
     wp_session_start();
     if (session_status() === PHP_SESSION_ACTIVE) {
-        if (($_SESSION['username'] ?? '') === ($mem['username'] ?? '')) $_SESSION[$tk] = $token;
+        if (($_SESSION['username'] ?? '') === ($mem['username'] ?? '')) $_SESSION[$key] = $value;
         $all = $_SESSION;
         session_write_close();
         $_SESSION = $all;
     } else {
         $_SESSION = $mem;
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* Cuenta DEMO (el panel la marca con "demo": true)                    */
+/* ------------------------------------------------------------------ */
+
+/** ¿La sesión es de una línea DEMO? (sin usuario/contraseña visibles, sin progreso ni Mi lista) */
+function wp_is_demo()
+{
+    return !empty($_SESSION['is_demo']);
+}
+
+/** Marca o quita la DEMO en la sesión (solo escribe si cambió). */
+function wp_panel_set_demo($demo)
+{
+    $demo = (bool)$demo;
+    if (isset($_SESSION['is_demo']) && (bool)$_SESSION['is_demo'] === $demo) return;
+    wp_panel_session_set('is_demo', $demo);
+}
+
+/** En una DEMO cambia el usuario y la contraseña de la línea por "DEMO" en un texto que se va a mostrar. */
+function wp_demo_mask($text)
+{
+    $text = (string)$text;
+    if (!wp_is_demo() || $text === '') return $text;
+    $u = wp_user();
+    foreach ([$u['username'], $u['password']] as $s) {
+        // muy cortos se confundirían con palabras del texto
+        if (strlen($s) < 3) continue;
+        $text = str_ireplace([$s, rawurlencode($s), urlencode($s)], 'DEMO', $text);
+    }
+    return $text;
 }
 
 /**
@@ -302,6 +342,7 @@ function wp_panel_call($endpoint, $body = null, $timeout = 8)
             $token = wp_panel_auth($u['username'], $u['password'], $u['server']);
             if ($token === '') return null;
             wp_panel_store_token($token);
+            wp_panel_set_demo(!empty($GLOBALS['wp_panel_auth_demo']));
         }
         $res = wp_panel_request($endpoint, $body, ['Authorization: Bearer ' . $token], $timeout, $code);
         if ($code === 401 && $try === 0) {
@@ -336,15 +377,24 @@ function wp_panel_userdata($refresh = false)
         && wp_cache_get(wp_panel_ck('panel|tmdbkey'), 86400) !== trim($j['tmdbKey'])) {
         wp_cache_set(wp_panel_ck('panel|tmdbkey'), trim($j['tmdbKey']));
     }
+    // línea DEMO (el panel la marca también aquí): se recuerda en la sesión
+    if (is_array($j) && !empty($j['demo'])) wp_panel_set_demo(true);
+    // DEMO: sin "Continuar viendo" ni "Mi lista"
+    $demo = wp_is_demo();
     $memo = [
-        'progress' => (is_array($j) && is_array($j['progress'] ?? null)) ? $j['progress'] : [],
-        'favorites' => (is_array($j) && is_array($j['favorites'] ?? null)) ? $j['favorites'] : [],
+        'progress' => (!$demo && is_array($j) && is_array($j['progress'] ?? null)) ? $j['progress'] : [],
+        'favorites' => (!$demo && is_array($j) && is_array($j['favorites'] ?? null)) ? $j['favorites'] : [],
     ];
     return $memo;
 }
 
 function wp_panel_post($action, array $data)
 {
+    // DEMO: nunca se guarda progreso ni Mi lista en el panel
+    if (wp_is_demo() && in_array($action, ['save', 'delete', 'fav_add', 'fav_remove'], true)) {
+        $GLOBALS['wp_panel_last_error'] = 'cuenta DEMO (no se guarda)';
+        return false;
+    }
     $j = wp_panel_call('progress.php', ['action' => $action, 'platform' => WP_APP_ID, 'client_ip' => wp_client_ip()] + $data, 8);
     if (is_array($j) && empty($j['success'])) $GLOBALS['wp_panel_last_error'] = 'respuesta: ' . substr(json_encode($j, JSON_UNESCAPED_UNICODE), 0, 120);
     elseif ($j === null && empty($GLOBALS['wp_panel_last_error'])) $GLOBALS['wp_panel_last_error'] = 'sin respuesta o token rechazado';

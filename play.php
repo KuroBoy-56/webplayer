@@ -28,7 +28,9 @@ $username = (string)$d['usr'];
 $password = (string)($d['pwd'] ?? '');
 // número de distribuidor de la sesión que abrió el enlace (el token del panel es de ese número)
 wp_panel_set_tenant((string)($d['dt'] ?? ''));
-$_SESSION = ['server' => $get_dns, 'username' => $username, 'password' => $password, 'dist' => wp_panel_tenant(), wp_panel_token_key() => (string)($d['pt'] ?? '')];
+$_SESSION = ['server' => $get_dns, 'username' => $username, 'password' => $password, 'dist' => wp_panel_tenant(), wp_panel_token_key() => (string)($d['pt'] ?? ''),
+    'is_demo' => !empty($d['dm'])];
+$demo = wp_is_demo();
 
 /* ---------- Guardar progreso (misma lógica que save_progress.php) ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -85,8 +87,10 @@ $title = (string)($d['title'] ?? '');
             'resume' => isset($_GET['t']) ? max(0, (int)$_GET['t']) : (int)($d['resume'] ?? 0),
             'backUrl' => (string)($d['back'] ?? ''),
             'nextUrl' => (string)($d['next'] ?? ''),
-            'vlcUrl' => 'vlc://' . $raw_url,
-            'streamUrl' => $raw_url,
+            // DEMO: sin VLC (el enlace lleva el usuario y la contraseña de la línea)
+            'vlcUrl' => $demo ? '' : 'vlc://' . $raw_url,
+            'streamUrl' => $demo ? '' : $raw_url,
+            'demo' => $demo,
             'media' => null,
             'ext' => $ext,
             'extraMenu' => [],
@@ -96,7 +100,8 @@ $title = (string)($d['title'] ?? '');
             'diagUrl' => 'diag.php?id=' . $id . '&slug=' . ($kind === 'series' ? 'series' : $kind) . '&ext=' . rawurlencode((string)($d['vlcExt'] ?? $ext)) . (!empty($d['sid']) ? '&series_id=' . rawurlencode((string)$d['sid']) : ''),
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
 
-        if (!cfg.live) {
+        // DEMO: no se guarda "Continuar viendo"
+        if (!cfg.live && !cfg.demo) {
             var openedAt = Date.now(), resumeAt = cfg.resume || 0, lastSave = 0, lastSent = -1, here = location.href;
             var save = function (v, beacon) {
                 var cur = Math.floor(v.currentTime || 0), tot = Math.floor(isFinite(v.duration) ? v.duration : 0);

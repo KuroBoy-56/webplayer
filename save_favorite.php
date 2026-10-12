@@ -18,6 +18,12 @@ if (!$stream_id || !$username || !$action) {
     exit;
 }
 
+// DEMO: Mi lista no está disponible (no se llama al panel)
+if (wp_is_demo()) {
+    echo json_encode(['ok' => false, 'demo' => true, 'message' => 'No disponible en la DEMO'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($action === 'remove') {
     echo json_encode(['ok' => wp_panel_post('fav_remove', ['id' => $stream_id, 'type' => $type])]);
     exit;

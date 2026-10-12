@@ -7,7 +7,9 @@ $data = xt_get('', [], 300, 10); // player_api.php sin acción = datos de la cue
 $ui = is_array($data["user_info"] ?? null) ? $data["user_info"] : [];
 $exp = $ui["exp_date"] ?? null;
 $acc_active = $ui["status"] ?? 'Desconocido';
-$acc_user = $ui["username"] ?? $username;
+// DEMO: nunca se muestra el usuario de la línea
+$acc_demo = wp_is_demo();
+$acc_user = $acc_demo ? 'DEMO' : ($ui["username"] ?? $username);
 $max_conn = $ui['max_connections'] ?? '';
 $active_conn = $ui['active_cons'] ?? '';
 $created = !empty($ui['created_at']) ? date('d/m/Y', (int)$ui['created_at']) : '';
@@ -47,6 +49,7 @@ include "header.php";
     <div class="ac-wrap">
         <h1 class="nf-page-title">Mi cuenta</h1>
         <p class="nf-page-sub">Detalles de tu suscripción y lo que estás viendo.</p>
+        <?php if ($acc_demo): ?><p class="nf-page-sub"><b style="background:var(--nf-red);color:#fff;padding:3px 8px;border-radius:3px;font-size:12px;letter-spacing:1px">Cuenta DEMO</b> En la DEMO no se guardan "Continuar viendo" ni "Mi lista".</p><?php endif; ?>
         <div class="ac-grid">
             <div class="ac-item"><small>Usuario</small><b><?php echo e($acc_user); ?></b></div>
             <div class="ac-item"><small>Estado</small><b class="<?php echo strcasecmp($acc_active, 'Active') === 0 ? 'ok' : 'bad'; ?>"><?php echo strcasecmp($acc_active, 'Active') === 0 ? 'Activa' : e($acc_active); ?></b></div>
@@ -66,7 +69,9 @@ include "header.php";
         </div>
         <div class="ac-hist history-section">
             <h3>Continuar viendo</h3>
-            <?php if ($history_items): ?>
+            <?php if ($acc_demo): ?>
+                <div class="nf-empty" style="padding:30px">No disponible en la DEMO.</div>
+            <?php elseif ($history_items): ?>
                 <?php foreach (array_slice($history_items, 0, 200) as $item): ?>
                     <div class="ac-row">
                         <span class="n"><?php echo e($item['title'] ?? ''); ?></span>

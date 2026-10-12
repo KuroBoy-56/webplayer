@@ -47,8 +47,9 @@ switch ($action) {
             'show' => true,
             'type' => $aj['type'],
             'days' => isset($aj['days']) ? (int)$aj['days'] : null,
-            'title' => (string)($aj['title'] ?? ''),
-            'message' => (string)($aj['message'] ?? ''),
+            // DEMO: el aviso nunca muestra el usuario ni la contraseña de la línea
+            'title' => wp_demo_mask($aj['title'] ?? ''),
+            'message' => wp_demo_mask($aj['message'] ?? ''),
             'image' => $img,
             'button' => (string)($aj['button'] ?? 'ENTENDIDO'),
             'logo' => wp_brand_logo(),

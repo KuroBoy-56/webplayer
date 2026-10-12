@@ -70,9 +70,11 @@ if ($slug == "movie") {
 }
 
 $raw_url = wp_stream_url($kind, $id, $ext);
+// DEMO: sin descarga ni VLC (sus enlaces llevan el usuario y la contraseña de la línea)
+$demo = wp_is_demo();
 
 /* ---------- Descarga: directo desde el servidor IPTV (no pasa por el hosting) ---------- */
-if (isset($_GET['action']) && $_GET['action'] === 'download_file') {
+if (isset($_GET['action']) && $_GET['action'] === 'download_file' && !$demo) {
     header('Location: ' . wp_client_stream_url($kind, $id, $ext));
     exit;
 }
@@ -85,7 +87,7 @@ if ($restart == 0) {
 }
 
 /* ---------- Fuentes en orden de prueba ---------- */
-$use_vlc = isset($_COOKIE["use_vlc"]) ? $_COOKIE["use_vlc"] : "0";
+$use_vlc = (isset($_COOKIE["use_vlc"]) && !$demo) ? $_COOKIE["use_vlc"] : "0";
 $exts = [$ext];
 if (in_array($ext, ['mkv', 'avi', 'mov', 'wmv', 'flv', 'mpg', 'mpeg', 'm4v', 'divx', 'xvid', '3gp'], true)) {
     array_unshift($exts, 'mp4'); // muchos servidores entregan el mismo archivo como .mp4 (compatible con el navegador)
@@ -134,7 +136,7 @@ if ($http_url !== '' && $use_vlc !== '1' && wp_needs_handoff($kind, $id, $source
 
 $back_url = ($slug == 'movie') ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get;
 $download_url = '?' . http_build_query(array_merge($_GET, ['action' => 'download_file']));
-$extra = [['label' => 'Descargar contenido', 'href' => $download_url]];
+$extra = $demo ? [] : [['label' => 'Descargar contenido', 'href' => $download_url]];
 if ($has_prev) $extra[] = ['label' => 'Capítulo anterior', 'href' => $prev_url];
 if ($slug === 'series') $extra[] = ['label' => 'Ver episodios', 'href' => $back_url . '#episodios'];
 $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext) . ($series_id_get ? '&series_id=' . rawurlencode($series_id_get) : '');
@@ -163,7 +165,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
     <div id="vlc-overlay" class="vlc-overlay">
         <h2>Abriendo VLC Player...</h2>
         <p>Si el contenido no se abre automáticamente, presiona el botón.</p>
-        <a href="vlc://<?php echo e($raw_url); ?>" class="nf-btn nf-btn-red">Reproducir en VLC</a>
+        <a href="<?php echo $demo ? '#' : 'vlc://' . e($raw_url); ?>" class="nf-btn nf-btn-red">Reproducir en VLC</a>
         <p style="margin-top:22px"><a href="<?php echo e($back_url); ?>" style="color:#aaa">Volver</a></p>
     </div>
     <div id="player-container"></div>
@@ -182,10 +184,11 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
             'debug' => !empty($_GET['debug']),
             'backUrl' => $back_url,
             'nextUrl' => $has_next ? $next_url : '',
-            'vlcUrl' => 'vlc://' . $raw_url,
-            'streamUrl' => $raw_url,
-            'vlcPc' => 'playlist.php?' . http_build_query(['id' => $id, 'slug' => $slug, 'ext' => $ext, 'title' => trim($content_name . ' ' . $episode_label)]),
-            'downloadUrl' => $download_url,
+            'vlcUrl' => $demo ? '' : 'vlc://' . $raw_url,
+            'streamUrl' => $demo ? '' : $raw_url,
+            'vlcPc' => $demo ? '' : 'playlist.php?' . http_build_query(['id' => $id, 'slug' => $slug, 'ext' => $ext, 'title' => trim($content_name . ' ' . $episode_label)]),
+            'downloadUrl' => $demo ? '' : $download_url,
+            'demo' => $demo,
             'media' => $media_cfg,
             'tracks' => $tracks_url,
             'ext' => $ext,
@@ -209,6 +212,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
 
         var openedAt = Date.now(), resumeAt = cfg.resume || 0, lastSave = 0, lastSent = -1;
         function save(v, beacon) {
+            if (cfg.demo) return; // DEMO: no se guarda "Continuar viendo"
             var cur = Math.floor(v.currentTime || 0), tot = Math.floor(isFinite(v.duration) ? v.duration : 0);
             if (cur < 10 || cur === lastSent) return;
             // al abrir, el video arranca en 0 unos instantes antes de saltar al punto guardado (y al cambiar de motor se pausa):

@@ -8,6 +8,8 @@ $slug = in_array($_GET['slug'] ?? '', ['movie', 'series', 'live'], true) ? $_GET
 $ext = strtolower(preg_replace('/[^a-z0-9]/i', '', (string)($_GET['ext'] ?? ''))) ?: ($slug === 'live' ? 'ts' : 'mp4');
 $title = trim((string)($_GET['title'] ?? '')) ?: 'Reproducir';
 if ($id === '') { http_response_code(400); exit; }
+// DEMO: la lista lleva el usuario y la contraseña de la línea
+if (wp_is_demo()) { http_response_code(403); header('Content-Type: text/plain; charset=utf-8'); echo 'No disponible en la DEMO'; exit; }
 
 $url = wp_stream_url($slug, $id, $ext);
 $name = preg_replace('/[^A-Za-z0-9_\- ]/', '', $title) ?: 'video';

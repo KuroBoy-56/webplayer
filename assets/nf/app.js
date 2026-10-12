@@ -97,6 +97,8 @@
 
     /* ---------------- Favoritos (Mi lista) ---------------- */
     NF.fav = function (btn, data) {
+        // DEMO: Mi lista no se guarda
+        if (NF.demo) { NF.toast('No disponible en la DEMO'); return; }
         var on = btn.classList.contains('on');
         var fd = new FormData();
         fd.append('id', data.id);

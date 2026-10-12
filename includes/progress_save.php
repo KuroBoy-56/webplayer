@@ -10,6 +10,8 @@ function wp_progress_log_owner($username)
 /** Guarda y deja un registro de los últimos intentos (estado.php muestra a cada usuario solo los suyos). */
 function wp_progress_save(array $in, $username)
 {
+    // DEMO: no se guarda "Continuar viendo" (ni se pregunta nada al panel)
+    if (wp_is_demo()) return ['ok' => false, 'demo' => true];
     $GLOBALS['wp_progress_why'] = '';
     $r = wp_progress_save_do($in, $username);
     $log = wp_cache_get('progress|log', 864000);

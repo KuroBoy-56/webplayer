@@ -51,6 +51,7 @@ function wp_handoff_url(array $v)
         'pwd' => $u['password'],
         'pt' => wp_panel_token(),
         'dt' => wp_panel_tenant(),
+        'dm' => wp_is_demo() ? 1 : 0,
     ]);
     if ($tok === '') return '';
     $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');

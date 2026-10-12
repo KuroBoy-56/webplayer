@@ -186,10 +186,10 @@ include "header.php";
     <div style="font-size:13px;color:#ccc;line-height:1.7;word-break:break-word">
     <?php foreach ($self_rows as $sr): $r = $sr['r']; ?>
         <p style="margin:0 0 8px"><b><?php echo e($sr['v']); ?>:</b> código <?php echo (int)$r['code']; ?> · <?php echo (int)$r['len']; ?> bytes · <?php echo (int)$r['ms']; ?> ms<?php echo $r['err'] ? ' · <span style="color:#e87c03">' . e($r['err']) . '</span>' : ''; ?><br>
-        <span style="color:#888"><?php echo e($r['hdr']); ?></span><?php echo $r['body'] ? '<br><span style="color:#e87c03">' . e($r['body']) . '</span>' : ''; ?></p>
+        <span style="color:#888"><?php echo e(wp_demo_mask($r['hdr'])); ?></span><?php echo $r['body'] ? '<br><span style="color:#e87c03">' . e(wp_demo_mask($r['body'])) . '</span>' : ''; ?></p>
     <?php endforeach; ?>
     <?php if (!$self_rows): ?><p>El servidor IPTV es https: no pasa por el hosting.</p><?php endif; ?>
-    <p style="margin:0">Último error de PHP en proxy.php: <b><?php echo $proxy_err !== '' ? nl2br(e($proxy_err)) : 'ninguno'; ?></b></p>
+    <p style="margin:0">Último error de PHP en proxy.php: <b><?php echo $proxy_err !== '' ? nl2br(e(wp_demo_mask($proxy_err))) : 'ninguno'; ?></b></p>
     </div>
     <h2 style="font-size:18px;margin:22px 0 8px">Relay de Cloudflare</h2>
     <?php if (!$relay_rows): ?>
@@ -204,7 +204,7 @@ include "header.php";
             <td style="color:<?php echo $ok ? '#46d369' : '#e87c03'; ?>"><?php echo $r['code'] ?: '—'; ?><?php echo $r['err'] ? ' · ' . e($r['err']) : ''; ?></td>
             <td><?php echo e($r['type'] ?: '—'); ?></td>
             <td><?php echo e($r['len'] ?: '—'); ?></td>
-            <td><?php echo e($r['body'] ?: '—'); ?></td>
+            <td><?php echo e(wp_demo_mask($r['body']) ?: '—'); ?></td>
             <td><?php echo e($r['loc'] ?: '—'); ?></td>
             <td><?php echo e($r['acao'] ?: 'no'); ?></td>
             <td><?php echo (int)$r['ms']; ?> ms</td>

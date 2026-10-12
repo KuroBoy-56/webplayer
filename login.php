@@ -150,6 +150,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         $_SESSION['dist'] = $dist_code;
         // Token del panel para "Continuar viendo" y "Mi lista" (uno por número de distribuidor)
         $_SESSION[wp_panel_token_key()] = wp_panel_auth($username, $password, $srv['url']);
+        // Línea DEMO según el panel ("demo": true): un login normal la quita
+        $_SESSION['is_demo'] = !empty($GLOBALS['wp_panel_auth_demo']);
         wp_rate_reset('login');
 
         // Sólo se recuerda el usuario (nunca la contraseña en una cookie)

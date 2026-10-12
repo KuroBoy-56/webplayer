@@ -20,7 +20,9 @@ $wp_nav_map = [
 $nav_active = $nav_active ?? ($wp_nav_map[$wp_script] ?? '');
 $page_title = $page_title ?? (isset($pagename) ? $pagename : 'Inicio');
 $search_query = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
-$wp_user_initial = mb_substr((string)$username, 0, 1, 'UTF-8');
+// DEMO: nunca se muestra el usuario de la línea
+$wp_demo = wp_is_demo();
+$wp_user_initial = $wp_demo ? 'D' : mb_substr((string)$username, 0, 1, 'UTF-8');
 $wp_server_name = $_SESSION['server_name'] ?? '';
 // Marca del distribuidor (Omitir: logo, nombre y colores de siempre)
 $wp_dist_cfg = wp_tenant_cfg();
@@ -48,8 +50,8 @@ if (!function_exists('wp_nav_cls')) {
     <link rel="stylesheet" href="assets/nf/app.css?v=9">
     <?php echo wp_tenant_css($wp_dist_cfg); ?>
     <?php if (wp_panel_tenant() !== '' || wp_dist_choice() === 'skip') echo wp_brand_store_script($wp_dist_cfg); ?>
-    <script>window.NF={imgErr:function(i){i.onerror=null;i.src='assets/nf/noposter.svg';i.classList.add('ok');var c=i.closest&&i.closest('.nf-card');if(c)c.classList.add('noimg');}};</script>
-    <script src="assets/nf/app.js?v=4" defer></script>
+    <script>window.NF={demo:<?php echo $wp_demo ? 'true' : 'false'; ?>,imgErr:function(i){i.onerror=null;i.src='assets/nf/noposter.svg';i.classList.add('ok');var c=i.closest&&i.closest('.nf-card');if(c)c.classList.add('noimg');}};</script>
+    <script src="assets/nf/app.js?v=5" defer></script>
     <script src="assets/nf/alert.js?v=2" defer></script>
     <?php if (!empty($wp_head_extra)) echo $wp_head_extra; ?>
 </head>
@@ -88,7 +90,7 @@ if (!function_exists('wp_nav_cls')) {
                 <span class="nf-caret"></span>
             </button>
             <div class="nf-menu" role="menu">
-                <div class="who"><b><?php echo e($username); ?></b><?php echo $wp_server_name ? 'Servidor: ' . e($wp_server_name) : ''; ?></div>
+                <div class="who"><b><?php echo $wp_demo ? 'Cuenta DEMO' : e($username); ?></b><?php echo $wp_server_name ? 'Servidor: ' . e($wp_server_name) : ''; ?></div>
                 <a href="myaccount.php"><i class="fas fa-user"></i> Mi cuenta</a>
                 <a href="settings.php"><i class="fas fa-cog"></i> Ajustes</a>
                 <?php if ($wp_show_sports): ?><a href="sportsschedule.php"><i class="fas fa-futbol"></i> Deportes</a><?php endif; ?>

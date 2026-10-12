@@ -85,9 +85,10 @@ function tv_channel_data($id, $username, $fav_file)
         'sources' => $sources,
         'http' => $http,
         'direct' => $http === '' || !wp_needs_handoff('live', $id, $sources),
-        'vlc' => 'vlc://' . wp_stream_url('live', $id, $pref),
-        'stream' => wp_stream_url('live', $id, $pref),
-        'vlcPc' => 'playlist.php?' . http_build_query(['id' => (string)$id, 'slug' => 'live', 'ext' => $pref, 'title' => $name]),
+        // DEMO: sin VLC (el enlace lleva el usuario y la contraseña de la línea)
+        'vlc' => wp_is_demo() ? '' : 'vlc://' . wp_stream_url('live', $id, $pref),
+        'stream' => wp_is_demo() ? '' : wp_stream_url('live', $id, $pref),
+        'vlcPc' => wp_is_demo() ? '' : 'playlist.php?' . http_build_query(['id' => (string)$id, 'slug' => 'live', 'ext' => $pref, 'title' => $name]),
         'diag' => 'diag.php?slug=live&id=' . rawurlencode((string)$id),
         'fav' => wp_is_favorite('live', $id),
         'epg' => tv_epg($id, $name),
@@ -123,7 +124,7 @@ $selectedCategoryId = isset($_GET['category_id']) ? (string)$_GET['category_id']
 $categories = wp_categories('live');
 if ($selectedCategoryId === '' && !$id) $selectedCategoryId = tv_fav_channels($username, $fav_file) ? 'favorites' : (string)($categories[0]['category_id'] ?? '');
 $initial = $id ? tv_channel_data($id, $username, $fav_file) : null;
-$use_vlc = isset($_COOKIE["use_vlc"]) ? $_COOKIE["use_vlc"] : "0";
+$use_vlc = (isset($_COOKIE["use_vlc"]) && !wp_is_demo()) ? $_COOKIE["use_vlc"] : "0";
 
 $page_title = 'TV en vivo';
 $body_class = 'nf-solid nf-live';
