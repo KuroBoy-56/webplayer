@@ -12,7 +12,8 @@ import org.json.JSONObject
  */
 object Panel {
     /** Línea IPTV que el panel tiene asignada a este equipo. */
-    data class Line(val name: String, val base: String, val user: String, val pass: String)
+    /** demo: el panel dice que la línea es una demo (se muestra "DEMO", sin progreso ni Mi lista) */
+    data class Line(val name: String, val base: String, val user: String, val pass: String, val demo: Boolean = false)
 
     /** Resultado con mensaje de error en español para mostrar en pantalla. */
     data class Answer<T>(val value: T?, val error: String? = null, val code: Int = 0)
@@ -82,7 +83,7 @@ object Panel {
         if (!j.optBoolean("exists", false)) return Answer(null)
         // PIN parental del panel: es el que usa la app
         j.s("pin").takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { Store.parentalPin = it }
-        val line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))
+        val line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))?.copy(demo = j.optBoolean("demo", false))
         return Answer(line)
     }
 

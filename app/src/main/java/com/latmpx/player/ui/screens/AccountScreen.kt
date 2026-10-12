@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.latmpx.player.BuildConfig
 import com.latmpx.player.Device
+import com.latmpx.player.data.Store
 import com.latmpx.player.data.Cloud
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.Route
@@ -158,12 +159,14 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
         
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(64.dp).background(NfRed, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                Text(s.user.take(1).uppercase(), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Text(Store.shownUser(s).take(1).uppercase(), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.width(16.dp))
             Column {
-                Text(s.user, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text("Suscripción Activa", color = Color(0xFF4CAF50), fontSize = 14.sp)
+                // demo: nunca el usuario ni la contraseña de la línea
+                Text(Store.shownUser(s), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                if (Store.demo) Text("Cuenta DEMO · Estás usando una demostración", color = Color(0xFFFFB300), fontSize = 14.sp)
+                else Text("Suscripción Activa", color = Color(0xFF4CAF50), fontSize = 14.sp)
             }
         }
         

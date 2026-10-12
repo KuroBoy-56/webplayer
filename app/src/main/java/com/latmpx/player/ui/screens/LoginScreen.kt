@@ -102,12 +102,32 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
     // pantalla falsa del panel (equipo nuevo): hasta escribir el código o hasta que lo registren
     var fake by remember { mutableStateOf<com.latmpx.player.data.FakeScreen?>(null) }
 
-    suspend fun connect(line: Panel.Line) {
+    // la línea que se va a abrir viene del botón Autodemo (aunque el panel no lo diga)
+    var fromAutodemo by remember { mutableStateOf(false) }
+
+    /** true si entró; la demo (Autodemo o el panel dice "demo") se abre en modo DEMO */
+    suspend fun tryLine(line: Panel.Line): Boolean {
         status = "Conectando con ${line.name}…"
-        when (val r = Xtream.login(listOf(line.name to line.base), line.user, line.pass)) {
-            is Xtream.LoginResult.Ok -> onLogged(r.session)
-            is Xtream.LoginResult.Fail -> err = r.message
+        return when (val r = Xtream.login(listOf(line.name to line.base), line.user, line.pass)) {
+            is Xtream.LoginResult.Ok -> { Store.demo = line.demo || fromAutodemo; onLogged(r.session); true }
+            is Xtream.LoginResult.Fail -> { err = r.message; false }
         }
+    }
+
+    suspend fun connect(line: Panel.Line) { tryLine(line) }
+
+    /**
+     * Varias líneas o servidores para este equipo: se entra con la primera que funciona, sin preguntar
+     * (antes se mostraba la lista "Elige tu servicio").
+     */
+    suspend fun connectFirst(found: List<Panel.Line>) {
+        var lastErr: String? = null
+        for (l in found) {
+            err = null
+            if (tryLine(l)) return
+            lastErr = err
+        }
+        err = lastErr
     }
 
     suspend fun resolve(): Boolean {
@@ -121,8 +141,8 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
             if (problem == null) problem = c.error
         }
         lines = found
-        if (found.size == 1) connect(found.first())
-        else if (found.isEmpty() && problem != null) err = problem
+        if (found.isNotEmpty()) connectFirst(found)
+        else if (problem != null) err = problem
         busy = false
         return found.isNotEmpty()
     }
@@ -182,93 +202,87 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                     if (!PanelCrypto.hasKey()) {
                         ErrorBanner("Esta versión de la app no tiene la llave del panel (PANEL_MASTER_KEY). La activación no funcionará hasta instalar una versión configurada.")
                     }
-                    if (lines.size > 1) {
-                        Text("Elige tu servicio", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                        lines.forEachIndexed { i, l ->
-                            HeroButton(l.name.ifBlank { "Servicio ${i + 1}" }, Icons.Filled.PlayArrow, i == 0, if (i == 0) Modifier.focusRequester(firstFocus) else Modifier) {
-                                act { connect(l) }
+                    // varias líneas para este equipo: se entra con la primera que funciona (ya no se pregunta)
+                    Text("Iniciar sesión", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                    err?.let { ErrorBanner(it) }
+                    
+                    OutlinedTextField(
+                        value = user, onValueChange = { user = it }, label = { Text("Usuario") }, singleLine = true, colors = fieldColors,
+                        keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Next)), modifier = Modifier.fillMaxWidth().then(Modifier.tvTextInput()),
+                    )
+                    OutlinedTextField(
+                        value = pass, onValueChange = { pass = it }, label = { Text("Contraseña") }, singleLine = true, colors = fieldColors,
+                        visualTransformation = if (showPass) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            androidx.compose.material3.IconButton(onClick = { showPass = !showPass }, modifier = Modifier.focusRequester(eyeFocus)) {
+                                androidx.compose.material3.Icon(
+                                    if (showPass) androidx.compose.material.icons.Icons.Filled.VisibilityOff else androidx.compose.material.icons.Icons.Filled.Visibility,
+                                    if (showPass) "Ocultar contraseña" else "Ver contraseña", tint = Color.White,
+                                )
                             }
+                        },
+                        keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)),
+                        keyboardActions = KeyboardActions(onDone = { }),
+                        modifier = Modifier.fillMaxWidth()
+                            // TV: derecha desde la contraseña va al ojito (el campo se queda con las flechas)
+                            .then(if (tv) Modifier.onPreviewKeyEvent { e ->
+                                if (e.key == androidx.compose.ui.input.key.Key.DirectionRight && e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                    runCatching { eyeFocus.requestFocus() }; true
+                                } else false
+                            } else Modifier)
+                            .then(Modifier.tvTextInput()),
+                    )
+                    
+                    Column(Modifier.fillMaxWidth().background(Color(0x33FFFFFF), RoundedCornerShape(4.dp)).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Código MAC (Activación remota)", color = NfGray2, fontSize = 12.sp)
+                        Text(deviceId, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    }
+                    
+                    RedButton("Iniciar sesión", Modifier.fillMaxWidth().focusRequester(firstFocus)) {
+                        act {
+                            if (user.isBlank() || pass.isBlank()) { err = "Escribe tu usuario y contraseña"; return@act }
+                            if (dns.isEmpty()) Panel.fetchDns().let { d -> d.value?.let { dns = it }; if (d.value == null) err = d.error }
+                            val server = dns.getOrNull(dnsIdx) ?: dns.firstOrNull()
+                            if (server == null) { if (err == null) err = "El panel no tiene servidores disponibles"; return@act }
+                            status = "Activando…"
+                            fromAutodemo = false
+                            val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), server)
+                            if (r.value == null) { err = r.error; return@act }
+                            if (!resolve() && err == null) connect(Panel.Line("Servidor ${dnsIdx + 1}", Xtream.normalize(server), user.trim(), pass.trim()))
                         }
-                    } else {
-                        Text("Iniciar sesión", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
-                        err?.let { ErrorBanner(it) }
-                        
-                        OutlinedTextField(
-                            value = user, onValueChange = { user = it }, label = { Text("Usuario") }, singleLine = true, colors = fieldColors,
-                            keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Next)), modifier = Modifier.fillMaxWidth().then(Modifier.tvTextInput()),
-                        )
-                        OutlinedTextField(
-                            value = pass, onValueChange = { pass = it }, label = { Text("Contraseña") }, singleLine = true, colors = fieldColors,
-                            visualTransformation = if (showPass) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
-                            trailingIcon = {
-                                androidx.compose.material3.IconButton(onClick = { showPass = !showPass }, modifier = Modifier.focusRequester(eyeFocus)) {
-                                    androidx.compose.material3.Icon(
-                                        if (showPass) androidx.compose.material.icons.Icons.Filled.VisibilityOff else androidx.compose.material.icons.Icons.Filled.Visibility,
-                                        if (showPass) "Ocultar contraseña" else "Ver contraseña", tint = Color.White,
-                                    )
-                                }
-                            },
-                            keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)),
-                            keyboardActions = KeyboardActions(onDone = { }),
-                            modifier = Modifier.fillMaxWidth()
-                                // TV: derecha desde la contraseña va al ojito (el campo se queda con las flechas)
-                                .then(if (tv) Modifier.onPreviewKeyEvent { e ->
-                                    if (e.key == androidx.compose.ui.input.key.Key.DirectionRight && e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
-                                        runCatching { eyeFocus.requestFocus() }; true
-                                    } else false
-                                } else Modifier)
-                                .then(Modifier.tvTextInput()),
-                        )
-                        
-                        Column(Modifier.fillMaxWidth().background(Color(0x33FFFFFF), RoundedCornerShape(4.dp)).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Código MAC (Activación remota)", color = NfGray2, fontSize = 12.sp)
-                            Text(deviceId, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                        }
-                        
-                        RedButton("Iniciar sesión", Modifier.fillMaxWidth().focusRequester(firstFocus)) {
+                    }
+                    
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // el distribuidor puede no tener demo (sin DNS): entonces no se muestra el botón
+                        if (Tenant.demoEnabled) HeroButton(if (demoUsed) "Autodemo" else "Autodemo", Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
+                            // el panel decide (si el dueño borró el registro, el equipo puede pedir otra demo)
                             act {
-                                if (user.isBlank() || pass.isBlank()) { err = "Escribe tu usuario y contraseña"; return@act }
-                                if (dns.isEmpty()) Panel.fetchDns().let { d -> d.value?.let { dns = it }; if (d.value == null) err = d.error }
-                                val server = dns.getOrNull(dnsIdx) ?: dns.firstOrNull()
-                                if (server == null) { if (err == null) err = "El panel no tiene servidores disponibles"; return@act }
-                                status = "Activando…"
-                                val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), server)
-                                if (r.value == null) { err = r.error; return@act }
-                                if (!resolve() && err == null) connect(Panel.Line("Servidor ${dnsIdx + 1}", Xtream.normalize(server), user.trim(), pass.trim()))
+                                status = "Creando demo…"
+                                // un código de revendedor escrito en Contraseña deja la demo a su nombre
+                                val r = Panel.autoDemo(deviceId, pass)
+                                val cred = r.value
+                                if (cred == null) {
+                                    err = r.error
+                                    if (r.code == 403) { demoUsed = true; Store.demoUsed = true }
+                                    return@act
+                                }
+                                Store.demoUsed = false; demoUsed = false
+                                fromAutodemo = true
+                                if (!resolve() && err == null) {
+                                    val d = dns.ifEmpty { Panel.fetchDns().value.orEmpty() }
+                                    val first = d.firstOrNull()
+                                    if (first != null) connect(Panel.Line("Demo", Xtream.normalize(first), cred.first, cred.second))
+                                    else err = "Demo creada, pero el panel no devolvió el servidor."
+                                }
                             }
                         }
                         
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // el distribuidor puede no tener demo (sin DNS): entonces no se muestra el botón
-                            if (Tenant.demoEnabled) HeroButton(if (demoUsed) "Autodemo" else "Autodemo", Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
-                                // el panel decide (si el dueño borró el registro, el equipo puede pedir otra demo)
-                                act {
-                                    status = "Creando demo…"
-                                    // un código de revendedor escrito en Contraseña deja la demo a su nombre
-                                    val r = Panel.autoDemo(deviceId, pass)
-                                    val cred = r.value
-                                    if (cred == null) {
-                                        err = r.error
-                                        if (r.code == 403) { demoUsed = true; Store.demoUsed = true }
-                                        return@act
-                                    }
-                                    Store.demoUsed = false; demoUsed = false
-                                    if (!resolve() && err == null) {
-                                        val d = dns.ifEmpty { Panel.fetchDns().value.orEmpty() }
-                                        val first = d.firstOrNull()
-                                        if (first != null) connect(Panel.Line("Demo", Xtream.normalize(first), cred.first, cred.second))
-                                        else err = "Demo creada, pero el panel no devolvió el servidor."
-                                    }
-                                }
+                        if (dns.size > 1 || true) {
+                            Box(Modifier.weight(1f)) {
+                                DnsButton()
                             }
-                            
-                            if (dns.size > 1 || true) {
-                                Box(Modifier.weight(1f)) {
-                                    DnsButton()
-                                }
-                            } else {
-                                Spacer(Modifier.weight(1f))
-                            }
+                        } else {
+                            Spacer(Modifier.weight(1f))
                         }
                     }
                     if (busy) {
@@ -277,7 +291,6 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                             Text(status, color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp), textAlign = TextAlign.Center)
                         }
                     }
-                    if (lines.size > 1) err?.let { ErrorBanner(it) }
                 }
             }
             Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} ${Tenant.nameOr("Garevyn TV")}", color = Color(0xFF999999), fontSize = 14.sp,
