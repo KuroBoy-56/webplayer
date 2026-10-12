@@ -137,13 +137,19 @@ object Store {
     fun logout() {
         mem = null
         demo = false
-        p.edit().remove("session").remove(tenantKey("cloud_token2")).apply()
+        p.edit().remove("session").remove(tenantKey("cloud_token2")).remove(tenantKey("cloud_token2_scope")).apply()
     }
 
     /* ---------- token de progress.php / epg.php / sports.php (30 días; uno por distribuidor) ---------- */
     var cloudToken: String?
         get() = p.getString(tenantKey("cloud_token2"), null)
         set(v) = p.edit().putString(tenantKey("cloud_token2"), v).apply()
+
+    // usuario@servidor al que pertenece el token guardado: si entra otro usuario, el token no coincide
+    // y se pide uno nuevo (no se reutiliza "Continuar viendo" ni "Mi lista" de la cuenta anterior)
+    var cloudTokenScope: String?
+        get() = p.getString(tenantKey("cloud_token2_scope"), null)
+        set(v) = p.edit().putString(tenantKey("cloud_token2_scope"), v).apply()
 
     private fun scope(): String = session()?.let { "${it.user}@${it.base}" } ?: "-"
 
