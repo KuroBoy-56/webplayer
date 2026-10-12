@@ -38,6 +38,9 @@ object Cloud {
     /* ---------- token ---------- */
 
     private suspend fun token(s: Session): String? {
+        // el token es de esta cuenta (usuario@servidor); si cambió, se descarta y se pide uno nuevo
+        val scope = "${s.user}@${s.base}"
+        if (Store.cloudTokenScope != scope) { Store.cloudToken = null; Store.cloudTokenScope = scope; clear() }
         Store.cloudToken?.takeIf { it.isNotEmpty() }?.let { return it }
         // con distribuidor el token lleva su número y la app (t, a); Omitir = igual que antes
         val r = Net.postJson(api(), Tenant.tag(JSONObject().put("action", "auth").put("user", s.user).put("pass", s.pass).put("dns", s.base)
