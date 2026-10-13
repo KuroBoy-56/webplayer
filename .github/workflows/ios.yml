@@ -91,7 +91,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete ipa-latest --yes --cleanup-tag || true
-          gh release create ipa-latest LatMpx.ipa --target "$GITHUB_SHA" --title "LatMpx iPhone / iPad (última versión)" \
+          gh release create ipa-latest LatMpx.ipa --target "$GITHUB_SHA" --title "MPX Player iPhone / iPad (última versión)" \
             --notes "Compilado automáticamente desde la rama ios ($GITHUB_SHA). Sin firma: instálalo con Sideloadly o AltStore (ver README de la rama ios)." --prerelease
 
   # prueba de humo: la app abre en el simulador de iPhone sin cerrarse (captura de pantalla como artefacto)
