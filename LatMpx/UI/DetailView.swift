@@ -13,6 +13,8 @@ struct DetailView: View {
     @State private var photos: [String: String] = [:]
     @State private var season = -1
     @ObservedObject private var dl = Downloads.shared
+    /** sugerencias: se barajan una vez por título (antes en cada redibujo, y el avance de una descarga las cambiaba sin parar) */
+    @State private var similar: [Item] = []
 
     var body: some View {
         GeometryReader { g in
@@ -100,8 +102,6 @@ struct DetailView: View {
                         }
                     }
 
-                    let pool = media.kind == .movie ? state.movies : state.series
-                    let similar = Array(pool.filter { $0.categoryId == media.categoryId && $0.id != media.id }.prefix(60).shuffled().prefix(24))
                     ShelfRow(title: "Sugerencias", items: similar, pad: pad) { _, it in
                         PosterCard(item: it, width: posterWidth(g.size)) { state.push(.detail(it)) }
                     }.padding(.top, 16)
@@ -112,6 +112,10 @@ struct DetailView: View {
         }
         .background(Theme.bg.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: "\(media.key)|\((media.kind == .movie ? state.movies : state.series).count)") {
+            let pool = media.kind == .movie ? state.movies : state.series
+            similar = Array(pool.filter { $0.categoryId == media.categoryId && $0.id != media.id }.prefix(60).shuffled().prefix(24))
+        }
         .task(id: media.key) {
             guard let s = state.session else { return }
             let d = media.kind == .series ? await Xtream.seriesDetails(s, media) : await Xtream.movieDetails(s, media)
