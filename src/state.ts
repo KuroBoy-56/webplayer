@@ -2,7 +2,7 @@
 // sincronizados con api/progress.php del panel igual que la web, Android y Roku.
 import { useSyncExternalStore } from 'react';
 import { bindSession, cloud, forgetCloud, onPanelDemo, panelTenantConfig, Session } from './api/panel';
-import { Kind, loadKind } from './api/xtream';
+import { Kind, loadKind, setStreamFlip } from './api/xtream';
 import { catalog } from './data/catalog';
 import { json } from './lib/http';
 import { read, readJson, remove, write, writeJson } from './lib/storage';
@@ -92,6 +92,7 @@ export function restoreSession(): boolean {
 // de sesión normal la deja en false
 export function setSession(s: Session, demo = false, demoExpires = 0, demoDuration = 0) {
   forgetCloud();
+  setStreamFlip(false);
   set({ session: s, progress: [], favorites: [], demo, demoExpires: demo ? demoExpires : 0, demoDuration: demo ? demoDuration : 0 });
 }
 

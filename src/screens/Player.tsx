@@ -8,7 +8,7 @@ import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon
 import { reportError } from '../api/report';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Image, StyleSheet, Text, View } from 'react-native';
-import { channelEpg, EpgEntry, episodeUrl, liveUrl, movieUrl, otherScheme } from '../api/xtream';
+import { channelEpg, EpgEntry, episodeUrl, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
 import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
@@ -54,7 +54,9 @@ export default function Player({ params }: { params: PlayParams }) {
 
   // el servidor no entrega el video por el protocolo de la sesión (quedó en https y el video solo va por
   // http, o al revés): tras un error se prueba una vez el otro antes de dar el error
-  const flipped = useRef(false);
+  // empieza con el protocolo que ya funcionó en esta sesión; triedOther: ya se probó el otro en este video
+  const flipped = useRef(streamFlip());
+  const triedOther = useRef(false);
   const urlFor = useCallback(
     (i: number): string => {
       const s = getState().session!;
@@ -178,6 +180,8 @@ export default function Player({ params }: { params: PlayParams }) {
       setPaused(false);
       setStatus('');
       c.onPlaying();
+      // por este protocolo entrega el video el servidor: los siguientes videos van primero por él
+      setStreamFlip(flipped.current);
     };
     const onWaiting = () => setBuffering(true);
     const onPause = () => {
@@ -199,8 +203,9 @@ export default function Player({ params }: { params: PlayParams }) {
         setTimeout(() => alive && load(indexRef.current), 1500);
         return;
       }
-      if (!flipped.current) {
-        flipped.current = true;
+      if (!triedOther.current) {
+        triedOther.current = true;
+        flipped.current = !flipped.current;
         setStatus('Reintentando…');
         const at = params.kind === 'live' ? 0 : Math.floor(c.realPos());
         setTimeout(() => alive && load(indexRef.current, at), 500);

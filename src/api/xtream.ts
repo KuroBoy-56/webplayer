@@ -24,6 +24,16 @@ function sessionFrom(sv: Server, user: string, pass: string, ui: any): Session {
 }
 
 // http://… <-> https://…
+// servidores mixtos: true = el video sale por el otro protocolo que el de la sesión (p. ej. la sesión en
+// https y el video solo en http). Lo pone el reproductor cuando un video arranca; vale para la sesión.
+let flip = false;
+export function streamFlip(): boolean {
+  return flip;
+}
+export function setStreamFlip(on: boolean): void {
+  flip = on;
+}
+
 export function otherScheme(base: string): string {
   // el puerto por defecto del otro protocolo se quita (http://host:443 da «400 plain HTTP request»)
   return /^https:\/\//i.test(base)
