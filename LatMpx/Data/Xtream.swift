@@ -61,6 +61,12 @@ enum Xtream {
         print("[LatMpx] login \(host) -> http \(r.code)" + (ui.map { " auth=\($0.s("auth")) status=\($0.s("status"))" } ?? " sin JSON"))
     }
 
+    /**
+     * Servidores mixtos: true = el video sale por el otro protocolo que el de la sesión (p. ej. la sesión en
+     * https y el video solo en http). Lo pone el reproductor cuando un video arranca; vale para la sesión.
+     */
+    static var streamFlip = false
+
     /** http://… <-> https://… */
     static func otherScheme(_ base: String) -> String {
         // el puerto por defecto del otro protocolo se quita (http://host:443 da «400 plain HTTP request»)

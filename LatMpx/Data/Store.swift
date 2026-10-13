@@ -84,7 +84,7 @@ enum Store {
     private static let lock = NSLock()
     private static var mem: Session?
 
-    static func saveSession(_ s: Session) { lock.lock(); mem = s; lock.unlock() }
+    static func saveSession(_ s: Session) { lock.lock(); mem = s; lock.unlock(); Xtream.streamFlip = false }
     static func session() -> Session? { lock.lock(); defer { lock.unlock() }; return mem }
 
     static var demoUsed: Bool {

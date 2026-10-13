@@ -114,9 +114,10 @@ final class PlayerModel: ObservableObject {
             case .series: urls = [Xtream.episodeUrl(s, q.id, q.ext)]
             case .live: urls = Xtream.liveUrls(s, q.id); Store.setLastChannel(q.id)
             }
-            // si el servidor no entrega el video por este protocolo (la sesión quedó en https y el video solo va
-            // por http, o al revés), se prueban las mismas direcciones con el otro antes de dar el error
-            urls += urls.map { Xtream.otherScheme($0) }
+            // servidores http, https o mixtos: si el video no sale por un protocolo se prueba el otro; el que
+            // funcionó se recuerda (Xtream.streamFlip) y va primero en los siguientes videos de la sesión
+            let other = urls.map { Xtream.otherScheme($0) }
+            urls = Xtream.streamFlip ? other + urls : urls + other
         }
         index = i
         urlIdx = 0
@@ -184,6 +185,11 @@ final class PlayerModel: ObservableObject {
         if player.isPlaying {
             if !everPlayed {
                 everPlayed = true
+                // protocolo con el que el servidor entrega el video (http / https), para los siguientes
+                if !request.offline, request.directUrls.isEmpty, let s = Store.session(), urls.indices.contains(urlIdx) {
+                    let scheme = (s.base.lowercased().components(separatedBy: "://").first ?? "http") + "://"
+                    Xtream.streamFlip = !urls[urlIdx].lowercased().hasPrefix(scheme)
+                }
                 if resumeTo > 0 { player.time = VLCTime(int: Int32(truncatingIfNeeded: resumeTo)) }
             }
             if !appliedLang && time > 1500 { appliedLang = true; readTracks(); applyPreferredLanguages() }

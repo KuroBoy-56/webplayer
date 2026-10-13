@@ -48,12 +48,14 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         // descargas: el archivo del equipo; la prueba del simulador (directUrls) sigue en el de la app
         if r.offline { return r.directUrls.indices.contains(r.index) && compatible(r.directUrls[r.index]) ? r.directUrls[r.index] : nil }
         guard r.directUrls.isEmpty, let s = Store.session() else { return nil }
-        let u: String
+        var u: String
         switch r.kind {
         case .movie: u = Xtream.movieUrl(s, q.id, q.ext)
         case .series: u = Xtream.episodeUrl(s, q.id, q.ext)
         case .live: u = Xtream.liveUrls(s, q.id).first { $0.lowercased().hasSuffix(".m3u8") } ?? ""
         }
+        // el protocolo con el que este servidor ya entregó video (http / https)
+        if Xtream.streamFlip { u = Xtream.otherScheme(u) }
         return compatible(u) ? u : nil
     }
 
