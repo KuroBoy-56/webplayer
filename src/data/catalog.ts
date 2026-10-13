@@ -30,9 +30,9 @@ export const PLATFORMS: Platform[] = [
   { key: 'max', label: 'HBO Max', image: require('../../assets/image/plat_max.png'), color: '#5822B4', kw: ['hbo', '\\bmax\\b'] },
   { key: 'prime', label: 'Prime Video', image: require('../../assets/image/plat_prime.png'), color: '#00A8E1', kw: ['amazon', 'prime'] },
   { key: 'marvel', label: 'Marvel', image: require('../../assets/image/plat_marvel.png'), color: '#EC1D24', kw: ['marvel', '\\bmcu\\b'] },
-  { key: 'apple', label: 'Apple TV+', color: '#555555', kw: ['apple'] },
-  { key: 'paramount', label: 'Paramount+', color: '#0064FF', kw: ['paramount'] },
-  { key: 'dc', label: 'DC', color: '#0476F2', kw: ['\\bdc\\b', 'dc comics'] },
+  { key: 'apple', label: 'Apple TV+', image: require('../../assets/image/plat_apple.png'), color: '#555555', kw: ['apple'] },
+  { key: 'paramount', label: 'Paramount+', image: require('../../assets/image/plat_paramount.png'), color: '#0064FF', kw: ['paramount'] },
+  { key: 'dc', label: 'DC', image: require('../../assets/image/plat_dc.png'), color: '#0476F2', kw: ['\\bdc\\b', 'dc comics'] },
   { key: 'xmas', label: 'Navidad', image: require('../../assets/image/plat_xmas.png'), color: '#1F7A3A', kw: ['navidad', 'navide', 'christmas', 'xmas'] },
   { key: 'halloween', label: 'Halloween', image: require('../../assets/image/plat_halloween.png'), color: '#FF6A00', kw: ['halloween', 'terror', 'horror'] },
 ];

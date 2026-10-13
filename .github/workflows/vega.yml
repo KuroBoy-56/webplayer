@@ -107,4 +107,4 @@ jobs:
           cd out
           sha256sum *.vpkg > SHA256SUMS.txt
           gh release delete vega-latest --yes --cleanup-tag || true
-          gh release create vega-latest *.vpkg SHA256SUMS.txt --target "$GITHUB_SHA" --title "LatMpx TV+ Vega OS (última versión)" --notes "Compilado automáticamente desde la rama vega-os ($GITHUB_SHA). Para la tienda sube armv7 y aarch64; x86_64 es solo para el simulador. Súbelos en la Amazon Appstore Developer Console." --prerelease
+          gh release create vega-latest *.vpkg SHA256SUMS.txt --target "$GITHUB_SHA" --title "MPX Player Vega OS (última versión)" --notes "Compilado automáticamente desde la rama vega-os ($GITHUB_SHA). Para la tienda sube armv7 y aarch64; x86_64 es solo para el simulador. Súbelos en la Amazon Appstore Developer Console." --prerelease

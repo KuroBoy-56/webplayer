@@ -6,7 +6,7 @@ import { read, readJson, remove, write, writeJson } from './storage';
 import { str } from './util';
 
 export const APP_ID = 'vega';
-export const APP_NAME = 'LatMpx TV+';
+export const APP_NAME = 'MPX Player';
 // sin respuesta del panel se sigue con la marca guardada hasta 72 h
 export const OFFLINE_GRACE = 72 * 3600;
 const PANAMA = -5 * 3600; // America/Panama, UTC-5 sin horario de verano

@@ -1,4 +1,6 @@
-# LatMpx TV+ para Fire TV con Vega OS
+# MPX Player para Fire TV con Vega OS
+
+**Marca:** la app se llama **MPX Player** (`title` en `manifest.toml` y `APP_NAME` en `src/lib/tenant.ts`; el id sigue siendo `com.latmpx.player.vega`). Logo, icono (`app_icon.png`) e imágenes de las plataformas (Netflix, Disney+, HBO Max, Prime Video, Marvel, Apple TV+, Paramount+, DC, Navidad, Halloween) están en `assets/image/`.
 
 App de la webplayer para los Fire TV nuevos con **Vega OS** (Fire TV Stick 4K Select y
 siguientes). Está hecha en React Native para Vega y usa el mismo panel y el mismo diseño
