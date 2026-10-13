@@ -30,6 +30,8 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     private var url = ""
     private weak var state: AppState?
     private var lastSave = Date()
+    /** la app le baja el video al reproductor de iOS (servidores http / https / mixtos, 1 conexión) */
+    private var loader: StreamLoader?
 
     var active: Bool { vc != nil }
 
@@ -83,7 +85,15 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         self.url = url
         if r.kind == .live, r.queue.indices.contains(r.index) { Store.setLastChannel(r.queue[r.index].id) }
 
-        let asset = u.isFileURL ? AVURLAsset(url: u) : AVURLAsset(url: u, options: ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": Net.ua]])
+        let asset: AVURLAsset
+        if StreamLoader.handles(u), let l = StreamLoader(u) {
+            // películas y episodios: el video lo pide la app (sigue redirecciones http / https, una sola conexión)
+            loader = l
+            asset = AVURLAsset(url: l.assetURL)
+            l.attach(asset)
+        } else {
+            asset = u.isFileURL ? AVURLAsset(url: u) : AVURLAsset(url: u, options: ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": Net.ua]])
+        }
         let item = AVPlayerItem(asset: asset)
         let p = AVPlayer(playerItem: item)
         let c = NativePlayerController()
@@ -163,6 +173,8 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         // suelta el video de verdad (cierra la conexión con el servidor IPTV antes de abrir otro reproductor)
         (vc?.player?.currentItem?.asset as? AVURLAsset)?.cancelLoading()
         vc?.player?.replaceCurrentItem(with: nil)
+        loader?.close()
+        loader = nil
         vc?.player = nil
         vc?.delegate = nil
         vc = nil

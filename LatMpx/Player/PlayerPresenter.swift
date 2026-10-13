@@ -64,8 +64,11 @@ enum PlayerPresenter {
         // lo que Apple puede abrir va a su reproductor (imagen en imagen); si falla vuelve aquí con forceApp
         if let url = NativePlayer.source(req) {
             shownId = req.id
-            if req.offline { NativePlayer.shared.open(req, url: url, state: state); return }
-            // servidores mixtos: la redirección de https a http (que el reproductor de iOS no sigue) se resuelve antes
+            if req.offline || URL(string: url).map(StreamLoader.handles) == true {
+                NativePlayer.shared.open(req, url: url, state: state)
+                return
+            }
+            // HLS (canales): la redirección de https a http (que el reproductor de iOS no sigue) se resuelve antes
             Task { @MainActor in
                 let u = await StreamRedirect.resolve(url)
                 guard shownId == req.id, state.play?.id == req.id else { return }
