@@ -14,6 +14,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Inicio de sesión** solo con usuario y contraseña: se prueba a la vez en todos los DNS
   del panel y entra en el que coincida. Si el panel tiene una cuenta asignada a este equipo
   aparece un botón para entrar con ella. Fondo con carteles de estreno (TMDB del panel).
+- **Botón DNS** (como Android e iOS): Automático, Cloudflare, Google, Quad9, AdGuard, NextDNS u OpenDNS.
+  Si el DNS de la red no encuentra el servidor IPTV (bloqueo del proveedor de internet), la app lo resuelve
+  con DNS sobre HTTPS y se conecta a esa IP: catálogo, inicio de sesión y reproductor (una vez por video).
+  Solo para servidores http (https necesita el nombre para el certificado). `src/lib/securedns.ts`.
 - **Autodemo con código de revendedor**: si en *Contraseña* hay un código de 6 letras y números
   (con al menos una letra, p. ej. `RV7K2M`), *Autodemo* lo envía en mayúsculas (`reseller` dentro de
   `auto_demo`) y la demo queda a nombre de ese revendedor en el panel. Solo números o cualquier otra

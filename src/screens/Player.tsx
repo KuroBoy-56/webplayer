@@ -6,6 +6,7 @@
 import { HWEvent, useTVEventHandler } from '@amazon-devices/react-native-kepler';
 import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { reportError } from '../api/report';
+import { viaDns } from '../lib/securedns';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Image, StyleSheet, Text, View } from 'react-native';
 import { channelEpg, EpgEntry, episodeUrl, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
@@ -57,6 +58,9 @@ export default function Player({ params }: { params: PlayParams }) {
   // empieza con el protocolo que ya funcionó en esta sesión; triedOther: ya se probó el otro en este video
   const flipped = useRef(streamFlip());
   const triedOther = useRef(false);
+  // botón DNS: si tampoco abre, una vez por la IP que da el DNS elegido (solo ese video)
+  const triedDns = useRef(false);
+  const dnsUrl = useRef<{ i: number; url: string } | null>(null);
   const urlFor = useCallback(
     (i: number): string => {
       const s = getState().session!;
@@ -122,7 +126,7 @@ export default function Player({ params }: { params: PlayParams }) {
       setSub('');
       setWork('');
       setStatus(live ? 'Conectando con el canal…' : 'Cargando…');
-      c.load(urlFor(i), resume, live);
+      c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
     },
     [urlFor, live],
   );
@@ -142,6 +146,7 @@ export default function Player({ params }: { params: PlayParams }) {
       if (params.kind !== 'live' || params.channels.length < 2) return;
       const n = (indexRef.current + delta + params.channels.length) % params.channels.length;
       retried.current = false;
+      triedDns.current = false;
       setIndex(n);
       setEpg([]);
       load(n);
@@ -212,13 +217,28 @@ export default function Player({ params }: { params: PlayParams }) {
         return;
       }
       // audio que el equipo no decodifica (DTS…): lo prepara el panel
-      c.onError().then(handled => {
-        if (!alive || handled) return;
-        setBuffering(false);
-        setStatus('');
-        setError(params.kind === 'live' ? 'Este canal no está disponible en este momento.' : 'No se pudo reproducir este contenido.');
-        reportError('playback', 'No se pudo reproducir (' + params.kind + ')', 'kind=' + params.kind + ' index=' + indexRef.current, 'Reproductor');
-      });
+      const giveUp = () =>
+        c.onError().then(handled => {
+          if (!alive || handled) return;
+          setBuffering(false);
+          setStatus('');
+          setError(params.kind === 'live' ? 'Este canal no está disponible en este momento.' : 'No se pudo reproducir este contenido.');
+          reportError('playback', 'No se pudo reproducir (' + params.kind + ')', 'kind=' + params.kind + ' index=' + indexRef.current, 'Reproductor');
+        });
+      if (!triedDns.current) {
+        triedDns.current = true;
+        const i = indexRef.current;
+        const at = params.kind === 'live' ? 0 : Math.floor(c.realPos());
+        viaDns(urlFor(i)).then(url => {
+          if (!alive) return;
+          if (!url) return giveUp();
+          dnsUrl.current = { i, url };
+          setStatus('Reintentando con el DNS elegido…');
+          load(i, at);
+        });
+        return;
+      }
+      giveUp();
     };
     const onTrack = () => {
       c.schedulePrefs();
