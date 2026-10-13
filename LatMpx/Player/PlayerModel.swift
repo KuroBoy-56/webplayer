@@ -99,7 +99,11 @@ final class PlayerModel: ObservableObject {
     private func load(_ i: Int) {
         guard request.queue.indices.contains(i) else { return }
         let q = request.queue[i]
-        if !request.directUrls.isEmpty {
+        if request.offline {
+            // descarga: el archivo del equipo de este episodio o película
+            urls = request.directUrls.indices.contains(i) ? [request.directUrls[i]] : []
+            if urls.isEmpty { return }
+        } else if !request.directUrls.isEmpty {
             urls = request.directUrls
         } else {
             guard let s = Store.session() else { return }
@@ -116,7 +120,10 @@ final class PlayerModel: ObservableObject {
             // de vuelta de imagen en imagen: donde iba
             startUsed = true
             resumeTo = request.startAt
-        } else if kind != .live, let p = Cloud.shared.progress(q.key), p.position > 30_000, p.duration <= 0 || Double(p.position) < Double(p.duration) * 0.95 {
+        } else if request.offline, let d = Downloads.shared.get(q.key), d.position > 30_000, d.duration <= 0 || Double(d.position) < Double(d.duration) * 0.95 {
+            resumeTo = d.position
+            toast = "Continuando desde \(fmtTime(d.position))"
+        } else if kind != .live, !request.offline, let p = Cloud.shared.progress(q.key), p.position > 30_000, p.duration <= 0 || Double(p.position) < Double(p.duration) * 0.95 {
             resumeTo = p.position
             toast = "Continuando desde \(fmtTime(p.position))"
         }
@@ -124,7 +131,7 @@ final class PlayerModel: ObservableObject {
         audio = []; subs = []; time = 0; length = 0; error = nil
         loadSeq += 1
         let raw = urls, my = loadSeq
-        if SecureDns.current.endpoint.isEmpty { open(raw[0]); return }
+        if SecureDns.current.endpoint.isEmpty || request.offline { open(raw[0]); return }
         // DNS elegido en Ajustes: si las direcciones de siempre no abren, se prueba la IP que da ese DNS
         buffering = true
         freshPlayer()
@@ -276,11 +283,14 @@ final class PlayerModel: ObservableObject {
     /* ---------- progreso en el panel ---------- */
     private func save(force: Bool = false, done: Bool = false) {
         lastSave = Date()
-        guard kind != .live, request.directUrls.isEmpty, request.queue.indices.contains(index) else { return }
+        guard kind != .live, request.queue.indices.contains(index) else { return }
         let q = entry
         let dur = length
         let pos = done ? dur : time
         if pos < 5_000 { return }
+        // sin internet: donde se dejó queda en el equipo
+        if request.offline { Downloads.shared.savePosition(q.key, pos, dur); return }
+        guard request.directUrls.isEmpty else { return }
         Cloud.shared.saveProgress(Progress(key: q.key, title: request.saveTitle.ifEmpty(q.title), label: q.title,
                                            poster: request.savePoster.ifEmpty(q.poster), position: pos, duration: dur,
                                            updated: Date().timeIntervalSince1970, url: urls.indices.contains(urlIdx) ? urls[urlIdx] : "",

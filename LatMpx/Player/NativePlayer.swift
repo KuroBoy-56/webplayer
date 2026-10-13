@@ -17,7 +17,6 @@ private final class NativePlayerController: AVPlayerViewController {
  * Si el de iOS falla, no arranca en 20 s o se queda sin imagen, el video pasa solo al de la app en el mismo
  * punto (antes quedaba en negro con algunos servidores). Ajustes › "Reproductor de iOS" lo apaga.
  */
-@MainActor
 final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     static let shared = NativePlayer()
 
@@ -46,7 +45,7 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         guard Store.nativePlayer, !r.forceApp, r.queue.indices.contains(r.index) else { return nil }
         let q = r.queue[r.index]
         // descargas: el archivo del equipo; la prueba del simulador (directUrls) sigue en el de la app
-        if r.offline { return r.directUrls.first(where: compatible) }
+        if r.offline { return r.directUrls.indices.contains(r.index) && compatible(r.directUrls[r.index]) ? r.directUrls[r.index] : nil }
         guard r.directUrls.isEmpty, let s = Store.session() else { return nil }
         let u: String
         switch r.kind {
@@ -61,7 +60,12 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     private static func startPoint(_ r: PlayRequest) -> Int64 {
         if r.kind == .live { return 0 }
         if r.startAt > 0 { return r.startAt }
-        guard !r.offline, r.queue.indices.contains(r.index), let p = Cloud.shared.progress(r.queue[r.index].key),
+        if r.offline {
+            guard r.queue.indices.contains(r.index), let d = Downloads.shared.get(r.queue[r.index].key),
+                  d.position > 30_000, d.duration <= 0 || Double(d.position) < Double(d.duration) * 0.95 else { return 0 }
+            return d.position
+        }
+        guard r.queue.indices.contains(r.index), let p = Cloud.shared.progress(r.queue[r.index].key),
               p.position > 30_000, p.duration <= 0 || Double(p.position) < Double(p.duration) * 0.95 else { return 0 }
         return p.position
     }
@@ -70,10 +74,10 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
 
     func open(_ r: PlayRequest, url: String, state: AppState) {
         close(save: false)
+        self.state = state
         guard let u = URL(string: url), let top = Self.topController() else { backToApp(r, 0, nil); return }
         request = r
         self.url = url
-        self.state = state
         if r.kind == .live, r.queue.indices.contains(r.index) { Store.setLastChannel(r.queue[r.index].id) }
 
         let asset = u.isFileURL ? AVURLAsset(url: u) : AVURLAsset(url: u, options: ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": Net.ua]])
@@ -102,13 +106,11 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
             },
         ]
         timeObs = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 5, preferredTimescale: 1), queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let s = self, Date().timeIntervalSince(s.lastSave) >= 10 else { return }
-                s.saveProgress()
-            }
+            guard let s = self, Date().timeIntervalSince(s.lastSave) >= 10 else { return }
+            s.saveProgress()
         }
         endObs = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.ended() }
+            self?.ended()
         }
         // si en 20 s no arrancó (servidor que no responde a este reproductor), pasa al de la app
         let t = DispatchWorkItem { [weak self] in
@@ -133,8 +135,8 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         PlayerDiag.log("nativo: reproduciendo")
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
             guard let s = self, s.vc === c, let item = c.player?.currentItem, !s.pipActive else { return }
-            let hasVideo = item.tracks.contains { $0.assetTrack?.mediaType == .video }
-            if item.presentationSize == .zero || !hasVideo { s.failed("sin imagen") }
+            // presentationSize sigue en cero cuando Apple no puede decodificar la imagen (en HLS assetTrack puede venir vacío)
+            if item.presentationSize == .zero { s.failed("sin imagen") }
         }
     }
 
@@ -177,7 +179,7 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         saveProgress(done: true)
         if r.kind == .series && r.index + 1 < r.queue.count {
             st.play = PlayRequest(kind: r.kind, queue: r.queue, index: r.index + 1, saveTitle: r.saveTitle, savePoster: r.savePoster,
-                                  category: r.category, directUrls: r.offline ? [] : r.directUrls, offline: false)
+                                  category: r.category, directUrls: r.directUrls, offline: r.offline)
             return
         }
         close(save: false)
@@ -213,31 +215,28 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     }
 
     /* ---------- imagen en imagen (la maneja el reproductor de iOS) ---------- */
-    nonisolated func playerViewControllerWillStartPictureInPicture(_ c: AVPlayerViewController) {
-        Task { @MainActor in self.pipActive = true; PlayerDiag.log("nativo: imagen en imagen") }
+    func playerViewControllerWillStartPictureInPicture(_ c: AVPlayerViewController) {
+        pipActive = true
+        PlayerDiag.log("nativo: imagen en imagen")
     }
 
-    nonisolated func playerViewControllerDidStopPictureInPicture(_ c: AVPlayerViewController) {
-        Task { @MainActor in
-            self.pipActive = false
-            // cerró la ventanita sin volver a la app
-            if let v = self.vc, v.presentingViewController == nil {
-                self.saveProgress()
-                let r = self.request
-                self.cleanup()
-                self.finish(r)
-            }
+    func playerViewControllerDidStopPictureInPicture(_ c: AVPlayerViewController) {
+        pipActive = false
+        // cerró la ventanita sin volver a la app
+        if let v = vc, v.presentingViewController == nil {
+            saveProgress()
+            let r = request
+            cleanup()
+            finish(r)
         }
     }
 
-    nonisolated func playerViewController(_ c: AVPlayerViewController,
-                                          restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completion: @escaping (Bool) -> Void) {
-        Task { @MainActor in
-            // "volver a la app" desde la ventanita: el reproductor de iOS vuelve a pantalla completa
-            guard let v = self.vc, v.presentingViewController == nil, let top = Self.topController() else { completion(true); return }
-            AppDelegate.playerOpen = true
-            top.present(v, animated: true) { completion(true) }
-        }
+    func playerViewController(_ c: AVPlayerViewController,
+                              restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completion: @escaping (Bool) -> Void) {
+        // "volver a la app" desde la ventanita: el reproductor de iOS vuelve a pantalla completa
+        guard let v = vc, v.presentingViewController == nil, let top = Self.topController() else { completion(true); return }
+        AppDelegate.playerOpen = true
+        top.present(v, animated: true) { completion(true) }
     }
 
     /* ---------- progreso en el panel ---------- */
@@ -248,12 +247,15 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
 
     private func saveProgress(done: Bool = false) {
         lastSave = Date()
-        guard let r = request, r.kind != .live, !r.offline, r.directUrls.isEmpty, r.queue.indices.contains(r.index) else { return }
+        guard let r = request, r.kind != .live, r.queue.indices.contains(r.index) else { return }
         let q = r.queue[r.index]
         var dur: Int64 = 0
         if let d = vc?.player?.currentItem?.duration, d.isNumeric { dur = Int64(d.seconds * 1000) }
         let pos = done ? dur : currentMs()
         if pos < 5_000 { return }
+        // sin internet: donde se dejó queda en el equipo
+        if r.offline { Downloads.shared.savePosition(q.key, pos, dur); return }
+        guard r.directUrls.isEmpty else { return }
         Cloud.shared.saveProgress(Progress(key: q.key, title: r.saveTitle.ifEmpty(q.title), label: q.title, poster: r.savePoster.ifEmpty(q.poster),
                                            position: pos, duration: dur, updated: Date().timeIntervalSince1970, url: url, categoryId: r.category), force: true)
     }

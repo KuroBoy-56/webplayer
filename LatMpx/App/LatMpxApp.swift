@@ -16,7 +16,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         Integrity.check()
         PlayerDiag.watchdog()
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        Downloads.shared.boot() // descargas para ver sin internet (siguen las que el sistema tenga en curso)
         return true
+    }
+
+    /** descargas que terminaron con la app cerrada: iOS la despierta para guardar los archivos */
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        guard identifier == Downloads.sessionId else { completionHandler(); return }
+        Downloads.shared.backgroundDone = completionHandler
+        Downloads.shared.boot()
     }
 }
 

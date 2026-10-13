@@ -8,6 +8,10 @@ import SwiftUI
 struct LoginView: View {
     let onLogged: (Session) -> Void
     @EnvironmentObject var tenant: Tenant
+    @EnvironmentObject var state: AppState
+    @ObservedObject private var online = Online.shared
+    /** Mis descargas sin internet */
+    @State private var showDownloads = false
     @State private var busy = true
     @State private var status = "Comprobando el equipo en el panel…"
     @State private var err: String?
@@ -29,6 +33,11 @@ struct LoginView: View {
                 .task(id: f) { await pollWhileFake() }
         } else {
             content
+                .fullScreenCover(isPresented: $showDownloads) {
+                    NavigationStack { DownloadsView(onClose: { showDownloads = false }) }
+                        .environmentObject(state)
+                        .preferredColorScheme(.dark)
+                }
         }
     }
 
@@ -74,6 +83,11 @@ struct LoginView: View {
             Group {
                 Text("Iniciar sesión").font(.system(size: 28, weight: .bold)).foregroundColor(.white).frame(maxWidth: .infinity, alignment: .leading)
                 if let e = err { ErrorBanner(text: e) }
+                // sin internet (o el panel no responde): lo descargado se puede ver igual
+                if !online.connected || (err ?? "").hasPrefix("No se pudo conectar") {
+                    if !online.connected { Text("Sin conexión a internet").font(.system(size: 13)).foregroundColor(Theme.muted).frame(maxWidth: .infinity, alignment: .leading) }
+                    AppButton(text: "Mis descargas", icon: "arrow.down.circle", primary: !online.connected) { showDownloads = true }
+                }
                 field("Usuario", text: $user, secure: false)
                 field("Contraseña", text: $pass, secure: true)
                 VStack(spacing: 2) {

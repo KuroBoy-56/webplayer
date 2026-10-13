@@ -32,6 +32,11 @@ final class ImageLoader {
             if let t = tasks[url] { return t }
             let t = Task<UIImage?, Never> { [session] in
                 guard let u = URL(string: url) else { return nil }
+                // carátula de una descarga (guardada en el equipo, sin internet)
+                if u.isFileURL {
+                    guard let img = UIImage(contentsOfFile: u.path) else { return nil }
+                    return img.preparingForDisplay() ?? img
+                }
                 var r = URLRequest(url: u)
                 if let h = u.host, let s = u.scheme { r.setValue("\(s)://\(h)/", forHTTPHeaderField: "Referer") }
                 guard let (d, resp) = try? await session.data(for: r), (resp as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? false,

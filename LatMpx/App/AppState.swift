@@ -12,6 +12,8 @@ enum Route: Hashable {
     case saved(Bool)
     case sports
     case search
+    /** Cuenta › Mis descargas */
+    case downloads
 }
 
 /** Entrada de la lista de reproducción (siguiente episodio o canal anterior/siguiente). */
@@ -59,6 +61,7 @@ final class AppState: ObservableObject {
     }
 
     func push(_ r: Route) { stacks[tab, default: []].append(r) }
+    func pop() { if !(stacks[tab]?.isEmpty ?? true) { stacks[tab]?.removeLast() } }
 
     func open(_ t: Tab) {
         if tab == t { stacks[t] = [] }
@@ -118,6 +121,19 @@ final class AppState: ObservableObject {
                        key: "series:\(series.id):\(e.id)", poster: e.image.ifEmpty(series.poster), ext: e.ext)
         }
         play = PlayRequest(kind: .series, queue: q, index: max(0, min(index, q.count - 1)), saveTitle: series.name, savePoster: series.poster, category: series.categoryId)
+    }
+
+    /** descargas sin internet: una película o los episodios descargados de una serie (pasa al siguiente) */
+    func playDownloads(_ list: [Downloads.Entry], _ index: Int) {
+        guard !list.isEmpty else { return }
+        let i = max(0, min(index, list.count - 1))
+        let q = list.map { e in
+            QueueEntry(id: e.streamId, title: e.isMovie ? e.title : "\(e.seriesName) · T\(e.season) E\(e.episode) · \(e.title)",
+                       key: e.key, poster: Downloads.image(e.poster, e.posterUrl), ext: e.ext)
+        }
+        let first = list[i]
+        play = PlayRequest(kind: first.isMovie ? .movie : .series, queue: q, index: i, saveTitle: first.isMovie ? first.title : first.seriesName,
+                           directUrls: list.map { Downloads.shared.fileURL($0).absoluteString }, offline: true)
     }
 
     /** canal: la lista de su categoría permite cambiar de canal en el reproductor */

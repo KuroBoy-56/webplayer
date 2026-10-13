@@ -12,6 +12,7 @@ struct DetailView: View {
     /** fotos del elenco buscadas en TMDB por nombre (respaldo para el elenco del servidor sin fotos) */
     @State private var photos: [String: String] = [:]
     @State private var season = -1
+    @ObservedObject private var dl = Downloads.shared
 
     var body: some View {
         GeometryReader { g in
@@ -58,6 +59,19 @@ struct DetailView: View {
                             Spacer()
                             action(cloud.isFav(media.key) ? "checkmark" : "plus", "Mi lista") { Cloud.shared.toggleFav(media) }
                             Spacer()
+                            // descargar para ver sin internet (dentro de la app, en Cuenta › Mis descargas)
+                            if media.kind == .movie, let d = det, Downloads.canDownload(d.item.ext.ifEmpty(media.ext)) {
+                                let _ = dl.entries
+                                let e = dl.get("movie:\(media.id)")
+                                action(downloadIcon(e), downloadLabel(e)) {
+                                    switch e?.state {
+                                    case nil: if let s = state.session { Downloads.shared.addMovie(s, d.item, ext: d.item.ext.ifEmpty(media.ext)) }
+                                    case .failed?: Downloads.shared.retry(e!.key)
+                                    default: state.push(.downloads)
+                                    }
+                                }
+                                Spacer()
+                            }
                             if !trailer.isEmpty { action("film", "Tráiler") { openTrailer(trailer) }; Spacer() }
                             ShareLink(item: "Mira \"\(media.name)\" en \(tenant.nameOr("LatMpx"))") {
                                 VStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 22)); Text("Compartir").font(.system(size: 11)).foregroundColor(Theme.muted) }
@@ -75,8 +89,12 @@ struct DetailView: View {
                                 .padding(.horizontal, pad).padding(.vertical, 8)
                         }
                         let all = seasons.flatMap { $0.1 }
+                        let _ = dl.entries
                         ForEach(seasons.first { $0.0 == cur }?.1 ?? [], id: \.id) { e in
-                            EpisodeRow(episode: e, series: media, progress: cloud.progress("series:\(media.id):\(e.id)")?.fraction ?? 0) {
+                            let key = "series:\(media.id):\(e.id)"
+                            let item = dl.get(key)
+                            EpisodeRow(episode: e, series: media, progress: cloud.progress(key)?.fraction ?? 0, download: item,
+                                       onDownload: episodeDownload(e, item)) {
                                 state.playEpisode(media, all, all.firstIndex(of: e) ?? 0)
                             }.padding(.horizontal, pad)
                         }
@@ -143,6 +161,19 @@ struct DetailView: View {
         }.buttonStyle(.plain)
     }
 
+    /** botón de descarga de un episodio (nil si el formato no se puede descargar) */
+    private func episodeDownload(_ e: Episode, _ item: Downloads.Entry?) -> (() -> Void)? {
+        guard Downloads.canDownload(e.ext) else { return nil }
+        let key = "series:\(media.id):\(e.id)"
+        return {
+            switch item?.state {
+            case nil: if let s = state.session { Downloads.shared.addEpisode(s, media, e) }
+            case .failed?: Downloads.shared.retry(key)
+            default: state.push(.downloads)
+            }
+        }
+    }
+
     private func defaultSeason(_ seasons: [(Int, [Episode])], _ lastEp: Progress?) -> Int {
         if let eid = lastEp.flatMap({ episodeId($0.key) }), let s = seasons.first(where: { $0.1.contains { $0.id == eid } }) { return s.0 }
         return seasons.first?.0 ?? 1
@@ -177,10 +208,33 @@ struct DetailView: View {
     }
 }
 
+/** icono y texto del botón de descarga según su estado */
+func downloadIcon(_ e: Downloads.Entry?) -> String {
+    switch e?.state {
+    case nil: return "arrow.down.circle"
+    case .done?: return "checkmark.circle.fill"
+    case .failed?: return "exclamationmark.arrow.circlepath"
+    default: return "arrow.down.circle.dotted"
+    }
+}
+
+func downloadLabel(_ e: Downloads.Entry?) -> String {
+    switch e?.state {
+    case nil: return "Descargar"
+    case .done?: return "Descargado"
+    case .failed?: return "Reintentar"
+    case .queued?: return "En espera"
+    case .running?: return (e?.total ?? 0) > 0 ? "\(e!.percent) %" : "Descargando"
+    }
+}
+
 struct EpisodeRow: View {
     let episode: Episode
     let series: Item
     let progress: Double
+    var download: Downloads.Entry? = nil
+    /** descarga del episodio: botón pequeño abajo a la derecha de la miniatura (nil = no se ofrece) */
+    var onDownload: (() -> Void)? = nil
     let action: () -> Void
 
     var body: some View {
@@ -199,6 +253,25 @@ struct EpisodeRow: View {
                 Spacer(minLength: 0)
             }.padding(.vertical, 6).contentShape(Rectangle())
         }.buttonStyle(.plain)
+        // fuera del botón de la fila para que el toque sea solo de la descarga
+        .overlay(alignment: .topLeading) {
+            if let tap = onDownload {
+                Button(action: tap) {
+                    ZStack {
+                        Circle().fill(Color.black.opacity(0.7))
+                        if let d = download, d.state == .running, d.total > 0 {
+                            Circle().trim(from: 0, to: CGFloat(d.percent) / 100).stroke(Color.white, lineWidth: 2).rotationEffect(.degrees(-90)).padding(5)
+                        } else {
+                            Image(systemName: downloadIcon(download)).font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(download?.state == .done ? Theme.green : .white)
+                        }
+                    }.frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(downloadLabel(download))
+                .offset(x: 150 - 30 - 4, y: 6 + 84 - 30 - 4)
+            }
+        }
     }
 }
 

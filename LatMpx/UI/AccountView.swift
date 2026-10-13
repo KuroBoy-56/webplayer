@@ -7,6 +7,7 @@ struct AccountView: View {
     let onChangeDistributor: () -> Void
     @State private var streamFormat = Store.streamFormat
     @State private var nativePlayer = Store.nativePlayer
+    @ObservedObject private var dl = Downloads.shared
     @State private var pinOpen = false
     @State private var confirmLogout = false
 
@@ -43,6 +44,13 @@ struct AccountView: View {
                     }
                     section("Configuración de la aplicación") {
                         setting("lock.fill", "Control parental", "Activado · el PIN lo administra el panel") { pinOpen = true }
+                        Divider().background(Color(hex: 0x333333))
+                        // películas y episodios guardados para ver sin internet
+                        let done = dl.entries.filter { $0.state == .done }.count
+                        let busy = dl.entries.filter { $0.state == .running || $0.state == .queued }.count
+                        setting("arrow.down.circle", "Mis descargas", busy > 0 ? "\(done) listas · \(busy) descargando" : done > 0 ? "\(done) para ver sin internet" : "Películas y episodios para ver sin internet") {
+                            state.push(.downloads)
+                        }
                         Divider().background(Color(hex: 0x333333))
                         setting("play.rectangle", "Formato de canales", streamFormat == "ts" ? "MPEG-TS (.ts)" : "HLS (.m3u8)") {
                             streamFormat = streamFormat == "ts" ? "m3u8" : "ts"

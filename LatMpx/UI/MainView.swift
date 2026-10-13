@@ -64,6 +64,7 @@ struct RouteView: View {
         case .saved(let cw): SavedView(continueWatching: cw)
         case .sports: if tenant.sportsEnabled { SportsView() } else { EmptyMessage(text: "Deportes no está disponible.") }
         case .search: SearchView()
+        case .downloads: DownloadsView()
         }
     }
 }
