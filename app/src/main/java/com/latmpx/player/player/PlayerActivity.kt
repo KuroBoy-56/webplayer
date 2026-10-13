@@ -72,6 +72,8 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var ui2: PlayerUiModel
     private var tv = false
     private lateinit var pip: PlayerPip
+    /** abierto con el botón de imagen en imagen de TV en vivo: entra a la ventanita al mostrarse */
+    private var pipOnStart = false
     private lateinit var selector: DefaultTrackSelector
     private val ui = Handler(Looper.getMainLooper())
 
@@ -108,6 +110,7 @@ class PlayerActivity : ComponentActivity() {
         val posters = intent.getStringArrayExtra(Play.X_POSTERS) ?: emptyArray()
         val exts = intent.getStringArrayExtra(Play.X_EXTS) ?: emptyArray()
         extra = intent.getStringExtra(Play.X_EXTRA).orEmpty()
+        pipOnStart = intent.getBooleanExtra(Play.X_PIP, false)
         saveTitle = intent.getStringExtra(Play.X_SAVE_TITLE).orEmpty()
         savePoster = intent.getStringExtra(Play.X_SAVE_POSTER).orEmpty()
         category = intent.getStringExtra(Play.X_CATEGORY).orEmpty()
@@ -501,6 +504,14 @@ class PlayerActivity : ComponentActivity() {
     }
 
     /* ---------------- ciclo de vida ---------------- */
+
+    override fun onResume() {
+        super.onResume()
+        if (pipOnStart && ::pip.isInitialized) {
+            pipOnStart = false
+            pip.enter()
+        }
+    }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
