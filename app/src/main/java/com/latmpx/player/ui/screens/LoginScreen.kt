@@ -110,7 +110,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
     suspend fun tryLine(line: Panel.Line): Boolean {
         status = "Conectando con ${line.name}…"
         return when (val r = Xtream.login(listOf(line.name to line.base), line.user, line.pass)) {
-            is Xtream.LoginResult.Ok -> { Store.demo = line.demo || fromAutodemo; onLogged(r.session); true }
+            is Xtream.LoginResult.Ok -> { Store.setDemo(line.demo || fromAutodemo, line.demoExpires, line.demoDuration); onLogged(r.session); true }
             is Xtream.LoginResult.Fail -> { err = r.message; false }
         }
     }
@@ -123,7 +123,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
         val list = servers.filter { it.isNotBlank() }.map(Xtream::normalize).distinct()
         if (list.isEmpty()) { err = "Demo creada, pero el panel no devolvió el servidor."; return false }
         return when (val r = Xtream.login(list.mapIndexed { i, s -> (if (i == 0) "Demo" else "Servidor ${i + 1}") to s }, demo.user, demo.pass)) {
-            is Xtream.LoginResult.Ok -> { Store.demo = true; onLogged(r.session); true }
+            is Xtream.LoginResult.Ok -> { Store.setDemo(true, demo.expires, demo.duration); onLogged(r.session); true }
             is Xtream.LoginResult.Fail -> { err = r.message; false }
         }
     }
@@ -165,7 +165,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
         scope.launch { busy = true; block(); busy = false }
     }
 
-    LaunchedEffect(Store.tmdbKey) { posters = Tmdb.nowPlaying(Store.tmdbKey) }
+    LaunchedEffect(Tenant.code) { posters = Tmdb.nowPlaying() }
     LaunchedEffect(Unit) {
         resolve()
         if (lines.isEmpty() && !Store.fakeUnlocked) fake = Panel.fakeScreen

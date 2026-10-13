@@ -1,10 +1,13 @@
 package com.latmpx.player.data
 
 import org.json.JSONObject
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.net.URLEncoder
 
 object Tmdb {
     private var cached: List<String>? = null
+    /** número de distribuidor de las carátulas guardadas (cada uno tiene su clave TMDB) */
+    private var cachedFor: String? = null
     private const val FALLBACK_KEY = "0c23c3f0458f0f9e4d0a35048d3a199a"
     /** la llave del panel respondió 401 (vencida o mal copiada): se usa la de respaldo */
     @Volatile private var panelKeyBad = false
@@ -29,11 +32,23 @@ object Tmdb {
         return null
     }
 
-    suspend fun nowPlaying(key: String, pages: Int = 3): List<String> {
-        cached?.let { return it }
+    /**
+     * Carátulas del fondo del inicio de sesión y del número de distribuidor: solo con la clave TMDB del
+     * panel (la del distribuidor o la del dueño), pedidas por api/tmdb.php. Sin clave el panel responde
+     * tmdb_key_not_set y no hay carrusel (nunca con la clave de respaldo de la app).
+     */
+    suspend fun nowPlaying(pages: Int = 3): List<String> {
+        val who = Tenant.code
+        if (cachedFor == who) cached?.let { return it }
         val out = ArrayList<String>()
         for (p in 1..pages) {
-            val j = get("movie/now_playing?language=es-MX&page=$p") ?: break
+            val url = (PanelUrl.api("tmdb.php") + "/movie/now_playing").toHttpUrlOrNull()?.newBuilder()
+                ?.let { Tenant.tag(it) }
+                ?.addQueryParameter("language", "es-MX")?.addQueryParameter("page", p.toString())
+                ?.build()?.toString() ?: break
+            val r = Net.get(url)
+            val j = (if (r.ok) r.json() else null) ?: break
+            if (j.has("error")) break
             j.optJSONArray("results")?.let { arr ->
                 for (i in 0 until arr.length()) {
                     val o = arr.optJSONObject(i)
@@ -43,7 +58,7 @@ object Tmdb {
             }
         }
         val list = out.distinct().take(48)
-        if (list.isNotEmpty()) cached = list
+        if (list.isNotEmpty()) { cached = list; cachedFor = who }
         return list
     }
 
