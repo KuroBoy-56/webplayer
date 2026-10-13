@@ -113,18 +113,22 @@ object Panel {
         return Answer(null, errorOf(r, "No se pudo activar el equipo"))
     }
 
+    /** Línea de la demo automática: usuario, contraseña y el servidor de la demo (url, puede venir vacío en paneles viejos). */
+    data class Demo(val user: String, val pass: String, val url: String)
+
     /** Demo automática (una sola vez por equipo). Con el código de un revendedor la demo queda a su nombre en el panel. */
-    suspend fun autoDemo(deviceId: String, reseller: String = ""): Answer<Pair<String, String>> {
+    suspend fun autoDemo(deviceId: String, reseller: String = ""): Answer<Demo> {
         val p = device(deviceId)
         if (isResellerCode(reseller)) p.put("reseller", reseller.trim().uppercase())
         val a = login("auto_demo", p)
         val r = a.value ?: return Answer(null, a.error)
         val j = r.json()
-        if (r.ok && j?.s("status") == "ok" && j.s("username").isNotEmpty()) return Answer(j.s("username") to j.s("password"), code = r.code)
+        if (r.ok && j?.s("status") == "ok" && j.s("username").isNotEmpty()) return Answer(Demo(j.s("username"), j.s("password"), j.s("url")), code = r.code)
         val fallback = when (r.code) {
             403 -> "Demo ya utilizado en este dispositivo o dispositivo ya registrado."
             404 -> "Código de revendedor no válido o sin demo disponible."
             429 -> "Demasiadas demos desde esta conexión. Inténtalo mañana."
+            503 -> "La demo no está disponible en este momento. Inténtalo más tarde."
             else -> "No se pudo crear la demo"
         }
         return Answer(null, errorOf(r, fallback), r.code)

@@ -32,9 +32,15 @@ object Xtream {
     suspend fun login(dns: List<Pair<String, String>>, user: String, pass: String): LoginResult {
         var lastMsg = "No se pudo conectar con el servidor"
         for ((name, rawUrl) in dns) {
-            val base = normalize(rawUrl)
-            val probe = Session(name, base, user, pass, "")
-            val j = Net.obj(api(probe)) ?: continue
+            // el panel (https) cambia http:// por https:// en las direcciones de los servidores IPTV; muchos
+            // solo responden en http (p. ej. el puerto 8080). Si no contesta, se prueba el otro protocolo.
+            var probe = Session(name, normalize(rawUrl), user, pass, "")
+            var j = Net.obj(api(probe))
+            if (j == null) {
+                probe = probe.copy(base = otherScheme(probe.base))
+                j = Net.obj(api(probe))
+            }
+            if (j == null) continue
             val ui = j.optJSONObject("user_info")
             if (ui == null || ui.i("auth") != 1) { lastMsg = "Usuario o contraseña incorrectos"; continue }
             val status = ui.s("status")
@@ -48,6 +54,10 @@ object Xtream {
         }
         return LoginResult.Fail(lastMsg)
     }
+
+    /** http://… <-> https://… */
+    fun otherScheme(base: String): String =
+        if (base.startsWith("https://", true)) "http://" + base.substring(8) else "https://" + base.substringAfter("://")
 
     fun normalize(u: String): String {
         var x = u.trim().trimEnd('/')
