@@ -27,6 +27,9 @@ enum Panel {
 
     private static func device() -> JObj { ["mac_address": Device.id] }
 
+    /** diferencia entre la hora del panel y la del equipo (segundos), para el "ts" de cada pedido */
+    private static var clockSkew = 0
+
     /** POST a login.php con el JSON cifrado. Con distribuidor lleva "tenant" + "app". */
     private static func login(_ action: String, _ payload: JObj, tag: Bool = true) async -> Answer<Resp> {
         var p = payload
@@ -37,11 +40,22 @@ enum Panel {
         let secret = action == "check_mac" || action == "auto_demo"
         if secret { p["enc"] = 1 }
         let encReply = secret || action == "set_pin"
-        let data: String
-        do { data = try PanelCrypto.encrypt(Json.string(p)) } catch is PanelCrypto.MissingKey {
-            return Answer(value: nil, error: PanelCrypto.missingKeyMessage)
-        } catch { return Answer(value: nil, error: "No se pudo preparar la solicitud al panel") }
-        let r = await Net.postForm(PanelUrl.api("login.php"), ["action": action, "data": data])
+        // verificador antihack del panel: hora del pedido ("ts"); si el reloj del equipo está mal, el panel
+        // responde 401 ts_expired con su hora y se reintenta una vez con el reloj corregido
+        var r = Resp(code: 0, data: Data())
+        for attempt in 0..<2 {
+            p["ts"] = Int(Date().timeIntervalSince1970) + clockSkew
+            let data: String
+            do { data = try PanelCrypto.encrypt(Json.string(p)) } catch is PanelCrypto.MissingKey {
+                return Answer(value: nil, error: PanelCrypto.missingKeyMessage)
+            } catch { return Answer(value: nil, error: "No se pudo preparar la solicitud al panel") }
+            r = await Net.postForm(PanelUrl.api("login.php"), ["action": action, "data": data])
+            if attempt == 0, r.code == 401, let j = r.json(), j.s("code").hasPrefix("ts_"), j.i("server_time") > 0 {
+                clockSkew = j.i("server_time") - Int(Date().timeIntervalSince1970)
+                continue
+            }
+            break
+        }
         if r.code == 0 { return Answer(value: nil, error: noPanel) }
         // respuesta cifrada (panel nuevo) -> JSON; los errores siempre llegan en JSON
         let body = r.text.trimmed
