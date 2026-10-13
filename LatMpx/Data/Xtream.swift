@@ -35,7 +35,8 @@ enum Xtream {
                 if f2 != nil || (r.code == 0 && r2.code > 0) { probe = alt; r = r2; found = f2 }
             }
             guard let j = found else {
-                // el servidor respondió pero no con la cuenta (línea bloqueada, vencida o servidor caído)
+                // el servidor respondió pero no con la cuenta: XUI dice el motivo; si no, el código HTTP
+                if let xui = xuiError(r.text) { last = xuiMessage(xui); print("[LatMpx] login rechazado por XUI: \(xui)"); continue }
                 if r.code > 0 && last == "No se pudo conectar con el servidor" { last = "El servidor no aceptó la conexión (código \(r.code))" }
                 continue
             }
@@ -62,9 +63,36 @@ enum Xtream {
 
     /** http://… <-> https://… */
     static func otherScheme(_ base: String) -> String {
-        if base.lowercased().hasPrefix("https://") { return "http://" + base.dropFirst(8) }
-        if let r = base.range(of: "://") { return "https://" + base[r.upperBound...] }
-        return "https://" + base
+        // el puerto por defecto del otro protocolo se quita (http://host:443 da «400 plain HTTP request»)
+        if base.lowercased().hasPrefix("https://") {
+            return "http://" + String(base.dropFirst(8)).replacingOccurrences(of: "^([^/]+):443(?=/|$)", with: "$1", options: .regularExpression)
+        }
+        let rest = base.range(of: "://").map { String(base[$0.upperBound...]) } ?? base
+        return "https://" + rest.replacingOccurrences(of: "^([^/]+):80(?=/|$)", with: "$1", options: .regularExpression)
+    }
+
+    /**
+     * XUI.one en «Debug Mode» no responde {"user_info":{"auth":0}} sino una página HTML (200) con el motivo:
+     * «XUI.ONE INVALID_CREDENTIALS Username or password is invalid.». Devuelve el código (o nil).
+     */
+    static func xuiError(_ body: String) -> String? {
+        let text = body
+            .replacingOccurrences(of: "(?is)<(style|script)[^>]*>.*?</\\1>", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        guard let re = try? NSRegularExpression(pattern: "XUI\\.(?:ONE|one)\\s+([A-Z][A-Z_]{2,})"),
+              let m = re.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let r = Range(m.range(at: 1), in: text) else { return nil }
+        return String(text[r])
+    }
+
+    static func xuiMessage(_ code: String) -> String {
+        switch code {
+        case "INVALID_CREDENTIALS": return "El servidor no reconoce el usuario o la contraseña"
+        case "EXPIRED": return "Tu cuenta está vencida"
+        case "BANNED", "DISABLED": return "Tu cuenta está desactivada en el servidor"
+        default: return "El servidor rechazó la cuenta (\(code))"
+        }
     }
 
     static func normalize(_ u: String) -> String {
