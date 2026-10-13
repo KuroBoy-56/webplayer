@@ -1,7 +1,8 @@
 // Botón «DNS» (como Android e iOS): DNS seguro elegido por el usuario para saltar bloqueos del proveedor de
-// internet. El televisor no deja cambiar su DNS, así que la app resuelve el nombre del servidor IPTV con
+// internet. El equipo no deja cambiar su DNS, así que la app resuelve el nombre del servidor IPTV con
 // DNS sobre HTTPS y, si el DNS de la red no lo encuentra, se conecta a esa IP. Solo para http (https
 // necesita el nombre para el certificado). «Automático» = el DNS de la red, sin cambios.
+import { bytesToB64, utf8Encode } from './crypto';
 import { pref, setPref } from './storage';
 
 export type DnsOption = { key: string; label: string; note: string; endpoint: string };
@@ -32,7 +33,7 @@ export function setDnsChoice(key: string): void {
 export function dnsQuery(host: string): Uint8Array {
   const out = [0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0];
   for (const label of host.split('.')) {
-    const b = Array.from(new TextEncoder().encode(label)).slice(0, 63);
+    const b = utf8Encode(label).slice(0, 63);
     out.push(b.length, ...b);
   }
   out.push(0, 0, 1, 0, 1);
@@ -74,7 +75,7 @@ async function resolve(host: string): Promise<string | null> {
   const k = opt.key + '|' + host.toLowerCase();
   const c = cache[k];
   if (c && c.until > Date.now()) return c.ip;
-  let q = btoa(String.fromCharCode(...Array.from(dnsQuery(host))));
+  let q = bytesToB64(dnsQuery(host));
   q = q.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   try {
     const r = await fetch(opt.endpoint + '?dns=' + q, { headers: { Accept: 'application/dns-message' } });
