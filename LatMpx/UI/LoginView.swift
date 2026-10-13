@@ -188,18 +188,38 @@ struct LoginView: View {
     @MainActor private func demo() async {
         status = "Creando demo…"
         let r = await Panel.autoDemo(reseller: pass)
-        guard let cred = r.value else {
+        guard let demo = r.value else {
             err = r.error
             if r.code == 403 { Store.demoUsed = true }
             return
         }
         Store.demoUsed = false
         fromAutodemo = true
-        if !(await resolve()) && err == nil {
-            var d = dns
-            if d.isEmpty { d = await Panel.fetchDns().value ?? [] }
-            if let first = d.first { await connect(Panel.Line(name: "Demo", base: Xtream.normalize(first), user: cred.0, pass: cred.1)) }
-            else { err = "Demo creada, pero el panel no devolvió el servidor." }
+        // se entra con la línea que acaba de dar el panel (antes se volvía a pedir con auth.php / check_mac
+        // y, si ese servidor no respondía en https, la demo quedaba creada sin acceso)
+        var d = dns
+        if d.isEmpty { d = await Panel.fetchDns().value ?? [] }
+        if await connectDemo(demo, servers: [demo.url] + d) { return }
+        // último intento: las líneas que el panel tiene para el equipo
+        let first = err
+        err = nil
+        let found = await resolve()
+        if err != nil || !found { err = first ?? err }
+    }
+
+    /** demo recién creada: su servidor (el que dijo el panel) y luego los DNS del panel, hasta que uno responda */
+    @MainActor private func connectDemo(_ demo: Panel.Demo, servers: [String]) async -> Bool {
+        status = "Conectando con la demo…"
+        var list: [String] = []
+        for s in servers where !s.trimmed.isEmpty {
+            let n = Xtream.normalize(s)
+            if !list.contains(n) { list.append(n) }
+        }
+        if list.isEmpty { err = "Demo creada, pero el panel no devolvió el servidor."; return false }
+        let named = list.enumerated().map { ($0.offset == 0 ? "Demo" : "Servidor \($0.offset + 1)", $0.element) }
+        switch await Xtream.login(named, user: demo.user, pass: demo.pass) {
+        case .ok(let s): Cloud.shared.setDemo(true); onLogged(s); return true
+        case .fail(let m): err = m; return false
         }
     }
 

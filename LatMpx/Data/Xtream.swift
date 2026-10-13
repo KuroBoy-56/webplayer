@@ -20,8 +20,15 @@ enum Xtream {
     static func login(_ dns: [(String, String)], user: String, pass: String) async -> LoginResult {
         var last = "No se pudo conectar con el servidor"
         for (name, raw) in dns {
-            let probe = Session(dnsName: name, base: normalize(raw), user: user, pass: pass, expires: "")
-            guard let j = await Net.obj(api(probe)) else { continue }
+            // el panel (https) cambia http:// por https:// en las direcciones de los servidores IPTV; muchos
+            // solo responden en http (p. ej. el puerto 8080). Si no contesta, se prueba el otro protocolo.
+            var probe = Session(dnsName: name, base: normalize(raw), user: user, pass: pass, expires: "")
+            var found = await Net.obj(api(probe))
+            if found == nil {
+                probe.base = otherScheme(probe.base)
+                found = await Net.obj(api(probe))
+            }
+            guard let j = found else { continue }
             guard let ui = j.o("user_info"), ui.i("auth") == 1 else { last = "Usuario o contraseña incorrectos"; continue }
             let st = ui.s("status")
             if !st.isEmpty && st.lowercased() != "active" { last = st.lowercased() == "expired" ? "Tu cuenta está vencida" : "Tu cuenta está \(st)"; continue }
@@ -34,6 +41,13 @@ enum Xtream {
             return .ok(s)
         }
         return .fail(last)
+    }
+
+    /** http://… <-> https://… */
+    static func otherScheme(_ base: String) -> String {
+        if base.lowercased().hasPrefix("https://") { return "http://" + base.dropFirst(8) }
+        if let r = base.range(of: "://") { return "https://" + base[r.upperBound...] }
+        return "https://" + base
     }
 
     static func normalize(_ u: String) -> String {

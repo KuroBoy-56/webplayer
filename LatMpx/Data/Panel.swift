@@ -110,20 +110,24 @@ enum Panel {
     }
 
     /** Demo automática. Con el código de un revendedor la demo queda a su nombre en el panel. */
-    static func autoDemo(reseller: String) async -> Answer<(String, String)> {
+    /** Línea de la demo automática: usuario, contraseña y el servidor de la demo (url, puede venir vacío en paneles viejos). */
+    struct Demo { let user: String; let pass: String; let url: String }
+
+    static func autoDemo(reseller: String) async -> Answer<Demo> {
         var p = device()
         if isResellerCode(reseller) { p["reseller"] = reseller.trimmed.uppercased() }
         let a = await login("auto_demo", p)
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
         let j = r.json()
         if r.ok, let j = j, j.s("status") == "ok", !j.s("username").isEmpty {
-            return Answer(value: (j.s("username"), j.s("password")), code: r.code)
+            return Answer(value: Demo(user: j.s("username"), pass: j.s("password"), url: j.s("url")), code: r.code)
         }
         let fallback: String
         switch r.code {
         case 403: fallback = "Demo ya utilizado en este dispositivo o dispositivo ya registrado."
         case 404: fallback = "Código de revendedor no válido o sin demo disponible."
         case 429: fallback = "Demasiadas demos desde esta conexión. Inténtalo mañana."
+        case 503: fallback = "La demo no está disponible en este momento. Inténtalo más tarde."
         default: fallback = "No se pudo crear la demo"
         }
         return Answer(value: nil, error: errorOf(r, fallback), code: r.code)
