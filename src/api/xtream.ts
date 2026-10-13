@@ -25,7 +25,25 @@ function sessionFrom(sv: Server, user: string, pass: string, ui: any): Session {
 
 // http://… <-> https://…
 export function otherScheme(base: string): string {
-  return /^https:\/\//i.test(base) ? 'http://' + base.slice(8) : 'https://' + base.replace(/^[a-z]+:\/\//i, '');
+  // el puerto por defecto del otro protocolo se quita (http://host:443 da «400 plain HTTP request»)
+  return /^https:\/\//i.test(base)
+    ? 'http://' + base.slice(8).replace(/^([^/]+):443(?=\/|$)/, '$1')
+    : 'https://' + base.replace(/^[a-z]+:\/\//i, '').replace(/^([^/]+):80(?=\/|$)/, '$1');
+}
+
+// XUI.one en «Debug Mode» no responde {"user_info":{"auth":0}} sino una página HTML (200) con el motivo:
+// «XUI.ONE INVALID_CREDENTIALS Username or password is invalid.». Devuelve el código (o '').
+export function xuiError(body: string): string {
+  const text = (body || '').replace(/<(style|script)[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const m = /XUI\.(?:ONE|one)\s+([A-Z][A-Z_]{2,})/.exec(text);
+  return m ? m[1] : '';
+}
+
+export function xuiMessage(code: string): string {
+  if (code === 'INVALID_CREDENTIALS') return 'El servidor no reconoce el usuario o la contraseña';
+  if (code === 'EXPIRED') return 'Tu cuenta está vencida';
+  if (code === 'BANNED' || code === 'DISABLED') return 'Tu cuenta está desactivada en el servidor';
+  return 'El servidor rechazó la cuenta (' + code + ')';
 }
 
 // Prueba el usuario en todos los servidores a la vez y se queda con el primero que lo acepte. El panel
@@ -72,6 +90,8 @@ export async function loginAll(input: Server[], user: string, pass: string): Pro
           lastErr = 'Tu cuenta está ' + st;
         } else if (ui && lastErr === 'No se pudo conectar con ningún servidor') {
           lastErr = 'Usuario o contraseña incorrectos';
+        } else if (!ui && xuiError(r.body)) {
+          lastErr = xuiMessage(xuiError(r.body));
         } else if (!ui && r.code > 0 && lastErr === 'No se pudo conectar con ningún servidor') {
           // el servidor respondió pero no con la cuenta (línea bloqueada, vencida o servidor caído)
           lastErr = 'El servidor no aceptó la conexión (código ' + r.code + ')';
