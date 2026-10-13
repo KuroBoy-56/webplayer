@@ -100,6 +100,11 @@ fun DetailScreen(state: AppState, media: Item) {
         if (media.kind == Kind.SERIES) Cloud.seriesProgress(media.id) else null
     }
     val playFocus = remember { FocusRequester() }
+    // sugerencias: se barajan una vez por título, fuera de la lista (el avance de una descarga no las cambia)
+    val pool = if (media.kind == Kind.MOVIE) state.movies else state.series
+    val similar = remember(media.id, pool.size) {
+        pool.filter { it.categoryId == media.categoryId && it.id != media.id }.shuffled().take(24)
+    }
     val dlRev = com.latmpx.player.data.Downloads.rev
     val notice = rememberDownloadNotice()
     if (tv) LaunchedEffect(d != null) { runCatching { playFocus.requestFocus() } }
@@ -290,10 +295,6 @@ fun DetailScreen(state: AppState, media: Item) {
             }
         }
         item {
-            val all = if (media.kind == Kind.MOVIE) state.movies else state.series
-            val similar = remember(all, media.categoryId, media.id) {
-                all.filter { it.categoryId == media.categoryId && it.id != media.id }.shuffled().take(24)
-            }
             if (similar.isNotEmpty()) {
                 Spacer(Modifier.height(24.dp))
                 Text("Sugerencias", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad()).padding(bottom = 12.dp))
