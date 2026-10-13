@@ -208,7 +208,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
     func urlSession(_ s: URLSession, task t: URLSessionTask, didCompleteWithError error: Error?) {
         guard let key = t.taskDescription, let err = error as NSError? else { return }
         if err.code == NSURLErrorCancelled && lockedGet(key) == nil { return } // se borró
-        if let r = err.userInfo[NSURLSessionDownloadTaskResumeDataKey] as? Data, let e = lockedGet(key) { try? r.write(to: resumeFile(e)) }
+        if let r = (error as? URLError)?.downloadTaskResumeData, let e = lockedGet(key) { try? r.write(to: resumeFile(e)) }
         let msg = err.code == NSURLErrorNotConnectedToInternet || err.code == NSURLErrorNetworkConnectionLost
             ? "Sin conexión. Toca para seguir." : (err.localizedDescription.isEmpty ? "No se pudo descargar" : err.localizedDescription)
         fail(key, msg)
