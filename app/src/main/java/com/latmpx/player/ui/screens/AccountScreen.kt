@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.OndemandVideo
@@ -208,6 +209,18 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
                 pinDialog = true
             }
             Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+            // celular: películas y episodios guardados para ver sin internet
+            if (!com.latmpx.player.ui.components.LocalIsTv.current) {
+                val dl = remember(com.latmpx.player.data.Downloads.rev) { com.latmpx.player.data.Downloads.all() }
+                val done = dl.count { it.state == com.latmpx.player.data.Downloads.State.DONE }
+                val busy = dl.count { it.state == com.latmpx.player.data.Downloads.State.RUNNING || it.state == com.latmpx.player.data.Downloads.State.QUEUED }
+                SettingsItem(Icons.Filled.Download, "Mis descargas", when {
+                    busy > 0 -> "$done listas · $busy descargando"
+                    done > 0 -> "$done para ver sin internet"
+                    else -> "Películas y episodios para ver sin internet"
+                }) { state.push(com.latmpx.player.ui.Route.Downloads) }
+                Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+            }
             SettingsItem(Icons.Filled.OndemandVideo, "Formato de Streaming", when(streamFormat) { "ts" -> "MPEG-TS (.ts)"; "auto" -> "Automático"; else -> "HLS (.m3u8)" }) {
                 streamFormat = when(streamFormat) { "m3u8" -> "ts"; "ts" -> "auto"; else -> "m3u8" }
                 com.latmpx.player.data.Store.streamFormat = streamFormat

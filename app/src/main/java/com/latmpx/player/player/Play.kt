@@ -22,6 +22,26 @@ object Play {
     const val X_SAVE_TITLE = "save_title"
     const val X_SAVE_POSTER = "save_poster"
     const val X_CATEGORY = "category"
+    /** descargas: archivo del equipo de cada entrada (misma posición que la lista) */
+    const val X_FILES = "files"
+
+    /** descargas sin internet: película sola o los episodios descargados de una serie (pasa al siguiente) */
+    fun offline(ctx: Context, list: List<com.latmpx.player.data.Downloads.Entry>, index: Int) {
+        if (list.isEmpty()) return
+        val e = list[index.coerceIn(0, list.lastIndex)]
+        val kind = e.kind
+        ctx.startActivity(Intent(ctx, PlayerActivity::class.java).apply {
+            putExtra(X_KIND, kind.name)
+            putExtra(X_INDEX, index.coerceIn(0, list.lastIndex))
+            putExtra(X_IDS, list.map { it.id }.toIntArray())
+            putExtra(X_TITLES, list.map { if (it.kind == Kind.SERIES) "${it.seriesName} · T${it.season} E${it.episode} · ${it.title}" else it.title }.toTypedArray())
+            putExtra(X_KEYS, list.map { it.key }.toTypedArray())
+            putExtra(X_POSTERS, list.map { it.poster }.toTypedArray())
+            putExtra(X_EXTS, list.map { it.ext }.toTypedArray())
+            putExtra(X_FILES, list.map { com.latmpx.player.data.Downloads.file(it).absolutePath }.toTypedArray())
+            putExtra(X_SAVE_TITLE, if (kind == Kind.SERIES) e.seriesName else e.title)
+        })
+    }
 
     fun movie(ctx: Context, item: Item, ext: String) =
         start(ctx, Kind.MOVIE, listOf(QueueEntry(item.id, item.name, item.key, item.poster, ext.ifEmpty { item.ext })), 0, "", item.name, item.poster, item.categoryId)

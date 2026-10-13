@@ -18,6 +18,7 @@ class App : Application(), SingletonImageLoader.Factory {
         com.latmpx.player.data.Tenant.init() // marca del distribuidor guardada: se aplica antes de la primera pantalla
         com.latmpx.player.data.Posters.init(this)
         com.latmpx.player.data.CatalogCache.init(this)
+        com.latmpx.player.data.Downloads.init(this) // descargas para ver sin internet (sigue lo pendiente)
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

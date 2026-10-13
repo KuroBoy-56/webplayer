@@ -21,6 +21,8 @@ sealed class Route {
     data class ActorPage(val name: String, val tmdbId: Int = 0, val photo: String = "") : Route()
     /** rejilla completa de "Continuar viendo" (true) o de "Mi lista" (false) */
     data class Saved(val continueWatching: Boolean) : Route()
+    /** Cuenta › Mis descargas (celular) */
+    data object Downloads : Route()
 }
 
 class AppState {
