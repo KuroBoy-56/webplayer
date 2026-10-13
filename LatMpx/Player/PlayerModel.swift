@@ -154,6 +154,21 @@ final class PlayerModel: ObservableObject {
     }
 
     private func open(_ url: String) {
+        guard !request.offline, url.lowercased().hasPrefix("http") else { start(url); return }
+        // servidores mixtos: la redirección de https a http (que VLC no sigue) se resuelve antes
+        let my = loadSeq, idx = urlIdx
+        freshPlayer()
+        connecting = false
+        buffering = true
+        openedAt = Date()
+        Task { @MainActor [weak self] in
+            let u = await StreamRedirect.resolve(url)
+            guard let self = self, !self.stopped, self.loadSeq == my, self.urlIdx == idx, self.error == nil else { return }
+            self.start(u)
+        }
+    }
+
+    private func start(_ url: String) {
         guard let u = URL(string: url) else { error = "Dirección no válida"; return }
         let m = VLCMedia(url: u)
         // películas y episodios: más búfer (4K / HDR de alto bitrate se cortaban con 1,5 s)

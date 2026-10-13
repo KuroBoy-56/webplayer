@@ -17,6 +17,8 @@ final class LivePreview: ObservableObject {
     private var seq = 0
     private var channelId = 0
     private var connecting = false
+    /** resolviendo la redirección del servidor (https → http) antes de abrir */
+    private var resolving = false
 
     /** canal que ya muestra imagen / canal que no se pudo reproducir */
     @Published private(set) var showingId = 0
@@ -50,6 +52,7 @@ final class LivePreview: ObservableObject {
     /** suelta la conexión (pantalla completa, segundo plano o al salir de TV en vivo) */
     func release() {
         seq += 1
+        resolving = false
         timer?.invalidate(); timer = nil
         // en segundo plano: stop() espera a que VLC suelte la conexión y congelaría la lista
         if let p = player { p.drawable = nil; VLCRetire.stop(p) }
@@ -58,7 +61,22 @@ final class LivePreview: ObservableObject {
     }
 
     private func open() {
-        guard let old = player, urls.indices.contains(urlIdx), let u = URL(string: urls[urlIdx]) else { fail(); return }
+        guard player != nil, urls.indices.contains(urlIdx) else { fail(); return }
+        // servidores mixtos: la redirección de https a http (que VLC no sigue) se resuelve antes
+        let my = seq, idx = urlIdx, raw = urls[urlIdx]
+        resolving = true
+        connecting = false
+        openedAt = Date()
+        Task { @MainActor [weak self] in
+            let url = await StreamRedirect.resolve(raw)
+            guard let self = self, self.seq == my, self.urlIdx == idx else { return }
+            self.resolving = false
+            self.start(url)
+        }
+    }
+
+    private func start(_ url: String) {
+        guard let old = player, let u = URL(string: url) else { fail(); return }
         // cada dirección con un reproductor nuevo (cambiar la de uno que no conecta bloquea)
         let p = VLCMediaPlayer()
         p.drawable = view
@@ -75,7 +93,7 @@ final class LivePreview: ObservableObject {
     }
 
     private func tick() {
-        guard let p = player else { return }
+        guard let p = player, !resolving else { return }
         if p.isPlaying && p.hasVideoOut || p.isPlaying && p.time.intValue > 800 {
             if showingId != channelId { showingId = channelId }
             return
