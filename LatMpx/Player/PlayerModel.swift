@@ -41,6 +41,8 @@ final class PlayerModel: ObservableObject {
 
     private var urls: [String] = []
     private var urlIdx = 0
+    /** la dirección actual ya se reintentó una vez (el servidor todavía contaba la conexión anterior) */
+    private var retriedSame = false
     private var timer: Timer?
     private var openedAt = Date()
     private var resumeTo: Int64 = 0
@@ -118,6 +120,7 @@ final class PlayerModel: ObservableObject {
         }
         index = i
         urlIdx = 0
+        retriedSame = false
         resumeTo = 0
         if kind != .live && i == request.index && request.startAt > 0 && !startUsed {
             // de vuelta de imagen en imagen: donde iba
@@ -150,7 +153,8 @@ final class PlayerModel: ObservableObject {
     private func open(_ url: String) {
         guard let u = URL(string: url) else { error = "Dirección no válida"; return }
         let m = VLCMedia(url: u)
-        m.addOption(":network-caching=\(kind == .live ? 2500 : 1500)")
+        // películas y episodios: más búfer (4K / HDR de alto bitrate se cortaban con 1,5 s)
+        m.addOption(":network-caching=\(kind == .live ? 2500 : 3000)")
         m.addOption(":http-user-agent=\(Net.ua)")
         m.addOption(":http-reconnect")
         PlayerDiag.log("abrir \(urlIdx): \(u.host ?? "")")
@@ -203,6 +207,21 @@ final class PlayerModel: ObservableObject {
         PlayerDiag.log("falló \(urlIdx) estado \(player.state.rawValue)")
         // ya se mostró el error: no se vuelve a crear un reproductor en cada vuelta del reloj
         if error != nil { return }
+        // se cortó enseguida sin dar imagen: muchas veces el servidor rechaza porque todavía cuenta la conexión
+        // anterior (líneas de 1 conexión). Se espera y se reintenta la misma dirección una vez.
+        if !everPlayed && !retriedSame && !request.offline && Date().timeIntervalSince(openedAt) < 8 {
+            retriedSame = true
+            buffering = true
+            connecting = false
+            openedAt = Date()
+            let my = loadSeq, url = urls[urlIdx]
+            freshPlayer()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+                guard let self = self, !self.stopped, self.loadSeq == my, self.error == nil else { return }
+                self.open(url)
+            }
+            return
+        }
         if urlIdx + 1 < urls.count {
             urlIdx += 1
             open(urls[urlIdx])
@@ -222,7 +241,7 @@ final class PlayerModel: ObservableObject {
         if kind == .series && hasNext { load(index + 1) } else { freshPlayer(); onFinish?() }
     }
 
-    func retry() { error = nil; urlIdx = 0; open(urls.first ?? "") }
+    func retry() { error = nil; urlIdx = 0; retriedSame = false; open(urls.first ?? "") }
 
     func toggle() { player.isPlaying ? player.pause() : player.play(); if !player.isPlaying { save(force: true) } }
     func seek(by s: Int32) { s >= 0 ? player.jumpForward(s) : player.jumpBackward(-s) }

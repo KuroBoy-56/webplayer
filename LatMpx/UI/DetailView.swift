@@ -29,7 +29,8 @@ struct DetailView: View {
                     ZStack(alignment: .bottom) {
                         RemoteImage(url: backdrop, maxPixel: 2560)
                             .frame(width: g.size.width, height: min(g.size.width / 1.6, 460)).clipped()
-                        LinearGradient(colors: [Color.black.opacity(0.2), Theme.bg.opacity(0.6), Theme.bg], startPoint: .top, endPoint: .bottom).frame(height: 120)
+                        // empieza transparente: antes empezaba en negro al 20 % y dejaba una línea marcada sobre el póster
+                        LinearGradient(colors: [.clear, Theme.bg.opacity(0.35), Theme.bg.opacity(0.8), Theme.bg], startPoint: .top, endPoint: .bottom).frame(height: 170)
                     }
                     VStack(alignment: .leading, spacing: 10) {
                         Text(media.name).font(.system(size: 26, weight: .black)).foregroundColor(.white)

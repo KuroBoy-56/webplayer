@@ -40,10 +40,20 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         return ["mp4", "m4v", "mov", "m3u8"].contains(ext)
     }
 
+    /**
+     * 4K / HDR / HEVC / Dolby Vision / 10 bits (lo dice el nombre): el reproductor de iOS suele rechazarlos
+     * («Operación detenida») y, al pasar al de la app, el servidor todavía cuenta su conexión (una línea de
+     * 1 conexión rechaza la segunda). Van directo al de la app, que abre cualquier formato y calidad.
+     */
+    static func heavy(_ title: String) -> Bool {
+        title.range(of: "(?i)(\\b4k\\b|uhd|2160p?|hdr|hevc|h\\.?265|x265|dolby ?vision|\\bdv\\b|10 ?bit)", options: .regularExpression) != nil
+    }
+
     /** dirección para el reproductor de iOS; nil = esta petición va al reproductor de la app */
     static func source(_ r: PlayRequest) -> String? {
         guard Store.nativePlayer, !r.forceApp, r.queue.indices.contains(r.index) else { return nil }
         let q = r.queue[r.index]
+        if r.kind != .live && (heavy(q.title) || heavy(r.saveTitle)) { return nil }
         // descargas: el archivo del equipo; la prueba del simulador (directUrls) sigue en el de la app
         if r.offline { return r.directUrls.indices.contains(r.index) && compatible(r.directUrls[r.index]) ? r.directUrls[r.index] : nil }
         guard r.directUrls.isEmpty, let s = Store.session() else { return nil }
@@ -157,6 +167,9 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         endObs = nil
         vc?.onClose = nil
         vc?.player?.pause()
+        // suelta el video de verdad (cierra la conexión con el servidor IPTV antes de abrir otro reproductor)
+        (vc?.player?.currentItem?.asset as? AVURLAsset)?.cancelLoading()
+        vc?.player?.replaceCurrentItem(with: nil)
         vc?.player = nil
         vc?.delegate = nil
         vc = nil
@@ -209,6 +222,14 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     private func backToApp(_ r: PlayRequest, _ ms: Int64, _ msg: String?) {
         guard let st = state else { return }
         if let m = msg { st.toast = m }
+        // unos segundos para que el servidor suelte la conexión del reproductor de iOS (con 1 conexión rechaza la nueva)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak st] in
+            guard let st = st else { return }
+            self.openInApp(st, r, ms)
+        }
+    }
+
+    private func openInApp(_ st: AppState, _ r: PlayRequest, _ ms: Int64) {
         st.play = PlayRequest(kind: r.kind, queue: r.queue, index: r.index, saveTitle: r.saveTitle, savePoster: r.savePoster, category: r.category,
                               closeOnPortrait: false, directUrls: r.directUrls, startAt: r.kind == .live ? 0 : max(ms, r.startAt),
                               forceApp: true, offline: r.offline)
