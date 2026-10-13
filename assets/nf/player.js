@@ -246,6 +246,10 @@
                 if (self._tcRecovering) return; // el vigilante ya está rescatando esta conversión
                 // la conversión se cortó a mitad de la película (límite del hosting o del servidor IPTV): se retoma donde iba
                 if (self.tc.played && (self.tc.retries || 0) < 6) { self.tc.retries = (self.tc.retries || 0) + 1; var r = self.tc.retries; self.startTc(self.T(), self.tc.a, self.tc.vt); self.tc.retries = r; return; }
+                // no llegó nada y el servidor tardó en responder el error: esperó el primer fragmento y se rindió (servidor
+                // IPTV u hosting sin responder). Otro modo de conversión tampoco llegaría: se vuelve al video original en
+                // vez de seguir "Cargando". Un error rápido (ffmpeg no pudo con el formato) sí prueba los otros modos.
+                if (!self.tc.played && v.readyState < 1 && Date.now() - (self.tc.at || 0) > 12000) { self.tcGiveUp('sin respuesta'); return; }
                 // el navegador no pudo con el video copiado (HEVC/10 bits en equipos sin soporte): se intenta convertir también el video
                 if (!self.tc.vt && !self._fullTried) { self._fullTried = true; self.toastMsg('Adaptando el video para este navegador…'); self.startTc(self.T(), self.tc.a, true); return; }
                 // archivo dañado o con marcas de tiempo rotas: modo seguro (480p, audio resincronizado)
@@ -1186,7 +1190,7 @@
         if (this.ts) { try { this.ts.destroy(); } catch (e) {} this.ts = null; }
         clearTimeout(this.loadTimer);
         var hadDirect = !this.tc && v.getAttribute('src') && v.getAttribute('src').indexOf('media.php') < 0;
-        this.tc = { off: t, dur: dur, a: a || 0, vt: vt === 2 ? 2 : (vt ? 1 : 0) };
+        this.tc = { off: t, dur: dur, a: a || 0, vt: vt === 2 ? 2 : (vt ? 1 : 0), at: Date.now() };
         this.root.classList.add('buffering');
         // iPhone/Safari: la conversión llega en HLS (Safari no abre un MP4 en flujo); el resto, MP4 en flujo
         var src = (CAPS.hlsTc && m.hls ? m.hls : m.tc) + '&t=' + Math.floor(t) + '&a=' + (a || 0) + (this.tc.vt ? '&v=' + this.tc.vt : ''), tc0 = this.tc;
@@ -1211,7 +1215,7 @@
             };
             v.addEventListener('loadeddata', askKf);
         }
-        this.loadTimer = setTimeout(function () { if (v.readyState < 2 && self.tc) { if (self.tc.vt !== 2 && !self._safeTried) { self._safeTried = true; self.toastMsg('Probando un modo de reproducción más compatible…'); self.startTc(self.T(), self.tc.a, 2); return; } self.tc = null; self.o.media = null; self.toastMsg('La conversión tardó demasiado'); self.idx--; self.next(); } }, 45000);
+        // sin primeros datos a tiempo: lo resuelve el vigilante (vuelve al video original)
         this.tcWatch();
     };
 
@@ -1221,27 +1225,53 @@
        IPTV o el hosting se trababa a mitad, el <video> no emitía ni "error" ni "ended" y el aviso se quedaba
        infinito. Una conversión lenta pero que sigue entregando (lo almacenado crece) NO se corta. */
     NFPlayer.prototype.tcWatch = function () {
-        var self = this, v = this.v;
+        var self = this, v = this.v, tc = this.tc;
         clearTimeout(this._tcW);
         var bufEnd = function () { try { return v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0; } catch (e) { return 0; } };
         this._tcMark = { t: v.currentTime || 0, b: bufEnd(), at: Date.now() };
-        this._tcSeen = false; // el arranque lento inicial lo cubre loadTimer; el vigilante actúa tras el 1er avance
+        this._tcSeen = false;
         var STALL = 25000; // sin avanzar nada este tiempo (ya habiendo arrancado) => colgada
+        // sin datos de video en este tiempo => se vuelve al original. Antes lo cubría loadTimer, pero "loadedmetadata"
+        // lo apagaba con los primeros cuadros y el vigilante no actuaba mientras el video no hubiera avanzado nunca:
+        // si después no llegaba más, quedaba "Cargando" para siempre. El servidor se rinde a los 25 s de arrancar
+        // ffmpeg (error 502); esto es el respaldo si ni eso responde.
+        var FIRST = 40000;
         var tick = function () {
-            if (self.dead || !self.tc) return;
+            if (self.dead || !self.tc || self.tc !== tc) return;
             var m = self._tcMark, now = Date.now(), cur = v.currentTime || 0, b = bufEnd();
+            if (!self._tcSeen) {
+                if (cur > 0.25 || b > 0.25 || v.readyState >= 3) self._tcSeen = true;
+                else {
+                    // aun en pausa: si nunca llega nada no tiene sentido seguir esperando
+                    if (now - (tc.at || now) > FIRST) { self.tcGiveUp('sin datos en ' + FIRST / 1000 + ' s'); return; }
+                    self._tcW = setTimeout(tick, 3000);
+                    return;
+                }
+            }
             // en pausa no cuenta (el usuario la detuvo); si avanzó el tiempo o lo almacenado, se reinicia el reloj
             if (v.paused || cur > m.t + 0.25 || b > m.b + 0.25) {
-                if (cur > 0.25 || b > 0.25) self._tcSeen = true;
                 self._tcMark = { t: cur, b: b, at: now };
                 self._tcW = setTimeout(tick, 5000);
                 return;
             }
-            if (!self._tcSeen || now - m.at < STALL) { self._tcW = setTimeout(tick, 5000); return; }
+            if (now - m.at < STALL) { self._tcW = setTimeout(tick, 5000); return; }
             // colgada tras haber arrancado: se rescata de forma acotada y luego se pasa a otro modo (nunca gira sin fin)
             self.recoverTc('colgada');
         };
         this._tcW = setTimeout(tick, 5000);
+    };
+
+    /* La conversión nunca entregó video: se deja de esperar y se reproduce el original (audio original) desde
+       el mismo punto. Si el original tampoco se puede, next() sigue con las otras fuentes o el aviso de error. */
+    NFPlayer.prototype.tcGiveUp = function (why) {
+        if (!this.tc) return;
+        clearTimeout(this._tcW);
+        clearTimeout(this.loadTimer);
+        this.log('conversión ' + why + ': se vuelve al video original');
+        if (this.T() > 5) this.lastTime = this.T();
+        this.tc = null; this.o.media = null;
+        this.toastMsg('La conversión no respondió: se reproduce con el audio original');
+        this.idx--; this.next();
     };
 
     /* Rescate de una conversión colgada o cortada, con un tope de intentos. Lo usan el vigilante y el

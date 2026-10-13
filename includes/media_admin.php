@@ -22,9 +22,15 @@ function wp_media_set_enabled($on)
     else @touch(wp_media_flag());
 }
 
+/** ¿El proceso sigue vivo y es ffmpeg? (un pid viejo de una conversión muerta puede haberlo reusado otro programa) */
 function wp_media_pid_alive($pid)
 {
+    $pid = (int)$pid;
     if ($pid < 2) return false;
+    if (@is_readable('/proc/' . $pid . '/cmdline')) {
+        $bin = wp_bin('ffmpeg');
+        return strpos((string)@file_get_contents('/proc/' . $pid . '/cmdline'), $bin ? basename($bin) : 'ffmpeg') !== false;
+    }
     if (function_exists('posix_kill')) return @posix_kill($pid, 0);
     return @is_dir('/proc/' . $pid);
 }

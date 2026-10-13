@@ -13,8 +13,10 @@ require_once __DIR__ . '/includes/core.php';
 /* Si el servidor IPTV deja de mandar datos, ffmpeg corta la lectura a los 15 s y se reconecta
  * (-reconnect) en vez de esperar para siempre: antes la conversión quedaba "Convirtiendo" sin fin. */
 const WP_FF_RW_TIMEOUT = '15000000';
-/* Sin datos de ffmpeg durante este tiempo la conversión se da por colgada y se detiene (segundos). */
-const WP_TC_FIRST_WAIT = 40;
+/* Sin datos de ffmpeg durante este tiempo la conversión se da por colgada y se detiene (segundos).
+ * FIRST: desde que arranca ffmpeg hasta el primer fragmento con video y audio (o el primer segmento HLS);
+ * si no llega se responde error y el reproductor vuelve al video original en vez de quedarse "Cargando". */
+const WP_TC_FIRST_WAIT = 25;
 const WP_TC_IDLE_WAIT = 45;
 
 $url = null;
@@ -54,13 +56,42 @@ function wp_media_kf($url, $t, $cacheOnly = false)
     if ($cacheOnly) return (float)$t;
     $fp = wp_bin('ffprobe');
     list($in, $hdr) = wp_doh_ffmpeg($url);
-    $out = $fp ? wp_run(array_merge([$fp, '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', WP_FF_RW_TIMEOUT], $hdr, ['-read_intervals', $t . '%+#1', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time', '-of', 'csv=p=0', $in]), 20) : '';
+    $out = $fp ? wp_run(array_merge([$fp, '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', WP_FF_RW_TIMEOUT], $hdr, ['-read_intervals', $t . '%+#1', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time', '-of', 'csv=p=0', $in]), 12) : '';
     if (!is_string($out) || !preg_match('/^\s*([0-9.]+)/', $out, $m)) return (float)$t; // sin respuesta: no se guarda
     $k = (float)$m[1];
     if ($k > $t || $k < $t - 60) $k = (float)$t;
     wp_cache_set($ck, $k);
     return $k;
 }
+
+/**
+ * Opciones de inicio (-ss) de la conversión.
+ * Con el video copiado ffmpeg solo puede empezar en un fotograma clave (k, anterior a t). Antes se pedía
+ * "-ss t": el video arrancaba en k pero el audio convertido se recortaba exacto en t, así que el audio
+ * empezaba (t - k) segundos después del video (hasta 10 s, según el archivo) y quedaba desfasado o con un
+ * hueco al inicio. Ahora video y audio arrancan juntos en k (-noaccurate_seek: el audio no se recorta) y k es
+ * el mismo segundo que el reproductor lee con do=kf. Se busca k + 0,5 s porque ffmpeg corre el -ss hacia atrás
+ * (el inicio del archivo, a veces -0,005 s por el audio, y 0,13 s si el video tiene cuadros B): con "-ss k" o
+ * "-ss t" justo en un fotograma clave caía en el anterior (10 s antes) y el tiempo del reproductor quedaba corrido.
+ * Con el video convertido el corte sí es exacto en t para los dos.
+ */
+function wp_media_seek($url, $t, $vcopy)
+{
+    if ($t <= 0) return [];
+    if (!$vcopy) return ['-ss', (string)$t];
+    return ['-ss', sprintf('%.3F', wp_media_kf($url, $t) + 0.5), '-noaccurate_seek'];
+}
+
+/** La preparación (ffprobe de pistas y fotograma clave) tardó tanto (servidor IPTV sin responder) que el reproductor
+ *  ya vuelve al video original: no se abre ffmpeg, que solo ocuparía otra conexión de la cuenta IPTV. */
+function wp_media_late()
+{
+    return microtime(true) - (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true)) > 20;
+}
+
+/* audio convertido: aresample=async=1 rellena con silencio (o recorta) los huecos y saltos de tiempo del audio
+ * original, así el AAC dura lo mismo que el video y no se va desfasando a lo largo de la película */
+const WP_FF_AUDIO_SYNC = 'aresample=async=1';
 
 if ($do === 'kf') {
     header('Content-Type: application/json');
@@ -134,14 +165,12 @@ if ($do === 'hls' || $do === 'seg') {
         exit;
     }
 
-    $alive = function ($pid) {
-        if ($pid < 2) return false;
-        if (function_exists('posix_kill')) return @posix_kill($pid, 0);
-        return @is_dir('/proc/' . $pid);
-    };
+    $alive = 'wp_media_pid_alive';
     $index = $dir . '/index.m3u8';
     $pid = (int)@file_get_contents($dir . '/pid');
-    $done = is_file($index) && strpos((string)@file_get_contents($index), '#EXT-X-ENDLIST') !== false;
+    $m3u = is_file($index) ? (string)@file_get_contents($index) : '';
+    // terminada solo si tiene segmentos: una conversión que falló sin entregar nada se vuelve a lanzar
+    $done = strpos($m3u, '#EXT-X-ENDLIST') !== false && strpos($m3u, '#EXTINF') !== false;
     if (!$done && !$alive($pid)) {
         $ff = wp_bin('ffmpeg');
         if (!$ff || !wp_exec_mode()) { http_response_code(501); exit; }
@@ -166,46 +195,58 @@ if ($do === 'hls' || $do === 'seg') {
         @touch($dir . '/ping');
         $probe = $live ? null : wp_probe($url);
         $vcodec = $probe['video'] ?? '';
-        if ($t > 0 && !$live && $v === '') wp_media_kf($url, $t); // antes de abrir la conversión (ver do=tc)
         $cmd = [$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', WP_FF_RW_TIMEOUT, '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'];
-        if ($t > 0 && !$live) array_push($cmd, '-ss', (string)$t);
+        // inicio en el fotograma clave con video y audio juntos (ver wp_media_seek); k se calcula antes de abrir la conversión
+        if ($t > 0 && !$live) array_push($cmd, ...wp_media_seek($url, $t, $v === ''));
         array_push($cmd, '-fflags', '+genpts+discardcorrupt', '-err_detect', 'ignore_err');
         if ($ffhdr) array_push($cmd, ...$ffhdr);
         array_push($cmd, '-i', $ffurl, '-map', '0:v:0?', '-map', '0:a:' . $a . '?', '-sn', '-dn', '-max_muxing_queue_size', '2048');
         if ($v === '2') {
             array_push($cmd, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '27', '-g', '48', '-vf', "scale='min(854,iw)':-2,fps=30", '-pix_fmt', 'yuv420p', '-profile:v', 'main', '-af', 'aresample=async=1000');
         } elseif ($v === '1') {
-            array_push($cmd, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '25', '-g', '48', '-vf', "scale='min(1280,iw)':-2", '-pix_fmt', 'yuv420p', '-profile:v', 'high');
+            array_push($cmd, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '25', '-g', '48', '-vf', "scale='min(1280,iw)':-2", '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-af', WP_FF_AUDIO_SYNC);
         } else {
-            array_push($cmd, '-c:v', 'copy');
+            array_push($cmd, '-c:v', 'copy', '-af', WP_FF_AUDIO_SYNC);
             if (in_array($vcodec, ['hevc', 'h265'], true)) array_push($cmd, '-tag:v', 'hvc1');
         }
         array_push($cmd, '-c:a', 'aac', '-b:a', '160k', '-ac', '2', '-ar', '48000',
             '-f', 'hls', '-hls_time', '4', '-hls_segment_type', 'fmp4', '-hls_fmp4_init_filename', 'init.mp4',
             '-hls_segment_filename', $dir . '/s%05d.m4s');
-        if ($live) array_push($cmd, '-hls_list_size', '8', '-hls_flags', 'delete_segments+independent_segments+omit_endlist');
-        else array_push($cmd, '-hls_list_size', '0', '-hls_playlist_type', 'event', '-hls_flags', 'independent_segments');
+        if ($live) array_push($cmd, '-hls_list_size', '8', '-hls_flags', 'delete_segments+independent_segments+omit_endlist+temp_file');
+        else array_push($cmd, '-hls_list_size', '0', '-hls_playlist_type', 'event', '-hls_flags', 'independent_segments+temp_file');
         array_push($cmd, $index);
         $d = escapeshellarg($dir);
-        // ffmpeg en segundo plano + vigilante: se detiene si nadie pide la lista o los segmentos en 45 s
-        $sh = 'cd ' . $d . ' && ' . wp_cmd_line($cmd) . ' 2>' . escapeshellarg($dir . '/err') . ' & FF=$!; echo $FF > ' . escapeshellarg($dir . '/pid') . '; echo $FF > ' . escapeshellarg($pidFile)
-            . '; while kill -0 $FF 2>/dev/null; do sleep 5; NOW=$(date +%s); P=$(stat -c %Y ' . escapeshellarg($dir . '/ping') . ' 2>/dev/null || echo 0); if [ $((NOW - P)) -gt 45 ]; then kill $FF; fi; done';
+        $ix = escapeshellarg($index);
+        $er = escapeshellarg($dir . '/err');
+        // ffmpeg en segundo plano + vigilante: se detiene si nadie pide la lista o los segmentos en 45 s,
+        // si no entrega el primer segmento en WP_TC_FIRST_WAIT s o si la lista deja de avanzar 60 s sin terminar
+        // (servidor IPTV colgado): así nunca queda una conversión trabada que el reproductor espere para siempre
+        $sh = 'cd ' . $d . ' && ' . wp_cmd_line($cmd) . ' 2>' . $er . ' & FF=$!; echo $FF > ' . escapeshellarg($dir . '/pid') . '; echo $FF > ' . escapeshellarg($pidFile)
+            . '; S=$(date +%s); while kill -0 $FF 2>/dev/null; do sleep 2; NOW=$(date +%s); P=$(stat -c %Y ' . escapeshellarg($dir . '/ping') . ' 2>/dev/null || echo 0);'
+            . ' if [ $((NOW - P)) -gt 45 ]; then kill $FF; fi;'
+            . ' if [ ! -s ' . $ix . ' ]; then if [ $((NOW - S)) -gt ' . WP_TC_FIRST_WAIT . ' ]; then echo "sin el primer segmento en ' . WP_TC_FIRST_WAIT . ' s" >> ' . $er . '; kill $FF; fi;'
+            . ' else M=$(stat -c %Y ' . $ix . ' 2>/dev/null || echo $NOW); if [ $((NOW - M)) -gt 60 ] && ! grep -q ENDLIST ' . $ix . '; then echo "la conversión dejó de avanzar" >> ' . $er . '; kill $FF; fi; fi; done';
+        if (wp_media_late()) { http_response_code(502); exit; }
         if (!wp_bg($sh)) { http_response_code(501); exit; }
     }
     @touch($dir . '/ping');
-    // se espera a que estén listos los primeros segmentos
+    // se espera a que estén listos los primeros segmentos (el vigilante detiene ffmpeg si no llegan a tiempo)
     $need = $live ? 2 : 1;
-    $end = microtime(true) + 35;
+    $end = microtime(true) + WP_TC_FIRST_WAIT + 5;
     $m3u = '';
     while (microtime(true) < $end) {
         $m3u = is_file($index) ? (string)@file_get_contents($index) : '';
         if (substr_count($m3u, '#EXTINF') >= $need || strpos($m3u, '#EXT-X-ENDLIST') !== false) break;
+        // ffmpeg terminó o lo detuvo el vigilante: no se sigue esperando
         $pid = (int)@file_get_contents($dir . '/pid');
-        if ($pid > 1 && !$alive($pid) && !is_file($index)) break;
+        if ($pid > 1 && !$alive($pid)) { clearstatcache(); $m3u = is_file($index) ? (string)@file_get_contents($index) : ''; break; }
         if (connection_aborted()) exit;
         usleep(400000);
     }
     if (substr_count($m3u, '#EXTINF') < 1) {
+        // sin video: error para que el reproductor vuelva al original (la próxima vez se convierte de nuevo)
+        $pid = (int)@file_get_contents($dir . '/pid');
+        if ($alive($pid)) { if (function_exists('posix_kill')) @posix_kill($pid, 15); else wp_bg('kill ' . $pid); }
         http_response_code(502);
         exit;
     }
@@ -237,11 +278,14 @@ if ($do === 'sub') {
     $bad = $ck . '.bad';
     header('Cache-Control: no-store');
     if (is_file($bad) && time() - filemtime($bad) < 3600) { http_response_code(404); exit; }
-    if (!is_file($job) || time() - filemtime($job) > 1500) {
-        @touch($job);
+    // el trabajo guarda el pid de ffmpeg: si el hosting lo mató (sin dejar resultado ni error) se vuelve a lanzar
+    // en vez de responder "espera" durante 25 minutos
+    $jage = is_file($job) ? time() - filemtime($job) : -1;
+    if ($jage < 0 || $jage > 1500 || ($jage > 10 && !wp_media_pid_alive((int)@file_get_contents($job)))) {
+        @file_put_contents($job, '');
         $part = $ck . '.part';
-        $cmd = wp_cmd_line(array_merge([$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', '30000000'], $ffhdr, ['-i', $ffurl, '-map', '0:s:' . $i, '-vn', '-an', '-dn', '-c:s', 'webvtt', '-f', 'webvtt', '-y', $part]));
-        $ok = wp_bg($cmd . ' && grep -q WEBVTT ' . escapeshellarg($part) . ' && mv ' . escapeshellarg($part) . ' ' . escapeshellarg($ck)
+        $cmd = wp_cmd_line(array_merge([$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', '30000000', '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'], $ffhdr, ['-i', $ffurl, '-map', '0:s:' . $i, '-vn', '-an', '-dn', '-c:s', 'webvtt', '-f', 'webvtt', '-y', $part]));
+        $ok = wp_bg($cmd . ' & FF=$!; echo $FF > ' . escapeshellarg($job) . '; wait $FF && grep -q WEBVTT ' . escapeshellarg($part) . ' && mv ' . escapeshellarg($part) . ' ' . escapeshellarg($ck)
             . ' || touch ' . escapeshellarg($bad) . '; rm -f ' . escapeshellarg($job) . ' ' . escapeshellarg($part));
         if (!$ok) { @unlink($job); http_response_code(404); exit; }
     }
@@ -262,13 +306,12 @@ $vtc = !empty($_GET['v']);
 $vsafe = ($_GET['v'] ?? '') === '2';
 $probe = wp_probe($url);
 $vcodec = $probe['video'] ?? '';
-// fotograma clave de inicio antes de abrir la conversión (una conexión a la vez al servidor IPTV);
-// el reproductor lo lee después de la caché (do=kf&c=1)
-if ($t > 0 && !$vtc) wp_media_kf($url, $t);
 
 $cmd = [$ff, '-nostdin', '-v', 'error', '-user_agent', WP_UA, '-rw_timeout', WP_FF_RW_TIMEOUT, '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'];
-// con video copiado ffmpeg arranca en el fotograma clave anterior a t; el reproductor pide ese segundo exacto (do=kf) para cuadrar el tiempo
-if ($t > 0) array_push($cmd, '-ss', (string)$t);
+// con video copiado la conversión arranca en el fotograma clave anterior a t, con video y audio juntos (ver wp_media_seek).
+// Ese segundo se calcula antes de abrir la conversión (una conexión a la vez al servidor IPTV) y el reproductor
+// lo lee después de la caché (do=kf&c=1) para cuadrar el tiempo
+if ($t > 0) array_push($cmd, ...wp_media_seek($url, $t, !$vtc));
 // archivos dañados o con marcas de tiempo rotas: se ignoran los paquetes corruptos en vez de detener la conversión
 array_push($cmd, '-fflags', '+genpts+discardcorrupt', '-err_detect', 'ignore_err');
 if ($ffhdr) array_push($cmd, ...$ffhdr);
@@ -279,13 +322,18 @@ if ($vtc && $vsafe) {
         '-profile:v', 'main', '-af', 'aresample=async=1000');
 } elseif ($vtc) {
     // formatos antiguos (XviD, MPEG-2, WMV...): se convierte el video a H.264 a 720p (rápido para que el hosting alcance a convertir en tiempo real)
-    array_push($cmd, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '25', '-g', '48', '-vf', "scale='min(1280,iw)':-2", '-pix_fmt', 'yuv420p');
+    array_push($cmd, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '25', '-g', '48', '-vf', "scale='min(1280,iw)':-2", '-pix_fmt', 'yuv420p', '-af', WP_FF_AUDIO_SYNC);
 } else {
-    array_push($cmd, '-c:v', 'copy');
+    array_push($cmd, '-c:v', 'copy', '-af', WP_FF_AUDIO_SYNC);
     if (in_array($vcodec, ['hevc', 'h265'], true)) array_push($cmd, '-tag:v', 'hvc1');
 }
 array_push($cmd, '-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-ar', '48000',
     '-f', 'mp4', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-frag_duration', '2000000', 'pipe:1');
+
+if (wp_media_late()) {
+    http_response_code(502);
+    exit;
+}
 
 // detiene la conversión anterior de este usuario
 if (is_file($pidFile)) {
@@ -308,6 +356,8 @@ $errFile = wp_cache_dir() . '/ff_' . $who . '.err';
 // hasta 3 intentos: si el servidor IPTV todavía cuenta la conexión anterior del navegador, rechaza la primera
 // (un servidor que no manda nada no se reintenta: el reproductor ya pasa a otro modo)
 $stalled = false;
+// el primer fragmento tiene que llegar en WP_TC_FIRST_WAIT s desde el primer intento (contando los reintentos)
+$t0 = microtime(true);
 for ($try = 0; $try < 3 && $sent === 0 && !$stalled; $try++) {
     if ($try > 0) { sleep(2); if (connection_aborted()) break; }
     $pr = wp_spawn_stream($cmd, $errFile, $pidFile);
@@ -317,6 +367,10 @@ for ($try = 0; $try < 3 && $sent === 0 && !$stalled; $try++) {
     // y el reproductor pasa a otro modo, en vez de quedarse "Convirtiendo" para siempre
     @stream_set_blocking($pr['h'], false);
     $last = microtime(true);
+    // la cabecera del MP4 (ftyp+moov) sale al instante, antes de leer el video: se guarda hasta el primer
+    // fragmento (moof). Antes se mandaba enseguida, la respuesta ya era un 200 "con datos" y se esperaba 45 s
+    // más sin video; ahora, sin fragmento a tiempo, se responde 502 y el reproductor vuelve al video original
+    $head = '';
     while (true) {
         $r = [$pr['h']]; $w = null; $x = null;
         $n = @stream_select($r, $w, $x, 1, 0);
@@ -327,12 +381,18 @@ for ($try = 0; $try < 3 && $sent === 0 && !$stalled; $try++) {
             if (!$pr['alive']()) { $chunk = (string)@stream_get_contents($pr['h']); if ($chunk === '') break; }
             else {
                 $wait = $sent === 0 ? WP_TC_FIRST_WAIT : WP_TC_IDLE_WAIT;
-                if (microtime(true) - $last > $wait) { @file_put_contents($errFile, "sin datos de ffmpeg en {$wait} s\n", FILE_APPEND); $stalled = true; break; }
+                if (microtime(true) - ($sent === 0 ? $t0 : $last) > $wait) { @file_put_contents($errFile, "sin datos de ffmpeg en {$wait} s\n", FILE_APPEND); $stalled = true; break; }
                 if (connection_aborted()) break;
                 continue;
             }
         }
         $last = microtime(true);
+        if ($sent === 0) {
+            $head .= $chunk;
+            if (strpos($head, 'moof') === false && strlen($head) < 4194304) continue;
+            $chunk = $head;
+            $head = '';
+        }
         echo $chunk;
         @flush();
         $sent += strlen($chunk);
@@ -340,5 +400,7 @@ for ($try = 0; $try < 3 && $sent === 0 && !$stalled; $try++) {
     }
     $pr['stop']();
     if ((int)@file_get_contents($pidFile) === $myPid) @unlink($pidFile);
+    // solo se reintenta un rechazo inmediato; si ffmpeg tardó en fallar ya no hay tiempo: el reproductor vuelve al original
+    if ($sent === 0 && microtime(true) - $t0 > 10) break;
 }
 if ($sent === 0 && !headers_sent()) http_response_code(502);
