@@ -8,7 +8,7 @@ import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon
 import { reportError } from '../api/report';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Image, StyleSheet, Text, View } from 'react-native';
-import { channelEpg, EpgEntry, episodeUrl, liveUrl, movieUrl } from '../api/xtream';
+import { channelEpg, EpgEntry, episodeUrl, liveUrl, movieUrl, otherScheme } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
 import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
@@ -52,12 +52,19 @@ export default function Player({ params }: { params: PlayParams }) {
   const entry = !live ? params.queue[index] : null;
   const title = live ? channel!.name : entry!.title;
 
+  // el servidor no entrega el video por el protocolo de la sesión (quedó en https y el video solo va por
+  // http, o al revés): tras un error se prueba una vez el otro antes de dar el error
+  const flipped = useRef(false);
   const urlFor = useCallback(
     (i: number): string => {
       const s = getState().session!;
-      if (params.kind === 'live') return liveUrl(s, (params.channels[i] || params.channel).id, 'ts');
-      const e = params.queue[i];
-      return params.kind === 'movie' ? movieUrl(s, e.id, e.ext) : episodeUrl(s, e.id, e.ext);
+      let u: string;
+      if (params.kind === 'live') u = liveUrl(s, (params.channels[i] || params.channel).id, 'ts');
+      else {
+        const e = params.queue[i];
+        u = params.kind === 'movie' ? movieUrl(s, e.id, e.ext) : episodeUrl(s, e.id, e.ext);
+      }
+      return flipped.current ? otherScheme(u) : u;
     },
     [params],
   );
@@ -190,6 +197,13 @@ export default function Player({ params }: { params: PlayParams }) {
         retried.current = true;
         setStatus('Reintentando…');
         setTimeout(() => alive && load(indexRef.current), 1500);
+        return;
+      }
+      if (!flipped.current) {
+        flipped.current = true;
+        setStatus('Reintentando…');
+        const at = params.kind === 'live' ? 0 : Math.floor(c.realPos());
+        setTimeout(() => alive && load(indexRef.current, at), 500);
         return;
       }
       // audio que el equipo no decodifica (DTS…): lo prepara el panel

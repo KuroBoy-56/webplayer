@@ -1,6 +1,6 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import { loginAll } from '../api/xtream';
@@ -21,7 +21,7 @@ async function tmdbPosters(): Promise<string[]> {
   const tq = code ? '&t=' + encodeURIComponent(code) + '&app=' + APP_ID : '';
   const out: string[] = [];
   for (const path of ['movie/now_playing', 'trending/tv/week', 'movie/popular']) {
-    const j = json<any>(await panel('tmdb.php', 'GET', '', '', '/' + path + '?language=es-MX' + tq));
+    const j = json<any>(await panel('tmdb.php', 'GET', '', '', '?path=' + path + '&language=es-MX' + tq));
     if (!j || j.error) break;
     for (const it of j.results || []) if (str(it.poster_path)) out.push('https://image.tmdb.org/t/p/w342' + it.poster_path);
     if (out.length >= 48) break;
@@ -43,6 +43,9 @@ export default function Login() {
   const dev = deviceId();
   // pantalla falsa del panel (equipo nuevo): hasta escribir el código o hasta que lo registren
   const [fake, setFake] = useState<Fake | null>(null);
+  // primera consulta al panel (línea del equipo y pantalla falsa) en curso: la pantalla falsa, si el
+  // panel la tiene activada, es lo primero que se ve (nunca el inicio de sesión antes)
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     let alive = true;
@@ -59,6 +62,7 @@ export default function Login() {
         else if (read('fake_unlocked') !== '1') setFake(lastFakeScreen());
       }
       if (!alive) return;
+      setChecking(false);
       setBusy('');
       if (lines.length) setAssigned(lines);
       if (lines.length === 1) enter(lines[0].user, lines[0].pass, [{ name: lines[0].name, base: lines[0].base }], true, lines[0].demo, lines[0].demoExpires, lines[0].demoDuration);
@@ -143,6 +147,14 @@ export default function Login() {
   };
 
   const canDemo = hasMasterKey() && features().demo;
+
+  if (checking && !fake) {
+    return (
+      <View style={s.checking}>
+        <ActivityIndicator size="large" color={C.red} />
+      </View>
+    );
+  }
 
   if (fake) {
     return (
@@ -233,6 +245,7 @@ function Eye({ open }: { open: boolean }) {
 const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg },
+    checking: { flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' },
     mosaic: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, flexDirection: 'row', flexWrap: 'wrap', transform: [{ rotate: '-8deg' }, { scale: 1.3 }] },
     mosaicImg: { width: px(192), height: px(288), margin: px(4), borderRadius: px(6) },
     shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha(C.bg, 0.72) },
