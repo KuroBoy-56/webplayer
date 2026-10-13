@@ -6,7 +6,8 @@ import { Kind, loadKind, setStreamFlip } from './api/xtream';
 import { catalog } from './data/catalog';
 import { json } from './lib/http';
 import { read, readJson, remove, write, writeJson } from './lib/storage';
-import { brand, clearTenant, expiredMessage, locallyExpired, OFFLINE_GRACE, saveBrand, scoped, TENANT_FATAL, tenantCode } from './lib/tenant';
+import { tvMac } from './lib/platform';
+import { APP_ID, brand, clearTenant, expiredMessage, locallyExpired, OFFLINE_GRACE, saveBrand, scoped, TENANT_FATAL, tenantCode } from './lib/tenant';
 import { digits, nowSec, parseIso, str } from './lib/util';
 
 export type Progress = {
@@ -272,7 +273,7 @@ export function saveProgress(p: Progress, force: boolean) {
     return;
   }
   const { order, ...body } = p;
-  cloudPost({ action: 'save', ...body, platform: 'vega', device: read('device_id') });
+  cloudPost({ action: 'save', ...body, platform: APP_ID, device: read('device_id') });
 }
 
 export function removeProgress(title: string) {
@@ -287,6 +288,12 @@ export function removeProgress(title: string) {
 export function deviceId(): string {
   const saved = read('device_id');
   if (saved) return saved;
+  // Tizen: MAC armada con el id del televisor (no cambia al reinstalar la app)
+  const tv = tvMac();
+  if (tv) {
+    write('device_id', tv);
+    return tv;
+  }
   let hex = '';
   for (let i = 0; i < 16; i++) hex += '0123456789ABCDEF'[Math.floor(Math.random() * 16)];
   if (hex.startsWith('00')) hex = '1' + hex.slice(1);

@@ -2,7 +2,10 @@
   "compilerOptions": {
     "target": "esnext",
     "module": "commonjs",
-    "lib": ["es2020"],
+    "lib": [
+      "es2020",
+      "dom"
+    ],
     "jsx": "react-jsx",
     "noEmit": true,
     "isolatedModules": true,
@@ -12,7 +15,25 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": []
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@amazon-devices/react-native-kepler": [
+        "web/shims/kepler.ts"
+      ],
+      "@amazon-devices/react-native-w3cmedia": [
+        "web/shims/w3cmedia.tsx"
+      ],
+      "@react-native-async-storage/async-storage": [
+        "web/shims/async-storage.ts"
+      ]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/types.d.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/types.d.ts",
+    "web/**/*.ts",
+    "web/**/*.tsx"
+  ]
 }

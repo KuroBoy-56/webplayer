@@ -1,0 +1,93 @@
+name: App Tizen OS (Samsung)
+
+on:
+  push:
+    branches: [tizenOS]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # llave del panel para Autodemo, DNS y registro del equipo (la misma de Vega OS; ver config/README.md)
+  PANEL_KEY: ${{ secrets.PANEL_KEY || secrets.PANEL_MASTER_KEY }}
+  TIZEN_STUDIO: '6.1'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar paquetes
+        run: npm ci --no-audit --no-fund
+
+      - name: Llave del panel
+        run: |
+          node tools/prepare-key.js | tee key.log
+          grep -q incluida key.log || echo "::notice::Compilado sin llave del panel: sin Autodemo, DNS ni registro del equipo (ver config/README.md)"
+
+      - name: Revisar código (TypeScript) y pruebas
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Compilar la app (dist/)
+        run: npm run build
+
+      # la CLI oficial de Samsung / Tizen (no pide cuenta para firmar con un certificado de autor)
+      - name: Instalar Tizen Studio (CLI)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/web-cli.bin" "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO}/web-cli_Tizen_Studio_${TIZEN_STUDIO}_ubuntu-64.bin"
+          chmod +x "$RUNNER_TEMP/web-cli.bin"
+          "$RUNNER_TEMP/web-cli.bin" --accept-license "$HOME/tizen-studio" > tizen-install.log 2>&1 || { tail -40 tizen-install.log; exit 1; }
+          echo "$HOME/tizen-studio/tools/ide/bin" >> "$GITHUB_PATH"
+
+      - name: Firmar y empaquetar .wgt
+        id: sign
+        env:
+          TIZEN_AUTHOR_P12: ${{ secrets.TIZEN_AUTHOR_P12 }}
+          TIZEN_AUTHOR_PASS: ${{ secrets.TIZEN_AUTHOR_PASS }}
+          TIZEN_DISTRIBUTOR_P12: ${{ secrets.TIZEN_DISTRIBUTOR_P12 }}
+          TIZEN_DISTRIBUTOR_PASS: ${{ secrets.TIZEN_DISTRIBUTOR_PASS }}
+        run: bash tools/sign-tizen.sh
+
+      - name: Resumen de errores
+        if: failure()
+        run: |
+          f="$HOME/tizen-studio-data/cli/logs/cli.log"
+          [ -f "$f" ] || exit 0
+          msg=$(grep -iE "error|exception" "$f" | tail -30 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Errores de la CLI de Tizen::$msg"
+
+      - name: Paquete web (para volver a firmar con tu certificado Samsung)
+        run: cd dist && zip -qr ../out/MPXPlayer-web.zip . -x '*.wgt'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MPXPlayer-Tizen
+          path: out/*
+
+      # publica siempre la última versión en la misma dirección de descarga (Releases > tizen-latest)
+      - name: Publicar descarga
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KIND: ${{ steps.sign.outputs.kind }}
+        run: |
+          cd out
+          sha256sum MPXPlayer.wgt MPXPlayer-web.zip > SHA256SUMS.txt
+          if [ "$KIND" = samsung ]; then
+            notes="Firmado con tu certificado Samsung (secretos TIZEN_*): se instala directo en los televisores de ese certificado."
+          else
+            notes="Firmado con un certificado de autor de Tizen. Para un televisor Samsung real hay que firmarlo con tu certificado Samsung (gratis, con tu cuenta de Samsung): mira el README de la rama tizenOS, o guarda ese certificado como secretos TIZEN_* y GitHub lo firma solo."
+          fi
+          gh release delete tizen-latest --yes --cleanup-tag || true
+          gh release create tizen-latest MPXPlayer.wgt MPXPlayer-web.zip SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease \
+            --title "MPX Player Samsung Smart TV · Tizen OS (última versión)" \
+            --notes "Compilado automáticamente desde la rama tizenOS ($GITHUB_SHA). $notes"

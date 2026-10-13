@@ -150,7 +150,7 @@ export default function Account() {
           nav.reset({ name: 'login' });
         }}
       />
-      <Text style={s.ver}>{brandName()} para Fire TV (Vega OS) · versión 1.0.0</Text>
+      <Text style={s.ver}>{brandName()} para Samsung Smart TV (Tizen OS) · versión 1.0.0</Text>
       <ChangePinDialog
         visible={changePin}
         onClose={() => setChangePin(false)}

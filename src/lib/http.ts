@@ -1,13 +1,21 @@
 // Peticiones HTTP con tiempo límite.
+import { viaDns } from './securedns';
 
 export type HttpResult = { code: number; body: string; ok: boolean };
 
-export const UA = 'LatMpxVega/1.0 (Fire TV; Vega OS)';
+export const UA = 'LatMpxTizen/1.0 (Samsung Smart TV; Tizen OS)';
 
-export async function http(
-  url: string,
-  opts: { method?: string; body?: string; type?: string; timeout?: number; signal?: AbortSignal } = {},
-): Promise<HttpResult> {
+type HttpOpts = { method?: string; body?: string; type?: string; timeout?: number; signal?: AbortSignal };
+
+// sin conexión con el DNS de la red y con un DNS elegido (botón DNS): se prueba la IP que da ese DNS
+export async function http(url: string, opts: HttpOpts = {}): Promise<HttpResult> {
+  const r = await send(url, opts);
+  if (r.code !== 0 || opts.signal?.aborted) return r;
+  const alt = await viaDns(url);
+  return alt ? send(alt, opts) : r;
+}
+
+async function send(url: string, opts: HttpOpts): Promise<HttpResult> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts.timeout || 15000);
   const onAbort = () => ctrl.abort();

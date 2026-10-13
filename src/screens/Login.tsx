@@ -1,12 +1,13 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import { loginAll } from '../api/xtream';
 import { Button, Focusable, Logo } from '../components/ui';
 import { json } from '../lib/http';
 import { hasMasterKey } from '../lib/aes';
+import { DNS_OPTIONS, dnsChoice, setDnsChoice } from '../lib/securedns';
 import { read, write } from '../lib/storage';
 import { APP_ID, features, scoped, tenantCode } from '../lib/tenant';
 import { shuffle, str } from '../lib/util';
@@ -35,6 +36,7 @@ export default function Login() {
   const [pass, setPass] = useState('');
   // ojito: ver la contraseña en texto o volver a ocultarla
   const [showPass, setShowPass] = useState(false);
+  const [dnsOpen, setDnsOpen] = useState(false);
   const [busy, setBusy] = useState('Comprobando el equipo en el panel…');
   const [error, setError] = useState('');
   const [posters, setPosters] = useState<string[]>([]);
@@ -216,6 +218,7 @@ export default function Login() {
         {busy ? <Text style={s.busy}>{busy}</Text> : null}
         <View style={s.btns}>
           <Button label={busy ? 'Entrando…' : 'Ingresar'} primary onPress={() => !busy && enter(user, pass)} />
+          <Button label="DNS" last={!canDemo} onPress={() => setDnsOpen(true)} />
           {canDemo ? <Button label="Autodemo" last onPress={() => !busy && demo()} /> : null}
         </View>
         {canDemo ? <Text style={s.tip}>¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.</Text> : null}
@@ -225,6 +228,40 @@ export default function Login() {
           </View>
         ) : null}
         <Text style={s.device}>Código del equipo: {dev}</Text>
+      </View>
+      {dnsOpen ? <DnsPicker onClose={() => setDnsOpen(false)} /> : null}
+    </View>
+  );
+}
+
+// botón «DNS» (como Android e iOS): DNS seguro para saltar bloqueos del proveedor de internet
+function DnsPicker({ onClose }: { onClose: () => void }) {
+  const [cur, setCur] = useState(dnsChoice().key);
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onClose]);
+  return (
+    <View style={s.dnsShade}>
+      <View style={s.dnsBox}>
+        <Text style={s.title}>DNS</Text>
+        <Text style={s.dnsNote}>Si tu internet bloquea el servidor, elige otro DNS. La app lo usa cuando el de tu red no responde.</Text>
+        {DNS_OPTIONS.map(o => (
+          <Button
+            key={o.key}
+            label={(o.key === cur ? '✓ ' : '') + o.label}
+            value={o.note}
+            preferred={o.key === cur}
+            onPress={() => {
+              setDnsChoice(o.key);
+              setCur(o.key);
+              onClose();
+            }}
+          />
+        ))}
       </View>
     </View>
   );
@@ -245,6 +282,9 @@ function Eye({ open }: { open: boolean }) {
 const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg },
+    dnsShade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha('#000000', 0.7), alignItems: 'center', justifyContent: 'center' },
+    dnsBox: { width: px(820), backgroundColor: C.bg2, borderRadius: px(12), padding: px(50) },
+    dnsNote: { color: C.sub, fontSize: px(26), marginBottom: px(24) },
     checking: { flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' },
     mosaic: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, flexDirection: 'row', flexWrap: 'wrap', transform: [{ rotate: '-8deg' }, { scale: 1.3 }] },
     mosaicImg: { width: px(192), height: px(288), margin: px(4), borderRadius: px(6) },

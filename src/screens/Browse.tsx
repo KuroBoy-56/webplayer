@@ -55,7 +55,8 @@ function Billboard({ hero }: { hero: Item }) {
       {hero.backdrop || hero.poster ? <Image source={{ uri: hero.backdrop || hero.poster }} style={s.heroImg} resizeMode="cover" /> : null}
       {/* degradado teñido con el fondo del distribuidor */}
       <Image source={require('../../assets/image/grad_bottom.png')} style={[s.heroGrad, { tintColor: C.bg }]} resizeMode="stretch" />
-      <View style={s.heroShade} />
+      {/* sombra a la izquierda para leer el texto: degradado, sin borde marcado */}
+      <Image source={require('../../assets/image/grad_left.png')} style={[s.heroShade, { tintColor: C.bg }]} resizeMode="stretch" />
       <View style={s.heroText}>
         <Text style={s.heroKind}>{hero.kind === 'series' ? 'S E R I E' : 'P E L Í C U L A'}</Text>
         <Text style={s.heroTitle} numberOfLines={2}>
@@ -143,7 +144,7 @@ const s = themed(() =>
     hero: { height: px(840), marginBottom: px(-120) },
     heroImg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
     heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(420) },
-    heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1100), backgroundColor: alpha(C.bg, 0.5) },
+    heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1400) },
     heroText: { position: 'absolute', left: SIDE, top: px(220), width: px(980) },
     heroKind: { color: C.red, fontSize: px(24), fontWeight: '800', marginBottom: px(8) },
     heroTitle: { color: C.text, fontSize: px(76), fontWeight: '900', lineHeight: px(84) },

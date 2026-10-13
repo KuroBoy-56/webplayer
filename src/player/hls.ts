@@ -1,6 +1,6 @@
-// HLS del motor del panel (video copiado + audio AAC en MPEG-TS) con Media Source Extensions:
-// el reproductor de Vega solo abre HLS por MSE, así que la lista y los segmentos se bajan aquí y se
-// entregan al SourceBuffer en orden. La lista es de tipo "event": crece mientras ffmpeg convierte.
+// HLS del motor del panel (video copiado + audio AAC en MPEG-TS). En el televisor Samsung, AVPlay lo abre
+// directo; sin AVPlay (navegador) va por Media Source Extensions: la lista y los segmentos se bajan aquí y
+// se entregan al SourceBuffer en orden. La lista es de tipo "event": crece mientras ffmpeg convierte.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { http, UA } from '../lib/http';
 import { engineError } from '../api/media';
@@ -30,8 +30,14 @@ export class PanelHls {
     this.dir = path.slice(0, path.lastIndexOf('/') + 1);
   }
 
-  // ¿el equipo acepta MPEG-TS por MSE?
+  // el reproductor abre HLS directo (AVPlay del televisor Samsung)
+  private get native(): boolean {
+    return !!(this.v as any).nativeHls;
+  }
+
+  // ¿AVPlay o el equipo acepta MPEG-TS por MSE?
   static supported(): boolean {
+    if ((globalThis as any).webapis?.avplay) return true;
     try {
       return MediaSource.isTypeSupported('video/mp2t', true);
     } catch {
@@ -45,6 +51,12 @@ export class PanelHls {
     if (err) return err;
     if (!this.segs.length) return 'El panel no devolvió el audio';
     if (!this.alive) return '';
+    if (this.native) {
+      this.attached = true;
+      this.v.src = this.listUrl;
+      this.watch();
+      return '';
+    }
     const ms: any = new MediaSource();
     this.ms = ms;
     const opened = new Promise<void>(res => ms.addEventListener('sourceopen', () => res()));
@@ -94,6 +106,11 @@ export class PanelHls {
 
   // t: segundo dentro del HLS. false = aún no está convertido (hay que pedirlo desde ahí)
   async seekTo(t: number): Promise<boolean> {
+    if (this.native) {
+      if (t >= this.listed()) return false;
+      this.v.currentTime = t;
+      return true;
+    }
     if (!this.sb) return false;
     if (this.isBuffered(t)) {
       this.v.currentTime = t;
@@ -136,6 +153,14 @@ export class PanelHls {
       return b.length ? b.end(b.length - 1) : 0;
     } catch {
       return 0;
+    }
+  }
+
+  // AVPlay: la lista se sigue leyendo hasta que termina (duración y hasta dónde se puede adelantar)
+  private async watch(): Promise<void> {
+    while (this.alive && !this.ended) {
+      await sleep(5000);
+      if (this.alive) await this.refresh(20000);
     }
   }
 

@@ -1,4 +1,4 @@
-// Motor del panel para Vega (api/media_vega.php): cuando el reproductor del equipo no puede cambiar
+// Motor del panel para Tizen (api/media_tizen.php): cuando el reproductor del equipo no puede cambiar
 // el audio de un archivo o no sabe decodificarlo (DTS, TrueHD…), el panel lo prepara con ffmpeg
 // (video sin cambios + ese audio en AAC, HLS desde el segundo pedido); los subtítulos del archivo
 // que el equipo no muestra llegan como WebVTT. Mismo contrato que media.php de Roku.
@@ -7,7 +7,7 @@ import { http, json } from '../lib/http';
 import { str } from '../lib/util';
 import { cloudToken, panel, panelApiBase, panelScheme } from './panel';
 
-const FILE = 'media_vega.php';
+const FILE = 'media_tizen.php';
 
 export type Engine = { base: string; token: string };
 

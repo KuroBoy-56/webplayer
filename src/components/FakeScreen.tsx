@@ -1,7 +1,6 @@
 // Pantalla falsa del panel para equipos nuevos (Pantalla Falsa, solo el dueño): calculadora que
-// funciona de verdad, carrusel o imagen. Vega OS no tiene navegador ni reproductor libre fuera del
-// reproductor de la app: «video» y «web» se muestran como la calculadora. El código del panel + «=»
-// abre el inicio de sesión. Abajo, pequeño, el ID del equipo para que lo registren.
+// funciona de verdad, carrusel, imagen, video (en bucle, sin sonido) o página web. El código del panel
+// + «=» en la calculadora abre el inicio de sesión. Abajo, pequeño, el ID del equipo para que lo registren.
 import React, { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import type { FakeScreen as Fake } from '../api/panel';
@@ -111,6 +110,9 @@ export default function FakeScreen({ screen, device, onUnlock }: { screen: Fake;
   let body: React.ReactNode;
   if (screen.type === 'carrusel' && screen.images.length) body = <Carousel images={screen.images} interval={screen.interval} />;
   else if (screen.type === 'image' && screen.url) body = <Image source={{ uri: screen.url }} style={s.full} resizeMode="contain" />;
+  // el televisor sí tiene navegador y reproductor: video y web como en la web player
+  else if (screen.type === 'video' && screen.url) body = <video src={screen.url} autoPlay loop muted style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />;
+  else if (screen.type === 'web' && screen.url) body = <iframe src={screen.url} style={{ width: '100%', height: '100%', border: 0, background: '#fff' }} />;
   else body = <Calculator unlock={screen.unlock} onUnlock={onUnlock} />;
   return (
     <View style={s.root}>

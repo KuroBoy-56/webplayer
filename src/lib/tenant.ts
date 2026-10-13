@@ -5,7 +5,7 @@ import { Palette, setPalette, validPalette } from '../theme';
 import { read, readJson, remove, write, writeJson } from './storage';
 import { str } from './util';
 
-export const APP_ID = 'vega';
+export const APP_ID = 'tizen';
 export const APP_NAME = 'MPX Player';
 // sin respuesta del panel se sigue con la marca guardada hasta 72 h
 export const OFFLINE_GRACE = 72 * 3600;

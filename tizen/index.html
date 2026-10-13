@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1920, user-scalable=no" />
+  <title>MPX Player</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+    #root { position: relative; z-index: 1; display: flex; flex-direction: column; width: 100%; height: 100%; }
+    /* AVPlay dibuja el video en un plano debajo de la página */
+    #av-player { position: fixed; left: 0; top: 0; width: 100%; height: 100%; }
+    :focus { outline: none; }
+  </style>
+  <!-- APIs de Samsung (AVPlay, id del televisor); en un navegador no existe y la app usa <video> -->
+  <script src="$WEBAPIS/webapis/webapis.js"></script>
+</head>
+<body>
+  <object id="av-player" type="application/avplayer"></object>
+  <div id="root"></div>
+  <script src="app.js"></script>
+</body>
+</html>

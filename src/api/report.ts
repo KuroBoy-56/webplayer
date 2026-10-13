@@ -1,9 +1,9 @@
 // Errores de la app al panel (api/report.php, cifrado igual que login.php): el dueño los ve en
 // «Errores de las apps» con el equipo, la hora, la línea y el detalle. Nunca se manda la contraseña
 // de la línea (el panel además tapa usuario/contraseña de las direcciones).
-import { Platform } from 'react-native';
 import { hasMasterKey, panelEncrypt } from '../lib/aes';
 import { formBody } from '../lib/http';
+import { tvModel, tvOs } from '../lib/platform';
 import { APP_ID, tenantCode } from '../lib/tenant';
 import { panel } from './panel';
 
@@ -36,8 +36,8 @@ export function reportError(kind: ErrorKind, message: string, detail = '', scree
     detail: detail.slice(0, 8000),
     screen,
     device: c.device,
-    model: 'Fire TV Vega OS',
-    os: 'Vega OS ' + String((Platform as any).Version ?? ''),
+    model: tvModel(),
+    os: tvOs(),
     user: c.user,
     server: c.server,
   };
