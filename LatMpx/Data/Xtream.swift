@@ -23,12 +23,22 @@ enum Xtream {
             // el panel (https) cambia http:// por https:// en las direcciones de los servidores IPTV; muchos
             // solo responden en http (p. ej. el puerto 8080). Si no contesta, se prueba el otro protocolo.
             var probe = Session(dnsName: name, base: normalize(raw), user: user, pass: pass, expires: "")
-            var found = await Net.obj(api(probe))
+            var r = await Net.get(api(probe))
+            var found = r.json()
+            logLogin(probe.base, r, found)
             if found == nil {
-                probe.base = otherScheme(probe.base)
-                found = await Net.obj(api(probe))
+                var alt = probe
+                alt.base = otherScheme(probe.base)
+                let r2 = await Net.get(api(alt))
+                let f2 = r2.json()
+                logLogin(alt.base, r2, f2)
+                if f2 != nil || (r.code == 0 && r2.code > 0) { probe = alt; r = r2; found = f2 }
             }
-            guard let j = found else { continue }
+            guard let j = found else {
+                // el servidor respondió pero no con la cuenta (línea bloqueada, vencida o servidor caído)
+                if r.code > 0 && last == "No se pudo conectar con el servidor" { last = "El servidor no aceptó la conexión (código \(r.code))" }
+                continue
+            }
             guard let ui = j.o("user_info"), ui.i("auth") == 1 else { last = "Usuario o contraseña incorrectos"; continue }
             let st = ui.s("status")
             if !st.isEmpty && st.lowercased() != "active" { last = st.lowercased() == "expired" ? "Tu cuenta está vencida" : "Tu cuenta está \(st)"; continue }
@@ -41,6 +51,13 @@ enum Xtream {
             return .ok(s)
         }
         return .fail(last)
+    }
+
+    /** registro del inicio de sesión (consola de Xcode, «[LatMpx] login»): servidor y código, nunca usuario ni contraseña */
+    private static func logLogin(_ base: String, _ r: Resp, _ j: JObj?) {
+        let host = base.components(separatedBy: "://").last ?? base
+        let ui = j?.o("user_info")
+        print("[LatMpx] login \(host) -> http \(r.code)" + (ui.map { " auth=\($0.s("auth")) status=\($0.s("status"))" } ?? " sin JSON"))
     }
 
     /** http://… <-> https://… */
