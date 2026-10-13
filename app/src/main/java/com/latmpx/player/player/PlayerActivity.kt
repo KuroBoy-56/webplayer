@@ -76,6 +76,8 @@ class PlayerActivity : ComponentActivity() {
     private val ui = Handler(Looper.getMainLooper())
 
     private lateinit var session: Session
+    /** ya se probó el otro protocolo (http / https) para este reproductor */
+    private var schemeFlipped = false
     private lateinit var kind: Kind
     private lateinit var queue: List<QueueEntry>
     private var extra = ""
@@ -346,6 +348,18 @@ class PlayerActivity : ComponentActivity() {
                 player.prepare()
                 return
             }
+        }
+        // el servidor no entrega el video por este protocolo (la sesión quedó en https y el video solo va por
+        // http, o al revés): una vez se prueba el otro, en el mismo punto, antes de reintentar o dar el error
+        if (isNetwork && !schemeFlipped && files[q.key] == null && session.base.isNotEmpty()) {
+            schemeFlipped = true
+            session = session.copy(base = Xtream.otherScheme(session.base))
+            val pos = player.currentPosition
+            for (i in 0 until player.mediaItemCount) queue.getOrNull(i)?.let { player.replaceMediaItem(i, mediaItem(it)) }
+            if (kind == Kind.LIVE) player.seekToDefaultPosition(idx) else player.seekTo(idx, pos)
+            player.prepare()
+            player.play()
+            return
         }
         // corte de conexión o del servidor IPTV: se retoma donde iba (hasta 6 veces seguidas)
         val now = System.currentTimeMillis()
