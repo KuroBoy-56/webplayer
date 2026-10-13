@@ -21,3 +21,4 @@ includes/https_relay.php
 bin/ffmpeg
 bin/ffprobe
 bin/*.part
+movies_cache.json

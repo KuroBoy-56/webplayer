@@ -14,19 +14,21 @@ wp_fake_unlock_post();
 $panel_ready = wp_panel_ready();
 $panel_msg = 'Falta configurar la conexión con el panel: configura includes/panel_secret.php (copia includes/panel_secret.sample.php y pon la llave maestra del panel).';
 
-/* ---------- Fondo de pósters (TMDB) con caché, sin bloquear el login ---------- */
-function getMoviesFromEndpoint($api_key, $pages = 4)
+/* ---------- Fondo de pósters: api/tmdb.php del panel, como las apps ----------
+ * Clave TMDB del distribuidor (o la del dueño con Omitir / sin número). Sin clave el panel responde
+ * tmdb_key_not_set y no hay fondo. Caché por distribuidor: 6 h con carátulas, 10 min sin ellas (si se
+ * pone una clave en el panel, el fondo aparece pronto). */
+function getMoviesFromPanel($pages = 4)
 {
-    $cache_file = __DIR__ . '/movies_cache.json';
-    $cache_time = 3600 * 6;
-    $cached = is_file($cache_file) ? json_decode((string)@file_get_contents($cache_file), true) : null;
-    $fresh = $cached && (time() - filemtime($cache_file) < $cache_time);
-    if ($fresh) return $cached;
-
-    $refresh = function () use ($api_key, $pages, $cache_file) {
+    $base = wp_panel_base();
+    if ($base === '') return [];
+    $ck = wp_panel_ck('login|posters');
+    $c = wp_cache_get($ck, 6 * 3600, $stale);
+    if (is_array($c) && (!empty($c['m']) || time() - (int)($c['at'] ?? 0) < 600)) return (array)($c['m'] ?? []);
+    $refresh = function () use ($base, $pages, $ck) {
         $urls = [];
         for ($p = 1; $p <= $pages; $p++) {
-            $urls[$p] = "https://api.themoviedb.org/3/movie/now_playing?api_key={$api_key}&language=es-ES&page={$p}";
+            $urls[$p] = $base . wp_panel_tenant_query('tmdb.php?path=movie/now_playing&language=es-MX&page=' . $p);
         }
         $movies = [];
         foreach (wp_http_multi($urls, 5) as $body) {
@@ -34,17 +36,16 @@ function getMoviesFromEndpoint($api_key, $pages = 4)
             if (isset($data['results']) && is_array($data['results'])) $movies = array_merge($movies, $data['results']);
         }
         $movies = array_values(array_filter($movies, function ($m) { return !empty($m['poster_path']); }));
-        if ($movies) @file_put_contents($cache_file, json_encode($movies));
+        wp_cache_set($ck, ['m' => $movies, 'at' => time()]);
         return $movies;
     };
-
-    if ($cached) {
-        // Se muestra la copia anterior y se actualiza después de responder
+    // copia anterior con carátulas: se muestra y se actualiza después de responder (sin bloquear el login)
+    if (is_array($stale) && !empty($stale['m'])) {
         register_shutdown_function(function () use ($refresh) {
             if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
             $refresh();
         });
-        return $cached;
+        return $stale['m'];
     }
     return $refresh();
 }
@@ -191,8 +192,7 @@ session_write_close();
 $fake = wp_fake_screen_cfg();
 if ($fake !== null && !wp_fake_unlocked($fake)) wp_fake_screen_render($fake);
 
-$api_key = wp_tmdb_key();
-$movies = getMoviesFromEndpoint($api_key);
+$movies = getMoviesFromPanel();
 $movies = is_array($movies) ? array_slice($movies, 0, 48) : [];
 $remember = isset($_COOKIE['username']) ? (string)$_COOKIE['username'] : '';
 $dist_cfg = $dist_view['cfg'];
