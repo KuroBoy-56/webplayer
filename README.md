@@ -26,6 +26,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   «Usuario: DEMO» con la marca «Cuenta DEMO»; el código del equipo sí se ve), no hay Continuar viendo
   ni Mi lista y no se envía nada a `progress.php` (`save`, `delete`, `fav_add`, `fav_remove`): al
   pulsar *Mi lista* o *Agregar a favoritos* sale el aviso «No disponible en la DEMO».
+- **Vencimiento de la DEMO**: *Cuenta* solo muestra «Vence:» con el fin que dice el panel
+  (`demo_expires` de `check_mac` / `auto_demo`, fecha y hora exactas) y «Cuenta DEMO · 2 horas»
+  (`demo_duration`); nunca el servidor, la fecha ni las conexiones de la línea demo del servidor IPTV.
+  No hay textos de «24 horas»: la duración siempre sale del panel.
+- **Fondo del inicio de sesión**: carátulas de TMDB pedidas por `api/tmdb.php` del panel (clave del
+  distribuidor o del dueño); sin clave no hay carrusel.
+- **Audio y subtítulos del panel**: `media_vega.php?do=status&token=` — si el dueño desactivó ffmpeg
+  para el distribuidor de la línea, el panel responde `ffmpeg:false` y se queda el audio original.
 - **Botones iguales a Roku, Windows y la web**: un solo componente en toda la app (inicio de sesión,
   distribuidor, avisos, diálogos, Cuenta y menú del reproductor). Principal = color del distribuidor
   (rojo sin distribuidor) con texto de contraste; secundario = blanco translúcido con borde fino; con

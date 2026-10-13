@@ -9,7 +9,7 @@ import { panelSubmit } from '../api/panel';
 import { hasMasterKey } from '../lib/aes';
 import { pref, setPref } from '../lib/storage';
 import { brand, brandName, distChoice, expiryText } from '../lib/tenant';
-import { dateText } from '../lib/util';
+import { dateText, dateTimeText, demoLength } from '../lib/util';
 import { useNav } from '../nav';
 import { deviceId, loadCatalog, loadCloud, logout, refreshCatalog, resetTenant, useAppState } from '../state';
 import { C, px, SIDE, themed } from '../theme';
@@ -59,11 +59,18 @@ export default function Account() {
       {s0 ? (
         <View style={s.card}>
           {/* DEMO: nunca el usuario de la línea */}
-          {st.demo ? <Text style={s.demo}>Cuenta DEMO · Estás usando una DEMO</Text> : null}
+          {st.demo ? <Text style={s.demo}>{demoLength(st.demoDuration) ? 'Cuenta DEMO · ' + demoLength(st.demoDuration) : 'Cuenta DEMO'}</Text> : null}
           <Text style={s.row}>Usuario: <Text style={s.val}>{st.demo ? 'DEMO' : s0.user}</Text></Text>
-          <Text style={s.row}>Servidor: <Text style={s.val}>{s0.dns}</Text></Text>
-          <Text style={s.row}>Vence: <Text style={s.val}>{dateText(s0.exp)}</Text></Text>
-          <Text style={s.row}>Conexiones: <Text style={s.val}>{s0.active || '0'} de {s0.max || '1'}</Text></Text>
+          {/* DEMO: solo el fin que dice el panel (hora exacta); nada de la línea demo del servidor */}
+          {st.demo ? (
+            <Text style={s.row}>Vence: <Text style={s.val}>{st.demoExpires > 0 ? dateTimeText(st.demoExpires) : '—'}</Text></Text>
+          ) : (
+            <>
+              <Text style={s.row}>Servidor: <Text style={s.val}>{s0.dns}</Text></Text>
+              <Text style={s.row}>Vence: <Text style={s.val}>{dateText(s0.exp)}</Text></Text>
+              <Text style={s.row}>Conexiones: <Text style={s.val}>{s0.active || '0'} de {s0.max || '1'}</Text></Text>
+            </>
+          )}
           <Text style={s.row}>Código del equipo: <Text style={s.val}>{deviceId()}</Text></Text>
           {dist ? (
             <Text style={s.row}>

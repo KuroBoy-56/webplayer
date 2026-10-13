@@ -33,6 +33,9 @@ type State = {
   favorites: Fav[];
   // línea DEMO: no se muestran usuario ni contraseña y no se guardan progreso ni Mi lista
   demo: boolean;
+  // fin (segundos Unix) y duración (segundos) de la demo según el panel; 0 = no se sabe
+  demoExpires: number;
+  demoDuration: number;
   // aviso corto encima de todo (p. ej. "No disponible en la DEMO")
   notice: string;
   catalogRev: number;
@@ -47,6 +50,8 @@ let state: State = {
   progress: [],
   favorites: [],
   demo: false,
+  demoExpires: 0,
+  demoDuration: 0,
   notice: '',
   catalogRev: 0,
   rev: 0,
@@ -85,9 +90,9 @@ export function restoreSession(): boolean {
 
 // demo: la sesión salió del botón Autodemo o el panel la marcó como DEMO (check_mac); un inicio
 // de sesión normal la deja en false
-export function setSession(s: Session, demo = false) {
+export function setSession(s: Session, demo = false, demoExpires = 0, demoDuration = 0) {
   forgetCloud();
-  set({ session: s, progress: [], favorites: [], demo });
+  set({ session: s, progress: [], favorites: [], demo, demoExpires: demo ? demoExpires : 0, demoDuration: demo ? demoDuration : 0 });
 }
 
 // el panel dijo "demo": true (progress.php): desde ahora la sesión es una DEMO
@@ -116,7 +121,7 @@ export function logout() {
   forgetCloud();
   catalog.clear();
   catalog.unlocked = false;
-  set({ session: null, loaded: { vod: false, series: false, live: false }, loading: '', error: '', progress: [], favorites: [], demo: false });
+  set({ session: null, loaded: { vod: false, series: false, live: false }, loading: '', error: '', progress: [], favorites: [], demo: false, demoExpires: 0, demoDuration: 0 });
 }
 
 // ---------- catálogo ----------

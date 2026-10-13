@@ -60,6 +60,21 @@ export function dateText(epoch: number): string {
   return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear();
 }
 
+// fecha y hora exactas del equipo: "13/10/2026 18:45"
+export function dateTimeText(epoch: number): string {
+  const d = new Date(epoch * 1000);
+  return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
+// "1 hora", "2 horas", "30 minutos", "1 día"… según la duración de la demo del panel ('' si no la mandó)
+export function demoLength(sec: number): string {
+  if (!(sec > 0)) return '';
+  if (sec % 86400 === 0) return sec / 86400 + (sec === 86400 ? ' día' : ' días');
+  if (sec % 3600 === 0) return sec / 3600 + (sec === 3600 ? ' hora' : ' horas');
+  const m = Math.round(sec / 60);
+  return m + (m === 1 ? ' minuto' : ' minutos');
+}
+
 // número de día local (para separar Hoy / Mañana)
 export function localDay(epoch: number): number {
   const d = new Date(epoch * 1000);

@@ -18,14 +18,15 @@ export async function mediaEngine(): Promise<{ ok: true; engine: Engine } | { ok
   if (cached) return { ok: true, engine: cached };
   let base = panelApiBase();
   if (!base) return { ok: false, error: 'No se encontró el panel' };
-  const st = await panel(FILE, 'GET', '', '', '?do=status');
+  const token = await cloudToken();
+  if (!token) return { ok: false, error: 'No se pudo validar tu línea con el panel.' };
+  // con el token el panel dice también si el distribuidor de la línea tiene ffmpeg activado
+  const st = await panel(FILE, 'GET', '', '', '?do=status&token=' + encodeURIComponent(token));
   const j = json(st);
   if (st.code === 0) return { ok: false, error: 'No se pudo conectar con el panel.' };
   if (st.code === 404 || !j) return { ok: false, error: 'El panel todavía no tiene el motor de audio y subtítulos (actualízalo).' };
-  if (j.ffmpeg !== true) return { ok: false, error: 'El panel no tiene ffmpeg: el dueño debe instalarlo en Guía EPG.' };
+  if (j.ffmpeg !== true) return { ok: false, error: 'El cambio de idioma desde el panel no está disponible.' };
   if (panelScheme() === 'http') base = base.replace(/^https:/i, 'http:');
-  const token = await cloudToken();
-  if (!token) return { ok: false, error: 'No se pudo validar tu línea con el panel.' };
   cached = { base, token };
   return { ok: true, engine: cached };
 }

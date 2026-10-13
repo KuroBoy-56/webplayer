@@ -21,7 +21,8 @@ export type Session = {
 export type Server = { name: string; base: string };
 
 // línea del panel; demo: el panel dice que es una DEMO ("demo": true en check_mac)
-export type Line = Server & { user: string; pass: string; demo?: boolean };
+// demoExpires / demoDuration: fin (segundos Unix) y duración (segundos) de la demo según el panel
+export type Line = Server & { user: string; pass: string; demo?: boolean; demoExpires?: number; demoDuration?: number };
 
 const PANEL_HEX =
   '4979456d507a6876665741734e4341715053773850796f374e794d34657a3475507a67694e32553250534a6b4f444d38507a41675944733050436f6e656a4d2f496e6f6949796f734e7a30554e43496d5a53553650773d3d';
@@ -311,7 +312,7 @@ export async function panelCheckMac(deviceId: string): Promise<Line | null> {
   // PIN parental del panel: es el que usa la app
   if (/^\d{4}$/.test(str(j.pin))) write(scoped('panel_pin'), str(j.pin));
   const ln = lineFromUrl('Servidor', str(j.url), str(j.username), str(j.password));
-  return ln ? { ...ln, demo: j.demo === true } : null;
+  return ln ? { ...ln, demo: j.demo === true, demoExpires: Number(j.demo_expires) || 0, demoDuration: Number(j.demo_duration) || 0 } : null;
 }
 
 let lastCheckAnswered = false;
@@ -345,14 +346,25 @@ export function resellerCode(text: string): string {
   return /^(?=.*[A-Za-z])[A-Za-z0-9]{6}$/.test(t) ? t.toUpperCase() : '';
 }
 
-// demo de 24 horas, una por equipo. reseller: código del revendedor escrito en Contraseña (la demo
+// demo automática (su duración la decide el panel: demo_duration), una por equipo. reseller: código del revendedor escrito en Contraseña (la demo
 // queda a su nombre en el panel); cualquier otra cosa no se envía.
 // url: el servidor de la demo (vacío en paneles viejos)
-export async function panelDemo(deviceId: string, reseller = ''): Promise<{ ok: boolean; user?: string; pass?: string; url?: string; error?: string; code: number }> {
+export async function panelDemo(
+  deviceId: string,
+  reseller = '',
+): Promise<{ ok: boolean; user?: string; pass?: string; url?: string; expires?: number; duration?: number; error?: string; code: number }> {
   const code = resellerCode(reseller);
   const r = await panelLogin('auto_demo', code ? { mac_address: deviceId, reseller: code, enc: 1 } : { mac_address: deviceId, enc: 1 });
   const j = loginReply(r);
-  if (r.ok && j && str(j.status) === 'ok' && str(j.username)) return { ok: true, user: str(j.username), pass: str(j.password), url: str(j.url), code: r.code };
+  if (r.ok && j && str(j.status) === 'ok' && str(j.username)) return {
+      ok: true,
+      user: str(j.username),
+      pass: str(j.password),
+      url: str(j.url),
+      expires: Number(j.demo_expires) || 0,
+      duration: Number(j.demo_duration) || 0,
+      code: r.code,
+    };
   let fb = 'No se pudo crear la demo';
   if (r.code === 403) fb = 'Demo ya utilizada en este dispositivo o dispositivo ya registrado.';
   if (r.code === 429) fb = 'Demasiadas demos desde esta conexión. Inténtalo mañana.';

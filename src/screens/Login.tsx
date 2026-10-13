@@ -1,26 +1,29 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
-import { FakeScreen as Fake, lastFakeScreen, Line, panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
+import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import { loginAll } from '../api/xtream';
 import { Button, Focusable, Logo } from '../components/ui';
-import { http, json } from '../lib/http';
+import { json } from '../lib/http';
 import { hasMasterKey } from '../lib/aes';
 import { read, write } from '../lib/storage';
-import { features, scoped } from '../lib/tenant';
+import { APP_ID, features, scoped, tenantCode } from '../lib/tenant';
 import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
 import { deviceId, setSession } from '../state';
 import { alpha, C, px, themed } from '../theme';
 
+// fondo: carátulas de TMDB con la clave del panel (la del distribuidor o la del dueño) por
+// api/tmdb.php; sin clave el panel responde tmdb_key_not_set y no hay carrusel
 async function tmdbPosters(): Promise<string[]> {
-  const key = read(scoped('tmdb_key'));
-  if (!key) return [];
+  const code = tenantCode();
+  const tq = code ? '&t=' + encodeURIComponent(code) + '&app=' + APP_ID : '';
   const out: string[] = [];
   for (const path of ['movie/now_playing', 'trending/tv/week', 'movie/popular']) {
-    const j = json(await http('https://api.themoviedb.org/3/' + path + '?language=es-MX&api_key=' + encodeURIComponent(key), { timeout: 10000 }));
-    for (const it of j?.results || []) if (str(it.poster_path)) out.push('https://image.tmdb.org/t/p/w342' + it.poster_path);
+    const j = json<any>(await panel('tmdb.php', 'GET', '', '', '/' + path + '?language=es-MX' + tq));
+    if (!j || j.error) break;
+    for (const it of j.results || []) if (str(it.poster_path)) out.push('https://image.tmdb.org/t/p/w342' + it.poster_path);
     if (out.length >= 48) break;
   }
   return shuffle(out);
@@ -58,7 +61,7 @@ export default function Login() {
       if (!alive) return;
       setBusy('');
       if (lines.length) setAssigned(lines);
-      if (lines.length === 1) enter(lines[0].user, lines[0].pass, [{ name: lines[0].name, base: lines[0].base }], true, lines[0].demo);
+      if (lines.length === 1) enter(lines[0].user, lines[0].pass, [{ name: lines[0].name, base: lines[0].base }], true, lines[0].demo, lines[0].demoExpires, lines[0].demoDuration);
       else if (!lines.length && r.error) setError(r.error);
     });
     return () => {
@@ -73,7 +76,7 @@ export default function Login() {
       const ln = await panelCheckMac(dev);
       if (ln) {
         setFake(null);
-        enter(ln.user, ln.pass, [{ name: ln.name, base: ln.base }], true, ln.demo);
+        enter(ln.user, ln.pass, [{ name: ln.name, base: ln.base }], true, ln.demo, ln.demoExpires, ln.demoDuration);
       } else if (!lastFakeScreen()) setFake(null);
     }, 30000);
     return () => clearInterval(t);
@@ -82,7 +85,15 @@ export default function Login() {
 
   // fromPanel: la línea ya está registrada para este equipo (no se vuelve a registrar: si el dueño la
   // borró, el equipo no debe reaparecer solo). demo: línea DEMO (Autodemo o "demo": true del panel)
-  const enter = async (u: string, p: string, servers?: { name: string; base: string }[], fromPanel = false, demo = false) => {
+  const enter = async (
+    u: string,
+    p: string,
+    servers?: { name: string; base: string }[],
+    fromPanel = false,
+    demo = false,
+    demoExpires = 0,
+    demoDuration = 0,
+  ) => {
     if (!u.trim() || !p.trim()) {
       setError('Escribe tu usuario y contraseña');
       return;
@@ -95,7 +106,7 @@ export default function Login() {
     if (r.session) {
       // registra el código del equipo en el panel (igual que Android y Roku)
       if (hasMasterKey() && !fromPanel) panelSubmit(dev, r.session.user, r.session.pass, r.session.base).catch(() => {});
-      setSession(r.session, demo);
+      setSession(r.session, demo, demoExpires, demoDuration);
       nav.reset({ name: 'main' });
     } else {
       setError(r.error || 'No se pudo iniciar sesión');
@@ -107,7 +118,7 @@ export default function Login() {
     setError('');
     // el código de un revendedor escrito en Contraseña deja la demo a su nombre en el panel
     const reseller = resellerCode(pass);
-    setBusy(reseller ? 'Creando tu demo de 24 horas (revendedor ' + reseller + ')…' : 'Creando tu demo de 24 horas…');
+    setBusy(reseller ? 'Creando tu demo (revendedor ' + reseller + ')…' : 'Creando tu demo…');
     const d = await panelDemo(dev, reseller);
     if (!d.ok) {
       setBusy('');
@@ -123,12 +134,12 @@ export default function Login() {
     const own = pl.lines.filter(l => l.user === d.user).map(l => ({ name: l.name, base: l.base }));
     const dns = await panelDnsList();
     const servers = [...(d.url ? [{ name: 'Demo', base: d.url.replace(/\/+$/, '') }] : []), ...own, ...dns];
-    await enter(d.user!, d.pass!, servers.length ? servers : undefined, false, true);
+    await enter(d.user!, d.pass!, servers.length ? servers : undefined, false, true, d.expires || 0, d.duration || 0);
   };
 
   const enterAssigned = () => {
     const ln = assigned[0];
-    enter(ln.user, ln.pass, assigned.filter(a => a.user === ln.user).map(a => ({ name: a.name, base: a.base })), true, ln.demo);
+    enter(ln.user, ln.pass, assigned.filter(a => a.user === ln.user).map(a => ({ name: a.name, base: a.base })), true, ln.demo, ln.demoExpires, ln.demoDuration);
   };
 
   const canDemo = hasMasterKey() && features().demo;
