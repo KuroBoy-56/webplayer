@@ -99,6 +99,8 @@ class PlayerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val localFiles = intent.getStringArrayExtra(Play.X_FILES)
         session = Store.session() ?: if (localFiles != null) Session("", "", "", "", "") else run { finish(); return }
+        // el protocolo con el que este servidor ya entregó video (http / https) va primero
+        if (localFiles == null && Store.streamFlip && session.base.isNotEmpty()) session = session.copy(base = Xtream.otherScheme(session.base))
         kind = runCatching { Kind.valueOf(intent.getStringExtra(Play.X_KIND) ?: "") }.getOrDefault(Kind.MOVIE)
         val ids = intent.getIntArrayExtra(Play.X_IDS) ?: IntArray(0)
         val titles = intent.getStringArrayExtra(Play.X_TITLES) ?: emptyArray()
@@ -286,6 +288,8 @@ class PlayerActivity : ComponentActivity() {
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (::ui2.isInitialized) { ui2.playing = isPlaying; if (!isPlaying) ui2.poke() }
+                // arrancó: se recuerda por qué protocolo entrega el video este servidor (para los siguientes)
+                if (isPlaying && !offline) Store.session()?.let { s -> if (s.base.isNotEmpty()) Store.streamFlip = s.base != session.base }
                 if (!isPlaying) saveProgress(force = true)
                 if (::pip.isInitialized) pip.update()
             }
