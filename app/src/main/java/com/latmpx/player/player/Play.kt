@@ -24,6 +24,8 @@ object Play {
     const val X_CATEGORY = "category"
     /** descargas: archivo del equipo de cada entrada (misma posición que la lista) */
     const val X_FILES = "files"
+    /** TV en vivo desde la miniatura: entra directo a imagen en imagen */
+    const val X_PIP = "pip"
 
     /** descargas sin internet: película sola o los episodios descargados de una serie (pasa al siguiente) */
     fun offline(ctx: Context, list: List<com.latmpx.player.data.Downloads.Entry>, index: Int) {
@@ -54,10 +56,11 @@ object Play {
         }, index, series.key, series.name, series.poster, series.categoryId)
 
     /** canal: la lista completa de la categoría permite cambiar de canal con arriba/abajo o CH+/CH- */
-    fun live(ctx: Context, channels: List<Item>, index: Int) =
-        start(ctx, Kind.LIVE, channels.map { QueueEntry(it.id, it.name, it.key, it.poster, "") }, index, "", "", "", "")
+    fun live(ctx: Context, channels: List<Item>, index: Int, pip: Boolean = false) =
+        start(ctx, Kind.LIVE, channels.map { QueueEntry(it.id, it.name, it.key, it.poster, "") }, index, "", "", "", "", pip)
 
-    private fun start(ctx: Context, kind: Kind, q: List<QueueEntry>, index: Int, extra: String, saveTitle: String, savePoster: String, category: String) {
+    private fun start(ctx: Context, kind: Kind, q: List<QueueEntry>, index: Int, extra: String, saveTitle: String, savePoster: String, category: String,
+                      pip: Boolean = false) {
         // un intent no aguanta listas enormes: se envía una ventana alrededor del elegido
         val from = (index - 300).coerceAtLeast(0)
         val win = q.subList(from, (index + 300).coerceAtMost(q.size))
@@ -93,6 +96,7 @@ object Play {
             putExtra(X_SAVE_TITLE, saveTitle)
             putExtra(X_SAVE_POSTER, savePoster)
             putExtra(X_CATEGORY, category)
+            putExtra(X_PIP, pip)
         })
     }
 }

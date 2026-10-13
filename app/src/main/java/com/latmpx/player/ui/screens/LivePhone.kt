@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.Settings
 import android.view.OrientationEventListener
 import androidx.activity.compose.BackHandler
@@ -72,6 +74,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -224,6 +227,22 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
             byRotation = false
         }
     }
+    // imagen en imagen: el canal pasa al reproductor (que ya la tiene) y entra directo a la ventanita
+    val pipOk = remember(ctx) {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    }
+    val openPip: () -> Unit = {
+        val ch = sel
+        if (ch != null) {
+            // la miniatura suelta la conexión antes (líneas de 1 conexión)
+            preview.release()
+            active = false
+            full = false
+            byRotation = false
+            val i = shown.indexOfFirst { it.id == ch.id }
+            if (i >= 0) Play.live(ctx, shown, i, pip = true) else Play.live(ctx, listOf(ch), 0, pip = true)
+        }
+    }
     val toggleFav: (Item) -> Unit = { ch -> Cloud.toggleFav(ch.copy(kind = Kind.LIVE)); favTick++ }
 
     // guía del canal elegido: la del panel y, si no tiene, la del servidor IPTV (como la web)
@@ -246,6 +265,7 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
             modifier = if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(16f / 9f),
             onStart = { active = true }, onRetry = { preview.release(); resumeTick++ },
             onFull = openFull, onExitFull = exitFull,
+            onPip = if (pipOk && !Store.externalPlayer) openPip else null,
         )
         if (!full) {
             /* ---------- canal elegido ---------- */
@@ -334,7 +354,7 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
 @Composable
 private fun PhonePlayerBox(
     preview: LivePreview, ch: Item?, active: Boolean, full: Boolean, nowProg: EpgEntry?, now: Long, modifier: Modifier,
-    onStart: () -> Unit, onRetry: () -> Unit, onFull: () -> Unit, onExitFull: () -> Unit,
+    onStart: () -> Unit, onRetry: () -> Unit, onFull: () -> Unit, onExitFull: () -> Unit, onPip: (() -> Unit)? = null,
 ) {
     var controls by remember { mutableStateOf(true) }
     var touch by remember { mutableIntStateOf(0) }
@@ -428,6 +448,15 @@ private fun PhonePlayerBox(
                     Text(ch.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (nowProg != null) Text("${hm(nowProg.start)} - ${hm(nowProg.end)} · ${nowProg.title}", color = Color(0xFFDDDDDD), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+            }
+        }
+        if (active && onPip != null && (!full || controls)) {
+            Box(
+                Modifier.align(Alignment.BottomEnd).padding(end = if (full) 64.dp else 56.dp, bottom = if (full) 16.dp else 8.dp).size(40.dp)
+                    .clip(CircleShape).background(Color(0x88000000)).clickable { onPip() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.PictureInPictureAlt, "Imagen en imagen", tint = Color.White, modifier = Modifier.size(24.dp))
             }
         }
         if (active && (!full || controls)) {
