@@ -42,7 +42,9 @@ object Tmdb {
         if (cachedFor == who) cached?.let { return it }
         val out = ArrayList<String>()
         for (p in 1..pages) {
-            val url = (PanelUrl.api("tmdb.php") + "/movie/now_playing").toHttpUrlOrNull()?.newBuilder()
+            // ?path= (no tmdb.php/movie/now_playing): muchos hostings no pasan PATH_INFO
+            val url = PanelUrl.api("tmdb.php").toHttpUrlOrNull()?.newBuilder()
+                ?.addQueryParameter("path", "movie/now_playing")
                 ?.let { Tenant.tag(it) }
                 ?.addQueryParameter("language", "es-MX")?.addQueryParameter("page", p.toString())
                 ?.build()?.toString() ?: break

@@ -102,6 +102,8 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
     var posters by remember { mutableStateOf<List<String>>(emptyList()) }
     // pantalla falsa del panel (equipo nuevo): hasta escribir el código o hasta que lo registren
     var fake by remember { mutableStateOf<com.latmpx.player.data.FakeScreen?>(null) }
+    /** primera consulta al panel (línea del equipo y pantalla falsa) todavía en curso */
+    var checking by remember { mutableStateOf(true) }
 
     // la línea que se va a abrir viene del botón Autodemo (aunque el panel no lo diga)
     var fromAutodemo by remember { mutableStateOf(false) }
@@ -169,6 +171,9 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
     LaunchedEffect(Unit) {
         resolve()
         if (lines.isEmpty() && !Store.fakeUnlocked) fake = Panel.fakeScreen
+        // la pantalla falsa (si el panel la tiene activada) es lo primero que se ve: el inicio de sesión
+        // no aparece hasta que el panel respondió
+        checking = false
         if (lines.isEmpty() && PanelCrypto.hasKey()) Panel.fetchDns().value?.let { dns = it }
         if (tv && fake == null) runCatching { firstFocus.requestFocus() }
     }
@@ -184,6 +189,14 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
     }
     fake?.let { f ->
         com.latmpx.player.ui.screens.FakeScreenView(f, deviceId) { Store.fakeUnlocked = true; fake = null }
+        return
+    }
+    // primera consulta al panel en curso: fondo negro con la rueda (nunca el inicio de sesión antes de saber
+    // si va la pantalla falsa)
+    if (checking) {
+        Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.CircularProgressIndicator(color = NfRed)
+        }
         return
     }
 
