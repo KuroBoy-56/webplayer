@@ -26,6 +26,9 @@ object Panel {
 
     private fun device(id: String) = JSONObject().put("mac_address", id)
 
+    /** diferencia entre la hora del panel y la del equipo (segundos), para el "ts" de cada pedido */
+    @Volatile private var clockSkew = 0L
+
     /** POST a login.php con el JSON cifrado. Devuelve el cuerpo crudo o el error. Con distribuidor lleva "tenant" + "app". */
     private suspend fun login(action: String, payload: JSONObject, tag: Boolean = true): Answer<Net.Resp> {
         if (tag) Tenant.tag(payload)
@@ -35,14 +38,27 @@ object Panel {
         val secret = action == "check_mac" || action == "auto_demo"
         if (secret) payload.put("enc", 1)
         val encReply = secret || action == "set_pin" // set_pin siempre responde cifrado cuando sale bien
-        val data = try {
-            PanelCrypto.encrypt(payload.toString())
-        } catch (e: PanelCrypto.MissingKey) {
-            return Answer(null, e.message)
-        } catch (e: Exception) {
-            return Answer(null, "No se pudo preparar la solicitud al panel")
+        // verificador antihack del panel: hora del pedido ("ts"); si el reloj del equipo está mal, el panel
+        // responde 401 ts_expired con su hora y se reintenta una vez con el reloj corregido
+        var r = Net.Resp(0, "")
+        for (attempt in 0..1) {
+            payload.put("ts", System.currentTimeMillis() / 1000 + clockSkew)
+            val data = try {
+                PanelCrypto.encrypt(payload.toString())
+            } catch (e: PanelCrypto.MissingKey) {
+                return Answer(null, e.message)
+            } catch (e: Exception) {
+                return Answer(null, "No se pudo preparar la solicitud al panel")
+            }
+            r = Net.postForm(PanelUrl.api("login.php"), mapOf("action" to action, "data" to data))
+            val j = if (r.code == 401) r.json() else null
+            val server = j?.optLong("server_time", 0L) ?: 0L
+            if (attempt == 0 && server > 0 && j?.optString("code").orEmpty().startsWith("ts_")) {
+                clockSkew = server - System.currentTimeMillis() / 1000
+                continue
+            }
+            break
         }
-        val r = Net.postForm(PanelUrl.api("login.php"), mapOf("action" to action, "data" to data))
         if (r.code == 0) return Answer(null, NO_PANEL)
         // respuesta cifrada (panel nuevo) -> JSON; un panel viejo la manda en JSON y queda igual. Los errores siempre llegan en JSON.
         if (encReply && r.code == 200 && r.body.isNotBlank() && !r.body.trimStart().startsWith("{")) {
