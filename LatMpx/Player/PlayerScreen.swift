@@ -152,8 +152,11 @@ struct PlayerScreen: View {
     private func errorBox(_ e: String) -> some View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 34)).foregroundColor(Theme.warn)
-            Text(e).font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+            Text(e).font(.system(size: 16, weight: .semibold)).foregroundColor(.white).multilineTextAlignment(.center)
             Text(m.entry.title).font(.system(size: 13)).foregroundColor(.white.opacity(0.7)).lineLimit(1)
+            if let d = m.errorDetail {
+                Text(d).font(.system(size: 11)).foregroundColor(.white.opacity(0.5)).multilineTextAlignment(.center).lineLimit(3)
+            }
             HStack(spacing: 12) {
                 AppButton(text: "Reintentar", height: 42) { m.retry() }.frame(width: 150)
                 if m.kind == .live { AppButton(text: "Siguiente canal", primary: false, height: 42) { m.next() }.frame(width: 170) }

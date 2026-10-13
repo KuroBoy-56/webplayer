@@ -32,6 +32,8 @@ final class PlayerModel: ObservableObject {
     @Published private(set) var time: Int64 = 0
     @Published private(set) var length: Int64 = 0
     @Published var error: String?
+    /** qué respondió el servidor al pedir el video (código HTTP, motivo de XUI, adónde redirige) */
+    @Published private(set) var errorDetail: String?
     @Published var fill = false
     @Published private(set) var audio: [Track] = []
     @Published private(set) var subs: [Track] = []
@@ -135,7 +137,7 @@ final class PlayerModel: ObservableObject {
             toast = "Continuando desde \(fmtTime(p.position))"
         }
         everPlayed = false; appliedLang = false
-        audio = []; subs = []; time = 0; length = 0; error = nil
+        audio = []; subs = []; time = 0; length = 0; error = nil; errorDetail = nil
         loadSeq += 1
         let raw = urls, my = loadSeq
         if SecureDns.current.endpoint.isEmpty || request.offline { open(raw[0]); return }
@@ -234,8 +236,22 @@ final class PlayerModel: ObservableObject {
             return
         }
         if error == nil {
-            error = kind == .live ? "No se pudo reproducir este canal" : "No se pudo reproducir este video"
-            ErrorReport.report("playback", error!, detail: "\(entry.title) · \(kind.rawValue) \(entry.id) · estado \(player.state.rawValue)", screen: "player")
+            let generic = kind == .live ? "No se pudo reproducir este canal" : "No se pudo reproducir este video"
+            error = generic
+            let info = "\(entry.title) · \(kind.rawValue) \(entry.id) · estado \(player.state.rawValue)"
+            let my = loadSeq, url = urls.first ?? ""
+            if request.offline || url.isEmpty {
+                ErrorReport.report("playback", generic, detail: info, screen: "player")
+            } else {
+                // se pregunta al servidor por qué no entrega el video y se muestra el motivo
+                Task { @MainActor [weak self] in
+                    let p = await StreamProbe.check(url)
+                    ErrorReport.report("playback", p.message ?? generic, detail: "\(info) · \(p.detail)", screen: "player")
+                    guard let self = self, self.loadSeq == my, self.error == generic else { return }
+                    self.errorDetail = p.detail
+                    if let msg = p.message { self.error = msg }
+                }
+            }
         }
         buffering = false
         freshPlayer()
@@ -247,7 +263,7 @@ final class PlayerModel: ObservableObject {
         if kind == .series && hasNext { load(index + 1) } else { freshPlayer(); onFinish?() }
     }
 
-    func retry() { error = nil; urlIdx = 0; retriedSame = false; open(urls.first ?? "") }
+    func retry() { error = nil; errorDetail = nil; urlIdx = 0; retriedSame = false; open(urls.first ?? "") }
 
     func toggle() { player.isPlaying ? player.pause() : player.play(); if !player.isPlaying { save(force: true) } }
     func seek(by s: Int32) { s >= 0 ? player.jumpForward(s) : player.jumpBackward(-s) }
