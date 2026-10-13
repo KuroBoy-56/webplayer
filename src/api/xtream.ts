@@ -70,9 +70,13 @@ export async function loginAll(input: Server[], user: string, pass: string): Pro
             return;
           }
           lastErr = 'Tu cuenta está ' + st;
-        } else if (r.code > 0 && lastErr === 'No se pudo conectar con ningún servidor') {
+        } else if (ui && lastErr === 'No se pudo conectar con ningún servidor') {
           lastErr = 'Usuario o contraseña incorrectos';
+        } else if (!ui && r.code > 0 && lastErr === 'No se pudo conectar con ningún servidor') {
+          // el servidor respondió pero no con la cuenta (línea bloqueada, vencida o servidor caído)
+          lastErr = 'El servidor no aceptó la conexión (código ' + r.code + ')';
         }
+        console.log('[LatMpx] login ' + sv.base.replace(/^[a-z]+:\/\//i, '') + ' -> http ' + r.code + (ui ? ' auth=' + str(ui.auth) + ' status=' + str(ui.status) : ' sin JSON'));
         finish();
       });
     }
