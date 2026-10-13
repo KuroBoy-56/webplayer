@@ -243,11 +243,26 @@ export function forgetCloud(): void {
 // ---------- login.php (con la llave maestra) ----------
 
 // POST a login.php con el JSON cifrado (con distribuidor lleva "tenant" y "app")
+// diferencia entre la hora del panel y la del equipo (segundos), para el "ts" de cada pedido
+let clockSkew = 0;
+
 async function panelLogin(action: string, payload: Record<string, any>): Promise<HttpResult & { error?: string }> {
-  // platform: en qué equipo está esta MAC (Clientes MAC › Dispositivo) y la pantalla falsa de esta app
-  const data = panelEncrypt(JSON.stringify({ ...payload, ...tenantFields(), platform: APP_ID }));
-  if (!data) return { code: -1, body: '', ok: false, error: 'Esta versión no tiene la llave del panel.' };
-  const r = await panel('login.php', 'POST', formBody({ action, data }), 'application/x-www-form-urlencoded');
+  // verificador antihack del panel: hora del pedido ("ts"); si el reloj del equipo está mal, el panel
+  // responde 401 ts_expired con su hora y se reintenta una vez con el reloj corregido
+  let r: HttpResult = { code: 0, body: '', ok: false };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ts = Math.floor(Date.now() / 1000) + clockSkew;
+    // platform: en qué equipo está esta MAC (Clientes MAC › Dispositivo) y la pantalla falsa de esta app
+    const data = panelEncrypt(JSON.stringify({ ...payload, ...tenantFields(), platform: APP_ID, ts }));
+    if (!data) return { code: -1, body: '', ok: false, error: 'Esta versión no tiene la llave del panel.' };
+    r = await panel('login.php', 'POST', formBody({ action, data }), 'application/x-www-form-urlencoded');
+    const j = r.code === 401 ? json<any>(r) : null;
+    if (attempt === 0 && j && /^ts_/.test(str(j.code)) && Number(j.server_time) > 0) {
+      clockSkew = Number(j.server_time) - Math.floor(Date.now() / 1000);
+      continue;
+    }
+    break;
+  }
   return r.code === 0 ? { ...r, error: 'No se pudo conectar con el panel.' } : r;
 }
 
