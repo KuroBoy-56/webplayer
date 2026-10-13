@@ -46,7 +46,9 @@ object Xtream {
                 if (j2 != null || (r.code == 0 && r2.code > 0)) { probe = alt; r = r2; j = j2 }
             }
             if (j == null) {
-                // el servidor respondió pero no con la cuenta (línea bloqueada, vencida o servidor caído)
+                // el servidor respondió pero no con la cuenta: XUI dice el motivo; si no, el código HTTP
+                val xui = xuiError(r.body)
+                if (xui != null) { lastMsg = xuiMessage(xui); android.util.Log.i("LatMpx", "login rechazado por XUI: $xui"); continue }
                 if (r.code > 0 && lastMsg == "No se pudo conectar con el servidor") lastMsg = "El servidor no aceptó la conexión (código ${r.code})"
                 continue
             }
@@ -72,7 +74,25 @@ object Xtream {
 
     /** http://… <-> https://… */
     fun otherScheme(base: String): String =
-        if (base.startsWith("https://", true)) "http://" + base.substring(8) else "https://" + base.substringAfter("://")
+        if (base.startsWith("https://", true)) "http://" + base.substring(8).replace(Regex("^([^/]+):443(?=/|$)"), "$1")
+        else "https://" + base.substringAfter("://").replace(Regex("^([^/]+):80(?=/|$)"), "$1")
+
+    /**
+     * XUI.one en «Debug Mode» no responde {"user_info":{"auth":0}} sino una página HTML (200) con el motivo:
+     * «XUI.ONE INVALID_CREDENTIALS Username or password is invalid.». Devuelve el código (o null).
+     */
+    fun xuiError(body: String): String? {
+        val text = body.replace(Regex("(?is)<(style|script)[^>]*>.*?</\\1>"), " ").replace(Regex("<[^>]+>"), " ").replace(Regex("\\s+"), " ")
+        return Regex("XUI\\.(?:ONE|one)\\s+([A-Z][A-Z_]{2,})").find(text)?.groupValues?.get(1)
+    }
+
+    /** mensaje en español para el código de XUI */
+    fun xuiMessage(code: String): String = when (code) {
+        "INVALID_CREDENTIALS" -> "El servidor no reconoce el usuario o la contraseña"
+        "EXPIRED" -> "Tu cuenta está vencida"
+        "BANNED", "DISABLED" -> "Tu cuenta está desactivada en el servidor"
+        else -> "El servidor rechazó la cuenta ($code)"
+    }
 
     fun normalize(u: String): String {
         var x = u.trim().trimEnd('/')
