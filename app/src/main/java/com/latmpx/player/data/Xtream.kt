@@ -35,12 +35,21 @@ object Xtream {
             // el panel (https) cambia http:// por https:// en las direcciones de los servidores IPTV; muchos
             // solo responden en http (p. ej. el puerto 8080). Si no contesta, se prueba el otro protocolo.
             var probe = Session(name, normalize(rawUrl), user, pass, "")
-            var j = Net.obj(api(probe))
+            var r = Net.get(api(probe))
+            var j = r.json()
+            log(probe.base, r, j)
             if (j == null) {
-                probe = probe.copy(base = otherScheme(probe.base))
-                j = Net.obj(api(probe))
+                val alt = probe.copy(base = otherScheme(probe.base))
+                val r2 = Net.get(api(alt))
+                val j2 = r2.json()
+                log(alt.base, r2, j2)
+                if (j2 != null || (r.code == 0 && r2.code > 0)) { probe = alt; r = r2; j = j2 }
             }
-            if (j == null) continue
+            if (j == null) {
+                // el servidor respondió pero no con la cuenta (línea bloqueada, vencida o servidor caído)
+                if (r.code > 0 && lastMsg == "No se pudo conectar con el servidor") lastMsg = "El servidor no aceptó la conexión (código ${r.code})"
+                continue
+            }
             val ui = j.optJSONObject("user_info")
             if (ui == null || ui.i("auth") != 1) { lastMsg = "Usuario o contraseña incorrectos"; continue }
             val status = ui.s("status")
@@ -53,6 +62,12 @@ object Xtream {
             return LoginResult.Ok(probe.copy(expires = exp, createdAt = created, activeCons = active, maxCons = max))
         }
         return LoginResult.Fail(lastMsg)
+    }
+
+    /** registro (adb logcat -s LatMpx): servidor, código HTTP y si llegó la cuenta; nunca usuario ni contraseña */
+    private fun log(base: String, r: Net.Resp, j: org.json.JSONObject?) {
+        val ui = j?.optJSONObject("user_info")
+        android.util.Log.i("LatMpx", "login ${base.substringAfter("://")} -> http ${r.code}" + if (ui != null) " auth=${ui.s("auth")} status=${ui.s("status")}" else " sin JSON")
     }
 
     /** http://… <-> https://… */
