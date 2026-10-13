@@ -96,8 +96,15 @@ object Store {
     // abre la app se le pide la línea al panel (check_mac) y se comprueba en el servidor IPTV.
     @Volatile private var mem: Session? = null
 
+    /**
+     * Servidores mixtos: true = el video sale por el otro protocolo que el de la sesión (p. ej. la sesión en
+     * https y el video solo en http). Lo pone el reproductor cuando un video arranca; vale para la sesión.
+     */
+    @Volatile var streamFlip = false
+
     fun saveSession(s: Session) {
         mem = s
+        streamFlip = false
         p.edit().remove("session").apply() // versiones anteriores la guardaban: se borra
     }
 

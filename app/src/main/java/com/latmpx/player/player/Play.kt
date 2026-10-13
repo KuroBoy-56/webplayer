@@ -63,7 +63,9 @@ object Play {
         val win = q.subList(from, (index + 300).coerceAtMost(q.size))
         if (com.latmpx.player.data.Store.externalPlayer) {
             val qv = win[index - from]
-            val s = com.latmpx.player.data.Store.session()!!
+            val s0 = com.latmpx.player.data.Store.session()!!
+            // el protocolo con el que este servidor ya entregó video (http / https)
+            val s = if (com.latmpx.player.data.Store.streamFlip) s0.copy(base = com.latmpx.player.data.Xtream.otherScheme(s0.base)) else s0
             val url = when (kind) {
                 com.latmpx.player.data.Kind.MOVIE -> com.latmpx.player.data.Xtream.movieUrl(s, qv.id, qv.ext)
                 com.latmpx.player.data.Kind.SERIES -> com.latmpx.player.data.Xtream.episodeUrl(s, qv.id, qv.ext)
