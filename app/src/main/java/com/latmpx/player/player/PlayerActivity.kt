@@ -82,6 +82,9 @@ class PlayerActivity : ComponentActivity() {
     private var saveTitle = ""
     private var savePoster = ""
     private var category = ""
+    /** descargas: clave -> archivo del equipo (sin internet, sin sesión y sin progreso en el panel) */
+    private var files: Map<String, String> = emptyMap()
+    private val offline: Boolean get() = files.isNotEmpty()
     /** para canales: qué dirección alternativa (m3u8 / ts / sin extensión) se está usando en cada canal */
     private val liveAlt = HashMap<Int, Int>()
     private var retries = 0
@@ -92,7 +95,8 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        session = Store.session() ?: run { finish(); return }
+        val localFiles = intent.getStringArrayExtra(Play.X_FILES)
+        session = Store.session() ?: if (localFiles != null) Session("", "", "", "", "") else run { finish(); return }
         kind = runCatching { Kind.valueOf(intent.getStringExtra(Play.X_KIND) ?: "") }.getOrDefault(Kind.MOVIE)
         val ids = intent.getIntArrayExtra(Play.X_IDS) ?: IntArray(0)
         val titles = intent.getStringArrayExtra(Play.X_TITLES) ?: emptyArray()
@@ -105,6 +109,7 @@ class PlayerActivity : ComponentActivity() {
         category = intent.getStringExtra(Play.X_CATEGORY).orEmpty()
         queue = ids.indices.map { i -> QueueEntry(ids[i], titles.getOrElse(i) { "" }, keys.getOrElse(i) { "" }, posters.getOrElse(i) { "" }, exts.getOrElse(i) { "" }) }
         if (queue.isEmpty()) { finish(); return }
+        if (localFiles != null) files = queue.indices.associate { i -> queue[i].key to localFiles.getOrElse(i) { "" } }
         val start = intent.getIntExtra(Play.X_INDEX, 0).coerceIn(0, queue.lastIndex)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -303,7 +308,8 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun mediaItem(q: QueueEntry): MediaItem {
-        val url = when (kind) {
+        val local = files[q.key]
+        val url = if (local != null) Uri.fromFile(java.io.File(local)).toString() else when (kind) {
             Kind.MOVIE -> Xtream.movieUrl(session, q.id, q.ext)
             Kind.SERIES -> Xtream.episodeUrl(session, q.id, q.ext)
             Kind.LIVE -> Xtream.liveUrls(session, q.id)[liveAlt[q.id] ?: 0]
@@ -398,6 +404,10 @@ class PlayerActivity : ComponentActivity() {
 
     private fun resumePosition(q: QueueEntry): Long {
         if (kind == Kind.LIVE) return C.TIME_UNSET
+        if (offline) {
+            val d = com.latmpx.player.data.Downloads.get(q.key) ?: return 0
+            return if (d.position > 30_000 && (d.duration <= 0 || d.position < d.duration * 0.95)) d.position else 0
+        }
         val p = Cloud.progress(q.key) ?: return 0
         return if (p.position > 30_000 && (p.duration <= 0 || p.position < p.duration * 0.95)) p.position else 0
     }
@@ -409,6 +419,7 @@ class PlayerActivity : ComponentActivity() {
         val pos = player.currentPosition
         val dur = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0
         if (pos < 5_000) return
+        if (offline) { com.latmpx.player.data.Downloads.savePosition(q.key, pos, dur); return }
         val url = player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
         Cloud.saveProgress(
             Progress(

@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -80,7 +81,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LoginScreen(onLogged: (Session) -> Unit) {
+fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
     val ctx = LocalContext.current
     val tv = LocalIsTv.current
     val deviceId = remember { Device.id(ctx) }
@@ -216,6 +217,13 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                     // varias líneas para este equipo: se entra con la primera que funciona (ya no se pregunta)
                     Text("Iniciar sesión", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
                     err?.let { ErrorBanner(it) }
+                    // celular sin internet (o el panel no responde): lo descargado se puede ver igual
+                    val online = com.latmpx.player.data.rememberOnline()
+                    if (!tv && (!online || err?.startsWith("No se pudo conectar") == true)) {
+                        if (!online) Text("Sin conexión a internet", color = NfGray2, fontSize = 13.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                        com.latmpx.player.ui.components.AppButton("Mis descargas", Modifier.fillMaxWidth(), primary = !online,
+                            icon = Icons.Filled.Download, onClick = onDownloads)
+                    }
                     
                     OutlinedTextField(
                         value = user, onValueChange = { user = it }, label = { Text("Usuario") }, singleLine = true, colors = fieldColors,

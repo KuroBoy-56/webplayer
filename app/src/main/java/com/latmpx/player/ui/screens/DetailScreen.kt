@@ -23,10 +23,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.Downloading
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -93,6 +98,8 @@ fun DetailScreen(state: AppState, media: Item) {
         if (media.kind == Kind.SERIES) Cloud.seriesProgress(media.id) else null
     }
     val playFocus = remember { FocusRequester() }
+    val dlRev = com.latmpx.player.data.Downloads.rev
+    val notice = rememberDownloadNotice()
     if (tv) LaunchedEffect(d != null) { runCatching { playFocus.requestFocus() } }
 
     val det = d
@@ -154,6 +161,19 @@ fun DetailScreen(state: AppState, media: Item) {
                 det?.director?.takeIf { it.isNotBlank() }?.let { Text("Dirección: $it", color = NfGray2, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp)) }
                 Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     IconAction(if (fav) Icons.Filled.Check else Icons.Filled.Add, "Mi lista") { fav = Cloud.toggleFav(media) }
+                    // descargar para ver sin internet (dentro de la app, en Cuenta › Mis descargas)
+                    val movieExt = det?.item?.ext?.ifBlank { null } ?: media.ext
+                    if (media.kind == Kind.MOVIE && det != null && com.latmpx.player.data.Downloads.canDownload(movieExt)) {
+                        val dl = remember(dlRev, media.id) { com.latmpx.player.data.Downloads.get("movie:${media.id}") }
+                        val (icon, label) = downloadLook(dl)
+                        IconAction(icon, label) {
+                            when (dl?.state) {
+                                null -> { notice(); com.latmpx.player.data.Downloads.addMovie(s, det.item, movieExt) }
+                                com.latmpx.player.data.Downloads.State.FAILED -> com.latmpx.player.data.Downloads.retry(dl.key)
+                                else -> state.push(Route.Downloads)
+                            }
+                        }
+                    }
                     tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { t -> IconAction(Icons.Filled.Movie, "Tráiler") { openTrailer(ctx, t) } }
                     IconAction(Icons.Filled.Share, "Compartir") {
                         val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, "Mira \"${media.name}\" en ${com.latmpx.player.data.Tenant.nameOr("LatMpx")}")
@@ -253,7 +273,16 @@ fun DetailScreen(state: AppState, media: Item) {
             val eps = seasons[season].orEmpty()
             val all = seasons.values.flatten()
             itemsIndexed(eps, key = { _, e -> e.id }) { _, e ->
-                EpisodeRow(e, media, Cloud.progress("series:${media.id}:${e.id}")?.let { if (it.duration > 0) it.position.toFloat() / it.duration else 0f } ?: 0f) {
+                val dl = remember(dlRev, e.id) { com.latmpx.player.data.Downloads.get("series:${media.id}:${e.id}") }
+                EpisodeRow(e, media, Cloud.progress("series:${media.id}:${e.id}")?.let { if (it.duration > 0) it.position.toFloat() / it.duration else 0f } ?: 0f,
+                    dl = dl,
+                    onDownload = if (tv || !com.latmpx.player.data.Downloads.canDownload(e.ext)) null else ({
+                        when (dl?.state) {
+                            null -> { notice(); com.latmpx.player.data.Downloads.addEpisode(s, media, e) }
+                            com.latmpx.player.data.Downloads.State.FAILED -> com.latmpx.player.data.Downloads.retry(dl.key)
+                            else -> state.push(Route.Downloads)
+                        }
+                    })) {
                     Play.episode(ctx, media, all, all.indexOf(e).coerceAtLeast(0))
                 }
             }
@@ -298,13 +327,27 @@ private fun IconAction(icon: androidx.compose.ui.graphics.vector.ImageVector, la
 }
 
 @Composable
-private fun EpisodeRow(e: Episode, series: Item, progress: Float, onClick: () -> Unit) {
+private fun EpisodeRow(e: Episode, series: Item, progress: Float, dl: com.latmpx.player.data.Downloads.Entry? = null, onDownload: (() -> Unit)? = null, onClick: () -> Unit) {
     FocusBox(onClick = onClick, focusScale = 1.02f, modifier = Modifier.padding(horizontal = sidePad(), vertical = 6.dp).fillMaxWidth()) { f ->
         Row(Modifier.background(if (f) Color(0xFF2A2A2A) else Color.Transparent).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(150.dp).aspectRatio(16f / 9f)) {
                 Poster(e.image.ifEmpty { series.poster }, "E${e.num}", Modifier.fillMaxSize())
                 if (progress > 0f) LinearProgressIndicator(progress = { progress }, color = NfRed, trackColor = Color(0x66FFFFFF),
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp))
+                // descarga del episodio: pequeño, abajo a la derecha de la miniatura
+                onDownload?.let { tap ->
+                    Box(Modifier.align(Alignment.BottomEnd).padding(4.dp).size(30.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Color(0xB3000000)).clickable(onClick = tap), contentAlignment = Alignment.Center) {
+                        if (dl?.state == com.latmpx.player.data.Downloads.State.RUNNING && dl.total > 0) {
+                            androidx.compose.material3.CircularProgressIndicator(progress = { dl.percent / 100f }, color = Color.White, trackColor = Color(0x44FFFFFF),
+                                strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                        } else {
+                            val (icon, label) = downloadLook(dl)
+                            androidx.compose.material3.Icon(icon, label, tint = if (dl?.state == com.latmpx.player.data.Downloads.State.DONE) Color(0xFF46D369) else Color.White,
+                                modifier = Modifier.size(17.dp))
+                        }
+                    }
+                }
             }
             Column(Modifier.padding(start = 12.dp).weight(1f)) {
                 Text("${e.num}. " + e.title.ifBlank { "Episodio ${e.num}" }, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -313,6 +356,15 @@ private fun EpisodeRow(e: Episode, series: Item, progress: Float, onClick: () ->
             }
         }
     }
+}
+
+/** icono y texto del botón de descarga según su estado */
+private fun downloadLook(dl: com.latmpx.player.data.Downloads.Entry?): Pair<androidx.compose.ui.graphics.vector.ImageVector, String> = when (dl?.state) {
+    null -> Icons.Filled.Download to "Descargar"
+    com.latmpx.player.data.Downloads.State.DONE -> Icons.Filled.DownloadDone to "Descargado"
+    com.latmpx.player.data.Downloads.State.RUNNING -> Icons.Filled.Downloading to (if (dl.total > 0) "${dl.percent} %" else "Descargando")
+    com.latmpx.player.data.Downloads.State.QUEUED -> Icons.Filled.Downloading to "En espera"
+    com.latmpx.player.data.Downloads.State.FAILED -> Icons.Filled.ErrorOutline to "Reintentar"
 }
 
 /** "Continuar T1 E3" a partir de la clave "series:5:301" */

@@ -94,6 +94,8 @@ fun AppRoot() {
     val distMsg = remember { mutableStateOf<String?>(null) }
     val retryMsg = remember { mutableStateOf("") }
     val checking = remember { mutableStateOf(false) }
+    /** Mis descargas desde el inicio de sesión (sin internet) */
+    val offlineDownloads = remember { mutableStateOf(false) }
 
     // "Cambiar distribuidor" o número cortado por el panel: se borra el número, su marca, la sesión y el token
     fun wipe(msg: String?) {
@@ -205,7 +207,8 @@ fun AppRoot() {
                 state.session = Store.session()
             }
             gate.value == Gate.RETRY -> TenantRetryScreen(retryMsg.value, checking.value, onRetry = { guard() }, onChange = { wipe(null) })
-            state.session == null -> LoginScreen { s ->
+            state.session == null && offlineDownloads.value -> com.latmpx.player.ui.screens.DownloadsScreen { offlineDownloads.value = false }
+            state.session == null -> LoginScreen(onDownloads = { offlineDownloads.value = true }) { s ->
                 lastPanelCheck.longValue = System.currentTimeMillis()
                 Store.saveSession(s)
                 Xtream.clearCache()
@@ -249,6 +252,7 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
             is Route.PlatformPage -> BrowseScreen(state, top.platform.label, null, emptySet(), top.platform)
             is Route.ActorPage -> ActorScreen(state, top)
             is Route.Saved -> SavedScreen(state, top.continueWatching)
+            is Route.Downloads -> com.latmpx.player.ui.screens.DownloadsScreen { state.pop() }
             null -> when (state.tab) {
                 Tab.HOME -> HomeScreen(state)
                 Tab.MOVIES -> CatalogScreen(state, Kind.MOVIE)
