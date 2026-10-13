@@ -181,7 +181,7 @@ fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 fun LogoHeader(modifier: Modifier = Modifier, height: Dp = 34.dp) {
     val brand = com.latmpx.player.data.Tenant.brand
-    val name = com.latmpx.player.data.Tenant.nameOr("LatMpx")
+    val name = com.latmpx.player.data.Tenant.nameOr("MPX Player")
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         val url = brand?.logoUrl.orEmpty()
         var failed by androidx.compose.runtime.remember(url) { androidx.compose.runtime.mutableStateOf(false) }

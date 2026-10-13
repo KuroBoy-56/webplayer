@@ -1,4 +1,6 @@
-# LatMpx para Android TV y Google TV (rama `android-tv`)
+# MPX Player para Android TV y Google TV (rama `android-tv`)
+
+**Marca:** la app se llama **MPX Player** (`app_name`; el paquete sigue siendo `com.latmpx.player` para que se actualice sobre la instalada). Logo, icono, banner de TV e imágenes de las plataformas (Netflix, Disney+, HBO Max, Prime Video, Marvel, Apple TV+, Paramount+, DC, Navidad, Halloween) están en `res/drawable-nodpi`, `res/mipmap-xxxhdpi` y `res/drawable-*`.
 
 App nativa en Kotlin exclusiva para televisor, con la misma lógica y el mismo diseño que el reproductor web (rama `main`).
 La app para celular y tablet está en la rama `android`. Las dos se pueden instalar a la vez (esta usa el id `com.latmpx.player.tv`).

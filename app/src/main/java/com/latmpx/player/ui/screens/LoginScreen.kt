@@ -316,7 +316,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
                     }
                 }
             }
-            Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} ${Tenant.nameOr("Garevyn TV")}", color = Color(0xFF999999), fontSize = 14.sp,
+            Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} ${Tenant.nameOr("MPX Player")}", color = Color(0xFF999999), fontSize = 14.sp,
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).background(Color(0x99000000)).padding(20.dp).navigationBarsPadding())
         }
     }

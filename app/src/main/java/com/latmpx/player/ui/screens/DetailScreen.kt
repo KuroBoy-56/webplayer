@@ -178,7 +178,7 @@ fun DetailScreen(state: AppState, media: Item) {
                     }
                     tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { t -> IconAction(Icons.Filled.Movie, "Tráiler") { openTrailer(ctx, t) } }
                     IconAction(Icons.Filled.Share, "Compartir") {
-                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, "Mira \"${media.name}\" en ${com.latmpx.player.data.Tenant.nameOr("LatMpx")}")
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, "Mira \"${media.name}\" en ${com.latmpx.player.data.Tenant.nameOr("MPX Player")}")
                         runCatching { ctx.startActivity(android.content.Intent.createChooser(send, "Compartir")) }
                     }
                 }

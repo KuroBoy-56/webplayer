@@ -13,9 +13,9 @@ object Platforms {
         Platform("max", "HBO Max", R.drawable.plat_max, 0xFF5822B4, listOf("hbo", "\\bmax\\b")),
         Platform("prime", "Prime Video", R.drawable.plat_prime, 0xFF00A8E1, listOf("amazon", "prime")),
         Platform("marvel", "Marvel", R.drawable.plat_marvel, 0xFFEC1D24, listOf("marvel", "\\bmcu\\b")),
-        Platform("apple", "Apple TV+", 0, 0xFF555555, listOf("apple")),
-        Platform("paramount", "Paramount+", 0, 0xFF0064FF, listOf("paramount")),
-        Platform("dc", "DC", 0, 0xFF0476F2, listOf("\\bdc\\b", "dc comics")),
+        Platform("apple", "Apple TV+", R.drawable.plat_apple, 0xFF555555, listOf("apple")),
+        Platform("paramount", "Paramount+", R.drawable.plat_paramount, 0xFF0064FF, listOf("paramount")),
+        Platform("dc", "DC", R.drawable.plat_dc, 0xFF0476F2, listOf("\\bdc\\b", "dc comics")),
         Platform("xmas", "Navidad", R.drawable.plat_xmas, 0xFF1F7A3A, listOf("navidad", "navide", "christmas", "xmas")),
         Platform("halloween", "Halloween", R.drawable.plat_halloween, 0xFFFF6A00, listOf("halloween", "terror", "horror")),
     )
