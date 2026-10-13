@@ -40,20 +40,11 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         return ["mp4", "m4v", "mov", "m3u8"].contains(ext)
     }
 
-    /**
-     * 4K / HDR / HEVC / Dolby Vision / 10 bits (lo dice el nombre): el reproductor de iOS suele rechazarlos
-     * («Operación detenida») y, al pasar al de la app, el servidor todavía cuenta su conexión (una línea de
-     * 1 conexión rechaza la segunda). Van directo al de la app, que abre cualquier formato y calidad.
-     */
-    static func heavy(_ title: String) -> Bool {
-        title.range(of: "(?i)(\\b4k\\b|uhd|2160p?|hdr|hevc|h\\.?265|x265|dolby ?vision|\\bdv\\b|10 ?bit)", options: .regularExpression) != nil
-    }
 
     /** dirección para el reproductor de iOS; nil = esta petición va al reproductor de la app */
     static func source(_ r: PlayRequest) -> String? {
         guard Store.nativePlayer, !r.forceApp, r.queue.indices.contains(r.index) else { return nil }
         let q = r.queue[r.index]
-        if r.kind != .live && (heavy(q.title) || heavy(r.saveTitle)) { return nil }
         // descargas: el archivo del equipo; la prueba del simulador (directUrls) sigue en el de la app
         if r.offline { return r.directUrls.indices.contains(r.index) && compatible(r.directUrls[r.index]) ? r.directUrls[r.index] : nil }
         guard r.directUrls.isEmpty, let s = Store.session() else { return nil }
