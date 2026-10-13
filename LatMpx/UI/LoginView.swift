@@ -27,17 +27,38 @@ struct LoginView: View {
     /** ojito: ver la contraseña en texto o volver a ocultarla */
     @State private var showPass = false
 
+    /** primera consulta al panel (línea del equipo y pantalla falsa) todavía en curso */
+    @State private var checking = true
+
     var body: some View {
-        if let f = fake {
-            FakeScreenView(screen: f) { Store.fakeUnlocked = true; fake = nil }
-                .task(id: f) { await pollWhileFake() }
-        } else {
-            content
-                .fullScreenCover(isPresented: $showDownloads) {
-                    NavigationStack { DownloadsView(onClose: { showDownloads = false }) }
-                        .environmentObject(state)
-                        .preferredColorScheme(.dark)
-                }
+        // ZStack (una sola vista): la primera consulta no se cancela al cambiar lo que se muestra
+        ZStack {
+            if let f = fake {
+                FakeScreenView(screen: f) { Store.fakeUnlocked = true; fake = nil }
+                    .task(id: f) { await pollWhileFake() }
+            } else if checking {
+                // la pantalla falsa (si el panel la tiene activada) es lo primero que se ve: nunca el inicio
+                // de sesión antes de que el panel responda
+                Color.black.ignoresSafeArea()
+                ProgressView().tint(Theme.accent).scaleEffect(1.3)
+            } else {
+                content
+                    .fullScreenCover(isPresented: $showDownloads) {
+                        NavigationStack { DownloadsView(onClose: { showDownloads = false }) }
+                            .environmentObject(state)
+                            .preferredColorScheme(.dark)
+                    }
+            }
+        }
+        .task {
+            guard !started else { return }
+            started = true
+            Task { posters = await Tmdb.nowPlaying() }
+            _ = await resolve()
+            if lines.isEmpty && !Store.fakeUnlocked { fake = Panel.fakeScreen }
+            checking = false
+            if lines.isEmpty && PanelCrypto.hasKey, let d = await Panel.fetchDns().value { dns = d }
+            if posters.isEmpty { posters = await Tmdb.nowPlaying() }
         }
     }
 
@@ -63,15 +84,6 @@ struct LoginView: View {
         .background(Color.black.ignoresSafeArea())
         // lo que el panel o el servidor IPTV respondieron mal al entrar (el panel no recibe la contraseña)
         .onChange(of: err) { e in if let e = e, !e.trimmed.isEmpty { ErrorReport.report("panel", e, screen: "login") } }
-        .task {
-            guard !started else { return }
-            started = true
-            posters = await Tmdb.nowPlaying()
-            _ = await resolve()
-            if lines.isEmpty && !Store.fakeUnlocked { fake = Panel.fakeScreen }
-            if lines.isEmpty && PanelCrypto.hasKey, let d = await Panel.fetchDns().value { dns = d }
-            if posters.isEmpty { posters = await Tmdb.nowPlaying() }
-        }
     }
 
     @ViewBuilder private var box: some View {

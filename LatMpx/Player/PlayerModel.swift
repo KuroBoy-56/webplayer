@@ -112,6 +112,9 @@ final class PlayerModel: ObservableObject {
             case .series: urls = [Xtream.episodeUrl(s, q.id, q.ext)]
             case .live: urls = Xtream.liveUrls(s, q.id); Store.setLastChannel(q.id)
             }
+            // si el servidor no entrega el video por este protocolo (la sesión quedó en https y el video solo va
+            // por http, o al revés), se prueban las mismas direcciones con el otro antes de dar el error
+            urls += urls.map { Xtream.otherScheme($0) }
         }
         index = i
         urlIdx = 0

@@ -75,7 +75,8 @@ enum Tmdb {
         if let c = lock.locked({ nowPlayingFor == who ? nowPlayingCache : nil }) { return c }
         var out = [String]()
         for p in 1...3 {
-            let url = PanelUrl.api("tmdb.php") + "/movie/now_playing?language=es-MX&page=\(p)" + Tenant.query()
+            // ?path= (no tmdb.php/movie/now_playing): muchos hostings no pasan PATH_INFO
+            let url = PanelUrl.api("tmdb.php") + "?path=movie/now_playing&language=es-MX&page=\(p)" + Tenant.query()
             let r = await Net.get(url, timeout: 15)
             guard r.ok, let j = r.json(), j["error"] == nil else { break }
             for o in j.objs("results") {
