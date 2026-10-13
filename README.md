@@ -14,7 +14,8 @@ La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funcion
 - **Pantalla falsa** del panel para equipos nuevos (calculadora, carrusel, imagen, video o web; el código + `=` en la calculadora, o mantener pulsado 3 s en los demás, abre el inicio de sesión). Si el distribuidor registra el equipo, la app se abre sola.
 - **Sincronizado con el panel:** Continuar viendo y Mi lista (`progress.php`), guía de respaldo (`epg.php`), aviso de bienvenida / vencimiento (`alerta.php`) y errores de reproducción (`report.php`).
 - **Deportes:** agenda de hoy y mañana (`sports.php`). Cada tarjeta muestra los canales que transmiten el partido; **Ver canales** abre un menú: el evento (prueba esos canales y luego los equipos), cada canal o buscar por equipos. "ESPN 2" busca en la lista del cliente el canal que se llama igual sin calidad ni país; si no lo tiene, busca el partido en la carpeta de eventos.
-- **Reproductor VLCKit:** MKV, MP4, HLS, TS, audio AC3/E-AC3/DTS, cambio de idioma y subtítulos, sigue donde se dejó, siguiente episodio automático, cambio de canal deslizando arriba/abajo.
+- **Reproductor de iOS por defecto (imagen en imagen y AirPlay):** lo que Apple puede abrir (canales en HLS `.m3u8`, películas y episodios MP4 / M4V / MOV, y las descargas en esos formatos) se abre en `AVPlayerViewController` (`Player/NativePlayer.swift`): imagen en imagen con su botón o al salir con Inicio, AirPlay, sigue donde se dejó y pasa al siguiente episodio. Si ese reproductor falla, no arranca en 20 s o a los 4 s no da imagen (códec que Apple no decodifica), el video pasa solo al reproductor de la app en el mismo punto (nunca queda en negro). MKV, AVI y TS van directo al de la app. **Cuenta › Reproductor** cambia a usar siempre el de la app.
+- **Reproductor de la app (VLCKit):** MKV, MP4, HLS, TS, audio AC3/E-AC3/DTS, cambio de idioma y subtítulos, sigue donde se dejó, siguiente episodio automático, cambio de canal deslizando arriba/abajo.
 - **Modo DEMO:** con una línea demo (botón Autodemo, o el panel responde `"demo": true` en `check_mac` o `progress.php`) la app muestra **DEMO** en lugar del usuario (inicio, perfil, Mi cuenta), nunca la contraseña, y no guarda ni muestra "Continuar viendo" ni "Mi lista" ("No disponible en la DEMO"). El panel tampoco guarda nada de una línea demo.
 - **Varias líneas para el equipo:** se entra solo con la primera que funciona (ya no aparece "Elige tu servicio").
 - **Inicio de sesión centrado** con la firma del distribuidor abajo.
@@ -59,5 +60,5 @@ open LatMpx.xcworkspace
 
 - `LatMpx/Data/` — panel (cifrado AES-256-GCM + HKDF y mope, igual que Android), Xtream, distribuidor, sincronización, deportes, TMDB.
 - `LatMpx/UI/` — pantallas (inicio, películas, series, TV en vivo, deportes, cuenta, inicio de sesión, distribuidor, pantalla falsa).
-- `LatMpx/Player/` — reproductor VLCKit (`PlayerPresenter` lo presenta en horizontal) y la miniatura de TV en vivo (`LivePreview`).
+- `LatMpx/Player/` — reproductor de iOS (`NativePlayer`), reproductor VLCKit (`PlayerPresenter` lo presenta en horizontal) y la miniatura de TV en vivo (`LivePreview`).
 - `project.yml` (XcodeGen) y `Podfile` (MobileVLCKit).

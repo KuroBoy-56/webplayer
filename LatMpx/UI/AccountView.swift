@@ -6,6 +6,7 @@ struct AccountView: View {
     let onLogout: () -> Void
     let onChangeDistributor: () -> Void
     @State private var streamFormat = Store.streamFormat
+    @State private var nativePlayer = Store.nativePlayer
     @State private var pinOpen = false
     @State private var confirmLogout = false
 
@@ -46,6 +47,11 @@ struct AccountView: View {
                         setting("play.rectangle", "Formato de canales", streamFormat == "ts" ? "MPEG-TS (.ts)" : "HLS (.m3u8)") {
                             streamFormat = streamFormat == "ts" ? "m3u8" : "ts"
                             Store.streamFormat = streamFormat
+                        }
+                        Divider().background(Color(hex: 0x333333))
+                        setting("pip", "Reproductor", nativePlayer ? "De iOS · imagen en imagen y AirPlay (MKV y TS en el de la app)" : "De la app (sin imagen en imagen)") {
+                            nativePlayer.toggle()
+                            Store.nativePlayer = nativePlayer
                         }
                         Divider().background(Color(hex: 0x333333))
                         DnsButton(fill: true)

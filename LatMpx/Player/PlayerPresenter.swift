@@ -44,6 +44,9 @@ enum PlayerPresenter {
     static func sync(_ state: AppState, _ tenant: Tenant) {
         let req = state.play
         if req?.id == shownId { return }
+        // otro video (o se cerró) mientras está el reproductor de iOS o su ventanita: se cierra
+        if NativePlayer.shared.active { NativePlayer.shared.close() }
+        if host == nil { shownId = nil }
         if let h = host {
             shownId = nil
             host = nil
@@ -58,6 +61,12 @@ enum PlayerPresenter {
     }
 
     private static func present(_ req: PlayRequest, _ state: AppState, _ tenant: Tenant) {
+        // lo que Apple puede abrir va a su reproductor (imagen en imagen); si falla vuelve aquí con forceApp
+        if let url = NativePlayer.source(req) {
+            shownId = req.id
+            NativePlayer.shared.open(req, url: url, state: state)
+            return
+        }
         guard let top = topController() else { return }
         let view = PlayerScreen(request: req)
             .environmentObject(state)

@@ -80,6 +80,7 @@ struct RootView: View {
     }
 
     private func clearAll() {
+        NativePlayer.shared.close()
         Store.logout(); Alerts.reset(); alert = nil; Xtream.clearCache(); Cloud.shared.clear()
         Task { await PanelEpg.shared.clear() }
         state.reset(); state.session = nil

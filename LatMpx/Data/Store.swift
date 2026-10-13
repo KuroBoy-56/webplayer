@@ -55,6 +55,12 @@ enum Store {
     static func setLastChannel(_ id: Int) { p.set(id, forKey: "last_ch|" + scope()) }
     private static func scope() -> String { session().map { "\($0.user)@\($0.base)" } ?? "-" }
 
+    /** reproductor de iOS (imagen en imagen, AirPlay) para lo que puede abrir; false = siempre el de la app */
+    static var nativePlayer: Bool {
+        get { p.object(forKey: "native_player") as? Bool ?? true }
+        set { p.set(newValue, forKey: "native_player") }
+    }
+
     static var streamFormat: String {
         get { p.string(forKey: "stream_format") ?? "m3u8" }
         set { p.set(newValue, forKey: "stream_format") }

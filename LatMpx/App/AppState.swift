@@ -30,8 +30,12 @@ struct PlayRequest: Identifiable {
     var closeOnPortrait = false
     /** solo la prueba del simulador: direcciones fijas en lugar de las de la línea */
     var directUrls: [String] = []
-    /** seguir desde aquí (ms), por ejemplo al volver de imagen en imagen */
+    /** seguir desde aquí (ms), por ejemplo al volver del reproductor de iOS */
     var startAt: Int64 = 0
+    /** el reproductor de iOS no pudo: va al de la app (VLC) */
+    var forceApp = false
+    /** descarga del equipo: directUrls es el archivo y no se guarda progreso en el panel */
+    var offline = false
 }
 
 final class AppState: ObservableObject {
