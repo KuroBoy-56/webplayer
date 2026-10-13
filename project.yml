@@ -33,7 +33,7 @@ targets:
     info:
       path: LatMpx/Info.plist
       properties:
-        CFBundleDisplayName: LatMpx TV+
+        CFBundleDisplayName: MPX Player
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true

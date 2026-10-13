@@ -1,4 +1,6 @@
-# LatMpx TV+ para iPhone y iPad (rama `ios`)
+# MPX Player para iPhone y iPad (rama `ios`)
+
+**Marca:** la app se llama **MPX Player** (`CFBundleDisplayName` en `project.yml`; el identificador sigue siendo `com.latmpx.player`). Logo, icono (`AppIcon`, 1024 px sin transparencia) e imágenes de las plataformas (Netflix, Disney+, HBO Max, Prime Video, Marvel, Apple TV+, Paramount+, DC, Navidad, Halloween) están en `LatMpx/Resources/Assets.xcassets`.
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
@@ -36,7 +38,7 @@ El `.ipa` de **Releases › ipa-latest** se compila sin firma (no hay cuenta de 
 1. En la computadora instala **Sideloadly** (Windows o Mac, https://sideloadly.io) o **AltStore** (https://altstore.io).
 2. Conecta el iPhone por cable, abre Sideloadly, arrastra `LatMpx.ipa`, escribe tu Apple ID y pulsa **Start**.
 3. En el iPhone: **Ajustes › Privacidad y seguridad › Modo de desarrollador › Activar** (se reinicia) y después **Ajustes › General › VPN y gestión de dispositivos ›** tu Apple ID **› Confiar**.
-4. Abre LatMpx TV+.
+4. Abre MPX Player.
 
 Con un Apple ID gratuito la firma dura **7 días**: vuelve a instalarlo con Sideloadly (o deja que AltStore lo renueve). Con una cuenta de Apple Developer (99 USD/año) dura un año y se puede publicar en TestFlight.
 

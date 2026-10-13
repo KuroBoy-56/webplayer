@@ -51,7 +51,7 @@ struct LoginView: View {
                         Spacer(minLength: 16)
                         box.frame(maxWidth: 400).padding(.horizontal, 16)
                         Spacer(minLength: 28)
-                        Text("© " + String(Calendar.current.component(.year, from: Date())) + " " + tenant.nameOr("Garevyn TV"))
+                        Text("© " + String(Calendar.current.component(.year, from: Date())) + " " + tenant.nameOr("MPX Player"))
                             .font(.system(size: 14)).foregroundColor(Color(hex: 0x999999))
                             .frame(maxWidth: .infinity).padding(20).background(Color.black.opacity(0.6))
                     }

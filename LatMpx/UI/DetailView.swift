@@ -73,7 +73,7 @@ struct DetailView: View {
                                 Spacer()
                             }
                             if !trailer.isEmpty { action("film", "Tráiler") { openTrailer(trailer) }; Spacer() }
-                            ShareLink(item: "Mira \"\(media.name)\" en \(tenant.nameOr("LatMpx"))") {
+                            ShareLink(item: "Mira \"\(media.name)\" en \(tenant.nameOr("MPX Player"))") {
                                 VStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 22)); Text("Compartir").font(.system(size: 11)).foregroundColor(Theme.muted) }
                                     .foregroundColor(.white)
                             }

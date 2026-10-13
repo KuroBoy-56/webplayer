@@ -11,7 +11,7 @@ struct LogoHeader: View {
                 RemoteImage(url: b.logoUrl + (b.logoUrl.contains("?") ? "&" : "?") + "r=\(b.logoRev)", mode: .fit, maxPixel: 600)
                     .frame(maxWidth: height * 6, maxHeight: height)
             } else {
-                Text(tenant.nameOr("LatMpx")).font(.system(size: height * 0.6, weight: .black)).foregroundColor(Theme.accent).lineLimit(1)
+                Text(tenant.nameOr("MPX Player")).font(.system(size: height * 0.6, weight: .black)).foregroundColor(Theme.accent).lineLimit(1)
             }
         } else {
             Image("Logo").resizable().scaledToFit().frame(height: height).clipShape(RoundedRectangle(cornerRadius: 4))

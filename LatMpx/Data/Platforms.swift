@@ -17,9 +17,9 @@ enum Platforms {
         Platform(key: "max", label: "HBO Max", image: "plat_max", color: 0x5822B4, kw: ["hbo", "\\bmax\\b"]),
         Platform(key: "prime", label: "Prime Video", image: "plat_prime", color: 0x00A8E1, kw: ["amazon", "prime"]),
         Platform(key: "marvel", label: "Marvel", image: "plat_marvel", color: 0xEC1D24, kw: ["marvel", "\\bmcu\\b"]),
-        Platform(key: "apple", label: "Apple TV+", image: "", color: 0x555555, kw: ["apple"]),
-        Platform(key: "paramount", label: "Paramount+", image: "", color: 0x0064FF, kw: ["paramount"]),
-        Platform(key: "dc", label: "DC", image: "", color: 0x0476F2, kw: ["\\bdc\\b", "dc comics"]),
+        Platform(key: "apple", label: "Apple TV+", image: "plat_apple", color: 0x555555, kw: ["apple"]),
+        Platform(key: "paramount", label: "Paramount+", image: "plat_paramount", color: 0x0064FF, kw: ["paramount"]),
+        Platform(key: "dc", label: "DC", image: "plat_dc", color: 0x0476F2, kw: ["\\bdc\\b", "dc comics"]),
         Platform(key: "xmas", label: "Navidad", image: "plat_xmas", color: 0x1F7A3A, kw: ["navidad", "navide", "christmas", "xmas"]),
         Platform(key: "halloween", label: "Halloween", image: "plat_halloween", color: 0xFF6A00, kw: ["halloween", "terror", "horror"]),
     ]
