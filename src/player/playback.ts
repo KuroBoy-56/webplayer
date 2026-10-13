@@ -317,7 +317,7 @@ export class Playback {
     out.push({ kind: 'text', key: 'off', label: 'Desactivados', on: this.subKey === 'off' || (!this.ext && !showing) });
     for (const it of subs) {
       const isOn = this.ext ? it.probe === this.ext.s : this.subKey !== 'off' && !!showing && it.native === showing.index;
-      out.push({ kind: 'text', key: it.key, label: it.label + (this.subWait?.s === it.probe ? ' (preparando…)' : ''), on: isOn });
+      out.push({ kind: 'text', key: it.key, label: it.label + (this.subWait && this.subWait.s === it.probe ? ' (preparando…)' : ''), on: isOn });
     }
     return out;
   }
