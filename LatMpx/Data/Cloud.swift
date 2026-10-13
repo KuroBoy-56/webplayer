@@ -26,8 +26,37 @@ final class Cloud: ObservableObject {
 
     private func bump() { DispatchQueue.main.async { self.rev += 1 } }
 
-    func setDemo(_ on: Bool) {
-        if Thread.isMainThread { demo = on } else { DispatchQueue.main.async { self.demo = on } }
+    /** fin de la demo según el panel (segundos Unix, "demo_expires"; 0 = no se sabe) */
+    @Published private(set) var demoExpires = 0
+    /** duración de la demo según el panel (segundos, "demo_duration"; 0 = no se sabe) */
+    @Published private(set) var demoDuration = 0
+
+    /** expires / duration: lo que dijo el panel; nil = se conservan los que ya había */
+    func setDemo(_ on: Bool, expires: Int? = nil, duration: Int? = nil) {
+        let apply = {
+            self.demo = on
+            if !on { self.demoExpires = 0; self.demoDuration = 0 }
+            if on, let e = expires { self.demoExpires = e }
+            if on, let d = duration { self.demoDuration = d }
+        }
+        if Thread.isMainThread { apply() } else { DispatchQueue.main.async(execute: apply) }
+    }
+
+    /** "1 hora", "2 horas", "30 minutos", "1 día"… según la duración del panel ("" si no la mandó) */
+    var demoLength: String {
+        let s = demoDuration
+        if s <= 0 { return "" }
+        if s % 86400 == 0 { return "\(s / 86400) día" + (s == 86400 ? "" : "s") }
+        if s % 3600 == 0 { return "\(s / 3600) hora" + (s == 3600 ? "" : "s") }
+        return "\(s / 60) minuto" + (s / 60 == 1 ? "" : "s")
+    }
+
+    /** fin de la demo con la hora exacta del equipo: "13/10/2026 18:45" ("" si el panel no lo mandó) */
+    var demoEndText: String {
+        if demoExpires <= 0 { return "" }
+        let f = DateFormatter()
+        f.dateFormat = "dd/MM/yyyy HH:mm"
+        return f.string(from: Date(timeIntervalSince1970: TimeInterval(demoExpires)))
     }
 
     /** el usuario a mostrar: "DEMO" en una línea demo */

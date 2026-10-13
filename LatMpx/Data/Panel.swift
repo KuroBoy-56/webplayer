@@ -9,7 +9,12 @@ import Foundation
 enum Panel {
     /** Línea IPTV que el panel tiene asignada a este equipo. */
     /** demo: el panel dice que la línea es una demo (se muestra "DEMO", sin progreso ni Mi lista) */
-    struct Line: Equatable { let name, base, user, pass: String; var demo = false }
+    struct Line: Equatable {
+        let name, base, user, pass: String
+        var demo = false
+        /** demo: fin (segundos Unix) y duración (segundos) según el panel */
+        var demoExpires = 0, demoDuration = 0
+    }
 
     /** Resultado con mensaje de error en español para mostrar en pantalla. */
     struct Answer<T> {
@@ -84,6 +89,8 @@ enum Panel {
         if pin.count == 4 && pin.isDigits { Store.parentalPin = pin }
         var line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))
         line?.demo = j.b("demo")
+        line?.demoExpires = j.i("demo_expires")
+        line?.demoDuration = j.i("demo_duration")
         return Answer(value: line)
     }
 
@@ -111,7 +118,7 @@ enum Panel {
 
     /** Demo automática. Con el código de un revendedor la demo queda a su nombre en el panel. */
     /** Línea de la demo automática: usuario, contraseña y el servidor de la demo (url, puede venir vacío en paneles viejos). */
-    struct Demo { let user: String; let pass: String; let url: String }
+    struct Demo { let user: String; let pass: String; let url: String; var expires = 0; var duration = 0 }
 
     static func autoDemo(reseller: String) async -> Answer<Demo> {
         var p = device()
@@ -120,7 +127,7 @@ enum Panel {
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
         let j = r.json()
         if r.ok, let j = j, j.s("status") == "ok", !j.s("username").isEmpty {
-            return Answer(value: Demo(user: j.s("username"), pass: j.s("password"), url: j.s("url")), code: r.code)
+            return Answer(value: Demo(user: j.s("username"), pass: j.s("password"), url: j.s("url"), expires: j.i("demo_expires"), duration: j.i("demo_duration")), code: r.code)
         }
         let fallback: String
         switch r.code {

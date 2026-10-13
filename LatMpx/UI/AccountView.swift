@@ -25,7 +25,7 @@ struct AccountView: View {
                                 // demo: nunca el usuario ni la contraseña de la línea
                                 Text(cloud.shownUser(s)).font(.system(size: 24, weight: .bold)).foregroundColor(.white).lineLimit(1)
                                 if cloud.demo {
-                                    Text("Cuenta DEMO · Estás usando una demostración").font(.system(size: 14)).foregroundColor(Color(hex: 0xFFB300))
+                                    Text(cloud.demoLength.isEmpty ? "Cuenta DEMO" : "Cuenta DEMO · \(cloud.demoLength)").font(.system(size: 14)).foregroundColor(Color(hex: 0xFFB300))
                                 } else {
                                     Text("Suscripción activa").font(.system(size: 14)).foregroundColor(Color(hex: 0x4CAF50))
                                 }
@@ -36,10 +36,15 @@ struct AccountView: View {
                             if let it = state.item(from: p) { ContinueCard(item: it, progress: p, width: posterWidth(g.size)) }
                         }
                         section("Detalles de la cuenta") {
-                            InfoRow(k: "Vencimiento", v: s.expires); Divider().background(Color(hex: 0x333333))
-                            InfoRow(k: "Conexiones", v: "\(s.activeCons) / \(s.maxCons)"); Divider().background(Color(hex: 0x333333))
-                            InfoRow(k: "Servidor", v: s.dnsName); Divider().background(Color(hex: 0x333333))
-                            InfoRow(k: "Miembro desde", v: s.createdAt)
+                            // demo: solo el fin que dice el panel (hora exacta); nada de la línea demo del servidor
+                            if cloud.demo {
+                                InfoRow(k: "Vencimiento", v: cloud.demoEndText.isEmpty ? "—" : cloud.demoEndText)
+                            } else {
+                                InfoRow(k: "Vencimiento", v: s.expires); Divider().background(Color(hex: 0x333333))
+                                InfoRow(k: "Conexiones", v: "\(s.activeCons) / \(s.maxCons)"); Divider().background(Color(hex: 0x333333))
+                                InfoRow(k: "Servidor", v: s.dnsName); Divider().background(Color(hex: 0x333333))
+                                InfoRow(k: "Miembro desde", v: s.createdAt)
+                            }
                         }
                     }
                     section("Configuración de la aplicación") {

@@ -66,7 +66,7 @@ struct ProfileSheet: View {
             Text("Perfil").font(.system(size: 20, weight: .bold)).foregroundColor(.white)
             VStack(alignment: .leading, spacing: 4) {
                 Text(cloud.shownUser(state.session)).font(.system(size: 16)).foregroundColor(.white)
-                Text(state.session?.dnsName ?? "").font(.system(size: 13)).foregroundColor(Theme.muted)
+                Text(cloud.demo ? (cloud.demoEndText.isEmpty ? "" : "Vence: \(cloud.demoEndText)") : (state.session?.dnsName ?? "")).font(.system(size: 13)).foregroundColor(Theme.muted)
             }
             Divider().background(Color.white.opacity(0.2))
             row("person.fill", "Mi cuenta") { go { state.open(.account) } }

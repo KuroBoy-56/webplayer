@@ -149,7 +149,7 @@ struct LoginView: View {
     @MainActor @discardableResult private func connect(_ line: Panel.Line) async -> Bool {
         status = "Conectando con \(line.name)…"
         switch await Xtream.login([(line.name, line.base)], user: line.user, pass: line.pass) {
-        case .ok(let s): Cloud.shared.setDemo(line.demo || fromAutodemo); onLogged(s); return true
+        case .ok(let s): Cloud.shared.setDemo(line.demo || fromAutodemo, expires: line.demoExpires, duration: line.demoDuration); onLogged(s); return true
         case .fail(let m): err = m; return false
         }
     }
@@ -232,7 +232,7 @@ struct LoginView: View {
         if list.isEmpty { err = "Demo creada, pero el panel no devolvió el servidor."; return false }
         let named = list.enumerated().map { ($0.offset == 0 ? "Demo" : "Servidor \($0.offset + 1)", $0.element) }
         switch await Xtream.login(named, user: demo.user, pass: demo.pass) {
-        case .ok(let s): Cloud.shared.setDemo(true); onLogged(s); return true
+        case .ok(let s): Cloud.shared.setDemo(true, expires: demo.expires, duration: demo.duration); onLogged(s); return true
         case .fail(let m): err = m; return false
         }
     }

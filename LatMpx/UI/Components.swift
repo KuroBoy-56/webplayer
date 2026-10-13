@@ -146,27 +146,58 @@ struct ShelfRow<T, Cell: View>: View {
     }
 }
 
-/** fondo de pósters del inicio de sesión (TMDB) */
+/**
+ * Fondo del inicio de sesión como la web y Android (.nf-login-wall): cuadrícula de pósters inclinada -8°
+ * que sube despacio sin fin (120 s por vuelta), con la sombra negra encima. Sin pósters (el panel no
+ * tiene clave TMDB) queda negro.
+ */
 struct PosterWall: View {
     let posters: [String]
     var columns = 4
+    private let gap: CGFloat = 10
+    private let period: Double = 120
+    @State private var rolling = false
 
     var body: some View {
         GeometryReader { g in
-            let w = g.size.width / CGFloat(columns)
-            let rows = Int(ceil(g.size.height / (w * 1.5))) + 1
-            VStack(spacing: 0) {
-                ForEach(0..<rows, id: \.self) { r in
-                    HStack(spacing: 0) {
-                        ForEach(0..<columns, id: \.self) { c in
-                            let i = r * columns + c
-                            if !posters.isEmpty { RemoteImage(url: posters[i % posters.count], maxPixel: 300).frame(width: w, height: w * 1.5).clipped() }
-                            else { Color.black.frame(width: w, height: w * 1.5) }
+            ZStack {
+                Color.black
+                if posters.count >= columns {
+                    let width = g.size.width * 1.3
+                    let w = (width - gap * CGFloat(columns - 1)) / CGFloat(columns)
+                    let rowH = w * 1.5 + gap
+                    // filas de la vuelta: las carátulas repetidas hasta cubrir la pantalla inclinada
+                    let base = Array(posters.prefix(posters.count - posters.count % columns))
+                    let baseRows = stride(from: 0, to: base.count, by: columns).map { Array(base[$0..<$0 + columns]) }
+                    let reps = max(1, Int(ceil(g.size.height * 1.6 / (CGFloat(baseRows.count) * rowH))))
+                    let loop = Array(repeating: baseRows, count: reps).flatMap { $0 }
+                    let loopH = CGFloat(loop.count) * rowH
+                    VStack(spacing: gap) {
+                        ForEach(0..<(loop.count * 2), id: \.self) { r in
+                            HStack(spacing: gap) {
+                                ForEach(0..<columns, id: \.self) { c in
+                                    RemoteImage(url: loop[r % loop.count][c], maxPixel: 300)
+                                        .frame(width: w, height: w * 1.5)
+                                        .background(Color(hex: 0x111111))
+                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                }
+                            }
                         }
                     }
+                    .frame(width: width, alignment: .top)
+                    // sube una vuelta (la segunda mitad es igual a la primera) y vuelve a empezar sin salto
+                    .offset(y: (rolling ? -loopH : 0) - g.size.height * 0.2)
+                    .animation(.linear(duration: period).repeatForever(autoreverses: false), value: rolling)
+                    .frame(width: g.size.width, height: g.size.height, alignment: .top)
+                    .rotationEffect(.degrees(-8))
+                    .onAppear { rolling = true }
                 }
+                // .nf-login-shade
+                Color.black.opacity(0.55)
+                LinearGradient(colors: [Color.black.opacity(0.85), Color.black.opacity(0.35), Color.black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
             }
-            .overlay(LinearGradient(colors: [Color.black.opacity(0.85), Color.black.opacity(0.55), Color.black.opacity(0.9)], startPoint: .top, endPoint: .bottom))
+            .frame(width: g.size.width, height: g.size.height)
+            .clipped()
         }
         .ignoresSafeArea()
     }

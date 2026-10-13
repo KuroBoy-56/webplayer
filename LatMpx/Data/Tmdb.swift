@@ -3,6 +3,8 @@ import Foundation
 /** TMDB con la llave que configura el panel (nunca una llave escrita en la app). */
 enum Tmdb {
     private static var nowPlayingCache: [String]?
+    /** número de distribuidor de las carátulas guardadas (cada uno tiene su clave TMDB) */
+    private static var nowPlayingFor: String?
     /** la llave que TMDB rechazó (401); si el panel manda otra, se vuelve a usar */
     private static var badKey = ""
     private static let lock = NSLock()
@@ -63,11 +65,19 @@ enum Tmdb {
         }
     }
 
+    /**
+     * Carátulas del fondo del inicio de sesión y del número de distribuidor: solo con la clave TMDB del
+     * panel (la del distribuidor o la del dueño), pedidas por api/tmdb.php. Sin clave el panel responde
+     * tmdb_key_not_set y no hay carrusel.
+     */
     static func nowPlaying() async -> [String] {
-        if let c = nowPlayingCache { return c }
+        let who = Tenant.code
+        if let c = lock.locked({ nowPlayingFor == who ? nowPlayingCache : nil }) { return c }
         var out = [String]()
         for p in 1...3 {
-            guard let j = await get("movie/now_playing?language=es-MX&page=\(p)") else { break }
+            let url = PanelUrl.api("tmdb.php") + "/movie/now_playing?language=es-MX&page=\(p)" + Tenant.query()
+            let r = await Net.get(url, timeout: 15)
+            guard r.ok, let j = r.json(), j["error"] == nil else { break }
             for o in j.objs("results") {
                 let pp = o.s("poster_path")
                 if !pp.isEmpty { out.append("https://image.tmdb.org/t/p/w342\(pp)") }
@@ -75,7 +85,7 @@ enum Tmdb {
         }
         var seen = Set<String>()
         let list = Array(out.filter { seen.insert($0).inserted }.prefix(48))
-        if !list.isEmpty { nowPlayingCache = list }
+        if !list.isEmpty { lock.locked { nowPlayingCache = list; nowPlayingFor = who } }
         return list
     }
 
