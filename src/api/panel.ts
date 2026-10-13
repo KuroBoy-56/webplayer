@@ -347,14 +347,16 @@ export function resellerCode(text: string): string {
 
 // demo de 24 horas, una por equipo. reseller: código del revendedor escrito en Contraseña (la demo
 // queda a su nombre en el panel); cualquier otra cosa no se envía.
-export async function panelDemo(deviceId: string, reseller = ''): Promise<{ ok: boolean; user?: string; pass?: string; error?: string; code: number }> {
+// url: el servidor de la demo (vacío en paneles viejos)
+export async function panelDemo(deviceId: string, reseller = ''): Promise<{ ok: boolean; user?: string; pass?: string; url?: string; error?: string; code: number }> {
   const code = resellerCode(reseller);
   const r = await panelLogin('auto_demo', code ? { mac_address: deviceId, reseller: code, enc: 1 } : { mac_address: deviceId, enc: 1 });
   const j = loginReply(r);
-  if (r.ok && j && str(j.status) === 'ok' && str(j.username)) return { ok: true, user: str(j.username), pass: str(j.password), code: r.code };
+  if (r.ok && j && str(j.status) === 'ok' && str(j.username)) return { ok: true, user: str(j.username), pass: str(j.password), url: str(j.url), code: r.code };
   let fb = 'No se pudo crear la demo';
   if (r.code === 403) fb = 'Demo ya utilizada en este dispositivo o dispositivo ya registrado.';
   if (r.code === 429) fb = 'Demasiadas demos desde esta conexión. Inténtalo mañana.';
+  if (r.code === 503) fb = 'La demo no está disponible en este momento. Inténtalo más tarde.';
   if (r.code === 404 && code) fb = 'El código de revendedor no existe o no está activo.';
   return { ok: false, error: panelError(r, fb), code: r.code };
 }

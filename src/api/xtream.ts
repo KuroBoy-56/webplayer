@@ -23,9 +23,27 @@ function sessionFrom(sv: Server, user: string, pass: string, ui: any): Session {
   };
 }
 
-// Prueba el usuario en todos los servidores a la vez y se queda con el primero que lo acepte
-export async function loginAll(servers: Server[], user: string, pass: string): Promise<{ session?: Session; error?: string }> {
-  if (!servers.length) return { error: 'El panel no devolvió servidores. Inténtalo de nuevo.' };
+// http://… <-> https://…
+export function otherScheme(base: string): string {
+  return /^https:\/\//i.test(base) ? 'http://' + base.slice(8) : 'https://' + base.replace(/^[a-z]+:\/\//i, '');
+}
+
+// Prueba el usuario en todos los servidores a la vez y se queda con el primero que lo acepte. El panel
+// (https) manda los servidores IPTV con https:// y muchos solo responden en http (p. ej. puerto 8080):
+// cada servidor se prueba también con el otro protocolo, así la app nunca se queda sin entrar por eso.
+export async function loginAll(input: Server[], user: string, pass: string): Promise<{ session?: Session; error?: string }> {
+  if (!input.length) return { error: 'El panel no devolvió servidores. Inténtalo de nuevo.' };
+  const seen = new Set<string>();
+  const servers: Server[] = [];
+  for (const sv of input) {
+    for (const base of [sv.base, otherScheme(sv.base)]) {
+      const k = base.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        servers.push({ name: sv.name, base });
+      }
+    }
+  }
   const ctrl = new AbortController();
   let lastErr = 'No se pudo conectar con ningún servidor';
   return new Promise(resolve => {

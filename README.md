@@ -16,6 +16,8 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   (con al menos una letra, p. ej. `RV7K2M`), *Autodemo* lo envía en mayúsculas (`reseller` dentro de
   `auto_demo`) y la demo queda a nombre de ese revendedor en el panel. Solo números o cualquier otra
   cosa no se envía. Código que no existe: se muestra el aviso del panel y la demo sigue disponible.
+- **Autodemo, entrada**: se entra con la línea de `auto_demo` (usuario, contraseña y `url`, el servidor de la demo) más las líneas del equipo y los DNS del panel. `503` = el panel no pudo confirmar la demo con el servidor IPTV (no se registra nada).
+- **http / https**: el panel (https) manda los servidores IPTV con `https://` y muchos solo responden en http. `loginAll` prueba cada servidor con los dos protocolos a la vez y la sesión se queda con el que respondió.
 - **Modo DEMO**: la sesión es DEMO si salió del botón *Autodemo* o si el panel responde `"demo": true`
   (en `check_mac`, en el `auth` de `progress.php` o en su GET `?v=2`); un inicio de sesión normal lo
   quita. En la DEMO nunca se muestran el usuario ni la contraseña de la línea (*Cuenta* dice

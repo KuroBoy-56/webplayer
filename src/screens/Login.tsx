@@ -117,9 +117,13 @@ export default function Login() {
       return;
     }
     write(scoped('demo_used'), '1');
+    // se entra con el servidor que acaba de dar el panel, las líneas del equipo y los DNS del panel
+    // (loginAll prueba todos a la vez y en http y https)
     const pl = await panelPlaylists(dev);
-    const own = pl.lines.filter(l => l.user === d.user);
-    await enter(d.user!, d.pass!, own.length ? own.map(l => ({ name: l.name, base: l.base })) : undefined, false, true);
+    const own = pl.lines.filter(l => l.user === d.user).map(l => ({ name: l.name, base: l.base }));
+    const dns = await panelDnsList();
+    const servers = [...(d.url ? [{ name: 'Demo', base: d.url.replace(/\/+$/, '') }] : []), ...own, ...dns];
+    await enter(d.user!, d.pass!, servers.length ? servers : undefined, false, true);
   };
 
   const enterAssigned = () => {
