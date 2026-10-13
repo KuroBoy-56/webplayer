@@ -116,6 +116,17 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
 
     suspend fun connect(line: Panel.Line) { tryLine(line) }
 
+    /** Demo recién creada: su servidor (el que dijo el panel) y luego los DNS del panel, hasta que uno responda. */
+    suspend fun tryDemo(demo: Panel.Demo, servers: List<String>): Boolean {
+        status = "Conectando con la demo…"
+        val list = servers.filter { it.isNotBlank() }.map(Xtream::normalize).distinct()
+        if (list.isEmpty()) { err = "Demo creada, pero el panel no devolvió el servidor."; return false }
+        return when (val r = Xtream.login(list.mapIndexed { i, s -> (if (i == 0) "Demo" else "Servidor ${i + 1}") to s }, demo.user, demo.pass)) {
+            is Xtream.LoginResult.Ok -> { Store.demo = true; onLogged(r.session); true }
+            is Xtream.LoginResult.Fail -> { err = r.message; false }
+        }
+    }
+
     /**
      * Varias líneas o servidores para este equipo: se entra con la primera que funciona, sin preguntar
      * (antes se mostraba la lista "Elige tu servicio").
@@ -260,19 +271,23 @@ fun LoginScreen(onLogged: (Session) -> Unit) {
                                 status = "Creando demo…"
                                 // un código de revendedor escrito en Contraseña deja la demo a su nombre
                                 val r = Panel.autoDemo(deviceId, pass)
-                                val cred = r.value
-                                if (cred == null) {
+                                val demo = r.value
+                                if (demo == null) {
                                     err = r.error
                                     if (r.code == 403) { demoUsed = true; Store.demoUsed = true }
                                     return@act
                                 }
                                 Store.demoUsed = false; demoUsed = false
                                 fromAutodemo = true
-                                if (!resolve() && err == null) {
-                                    val d = dns.ifEmpty { Panel.fetchDns().value.orEmpty() }
-                                    val first = d.firstOrNull()
-                                    if (first != null) connect(Panel.Line("Demo", Xtream.normalize(first), cred.first, cred.second))
-                                    else err = "Demo creada, pero el panel no devolvió el servidor."
+                                // se entra con la línea que acaba de dar el panel (antes se volvía a pedir con auth.php /
+                                // check_mac y, si ese servidor no respondía en https, la demo quedaba creada sin acceso)
+                                val d = dns.ifEmpty { Panel.fetchDns().value.orEmpty() }
+                                if (!tryDemo(demo, listOf(demo.url) + d)) {
+                                    // último intento: las líneas que el panel tiene para el equipo
+                                    val first = err
+                                    err = null
+                                    val found = resolve()
+                                    if (err != null || !found) err = first ?: err
                                 }
                             }
                         }

@@ -88,6 +88,8 @@ Al abrir la app por primera vez sale **Número de distribuidor** (mismo diseño 
 - **Modo DEMO:** con una línea demo (botón Autodemo, o el panel responde `"demo": true` en `check_mac` o `progress.php`) la app muestra **DEMO** en lugar del usuario (inicio, perfil, Mi cuenta), nunca la contraseña, y no guarda ni muestra "Continuar viendo" ni "Mi lista": agregar a Mi lista avisa "No disponible en la DEMO". El panel tampoco guarda nada de una línea demo.
 - **Varias líneas para el equipo:** se entra solo con la primera que funciona (ya no aparece "Elige tu servicio").
 - **Autodemo:** el botón ya no se bloquea en el equipo: el panel decide (si el dueño borró el registro, se puede pedir otra demo).
+- **Autodemo, entrada:** la app entra con la línea que devuelve `auto_demo` (usuario, contraseña y `url`, el servidor de la demo) y después prueba los DNS del panel; solo si ninguno responde vuelve a pedir las líneas del equipo (`auth.php` / `check_mac`). `503` = el panel no pudo confirmar la demo con el servidor IPTV (no se registra nada).
+- **http / https:** el panel está en https y manda las direcciones de los servidores IPTV con `https://`. Muchos servidores solo responden en http (p. ej. puerto 8080): si un servidor no contesta, `Xtream.login` prueba el otro protocolo y la sesión se queda con el que respondió (antes salía "No se pudo conectar con el servidor").
 - **Cuenta → Cambiar distribuidor:** muestra distribuidor, número y vencimiento; borra todo, cierra sesión y vuelve a pedir el número.
 
 ## Datos que viven en el panel
