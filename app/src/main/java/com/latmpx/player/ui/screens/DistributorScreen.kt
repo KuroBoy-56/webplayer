@@ -85,7 +85,7 @@ fun DistributorScreen(message: String?, onDone: () -> Unit) {
 
     LaunchedEffect(Unit) {
         if (tv) runCatching { firstFocus.requestFocus() }
-        posters = Tmdb.nowPlaying(Store.tmdbKey)
+        posters = Tmdb.nowPlaying()
     }
 
     fun typeDigit(d: String) { if (!busy && code.length < CODE_LEN) { code += d; err = null } }

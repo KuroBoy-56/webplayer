@@ -119,7 +119,7 @@ fun HomeScreen(state: AppState) {
                     Text("Perfil", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(Store.shownUser(state.session), color = Color.White, fontSize = 16.sp)
-                        Text(state.session?.dnsName ?: "", color = NfGray2, fontSize = 13.sp)
+                        Text(if (Store.demo) Store.demoEndText().let { if (it.isEmpty()) "" else "Vence: $it" } else state.session?.dnsName ?: "", color = NfGray2, fontSize = 13.sp)
                     }
                     Divider(color = Color(0x33FFFFFF))
                     Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.ACCOUNT }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

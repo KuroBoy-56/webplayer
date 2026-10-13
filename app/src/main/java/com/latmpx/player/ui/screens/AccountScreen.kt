@@ -166,7 +166,7 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
             Column {
                 // demo: nunca el usuario ni la contraseña de la línea
                 Text(Store.shownUser(s), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                if (Store.demo) Text("Cuenta DEMO · Estás usando una demostración", color = Color(0xFFFFB300), fontSize = 14.sp)
+                if (Store.demo) Text(Store.demoLength().let { if (it.isEmpty()) "Cuenta DEMO" else "Cuenta DEMO · $it" }, color = Color(0xFFFFB300), fontSize = 14.sp)
                 else Text("Suscripción Activa", color = Color(0xFF4CAF50), fontSize = 14.sp)
             }
         }
@@ -188,13 +188,18 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
 
         Text("Detalles de la cuenta", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
         Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2A), Color(0xFF1A1A1A))), RoundedCornerShape(12.dp)).border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp)).padding(16.dp)) {
-            Row2("Vencimiento", s.expires)
-            Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
-            Row2("Conexiones", "${s.activeCons} / ${s.maxCons}")
-            Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
-            Row2("Servidor DNS", s.dnsName)
-            Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
-            Row2("Miembro desde", s.createdAt)
+            // demo: solo el fin que dice el panel (hora exacta); nada de la línea demo del servidor
+            if (Store.demo) {
+                Row2("Vencimiento", Store.demoEndText().ifEmpty { "—" })
+            } else {
+                Row2("Vencimiento", s.expires)
+                Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
+                Row2("Conexiones", "${s.activeCons} / ${s.maxCons}")
+                Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
+                Row2("Servidor DNS", s.dnsName)
+                Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
+                Row2("Miembro desde", s.createdAt)
+            }
         }
 
         Spacer(Modifier.height(32.dp))

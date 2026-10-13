@@ -13,7 +13,11 @@ import org.json.JSONObject
 object Panel {
     /** Línea IPTV que el panel tiene asignada a este equipo. */
     /** demo: el panel dice que la línea es una demo (se muestra "DEMO", sin progreso ni Mi lista) */
-    data class Line(val name: String, val base: String, val user: String, val pass: String, val demo: Boolean = false)
+    data class Line(
+        val name: String, val base: String, val user: String, val pass: String, val demo: Boolean = false,
+        /** demo: fin (segundos Unix) y duración (segundos) según el panel */
+        val demoExpires: Long = 0L, val demoDuration: Long = 0L,
+    )
 
     /** Resultado con mensaje de error en español para mostrar en pantalla. */
     data class Answer<T>(val value: T?, val error: String? = null, val code: Int = 0)
@@ -83,7 +87,7 @@ object Panel {
         if (!j.optBoolean("exists", false)) return Answer(null)
         // PIN parental del panel: es el que usa la app
         j.s("pin").takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { Store.parentalPin = it }
-        val line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))?.copy(demo = j.optBoolean("demo", false))
+        val line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))?.copy(demo = j.optBoolean("demo", false), demoExpires = j.optLong("demo_expires", 0L), demoDuration = j.optLong("demo_duration", 0L))
         return Answer(line)
     }
 
@@ -114,7 +118,7 @@ object Panel {
     }
 
     /** Línea de la demo automática: usuario, contraseña y el servidor de la demo (url, puede venir vacío en paneles viejos). */
-    data class Demo(val user: String, val pass: String, val url: String)
+    data class Demo(val user: String, val pass: String, val url: String, val expires: Long = 0L, val duration: Long = 0L)
 
     /** Demo automática (una sola vez por equipo). Con el código de un revendedor la demo queda a su nombre en el panel. */
     suspend fun autoDemo(deviceId: String, reseller: String = ""): Answer<Demo> {
@@ -123,7 +127,7 @@ object Panel {
         val a = login("auto_demo", p)
         val r = a.value ?: return Answer(null, a.error)
         val j = r.json()
-        if (r.ok && j?.s("status") == "ok" && j.s("username").isNotEmpty()) return Answer(Demo(j.s("username"), j.s("password"), j.s("url")), code = r.code)
+        if (r.ok && j?.s("status") == "ok" && j.s("username").isNotEmpty()) return Answer(Demo(j.s("username"), j.s("password"), j.s("url"), j.optLong("demo_expires", 0L), j.optLong("demo_duration", 0L)), code = r.code)
         val fallback = when (r.code) {
             403 -> "Demo ya utilizado en este dispositivo o dispositivo ya registrado."
             404 -> "Código de revendedor no válido o sin demo disponible."

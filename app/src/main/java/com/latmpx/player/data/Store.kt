@@ -110,6 +110,36 @@ object Store {
      */
     var demo by androidx.compose.runtime.mutableStateOf(false)
 
+    /** fin de la demo según el panel (segundos Unix, "demo_expires"; 0 = no se sabe) */
+    var demoExpires by androidx.compose.runtime.mutableLongStateOf(0L)
+
+    /** duración de la demo según el panel (segundos, "demo_duration"; 0 = no se sabe) */
+    var demoDuration by androidx.compose.runtime.mutableLongStateOf(0L)
+
+    /** la línea abierta es una demo: guarda su fin y su duración (lo que dice el panel) */
+    fun setDemo(on: Boolean, expires: Long = 0L, duration: Long = 0L) {
+        demo = on
+        demoExpires = if (on) expires else 0L
+        demoDuration = if (on) duration else 0L
+    }
+
+    /** "1 hora", "2 horas", "30 minutos", "1 día"… según la duración del panel ('' si no la mandó) */
+    fun demoLength(sec: Long = demoDuration): String {
+        if (sec <= 0) return ""
+        val days = sec / 86400; val h = sec / 3600; val m = sec / 60
+        return when {
+            sec % 86400 == 0L -> "$days día" + if (days == 1L) "" else "s"
+            sec % 3600 == 0L -> "$h hora" + if (h == 1L) "" else "s"
+            else -> "$m minuto" + if (m == 1L) "" else "s"
+        }
+    }
+
+    /** fin de la demo con la hora exacta del equipo: "13/10/2026 18:45" ('' si el panel no lo mandó) */
+    fun demoEndText(): String {
+        if (demoExpires <= 0) return ""
+        return java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(demoExpires * 1000))
+    }
+
     /** texto a mostrar en lugar del usuario de la línea */
     fun shownUser(s: Session?): String = if (demo) "DEMO" else s?.user.orEmpty()
 
@@ -136,7 +166,7 @@ object Store {
 
     fun logout() {
         mem = null
-        demo = false
+        setDemo(false)
         p.edit().remove("session").remove(tenantKey("cloud_token2")).remove(tenantKey("cloud_token2_scope")).apply()
     }
 
