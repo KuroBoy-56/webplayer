@@ -5,7 +5,7 @@ import { hasMasterKey, panelDecrypt, panelEncrypt } from '../lib/aes';
 import { formBody, http, HttpResult, json } from '../lib/http';
 import { read, remove, write } from '../lib/storage';
 import { APP_ID, Brand, parseConfig, reportTenantProblem, scoped, TENANT_ERRORS, TENANT_FATAL, tenantCode, tenantFields } from '../lib/tenant';
-import { t } from '../lib/i18n';
+import { lang, t } from '../lib/i18n';
 import { normalizeBase, str } from '../lib/util';
 
 export type Session = {
@@ -40,7 +40,8 @@ export function panelApiBase(): string {
 }
 
 // Llama al panel por https y, si el certificado del hosting falla, por http (igual que la web).
-// El modo que funciona se recuerda.
+// El modo que funciona se recuerda. Siempre lleva ?lang= (idioma de la app): el panel traduce sus
+// mensajes (progress, epg, sports, tmdb, alerta, media…); los códigos de error no cambian.
 let panelMode = '';
 // esquema con el que respondió el panel ('' si aún no se sabe)
 export function panelScheme(): string {
@@ -49,7 +50,7 @@ export function panelScheme(): string {
 export async function panel(file: string, method = 'GET', body = '', type = '', query = ''): Promise<HttpResult> {
   const base = panelApiBase();
   if (!base) return { code: 0, body: '', ok: false };
-  const url = base + file + query;
+  const url = base + file + query + (query.includes('?') ? '&' : '?') + 'lang=' + lang();
   const modes = panelMode ? [panelMode, 'https', 'http'] : ['https', 'http'];
   const tried = new Set<string>();
   for (const md of modes) {
@@ -254,7 +255,7 @@ async function panelLogin(action: string, payload: Record<string, any>): Promise
   for (let attempt = 0; attempt < 2; attempt++) {
     const ts = Math.floor(Date.now() / 1000) + clockSkew;
     // platform: en qué equipo está esta MAC (Clientes MAC › Dispositivo) y la pantalla falsa de esta app
-    const data = panelEncrypt(JSON.stringify({ ...payload, ...tenantFields(), platform: APP_ID, ts }));
+    const data = panelEncrypt(JSON.stringify({ ...payload, ...tenantFields(), platform: APP_ID, ts, lang: lang() }));
     if (!data) return { code: -1, body: '', ok: false, error: t('Esta versión no tiene la llave del panel.') };
     r = await panel('login.php', 'POST', formBody({ action, data }), 'application/x-www-form-urlencoded');
     const j = r.code === 401 ? json<any>(r) : null;
@@ -412,7 +413,7 @@ export type TenantResult =
 
 export async function panelTenantConfig(code: string, device: string, now: number): Promise<TenantResult> {
   if (!hasMasterKey()) return { ok: false, network: false, code: 'no_key', message: t('Esta versión de la app no tiene la llave del panel') };
-  const data = panelEncrypt(JSON.stringify({ code, app: APP_ID, device }));
+  const data = panelEncrypt(JSON.stringify({ code, app: APP_ID, device, lang: lang() }));
   const r = await panel('login.php', 'POST', formBody({ action: 'tenant_config', data }), 'application/x-www-form-urlencoded');
   if (r.code === 0 || r.code >= 500) return { ok: false, network: true, code: '', message: t('No se pudo conectar con el panel. Revisa tu conexión a internet.') };
   if (!r.ok) {
