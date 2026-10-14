@@ -123,6 +123,7 @@ Usa DNS sobre HTTPS (`okhttp-dnsoverhttps`) en el único cliente OkHttp de la ap
 La app está en español (por defecto), inglés, portugués (Brasil) y francés: `res/values/strings.xml` (español) y `values-en`, `values-pt`, `values-fr`.
 - **Automático** (por defecto): el idioma del equipo; si no es uno de los cuatro, español.
 - **Cuenta › Idioma de la app**: Automático, Español, English, Português o Français. Se guarda en el equipo (`app_lang` en las preferencias) y se aplica al momento (se recrea la pantalla, sin cerrar sesión).
+- Panel: cada pedido a `api/` lleva `Accept-Language: <idioma>` y el JSON cifrado de `login.php` lleva `"lang"`; el panel responde sus mensajes en ese idioma (los códigos de error no cambian).
 - Código: `Lang.kt` (idioma elegido, `attachBaseContext` de cada actividad y del reproductor, `tr()` para textos fuera de Compose) y `ui/components/LanguagePicker.kt`.
 - No se traducen los títulos del servidor IPTV ni de TMDB, los textos del panel (avisos, errores, pantalla falsa), las marcas ni la insignia «DEMO». Las palabras clave que reconocen plataformas y géneros en las categorías del servidor (`data/Platforms.kt`) siguen en español; solo cambia la etiqueta que se muestra.
 
