@@ -6,6 +6,7 @@ import { catalog, Item } from '../data/catalog';
 import { digits } from '../lib/util';
 import { useAppState } from '../state';
 import { C, px, themed } from '../theme';
+import { t } from '../lib/i18n';
 import { ItemGrid } from './Grid';
 
 export default function MyList() {
@@ -21,9 +22,9 @@ export default function MyList() {
     return out;
   }, [st.favorites, st.catalogRev]);
 
-  if (st.demo) return <Message text="Mi lista no está disponible en la DEMO." />;
-  if (!items.length) return <Message text="Tu lista está vacía. Agrega películas, series o canales con «Mi lista»." />;
-  return <ItemGrid items={items} header={<Text style={s.title}>Mi lista</Text>} />;
+  if (st.demo) return <Message text={t('Mi lista no está disponible en la DEMO.')} />;
+  if (!items.length) return <Message text={t('Tu lista está vacía. Agrega películas, series o canales con «Mi lista».')} />;
+  return <ItemGrid items={items} header={<Text style={s.title}>{t('Mi lista')}</Text>} />;
 }
 
 const s = themed(() =>

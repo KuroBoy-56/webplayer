@@ -4,8 +4,10 @@
 // necesita el nombre para el certificado). «Automático» = el DNS de la red, sin cambios.
 import { bytesToB64, utf8Encode } from './crypto';
 import { pref, setPref } from './storage';
+import type { Key } from './i18n';
 
-export type DnsOption = { key: string; label: string; note: string; endpoint: string };
+// label y note se traducen al mostrarlos (t)
+export type DnsOption = { key: string; label: string; note: Key; endpoint: string };
 
 export const DNS_OPTIONS: DnsOption[] = [
   { key: 'auto', label: 'Automático', note: 'El DNS de tu red (recomendado)', endpoint: '' },

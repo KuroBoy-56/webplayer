@@ -4,12 +4,14 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { panelTenantConfig } from '../api/panel';
 import { Button, Logo } from '../components/ui';
+import { t } from '../lib/i18n';
 import { chooseSkip, saveBrand } from '../lib/tenant';
 import { nowSec } from '../lib/util';
 import { useNav } from '../nav';
 import { checkTenant, deviceId, getState } from '../state';
 import { C, px, themed } from '../theme';
 
+// 'Borrar' se traduce al dibujar la tecla
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Borrar', '0', '⌫'];
 
 function Key({ label, onPress, preferred }: { label: string; onPress: () => void; preferred?: boolean }) {
@@ -39,7 +41,7 @@ export default function Distributor({ message }: { message?: string }) {
   const go = async () => {
     if (busy) return;
     if (!/^\d{6}$/.test(code)) {
-      setError('Escribe los 6 dígitos de tu número de distribuidor');
+      setError(t('Escribe los 6 dígitos de tu número de distribuidor'));
       return;
     }
     setBusy(true);
@@ -66,8 +68,8 @@ export default function Distributor({ message }: { message?: string }) {
         <Logo size={110} />
       </View>
       <View style={s.box}>
-        <Text style={s.title}>Número de distribuidor</Text>
-        <Text style={s.hint}>Escribe el número de 6 dígitos que te dio tu distribuidor.</Text>
+        <Text style={s.title}>{t('Número de distribuidor')}</Text>
+        <Text style={s.hint}>{t('Escribe el número de 6 dígitos que te dio tu distribuidor.')}</Text>
         <View style={s.slots}>
           {[0, 1, 2, 3, 4, 5].map(i => (
             <View key={i} style={[s.slot, i === code.length && s.slotOn]}>
@@ -77,14 +79,14 @@ export default function Distributor({ message }: { message?: string }) {
         </View>
         <View style={s.pad}>
           {KEYS.map((k, i) => (
-            <Key key={k} label={k} preferred={i === 0} onPress={() => press(k)} />
+            <Key key={k} label={k === 'Borrar' ? t('Borrar') : k} preferred={i === 0} onPress={() => press(k)} />
           ))}
         </View>
         {error ? <Text style={s.error}>{error}</Text> : null}
-        {busy ? <Text style={s.busy}>Comprobando el número…</Text> : null}
+        {busy ? <Text style={s.busy}>{t('Comprobando el número…')}</Text> : null}
         <View style={s.btns}>
-          <Button label={busy ? 'Comprobando…' : 'Continuar'} primary onPress={go} />
-          <Button label="Omitir" last onPress={skip} />
+          <Button label={busy ? t('Comprobando…') : t('Continuar')} primary onPress={go} />
+          <Button label={t('Omitir')} last onPress={skip} />
         </View>
       </View>
     </View>
@@ -113,11 +115,11 @@ export function TenantRetry({ message }: { message: string }) {
         <Logo size={110} />
       </View>
       <View style={s.box}>
-        <Text style={s.title}>Sin conexión</Text>
+        <Text style={s.title}>{t('Sin conexión')}</Text>
         <Text style={s.hint}>{msg}</Text>
-        {busy ? <Text style={s.busy}>Comprobando…</Text> : null}
+        {busy ? <Text style={s.busy}>{t('Comprobando…')}</Text> : null}
         <View style={s.btns}>
-          <Button label={busy ? 'Comprobando…' : 'Reintentar'} primary preferred last onPress={retry} />
+          <Button label={busy ? t('Comprobando…') : t('Reintentar')} primary preferred last onPress={retry} />
         </View>
       </View>
     </View>

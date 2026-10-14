@@ -3,6 +3,7 @@
 import { json } from '../lib/http';
 import { APP_ID, tenantCode } from '../lib/tenant';
 import { panel, panelApiBase, Session } from './panel';
+import { lang, t } from '../lib/i18n';
 
 export type PanelAlert = { expiry: boolean; title: string; message: string; image: string; button: string };
 
@@ -13,6 +14,8 @@ export async function fetchAlert(s: Session): Promise<PanelAlert | null> {
     ['pass', s.pass],
     ['dns', s.base],
     ['title', s.dns || ''],
+    // título y botón del aviso en el idioma de la app (el mensaje queda como lo escribió el distribuidor)
+    ['lang', lang()],
     // con distribuidor: sus textos (?t=<número>&app=)
     ...(tenantCode() ? [['t', tenantCode()], ['app', APP_ID]] : []),
   ]
@@ -32,6 +35,6 @@ export async function fetchAlert(s: Session): Promise<PanelAlert | null> {
     title: String(j.title || ''),
     message: String(j.message || ''),
     image,
-    button: String(j.button || 'ENTENDIDO'),
+    button: String(j.button || t('ENTENDIDO')),
   };
 }

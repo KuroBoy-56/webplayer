@@ -16,6 +16,7 @@ import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { MenuItem, Playback } from '../player/playback';
 import { getState, isFav, saveProgress, toggleFav } from '../state';
+import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
 
 export default function Player({ params }: { params: PlayParams }) {
@@ -125,7 +126,7 @@ export default function Player({ params }: { params: PlayParams }) {
       setDur(0);
       setSub('');
       setWork('');
-      setStatus(live ? 'Conectando con el canal…' : 'Cargando…');
+      setStatus(live ? t('Conectando con el canal…') : t('Cargando…'));
       c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
     },
     [urlFor, live],
@@ -204,14 +205,14 @@ export default function Player({ params }: { params: PlayParams }) {
       // TV en vivo: un reintento automático (algunos servidores cortan el primer intento)
       if (params.kind === 'live' && !retried.current) {
         retried.current = true;
-        setStatus('Reintentando…');
+        setStatus(t('Reintentando…'));
         setTimeout(() => alive && load(indexRef.current), 1500);
         return;
       }
       if (!triedOther.current) {
         triedOther.current = true;
         flipped.current = !flipped.current;
-        setStatus('Reintentando…');
+        setStatus(t('Reintentando…'));
         const at = params.kind === 'live' ? 0 : Math.floor(c.realPos());
         setTimeout(() => alive && load(indexRef.current, at), 500);
         return;
@@ -222,7 +223,7 @@ export default function Player({ params }: { params: PlayParams }) {
           if (!alive || handled) return;
           setBuffering(false);
           setStatus('');
-          setError(params.kind === 'live' ? 'Este canal no está disponible en este momento.' : 'No se pudo reproducir este contenido.');
+          setError(params.kind === 'live' ? t('Este canal no está disponible en este momento.') : t('No se pudo reproducir este contenido.'));
           reportError('playback', 'No se pudo reproducir (' + params.kind + ')', 'kind=' + params.kind + ' index=' + indexRef.current, 'Reproductor');
         });
       if (!triedDns.current) {
@@ -233,7 +234,7 @@ export default function Player({ params }: { params: PlayParams }) {
           if (!alive) return;
           if (!url) return giveUp();
           dnsUrl.current = { i, url };
-          setStatus('Reintentando con el DNS elegido…');
+          setStatus(t('Reintentando con el DNS elegido…'));
           load(i, at);
         });
         return;
@@ -263,7 +264,7 @@ export default function Player({ params }: { params: PlayParams }) {
         if (captions.current) v.setCaptionViewHandle(captions.current);
         load(indexRef.current, firstResume.current);
       })
-      .catch(() => alive && setError('No se pudo iniciar el reproductor.'));
+      .catch(() => alive && setError(t('No se pudo iniciar el reproductor.')));
 
     return () => {
       alive = false;
@@ -457,7 +458,7 @@ export default function Player({ params }: { params: PlayParams }) {
       {error ? (
         <View style={s.center}>
           <Text style={s.error}>{error}</Text>
-          <Text style={s.hint}>OK para reintentar · Atrás para salir</Text>
+          <Text style={s.hint}>{t('OK para reintentar · Atrás para salir')}</Text>
         </View>
       ) : null}
 
@@ -476,7 +477,7 @@ export default function Player({ params }: { params: PlayParams }) {
                 {cur ? (
                   <>
                     <Text style={s.now}>
-                      AHORA · {clock(cur.s)} - {clock(cur.e)}
+                      {t('AHORA')} · {clock(cur.s)} - {clock(cur.e)}
                     </Text>
                     <Text style={s.prog} numberOfLines={1}>
                       {cur.t}
@@ -487,7 +488,7 @@ export default function Player({ params }: { params: PlayParams }) {
                   </>
                 ) : null}
                 <Text style={s.hint}>
-                  ▲▼ cambiar canal ({index + 1}/{params.kind === 'live' ? params.channels.length : 1}) · MENÚ audio y subtítulos
+                  {t('▲▼ cambiar canal ({x}/{y}) · MENÚ audio y subtítulos', { x: index + 1, y: params.kind === 'live' ? params.channels.length : 1 })}
                 </Text>
               </>
             ) : (
@@ -497,10 +498,10 @@ export default function Player({ params }: { params: PlayParams }) {
                 </View>
                 <View style={s.times}>
                   <Text style={s.time}>{hms(pos)}</Text>
-                  <Text style={s.time}>{paused ? '❚❚ En pausa' : ''}</Text>
+                  <Text style={s.time}>{paused ? '❚❚ ' + t('En pausa') : ''}</Text>
                   <Text style={s.time}>{dur > 0 ? '-' + hms(Math.max(0, dur - pos)) : ''}</Text>
                 </View>
-                <Text style={s.hint}>◀▶ 10 s · OK pausa · ▼ audio y subtítulos{params.kind === 'episode' && index + 1 < params.queue.length ? ' · al terminar sigue el próximo episodio' : ''}</Text>
+                <Text style={s.hint}>{t('◀▶ 10 s · OK pausa · ▼ audio y subtítulos')}{params.kind === 'episode' && index + 1 < params.queue.length ? ' · ' + t('al terminar sigue el próximo episodio') : ''}</Text>
               </>
             )}
           </View>
@@ -522,7 +523,7 @@ export default function Player({ params }: { params: PlayParams }) {
       {menu ? (
         <TrackMenu
           items={menu}
-          favLabel={live && channel ? (isFav('live', channel.id) ? '★ Quitar de favoritos' : '☆ Agregar a favoritos') : ''}
+          favLabel={live && channel ? (isFav('live', channel.id) ? '★ ' + t('Quitar de favoritos') : '☆ ' + t('Agregar a favoritos')) : ''}
           onFav={() => {
             if (!channel) return;
             toggleFav('live', channel.id, channel.name, channel.poster, channel.cat);

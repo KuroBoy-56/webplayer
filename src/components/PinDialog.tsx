@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { catalog } from '../data/catalog';
+import { t } from '../lib/i18n';
 import { parentalPin } from '../state';
 import { C, px, themed } from '../theme';
 import { Button } from './ui';
@@ -16,7 +17,7 @@ export default function PinDialog({ visible, onClose, onOk }: { visible: boolean
       setErr('');
       onOk();
     } else {
-      setErr('PIN incorrecto');
+      setErr(t('PIN incorrecto'));
       setPin('');
     }
   };
@@ -24,8 +25,8 @@ export default function PinDialog({ visible, onClose, onOk }: { visible: boolean
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.back}>
         <View style={s.box}>
-          <Text style={s.title}>Control parental</Text>
-          <Text style={s.sub}>Escribe el PIN para ver este contenido</Text>
+          <Text style={s.title}>{t('Control parental')}</Text>
+          <Text style={s.sub}>{t('Escribe el PIN para ver este contenido')}</Text>
           <TextInput
             style={s.input}
             value={pin}
@@ -37,8 +38,8 @@ export default function PinDialog({ visible, onClose, onOk }: { visible: boolean
           />
           {err ? <Text style={s.err}>{err}</Text> : null}
           <View style={s.btns}>
-            <Button label="Aceptar" primary onPress={check} />
-            <Button label="Cancelar" last onPress={onClose} />
+            <Button label={t('Aceptar')} primary onPress={check} />
+            <Button label={t('Cancelar')} last onPress={onClose} />
           </View>
         </View>
       </View>

@@ -7,6 +7,7 @@
 //   el panel los convierte a WebVTT y se dibujan encima del video.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { Engine, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
+import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, sameLang, trackLang } from '../lib/lang';
 import { Probe, probeTracks } from '../lib/probe';
 import { pref, setPref } from '../lib/storage';
@@ -183,7 +184,7 @@ export class Playback {
         else this.checkDecodable();
         if (!this.subKey) this.subApplied = false;
         this.applyPrefs();
-        if (p.audio.length > 1) this.hooks.toast(p.audio.length + ' idiomas de audio en este video: pulsa ▼ para cambiar');
+        if (p.audio.length > 1) this.hooks.toast(t('{n} idiomas de audio en este video: pulsa ▼ para cambiar', { n: p.audio.length }));
       }
       this.hooks.changed();
     });
@@ -195,7 +196,7 @@ export class Playback {
     if (this.remux) {
       // el video directo falló mientras el panel prepara el audio: sigue la preparación
       if (!this.hls?.attached) return true;
-      this.remuxFailed('el reproductor no pudo abrirlo');
+      this.remuxFailed(t('el reproductor no pudo abrirlo'));
       return true;
     }
     const g = this.gen;
@@ -245,34 +246,34 @@ export class Playback {
     const nat = this.nativeAudio();
     const pr = this.probe?.ok ? this.probe.audio : [];
     if (pr.length && pr.length >= nat.length) {
-      return pr.map((t, i) => {
+      return pr.map((tr, i) => {
         const n = nat.length === pr.length ? i : this.byLang(nat, pr, i);
         return {
           key: 'p:' + i,
-          label: langName(t.lang, t.name) + (t.codec ? '  (' + codecName(t.codec) + ')' : ''),
-          lang: trackLang(t.lang, t.name),
-          codec: t.codec,
+          label: langName(tr.lang, tr.name) + (tr.codec ? '  (' + codecName(tr.codec) + ')' : ''),
+          lang: trackLang(tr.lang, tr.name),
+          codec: tr.codec,
           probe: i,
           native: n >= 0 ? n : undefined,
         };
       });
     }
-    return nat.map((t, i) => ({ key: 'n:' + i, label: langName(t.language, t.label) || 'Audio ' + (i + 1), lang: trackLang(t.language, t.label), codec: '', native: i }));
+    return nat.map((tr, i) => ({ key: 'n:' + i, label: langName(tr.language, tr.label) || t('Audio {n}', { n: i + 1 }), lang: trackLang(tr.language, tr.label), codec: '', native: i }));
   }
 
   private subItems(): SubItem[] {
     const nat = this.nativeSubs();
     const pr = this.probe?.ok ? this.probe.subs : [];
     if (pr.length && pr.length >= nat.length) {
-      return pr.map((t, i) => {
+      return pr.map((tr, i) => {
         const n = nat.length === pr.length ? i : this.byLang(nat, pr, i);
-        let label = langName(t.lang, t.name);
-        if (t.forced) label += ' · forzados';
-        if (imageSub(t.codec)) label += ' · imagen';
-        return { key: 'p:' + i, label, lang: trackLang(t.lang, t.name), image: imageSub(t.codec), probe: i, native: n >= 0 ? nat[n].index : undefined };
+        let label = langName(tr.lang, tr.name);
+        if (tr.forced) label += ' · ' + t('forzados');
+        if (imageSub(tr.codec)) label += ' · ' + t('imagen');
+        return { key: 'p:' + i, label, lang: trackLang(tr.lang, tr.name), image: imageSub(tr.codec), probe: i, native: n >= 0 ? nat[n].index : undefined };
       });
     }
-    return nat.map((t, i) => ({ key: 'n:' + i, label: langName(t.language, t.label) || 'Subtítulos ' + (i + 1), lang: trackLang(t.language, t.label), image: false, native: t.index }));
+    return nat.map((tr, i) => ({ key: 'n:' + i, label: langName(tr.language, tr.label) || t('Subtítulos {n}', { n: i + 1 }), lang: trackLang(tr.language, tr.label), image: false, native: tr.index }));
   }
 
   private probeDefault(): number {
@@ -311,13 +312,13 @@ export class Playback {
     const on = this.audioOn(a);
     for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: it === on });
     // como "Reabrir en modo compatible" de Roku: si el equipo no cambió el idioma, lo hace el panel
-    if (!this.live && !this.remux && this.probe?.ok && a.length > 1) out.push({ kind: 'panel', key: 'panel', label: '¿No cambia el idioma? Prepararlo con el panel', on: false });
+    if (!this.live && !this.remux && this.probe?.ok && a.length > 1) out.push({ kind: 'panel', key: 'panel', label: t('¿No cambia el idioma? Prepararlo con el panel'), on: false });
     const subs = this.subItems();
     const showing = this.nativeSubs().find(t => t.showing);
-    out.push({ kind: 'text', key: 'off', label: 'Desactivados', on: this.subKey === 'off' || (!this.ext && !showing) });
+    out.push({ kind: 'text', key: 'off', label: t('Desactivados'), on: this.subKey === 'off' || (!this.ext && !showing) });
     for (const it of subs) {
       const isOn = this.ext ? it.probe === this.ext.s : this.subKey !== 'off' && !!showing && it.native === showing.index;
-      out.push({ kind: 'text', key: it.key, label: it.label + (this.subWait && this.subWait.s === it.probe ? ' (preparando…)' : ''), on: isOn });
+      out.push({ kind: 'text', key: it.key, label: it.label + (this.subWait && this.subWait.s === it.probe ? ' (' + t('preparando…') + ')' : ''), on: isOn });
     }
     return out;
   }
@@ -419,7 +420,7 @@ export class Playback {
         return;
       }
       if (this.enabledNative() === it.native) {
-        if (user) this.hooks.toast('Audio: ' + it.label);
+        if (user) this.hooks.toast(t('Audio: {x}', { x: it.label }));
         this.hooks.changed();
         return;
       }
@@ -429,13 +430,13 @@ export class Playback {
       setTimeout(() => {
         if (g !== this.gen || this.remux) return;
         if (this.enabledNative() === n) {
-          if (user) this.hooks.toast('Audio: ' + it.label);
+          if (user) this.hooks.toast(t('Audio: {x}', { x: it.label }));
         } else if (it.probe !== undefined && !this.live && user) {
           // el equipo no tomó la pista: la prepara el panel
           this.toRemux(it.probe, it.label, true);
         } else {
           this.audioKey = '';
-          if (user) this.hooks.toast('Este equipo no pudo cambiar a ' + it.label + '.');
+          if (user) this.hooks.toast(t('Este equipo no pudo cambiar a {x}.', { x: it.label }));
         }
         this.hooks.changed();
       }, 1500);
@@ -453,7 +454,7 @@ export class Playback {
       this.audioKey = '';
       return;
     }
-    if (!user) this.hooks.toast('Este equipo no reproduce el audio ' + codecName(it.codec) + ': se prepara con el panel…');
+    if (!user) this.hooks.toast(t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: codecName(it.codec) }));
     this.toRemux(it.probe, it.label, user);
   }
 
@@ -472,12 +473,12 @@ export class Playback {
     if (this.live || this.remux?.a === a) return;
     if (!PanelHls.supported()) {
       this.audioKey = '';
-      this.hooks.toast('Este equipo no puede reproducir el audio que prepara el panel.');
+      this.hooks.toast(t('Este equipo no puede reproducir el audio que prepara el panel.'));
       this.hooks.changed();
       return;
     }
     const g = this.gen;
-    this.hooks.status('Preparando ' + label + '…');
+    this.hooks.status(t('Preparando {x}…', { x: label }));
     const e = await this.getEngine();
     if (g !== this.gen) return;
     if (!e) {
@@ -490,7 +491,7 @@ export class Playback {
     this.duration();
     this.remux = { a, label };
     this.audioKey = 'p:' + a;
-    if (announce) this.hooks.toast('Cambiando a ' + label + '…');
+    if (announce) this.hooks.toast(t('Cambiando a {x}…', { x: label }));
     this.startRemux(pos);
   }
 
@@ -503,7 +504,7 @@ export class Playback {
     const h = new PanelHls(this.v, hlsLink(this.engine, this.url, a, pos));
     this.hls = h;
     h.onError = msg => this.hls === h && this.remuxFailed(msg);
-    this.hooks.status('Cambiando idioma…');
+    this.hooks.status(t('Cambiando idioma…'));
     const err = await h.start();
     if (this.hls !== h) return;
     if (err) {
@@ -515,7 +516,7 @@ export class Playback {
     this.resumeAt = 0;
     this.v.play();
     this.hooks.status('');
-    this.hooks.toast('Audio: ' + label);
+    this.hooks.toast(t('Audio: {x}', { x: label }));
     this.hooks.changed();
   }
 
@@ -527,11 +528,11 @@ export class Playback {
     this.remux = null;
     this.audioKey = '';
     this.hooks.status('');
-    this.hooks.toast('No se pudo cambiar a ' + label + ' (' + msg + '). Se sigue con el audio original.');
+    this.hooks.toast(t('No se pudo cambiar a {x} ({msg}). Se sigue con el audio original.', { x: label, msg }));
     if (attached) this.direct(pos);
     else {
       this.stopHls();
-      if ((this.v as any).error) this.hooks.fatal('No se pudo reproducir el audio de este contenido.');
+      if ((this.v as any).error) this.hooks.fatal(t('No se pudo reproducir el audio de este contenido.'));
     }
     this.hooks.changed();
   }
@@ -577,7 +578,7 @@ export class Playback {
       this.setNativeSub(-1);
       if (user) {
         setPref('subs_lang', 'off');
-        this.hooks.toast('Subtítulos desactivados');
+        this.hooks.toast(t('Subtítulos desactivados'));
       }
       this.hooks.changed();
       return;
@@ -588,7 +589,7 @@ export class Playback {
       this.subWait = null;
       this.setExt(null);
       this.setNativeSub(it.native);
-      if (user) this.hooks.toast('Subtítulos: ' + it.label);
+      if (user) this.hooks.toast(t('Subtítulos: {x}', { x: it.label }));
       this.hooks.changed();
       return;
     }
@@ -601,7 +602,7 @@ export class Playback {
     }
     if (it.image) {
       this.subKey = 'off';
-      this.hooks.toast('Este subtítulo es de imagen y no se puede mostrar en este equipo.');
+      this.hooks.toast(t('Este subtítulo es de imagen y no se puede mostrar en este equipo.'));
       this.hooks.changed();
       return;
     }
@@ -621,7 +622,7 @@ export class Playback {
     this.setExt(null);
     const wait = { s, tries: 0, label };
     this.subWait = wait;
-    this.hooks.toast('Preparando subtítulos ' + label + '… (puede tardar un minuto)');
+    this.hooks.toast(t('Preparando subtítulos {x}… (puede tardar un minuto)', { x: label }));
     this.hooks.changed();
     while (this.subWait === wait && g === this.gen) {
       const r = await subCheck(e, this.url, s);
@@ -632,10 +633,10 @@ export class Playback {
         this.subWait = null;
         if (!cues.length) {
           this.subKey = 'off';
-          this.hooks.toast('Este subtítulo está vacío.');
+          this.hooks.toast(t('Este subtítulo está vacío.'));
         } else {
           this.setExt({ s, cues });
-          this.hooks.toast('Subtítulos: ' + label);
+          this.hooks.toast(t('Subtítulos: {x}', { x: label }));
         }
         this.hooks.changed();
         return;
@@ -643,7 +644,7 @@ export class Playback {
       if (r.failed || ++wait.tries > 100) {
         this.subWait = null;
         this.subKey = 'off';
-        this.hooks.toast('Este subtítulo no se puede mostrar (es de imagen o el servidor no respondió).');
+        this.hooks.toast(t('Este subtítulo no se puede mostrar (es de imagen o el servidor no respondió).'));
         this.hooks.changed();
         return;
       }

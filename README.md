@@ -90,6 +90,21 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
   está registrado o la línea venció, se queda en el inicio de sesión. Al volver a la app (como mucho cada
   15 min) se pregunta otra vez: si el dueño quitó la línea del equipo, vuelve al inicio de sesión.
 
+## Idiomas
+
+- La app está en **español, inglés, portugués (Brasil) y francés**. La primera vez (y con *Automático*)
+  usa el idioma del televisor (`LOCALE` de `tizen.systeminfo` o `navigator.language`, las 2 primeras
+  letras; shim `web/shims/kepler.ts`); si no es uno de esos cuatro, español.
+- **Cuenta › Idioma de la app**: Automático (idioma del equipo), Español, English, Português o Français.
+  Se guarda en el equipo (`pref_app_lang`) y se aplica enseguida, sin cerrar sesión.
+- Textos: `src/lib/i18n.ts` (`t('Texto en español')`, con `{x}` para los valores) y los diccionarios
+  `src/i18n/en.ts`, `pt.ts` y `fr.ts`. `npm run typecheck` falla si a un diccionario le falta un texto y
+  `npm test` (`tools/i18n.test.js`) revisa el idioma automático, el elegido, las fechas y los `{valores}`.
+- No se traducen los títulos y nombres del servidor o de TMDB (películas, series, canales, categorías),
+  los textos del panel (avisos, errores, pantalla falsa) ni las marcas. Las palabras clave de
+  plataformas y géneros (`src/data/catalog.ts`, `kw`) siguen en español porque buscan en los nombres de
+  categoría del servidor; solo cambia el nombre que se ve. El aviso del panel se pide con `&lang=`.
+
 ## Panel: dispositivo, pantalla falsa y errores
 
 - Todo lo que va a `login.php` lleva `"platform": "tizen"` (Clientes MAC › Dispositivo: «Samsung Smart TV

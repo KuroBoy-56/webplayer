@@ -9,6 +9,7 @@ import { read, readJson, remove, write, writeJson } from './lib/storage';
 import { tvMac } from './lib/platform';
 import { APP_ID, brand, clearTenant, expiredMessage, locallyExpired, OFFLINE_GRACE, saveBrand, scoped, TENANT_FATAL, tenantCode } from './lib/tenant';
 import { digits, nowSec, parseIso, str } from './lib/util';
+import { Key, t } from './lib/i18n';
 
 export type Progress = {
   title: string;
@@ -116,8 +117,6 @@ export function showNotice(msg: string) {
   }, 3500);
 }
 
-export const DEMO_NOTICE = 'No disponible en la DEMO';
-
 export function logout() {
   remove('session');
   forgetCloud();
@@ -128,7 +127,7 @@ export function logout() {
 
 // ---------- catálogo ----------
 
-const LABEL: Record<Kind, string> = { vod: 'las películas', series: 'las series', live: 'los canales' };
+const LABEL: Record<Kind, Key> = { vod: 'No se pudieron cargar las películas', series: 'No se pudieron cargar las series', live: 'No se pudieron cargar los canales' };
 
 export async function loadCatalog(force = false) {
   const s = state.session;
@@ -147,7 +146,7 @@ export async function loadCatalog(force = false) {
       catalog.set(kind, cats, items);
       const loaded = { ...state.loaded, [kind]: true };
       const left = (['vod', 'series', 'live'] as Kind[]).find(k => !loaded[k]) || '';
-      set({ loaded, loading: left, catalogRev: state.catalogRev + 1, error: items.length ? state.error : 'No se pudo cargar ' + LABEL[kind] });
+      set({ loaded, loading: left, catalogRev: state.catalogRev + 1, error: items.length ? state.error : t(LABEL[kind]) });
     }),
   );
 }
@@ -221,16 +220,16 @@ export function isFav(kind: string, id: string): boolean {
 // agrega o quita; devuelve true si quedó en la lista
 export function toggleFav(kind: string, id: string, title: string, poster: string, cat: string): boolean {
   if (state.demo) {
-    showNotice(DEMO_NOTICE);
+    showNotice(t('No disponible en la DEMO'));
     return false;
   }
-  const t = favType(kind);
+  const ft = favType(kind);
   const found = isFav(kind, id);
   if (found) {
-    set({ favorites: state.favorites.filter(f => !(f.type === t && digits(f.id) === id)) });
-    cloudPost({ action: 'fav_remove', id, type: t });
+    set({ favorites: state.favorites.filter(f => !(f.type === ft && digits(f.id) === id)) });
+    cloudPost({ action: 'fav_remove', id, type: ft });
   } else {
-    const item: Fav = { id, type: t, title, poster, categoryId: cat };
+    const item: Fav = { id, type: ft, title, poster, categoryId: cat };
     set({ favorites: [item, ...state.favorites] });
     cloudPost({ action: 'fav_add', item });
   }
@@ -364,5 +363,5 @@ async function runCheck(): Promise<Guard> {
     return { kind: 'wiped', message: expiredMessage(old) };
   }
   if (old && now - old.lastOk < OFFLINE_GRACE) return { kind: 'offline' };
-  return { kind: 'retry', message: r.network ? 'No se pudo comprobar tu distribuidor. Revisa tu conexión a internet.' : r.message };
+  return { kind: 'retry', message: r.network ? t('No se pudo comprobar tu distribuidor. Revisa tu conexión a internet.') : r.message };
 }

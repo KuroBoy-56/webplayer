@@ -5,6 +5,7 @@ import { AppState, BackHandler, StatusBar, StyleSheet, Text, View } from 'react-
 import { fetchAlert, PanelAlert } from './api/alerts';
 import AlertDialog from './components/AlertDialog';
 import { Logo } from './components/ui';
+import { onLangChange } from './lib/i18n';
 import { loadStorage } from './lib/storage';
 import { applyBrand, distChoice, features, onTenantProblem, tenantCode } from './lib/tenant';
 import { Nav, NavContext, Route } from './nav';
@@ -63,8 +64,10 @@ export default function App() {
   const [stack, setStack] = useState<Route[] | null>(null);
   // pantalla de inicio: fondo y logo del distribuidor (o los de la app con Omitir)
   const [splash, setSplash] = useState(true);
-  // cambia cuando cambian los colores: se vuelven a montar las pantallas con los nuevos estilos
+  // cambia cuando cambian los colores o el idioma: se vuelven a montar las pantallas con los nuevos
+  // estilos y textos
   const [skin, setSkin] = useState(0);
+  useEffect(() => onLangChange(() => setSkin(k => k + 1)), []);
 
   useEffect(() => {
     const started = Date.now();

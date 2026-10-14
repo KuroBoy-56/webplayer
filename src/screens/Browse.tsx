@@ -8,6 +8,7 @@ import { catalog, Item, Row } from '../data/catalog';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, Progress, toggleFav, useAppState } from '../state';
+import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
 // fila "Continuar viendo" a partir del progreso guardado en el panel
@@ -31,7 +32,7 @@ function continueRow(progress: Progress[], only?: 'vod' | 'series'): Row | null 
     }
     if (items.length >= 30) break;
   }
-  return items.length ? { title: 'Continuar viendo', type: 'poster', items } : null;
+  return items.length ? { title: t('Continuar viendo'), type: 'poster', items } : null;
 }
 
 function favRow(): Row | null {
@@ -42,7 +43,7 @@ function favRow(): Row | null {
     if (it) items.push(it);
     if (items.length >= 30) break;
   }
-  return items.length ? { title: 'Mi lista', type: 'poster', items } : null;
+  return items.length ? { title: t('Mi lista'), type: 'poster', items } : null;
 }
 
 function Billboard({ hero }: { hero: Item }) {
@@ -58,7 +59,7 @@ function Billboard({ hero }: { hero: Item }) {
       {/* sombra a la izquierda para leer el texto: degradado, sin borde marcado */}
       <Image source={require('../../assets/image/grad_left.png')} style={[s.heroShade, { tintColor: C.bg }]} resizeMode="stretch" />
       <View style={s.heroText}>
-        <Text style={s.heroKind}>{hero.kind === 'series' ? 'S E R I E' : 'P E L Í C U L A'}</Text>
+        <Text style={s.heroKind}>{(hero.kind === 'series' ? t('SERIE') : t('PELÍCULA')).split('').join(' ')}</Text>
         <Text style={s.heroTitle} numberOfLines={2}>
           {hero.name}
         </Text>
@@ -72,14 +73,14 @@ function Billboard({ hero }: { hero: Item }) {
         ) : null}
         <View style={s.heroBtns}>
           <Button
-            label="Reproducir"
+            label={t('Reproducir')}
             icon="▶"
             primary
             preferred
             onPress={() => (hero.kind === 'vod' ? playMovie(nav, hero, hero.ext) : openItem(nav, hero))}
           />
-          <Button label="Más información" icon="ⓘ" onPress={() => openItem(nav, hero)} />
-          <Button label={fav ? 'En mi lista' : 'Mi lista'} icon={fav ? '✓' : '+'} last onPress={() => toggleFav(hero.kind, hero.id, hero.name, hero.poster, hero.cat)} />
+          <Button label={t('Más información')} icon="ⓘ" onPress={() => openItem(nav, hero)} />
+          <Button label={fav ? t('En mi lista') : t('Mi lista')} icon={fav ? '✓' : '+'} last onPress={() => toggleFav(hero.kind, hero.id, hero.name, hero.poster, hero.cat)} />
         </View>
       </View>
     </View>
@@ -121,8 +122,8 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
     return (it: Item) => map.get(it.kind + it.id);
   }, [st.progress]);
 
-  if (!ready) return <Spinner label={st.error || 'Cargando el catálogo…'} />;
-  if (!rows.length) return <Message text="No hay contenido para mostrar." />;
+  if (!ready) return <Spinner label={st.error || t('Cargando el catálogo…')} />;
+  if (!rows.length) return <Message text={t('No hay contenido para mostrar.')} />;
 
   return (
     <FlatList

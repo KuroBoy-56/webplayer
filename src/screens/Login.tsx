@@ -7,6 +7,7 @@ import { loginAll } from '../api/xtream';
 import { Button, Focusable, Logo } from '../components/ui';
 import { json } from '../lib/http';
 import { hasMasterKey } from '../lib/aes';
+import { t } from '../lib/i18n';
 import { DNS_OPTIONS, dnsChoice, setDnsChoice } from '../lib/securedns';
 import { read, write } from '../lib/storage';
 import { APP_ID, features, scoped, tenantCode } from '../lib/tenant';
@@ -37,7 +38,7 @@ export default function Login() {
   // ojito: ver la contraseña en texto o volver a ocultarla
   const [showPass, setShowPass] = useState(false);
   const [dnsOpen, setDnsOpen] = useState(false);
-  const [busy, setBusy] = useState('Comprobando el equipo en el panel…');
+  const [busy, setBusy] = useState(() => t('Comprobando el equipo en el panel…'));
   const [error, setError] = useState('');
   const [posters, setPosters] = useState<string[]>([]);
   const [assigned, setAssigned] = useState<Line[]>([]);
@@ -101,11 +102,11 @@ export default function Login() {
     demoDuration = 0,
   ) => {
     if (!u.trim() || !p.trim()) {
-      setError('Escribe tu usuario y contraseña');
+      setError(t('Escribe tu usuario y contraseña'));
       return;
     }
     setError('');
-    setBusy('Buscando tu cuenta en los servidores…');
+    setBusy(t('Buscando tu cuenta en los servidores…'));
     const list = servers || (await panelDnsList());
     const r = await loginAll(list, u.trim(), p.trim());
     setBusy('');
@@ -115,7 +116,7 @@ export default function Login() {
       setSession(r.session, demo, demoExpires, demoDuration);
       nav.reset({ name: 'main' });
     } else {
-      setError(r.error || 'No se pudo iniciar sesión');
+      setError(r.error || t('No se pudo iniciar sesión'));
     }
   };
 
@@ -124,13 +125,13 @@ export default function Login() {
     setError('');
     // el código de un revendedor escrito en Contraseña deja la demo a su nombre en el panel
     const reseller = resellerCode(pass);
-    setBusy(reseller ? 'Creando tu demo (revendedor ' + reseller + ')…' : 'Creando tu demo…');
+    setBusy(reseller ? t('Creando tu demo (revendedor {x})…', { x: reseller }) : t('Creando tu demo…'));
     const d = await panelDemo(dev, reseller);
     if (!d.ok) {
       setBusy('');
       // 404 (código de revendedor que no existe): la demo sigue disponible
       if (d.code === 403) write(scoped('demo_used'), '1');
-      setError(d.error || 'No se pudo crear la demo');
+      setError(d.error || t('No se pudo crear la demo'));
       return;
     }
     write(scoped('demo_used'), '1');
@@ -183,12 +184,12 @@ export default function Login() {
         <Logo size={110} />
       </View>
       <View style={s.box}>
-        <Text style={s.title}>Iniciar sesión</Text>
+        <Text style={s.title}>{t('Iniciar sesión')}</Text>
         <TextInput
           style={s.input}
           value={user}
           onChangeText={setUser}
-          placeholder="Usuario"
+          placeholder={t('Usuario')}
           placeholderTextColor={C.dim}
           autoCapitalize="none"
           autoCorrect={false}
@@ -202,7 +203,7 @@ export default function Login() {
             style={[s.input, s.passInput]}
             value={pass}
             onChangeText={setPass}
-            placeholder="Contraseña"
+            placeholder={t('Contraseña')}
             placeholderTextColor={C.dim}
             autoCapitalize="none"
             autoCorrect={false}
@@ -217,17 +218,17 @@ export default function Login() {
         {error ? <Text style={s.error}>{error}</Text> : null}
         {busy ? <Text style={s.busy}>{busy}</Text> : null}
         <View style={s.btns}>
-          <Button label={busy ? 'Entrando…' : 'Ingresar'} primary onPress={() => !busy && enter(user, pass)} />
+          <Button label={busy ? t('Entrando…') : t('Ingresar')} primary onPress={() => !busy && enter(user, pass)} />
           <Button label="DNS" last={!canDemo} onPress={() => setDnsOpen(true)} />
           {canDemo ? <Button label="Autodemo" last onPress={() => !busy && demo()} /> : null}
         </View>
-        {canDemo ? <Text style={s.tip}>¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.</Text> : null}
+        {canDemo ? <Text style={s.tip}>{t('¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.')}</Text> : null}
         {assigned.length ? (
           <View style={s.btns}>
-            <Button label={'Entrar con la cuenta de este equipo (' + (assigned[0].demo ? 'DEMO' : assigned[0].user) + ')'} small last onPress={() => !busy && enterAssigned()} />
+            <Button label={t('Entrar con la cuenta de este equipo ({x})', { x: assigned[0].demo ? 'DEMO' : assigned[0].user })} small last onPress={() => !busy && enterAssigned()} />
           </View>
         ) : null}
-        <Text style={s.device}>Código del equipo: {dev}</Text>
+        <Text style={s.device}>{t('Código del equipo:')} {dev}</Text>
       </View>
       {dnsOpen ? <DnsPicker onClose={() => setDnsOpen(false)} /> : null}
     </View>
@@ -248,12 +249,12 @@ function DnsPicker({ onClose }: { onClose: () => void }) {
     <View style={s.dnsShade}>
       <View style={s.dnsBox}>
         <Text style={s.title}>DNS</Text>
-        <Text style={s.dnsNote}>Si tu internet bloquea el servidor, elige otro DNS. La app lo usa cuando el de tu red no responde.</Text>
+        <Text style={s.dnsNote}>{t('Si tu internet bloquea el servidor, elige otro DNS. La app lo usa cuando el de tu red no responde.')}</Text>
         {DNS_OPTIONS.map(o => (
           <Button
             key={o.key}
-            label={(o.key === cur ? '✓ ' : '') + o.label}
-            value={o.note}
+            label={(o.key === cur ? '✓ ' : '') + (o.key === 'auto' ? t('Automático') : o.label)}
+            value={t(o.note)}
             preferred={o.key === cur}
             onPress={() => {
               setDnsChoice(o.key);

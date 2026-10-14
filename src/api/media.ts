@@ -6,6 +6,7 @@ import { b64Encode } from '../lib/crypto';
 import { http, json } from '../lib/http';
 import { str } from '../lib/util';
 import { cloudToken, panel, panelApiBase, panelScheme } from './panel';
+import { t } from '../lib/i18n';
 
 const FILE = 'media_tizen.php';
 
@@ -17,15 +18,15 @@ let cached: Engine | null = null;
 export async function mediaEngine(): Promise<{ ok: true; engine: Engine } | { ok: false; error: string }> {
   if (cached) return { ok: true, engine: cached };
   let base = panelApiBase();
-  if (!base) return { ok: false, error: 'No se encontró el panel' };
+  if (!base) return { ok: false, error: t('No se encontró el panel') };
   const token = await cloudToken();
-  if (!token) return { ok: false, error: 'No se pudo validar tu línea con el panel.' };
+  if (!token) return { ok: false, error: t('No se pudo validar tu línea con el panel.') };
   // con el token el panel dice también si el distribuidor de la línea tiene ffmpeg activado
   const st = await panel(FILE, 'GET', '', '', '?do=status&token=' + encodeURIComponent(token));
   const j = json(st);
-  if (st.code === 0) return { ok: false, error: 'No se pudo conectar con el panel.' };
-  if (st.code === 404 || !j) return { ok: false, error: 'El panel todavía no tiene el motor de audio y subtítulos (actualízalo).' };
-  if (j.ffmpeg !== true) return { ok: false, error: 'El cambio de idioma desde el panel no está disponible.' };
+  if (st.code === 0) return { ok: false, error: t('No se pudo conectar con el panel.') };
+  if (st.code === 404 || !j) return { ok: false, error: t('El panel todavía no tiene el motor de audio y subtítulos (actualízalo).') };
+  if (j.ffmpeg !== true) return { ok: false, error: t('El cambio de idioma desde el panel no está disponible.') };
   if (panelScheme() === 'http') base = base.replace(/^https:/i, 'http:');
   cached = { base, token };
   return { ok: true, engine: cached };

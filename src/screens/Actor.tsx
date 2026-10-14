@@ -4,13 +4,15 @@ import React, { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { Person, personWithCatalog } from '../api/tmdb';
 import { Message, Spinner } from '../components/ui';
+import { ymd } from '../lib/util';
 import { useAppState } from '../state';
 import { C, px, themed } from '../theme';
+import { t } from '../lib/i18n';
 import { ItemGrid } from './Grid';
 
 function birth(p: Person): string {
   const m = p.birthday.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const d = m ? 'Nació el ' + m[3] + '/' + m[2] + '/' + m[1] : '';
+  const d = m ? t('Nació el {d}', { d: ymd(+m[1], +m[2], +m[3]) }) : '';
   return [d, p.place].filter(Boolean).join(' · ');
 }
 
@@ -31,8 +33,8 @@ export default function Actor({ personId, name }: { personId: number; name: stri
     };
   }, [personId, st.catalogRev]);
 
-  if (loading && !person) return <Spinner label={'Buscando la filmografía de ' + name} />;
-  if (!person) return <Message text={'No se encontró información de ' + name + '.'} />;
+  if (loading && !person) return <Spinner label={t('Buscando la filmografía de {x}', { x: name })} />;
+  if (!person) return <Message text={t('No se encontró información de {x}.', { x: name })} />;
 
   const header = (
     <View style={s.head}>
@@ -48,9 +50,9 @@ export default function Actor({ personId, name }: { personId: number; name: stri
           </Text>
         ) : null}
         <Text style={s.h2}>
-          Disponible en tu servidor <Text style={s.count}>{person.items.length ? '· ' + person.items.length : ''}</Text>
+          {t('Disponible en tu servidor')} <Text style={s.count}>{person.items.length ? '· ' + person.items.length : ''}</Text>
         </Text>
-        {!person.items.length ? <Text style={s.meta}>Este servidor no tiene películas ni series de {person.name}.</Text> : null}
+        {!person.items.length ? <Text style={s.meta}>{t('Este servidor no tiene películas ni series de {x}.', { x: person.name })}</Text> : null}
       </View>
     </View>
   );

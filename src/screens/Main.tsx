@@ -4,6 +4,7 @@ import { useKeplerBackHandler } from '@amazon-devices/react-native-kepler';
 import React, { useEffect, useState } from 'react';
 import { BackHandler, Modal, StyleSheet, Text, View } from 'react-native';
 import { Button, Focusable, Logo } from '../components/ui';
+import { Key, langChanged, t } from '../lib/i18n';
 import { brandName, features, useBrandRev } from '../lib/tenant';
 import { useAppState } from '../state';
 import { alpha, C, px, SIDE, themed } from '../theme';
@@ -16,7 +17,8 @@ import Sports from './Sports';
 
 type Section = 'home' | 'series' | 'movies' | 'live' | 'sports' | 'mylist' | 'search' | 'account';
 
-const MENU: [Section, string][] = [
+// los nombres se traducen al dibujar el menú
+const MENU: [Section, Key][] = [
   ['home', 'Inicio'],
   ['series', 'Series'],
   ['movies', 'Películas'],
@@ -30,7 +32,8 @@ const MENU: [Section, string][] = [
 export default function Main({ active }: { active: boolean }) {
   const st = useAppState();
   const back = useKeplerBackHandler();
-  const [section, setSection] = useState<Section>('home');
+  // tras cambiar el idioma se vuelve a Cuenta
+  const [section, setSection] = useState<Section>(() => (langChanged() ? 'account' : 'home'));
   const [exitAsk, setExitAsk] = useState(false);
   useBrandRev();
   // el distribuidor puede no tener deportes
@@ -67,22 +70,22 @@ export default function Main({ active }: { active: boolean }) {
             <Focusable key={key} onPress={() => setSection(key)} style={f => [s.item, f && s.itemF]}>
               {f => (
                 <>
-                  <Text style={[s.itemText, key === section && s.itemOn, f && s.itemTextF]}>{label}</Text>
+                  <Text style={[s.itemText, key === section && s.itemOn, f && s.itemTextF]}>{t(label)}</Text>
                   {key === section && !f ? <View style={s.itemBar} /> : null}
                 </>
               )}
             </Focusable>
           ))}
         </View>
-        {st.loading ? <Text style={s.loading}>Cargando {st.loading === 'vod' ? 'películas' : st.loading === 'series' ? 'series' : 'canales'}…</Text> : null}
+        {st.loading ? <Text style={s.loading}>{t(st.loading === 'vod' ? 'Cargando películas…' : st.loading === 'series' ? 'Cargando series…' : 'Cargando canales…')}</Text> : null}
       </View>
       <Modal visible={exitAsk} transparent animationType="fade" onRequestClose={() => setExitAsk(false)}>
         <View style={s.dlgBack}>
           <View style={s.dlg}>
-            <Text style={s.dlgTitle}>¿Quieres salir de {brandName()}?</Text>
+            <Text style={s.dlgTitle}>{t('¿Quieres salir de {x}?', { x: brandName() })}</Text>
             <View style={s.dlgBtns}>
-              <Button label="Salir" primary onPress={() => back.exitApp()} />
-              <Button label="Cancelar" preferred last onPress={() => setExitAsk(false)} />
+              <Button label={t('Salir')} primary onPress={() => back.exitApp()} />
+              <Button label={t('Cancelar')} preferred last onPress={() => setExitAsk(false)} />
             </View>
           </View>
         </View>
