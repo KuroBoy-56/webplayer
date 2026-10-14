@@ -196,7 +196,7 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
             ]
             p.replaceCurrentItem(with: item)
             if self.offsetMs == 0, ms > 0, self.request?.kind != .live {
-                p.seek(to: CMTime(value: ms, timescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero)
+                p.seek(to: CMTime(value: ms, timescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero) { _ in }
             }
             // si no arranca, la vía siguiente (el panel tarda más: prepara los primeros segmentos)
             let wait: Double
