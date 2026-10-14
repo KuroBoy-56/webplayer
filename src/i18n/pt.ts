@@ -290,7 +290,7 @@ const pt: Record<Key, string> = {
   "{n} minutos": "{n} minutos",
   "{n} temporadas": "{n} temporadas",
   "{n} títulos": "{n} títulos",
-  "{x} para Fire TV (Vega OS) · versión {v}": "{x} para Fire TV (Vega OS) · versão {v}",
+  "{x} para {p} · versión {v}": "{x} para {p} · versão {v}",
   "¿Dónde quieres verlo?": "Onde você quer assistir?",
   "¿No cambia el idioma? Prepararlo con el panel": "O idioma não muda? Preparar com o painel",
   "¿Quieres salir de {x}?": "Quer sair do {x}?",

@@ -289,7 +289,7 @@ const en = {
   "{n} minutos": "{n} minutes",
   "{n} temporadas": "{n} seasons",
   "{n} títulos": "{n} titles",
-  "{x} para Fire TV (Vega OS) · versión {v}": "{x} for Fire TV (Vega OS) · version {v}",
+  "{x} para {p} · versión {v}": "{x} for {p} · version {v}",
   "¿Dónde quieres verlo?": "Where do you want to watch it?",
   "¿No cambia el idioma? Prepararlo con el panel": "Language didn't change? Prepare it with the panel",
   "¿Quieres salir de {x}?": "Do you want to exit {x}?",
