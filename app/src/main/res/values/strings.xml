@@ -299,6 +299,31 @@
     <string name="play_failed_server">El servidor no respondió o el archivo está dañado. Puedes intentarlo de nuevo o abrirlo en VLC.</string>
     <string name="open_in_vlc">Abrir en VLC</string>
     <string name="no_external_player">No hay reproductor externo instalado</string>
+    <string name="exit_question">¿Quieres salir?</string>
+    <string name="exit_desc">Tu progreso y tu lista quedan guardados para cuando vuelvas.</string>
+    <string name="keep_watching">Seguir viendo</string>
+    <string name="exit">Salir</string>
+    <string name="see_all">Ver todo</string>
+    <string name="series_badge">SERIE</string>
+    <string name="movie_badge">PELÍCULA</string>
+    <string name="match_pct">%1$d%% para ti</string>
+    <string name="genres">Géneros</string>
+    <string name="director">Dirección</string>
+    <string name="more_like_this">Más títulos similares</string>
+    <string name="yesterday">Ayer</string>
+    <string name="epg_pick_channel">Presiona OK sobre un canal para verlo aquí con su guía</string>
+    <string name="no_guide_for">Sin guía de programación para %1$s</string>
+    <string name="on_now_badge">EN SINTONÍA</string>
+    <string name="min_left">quedan %1$d min</string>
+    <string name="aired_badge">EMITIDO</string>
+    <string name="upcoming_badge">PRÓXIMO</string>
+    <string name="series_for_you">Series para ti</string>
+    <string name="movies_for_you">Películas para ti</string>
+    <string name="top10_movies_today">Top 10 películas hoy</string>
+    <string name="top10_series_today">Top 10 series hoy</string>
+    <string name="tv_no_favs">Aún no tienes favoritos.\nMantén presionado OK (o MENÚ) sobre un canal para agregarlo.</string>
+    <string name="no_channels_category">No hay canales en esta categoría.</string>
+    <string name="best_of">Lo mejor de %1$s</string>
     <plurals name="days">
         <item quantity="one">%1$d día</item>
         <item quantity="many">%1$d días</item>
@@ -333,5 +358,10 @@
         <item quantity="one">%1$d episodio</item>
         <item quantity="many">%1$d episodios</item>
         <item quantity="other">%1$d episodios</item>
+    </plurals>
+    <plurals name="channels_count">
+        <item quantity="one">%1$d canal</item>
+        <item quantity="many">%1$d canales</item>
+        <item quantity="other">%1$d canales</item>
     </plurals>
 </resources>

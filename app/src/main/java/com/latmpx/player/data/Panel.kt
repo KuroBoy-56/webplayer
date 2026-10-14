@@ -1,4 +1,5 @@
 package com.latmpx.player.data
+import com.latmpx.player.Lang
 
 import com.latmpx.player.tr
 import com.latmpx.player.R
@@ -36,6 +37,7 @@ object Panel {
         if (tag) Tenant.tag(payload)
         // en qué equipo está esta MAC (Clientes MAC › Dispositivo) y la pantalla falsa de esta app
         payload.put("platform", Tenant.APP)
+        payload.put("lang", Lang.current) // el panel responde sus mensajes en el idioma de la app
         // check_mac y auto_demo traen la línea (usuario y contraseña): se piden cifradas
         val secret = action == "check_mac" || action == "auto_demo"
         if (secret) payload.put("enc", 1)

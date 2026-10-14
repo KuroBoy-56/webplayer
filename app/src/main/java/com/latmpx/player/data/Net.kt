@@ -1,4 +1,5 @@
 package com.latmpx.player.data
+import com.latmpx.player.Lang
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,7 +22,14 @@ object Net {
         .followSslRedirects(true)
         .retryOnConnectionFailure(true)
         .dns(SecureDns)
-        .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", UA).build()) }
+        .addInterceptor { chain ->
+            val req = chain.request()
+            val b = req.newBuilder().header("User-Agent", UA)
+            // panel: mensajes en el idioma de la app (progress, epg, sports, tmdb, alerta, media…)
+            val panel = PanelUrl.apiBase
+            if (panel.isNotEmpty() && req.url.toString().startsWith(panel)) b.header("Accept-Language", Lang.current)
+            chain.proceed(b.build())
+        }
         .build()
 
     /**

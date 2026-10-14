@@ -298,6 +298,31 @@
     <string name="play_failed_server">Le serveur n\'a pas répondu ou le fichier est endommagé. Réessayez ou ouvrez-le dans VLC.</string>
     <string name="open_in_vlc">Ouvrir dans VLC</string>
     <string name="no_external_player">Aucun lecteur externe installé</string>
+    <string name="exit_question">Voulez-vous quitter ?</string>
+    <string name="exit_desc">Votre progression et votre liste sont conservées pour votre retour.</string>
+    <string name="keep_watching">Continuer</string>
+    <string name="exit">Quitter</string>
+    <string name="see_all">Tout voir</string>
+    <string name="series_badge">SÉRIE</string>
+    <string name="movie_badge">FILM</string>
+    <string name="match_pct">%1$d %% pour vous</string>
+    <string name="genres">Genres</string>
+    <string name="director">Réalisation</string>
+    <string name="more_like_this">Titres similaires</string>
+    <string name="yesterday">Hier</string>
+    <string name="epg_pick_channel">Appuyez sur OK sur une chaîne pour la voir ici avec son guide</string>
+    <string name="no_guide_for">Pas de guide des programmes pour %1$s</string>
+    <string name="on_now_badge">EN COURS</string>
+    <string name="min_left">reste %1$d min</string>
+    <string name="aired_badge">DIFFUSÉ</string>
+    <string name="upcoming_badge">À SUIVRE</string>
+    <string name="series_for_you">Séries pour vous</string>
+    <string name="movies_for_you">Films pour vous</string>
+    <string name="top10_movies_today">Top 10 films du jour</string>
+    <string name="top10_series_today">Top 10 séries du jour</string>
+    <string name="tv_no_favs">Vous n\'avez pas encore de favoris.\nMaintenez OK (ou MENU) sur une chaîne pour l\'ajouter.</string>
+    <string name="no_channels_category">Aucune chaîne dans cette catégorie.</string>
+    <string name="best_of">Le meilleur de %1$s</string>
     <plurals name="days">
         <item quantity="one">%1$d jour</item>
         <item quantity="many">%1$d jours</item>
@@ -332,5 +357,10 @@
         <item quantity="one">%1$d épisode</item>
         <item quantity="many">%1$d épisodes</item>
         <item quantity="other">%1$d épisodes</item>
+    </plurals>
+    <plurals name="channels_count">
+        <item quantity="one">%1$d chaîne</item>
+        <item quantity="many">%1$d chaînes</item>
+        <item quantity="other">%1$d chaînes</item>
     </plurals>
 </resources>

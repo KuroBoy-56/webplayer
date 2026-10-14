@@ -298,6 +298,31 @@
     <string name="play_failed_server">The server didn\'t respond or the file is damaged. You can try again or open it in VLC.</string>
     <string name="open_in_vlc">Open in VLC</string>
     <string name="no_external_player">No external player installed</string>
+    <string name="exit_question">Do you want to exit?</string>
+    <string name="exit_desc">Your progress and your list are saved for when you come back.</string>
+    <string name="keep_watching">Keep watching</string>
+    <string name="exit">Exit</string>
+    <string name="see_all">See all</string>
+    <string name="series_badge">SERIES</string>
+    <string name="movie_badge">MOVIE</string>
+    <string name="match_pct">%1$d%% match</string>
+    <string name="genres">Genres</string>
+    <string name="director">Director</string>
+    <string name="more_like_this">More like this</string>
+    <string name="yesterday">Yesterday</string>
+    <string name="epg_pick_channel">Press OK on a channel to watch it here with its guide</string>
+    <string name="no_guide_for">No TV guide for %1$s</string>
+    <string name="on_now_badge">ON NOW</string>
+    <string name="min_left">%1$d min left</string>
+    <string name="aired_badge">AIRED</string>
+    <string name="upcoming_badge">UP NEXT</string>
+    <string name="series_for_you">Series for you</string>
+    <string name="movies_for_you">Movies for you</string>
+    <string name="top10_movies_today">Top 10 movies today</string>
+    <string name="top10_series_today">Top 10 series today</string>
+    <string name="tv_no_favs">You don\'t have any favorites yet.\nPress and hold OK (or MENU) on a channel to add it.</string>
+    <string name="no_channels_category">No channels in this category.</string>
+    <string name="best_of">Best of %1$s</string>
     <plurals name="days">
         <item quantity="one">%1$d day</item>
         <item quantity="many">%1$d days</item>
@@ -332,5 +357,10 @@
         <item quantity="one">%1$d episode</item>
         <item quantity="many">%1$d episodes</item>
         <item quantity="other">%1$d episodes</item>
+    </plurals>
+    <plurals name="channels_count">
+        <item quantity="one">%1$d channel</item>
+        <item quantity="many">%1$d channels</item>
+        <item quantity="other">%1$d channels</item>
     </plurals>
 </resources>
