@@ -9,8 +9,11 @@ function visible(el: HTMLElement): boolean {
   return r.width > 0 && r.height > 0 && el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden';
 }
 
+// con un Modal abierto (aria-modal) solo cuenta lo de adentro: lo de atrás no se ve pero está más cerca
 function candidates(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(visible);
+  const modals = document.querySelectorAll<HTMLElement>('[aria-modal="true"]');
+  const scope: ParentNode = modals.length ? modals[modals.length - 1] : document;
+  return Array.from(scope.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(visible);
 }
 
 // lo último que tuvo el foco: al volver a una pantalla (cerrar el reproductor, Atrás) se vuelve ahí
