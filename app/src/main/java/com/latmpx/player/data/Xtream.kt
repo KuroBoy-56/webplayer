@@ -1,5 +1,7 @@
 package com.latmpx.player.data
 
+import com.latmpx.player.tr
+import com.latmpx.player.R
 import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -30,7 +32,8 @@ object Xtream {
 
     /** Prueba el usuario en cada DNS del panel (en orden) y se queda con el primero que responda. */
     suspend fun login(dns: List<Pair<String, String>>, user: String, pass: String): LoginResult {
-        var lastMsg = "No se pudo conectar con el servidor"
+        val noServer = tr(R.string.err_server_offline)
+        var lastMsg = noServer
         for ((name, rawUrl) in dns) {
             // el panel (https) cambia http:// por https:// en las direcciones de los servidores IPTV; muchos
             // solo responden en http (p. ej. el puerto 8080). Si no contesta, se prueba el otro protocolo.
@@ -49,16 +52,16 @@ object Xtream {
                 // el servidor respondió pero no con la cuenta: XUI dice el motivo; si no, el código HTTP
                 val xui = xuiError(r.body)
                 if (xui != null) { lastMsg = xuiMessage(xui); android.util.Log.i("LatMpx", "login rechazado por XUI: $xui"); continue }
-                if (r.code > 0 && lastMsg == "No se pudo conectar con el servidor") lastMsg = "El servidor no aceptó la conexión (código ${r.code})"
+                if (r.code > 0 && lastMsg == noServer) lastMsg = tr(R.string.err_server_refused, r.code)
                 continue
             }
             val ui = j.optJSONObject("user_info")
-            if (ui == null || ui.i("auth") != 1) { lastMsg = "Usuario o contraseña incorrectos"; continue }
+            if (ui == null || ui.i("auth") != 1) { lastMsg = tr(R.string.err_bad_credentials); continue }
             val status = ui.s("status")
-            if (status.isNotEmpty() && !status.equals("Active", true)) { lastMsg = "Tu cuenta está $status"; continue }
-            val exp = ui.s("exp_date").toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: "Ilimitado"
+            if (status.isNotEmpty() && !status.equals("Active", true)) { lastMsg = tr(R.string.err_account_status, status); continue }
+            val exp = ui.s("exp_date").toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: tr(R.string.unlimited)
             val c = ui.s("created_at")
-            val created = c.toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: c.takeIf { it.isNotBlank() } ?: "Desconocido"
+            val created = c.toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: c.takeIf { it.isNotBlank() } ?: tr(R.string.unknown)
             val active = ui.s("active_cons").takeIf { it.isNotBlank() } ?: "0"
             val max = ui.s("max_connections").takeIf { it.isNotBlank() } ?: "0"
             return LoginResult.Ok(probe.copy(expires = exp, createdAt = created, activeCons = active, maxCons = max))
@@ -88,10 +91,10 @@ object Xtream {
 
     /** mensaje en español para el código de XUI */
     fun xuiMessage(code: String): String = when (code) {
-        "INVALID_CREDENTIALS" -> "El servidor no reconoce el usuario o la contraseña"
-        "EXPIRED" -> "Tu cuenta está vencida"
-        "BANNED", "DISABLED" -> "Tu cuenta está desactivada en el servidor"
-        else -> "El servidor rechazó la cuenta ($code)"
+        "INVALID_CREDENTIALS" -> tr(R.string.err_xui_credentials)
+        "EXPIRED" -> tr(R.string.err_xui_expired)
+        "BANNED", "DISABLED" -> tr(R.string.err_xui_disabled)
+        else -> tr(R.string.err_xui_other, code)
     }
 
     fun normalize(u: String): String {

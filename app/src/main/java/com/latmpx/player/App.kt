@@ -12,6 +12,7 @@ import com.latmpx.player.data.Store
 class App : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
+        Lang.init(this) // idioma de la app (automático o el elegido en Cuenta)
         Store.init(this)
         Store.deviceIdCache = runCatching { Device.id(this) }.getOrDefault("")
         com.latmpx.player.data.ErrorReport.init(this) // cierres inesperados y errores al panel (Errores de las apps)

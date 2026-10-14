@@ -1,4 +1,6 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -56,8 +58,8 @@ fun LiveScreen(state: AppState) {
     var cat by rememberSaveable { mutableStateOf(ALL) }
     var favTick by remember { mutableIntStateOf(0) }
     val all = state.live.ifEmpty { null } ?: fetched
-    if (all == null) { Loading("Cargando canales…"); return }
-    val cats = remember(state.liveCats) { listOf(FAVS to "★ Favoritos", ALL to "Todos") + state.liveCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }.map { it.id to it.name } }
+    if (all == null) { Loading(stringResource(R.string.loading_channels)); return }
+    val cats = remember(state.liveCats) { listOf(FAVS to "★ " + tr(R.string.favorites), ALL to tr(R.string.all)) + state.liveCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }.map { it.id to it.name } }
     // celular: diseño de tvguide.php de la web (ver LivePhone.kt)
     if (!tv) { PhoneLive(state, all, cats); return }
     
@@ -90,7 +92,7 @@ fun LiveScreen(state: AppState) {
             }
         }
         LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(12.dp)) {
-            if (shown.isEmpty()) item { Text(if (cat == FAVS) "Mantén presionado OK sobre un canal para agregarlo a favoritos" else "Sin canales", color = NfGray2, modifier = Modifier.padding(20.dp)) }
+            if (shown.isEmpty()) item { Text(stringResource(if (cat == FAVS) R.string.live_favs_hint_tv else R.string.no_channels), color = NfGray2, modifier = Modifier.padding(20.dp)) }
             itemsIndexed(shown, key = { _, c -> c.id }) { i, ch ->
                 ChannelRow(ch, i + 1, onClick = { play(i) }, onLong = { fav(ch) }, onFocus = { focused = ch })
             }
@@ -135,7 +137,7 @@ private fun EpgPanel(state: AppState, focus: Item?, shown: List<Item>, modifier:
             val now = System.currentTimeMillis()
             val valid = epg?.filter { it.end > now - 3600_000 }?.take(15) ?: emptyList()
             if (valid.isEmpty()) {
-                Text("Guía no disponible", color = NfGray2)
+                Text(stringResource(R.string.guide_unavailable), color = NfGray2)
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(valid) { e ->
@@ -145,7 +147,7 @@ private fun EpgPanel(state: AppState, focus: Item?, shown: List<Item>, modifier:
                                 Text(tf(e.start) + " - " + tf(e.end), color = if (isNow) NfRed else NfGray2, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 if (isNow) {
                                     Spacer(Modifier.width(8.dp))
-                                    com.latmpx.player.ui.components.Chip("AHORA", true) {}
+                                    com.latmpx.player.ui.components.Chip(stringResource(R.string.now_badge), true) {}
                                 }
                             }
                             Text(e.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 2.dp))
@@ -157,7 +159,7 @@ private fun EpgPanel(state: AppState, focus: Item?, shown: List<Item>, modifier:
                 }
             }
         } else {
-            Text("Cargando guía…", color = NfGray2)
+            Text(stringResource(R.string.loading_guide), color = NfGray2)
         }
     }
 }

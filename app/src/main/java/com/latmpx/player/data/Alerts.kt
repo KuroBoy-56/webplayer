@@ -1,5 +1,8 @@
 package com.latmpx.player.data
 
+import com.latmpx.player.tr
+import com.latmpx.player.R
+import com.latmpx.player.Lang
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
@@ -25,6 +28,7 @@ object Alerts {
         val url = PanelUrl.api("alerta.php").toHttpUrlOrNull()?.newBuilder()
             ?.let { Tenant.tag(it) } // ?t=<número>&app=<app>: textos del distribuidor (nada con Omitir)
             ?.addQueryParameter("format", "json")
+            ?.addQueryParameter("lang", Lang.current) // título y botón del aviso en el idioma de la app
             ?.addQueryParameter("user", s.user)
             ?.addQueryParameter("pass", s.pass)
             ?.addQueryParameter("dns", s.base)
@@ -40,6 +44,6 @@ object Alerts {
             path.matches(Regex("img/alertas/[A-Za-z0-9._-]+")) -> PanelUrl.apiBase.removeSuffix("api/") + path
             else -> j.s("image").takeIf { it.startsWith("http") }.orEmpty()
         }
-        return Alert(type == "expiry", j.s("title"), j.s("message"), image, j.s("button").ifEmpty { "Entendido" })
+        return Alert(type == "expiry", j.s("title"), j.s("message"), image, j.s("button").ifEmpty { tr(R.string.got_it) })
     }
 }

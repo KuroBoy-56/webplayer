@@ -1,5 +1,7 @@
 package com.latmpx.player.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +31,7 @@ fun posterWidth(): Dp = if (LocalIsTv.current) 128.dp else 108.dp
 fun sidePad(): Dp = if (LocalIsTv.current) 36.dp else 14.dp
 
 @Composable
-fun Loading(msg: String = "Cargando…") {
+fun Loading(msg: String = stringResource(R.string.loading)) {
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         CircularProgressIndicator(color = NfRed)
         Text(msg, color = NfGray2, modifier = Modifier.padding(top = 12.dp))

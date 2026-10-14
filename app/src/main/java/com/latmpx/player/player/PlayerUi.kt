@@ -1,4 +1,7 @@
 package com.latmpx.player.player
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.animation.AnimatedVisibility
 import com.latmpx.player.ui.theme.NfRed
@@ -165,14 +168,14 @@ fun textOptions(p: ExoPlayer): List<TrackOption> {
             val f = g.getTrackFormat(i)
             val sel = !disabled && g.isTrackSelected(i)
             if (sel) any = true
-            out += TrackOption(langName(f.language, f.label) + if ((f.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) " (forzados)" else "", sel) {
+            out += TrackOption(langName(f.language, f.label) + if ((f.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) " (" + tr(R.string.forced) + ")" else "", sel) {
                 p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                     .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i)).build()
             }
         }
     }
-    out.add(0, TrackOption("Desactivados", !any) {
+    out.add(0, TrackOption(tr(R.string.off), !any) {
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
     })
     return out
@@ -182,7 +185,7 @@ private fun audioLabel(f: Format, i: Int): String {
     val ch = when {
         f.channelCount >= 8 -> " 7.1"
         f.channelCount >= 6 -> " 5.1"
-        f.channelCount == 2 -> " Estéreo"
+        f.channelCount == 2 -> " " + tr(R.string.stereo)
         else -> ""
     }
     val codec = when (f.sampleMimeType) {
@@ -192,26 +195,26 @@ private fun audioLabel(f: Format, i: Int): String {
         "audio/vnd.dts", "audio/vnd.dts.hd" -> " · DTS"
         else -> ""
     }
-    val name = langName(f.language, f.label).ifBlank { "Audio ${i + 1}" }
+    val name = langName(f.language, f.label).ifBlank { tr(R.string.audio_n, i + 1) }
     return name + ch + codec
 }
 
+/** códigos de 3 letras de las pistas -> 2 letras (el nombre sale del sistema en el idioma de la app) */
 private val LANGS = mapOf(
-    "es" to "Español", "spa" to "Español", "en" to "Inglés", "eng" to "Inglés", "pt" to "Portugués", "por" to "Portugués",
-    "fr" to "Francés", "fre" to "Francés", "fra" to "Francés", "de" to "Alemán", "ger" to "Alemán", "deu" to "Alemán",
-    "it" to "Italiano", "ita" to "Italiano", "ja" to "Japonés", "jpn" to "Japonés", "ko" to "Coreano", "kor" to "Coreano",
-    "zh" to "Chino", "chi" to "Chino", "zho" to "Chino", "ru" to "Ruso", "rus" to "Ruso",
+    "spa" to "es", "eng" to "en", "por" to "pt", "fre" to "fr", "fra" to "fr", "ger" to "de", "deu" to "de",
+    "ita" to "it", "jpn" to "ja", "kor" to "ko", "chi" to "zh", "zho" to "zh", "rus" to "ru",
 )
 
 fun langName(lang: String?, label: String?): String {
     val l = (lang ?: "").lowercase(Locale.ROOT).substringBefore('-')
-    val base = LANGS[l] ?: if (l.isNotEmpty() && l != "und") Locale(l).getDisplayLanguage(Locale("es")).replaceFirstChar { it.uppercase() } else ""
+    val code = LANGS[l] ?: l
+    val base = if (code.isNotEmpty() && code != "und") Locale(code).getDisplayLanguage(Locale.getDefault()).replaceFirstChar { it.uppercase() } else ""
     val lb = label?.trim().orEmpty()
     if (lb.isNotEmpty() && !lb.equals(base, true) && !lb.equals(l, true)) {
         val latino = Regex("lat|latino|latam|mx", RegexOption.IGNORE_CASE).containsMatchIn(lb)
         return when {
             base.isEmpty() -> lb
-            base == "Español" && latino -> "Español (Latinoamérica)"
+            code == "es" && latino -> tr(R.string.spanish_latam)
             else -> "$base · $lb"
         }
     }
@@ -276,7 +279,7 @@ fun PlayerOverlay(m: PlayerUiModel, a: PlayerActions) {
 @Composable
 private fun LockedLayer(m: PlayerUiModel) {
     Box(Modifier.fillMaxSize()) {
-        CtrlButton(Icons.Filled.Lock, "Desbloquear", Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp), big = false, label = "Pantalla bloqueada · toca para desbloquear") {
+        CtrlButton(Icons.Filled.Lock, stringResource(R.string.unlock), Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp), big = false, label = stringResource(R.string.screen_locked)) {
             m.locked = false; m.poke()
         }
     }
@@ -293,33 +296,33 @@ private fun Controls(m: PlayerUiModel, a: PlayerActions) {
 
         // arriba: atrás, título, calidad
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            CtrlButton(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", big = false) { a.back() }
+            CtrlButton(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), big = false) { a.back() }
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(m.title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (m.subtitle.isNotBlank()) Text(m.subtitle, color = Dim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (m.live) Badge("EN VIVO", Red)
+            if (m.live) Badge(stringResource(R.string.live_badge), Red)
             if (m.quality.isNotEmpty()) { Spacer(Modifier.width(8.dp)); Badge(m.quality, Color(0x33FFFFFF)) }
-            a.pip?.let { enter -> Spacer(Modifier.width(10.dp)); CtrlButton(Icons.Filled.PictureInPictureAlt, "Imagen en imagen", big = false) { enter() } }
+            a.pip?.let { enter -> Spacer(Modifier.width(10.dp)); CtrlButton(Icons.Filled.PictureInPictureAlt, stringResource(R.string.pip), big = false) { enter() } }
         }
 
         // centro: -10, reproducir/pausa, +10 (en vivo: canal anterior/siguiente)
         Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (m.tv) 36.dp else 48.dp)) {
-            if (m.live) CtrlButton(Icons.Filled.KeyboardArrowUp, "Canal anterior", big = false) { a.zap(-1); m.poke() }
-            else CtrlButton(Icons.Filled.Replay10, "Retroceder 10 s") { m.player.seekBack(); m.poke() }
-            CtrlButton(if (m.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (m.playing) "Pausa" else "Reproducir", Modifier.focusRequester(playFocus), huge = true) { m.toggle() }
-            if (m.live) CtrlButton(Icons.Filled.KeyboardArrowDown, "Canal siguiente", big = false) { a.zap(1); m.poke() }
-            else CtrlButton(Icons.Filled.Forward10, "Adelantar 10 s") { m.player.seekForward(); m.poke() }
+            if (m.live) CtrlButton(Icons.Filled.KeyboardArrowUp, stringResource(R.string.prev_channel), big = false) { a.zap(-1); m.poke() }
+            else CtrlButton(Icons.Filled.Replay10, stringResource(R.string.rewind_10)) { m.player.seekBack(); m.poke() }
+            CtrlButton(if (m.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, stringResource(if (m.playing) R.string.pause else R.string.play), Modifier.focusRequester(playFocus), huge = true) { m.toggle() }
+            if (m.live) CtrlButton(Icons.Filled.KeyboardArrowDown, stringResource(R.string.next_channel), big = false) { a.zap(1); m.poke() }
+            else CtrlButton(Icons.Filled.Forward10, stringResource(R.string.forward_10)) { m.player.seekForward(); m.poke() }
         }
 
         // abajo: barra de progreso y opciones
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp)) {
             if (!m.live && m.duration > 0) SeekBar(m)
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                if (!m.live) Pill(Icons.Filled.Speed, "Velocidad (${speedLabel(m.speed)})") { m.panel = PlayerPanel.SPEED }
-                if (!m.tv) Pill(Icons.Filled.LockOpen, "Bloquear") { m.locked = true; m.poke() }
-                if (m.episodes.size > 1 && !m.live) Pill(Icons.Filled.VideoLibrary, "Episodios") { m.panel = PlayerPanel.EPISODES }
-                Pill(Icons.Filled.Subtitles, "Audio y subtítulos") { m.panel = PlayerPanel.TRACKS }
+                if (!m.live) Pill(Icons.Filled.Speed, stringResource(R.string.speed_x, speedLabel(m.speed))) { m.panel = PlayerPanel.SPEED }
+                if (!m.tv) Pill(Icons.Filled.LockOpen, stringResource(R.string.lock)) { m.locked = true; m.poke() }
+                if (m.episodes.size > 1 && !m.live) Pill(Icons.Filled.VideoLibrary, stringResource(R.string.episodes)) { m.panel = PlayerPanel.EPISODES }
+                Pill(Icons.Filled.Subtitles, stringResource(R.string.audio_subs)) { m.panel = PlayerPanel.TRACKS }
                 Pill(Icons.Filled.AspectRatio, resizeLabel(m.resize)) {
                     val next = when (m.resize) {
                         AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
@@ -328,7 +331,7 @@ private fun Controls(m: PlayerUiModel, a: PlayerActions) {
                     }
                     a.resize(next); m.poke()
                 }
-                if (m.hasNext && !m.live) Pill(Icons.Filled.SkipNext, "Siguiente episodio") { a.next() }
+                if (m.hasNext && !m.live) Pill(Icons.Filled.SkipNext, stringResource(R.string.next_episode)) { a.next() }
             }
         }
     }
@@ -361,20 +364,20 @@ private fun Panel(m: PlayerUiModel, a: PlayerActions, p: PlayerPanel) {
     val first = remember { FocusRequester() }
     LaunchedEffect(p) { if (m.tv) { delay(80); runCatching { first.requestFocus() } } }
     Box(Modifier.fillMaxSize().background(Color(0xF0000000)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }) {
-        CtrlButton(Icons.Filled.Close, "Cerrar", Modifier.align(Alignment.TopEnd).padding(18.dp), big = false) { m.panel = null; m.poke() }
+        CtrlButton(Icons.Filled.Close, stringResource(R.string.close), Modifier.align(Alignment.TopEnd).padding(18.dp), big = false) { m.panel = null; m.poke() }
         when (p) {
             PlayerPanel.TRACKS -> {
                 val rev = m.tracksRev
                 val audio = remember(rev) { audioOptions(m.player) }
                 val subs = remember(rev) { textOptions(m.player) }
                 Row(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 60.dp, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-                    TrackColumn("Audio", if (audio.isEmpty()) listOf(TrackOption("Predeterminado", true) {}) else audio, Modifier.weight(1f), first) { it.apply(); m.tracksRev++ }
-                    TrackColumn("Subtítulos", subs, Modifier.weight(1f), null) { it.apply(); m.tracksRev++ }
+                    TrackColumn(stringResource(R.string.audio), if (audio.isEmpty()) listOf(TrackOption(stringResource(R.string.default_track), true) {}) else audio, Modifier.weight(1f), first) { it.apply(); m.tracksRev++ }
+                    TrackColumn(stringResource(R.string.subtitles), subs, Modifier.weight(1f), null) { it.apply(); m.tracksRev++ }
                 }
             }
             PlayerPanel.SPEED -> {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Velocidad de reproducción", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.playback_speed), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(28.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                         listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEachIndexed { i, s ->
@@ -392,7 +395,7 @@ private fun Panel(m: PlayerUiModel, a: PlayerActions, p: PlayerPanel) {
             PlayerPanel.EPISODES -> {
                 val st = rememberLazyListState(initialFirstVisibleItemIndex = (m.index - 1).coerceAtLeast(0))
                 Column(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 24.dp)) {
-                    Text("Episodios", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.episodes), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     LazyColumn(state = st, contentPadding = PaddingValues(vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         itemsIndexed(m.episodes) { i, t ->
                             val cur = i == m.index
@@ -473,7 +476,7 @@ private fun Badge(t: String, bg: Color) {
 private fun speedLabel(s: Float) = if (s == 1f) "1x" else (if (s % 1f == 0f) "${s.toInt()}x" else "${s}x")
 
 private fun resizeLabel(r: Int) = when (r) {
-    AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Zoom"
-    AspectRatioFrameLayout.RESIZE_MODE_FILL -> "Estirar"
-    else -> "Ajustar"
+    AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> tr(R.string.zoom)
+    AspectRatioFrameLayout.RESIZE_MODE_FILL -> tr(R.string.stretch)
+    else -> tr(R.string.fit)
 }

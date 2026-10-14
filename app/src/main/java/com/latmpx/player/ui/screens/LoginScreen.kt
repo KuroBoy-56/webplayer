@@ -1,4 +1,7 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -87,7 +90,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
     val deviceId = remember { Device.id(ctx) }
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(true) }
-    var status by remember { mutableStateOf("Comprobando el equipo en el panel…") }
+    var status by remember { mutableStateOf(tr(R.string.login_checking_device)) }
     var err by remember { mutableStateOf<String?>(null) }
     var lines by remember { mutableStateOf<List<Panel.Line>>(emptyList()) }
     var dns by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -110,7 +113,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
 
     /** true si entró; la demo (Autodemo o el panel dice "demo") se abre en modo DEMO */
     suspend fun tryLine(line: Panel.Line): Boolean {
-        status = "Conectando con ${line.name}…"
+        status = tr(R.string.login_connecting_to, line.name)
         return when (val r = Xtream.login(listOf(line.name to line.base), line.user, line.pass)) {
             is Xtream.LoginResult.Ok -> { Store.setDemo(line.demo || fromAutodemo, line.demoExpires, line.demoDuration); onLogged(r.session); true }
             is Xtream.LoginResult.Fail -> { err = r.message; false }
@@ -121,10 +124,10 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
 
     /** Demo recién creada: su servidor (el que dijo el panel) y luego los DNS del panel, hasta que uno responda. */
     suspend fun tryDemo(demo: Panel.Demo, servers: List<String>): Boolean {
-        status = "Conectando con la demo…"
+        status = tr(R.string.login_connecting_demo)
         val list = servers.filter { it.isNotBlank() }.map(Xtream::normalize).distinct()
-        if (list.isEmpty()) { err = "Demo creada, pero el panel no devolvió el servidor."; return false }
-        return when (val r = Xtream.login(list.mapIndexed { i, s -> (if (i == 0) "Demo" else "Servidor ${i + 1}") to s }, demo.user, demo.pass)) {
+        if (list.isEmpty()) { err = tr(R.string.login_demo_no_server); return false }
+        return when (val r = Xtream.login(list.mapIndexed { i, s -> (if (i == 0) "Demo" else tr(R.string.server_n, i + 1)) to s }, demo.user, demo.pass)) {
             is Xtream.LoginResult.Ok -> { Store.setDemo(true, demo.expires, demo.duration); onLogged(r.session); true }
             is Xtream.LoginResult.Fail -> { err = r.message; false }
         }
@@ -145,7 +148,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
     }
 
     suspend fun resolve(): Boolean {
-        busy = true; status = "Comprobando el equipo en el panel…"
+        busy = true; status = tr(R.string.login_checking_device)
         val a = Panel.playlists(deviceId)
         var found = a.value.orEmpty()
         var problem = a.error
@@ -225,31 +228,31 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     if (!PanelCrypto.hasKey()) {
-                        ErrorBanner("Esta versión de la app no tiene la llave del panel (PANEL_MASTER_KEY). La activación no funcionará hasta instalar una versión configurada.")
+                        ErrorBanner(stringResource(R.string.login_no_key))
                     }
                     // varias líneas para este equipo: se entra con la primera que funciona (ya no se pregunta)
-                    Text("Iniciar sesión", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                    Text(stringResource(R.string.sign_in), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
                     err?.let { ErrorBanner(it) }
                     // celular sin internet (o el panel no responde): lo descargado se puede ver igual
                     val online = com.latmpx.player.data.rememberOnline()
-                    if (!tv && (!online || err?.startsWith("No se pudo conectar") == true)) {
-                        if (!online) Text("Sin conexión a internet", color = NfGray2, fontSize = 13.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
-                        com.latmpx.player.ui.components.AppButton("Mis descargas", Modifier.fillMaxWidth(), primary = !online,
+                    if (!tv && (!online || err.let { it == tr(R.string.err_panel_offline) || it == tr(R.string.err_panel_offline_short) || it == tr(R.string.err_server_offline) })) {
+                        if (!online) Text(stringResource(R.string.no_internet), color = NfGray2, fontSize = 13.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                        com.latmpx.player.ui.components.AppButton(stringResource(R.string.my_downloads), Modifier.fillMaxWidth(), primary = !online,
                             icon = Icons.Filled.Download, onClick = onDownloads)
                     }
                     
                     OutlinedTextField(
-                        value = user, onValueChange = { user = it }, label = { Text("Usuario") }, singleLine = true, colors = fieldColors,
+                        value = user, onValueChange = { user = it }, label = { Text(stringResource(R.string.username)) }, singleLine = true, colors = fieldColors,
                         keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Next)), modifier = Modifier.fillMaxWidth().then(Modifier.tvTextInput()),
                     )
                     OutlinedTextField(
-                        value = pass, onValueChange = { pass = it }, label = { Text("Contraseña") }, singleLine = true, colors = fieldColors,
+                        value = pass, onValueChange = { pass = it }, label = { Text(stringResource(R.string.password)) }, singleLine = true, colors = fieldColors,
                         visualTransformation = if (showPass) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             androidx.compose.material3.IconButton(onClick = { showPass = !showPass }, modifier = Modifier.focusRequester(eyeFocus)) {
                                 androidx.compose.material3.Icon(
                                     if (showPass) androidx.compose.material.icons.Icons.Filled.VisibilityOff else androidx.compose.material.icons.Icons.Filled.Visibility,
-                                    if (showPass) "Ocultar contraseña" else "Ver contraseña", tint = Color.White,
+                                    stringResource(if (showPass) R.string.hide_password else R.string.show_password), tint = Color.White,
                                 )
                             }
                         },
@@ -266,30 +269,30 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
                     )
                     
                     Column(Modifier.fillMaxWidth().background(Color(0x33FFFFFF), RoundedCornerShape(4.dp)).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Código MAC (Activación remota)", color = NfGray2, fontSize = 12.sp)
+                        Text(stringResource(R.string.mac_code_remote), color = NfGray2, fontSize = 12.sp)
                         Text(deviceId, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                     }
                     
-                    RedButton("Iniciar sesión", Modifier.fillMaxWidth().focusRequester(firstFocus)) {
+                    RedButton(stringResource(R.string.sign_in), Modifier.fillMaxWidth().focusRequester(firstFocus)) {
                         act {
-                            if (user.isBlank() || pass.isBlank()) { err = "Escribe tu usuario y contraseña"; return@act }
+                            if (user.isBlank() || pass.isBlank()) { err = tr(R.string.login_enter_credentials); return@act }
                             if (dns.isEmpty()) Panel.fetchDns().let { d -> d.value?.let { dns = it }; if (d.value == null) err = d.error }
                             val server = dns.getOrNull(dnsIdx) ?: dns.firstOrNull()
-                            if (server == null) { if (err == null) err = "El panel no tiene servidores disponibles"; return@act }
-                            status = "Activando…"
+                            if (server == null) { if (err == null) err = tr(R.string.login_no_servers); return@act }
+                            status = tr(R.string.login_activating)
                             fromAutodemo = false
                             val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), server)
                             if (r.value == null) { err = r.error; return@act }
-                            if (!resolve() && err == null) connect(Panel.Line("Servidor ${dnsIdx + 1}", Xtream.normalize(server), user.trim(), pass.trim()))
+                            if (!resolve() && err == null) connect(Panel.Line(tr(R.string.server_n, dnsIdx + 1), Xtream.normalize(server), user.trim(), pass.trim()))
                         }
                     }
                     
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // el distribuidor puede no tener demo (sin DNS): entonces no se muestra el botón
-                        if (Tenant.demoEnabled) HeroButton(if (demoUsed) "Autodemo" else "Autodemo", Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
+                        if (Tenant.demoEnabled) HeroButton(stringResource(R.string.autodemo), Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
                             // el panel decide (si el dueño borró el registro, el equipo puede pedir otra demo)
                             act {
-                                status = "Creando demo…"
+                                status = tr(R.string.login_creating_demo)
                                 // un código de revendedor escrito en Contraseña deja la demo a su nombre
                                 val r = Panel.autoDemo(deviceId, pass)
                                 val demo = r.value

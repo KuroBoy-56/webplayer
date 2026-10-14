@@ -105,12 +105,20 @@ Todas estas llamadas usan un token: la app hace `POST progress.php {"action":"au
 | `api/epg.php` | Guía de respaldo: primero `get_short_epg` del proveedor; si un canal no trae guía, `POST {channels:[{id, epg, name}]}` en lotes de hasta 400 canales. |
 | `api/sports.php` | Pestaña **Deportes**: partidos de hoy y mañana con el mismo diseño de la web (Hoy/Mañana, deportes con emoji, escudos, en vivo / marcador / final). Cada tarjeta muestra los canales que transmiten el partido (`tv`, los de la región primero); al tocarla sale el menú **Ver el evento** (automático), cada canal y **Buscar por equipos**. Un canal se busca por su nombre en la lista del cliente sin calidad ni país (`ESPN 2` encuentra `MX: ESPN 2 HD`, nunca `ESPN` ni `ESPN 3`); si el cliente no lo tiene, se busca el evento por equipos o nombre en las carpetas de eventos (reglas `match` del panel). |
 
-**Aviso al abrir la app** (`api/alerta.php?format=json&user&pass&dns&title`, sin token): lo que se configura en **Alertas** del panel. Con 3, 2 o 1 días restantes sale el texto de ese día, con 0 días o vencida el de 0 días (título rojo, sin imagen); si no, la bienvenida con el texto general y la imagen de `img/alertas/`. Sale una vez cada vez que se abre la app y otra vez tras iniciar sesión, con un solo botón **Entendido** (enfocado para el control remoto; atrás también lo cierra). Código: `data/Alerts.kt`, `ui/components/PanelAlert.kt`.
+**Aviso al abrir la app** (`api/alerta.php?format=json&lang&user&pass&dns&title`, sin token; `lang` = idioma de la app, el panel devuelve el título y el botón en ese idioma): lo que se configura en **Alertas** del panel. Con 3, 2 o 1 días restantes sale el texto de ese día, con 0 días o vencida el de 0 días (título rojo, sin imagen); si no, la bienvenida con el texto general y la imagen de `img/alertas/`. Sale una vez cada vez que se abre la app y otra vez tras iniciar sesión, con un solo botón **Entendido** (enfocado para el control remoto; atrás también lo cierra). Código: `data/Alerts.kt`, `ui/components/PanelAlert.kt`.
 
 ## DNS
 
 Botón **DNS** en el inicio de sesión y en **Cuenta**: Automático (por defecto), Cloudflare, Google, Quad9, AdGuard (sin rastreo ni anuncios), NextDNS (anti-bloqueo geográfico) y OpenDNS.
 Usa DNS sobre HTTPS (`okhttp-dnsoverhttps`) en el único cliente OkHttp de la app, así aplica a todo: panel, Xtream, imágenes y el reproductor. La elección se guarda en el equipo.
+
+## Idiomas
+
+La app está en español (por defecto), inglés, portugués (Brasil) y francés: `res/values/strings.xml` (español) y `values-en`, `values-pt`, `values-fr`.
+- **Automático** (por defecto): el idioma del equipo; si no es uno de los cuatro, español.
+- **Cuenta › Idioma de la app**: Automático, Español, English, Português o Français. Se guarda en el equipo (`app_lang` en las preferencias) y se aplica al momento (se recrea la pantalla, sin cerrar sesión).
+- Código: `Lang.kt` (idioma elegido, `attachBaseContext` de cada actividad y del reproductor, `tr()` para textos fuera de Compose) y `ui/components/LanguagePicker.kt`.
+- No se traducen los títulos del servidor IPTV ni de TMDB, los textos del panel (avisos, errores, pantalla falsa), las marcas ni la insignia «DEMO». Las palabras clave que reconocen plataformas y géneros en las categorías del servidor (`data/Platforms.kt`) siguen en español; solo cambia la etiqueta que se muestra.
 
 ## Estructura
 

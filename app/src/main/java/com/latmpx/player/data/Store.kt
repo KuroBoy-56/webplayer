@@ -5,6 +5,9 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.latmpx.player.Device
+import com.latmpx.player.Lang
+import com.latmpx.player.R
+import com.latmpx.player.tr
 import org.json.JSONObject
 import java.security.SecureRandom
 
@@ -135,9 +138,9 @@ object Store {
         if (sec <= 0) return ""
         val days = sec / 86400; val h = sec / 3600; val m = sec / 60
         return when {
-            sec % 86400 == 0L -> "$days día" + if (days == 1L) "" else "s"
-            sec % 3600 == 0L -> "$h hora" + if (h == 1L) "" else "s"
-            else -> "$m minuto" + if (m == 1L) "" else "s"
+            sec % 86400 == 0L -> Lang.plural(R.plurals.days, days.toInt(), days)
+            sec % 3600 == 0L -> Lang.plural(R.plurals.hours, h.toInt(), h)
+            else -> Lang.plural(R.plurals.minutes, m.toInt(), m)
         }
     }
 
@@ -155,7 +158,7 @@ object Store {
         if (!demo) return false
         runCatching {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                android.widget.Toast.makeText(appCtx, "No disponible en la DEMO", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(appCtx, tr(R.string.demo_unavailable), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
         return true

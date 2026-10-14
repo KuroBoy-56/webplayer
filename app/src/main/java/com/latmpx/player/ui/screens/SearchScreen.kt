@@ -1,5 +1,7 @@
 package com.latmpx.player.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,7 +41,7 @@ fun SearchScreen(state: AppState) {
     }
     Column(Modifier.fillMaxSize().background(NfBg)) {
         OutlinedTextField(
-            value = q, onValueChange = { q = it }, singleLine = true, placeholder = { Text("Títulos, películas, series") },
+            value = q, onValueChange = { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.search_hint)) },
             leadingIcon = { Icon(Icons.Filled.Search, null) }, keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Search)),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.White, unfocusedBorderColor = Color(0xFF444444), focusedTextColor = Color.White, unfocusedTextColor = Color.White,
@@ -47,6 +49,6 @@ fun SearchScreen(state: AppState) {
             ),
             modifier = Modifier.fillMaxWidth().padding(horizontal = sidePad(), vertical = 14.dp).then(Modifier.tvTextInput()),
         )
-        if (q.trim().length >= 2) Grid(state, results) else Empty("Busca por nombre entre todas las películas y series")
+        if (q.trim().length >= 2) Grid(state, results) else Empty(stringResource(R.string.search_empty))
     }
 }

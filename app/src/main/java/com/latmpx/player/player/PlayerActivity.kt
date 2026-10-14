@@ -1,4 +1,5 @@
 package com.latmpx.player.player
+import com.latmpx.player.R
 
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
@@ -67,6 +68,8 @@ import com.latmpx.player.data.Xtream
  */
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 class PlayerActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(com.latmpx.player.Lang.wrap(newBase))
+
     private lateinit var player: ExoPlayer
     private lateinit var view: PlayerView
     private lateinit var ui2: PlayerUiModel
@@ -140,7 +143,7 @@ class PlayerActivity : ComponentActivity() {
         player.setMediaItems(queue.map { mediaItem(it) }, start, resumePosition(queue[start]))
         player.prepare()
         player.playWhenReady = true
-        if (kind != Kind.LIVE) resumePosition(queue[start]).takeIf { it > 0 }?.let { showToast("Continuando desde " + fmt(it)) }
+        if (kind != Kind.LIVE) resumePosition(queue[start]).takeIf { it > 0 }?.let { showToast(getString(R.string.resuming_from, fmt(it))) }
         ui.post(saver)
     }
 
@@ -375,7 +378,7 @@ class PlayerActivity : ComponentActivity() {
             retries++
             lastRetryAt = now
             val pos = player.currentPosition
-            showToast("Reconectando…")
+            showToast(getString(R.string.reconnecting))
             ui.postDelayed({
                 if (kind == Kind.LIVE) player.seekToDefaultPosition() else player.seekTo(idx, pos)
                 player.prepare()
@@ -397,14 +400,13 @@ class PlayerActivity : ComponentActivity() {
         if (isFinishing) return
         val decoding = e.errorCode in 4000..4999
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("No se pudo reproducir")
+            .setTitle(R.string.play_failed)
             .setMessage(
-                if (decoding) "Este equipo no puede decodificar el formato de este contenido. Puedes intentarlo de nuevo o abrirlo en VLC."
-                else "El servidor no respondió o el archivo está dañado. Puedes intentarlo de nuevo o abrirlo en VLC.",
+                getString(if (decoding) R.string.play_failed_decoder else R.string.play_failed_server),
             )
-            .setPositiveButton("Reintentar") { _, _ -> retries = 0; player.prepare(); player.play() }
-            .setNeutralButton("Abrir en VLC") { _, _ -> openVlc(player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty(), q.title) }
-            .setNegativeButton("Cerrar") { _, _ -> finish() }
+            .setPositiveButton(R.string.retry) { _, _ -> retries = 0; player.prepare(); player.play() }
+            .setNeutralButton(R.string.open_in_vlc) { _, _ -> openVlc(player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty(), q.title) }
+            .setNegativeButton(R.string.close) { _, _ -> finish() }
             .setOnCancelListener { finish() } // Atrás sobre el aviso sale del reproductor
             .show()
     }

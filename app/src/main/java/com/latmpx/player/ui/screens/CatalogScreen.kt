@@ -1,5 +1,8 @@
 package com.latmpx.player.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -58,15 +61,15 @@ fun CatalogScreen(state: AppState, kind: Kind) {
             }
             if (tv) item {
                 Row(Modifier.fillMaxWidth().padding(horizontal = sp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (kind == Kind.MOVIE) "Películas" else "Series", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(if (kind == Kind.MOVIE) R.string.movies else R.string.series), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
             }
             
             val recent = all.sortedByDescending { it.added }.take(20)
-            item { ShelfRow("Agregadas recientemente", recent, sp, onViewAll = { state.push(Route.Browse("Agregadas recientemente", kind, emptySet())) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
+            item { ShelfRow(stringResource(R.string.recently_added), recent, sp, onViewAll = { state.push(Route.Browse(tr(R.string.recently_added), kind, emptySet())) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
             
             val top10 = all.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10)
-            item { ShelfRow("Top 10", top10, sp) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) } }
+            item { ShelfRow(stringResource(R.string.top10), top10, sp) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) } }
             
             cats.forEach { c ->
                 val list = all.filter { it.categoryId == c.id }.sortedByDescending { it.added }.take(20)
@@ -86,7 +89,7 @@ fun byCats(all: List<Item>, ids: Set<String>): List<Item> = if (ids.isEmpty()) a
 
 @Composable
 fun Grid(state: AppState, items: List<Item>, heroItems: List<Item> = emptyList(), tv: Boolean = false) {
-    if (items.isEmpty()) { Empty("No hay contenido en esta sección"); return }
+    if (items.isEmpty()) { Empty(stringResource(R.string.empty_section)); return }
     val pw = posterWidth()
     val progress = remember(state.refresh, Cloud.rev) { Cloud.progressList().associateBy { it.key.split(":").take(2).joinToString(":") } }
     LazyVerticalGrid(
@@ -131,13 +134,13 @@ fun BrowseScreen(state: AppState, title: String, kind: Kind?, categoryIds: Set<S
                     Box(Modifier.size(40.dp).background(if (f) Color.White else Color(0x22FFFFFF), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
                         Icon(
                             if (searching) androidx.compose.material.icons.Icons.Filled.Close else androidx.compose.material.icons.Icons.Filled.Search,
-                            if (searching) "Cerrar búsqueda" else "Buscar", tint = if (f) Color.Black else Color.White, modifier = Modifier.size(24.dp),
+                            stringResource(if (searching) R.string.close_search else R.string.search), tint = if (f) Color.Black else Color.White, modifier = Modifier.size(24.dp),
                         )
                     }
                 }
             }
         }
-        if (shown.isEmpty() && query.isNotBlank()) Empty("No hay títulos que coincidan con \"${query.trim()}\"") else Grid(state, shown)
+        if (shown.isEmpty() && query.isNotBlank()) Empty(stringResource(R.string.no_matches, query.trim())) else Grid(state, shown)
     }
 }
 
@@ -163,7 +166,7 @@ private fun NameFilterField(value: String, modifier: Modifier, onChange: (String
                 Icon(androidx.compose.material.icons.Icons.Filled.Search, null, tint = Color(0xFF808080), modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
-                    if (value.isEmpty()) Text("Filtrar por nombre…", color = Color(0xFF808080), fontSize = 16.sp)
+                    if (value.isEmpty()) Text(stringResource(R.string.filter_by_name), color = Color(0xFF808080), fontSize = 16.sp)
                     inner()
                 }
             }
@@ -175,8 +178,8 @@ private fun NameFilterField(value: String, modifier: Modifier, onChange: (String
 fun MyListScreen(state: AppState) {
     val favs = remember(state.refresh, Cloud.rev) { Cloud.favList().filter { it.kind != Kind.LIVE } }
     Column(Modifier.fillMaxSize().background(NfBg)) {
-        Text("Mi lista", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = sidePad(), top = 16.dp, bottom = 6.dp))
-        if (favs.isEmpty()) Empty("Agrega películas y series con el botón \"Mi lista\" para verlas aquí") else Grid(state, favs)
+        Text(stringResource(R.string.my_list), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = sidePad(), top = 16.dp, bottom = 6.dp))
+        if (favs.isEmpty()) Empty(stringResource(R.string.my_list_empty)) else Grid(state, favs)
     }
 }
 
@@ -190,10 +193,10 @@ fun SavedScreen(state: AppState, continueWatching: Boolean) {
     }
     Column(Modifier.fillMaxSize().background(NfBg)) {
         Text(
-            if (continueWatching) "Continuar viendo" else "Mi lista", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold,
+            stringResource(if (continueWatching) R.string.continue_watching else R.string.my_list), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = sidePad(), top = 16.dp, bottom = 6.dp),
         )
-        if (list.isEmpty()) Empty(if (continueWatching) "Aún no has empezado a ver nada" else "Agrega películas y series con el botón \"Mi lista\" para verlas aquí")
+        if (list.isEmpty()) Empty(stringResource(if (continueWatching) R.string.continue_empty else R.string.my_list_empty))
         else Grid(state, list)
     }
 }

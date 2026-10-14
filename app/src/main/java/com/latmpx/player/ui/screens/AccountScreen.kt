@@ -1,4 +1,9 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.ui.res.pluralStringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import kotlinx.coroutines.launch
 
@@ -68,15 +73,18 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
     val pinScope = androidx.compose.runtime.rememberCoroutineScope()
     var blockedCatsState by remember { mutableStateOf(com.latmpx.player.data.Store.blockedCats) }
     
+    var langDialog by remember { mutableStateOf(false) }
+    if (langDialog) com.latmpx.player.ui.components.LanguageDialog { langDialog = false }
+
     if (pinDialog) {
         androidx.compose.ui.window.Dialog(onDismissRequest = { pinDialog = false; tempPin = ""; pinErr = null }) {
             Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xE61A1A1A), Color(0xF2000000))), RoundedCornerShape(16.dp)).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp)).padding(24.dp)) {
                 Column(Modifier.fillMaxWidth()) {
-                    Text(when(pinStep) { "CREATE" -> "Nuevo PIN"; "ENTER" -> "Ingresar PIN"; "SETTINGS" -> "Control Parental"; "CATS" -> "Carpetas Bloqueadas"; else -> "" }, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+                    Text(when(pinStep) { "CREATE" -> stringResource(R.string.pin_new); "ENTER" -> stringResource(R.string.pin_enter); "SETTINGS" -> stringResource(R.string.parental_control); "CATS" -> stringResource(R.string.blocked_folders); else -> "" }, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
                     
                     when (pinStep) {
                         "CREATE", "ENTER" -> {
-                            Text(if (pinStep == "CREATE") "Escribe el nuevo PIN de 4 números (se guarda también en el panel):" else "Ingresa tu PIN (el de fábrica es 0000):", color = Color.White)
+                            Text(stringResource(if (pinStep == "CREATE") R.string.pin_new_prompt else R.string.pin_enter_prompt), color = Color.White)
                             Spacer(Modifier.height(8.dp))
                             androidx.compose.material3.OutlinedTextField(
                                 value = tempPin,
@@ -86,14 +94,14 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
                                 colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NfRed, unfocusedBorderColor = NfGray2)
                             )
                             pinErr?.let { Text(it, color = Color(0xFFFF8A80), fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp)) }
-                            if (pinBusy) Text("Guardando en el panel…", color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                            if (pinBusy) Text(stringResource(R.string.pin_saving), color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
                         }
                         "SETTINGS" -> {
-                            SettingsItem(Icons.Filled.Lock, "Cambiar PIN", "Actualizar el PIN actual") { pinStep = "CREATE"; tempPin = "" }
+                            SettingsItem(Icons.Filled.Lock, stringResource(R.string.pin_change), stringResource(R.string.pin_change_desc)) { pinStep = "CREATE"; tempPin = "" }
                             Divider(color = Color(0xFF333333))
-                            SettingsItem(Icons.Filled.OndemandVideo, "Carpetas Bloqueadas", "${blockedCatsState.size} carpetas ocultas") { pinStep = "CATS" }
+                            SettingsItem(Icons.Filled.OndemandVideo, stringResource(R.string.blocked_folders), pluralStringResource(R.plurals.hidden_folders, blockedCatsState.size, blockedCatsState.size)) { pinStep = "CATS" }
                             Divider(color = Color(0xFF333333))
-                            SettingsItem(Icons.Filled.Lock, "Mostrar todas las carpetas", "Quita las carpetas bloqueadas (el PIN sigue activo)") {
+                            SettingsItem(Icons.Filled.Lock, stringResource(R.string.show_all_folders), stringResource(R.string.show_all_folders_desc)) {
                                 com.latmpx.player.data.Store.blockedCats = emptySet()
                                 blockedCatsState = emptySet()
                                 state.refresh++
@@ -122,17 +130,17 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
                             androidx.compose.material3.TextButton(onClick = { 
                                 if (pinStep == "CATS") { pinStep = "SETTINGS"; blockedCatsState = com.latmpx.player.data.Store.blockedCats }
                                 else { pinDialog = false; tempPin = ""; pinErr = null }
-                            }, colors = ButtonDefaults.textButtonColors(contentColor = NfGray2)) { Text("Cancelar") }
+                            }, colors = ButtonDefaults.textButtonColors(contentColor = NfGray2)) { Text(stringResource(R.string.cancel)) }
                             Spacer(Modifier.width(8.dp))
                         }
                         
                         if (pinStep == "CREATE" || pinStep == "ENTER") {
                             androidx.compose.material3.TextButton(onClick = {
                                 if (pinBusy) return@TextButton
-                                if (tempPin.length != 4) { pinErr = "El PIN tiene 4 números"; return@TextButton }
+                                if (tempPin.length != 4) { pinErr = tr(R.string.pin_4_digits); return@TextButton }
                                 if (pinStep == "ENTER") {
                                     if (tempPin == com.latmpx.player.data.Store.parentalPin) { currentPin = tempPin; tempPin = ""; pinStep = "SETTINGS" }
-                                    else { pinErr = "PIN incorrecto"; tempPin = "" }
+                                    else { pinErr = tr(R.string.pin_wrong); tempPin = "" }
                                 } else {
                                     val newPin = tempPin
                                     pinBusy = true
@@ -140,18 +148,18 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
                                         val r = com.latmpx.player.data.Panel.setPin(com.latmpx.player.data.Store.deviceIdOrEmpty(), currentPin, newPin)
                                         pinBusy = false
                                         if (r.value != null) { currentPin = newPin; tempPin = ""; pinErr = null; pinStep = "SETTINGS" }
-                                        else pinErr = r.error ?: "No se pudo guardar el PIN en el panel"
+                                        else pinErr = r.error ?: tr(R.string.pin_save_failed)
                                     }
                                 }
-                            }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text("Aceptar") }
+                            }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text(stringResource(R.string.ok)) }
                         } else if (pinStep == "CATS") {
                             androidx.compose.material3.TextButton(onClick = {
                                 com.latmpx.player.data.Store.blockedCats = blockedCatsState
                                 pinStep = "SETTINGS"
                                 state.refresh++
-                            }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text("Guardar") }
+                            }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text(stringResource(R.string.save)) }
                         } else {
-                            androidx.compose.material3.TextButton(onClick = { pinDialog = false }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text("Cerrar") }
+                            androidx.compose.material3.TextButton(onClick = { pinDialog = false }, colors = ButtonDefaults.textButtonColors(contentColor = NfRed)) { Text(stringResource(R.string.close)) }
                         }
                     }
                 }
@@ -171,15 +179,15 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
             Column {
                 // demo: nunca el usuario ni la contraseña de la línea
                 Text(Store.shownUser(s), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                if (Store.demo) Text(Store.demoLength().let { if (it.isEmpty()) "Cuenta DEMO" else "Cuenta DEMO · $it" }, color = Color(0xFFFFB300), fontSize = 14.sp)
-                else Text("Suscripción Activa", color = Color(0xFF4CAF50), fontSize = 14.sp)
+                if (Store.demo) Text(Store.demoLength().let { if (it.isEmpty()) stringResource(R.string.demo_account) else stringResource(R.string.demo_account) + " · $it" }, color = Color(0xFFFFB300), fontSize = 14.sp)
+                else Text(stringResource(R.string.subscription_active), color = Color(0xFF4CAF50), fontSize = 14.sp)
             }
         }
         
         Spacer(Modifier.height(32.dp))
         
         if (progressList.isNotEmpty()) {
-            Text("Continuar viendo", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
+            Text(stringResource(R.string.continue_watching), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(progressList) { p ->
                     val it = state.itemFromProgress(p)
@@ -191,27 +199,27 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
             Spacer(Modifier.height(32.dp))
         }
 
-        Text("Detalles de la cuenta", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
+        Text(stringResource(R.string.account_details), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
         Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2A), Color(0xFF1A1A1A))), RoundedCornerShape(12.dp)).border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp)).padding(16.dp)) {
             // demo: solo el fin que dice el panel (hora exacta); nada de la línea demo del servidor
             if (Store.demo) {
-                Row2("Vencimiento", Store.demoEndText().ifEmpty { "—" })
+                Row2(stringResource(R.string.expiration), Store.demoEndText().ifEmpty { "—" })
             } else {
-                Row2("Vencimiento", s.expires)
+                Row2(stringResource(R.string.expiration), s.expires)
                 Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
-                Row2("Conexiones", "${s.activeCons} / ${s.maxCons}")
+                Row2(stringResource(R.string.connections), "${s.activeCons} / ${s.maxCons}")
                 Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
-                Row2("Servidor DNS", s.dnsName)
+                Row2(stringResource(R.string.dns_server), s.dnsName)
                 Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
-                Row2("Miembro desde", s.createdAt)
+                Row2(stringResource(R.string.member_since), s.createdAt)
             }
         }
 
         Spacer(Modifier.height(32.dp))
         
-        Text("Configuración de la aplicación", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
+        Text(stringResource(R.string.app_settings), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
         Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2A), Color(0xFF1A1A1A))), RoundedCornerShape(12.dp)).border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp)).padding(vertical = 8.dp)) {
-            SettingsItem(Icons.Filled.Lock, "Control Parental", "Activado · el PIN lo administra el panel") {
+            SettingsItem(Icons.Filled.Lock, stringResource(R.string.parental_control), stringResource(R.string.parental_control_desc)) {
                 pinValue = com.latmpx.player.data.Store.parentalPin
                 // siempre se pide el PIN al abrir (antes se quedaba en el menú ya desbloqueado)
                 pinStep = "ENTER"; pinErr = null
@@ -224,22 +232,24 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
                 val dl = remember(com.latmpx.player.data.Downloads.rev) { com.latmpx.player.data.Downloads.all() }
                 val done = dl.count { it.state == com.latmpx.player.data.Downloads.State.DONE }
                 val busy = dl.count { it.state == com.latmpx.player.data.Downloads.State.RUNNING || it.state == com.latmpx.player.data.Downloads.State.QUEUED }
-                SettingsItem(Icons.Filled.Download, "Mis descargas", when {
-                    busy > 0 -> "$done listas · $busy descargando"
-                    done > 0 -> "$done para ver sin internet"
-                    else -> "Películas y episodios para ver sin internet"
+                SettingsItem(Icons.Filled.Download, stringResource(R.string.my_downloads), when {
+                    busy > 0 -> stringResource(R.string.dl_ready_busy, done, busy)
+                    done > 0 -> stringResource(R.string.dl_ready_offline, done)
+                    else -> stringResource(R.string.dl_desc)
                 }) { state.push(com.latmpx.player.ui.Route.Downloads) }
                 Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             }
-            SettingsItem(Icons.Filled.OndemandVideo, "Formato de Streaming", when(streamFormat) { "ts" -> "MPEG-TS (.ts)"; "auto" -> "Automático"; else -> "HLS (.m3u8)" }) {
+            SettingsItem(Icons.Filled.OndemandVideo, stringResource(R.string.stream_format), when(streamFormat) { "ts" -> "MPEG-TS (.ts)"; "auto" -> stringResource(R.string.automatic); else -> "HLS (.m3u8)" }) {
                 streamFormat = when(streamFormat) { "m3u8" -> "ts"; "ts" -> "auto"; else -> "m3u8" }
                 com.latmpx.player.data.Store.streamFormat = streamFormat
             }
             Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
-            SettingsItem(Icons.Filled.PlayCircle, "Reproductor", if (extPlayer) "Externo" else "Interno (ExoPlayer)") {
+            SettingsItem(Icons.Filled.PlayCircle, stringResource(R.string.player), stringResource(if (extPlayer) R.string.player_external else R.string.player_internal)) {
                 extPlayer = !extPlayer
                 com.latmpx.player.data.Store.externalPlayer = extPlayer
             }
+            Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+            SettingsItem(Icons.Filled.Language, stringResource(R.string.app_language), com.latmpx.player.ui.components.languageChoiceLabel()) { langDialog = true }
             Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             
             Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -248,12 +258,12 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
             
             Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Versión", color = NfGray2, fontSize = 15.sp)
+                Text(stringResource(R.string.version), color = NfGray2, fontSize = 15.sp)
                 Text(BuildConfig.VERSION_NAME, color = Color.White, fontSize = 15.sp)
             }
             Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Dirección MAC", color = NfGray2, fontSize = 15.sp)
+                Text(stringResource(R.string.mac_address), color = NfGray2, fontSize = 15.sp)
                 Text(Device.id(LocalContext.current), color = Color.White, fontSize = 15.sp)
             }
         }
@@ -262,7 +272,7 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
         // número de distribuidor, vencimiento y "Cambiar distribuidor" (también para quien eligió Omitir)
         DistributorAccountCard(onChangeDistributor)
         Spacer(Modifier.height(32.dp))
-        HeroButton("Cerrar sesión", Icons.AutoMirrored.Filled.Logout, false, onClick = onLogout)
+        HeroButton(stringResource(R.string.logout), Icons.AutoMirrored.Filled.Logout, false, onClick = onLogout)
         Spacer(Modifier.height(60.dp))
     }
 }

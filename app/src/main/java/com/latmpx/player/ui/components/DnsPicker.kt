@@ -1,5 +1,7 @@
 package com.latmpx.player.ui.components
 
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,12 +57,12 @@ fun DnsButton(modifier: Modifier = Modifier, onChanged: () -> Unit = {}) {
         AlertDialog(
             onDismissRequest = { open = false },
             confirmButton = {},
-            dismissButton = { FocusBox(onClick = { open = false }) { Text("Cerrar", color = Color.White, modifier = Modifier.padding(10.dp)) } },
+            dismissButton = { FocusBox(onClick = { open = false }) { Text(stringResource(R.string.close), color = Color.White, modifier = Modifier.padding(10.dp)) } },
             containerColor = NfBg2,
             title = { Text("DNS", color = Color.White, fontWeight = FontWeight.Bold) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
-                    Text("Cambia el DNS si algún canal o servidor no abre en tu red. Se aplica a toda la app.", color = NfGray2, fontSize = 13.sp,
+                    Text(stringResource(R.string.dns_help), color = NfGray2, fontSize = 13.sp,
                         modifier = Modifier.padding(bottom = 8.dp))
                     SecureDns.options.forEachIndexed { i, o ->
                         val sel = o.key == current.key

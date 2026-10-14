@@ -1,5 +1,7 @@
 package com.latmpx.player.data
 
+import com.latmpx.player.tr
+import com.latmpx.player.R
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -97,7 +99,7 @@ object Downloads {
     fun addEpisode(s: Session, series: Item, ep: Episode) {
         val e = ep.ext.ifBlank { "mp4" }
         add(Entry(key = "series:${series.id}:${ep.id}", kind = Kind.SERIES, id = ep.id,
-            title = ep.title.ifBlank { "Episodio ${ep.num}" }, ext = e, url = Xtream.episodeUrl(s, ep.id, e),
+            title = ep.title.ifBlank { tr(R.string.episode_n, ep.num) }, ext = e, url = Xtream.episodeUrl(s, ep.id, e),
             posterUrl = ep.image.ifBlank { series.poster }, seriesId = series.id, seriesName = series.name, seriesPosterUrl = series.poster,
             season = ep.season, episode = ep.num, file = safe("ep_${series.id}_${ep.id}") + "." + safe(e)))
     }
@@ -190,14 +192,14 @@ object Downloads {
         } catch (x: kotlinx.coroutines.CancellationException) {
             throw x
         } catch (x: Exception) {
-            update(e.key) { it.copy(state = State.FAILED, error = x.message ?: "No se pudo descargar") }
+            update(e.key) { it.copy(state = State.FAILED, error = x.message ?: tr(R.string.err_dl_failed)) }
             ErrorReport.report("error", "Descarga fallida", "${e.kind} ${e.id} · ${x.message}")
         } finally {
             if (current == e.key) current = null
         }
     }
 
-    private class NoSpace : IOException("No hay espacio suficiente en el equipo")
+    private class NoSpace : IOException(tr(R.string.err_dl_no_space))
 
     private suspend fun transfer(e: Entry) {
         val part = File(dir, e.file + ".part")
@@ -205,8 +207,8 @@ object Downloads {
         val req = Request.Builder().url(e.url).apply { if (have > 0) header("Range", "bytes=$have-") }.build()
         Net.client.newCall(req).execute().use { r ->
             if (r.code == 416 && have > 0) { part.renameTo(File(dir, e.file)); return } // ya estaba completo
-            if (!r.isSuccessful) throw IOException(if (r.code == 401 || r.code == 403) "El servidor no permitió la descarga (${r.code})" else "Error del servidor (${r.code})")
-            val body = r.body ?: throw IOException("El servidor no envió el archivo")
+            if (!r.isSuccessful) throw IOException(if (r.code == 401 || r.code == 403) tr(R.string.err_dl_forbidden, r.code) else tr(R.string.err_dl_server, r.code))
+            val body = r.body ?: throw IOException(tr(R.string.err_dl_no_file))
             val append = r.code == 206 && have > 0
             if (!append) have = 0
             val len = body.contentLength()
@@ -232,9 +234,9 @@ object Downloads {
                     }
                 }
             }
-            if (total > 0 && have < total) throw IOException("La descarga se cortó")
+            if (total > 0 && have < total) throw IOException(tr(R.string.err_dl_cut))
         }
-        if (!part.renameTo(File(dir, e.file))) throw IOException("No se pudo guardar el archivo")
+        if (!part.renameTo(File(dir, e.file))) throw IOException(tr(R.string.err_dl_save))
     }
 
     /** carátulas guardadas en el equipo (sin internet no se pueden pedir) */

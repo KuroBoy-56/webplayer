@@ -10,6 +10,8 @@ import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.theme.LatMpxTheme
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(Lang.wrap(newBase))
+
     private fun checkSignature() {
         if (com.latmpx.player.BuildConfig.DEBUG) return
         try {
