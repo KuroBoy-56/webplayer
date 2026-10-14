@@ -101,7 +101,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - No se traducen los títulos y nombres del servidor o de TMDB (películas, series, canales, categorías),
   los textos del panel (avisos, errores, pantalla falsa) ni las marcas. Las palabras clave de
   plataformas y géneros (`src/data/catalog.ts`, `kw`) siguen en español porque buscan en los nombres de
-  categoría del servidor; solo cambia el nombre que se ve. El aviso del panel se pide con `&lang=`.
+  categoría del servidor; solo cambia el nombre que se ve.
+- Cada pedido al panel lleva el idioma (`?lang=`; en `login.php`, `"lang"` dentro del JSON cifrado) para
+  que el panel traduzca sus mensajes y el aviso de `alerta.php`. TMDB: la búsqueda y el emparejamiento con
+  el catálogo siguen en es-MX; reparto, biografía y carátulas del inicio de sesión van en el idioma de la
+  app (es-MX, en-US, pt-BR o fr-FR).
 
 ## Panel: dispositivo, pantalla falsa y errores
 
