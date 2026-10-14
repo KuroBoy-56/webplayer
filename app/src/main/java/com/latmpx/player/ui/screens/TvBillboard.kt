@@ -1,4 +1,7 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
@@ -182,7 +185,7 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("N", color = NfRed, fontSize = 26.sp, fontWeight = FontWeight.Black)
                     Text(
-                        if (item.kind == Kind.SERIES) "SERIE" else "PELÍCULA", color = Color(0xFFDDDDDD), fontSize = 13.sp,
+                        stringResource(if (item.kind == Kind.SERIES) R.string.series_badge else R.string.movie_badge), color = Color(0xFFDDDDDD), fontSize = 13.sp,
                         fontWeight = FontWeight.Bold, letterSpacing = 3.sp, modifier = Modifier.padding(start = 8.dp),
                     )
                 }
@@ -195,7 +198,7 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
                     maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (item.rating > 0) Text("${(item.rating * 10).toInt().coerceAtMost(99)}% para ti", color = Color(0xFF46D369), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    if (item.rating > 0) Text(stringResource(R.string.match_pct, (item.rating * 10).toInt().coerceAtMost(99)), color = Color(0xFF46D369), fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     if (item.year.isNotBlank()) Text(item.year.take(4), color = Color(0xFFDDDDDD), fontSize = 15.sp)
                     Text(
                         "HD", color = Color(0xFFDDDDDD), fontSize = 12.sp,
@@ -211,10 +214,10 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
                 Spacer(Modifier.height(20.dp))
                 // los botones no se encogen al ancho del texto de arriba: siempre en una línea y del mismo alto
                 Row(Modifier.wrapContentWidth(Alignment.Start, unbounded = true), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    NfButton("Reproducir", Icons.Filled.PlayArrow, white = true, modifier = Modifier.focusRequester(play)) {
+                    NfButton(stringResource(R.string.play), Icons.Filled.PlayArrow, white = true, modifier = Modifier.focusRequester(play)) {
                         if (item.kind == Kind.MOVIE) Play.movie(ctx, item, item.ext) else state.push(Route.Detail(item))
                     }
-                    NfButton("Más información", Icons.Filled.Info, white = false) { state.push(Route.Detail(item)) }
+                    NfButton(stringResource(R.string.more_info), Icons.Filled.Info, white = false) { state.push(Route.Detail(item)) }
                 }
             }
         }

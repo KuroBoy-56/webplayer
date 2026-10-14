@@ -16,6 +16,8 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.latmpx.player.R
+import com.latmpx.player.tr
 
 /**
  * Mantiene viva la descarga con la app en segundo plano (servicio en primer plano con una notificación
@@ -51,14 +53,14 @@ class DownloadService : Service() {
             channel(ctx)
             val cur = Downloads.all().firstOrNull { it.state == Downloads.State.RUNNING }
             val left = Downloads.all().count { it.state == Downloads.State.QUEUED }
-            val title = cur?.let { if (it.kind == Kind.SERIES) "${it.seriesName} · T${it.season} E${it.episode}" else it.title } ?: "Descargas"
+            val title = cur?.let { if (it.kind == Kind.SERIES) tr(R.string.ep_short, it.seriesName, it.season, it.episode) else it.title } ?: tr(R.string.downloads)
             val open = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let {
                 PendingIntent.getActivity(ctx, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             }
             return NotificationCompat.Builder(ctx, CHANNEL)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
-                .setContentTitle("Descargando: $title")
-                .setContentText(if (left > 0) "${cur?.percent ?: 0} % · $left en espera" else "${cur?.percent ?: 0} %")
+                .setContentTitle(tr(R.string.dl_notif_title, title))
+                .setContentText(if (left > 0) tr(R.string.dl_notif_waiting, cur?.percent ?: 0, left) else "${cur?.percent ?: 0} %")
                 .setProgress(100, cur?.percent ?: 0, cur == null || cur.total <= 0)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
@@ -71,7 +73,7 @@ class DownloadService : Service() {
             if (Build.VERSION.SDK_INT < 26) return
             val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
             if (nm.getNotificationChannel(CHANNEL) == null) {
-                nm.createNotificationChannel(NotificationChannel(CHANNEL, "Descargas", NotificationManager.IMPORTANCE_LOW))
+                nm.createNotificationChannel(NotificationChannel(CHANNEL, tr(R.string.downloads), NotificationManager.IMPORTANCE_LOW))
             }
         }
     }

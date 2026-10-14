@@ -1,4 +1,7 @@
 package com.latmpx.player.ui.components
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -186,7 +189,7 @@ fun <T> TvRow(title: String, items: List<T>, onViewAll: (() -> Unit)? = null, on
                             Icons.AutoMirrored.Filled.ArrowForward, null, tint = if (f) Color.Black else Color.White,
                             modifier = Modifier.size(44.dp).background(if (f) Color.White else Color(0x33FFFFFF), CircleShape).padding(10.dp),
                         )
-                        Text("Ver todo", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+                        Text(stringResource(R.string.see_all), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
                     }
                 }
             }

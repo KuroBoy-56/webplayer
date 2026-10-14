@@ -1,5 +1,7 @@
 package com.latmpx.player.ui
 
+import com.latmpx.player.tr
+import com.latmpx.player.R
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -10,7 +12,11 @@ import com.latmpx.player.data.Kind
 import com.latmpx.player.data.Platform
 import com.latmpx.player.data.Session
 
-enum class Tab(val label: String) { HOME("Inicio"), MOVIES("Películas"), SERIES("Series"), LIVE("TV en vivo"), SPORTS("Deportes"), MYLIST("Mi lista"), SEARCH("Buscar"), ACCOUNT("Cuenta") }
+enum class Tab(private val res: Int) {
+    HOME(R.string.tab_home), MOVIES(R.string.movies), SERIES(R.string.series), LIVE(R.string.live_tv), SPORTS(R.string.sports), MYLIST(R.string.my_list), SEARCH(R.string.search), ACCOUNT(R.string.account);
+    /** nombre en el idioma de la app */
+    val label: String get() = tr(res)
+}
 
 /** Pantallas que se apilan sobre las pestañas (atrás vuelve a la anterior). */
 sealed class Route {

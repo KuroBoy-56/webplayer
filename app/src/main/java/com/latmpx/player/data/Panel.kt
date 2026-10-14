@@ -1,5 +1,7 @@
 package com.latmpx.player.data
 
+import com.latmpx.player.tr
+import com.latmpx.player.R
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONArray
 import org.json.JSONObject
@@ -22,7 +24,7 @@ object Panel {
     /** Resultado con mensaje de error en español para mostrar en pantalla. */
     data class Answer<T>(val value: T?, val error: String? = null, val code: Int = 0)
 
-    private const val NO_PANEL = "No se pudo conectar con el panel. Revisa tu conexión a internet."
+    private val NO_PANEL get() = tr(R.string.err_panel_offline)
 
     private fun device(id: String) = JSONObject().put("mac_address", id)
 
@@ -48,7 +50,7 @@ object Panel {
             } catch (e: PanelCrypto.MissingKey) {
                 return Answer(null, e.message)
             } catch (e: Exception) {
-                return Answer(null, "No se pudo preparar la solicitud al panel")
+                return Answer(null, tr(R.string.err_panel_prepare))
             }
             r = Net.postForm(PanelUrl.api("login.php"), mapOf("action" to action, "data" to data))
             val j = if (r.code == 401) r.json() else null
@@ -63,7 +65,7 @@ object Panel {
         // respuesta cifrada (panel nuevo) -> JSON; un panel viejo la manda en JSON y queda igual. Los errores siempre llegan en JSON.
         if (encReply && r.code == 200 && r.body.isNotBlank() && !r.body.trimStart().startsWith("{")) {
             val dec = runCatching { PanelCrypto.decrypt(r.body) }.getOrNull()
-                ?: return Answer(null, "La llave de la app no coincide con la del panel")
+                ?: return Answer(null, tr(R.string.err_panel_key_mismatch))
             return Answer(r.copy(body = dec))
         }
         return Answer(r)
@@ -81,8 +83,8 @@ object Panel {
         Tenant.onPanelError(j)?.let { return it }
         val msg = j?.s("error").orEmpty().ifEmpty { j?.s("message").orEmpty() }
         return when {
-            msg == "Server not configured" -> "El panel no está configurado"
-            msg == "Decryption failed" -> "La llave de la app no coincide con la del panel"
+            msg == "Server not configured" -> tr(R.string.err_panel_not_configured)
+            msg == "Decryption failed" -> tr(R.string.err_panel_key_mismatch)
             msg.isNotEmpty() -> msg
             else -> fallback
         }
@@ -97,13 +99,13 @@ object Panel {
         val a = login("check_mac", device(deviceId))
         val r = a.value ?: return Answer(null, a.error)
         // con distribuidor: un error del panel (vencido, suspendido…) se muestra en vez de "no hay línea"
-        if (Tenant.active && r.code in 400..499) return Answer(null, errorOf(r, "El panel rechazó la solicitud"))
-        val j = r.json() ?: return Answer(null, errorOf(r, "Respuesta no válida del panel"))
+        if (Tenant.active && r.code in 400..499) return Answer(null, errorOf(r, tr(R.string.err_panel_rejected)))
+        val j = r.json() ?: return Answer(null, errorOf(r, tr(R.string.err_panel_bad_response)))
         fakeScreen = FakeScreen.parse(j)
         if (!j.optBoolean("exists", false)) return Answer(null)
         // PIN parental del panel: es el que usa la app
         j.s("pin").takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { Store.parentalPin = it }
-        val line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))?.copy(demo = j.optBoolean("demo", false), demoExpires = j.optLong("demo_expires", 0L), demoDuration = j.optLong("demo_duration", 0L))
+        val line = lineFromUrl(tr(R.string.server), j.s("url"), j.s("username"), j.s("password"))?.copy(demo = j.optBoolean("demo", false), demoExpires = j.optLong("demo_expires", 0L), demoDuration = j.optLong("demo_duration", 0L))
         return Answer(line)
     }
 
@@ -111,14 +113,14 @@ object Panel {
     suspend fun fetchDns(): Answer<List<String>> {
         val a = login("fetch_dns", JSONObject())
         val r = a.value ?: return Answer(null, a.error)
-        if (!r.ok) return Answer(null, errorOf(r, "El panel no devolvió los servidores"))
+        if (!r.ok) return Answer(null, errorOf(r, tr(R.string.err_panel_no_servers)))
         val dec: String? = try {
             PanelCrypto.decrypt(r.body)
         } catch (e: PanelCrypto.MissingKey) {
             return Answer(null, e.message)
         }
-        val plain = dec ?: return Answer(null, "La llave de la app no coincide con la del panel")
-        val arr = runCatching { JSONArray(plain) }.getOrNull() ?: return Answer(null, "Lista de servidores no válida")
+        val plain = dec ?: return Answer(null, tr(R.string.err_panel_key_mismatch))
+        val arr = runCatching { JSONArray(plain) }.getOrNull() ?: return Answer(null, tr(R.string.err_panel_bad_servers))
         val out = (0 until arr.length()).map { arr.optString(it).trim() }.filter { it.isNotEmpty() }
         return Answer(out)
     }
@@ -130,7 +132,7 @@ object Panel {
         val r = a.value ?: return Answer(null, a.error)
         val j = r.json()
         if (r.ok && j?.s("status") == "ok") return Answer(Unit)
-        return Answer(null, errorOf(r, "No se pudo activar el equipo"))
+        return Answer(null, errorOf(r, tr(R.string.err_panel_activate)))
     }
 
     /** Línea de la demo automática: usuario, contraseña y el servidor de la demo (url, puede venir vacío en paneles viejos). */
@@ -145,11 +147,11 @@ object Panel {
         val j = r.json()
         if (r.ok && j?.s("status") == "ok" && j.s("username").isNotEmpty()) return Answer(Demo(j.s("username"), j.s("password"), j.s("url"), j.optLong("demo_expires", 0L), j.optLong("demo_duration", 0L)), code = r.code)
         val fallback = when (r.code) {
-            403 -> "Demo ya utilizado en este dispositivo o dispositivo ya registrado."
-            404 -> "Código de revendedor no válido o sin demo disponible."
-            429 -> "Demasiadas demos desde esta conexión. Inténtalo mañana."
-            503 -> "La demo no está disponible en este momento. Inténtalo más tarde."
-            else -> "No se pudo crear la demo"
+            403 -> tr(R.string.err_demo_used)
+            404 -> tr(R.string.err_demo_reseller)
+            429 -> tr(R.string.err_demo_too_many)
+            503 -> tr(R.string.err_demo_unavailable)
+            else -> tr(R.string.err_demo_create)
         }
         return Answer(null, errorOf(r, fallback), r.code)
     }
@@ -163,7 +165,7 @@ object Panel {
             Store.parentalPin = newPin
             return Answer(Unit)
         }
-        return Answer(null, errorOf(r, "El panel no guardó el PIN (${r.code})"), r.code)
+        return Answer(null, errorOf(r, tr(R.string.err_pin_not_saved_code, r.code)), r.code)
     }
 
     /** Respuesta de tenant_config: la configuración descifrada o el código de error (tenant_invalid, offline, no_key…). */
@@ -171,7 +173,7 @@ object Panel {
 
     /** login.php action tenant_config con {code, app, device} cifrado; la respuesta viene cifrada igual que fetch_dns. */
     suspend fun tenantConfig(code: String, deviceId: String): TenantAnswer {
-        if (!PanelCrypto.hasKey()) return TenantAnswer(null, "Esta versión de la app no tiene la llave del panel", "no_key")
+        if (!PanelCrypto.hasKey()) return TenantAnswer(null, tr(R.string.err_panel_no_key), "no_key")
         val payload = JSONObject().put("code", code).put("app", Tenant.APP).put("device", deviceId)
         val a = login("tenant_config", payload, tag = false)
         val r = a.value ?: return TenantAnswer(null, a.error, "offline")
@@ -181,9 +183,9 @@ object Panel {
             val c = j?.s("code").orEmpty()
             val msg = j?.s("error").orEmpty().let { m ->
                 when (m) {
-                    "Decryption failed" -> "La llave de la app no coincide con la del panel"
-                    "Server not configured" -> "El panel no está configurado"
-                    else -> m.ifEmpty { "El panel rechazó el número (${r.code})" }
+                    "Decryption failed" -> tr(R.string.err_panel_key_mismatch)
+                    "Server not configured" -> tr(R.string.err_panel_not_configured)
+                    else -> m.ifEmpty { tr(R.string.err_panel_rejected_code, r.code) }
                 }
             }
             return TenantAnswer(null, msg, c.ifEmpty { "http_${r.code}" })
@@ -191,11 +193,11 @@ object Panel {
         val dec: String? = try {
             PanelCrypto.decrypt(r.body)
         } catch (e: PanelCrypto.MissingKey) {
-            return TenantAnswer(null, "Esta versión de la app no tiene la llave del panel", "no_key")
+            return TenantAnswer(null, tr(R.string.err_panel_no_key), "no_key")
         }
-        val plain = dec ?: return TenantAnswer(null, "La llave de la app no coincide con la del panel", "bad_key")
+        val plain = dec ?: return TenantAnswer(null, tr(R.string.err_panel_key_mismatch), "bad_key")
         val j = runCatching { JSONObject(plain) }.getOrNull()
-        if (j == null || j.s("status") != "ok") return TenantAnswer(null, "Respuesta no válida del panel", "bad_response")
+        if (j == null || j.s("status") != "ok") return TenantAnswer(null, tr(R.string.err_panel_bad_response), "bad_response")
         return TenantAnswer(j)
     }
 
@@ -206,15 +208,15 @@ object Panel {
         val body = JSONObject().put("data", PanelCrypto.mopeEncrypt(device(deviceId).toString()))
         val r = Net.postJson(PanelUrl.api("auth.php"), body)
         if (r.code == 0) return Answer(null, NO_PANEL)
-        val outer = r.json() ?: return Answer(null, "Respuesta no válida del panel")
-        if (!r.ok) return Answer(null, errorOf(r, "El panel rechazó la solicitud"))
+        val outer = r.json() ?: return Answer(null, tr(R.string.err_panel_bad_response))
+        if (!r.ok) return Answer(null, errorOf(r, tr(R.string.err_panel_rejected)))
         val resp = outer.s("data").takeIf { it.isNotEmpty() }?.let { PanelCrypto.mopeDecrypt(it) }
             ?.let { runCatching { JSONObject(it) }.getOrNull() } ?: outer.optJSONObject("plain")
-            ?: return Answer(null, "Respuesta no válida del panel")
+            ?: return Answer(null, tr(R.string.err_panel_bad_response))
         // llave TMDB configurada en el panel: se usa para el fondo de pósters del inicio de sesión
         resp.s("tmdbKey").takeIf { it.isNotEmpty() && it != "missing_tmdb_key" }?.let { Store.tmdbKey = it }
         resp.s("parent_control").takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { Store.parentalPin = it }
-        val lines = resp.optJSONArray("urls").mapObj { o -> lineFromUrl(o.s("name").ifEmpty { "Servidor" }, o.s("url"), "", "") }
+        val lines = resp.optJSONArray("urls").mapObj { o -> lineFromUrl(o.s("name").ifEmpty { tr(R.string.server) }, o.s("url"), "", "") }
         return Answer(lines.distinctBy { "${it.base}|${it.user}" })
     }
 

@@ -1,4 +1,7 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -53,7 +56,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** géneros en el orden de homex.php ($preferred) */
-private val preferredGenres = listOf("Acción", "Comedia", "Terror", "Anime", "Drama", "Suspenso", "Aventura", "Animación", "Ciencia ficción", "Romance", "Documental")
+private val preferredGenres get() = listOf(
+    tr(R.string.genre_action), tr(R.string.genre_comedy), tr(R.string.genre_horror), "Anime", "Drama", tr(R.string.genre_suspense),
+    tr(R.string.genre_adventure), tr(R.string.genre_animation), tr(R.string.genre_scifi), "Romance", tr(R.string.genre_documentary),
+)
 
 private fun safe(cats: List<Category>) = cats.filter { it.id !in Store.blockedCats }
 
@@ -82,7 +88,7 @@ private fun CoroutineScope.focusRow(list: LazyListState, key: Any) = launch {
  */
 @Composable
 fun TvHomeScreen(state: AppState) {
-    if (state.loading && state.movies.isEmpty()) { Loading("Preparando tu catálogo…"); return }
+    if (state.loading && state.movies.isEmpty()) { Loading(stringResource(R.string.preparing_catalog)); return }
     val movies = state.movies
     val series = state.series
     val w = tvCardWidth()
@@ -134,27 +140,27 @@ fun TvHomeScreen(state: AppState) {
             }
         }
         if (cont.isNotEmpty()) item(key = "cont") {
-            TvRow("Continuar viendo", cont, onViewAll = { state.push(Route.Saved(continueWatching = true)) }, onFocused = { scope.focusRow(list, "cont") }) { _, p ->
+            TvRow(stringResource(R.string.continue_watching), cont, onViewAll = { state.push(Route.Saved(continueWatching = true)) }, onFocused = { scope.focusRow(list, "cont") }) { _, p ->
                 val it = state.itemFromProgress(p) ?: return@TvRow
                 TvCard(it.copy(poster = p.poster.ifEmpty { it.poster }), w, progress = if (p.duration > 0) p.position.toFloat() / p.duration else 0.05f) { open(it) }
             }
         }
-        if (favs.isNotEmpty()) item(key = "favs") { TvRow("Mi lista", favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) }, onFocused = { scope.focusRow(list, "favs") }) { _, it -> TvCard(it, w) { open(it) } } }
-        item(key = "top") { TvRow("Top 10 de hoy", top10, onFocused = { scope.focusRow(list, "top") }) { i, it -> TvTop10Card(i + 1, it, w) { open(it) } } }
+        if (favs.isNotEmpty()) item(key = "favs") { TvRow(stringResource(R.string.my_list), favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) }, onFocused = { scope.focusRow(list, "favs") }) { _, it -> TvCard(it, w) { open(it) } } }
+        item(key = "top") { TvRow(stringResource(R.string.top10_today), top10, onFocused = { scope.focusRow(list, "top") }) { i, it -> TvTop10Card(i + 1, it, w) { open(it) } } }
         item(key = "rm") {
-            TvRow("Películas agregadas recientemente", recentMovies, onViewAll = { state.push(Route.Browse("Películas agregadas recientemente", Kind.MOVIE, emptySet())) }, onFocused = { scope.focusRow(list, "rm") }) { _, it -> TvCard(it, w) { open(it) } }
+            TvRow(stringResource(R.string.new_movies), recentMovies, onViewAll = { state.push(Route.Browse(tr(R.string.new_movies), Kind.MOVIE, emptySet())) }, onFocused = { scope.focusRow(list, "rm") }) { _, it -> TvCard(it, w) { open(it) } }
         }
         item(key = "rs") {
-            TvRow("Series nuevas", recentSeries, onViewAll = { state.push(Route.Browse("Series nuevas", Kind.SERIES, emptySet())) }, onFocused = { scope.focusRow(list, "rs") }) { _, it -> TvCard(it, w) { open(it) } }
+            TvRow(stringResource(R.string.new_series), recentSeries, onViewAll = { state.push(Route.Browse(tr(R.string.new_series), Kind.SERIES, emptySet())) }, onFocused = { scope.focusRow(list, "rs") }) { _, it -> TvCard(it, w) { open(it) } }
         }
         platformRows.forEach { (p, l) ->
-            item(key = "p_${p.key}") { TvRow("Lo mejor de ${p.label}", l, onViewAll = { state.push(Route.PlatformPage(p)) }, onFocused = { scope.focusRow(list, "p_${p.key}") }) { _, it -> TvCard(it, w) { open(it) } } }
+            item(key = "p_${p.key}") { TvRow(stringResource(R.string.best_of, p.label), l, onViewAll = { state.push(Route.PlatformPage(p)) }, onFocused = { scope.focusRow(list, "p_${p.key}") }) { _, it -> TvCard(it, w) { open(it) } } }
         }
-        item(key = "sfy") { TvRow("Series para ti", seriesForYou, onFocused = { scope.focusRow(list, "sfy") }) { _, it -> TvCard(it, w) { open(it) } } }
+        item(key = "sfy") { TvRow(stringResource(R.string.series_for_you), seriesForYou, onFocused = { scope.focusRow(list, "sfy") }) { _, it -> TvCard(it, w) { open(it) } } }
         genreRows.forEach { (label, ids, l) ->
             item(key = "g_$label") { TvRow(label, l, onViewAll = { state.push(Route.Browse(label, Kind.MOVIE, ids)) }, onFocused = { scope.focusRow(list, "g_$label") }) { _, it -> TvCard(it, w) { open(it) } } }
         }
-        item(key = "mfy") { TvRow("Películas para ti", moviesForYou, onFocused = { scope.focusRow(list, "mfy") }) { _, it -> TvCard(it, w) { open(it) } } }
+        item(key = "mfy") { TvRow(stringResource(R.string.movies_for_you), moviesForYou, onFocused = { scope.focusRow(list, "mfy") }) { _, it -> TvCard(it, w) { open(it) } } }
     }
 }
 
@@ -167,7 +173,7 @@ fun TvCatalogScreen(state: AppState, kind: Kind) {
     val all = if (kind == Kind.MOVIE) state.movies else state.series
     if (state.loading && all.isEmpty()) { Loading(); return }
     val cats = safe(if (kind == Kind.MOVIE) state.movieCats else state.seriesCats)
-    val label = if (kind == Kind.MOVIE) "Películas" else "Series"
+    val label = stringResource(if (kind == Kind.MOVIE) R.string.movies else R.string.series)
     val w = tvCardWidth()
     val pad = tvPad()
     val list = rememberLazyListState()
@@ -193,9 +199,9 @@ fun TvCatalogScreen(state: AppState, kind: Kind) {
             }
         }
         item(key = "recent") {
-            TvRow("Agregadas recientemente", recent, onViewAll = { state.push(Route.Browse("Agregadas recientemente", kind, emptySet())) }, onFocused = { scope.focusRow(list, "recent") }) { _, it -> TvCard(it, w) { open(it) } }
+            TvRow(stringResource(R.string.recently_added), recent, onViewAll = { state.push(Route.Browse(tr(R.string.recently_added), kind, emptySet())) }, onFocused = { scope.focusRow(list, "recent") }) { _, it -> TvCard(it, w) { open(it) } }
         }
-        item(key = "top") { TvRow("Top 10 ${label.lowercase()} hoy", top10, onFocused = { scope.focusRow(list, "top") }) { i, it -> TvTop10Card(i + 1, it, w) { open(it) } } }
+        item(key = "top") { TvRow(stringResource(if (kind == Kind.MOVIE) R.string.top10_movies_today else R.string.top10_series_today), top10, onFocused = { scope.focusRow(list, "top") }) { i, it -> TvTop10Card(i + 1, it, w) { open(it) } } }
         rows.forEach { (c, l) ->
             item(key = "c_${c.id}") { TvRow(c.name, l, onViewAll = { state.push(Route.Browse(c.name, kind, setOf(c.id))) }, onFocused = { scope.focusRow(list, "c_${c.id}") }) { _, it -> TvCard(it, w) { open(it) } } }
         }

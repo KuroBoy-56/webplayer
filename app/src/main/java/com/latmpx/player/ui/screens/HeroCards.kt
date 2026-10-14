@@ -1,5 +1,7 @@
 package com.latmpx.player.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.R
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -129,10 +131,10 @@ private fun HeroCard(state: AppState, item: Item, modifier: Modifier) {
             if (tags.isNotEmpty()) Text(tags, color = Color(0xFFE5E5E5), fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CardButton("Reproducir", Icons.Filled.PlayArrow, true, Modifier.weight(1f)) {
+                CardButton(stringResource(R.string.play), Icons.Filled.PlayArrow, true, Modifier.weight(1f)) {
                     if (item.kind == Kind.MOVIE) Play.movie(ctx, item, item.ext) else state.push(Route.Detail(item))
                 }
-                CardButton(if (fav) "En mi lista" else "Mi lista", if (fav) Icons.Filled.Check else Icons.Filled.Add, false, Modifier.weight(1f)) {
+                CardButton(stringResource(if (fav) R.string.in_my_list else R.string.my_list), if (fav) Icons.Filled.Check else Icons.Filled.Add, false, Modifier.weight(1f)) {
                     fav = Cloud.toggleFav(item)
                 }
             }

@@ -85,7 +85,8 @@ private enum class Gate { CHOOSE, RETRY, OPEN }
 
 @Composable
 fun AppRoot() {
-    val state = remember { AppState() }
+    // tras cambiar el idioma (se recrea la actividad) se vuelve a Cuenta
+    val state = remember { AppState().apply { if (com.latmpx.player.Lang.reopenAccount) { com.latmpx.player.Lang.reopenAccount = false; tab = Tab.ACCOUNT } } }
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
     val booted = remember { mutableStateOf(false) }

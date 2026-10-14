@@ -1,4 +1,7 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -68,16 +71,15 @@ internal fun epgWindow(now: Long): Pair<Long, Long> {
     return from to c.timeInMillis
 }
 
-private val dayFmt = SimpleDateFormat("EEE d", Locale.forLanguageTag("es"))
 private val hmFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
 private fun hm(t: Long) = synchronized(hmFmt) { hmFmt.format(t) }
 
 /** Ayer / Hoy / Mañana / "sáb 11" */
 internal fun epgDayLabel(t: Long, now: Long): String = when (((epgDayStart(t) - epgDayStart(now)).toDouble() / DAY_MS).roundToInt()) {
-    -1 -> "Ayer"
-    0 -> "Hoy"
-    1 -> "Mañana"
-    else -> synchronized(dayFmt) { dayFmt.format(t) }.replace(".", "").replaceFirstChar { it.uppercase() }
+    -1 -> tr(R.string.yesterday)
+    0 -> tr(R.string.today)
+    1 -> tr(R.string.tomorrow)
+    else -> SimpleDateFormat("EEE d", Locale.getDefault()).format(t).replace(".", "").replaceFirstChar { it.uppercase() }
 }
 
 /**
@@ -89,9 +91,9 @@ internal fun epgDayLabel(t: Long, now: Long): String = when (((epgDayStart(t) - 
 internal fun TvEpgTimeline(ch: Item?, guide: List<EpgEntry>?, now: Long, entry: FocusRequester, onWatch: () -> Unit, modifier: Modifier) {
     Column(modifier.fillMaxWidth().padding(top = 12.dp)) {
         when {
-            ch == null -> Text("Presiona OK sobre un canal para verlo aquí con su guía", color = LvDim, fontSize = 14.sp)
-            guide == null -> Text("Cargando guía…", color = LvDim, fontSize = 14.sp)
-            guide.isEmpty() -> Text("Sin guía de programación para ${ch.name}", color = LvDim, fontSize = 14.sp)
+            ch == null -> Text(stringResource(R.string.epg_pick_channel), color = LvDim, fontSize = 14.sp)
+            guide == null -> Text(stringResource(R.string.loading_guide), color = LvDim, fontSize = 14.sp)
+            guide.isEmpty() -> Text(stringResource(R.string.no_guide_for, ch.name), color = LvDim, fontSize = 14.sp)
             else -> key(ch.id) { TimelineBody(guide, now, entry, onWatch) }
         }
     }
@@ -167,10 +169,10 @@ private fun ProgramInfo(p: EpgEntry?, now: Long, modifier: Modifier) {
             if (live) {
                 Box(Modifier.size(7.dp).background(NfRed, CircleShape))
                 Spacer(Modifier.width(6.dp))
-                Text("EN SINTONÍA", color = NfRed, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
-                Text("  ·  quedan ${((p.end - now) / 60_000).coerceAtLeast(1)} min", color = LvDim, fontSize = 12.sp)
+                Text(stringResource(R.string.on_now_badge), color = NfRed, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
+                Text("  ·  " + stringResource(R.string.min_left, ((p.end - now) / 60_000).coerceAtLeast(1).toInt()), color = LvDim, fontSize = 12.sp)
             } else {
-                Text(if (p.end <= now) "EMITIDO" else "PRÓXIMO", color = LvDim, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
+                Text(stringResource(if (p.end <= now) R.string.aired_badge else R.string.upcoming_badge), color = LvDim, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
                 Text("  ·  ${epgDayLabel(p.start, now)} ${hm(p.start)} – ${hm(p.end)}", color = LvDim, fontSize = 12.sp)
             }
         }
@@ -214,7 +216,7 @@ private fun ProgramBlock(
                     if (live) {
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            "AHORA", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1,
+                            stringResource(R.string.now_badge), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1,
                             modifier = Modifier.background(NfRed, RoundedCornerShape(3.dp)).padding(horizontal = 4.dp),
                         )
                     }

@@ -1,4 +1,7 @@
 package com.latmpx.player.ui
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
@@ -181,7 +184,7 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
             shape = CircleShape, focusScale = 1.12f,
         ) { f ->
             Box(Modifier.size(40.dp).background(if (f) Color.White else if (state.tab == Tab.SEARCH) Color(0x33FFFFFF) else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Search, "Buscar", tint = if (f) Color.Black else Color.White, modifier = Modifier.size(24.dp))
+                Icon(Icons.Filled.Search, stringResource(R.string.search), tint = if (f) Color.Black else Color.White, modifier = Modifier.size(24.dp))
             }
         }
         Spacer(Modifier.width(14.dp))
@@ -224,7 +227,7 @@ private fun Clock() {
     Column(horizontalAlignment = Alignment.End) {
         Text(java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(now), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Text(
-            java.text.SimpleDateFormat("EEE d MMM", java.util.Locale.forLanguageTag("es")).format(now).replace(".", ""),
+            java.text.SimpleDateFormat("EEE d MMM", java.util.Locale.getDefault()).format(now).replace(".", ""),
             color = NfGray2, fontSize = 11.sp,
         )
     }
@@ -249,15 +252,15 @@ private fun ExitDialog(onStay: () -> Unit, onExit: () -> Unit) {
             ) {
                 LogoHeader(height = 42.dp)
                 Spacer(Modifier.height(22.dp))
-                Text("¿Quieres salir?", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                Text(stringResource(R.string.exit_question), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
                 Text(
-                    "Tu progreso y tu lista quedan guardados para cuando vuelvas.",
+                    stringResource(R.string.exit_desc),
                     color = NfGray2, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp),
                 )
                 Spacer(Modifier.height(28.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    DialogButton("Seguir viendo", primary = true, Modifier.focusRequester(stay), onStay)
-                    DialogButton("Salir", primary = false, Modifier, onExit)
+                    DialogButton(stringResource(R.string.keep_watching), primary = true, Modifier.focusRequester(stay), onStay)
+                    DialogButton(stringResource(R.string.exit), primary = false, Modifier, onExit)
                 }
             }
         }

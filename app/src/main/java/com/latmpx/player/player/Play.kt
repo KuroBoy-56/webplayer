@@ -1,4 +1,6 @@
 package com.latmpx.player.player
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import android.content.Context
 import android.content.Intent
@@ -51,7 +53,7 @@ object Play {
     /** episodio: la lista incluye los siguientes de la temporada para pasar al siguiente automáticamente */
     fun episode(ctx: Context, series: Item, eps: List<Episode>, index: Int) =
         start(ctx, Kind.SERIES, eps.map { e ->
-            QueueEntry(e.id, "${series.name} · T${e.season} E${e.num}" + (if (e.title.isNotBlank() && !e.title.contains(series.name)) " · ${e.title}" else ""),
+            QueueEntry(e.id, tr(R.string.ep_short, series.name, e.season, e.num) + (if (e.title.isNotBlank() && !e.title.contains(series.name)) " · ${e.title}" else ""),
                 "series:${series.id}:${e.id}", e.image.ifEmpty { series.poster }, e.ext)
         }, index, series.key, series.name, series.poster, series.categoryId)
 
@@ -80,7 +82,7 @@ object Play {
             try {
                 ctx.startActivity(intent)
             } catch (e: Exception) {
-                android.widget.Toast.makeText(ctx, "No hay reproductor externo instalado", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(ctx, tr(R.string.no_external_player), android.widget.Toast.LENGTH_SHORT).show()
             }
             return
         }

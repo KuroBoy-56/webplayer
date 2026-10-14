@@ -1,5 +1,6 @@
 package com.latmpx.player.ui.components
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -115,7 +116,7 @@ fun <T> ShelfRow(title: String, items: List<T>, pad: Dp, onViewAll: (() -> Unit)
         Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.Bottom) {
             Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             if (onViewAll != null) {
-                Text("Ver todos", color = Color.LightGray, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, modifier = Modifier.clickable { onViewAll() }.padding(start = 16.dp, top = 4.dp, bottom = 4.dp))
+                Text(stringResource(R.string.view_all), color = Color.LightGray, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, modifier = Modifier.clickable { onViewAll() }.padding(start = 16.dp, top = 4.dp, bottom = 4.dp))
             }
         }
         LazyRow(contentPadding = PaddingValues(horizontal = pad, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -126,7 +127,7 @@ fun <T> ShelfRow(title: String, items: List<T>, pad: Dp, onViewAll: (() -> Unit)
                         Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                             Icon(androidx.compose.material.icons.Icons.Filled.ArrowForward, null, tint = Color.White, modifier = Modifier.size(32.dp).background(Color(0x33FFFFFF), androidx.compose.foundation.shape.CircleShape).padding(8.dp))
                             Spacer(Modifier.height(8.dp))
-                            Text("Ver todos", color = Color.White, fontSize = 14.sp)
+                            Text(stringResource(R.string.view_all), color = Color.White, fontSize = 14.sp)
                         }
                     }
                 }

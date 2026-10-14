@@ -1,4 +1,6 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
 
 import android.app.Activity
 import android.content.Context
@@ -282,7 +284,7 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
                             .border(2.dp, if (on) Color.White else Color(0x99FFFFFF), CircleShape)
                             .clickable { toggleFav(sel) },
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.Star, "Favorito", tint = if (on) Color.Black else Color.White, modifier = Modifier.size(22.dp)) }
+                    ) { Icon(Icons.Filled.Star, stringResource(R.string.favorite), tint = if (on) Color.Black else Color.White, modifier = Modifier.size(22.dp)) }
                 }
             }
 
@@ -290,7 +292,7 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
             val g = guide
             if (sel != null && !g.isNullOrEmpty()) {
                 Column(Modifier.fillMaxWidth().heightIn(max = epgMax).background(TvCol)) {
-                    Text("Guía de programas", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 6.dp))
+                    Text(stringResource(R.string.program_guide), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 6.dp))
                     LazyColumn(Modifier.fillMaxWidth()) {
                         items(g) { p -> ProgramRow(p, now) }
                     }
@@ -300,7 +302,7 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
             /* ---------- categorías, buscador y canales ---------- */
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
                 item(key = "cat") {
-                    val catName = cats.firstOrNull { it.first == cat }?.second ?: "Categorías"
+                    val catName = cats.firstOrNull { it.first == cat }?.second ?: stringResource(R.string.categories)
                     Box(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp)) {
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(Color.Black)
@@ -327,14 +329,14 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
                 }
                 item(key = "head") {
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
-                        Text("Canales", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.channels), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         if (shown.isNotEmpty()) Text("  (${shown.size})", color = TvEmpty, fontSize = 12.sp)
                     }
                 }
                 item(key = "filter") { FilterField(query) { query = it } }
                 if (shown.isEmpty()) item(key = "empty") {
                     Text(
-                        if (cat == FAVS && query.isBlank()) "Aún no tienes canales favoritos." else "No hay canales en esta sección.",
+                        stringResource(if (cat == FAVS && query.isBlank()) R.string.no_fav_channels else R.string.no_channels_section),
                         color = TvEmpty, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(16.dp),
                     )
                 }
@@ -391,7 +393,7 @@ private fun PhonePlayerBox(
         if (ch == null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Filled.LiveTv, null, tint = TvEmpty.copy(alpha = 0.5f), modifier = Modifier.size(54.dp))
-                Text("Selecciona un canal para comenzar a ver", color = TvEmpty, fontSize = 14.sp, textAlign = TextAlign.Center)
+                Text(stringResource(R.string.pick_channel), color = TvEmpty, fontSize = 14.sp, textAlign = TextAlign.Center)
             }
             return@Box
         }
@@ -407,9 +409,9 @@ private fun PhonePlayerBox(
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x33000000), Color(0x22000000), Color(0xCC000000)))))
             when {
                 failed -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No se pudo reproducir este canal", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.channel_failed), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Reintentar", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        stringResource(R.string.retry), color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 10.dp).clip(RoundedCornerShape(4.dp)).background(Color.White).clickable { onRetry() }.padding(horizontal = 14.dp, vertical = 6.dp),
                     )
                 }
@@ -417,7 +419,7 @@ private fun PhonePlayerBox(
                 else -> Box(
                     Modifier.size(64.dp).clip(CircleShape).background(Color(0x99000000)).border(2.dp, Color(0xCCFFFFFF), CircleShape),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Filled.PlayArrow, "Ver", tint = Color.White, modifier = Modifier.size(38.dp)) }
+                ) { Icon(Icons.Filled.PlayArrow, stringResource(R.string.watch), tint = Color.White, modifier = Modifier.size(38.dp)) }
             }
             if (!full && nowProg != null) {
                 Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 12.dp, end = 56.dp, top = 10.dp, bottom = 10.dp)) {
@@ -432,7 +434,7 @@ private fun PhonePlayerBox(
         }
         if (!full || controls) {
             Text(
-                "EN VIVO", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                stringResource(R.string.live_badge), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.TopStart).padding(if (full) 16.dp else 10.dp).background(NfRed, RoundedCornerShape(3.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
@@ -441,7 +443,7 @@ private fun PhonePlayerBox(
             Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(96.dp).background(Brush.verticalGradient(listOf(Color(0xCC000000), Color.Transparent))))
             Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 8.dp, end = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { onExitFull() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Salir de pantalla completa", tint = Color.White, modifier = Modifier.size(26.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.exit_fullscreen), tint = Color.White, modifier = Modifier.size(26.dp))
                 }
                 Spacer(Modifier.width(76.dp))
                 Column(Modifier.weight(1f)) {
@@ -456,7 +458,7 @@ private fun PhonePlayerBox(
                     .clip(CircleShape).background(Color(0x88000000)).clickable { onPip() },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.PictureInPictureAlt, "Imagen en imagen", tint = Color.White, modifier = Modifier.size(24.dp))
+                Icon(Icons.Filled.PictureInPictureAlt, stringResource(R.string.pip), tint = Color.White, modifier = Modifier.size(24.dp))
             }
         }
         if (active && (!full || controls)) {
@@ -467,7 +469,7 @@ private fun PhonePlayerBox(
             ) {
                 Icon(
                     if (full) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
-                    if (full) "Salir de pantalla completa" else "Pantalla completa", tint = Color.White, modifier = Modifier.size(28.dp),
+                    stringResource(if (full) R.string.exit_fullscreen else R.string.fullscreen), tint = Color.White, modifier = Modifier.size(28.dp),
                 )
             }
         }
@@ -506,7 +508,7 @@ private fun FilterField(value: String, onChange: (String) -> Unit) {
                 Icon(Icons.Filled.Search, null, tint = NfGray, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
-                    if (value.isEmpty()) Text("Buscar canal...", color = NfGray, fontSize = 14.sp)
+                    if (value.isEmpty()) Text(stringResource(R.string.search_channel), color = NfGray, fontSize = 14.sp)
                     inner()
                 }
             }

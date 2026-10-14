@@ -1,4 +1,5 @@
 package com.latmpx.player.player
+import com.latmpx.player.R
 
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
@@ -53,7 +54,7 @@ class PlayerPip(private val activity: ComponentActivity, private val player: Exo
         var r = if (w > 0 && vs.height > 0) Rational(w, vs.height) else Rational(16, 9)
         if (r.toFloat() > 2.39f) r = Rational(239, 100) else if (r.toFloat() < 1 / 2.39f) r = Rational(100, 239)
         val playing = player.isPlaying
-        val label = if (playing) "Pausa" else "Reproducir"
+        val label = activity.getString(if (playing) R.string.pause else R.string.play)
         val icon = Icon.createWithResource(activity, if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
         val pi = PendingIntent.getBroadcast(activity, 1, Intent(ACTION).setPackage(activity.packageName),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)

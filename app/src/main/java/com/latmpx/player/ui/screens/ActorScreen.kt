@@ -1,5 +1,8 @@
 package com.latmpx.player.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,14 +81,14 @@ fun ActorScreen(state: AppState, actor: Route.ActorPage) {
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(person?.name ?: actor.name, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black, lineHeight = 28.sp)
-                    val facts = listOfNotNull(person?.birthday?.ifBlank { null }?.let { "Nació: $it" }, person?.place?.ifBlank { null }).joinToString(" · ")
+                    val facts = listOfNotNull(person?.birthday?.ifBlank { null }?.let { tr(R.string.born, it) }, person?.place?.ifBlank { null }).joinToString(" · ")
                     if (facts.isNotEmpty()) Text(facts, color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
                     val bio = person?.bio.orEmpty()
                     if (bio.isNotBlank()) {
                         FocusBox(onClick = { bioOpen = !bioOpen }, focusScale = 1f, shape = RoundedCornerShape(4.dp), modifier = Modifier.padding(top = 8.dp)) {
                             Column {
                                 Text(bio, color = Color(0xFFDDDDDD), fontSize = 14.sp, lineHeight = 20.sp, maxLines = if (bioOpen) Int.MAX_VALUE else 5, overflow = TextOverflow.Ellipsis)
-                                Text(if (bioOpen) "Ver menos" else "Ver más", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+                                Text(stringResource(if (bioOpen) R.string.see_less else R.string.see_more), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
                     }
@@ -96,14 +99,14 @@ fun ActorScreen(state: AppState, actor: Route.ActorPage) {
             when {
                 p == null -> Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(color = NfRed, modifier = Modifier.width(26.dp).height(26.dp), strokeWidth = 3.dp)
-                    Text("  Buscando sus títulos en el servidor…", color = NfGray2, fontSize = 14.sp)
+                    Text("  " + stringResource(R.string.actor_searching), color = NfGray2, fontSize = 14.sp)
                 }
                 p.items.isEmpty() -> Text(
-                    if (person == null) "No se pudo consultar la filmografía y el servidor no tiene títulos con este actor."
-                    else "El servidor no tiene títulos de ${person.name} por ahora.",
+                    if (person == null) stringResource(R.string.actor_none)
+                    else stringResource(R.string.actor_none_name, person.name),
                     color = NfGray2, fontSize = 15.sp, modifier = Modifier.padding(top = 24.dp),
                 )
-                else -> Text("Disponible en el servidor (${p.items.size})", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
+                else -> Text(stringResource(R.string.actor_available, p.items.size), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
             }
         }
         items(p?.items.orEmpty(), key = { it.key }) { it ->

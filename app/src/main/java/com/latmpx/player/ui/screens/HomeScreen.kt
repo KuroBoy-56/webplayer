@@ -1,4 +1,8 @@
 package com.latmpx.player.ui.screens
+
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 import androidx.compose.foundation.layout.size
 import com.latmpx.player.ui.theme.NfRed
 
@@ -75,7 +79,7 @@ import com.latmpx.player.ui.theme.NfGray2
 
 @Composable
 fun HomeScreen(state: AppState) {
-    if (state.loading && state.movies.isEmpty()) { Loading("Preparando tu catálogo…"); return }
+    if (state.loading && state.movies.isEmpty()) { Loading(stringResource(R.string.preparing_catalog)); return }
     val tv = LocalIsTv.current
     // TV: diseño del reproductor web (TvHome.kt)
     if (tv) { TvHomeScreen(state); return }
@@ -116,30 +120,30 @@ fun HomeScreen(state: AppState) {
                     .padding(24.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Perfil", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.profile), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(Store.shownUser(state.session), color = Color.White, fontSize = 16.sp)
-                        Text(if (Store.demo) Store.demoEndText().let { if (it.isEmpty()) "" else "Vence: $it" } else state.session?.dnsName ?: "", color = NfGray2, fontSize = 13.sp)
+                        Text(if (Store.demo) Store.demoEndText().let { if (it.isEmpty()) "" else tr(R.string.expires_on, it) } else state.session?.dnsName ?: "", color = NfGray2, fontSize = 13.sp)
                     }
                     Divider(color = Color(0x33FFFFFF))
                     Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.ACCOUNT }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(16.dp))
-                        Text("Mi cuenta", color = Color.White, fontSize = 16.sp)
+                        Text(stringResource(R.string.my_account), color = Color.White, fontSize = 16.sp)
                     }
                     Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.ACCOUNT }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Settings, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(16.dp))
-                        Text("Ajustes", color = Color.White, fontSize = 16.sp)
+                        Text(stringResource(R.string.settings), color = Color.White, fontSize = 16.sp)
                     }
                     if (com.latmpx.player.data.Tenant.sportsEnabled) Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.SPORTS }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.SportsSoccer, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(16.dp))
-                        Text("Deportes", color = Color.White, fontSize = 16.sp)
+                        Text(stringResource(R.string.sports), color = Color.White, fontSize = 16.sp)
                     }
                     Spacer(Modifier.height(8.dp))
                     TextButton(onClick = { showProfileDialog = false }, modifier = Modifier.align(Alignment.End)) { 
-                        Text("Cerrar", color = NfRed) 
+                        Text(stringResource(R.string.close), color = NfRed) 
                     }
                 }
             }
@@ -161,24 +165,24 @@ fun HomeScreen(state: AppState) {
             else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 112.dp)
         }
         item {
-            ShelfRow("Continuar viendo para ${Store.shownUser(state.session)}", cont, pad) { _, p ->
+            ShelfRow(stringResource(R.string.continue_watching_for, Store.shownUser(state.session)), cont, pad) { _, p ->
                 val it = state.itemFromProgress(p) ?: return@ShelfRow
                 ContinueCard(state, it.copy(poster = p.poster.ifEmpty { it.poster }), p, pw)
             }
         }
-        item { ShelfRow("Mi lista", favs, pad) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
+        item { ShelfRow(stringResource(R.string.my_list), favs, pad) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
         item {
-            ShelfRow("Top 10 de hoy", top10, pad) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) }
+            ShelfRow(stringResource(R.string.top10_today), top10, pad) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) }
         }
         item {
-            ShelfRow("Plataformas", platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.PlatformPage(p)) }) }
+            ShelfRow(stringResource(R.string.platforms), platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.PlatformPage(p)) }) }
         }
         item {
-            ShelfRow("Películas recién agregadas", recentMovies, pad, onViewAll = { state.push(Route.Browse("Películas recién agregadas", com.latmpx.player.data.Kind.MOVIE, emptySet())) }) { _, it ->
+            ShelfRow(stringResource(R.string.new_movies), recentMovies, pad, onViewAll = { state.push(Route.Browse(tr(R.string.new_movies), com.latmpx.player.data.Kind.MOVIE, emptySet())) }) { _, it ->
                 PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) })
             }
         }
-        item { ShelfRow("Series recién agregadas", recentSeries, pad, onViewAll = { state.push(Route.Browse("Series recién agregadas", com.latmpx.player.data.Kind.SERIES, emptySet())) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
+        item { ShelfRow(stringResource(R.string.new_series), recentSeries, pad, onViewAll = { state.push(Route.Browse(tr(R.string.new_series), com.latmpx.player.data.Kind.SERIES, emptySet())) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
         genreRows.forEach { (label, list) ->
             item(key = "g_$label") {
                 val kw = com.latmpx.player.data.Platforms.genres.find { it.first == label }?.second ?: emptyList()
@@ -204,12 +208,12 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
     Column(Modifier.fillMaxWidth().background(bg).background(Brush.verticalGradient(listOf(Color(0xB3000000), Color.Transparent)))) {
         Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (current == null) {
-                Text("Para " + Store.shownUser(state.session), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.for_user, Store.shownUser(state.session)), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             } else {
                 LogoHeader(height = 28.dp)
                 Spacer(Modifier.weight(1f))
             }
-            Icon(Icons.Filled.Search, "Buscar", tint = Color.White, modifier = Modifier.size(26.dp).clickable { state.tab = Tab.SEARCH })
+            Icon(Icons.Filled.Search, stringResource(R.string.search), tint = Color.White, modifier = Modifier.size(26.dp).clickable { state.tab = Tab.SEARCH })
             Spacer(Modifier.width(18.dp))
             Box(Modifier.size(30.dp).clip(RoundedCornerShape(5.dp)).background(Brush.linearGradient(listOf(NfRed, if (com.latmpx.player.data.Tenant.brand?.colors == null) Color(0xFF8E0B12) else androidx.compose.ui.graphics.lerp(NfRed, Color.Black, 0.4f)))).clickable { onProfile() }, contentAlignment = Alignment.Center) {
                 Text(Store.shownUser(state.session).take(1).uppercase().ifEmpty { "U" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
@@ -217,10 +221,10 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
         }
         Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (current != null) com.latmpx.player.ui.components.Chip("✕", false) { state.tab = Tab.HOME }
-            com.latmpx.player.ui.components.Chip("Series", current == Tab.SERIES) { state.tab = Tab.SERIES }
-            com.latmpx.player.ui.components.Chip("Películas", current == Tab.MOVIES) { state.tab = Tab.MOVIES }
-            if (com.latmpx.player.data.Tenant.sportsEnabled) com.latmpx.player.ui.components.Chip("Deportes", current == Tab.SPORTS) { state.tab = Tab.SPORTS }
-            com.latmpx.player.ui.components.Chip("Mi lista", current == Tab.MYLIST) { state.tab = Tab.MYLIST }
+            com.latmpx.player.ui.components.Chip(stringResource(R.string.series), current == Tab.SERIES) { state.tab = Tab.SERIES }
+            com.latmpx.player.ui.components.Chip(stringResource(R.string.movies), current == Tab.MOVIES) { state.tab = Tab.MOVIES }
+            if (com.latmpx.player.data.Tenant.sportsEnabled) com.latmpx.player.ui.components.Chip(stringResource(R.string.sports), current == Tab.SPORTS) { state.tab = Tab.SPORTS }
+            com.latmpx.player.ui.components.Chip(stringResource(R.string.my_list), current == Tab.MYLIST) { state.tab = Tab.MYLIST }
         }
     }
 }
@@ -233,7 +237,7 @@ fun ContinueCard(state: AppState, item: Item, p: com.latmpx.player.data.Progress
         FocusBox(onClick = { state.push(Route.Detail(item)) }, modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f), shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)) {
             com.latmpx.player.ui.components.ItemPoster(item, Modifier.fillMaxSize())
             Box(Modifier.align(Alignment.Center).size(46.dp).background(Color(0x99000000), CircleShape).border(1.5.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.PlayArrow, "Reproducir", tint = Color.White, modifier = Modifier.size(28.dp))
+                Icon(Icons.Filled.PlayArrow, stringResource(R.string.play), tint = Color.White, modifier = Modifier.size(28.dp))
             }
         }
         androidx.compose.material3.LinearProgressIndicator(
@@ -242,7 +246,7 @@ fun ContinueCard(state: AppState, item: Item, p: com.latmpx.player.data.Progress
         )
         Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(p.label.removePrefix(item.name).trim().trimStart('·').trim().ifBlank { item.name }, color = NfGray2, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Icon(Icons.Filled.Info, "Información", tint = NfGray2, modifier = Modifier.size(18.dp).clickable { state.push(Route.Detail(item)) })
+            Icon(Icons.Filled.Info, stringResource(R.string.info), tint = NfGray2, modifier = Modifier.size(18.dp).clickable { state.push(Route.Detail(item)) })
         }
     }
 }
@@ -270,8 +274,8 @@ fun Hero(state: AppState, item: Item, tv: Boolean) {
             if (tv && item.plot.isNotBlank()) Text(item.plot, color = NfGray2, fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HeroButton("Reproducir", Icons.Filled.PlayArrow, true, Modifier.focusRequester(first)) { state.push(Route.Detail(item)) }
-                HeroButton("Más información", Icons.Filled.Info, false) { state.push(Route.Detail(item)) }
+                HeroButton(stringResource(R.string.play), Icons.Filled.PlayArrow, true, Modifier.focusRequester(first)) { state.push(Route.Detail(item)) }
+                HeroButton(stringResource(R.string.more_info), Icons.Filled.Info, false) { state.push(Route.Detail(item)) }
             }
         }
     }

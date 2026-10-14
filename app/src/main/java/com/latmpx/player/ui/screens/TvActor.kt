@@ -1,4 +1,7 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -84,7 +87,7 @@ fun TvActorScreen(state: AppState, actor: Route.ActorPage) {
                 Spacer(Modifier.width(28.dp))
                 Column(Modifier.weight(1f)) {
                     Text(person?.name ?: actor.name, color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 40.sp)
-                    val facts = listOfNotNull(person?.birthday?.ifBlank { null }?.let { "Nació: $it" }, person?.place?.ifBlank { null }).joinToString("  •  ")
+                    val facts = listOfNotNull(person?.birthday?.ifBlank { null }?.let { tr(R.string.born, it) }, person?.place?.ifBlank { null }).joinToString("  •  ")
                     if (facts.isNotEmpty()) Text(facts, color = Color(0xFFB3B3B3), fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp))
                     val bio = person?.bio.orEmpty()
                     if (bio.isNotBlank()) Text(bio, color = Color(0xFFDDDDDD), fontSize = 16.sp, lineHeight = 23.sp, maxLines = 7, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
@@ -95,14 +98,14 @@ fun TvActorScreen(state: AppState, actor: Route.ActorPage) {
             when {
                 p == null -> Row(Modifier.fillMaxWidth().padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(color = NfRed, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
-                    Text("   Buscando sus títulos en el servidor…", color = Color(0xFFB3B3B3), fontSize = 16.sp)
+                    Text("   " + stringResource(R.string.actor_searching), color = Color(0xFFB3B3B3), fontSize = 16.sp)
                 }
                 p.items.isEmpty() -> Text(
-                    if (person == null) "No se pudo consultar la filmografía y el servidor no tiene títulos con este actor."
-                    else "El servidor no tiene títulos de ${person.name} por ahora.",
+                    if (person == null) stringResource(R.string.actor_none)
+                    else stringResource(R.string.actor_none_name, person.name),
                     color = Color(0xFFB3B3B3), fontSize = 17.sp, modifier = Modifier.padding(top = 20.dp),
                 )
-                else -> Text("Disponible en el servidor (${p.items.size})", color = Color(0xFFE5E5E5), fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+                else -> Text(stringResource(R.string.actor_available, p.items.size), color = Color(0xFFE5E5E5), fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
             }
         }
         itemsIndexed(p?.items.orEmpty(), key = { _, it -> it.key }) { i, it ->

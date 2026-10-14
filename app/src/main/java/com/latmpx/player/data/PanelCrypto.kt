@@ -1,5 +1,7 @@
 package com.latmpx.player.data
 
+import com.latmpx.player.tr
+import com.latmpx.player.R
 import android.util.Base64
 import com.latmpx.player.BuildConfig
 import java.security.SecureRandom
@@ -10,7 +12,7 @@ import javax.crypto.spec.SecretKeySpec
 
 /** Cifrados que usa el panel: AES-256-GCM con HKDF (login.php) y "mope" (auth.php). */
 object PanelCrypto {
-    class MissingKey : Exception("Falta la llave del panel (PANEL_MASTER_KEY). Pide al administrador una versión de la app configurada.")
+    class MissingKey : Exception(tr(R.string.err_missing_key))
 
     private const val SALT_LEN = 16
     private const val IV_LEN = 12

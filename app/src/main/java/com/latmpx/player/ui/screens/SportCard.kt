@@ -1,4 +1,7 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,7 +57,7 @@ fun spStatus(e: SportEvent, info: SportInfo?, now: Long): SpStatus {
     }
 }
 
-private val hm = SimpleDateFormat("H:mm", Locale("es"))
+private val hm = SimpleDateFormat("H:mm", Locale.US)
 fun spTime(t: Long): String = synchronized(hm) { hm.format(t) }
 
 @Composable
@@ -63,9 +66,9 @@ fun SpDot(size: Dp = 9.dp, color: Color = NfRed) { Box(Modifier.size(size).clip(
 @Composable
 private fun Pill(st: SpStatus, start: Long) {
     val (bg, fg, text) = when (st) {
-        SpStatus.LIVE -> Triple(NfRed, Color.White, "EN VIVO")
-        SpStatus.FIN -> Triple(Color(0xFF2B2B2B), SpMute, "FINAL")
-        SpStatus.POSTPONED -> Triple(Color(0xFF2B2B2B), SpMute, "APLAZADO")
+        SpStatus.LIVE -> Triple(NfRed, Color.White, stringResource(R.string.live_badge))
+        SpStatus.FIN -> Triple(Color(0xFF2B2B2B), SpMute, stringResource(R.string.final_badge))
+        SpStatus.POSTPONED -> Triple(Color(0xFF2B2B2B), SpMute, stringResource(R.string.postponed_badge))
         SpStatus.SOON -> Triple(Color.White, Color.Black, spTime(start))
     }
     Row(Modifier.background(bg, RoundedCornerShape(4.dp)).padding(horizontal = 9.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -144,7 +147,7 @@ fun SportCardView(e: SportEvent, info: SportInfo?, now: Long, compact: Boolean, 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(e.venue.ifEmpty { if (st == SpStatus.SOON) spTime(e.start) else "" }, color = SpMute, fontSize = 12.5.sp, maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Text(if (e.tv.isNotEmpty()) "Ver canales" else "TV en vivo", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
+                Text(stringResource(if (e.tv.isNotEmpty()) R.string.see_channels else R.string.live_tv), color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.background(if (f) NfRed else Color(0x1AFFFFFF), RoundedCornerShape(4.dp)).padding(horizontal = 10.dp, vertical = 5.dp))
             }
         }

@@ -1,4 +1,7 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.latmpx.player.tr
 
 import android.content.Context
 import android.view.ViewGroup
@@ -222,7 +225,7 @@ fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
     Row(Modifier.fillMaxSize().background(LvBg)) {
         /* ---------- categorías ---------- */
         Column(Modifier.width(196.dp).fillMaxHeight().background(LvPanel)) {
-            Text("CATEGORÍAS", color = LvDim, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.padding(start = 18.dp, top = 14.dp, bottom = 8.dp))
+            Text(stringResource(R.string.categories).uppercase(), color = LvDim, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.padding(start = 18.dp, top = 14.dp, bottom = 8.dp))
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = 16.dp)) {
                 items(cats, key = { it.first }) { (id, name) ->
                     CategoryRow(name, counts[id] ?: 0, id == cat) { cat = id }
@@ -232,12 +235,12 @@ fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
         /* ---------- canales ---------- */
         Column(Modifier.width(372.dp).fillMaxHeight().background(LvBg)) {
             Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(cats.firstOrNull { it.first == cat }?.second ?: "Canales", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Text("${shown.size} canales", color = LvDim, fontSize = 12.sp)
+                Text(cats.firstOrNull { it.first == cat }?.second ?: stringResource(R.string.channels), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(pluralStringResource(R.plurals.channels_count, shown.size, shown.size), color = LvDim, fontSize = 12.sp)
             }
             if (shown.isEmpty()) {
                 Text(
-                    if (cat == FAVS) "Aún no tienes favoritos.\nMantén presionado OK (o MENÚ) sobre un canal para agregarlo." else "No hay canales en esta categoría.",
+                    stringResource(if (cat == FAVS) R.string.tv_no_favs else R.string.no_channels_category),
                     color = LvDim, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(24.dp),
                 )
             }
@@ -337,7 +340,7 @@ private fun LvChannelRow(
                     EpgBar(cur, now, Modifier.fillMaxWidth(0.9f))
                 }
             }
-            if (fav) Icon(Icons.Filled.Star, "Favorito", tint = NfRed, modifier = Modifier.padding(start = 6.dp).size(16.dp))
+            if (fav) Icon(Icons.Filled.Star, stringResource(R.string.favorite), tint = NfRed, modifier = Modifier.padding(start = 6.dp).size(16.dp))
         }
     }
 }
@@ -379,7 +382,7 @@ private fun PreviewBox(preview: LivePreview, ch: Item?, number: Int, modifier: M
                 Text(ch.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text(
-                "EN VIVO", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                stringResource(R.string.live_badge), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.TopStart).padding(10.dp).background(NfRed, RoundedCornerShape(3.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }

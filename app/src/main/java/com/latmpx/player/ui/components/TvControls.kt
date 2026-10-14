@@ -1,4 +1,7 @@
 package com.latmpx.player.ui.components
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -87,8 +90,8 @@ private fun PadKey(key: String, modifier: Modifier, onClick: () -> Unit) {
         ) {
             val tint = if (f && key != "ok") Color.Black else Color.White
             when (key) {
-                "<" -> Icon(Icons.AutoMirrored.Filled.Backspace, "Borrar", tint = tint, modifier = Modifier.size(24.dp))
-                "ok" -> Icon(Icons.Filled.Check, "Aceptar", tint = tint, modifier = Modifier.size(26.dp))
+                "<" -> Icon(Icons.AutoMirrored.Filled.Backspace, stringResource(R.string.delete), tint = tint, modifier = Modifier.size(24.dp))
+                "ok" -> Icon(Icons.Filled.Check, stringResource(R.string.ok), tint = tint, modifier = Modifier.size(26.dp))
                 else -> Text(key, color = tint, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             }
         }

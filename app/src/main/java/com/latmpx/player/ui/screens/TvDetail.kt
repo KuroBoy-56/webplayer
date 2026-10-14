@@ -1,4 +1,8 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import android.content.Context
 import android.content.Intent
@@ -169,38 +173,38 @@ fun TvDetailScreen(state: AppState, media: Item) {
                             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
                         ) {
                             val label = when {
-                                media.kind == Kind.MOVIE && progress != null -> "Continuar"
+                                media.kind == Kind.MOVIE && progress != null -> stringResource(R.string.resume)
                                 lastEp != null -> continueLabel(seasons, lastEp.key)
-                                else -> "Reproducir"
+                                else -> stringResource(R.string.play)
                             }
                             NfButton(label, Icons.Filled.PlayArrow, white = true, modifier = Modifier.focusRequester(playFocus)) { play() }
-                            tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { t -> NfButton("Tráiler", Icons.Filled.Movie, white = false) { openYoutube(ctx, t) } }
+                            tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { t -> NfButton(stringResource(R.string.trailer), Icons.Filled.Movie, white = false) { openYoutube(ctx, t) } }
                             CircleAction(if (fav) Icons.Filled.Check else Icons.Filled.Add, fav) { fav = Cloud.toggleFav(media) }
                         }
                         if (media.kind == Kind.MOVIE && progress != null && progress.duration > 0) Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.width(240.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x4DFFFFFF))) {
                                 Box(Modifier.fillMaxWidth((progress.position.toFloat() / progress.duration).coerceIn(0f, 1f)).fillMaxHeight().background(NfRed))
                             }
-                            Text("  Quedan " + com.latmpx.player.player.fmtTime(progress.duration - progress.position), color = Color(0xFFB3B3B3), fontSize = 13.sp)
+                            Text("  " + stringResource(R.string.time_left, com.latmpx.player.player.fmtTime(progress.duration - progress.position)), color = Color(0xFFB3B3B3), fontSize = 13.sp)
                         }
                         val cast = tmdb?.cast?.take(5)?.joinToString(", ") { it.name }?.ifBlank { null } ?: det?.cast?.split(",")?.take(5)?.joinToString(", ") { it.trim() }.orEmpty()
                         Column(Modifier.padding(top = 16.dp)) {
-                            if (cast.isNotBlank()) ExtraLine("Elenco: ", cast)
-                            det?.genre?.takeIf { it.isNotBlank() }?.let { ExtraLine("Géneros: ", it) }
-                            det?.director?.takeIf { it.isNotBlank() }?.let { ExtraLine("Dirección: ", it) }
+                            if (cast.isNotBlank()) ExtraLine(stringResource(R.string.cast) + ": ", cast)
+                            det?.genre?.takeIf { it.isNotBlank() }?.let { ExtraLine(stringResource(R.string.genres) + ": ", it) }
+                            det?.director?.takeIf { it.isNotBlank() }?.let { ExtraLine(stringResource(R.string.director) + ": ", it) }
                         }
                     }
                 }
             }
         }
-        if (det == null) item(key = "loading") { Text("Cargando información…", color = Color(0xFFB3B3B3), modifier = Modifier.padding(horizontal = pad, vertical = 12.dp)) }
+        if (det == null) item(key = "loading") { Text(stringResource(R.string.loading_info), color = Color(0xFFB3B3B3), modifier = Modifier.padding(horizontal = pad, vertical = 12.dp)) }
 
         if (media.kind == Kind.SERIES && seasons.isNotEmpty()) {
             item(key = "seasons") {
                 Column(Modifier.padding(horizontal = pad).padding(top = 10.dp)) {
-                    Text("Episodios", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.episodes), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     LazyRow(contentPadding = PaddingValues(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(seasons.keys.toList()) { n -> TvChip("Temporada $n", n == season, onFocus = { season = n }) { season = n } }
+                        items(seasons.keys.toList()) { n -> TvChip(stringResource(R.string.season_n, n), n == season, onFocus = { season = n }) { season = n } }
                     }
                     Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF333333)))
                 }
@@ -220,7 +224,7 @@ fun TvDetailScreen(state: AppState, media: Item) {
             .ifEmpty { det?.cast.orEmpty().split(",").map { it.trim() }.filter { it.isNotEmpty() }.map { Tmdb.CastMember(it, "", "") } }
         if (castList.isNotEmpty()) item(key = "cast") {
             Column(Modifier.padding(top = 20.dp)) {
-                Text("Elenco", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = pad))
+                Text(stringResource(R.string.cast), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = pad))
                 LazyRow(contentPadding = PaddingValues(horizontal = pad, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     // OK sobre un actor: sus películas y series disponibles en el servidor
                     items(castList) { c -> CastChip(c.name, c.character, c.profile) { state.push(Route.ActorPage(c.name, c.id, c.profile)) } }
@@ -231,7 +235,7 @@ fun TvDetailScreen(state: AppState, media: Item) {
             val pool = if (media.kind == Kind.MOVIE) state.movies else state.series
             val similar = remember(pool, media.categoryId, media.id) { pool.filter { it.categoryId == media.categoryId && it.id != media.id }.shuffled().take(24) }
             val w = tvCardWidth()
-            TvRow("Más títulos similares", similar) { _, it -> TvCard(it, w) { state.push(Route.Detail(it)) } }
+            TvRow(stringResource(R.string.more_like_this), similar) { _, it -> TvCard(it, w) { state.push(Route.Detail(it)) } }
         }
     }
 }
@@ -243,9 +247,9 @@ private fun DetailMeta(media: Item, det: Details?, seasons: Int) {
         val parts = listOfNotNull(
             media.year.takeIf { it.isNotBlank() }?.take(4),
             det?.duration?.takeIf { it.isNotBlank() },
-            if (media.kind == Kind.SERIES && seasons > 0) "$seasons " + (if (seasons > 1) "temporadas" else "temporada") else null,
+            if (media.kind == Kind.SERIES && seasons > 0) pluralStringResource(R.plurals.seasons, seasons, seasons) else null,
         )
-        if (media.rating > 0) Text("${(media.rating * 10).toInt().coerceAtMost(99)}% para ti", color = Color(0xFF46D369), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        if (media.rating > 0) Text(stringResource(R.string.match_pct, (media.rating * 10).toInt().coerceAtMost(99)), color = Color(0xFF46D369), fontWeight = FontWeight.Bold, fontSize = 15.sp)
         parts.forEachIndexed { i, p ->
             if (i > 0 || media.rating > 0) Text("•", color = Color(0xFF777777), fontSize = 15.sp)
             Text(p, color = Color(0xFFCCCCCC), fontSize = 15.sp)
@@ -270,7 +274,7 @@ private fun CircleAction(icon: ImageVector, on: Boolean, onClick: () -> Unit) {
             Modifier.size(46.dp).background(if (f || on) Color.White else Color(0x992A2A2A), CircleShape)
                 .border(2.dp, if (f || on) Color.White else Color(0x99FFFFFF), CircleShape),
             contentAlignment = Alignment.Center,
-        ) { Icon(icon, "Mi lista", tint = if (f || on) Color.Black else Color.White, modifier = Modifier.size(24.dp)) }
+        ) { Icon(icon, stringResource(R.string.my_list), tint = if (f || on) Color.Black else Color.White, modifier = Modifier.size(24.dp)) }
     }
 }
 
@@ -320,7 +324,7 @@ private fun TvEpisodeRow(e: Episode, series: Item, progress: Float, current: Boo
             Spacer(Modifier.width(18.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(e.title.ifBlank { "Episodio ${e.num}" }, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(e.title.ifBlank { stringResource(R.string.episode_n, e.num) }, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     if (e.duration.isNotBlank()) Text(e.duration, color = Color(0xFFCCCCCC), fontSize = 14.sp, modifier = Modifier.padding(start = 10.dp))
                 }
                 if (e.plot.isNotBlank()) Text(e.plot, color = Color(0xFFA3A3A3), fontSize = 14.sp, lineHeight = 20.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
@@ -331,9 +335,9 @@ private fun TvEpisodeRow(e: Episode, series: Item, progress: Float, current: Boo
 
 /** "Continuar T1 E3" a partir de la clave "series:5:301" */
 private fun continueLabel(seasons: Map<Int, List<Episode>>, key: String): String {
-    val eid = key.split(":").getOrNull(2)?.toIntOrNull() ?: return "Continuar"
-    val e = seasons.values.flatten().firstOrNull { it.id == eid } ?: return "Continuar"
-    return "Continuar T${e.season} E${e.num}"
+    val eid = key.split(":").getOrNull(2)?.toIntOrNull() ?: return tr(R.string.resume)
+    val e = seasons.values.flatten().firstOrNull { it.id == eid } ?: return tr(R.string.resume)
+    return tr(R.string.resume_ep, e.season, e.num)
 }
 
 private fun openYoutube(ctx: Context, id: String) {

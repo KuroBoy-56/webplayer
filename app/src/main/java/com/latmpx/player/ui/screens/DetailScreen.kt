@@ -1,4 +1,8 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -140,34 +144,34 @@ fun DetailScreen(state: AppState, media: Item) {
                     if (media.rating > 0) Text("★ " + String.format(java.util.Locale.US, "%.1f", media.rating), color = Color(0xFF46D369), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     if (media.year.isNotBlank()) Text(media.year.take(4), color = NfGray2, fontSize = 14.sp)
                     det?.duration?.takeIf { it.isNotBlank() }?.let { Text(it, color = NfGray2, fontSize = 14.sp) }
-                    if (media.kind == Kind.SERIES && seasons.isNotEmpty()) Text("${seasons.size} temporada" + if (seasons.size > 1) "s" else "", color = NfGray2, fontSize = 14.sp)
+                    if (media.kind == Kind.SERIES && seasons.isNotEmpty()) Text(pluralStringResource(R.plurals.seasons, seasons.size, seasons.size), color = NfGray2, fontSize = 14.sp)
                     Text("HD", color = NfGray2, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.border(1.dp, NfGray2, RoundedCornerShape(3.dp)).padding(horizontal = 4.dp, vertical = 1.dp))
                 }
                 det?.genre?.takeIf { it.isNotBlank() }?.let { Text(it, color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)) }
                 Spacer(Modifier.height(14.dp))
                 val label = when {
-                    media.kind == Kind.MOVIE && progress != null -> "Continuar"
+                    media.kind == Kind.MOVIE && progress != null -> stringResource(R.string.resume)
                     lastEp != null -> lastEpLabel(seasons, lastEp.key)
-                    else -> "Reproducir"
+                    else -> stringResource(R.string.play)
                 }
                 WideButton(label, Icons.Filled.PlayArrow, true) { play() }
                 if (media.kind == Kind.MOVIE && progress != null && progress.duration > 0) {
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         LinearProgressIndicator(progress = { progress.position.toFloat() / progress.duration }, color = NfRed, trackColor = Color(0x44FFFFFF), modifier = Modifier.weight(1f).height(3.dp))
-                        Text("  Quedan " + com.latmpx.player.player.fmtTime(progress.duration - progress.position), color = NfGray2, fontSize = 12.sp)
+                        Text("  " + stringResource(R.string.time_left, com.latmpx.player.player.fmtTime(progress.duration - progress.position)), color = NfGray2, fontSize = 12.sp)
                     }
                 }
                 tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { trailerId ->
                     Spacer(Modifier.height(8.dp))
-                    WideButton("Ver tráiler", Icons.Filled.Movie, false) { openTrailer(ctx, trailerId) }
+                    WideButton(stringResource(R.string.watch_trailer), Icons.Filled.Movie, false) { openTrailer(ctx, trailerId) }
                 }
                 val plot = tmdb?.overview?.ifBlank { null } ?: det?.plot?.ifBlank { null } ?: media.plot
                 if (plot.isNotBlank()) Text(plot, color = Color(0xFFE5E5E5), fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 14.dp))
                 val castLine = tmdb?.cast?.take(4)?.joinToString(", ") { it.name }?.ifBlank { null } ?: det?.cast?.split(",")?.take(4)?.joinToString(", ") { it.trim() }.orEmpty()
-                if (castLine.isNotBlank()) Text("Elenco: $castLine", color = NfGray2, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                det?.director?.takeIf { it.isNotBlank() }?.let { Text("Dirección: $it", color = NfGray2, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp)) }
+                if (castLine.isNotBlank()) Text(stringResource(R.string.cast_line, castLine), color = NfGray2, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                det?.director?.takeIf { it.isNotBlank() }?.let { Text(stringResource(R.string.director_line, it), color = NfGray2, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp)) }
                 Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    IconAction(if (fav) Icons.Filled.Check else Icons.Filled.Add, "Mi lista") { fav = Cloud.toggleFav(media) }
+                    IconAction(if (fav) Icons.Filled.Check else Icons.Filled.Add, stringResource(R.string.my_list)) { fav = Cloud.toggleFav(media) }
                     // descargar para ver sin internet (dentro de la app, en Cuenta › Mis descargas)
                     val movieExt = det?.item?.ext?.ifBlank { null } ?: media.ext
                     if (media.kind == Kind.MOVIE && det != null && com.latmpx.player.data.Downloads.canDownload(movieExt)) {
@@ -181,10 +185,11 @@ fun DetailScreen(state: AppState, media: Item) {
                             }
                         }
                     }
-                    tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { t -> IconAction(Icons.Filled.Movie, "Tráiler") { openTrailer(ctx, t) } }
-                    IconAction(Icons.Filled.Share, "Compartir") {
-                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, "Mira \"${media.name}\" en ${com.latmpx.player.data.Tenant.nameOr("MPX Player")}")
-                        runCatching { ctx.startActivity(android.content.Intent.createChooser(send, "Compartir")) }
+                    tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { t -> IconAction(Icons.Filled.Movie, stringResource(R.string.trailer)) { openTrailer(ctx, t) } }
+                    val shareTitle = stringResource(R.string.share)
+                    IconAction(Icons.Filled.Share, shareTitle) {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, tr(R.string.share_text, media.name, com.latmpx.player.data.Tenant.nameOr("MPX Player")))
+                        runCatching { ctx.startActivity(android.content.Intent.createChooser(send, shareTitle)) }
                     }
                 }
             }
@@ -202,13 +207,13 @@ fun DetailScreen(state: AppState, media: Item) {
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
                         val label = when {
-                            media.kind == Kind.MOVIE && progress != null -> "Continuar"
+                            media.kind == Kind.MOVIE && progress != null -> stringResource(R.string.resume)
                             lastEp != null -> lastEpLabel(seasons, lastEp.key)
-                            else -> "Reproducir"
+                            else -> stringResource(R.string.play)
                         }
                         HeroButton(label, Icons.Filled.PlayArrow, true, Modifier.focusRequester(playFocus)) { play() }
                         tmdb?.trailer?.takeIf { it.isNotEmpty() }?.let { trailerId ->
-                            HeroButton("Tráiler", Icons.Filled.PlayArrow, false) {
+                            HeroButton(stringResource(R.string.trailer), Icons.Filled.PlayArrow, false) {
                                 try {
                                     ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("vnd.youtube:" + trailerId)))
                                 } catch (e: Exception) {
@@ -216,7 +221,7 @@ fun DetailScreen(state: AppState, media: Item) {
                                 }
                             }
                         }
-                        HeroButton(if (fav) "En mi lista" else "Mi lista", if (fav) Icons.Filled.Check else Icons.Filled.Add, false) { fav = Cloud.toggleFav(media) }
+                        HeroButton(stringResource(if (fav) R.string.in_my_list else R.string.my_list), if (fav) Icons.Filled.Check else Icons.Filled.Add, false) { fav = Cloud.toggleFav(media) }
                     }
                     if (media.kind == Kind.MOVIE && progress != null && progress.duration > 0) {
                         LinearProgressIndicator(progress = { progress.position.toFloat() / progress.duration }, color = NfRed, trackColor = Color(0x44FFFFFF),
@@ -227,16 +232,16 @@ fun DetailScreen(state: AppState, media: Item) {
         }
         if (tv || det == null) item {
             Column(Modifier.padding(horizontal = sidePad(), vertical = 14.dp)) {
-                if (det == null) Text("Cargando información…", color = NfGray2)
+                if (det == null) Text(stringResource(R.string.loading_info), color = NfGray2)
                 val plot = tmdb?.overview?.ifBlank { null } ?: det?.plot?.ifBlank { null } ?: media.plot
                 if (tv && plot.isNotBlank()) Text(plot, color = Color(0xFFDDDDDD), fontSize = 15.sp, lineHeight = 21.sp)
-                if (tv) det?.director?.takeIf { it.isNotBlank() }?.let { Text("Dirección: $it", color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp)) }
+                if (tv) det?.director?.takeIf { it.isNotBlank() }?.let { Text(stringResource(R.string.director_line, it), color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp)) }
             }
         }
         
         if (tmdb?.cast?.isNotEmpty() == true) {
             item {
-                Text("Elenco", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad(), vertical = 8.dp))
+                Text(stringResource(R.string.cast), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad(), vertical = 8.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(tmdb!!.cast) { actor ->
                         FocusBox(onClick = { state.push(Route.ActorPage(actor.name, actor.id, actor.profile)) }, focusScale = 1.05f, shape = RoundedCornerShape(8.dp)) {
@@ -255,7 +260,7 @@ fun DetailScreen(state: AppState, media: Item) {
             }
         } else if (det?.cast?.isNotBlank() == true) {
             item {
-                Text("Elenco", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad(), vertical = 8.dp))
+                Text(stringResource(R.string.cast), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad(), vertical = 8.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     val actors = det.cast.split(",").map { it.trim() }.filter { it.isNotEmpty() }
                     items(actors) { actor ->
@@ -274,7 +279,7 @@ fun DetailScreen(state: AppState, media: Item) {
         if (media.kind == Kind.SERIES && seasons.isNotEmpty()) {
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(seasons.keys.toList()) { n -> Chip("Temporada $n", n == season) { season = n } }
+                    items(seasons.keys.toList()) { n -> Chip(stringResource(R.string.season_n, n), n == season) { season = n } }
                 }
             }
             val eps = seasons[season].orEmpty()
@@ -297,7 +302,7 @@ fun DetailScreen(state: AppState, media: Item) {
         item {
             if (similar.isNotEmpty()) {
                 Spacer(Modifier.height(24.dp))
-                Text("Sugerencias", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad()).padding(bottom = 12.dp))
+                Text(stringResource(R.string.suggestions), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = sidePad()).padding(bottom = 12.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = sidePad()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(similar) { it ->
                         PosterCard(it, if (tv) 150.dp else 110.dp, onClick = { state.push(Route.Detail(it)) })
@@ -353,7 +358,7 @@ private fun EpisodeRow(e: Episode, series: Item, progress: Float, dl: com.latmpx
                 }
             }
             Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                Text("${e.num}. " + e.title.ifBlank { "Episodio ${e.num}" }, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("${e.num}. " + e.title.ifBlank { stringResource(R.string.episode_n, e.num) }, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (e.duration.isNotBlank()) Text(e.duration, color = NfGray2, fontSize = 12.sp)
                 if (e.plot.isNotBlank()) Text(e.plot, color = NfGray2, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
@@ -363,16 +368,16 @@ private fun EpisodeRow(e: Episode, series: Item, progress: Float, dl: com.latmpx
 
 /** icono y texto del botón de descarga según su estado */
 private fun downloadLook(dl: com.latmpx.player.data.Downloads.Entry?): Pair<androidx.compose.ui.graphics.vector.ImageVector, String> = when (dl?.state) {
-    null -> Icons.Filled.Download to "Descargar"
-    com.latmpx.player.data.Downloads.State.DONE -> Icons.Filled.DownloadDone to "Descargado"
-    com.latmpx.player.data.Downloads.State.RUNNING -> Icons.Filled.Downloading to (if (dl.total > 0) "${dl.percent} %" else "Descargando")
-    com.latmpx.player.data.Downloads.State.QUEUED -> Icons.Filled.Downloading to "En espera"
-    com.latmpx.player.data.Downloads.State.FAILED -> Icons.Filled.ErrorOutline to "Reintentar"
+    null -> Icons.Filled.Download to tr(R.string.download)
+    com.latmpx.player.data.Downloads.State.DONE -> Icons.Filled.DownloadDone to tr(R.string.downloaded)
+    com.latmpx.player.data.Downloads.State.RUNNING -> Icons.Filled.Downloading to (if (dl.total > 0) tr(R.string.percent, dl.percent) else tr(R.string.downloading))
+    com.latmpx.player.data.Downloads.State.QUEUED -> Icons.Filled.Downloading to tr(R.string.queued)
+    com.latmpx.player.data.Downloads.State.FAILED -> Icons.Filled.ErrorOutline to tr(R.string.retry)
 }
 
 /** "Continuar T1 E3" a partir de la clave "series:5:301" */
 private fun lastEpLabel(seasons: Map<Int, List<Episode>>, key: String): String {
-    val eid = key.split(":").getOrNull(2)?.toIntOrNull() ?: return "Continuar"
-    val e = seasons.values.flatten().firstOrNull { it.id == eid } ?: return "Continuar"
-    return "Continuar T${e.season} E${e.num}"
+    val eid = key.split(":").getOrNull(2)?.toIntOrNull() ?: return tr(R.string.resume)
+    val e = seasons.values.flatten().firstOrNull { it.id == eid } ?: return tr(R.string.resume)
+    return tr(R.string.resume_ep, e.season, e.num)
 }

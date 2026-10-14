@@ -1,5 +1,7 @@
 package com.latmpx.player.data
 
+import com.latmpx.player.tr
+import com.latmpx.player.R
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -12,16 +14,20 @@ import java.util.concurrent.TimeUnit
  * OkHttp único (Net.client) resuelve nombres con SecureDns: panel, Xtream, imágenes y ExoPlayer.
  */
 object SecureDns : Dns {
-    data class Option(val key: String, val label: String, val note: String, val url: String, val bootstrap: List<String>)
+    data class Option(val key: String, val name: String, val noteRes: Int, val url: String, val bootstrap: List<String>) {
+        /** nombre y descripción en el idioma de la app ("" = Automático) */
+        val label: String get() = name.ifEmpty { tr(R.string.automatic) }
+        val note: String get() = tr(noteRes)
+    }
 
     val options = listOf(
-        Option("auto", "Automático", "El DNS de tu red (recomendado)", "", emptyList()),
-        Option("cloudflare", "Cloudflare", "Rápido y privado", "https://cloudflare-dns.com/dns-query", listOf("1.1.1.1", "1.0.0.1")),
-        Option("google", "Google", "Estable en todo el mundo", "https://dns.google/dns-query", listOf("8.8.8.8", "8.8.4.4")),
-        Option("quad9", "Quad9", "Bloquea sitios peligrosos", "https://dns.quad9.net/dns-query", listOf("9.9.9.9", "149.112.112.112")),
-        Option("adguard", "AdGuard", "Sin rastreo ni anuncios", "https://dns.adguard-dns.com/dns-query", listOf("94.140.14.14", "94.140.15.15")),
-        Option("nextdns", "NextDNS", "Anti-bloqueo geográfico", "https://dns.nextdns.io/dns-query", listOf("45.90.28.0", "45.90.30.0")),
-        Option("opendns", "OpenDNS", "Filtro de Cisco", "https://doh.opendns.com/dns-query", listOf("146.112.41.2", "146.112.41.3")),
+        Option("auto", "", R.string.dns_auto_desc, "", emptyList()),
+        Option("cloudflare", "Cloudflare", R.string.dns_cloudflare_desc, "https://cloudflare-dns.com/dns-query", listOf("1.1.1.1", "1.0.0.1")),
+        Option("google", "Google", R.string.dns_google_desc, "https://dns.google/dns-query", listOf("8.8.8.8", "8.8.4.4")),
+        Option("quad9", "Quad9", R.string.dns_quad9_desc, "https://dns.quad9.net/dns-query", listOf("9.9.9.9", "149.112.112.112")),
+        Option("adguard", "AdGuard", R.string.dns_adguard_desc, "https://dns.adguard-dns.com/dns-query", listOf("94.140.14.14", "94.140.15.15")),
+        Option("nextdns", "NextDNS", R.string.dns_nextdns_desc, "https://dns.nextdns.io/dns-query", listOf("45.90.28.0", "45.90.30.0")),
+        Option("opendns", "OpenDNS", R.string.dns_opendns_desc, "https://doh.opendns.com/dns-query", listOf("146.112.41.2", "146.112.41.3")),
     )
 
     // cliente aparte para las consultas DoH (sin SecureDns, para no entrar en bucle)

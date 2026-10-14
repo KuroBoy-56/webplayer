@@ -1,4 +1,8 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -93,7 +97,7 @@ fun SportsScreen(state: AppState) {
     var q by rememberSaveable { mutableStateOf("") }
 
     val d = data
-    if (d == null) { if (loaded) Empty("La agenda deportiva no está disponible.\nVuelve a intentarlo en unos minutos.") else Loading("Cargando partidos…"); return }
+    if (d == null) { if (loaded) Empty(stringResource(R.string.sports_unavailable)) else Loading(stringResource(R.string.loading_matches)); return }
     val keys = remember(now / 3_600_000) { listOf(dayKey(System.currentTimeMillis()), dayKey(System.currentTimeMillis() + 86_400_000)) }
     // si hoy no queda nada, se abre mañana
     val curDay = if (day >= 0) day else if (d.events.any { dayKey(it.start) == keys[0] }) 0 else 1
@@ -116,10 +120,10 @@ fun SportsScreen(state: AppState) {
     fun watch(e: SportEvent, channel: TvChannel? = null, byEvent: Boolean = false) {
         val st = spStatus(e, d.sports[e.sport], now)
         if (dayKey(e.start) != keys[0] || st == SpStatus.FIN || st == SpStatus.POSTPONED) {
-            Toast.makeText(ctx, if (st == SpStatus.FIN && dayKey(e.start) == keys[0]) "Este evento ya terminó" else "El evento no está en línea", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, tr(if (st == SpStatus.FIN && dayKey(e.start) == keys[0]) R.string.event_over else R.string.event_offline), Toast.LENGTH_SHORT).show()
             return
         }
-        Toast.makeText(ctx, if (channel != null) "Buscando ${channel.name}…" else "Buscando canal…", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, if (channel != null) tr(R.string.searching_x, channel.name) else tr(R.string.searching_channel), Toast.LENGTH_SHORT).show()
         scope.launch {
             val channels = Xtream.items(s, Kind.LIVE)
             val cats = state.liveCats.ifEmpty { Xtream.categories(s, Kind.LIVE) }
@@ -140,7 +144,7 @@ fun SportsScreen(state: AppState) {
             if (channel != null) {
                 val ev = withContext(Dispatchers.Default) { Sports.find(e, chans, d.rules) }
                 if (ev != null) {
-                    Toast.makeText(ctx, "No tienes ${channel.name}; te mostramos ${ev.name}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(ctx, tr(R.string.channel_missing_showing, channel.name, ev.name), Toast.LENGTH_LONG).show()
                     playInCategory(ctx, channels, ev)
                     return@launch
                 }
@@ -148,11 +152,11 @@ fun SportsScreen(state: AppState) {
             // sin canal exacto: se abre la primera carpeta de eventos, como la web
             val firstEvent = chans.firstOrNull { it.isEvent }?.item
             if (firstEvent != null) {
-                val name = cats.firstOrNull { it.id == firstEvent.categoryId }?.name ?: "eventos"
-                Toast.makeText(ctx, "Aún no aparece el canal exacto, te mostramos $name", Toast.LENGTH_LONG).show()
+                val name = cats.firstOrNull { it.id == firstEvent.categoryId }?.name ?: tr(R.string.events)
+                Toast.makeText(ctx, tr(R.string.channel_not_yet_showing, name), Toast.LENGTH_LONG).show()
                 playInCategory(ctx, channels, firstEvent)
             } else {
-                Toast.makeText(ctx, if (channel != null) "No encontramos ${channel.name} en tu lista" else "No encontramos un canal para este evento", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, if (channel != null) tr(R.string.channel_not_found_x, channel.name) else tr(R.string.channel_not_found_event), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -170,13 +174,13 @@ fun SportsScreen(state: AppState) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(bottom = 6.dp)) {
                 Column(Modifier.weight(1f)) {
-                    Text("Deportes", color = Color.White, fontSize = if (tv) 40.sp else 28.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Partidos de hoy y mañana en tu hora local.", color = SpMute, fontSize = if (compact) 13.5.sp else 15.sp)
+                    Text(stringResource(R.string.sports), color = Color.White, fontSize = if (tv) 40.sp else 28.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(stringResource(R.string.sports_subtitle), color = SpMute, fontSize = if (compact) 13.5.sp else 15.sp)
                 }
                 if (live.isNotEmpty()) {
                     Row(Modifier.background(Color(0x24E50914), RoundedCornerShape(50)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         SpDot(); Box(Modifier.width(8.dp))
-                        Text(if (live.size == 1) "1 partido en vivo" else "${live.size} partidos en vivo", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(pluralStringResource(R.plurals.live_matches, live.size, live.size), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -189,7 +193,7 @@ fun SportsScreen(state: AppState) {
                 Column(Modifier.padding(bottom = 16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
                         SpDot(); Box(Modifier.width(10.dp))
-                        Text("En vivo ahora", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.live_now), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     }
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(live, key = { "l" + it.id }) { e ->
@@ -213,8 +217,8 @@ fun SportsScreen(state: AppState) {
         if (groups.isEmpty() && !showLive) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(Modifier.fillMaxWidth().padding(vertical = 60.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No hay partidos con estos filtros", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("Prueba con otro día o deporte.", color = SpMute)
+                    Text(stringResource(R.string.no_matches_filters), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.try_other_day), color = SpMute)
                 }
             }
         }
@@ -236,7 +240,7 @@ private fun FilterBar(
     Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.background(Color(0xFF2A2A2A), RoundedCornerShape(6.dp)).padding(3.dp)) {
-                listOf("Hoy", "Mañana").forEachIndexed { i, label ->
+                listOf(stringResource(R.string.today), stringResource(R.string.tomorrow)).forEachIndexed { i, label ->
                     FocusBox(onClick = { onDay(i) }, shape = RoundedCornerShape(4.dp), focusScale = 1.05f) { f ->
                         Text(label, color = if (day == i) Color.Black else if (f) Color.White else Color(0xFFCCCCCC), fontWeight = FontWeight.Bold, fontSize = 14.sp,
                             modifier = Modifier.background(if (day == i) Color.White else if (f) Color(0x33FFFFFF) else Color.Transparent, RoundedCornerShape(4.dp))
@@ -245,7 +249,7 @@ private fun FilterBar(
                 }
             }
             OutlinedTextField(
-                value = q, onValueChange = onQ, singleLine = true, placeholder = { Text("Buscar equipo o liga", fontSize = 14.sp) },
+                value = q, onValueChange = onQ, singleLine = true, placeholder = { Text(stringResource(R.string.search_team_league), fontSize = 14.sp) },
                 leadingIcon = { Icon(Icons.Filled.Search, null) }, keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Search)),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color.White, unfocusedBorderColor = Color(0xFF555555), focusedTextColor = Color.White, unfocusedTextColor = Color.White,
@@ -254,7 +258,7 @@ private fun FilterBar(
                 modifier = Modifier.weight(1f).padding(start = 12.dp).then(Modifier.tvTextInput()),
             )
         }
-        val chips = listOf("" to "Todos $total") + d.sports.entries.filter { (counts[it.key] ?: 0) > 0 }
+        val chips = listOf("" to stringResource(R.string.all) + " $total") + d.sports.entries.filter { (counts[it.key] ?: 0) > 0 }
             .map { it.key to "${it.value.icon} ${it.value.label} ${counts[it.key]}" } +
             counts.keys.filter { it !in d.sports }.map { it to "$it ${counts[it]}" }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -273,11 +277,11 @@ private fun EventChannelsDialog(e: SportEvent, onDismiss: () -> Unit, onPick: (T
         ) {
             Text(if (e.home.isNotBlank() && e.away.isNotBlank()) "${e.home} vs ${e.away}" else e.title, color = Color.White, fontSize = 18.sp,
                 fontWeight = FontWeight.Bold, maxLines = 2)
-            Text("Elige dónde verlo", color = SpMute, fontSize = 13.sp)
+            Text(stringResource(R.string.choose_where), color = SpMute, fontSize = 13.sp)
             Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                PickRow("▶  Ver el evento", "Busca el mejor canal automáticamente", true) { onPick(null, false) }
+                PickRow("▶  " + stringResource(R.string.watch_event), stringResource(R.string.watch_event_desc), true) { onPick(null, false) }
                 e.tv.forEach { t -> PickRow("📺  ${t.name}", t.country) { onPick(t, false) } }
-                PickRow("🔎  Buscar por equipos", "En las carpetas de eventos de tu lista") { onPick(null, true) }
+                PickRow("🔎  " + stringResource(R.string.search_by_teams), stringResource(R.string.search_by_teams_desc)) { onPick(null, true) }
             }
         }
     }

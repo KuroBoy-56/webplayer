@@ -1,5 +1,7 @@
 package com.latmpx.player.data
 
+import com.latmpx.player.tr
+import com.latmpx.player.R
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -90,13 +92,13 @@ object Tenant {
     val FATAL = setOf("tenant_invalid", "tenant_expired", "tenant_suspended", "app_not_linked")
 
     fun message(code: String, fallback: String = ""): String = when (code) {
-        "tenant_invalid" -> "Número de distribuidor no válido"
-        "tenant_expired" -> "El servicio de este distribuidor venció. Contacta a tu distribuidor."
-        "tenant_suspended" -> "Este distribuidor está suspendido. Contacta a tu distribuidor."
-        "app_not_linked" -> "Este número de distribuidor no está habilitado para esta aplicación."
-        "too_many_attempts" -> "Demasiados intentos. Espera 15 minutos e inténtalo de nuevo."
-        "app_required" -> "Error de la app: no envió su identificador al panel (app_required). Actualiza la app."
-        else -> fallback.ifEmpty { "No se pudo comprobar el distribuidor" }
+        "tenant_invalid" -> tr(R.string.tenant_invalid)
+        "tenant_expired" -> tr(R.string.tenant_expired)
+        "tenant_suspended" -> tr(R.string.tenant_suspended)
+        "app_not_linked" -> tr(R.string.tenant_app_not_linked)
+        "too_many_attempts" -> tr(R.string.tenant_too_many)
+        "app_required" -> tr(R.string.tenant_app_required)
+        else -> fallback.ifEmpty { tr(R.string.tenant_check_failed) }
     }
 
     /**
@@ -114,7 +116,7 @@ object Tenant {
     }
 
     fun expiredMessage(b: Brand): String =
-        if (b.expiresText.isNotEmpty()) "Tu distribuidor venció el ${b.expiresText} (hora de Panamá)." else message("tenant_expired")
+        if (b.expiresText.isNotEmpty()) tr(R.string.tenant_expired_on, b.expiresText) else message("tenant_expired")
 
     /* ---------- tenant_config ---------- */
 
@@ -132,16 +134,16 @@ object Tenant {
     suspend fun fetch(code: String, deviceId: String): Check {
         val a = Panel.tenantConfig(code, deviceId)
         a.value?.let { cfg ->
-            val b = parse(cfg.toString()) ?: return Check.Problem("Respuesta no válida del panel")
+            val b = parse(cfg.toString()) ?: return Check.Problem(tr(R.string.err_panel_bad_response))
             return Check.Ok(b)
         }
         val c = a.errorCode
         return when {
             c in FATAL -> Check.Denied(message(c))
             c == "too_many_attempts" || c == "app_required" -> Check.Problem(message(c))
-            c == "no_key" -> Check.Problem("Esta versión de la app no tiene la llave del panel")
-            c == "offline" -> Check.Offline(a.error ?: "No se pudo conectar con el panel")
-            else -> Check.Problem(a.error ?: "No se pudo comprobar el distribuidor")
+            c == "no_key" -> Check.Problem(tr(R.string.err_panel_no_key))
+            c == "offline" -> Check.Offline(a.error ?: tr(R.string.err_panel_offline_short))
+            else -> Check.Problem(a.error ?: tr(R.string.tenant_check_failed))
         }
     }
 

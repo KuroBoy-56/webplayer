@@ -1,4 +1,7 @@
 package com.latmpx.player.ui.screens
+import androidx.compose.ui.res.stringResource
+import com.latmpx.player.tr
+import com.latmpx.player.R
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -93,8 +96,8 @@ fun DistributorScreen(message: String?, onDone: () -> Unit) {
 
     fun submit() {
         if (busy) return
-        if (code.length != CODE_LEN) { err = "Escribe los 6 dígitos del número de distribuidor"; return }
-        if (!PanelCrypto.hasKey()) { err = "Esta versión de la app no tiene la llave del panel"; return }
+        if (code.length != CODE_LEN) { err = tr(R.string.dist_enter_6); return }
+        if (!PanelCrypto.hasKey()) { err = tr(R.string.err_panel_no_key); return }
         err = null
         busy = true
         scope.launch {
@@ -139,9 +142,9 @@ fun DistributorScreen(message: String?, onDone: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text("Número de distribuidor", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                    Text(stringResource(R.string.dist_number), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
                     Text(
-                        "Escribe el número de 6 dígitos que te dio tu distribuidor. Si no tienes uno, elige Omitir.",
+                        stringResource(R.string.dist_help),
                         color = NfGray2, fontSize = 14.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth(),
                     )
                     err?.let { DistError(it) }
@@ -152,7 +155,7 @@ fun DistributorScreen(message: String?, onDone: () -> Unit) {
                         OutlinedTextField(
                             value = code,
                             onValueChange = { v -> code = v.filter { it.isDigit() }.take(CODE_LEN); err = null },
-                            label = { Text("Número de distribuidor") }, singleLine = true, enabled = !busy,
+                            label = { Text(stringResource(R.string.dist_number)) }, singleLine = true, enabled = !busy,
                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 22.sp, fontFamily = FontFamily.Monospace, letterSpacing = 6.sp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = Color.White, unfocusedBorderColor = Color(0xFF555555), focusedTextColor = Color.White, unfocusedTextColor = Color.White,
@@ -164,14 +167,14 @@ fun DistributorScreen(message: String?, onDone: () -> Unit) {
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                    DistButton("Continuar", primary = true, modifier = Modifier.fillMaxWidth()) { submit() }
-                    DistButton("Omitir", primary = false, modifier = Modifier.fillMaxWidth()) {
+                    DistButton(stringResource(R.string.continue_), primary = true, modifier = Modifier.fillMaxWidth()) { submit() }
+                    DistButton(stringResource(R.string.skip), primary = false, modifier = Modifier.fillMaxWidth()) {
                         if (!busy) { Tenant.skip(); onDone() }
                     }
                     if (busy) {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator(color = NfRed, strokeWidth = 2.dp)
-                            Text("Comprobando el número…", color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                            Text(stringResource(R.string.dist_checking), color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
                         }
                     }
                 }
@@ -195,11 +198,11 @@ fun TenantRetryScreen(message: String, busy: Boolean, onRetry: () -> Unit, onCha
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             LogoHeader(height = 46.dp)
-            Text("No se pudo comprobar tu distribuidor", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Text(stringResource(R.string.dist_check_failed), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
             DistError(message)
             if (busy) CircularProgressIndicator(color = NfRed, strokeWidth = 2.dp)
-            DistButton("Reintentar", primary = true, modifier = Modifier.fillMaxWidth().focusRequester(first)) { if (!busy) onRetry() }
-            DistButton("Cambiar distribuidor", primary = false, modifier = Modifier.fillMaxWidth()) { if (!busy) onChange() }
+            DistButton(stringResource(R.string.retry), primary = true, modifier = Modifier.fillMaxWidth().focusRequester(first)) { if (!busy) onRetry() }
+            DistButton(stringResource(R.string.change_distributor), primary = false, modifier = Modifier.fillMaxWidth()) { if (!busy) onChange() }
         }
     }
 }
@@ -208,18 +211,18 @@ fun TenantRetryScreen(message: String, busy: Boolean, onRetry: () -> Unit, onCha
 @Composable
 fun DistributorAccountCard(onChange: () -> Unit) {
     val b = Tenant.brand
-    Text("Distribuidor", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
+    Text(stringResource(R.string.distributor), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
     Column(
         Modifier.fillMaxWidth().background(Color(0xFF1F1F1F), RoundedCornerShape(12.dp)).border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp)).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (b != null) {
-            InfoRow("Distribuidor", "${b.name.ifBlank { "Distribuidor" }} (${b.code})")
-            InfoRow("Vence", if (b.expiresText.isNotEmpty()) "${b.expiresText} (hora de Panamá)" else "Sin vencimiento")
+            InfoRow(stringResource(R.string.distributor), "${b.name.ifBlank { stringResource(R.string.distributor) }} (${b.code})")
+            InfoRow(stringResource(R.string.expires), if (b.expiresText.isNotEmpty()) stringResource(R.string.panama_time, b.expiresText) else stringResource(R.string.no_expiration))
         } else {
-            InfoRow("Distribuidor", "Ninguno")
+            InfoRow(stringResource(R.string.distributor), stringResource(R.string.none))
         }
-        HeroButton("Cambiar distribuidor", Icons.Filled.SwapHoriz, false, onClick = onChange)
+        HeroButton(stringResource(R.string.change_distributor), Icons.Filled.SwapHoriz, false, onClick = onChange)
     }
 }
 
@@ -278,7 +281,7 @@ private fun NumPad(first: FocusRequester, onDigit: (String) -> Unit, onBack: () 
                                 contentAlignment = Alignment.Center,
                             ) {
                                 val tint = if (f) Color.Black else Color.White
-                                if (k == "<") Icon(Icons.AutoMirrored.Filled.Backspace, "Borrar", tint = tint, modifier = Modifier.size(22.dp))
+                                if (k == "<") Icon(Icons.AutoMirrored.Filled.Backspace, stringResource(R.string.delete), tint = tint, modifier = Modifier.size(22.dp))
                                 else Text(k, color = tint, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                             }
                         }
