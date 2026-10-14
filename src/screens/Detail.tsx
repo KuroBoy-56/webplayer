@@ -10,6 +10,7 @@ import { catalog, Item } from '../data/catalog';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, progressMovie, progressSeries, toggleFav, useAppState } from '../state';
+import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
 export default function Detail({ item }: { item: Item }) {
@@ -82,7 +83,7 @@ export default function Detail({ item }: { item: Item }) {
     playEpisodes(nav, item, ser.seasons[0].episodes, 0, 0);
   };
 
-  const meta = [info?.year || item.year, (info?.rating || '') !== '' && Number(info?.rating) > 0 ? '★ ' + Number(info?.rating).toFixed(1) : item.rating > 0 ? '★ ' + item.rating.toFixed(1) : '', vod?.duration || '', ser ? ser.seasons.length + (ser.seasons.length === 1 ? ' temporada' : ' temporadas') : '']
+  const meta = [info?.year || item.year, (info?.rating || '') !== '' && Number(info?.rating) > 0 ? '★ ' + Number(info?.rating).toFixed(1) : item.rating > 0 ? '★ ' + item.rating.toFixed(1) : '', vod?.duration || '', ser ? (ser.seasons.length === 1 ? t('1 temporada') : t('{n} temporadas', { n: ser.seasons.length })) : '']
     .filter(Boolean)
     .join('   ');
 
@@ -98,24 +99,24 @@ export default function Detail({ item }: { item: Item }) {
           <Text style={s.meta}>{meta}</Text>
           {info?.genre ? <Text style={s.genre}>{info.genre}</Text> : null}
           <Text style={s.plot} numberOfLines={5}>
-            {info?.plot || item.plot || (loading ? 'Cargando…' : '')}
+            {info?.plot || item.plot || (loading ? t('Cargando…') : '')}
           </Text>
           {info?.cast && !cast.length ? (
             <Text style={s.small} numberOfLines={2}>
-              Reparto: {info.cast}
+              {t('Reparto:')} {info.cast}
             </Text>
           ) : null}
-          {info?.director ? <Text style={s.small}>Dirección: {info.director}</Text> : null}
+          {info?.director ? <Text style={s.small}>{t('Dirección:')} {info.director}</Text> : null}
           <View style={s.btns}>
             {item.kind === 'vod' ? (
               <>
-                <Button label={canResume ? 'Continuar' : 'Reproducir'} icon="▶" primary preferred onPress={() => playMovie(nav, item, vod?.ext || item.ext)} />
-                {canResume ? <Button label="Desde el inicio" icon="↺" onPress={() => playMovie(nav, item, vod?.ext || item.ext, true)} /> : null}
+                <Button label={canResume ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onPress={() => playMovie(nav, item, vod?.ext || item.ext)} />
+                {canResume ? <Button label={t('Desde el inicio')} icon="↺" onPress={() => playMovie(nav, item, vod?.ext || item.ext, true)} /> : null}
               </>
             ) : (
-              <Button label={resumeEp ? 'Continuar' : 'Reproducir'} icon="▶" primary preferred onPress={playSeries} />
+              <Button label={resumeEp ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onPress={playSeries} />
             )}
-            <Button label={fav ? 'En mi lista' : 'Mi lista'} icon={fav ? '✓' : '+'} last onPress={() => toggleFav(item.kind, item.id, item.name, item.poster, item.cat)} />
+            <Button label={fav ? t('En mi lista') : t('Mi lista')} icon={fav ? '✓' : '+'} last onPress={() => toggleFav(item.kind, item.id, item.name, item.poster, item.cat)} />
           </View>
         </View>
 
@@ -129,7 +130,7 @@ export default function Detail({ item }: { item: Item }) {
               style={{ marginTop: px(30) }}
               renderItem={({ item: sn, index }) => (
                 <Focusable onFocus={() => setSeason(index)} onPress={() => setSeason(index)} style={f => [s.season, index === season && s.seasonOn, f && s.seasonF]}>
-                  {f => <Text style={[s.seasonText, f && { color: C.onFocus }]}>Temporada {sn.season}</Text>}
+                  {f => <Text style={[s.seasonText, f && { color: C.onFocus }]}>{t('Temporada {n}', { n: sn.season })}</Text>}
                 </Focusable>
               )}
             />
@@ -152,7 +153,7 @@ export default function Detail({ item }: { item: Item }) {
                       ) : null}
                     </View>
                     <Text style={s.epTitle} numberOfLines={1}>
-                      {e.num}. {e.title || 'Episodio ' + e.num}
+                      {e.num}. {e.title || t('Episodio {n}', { n: e.num })}
                     </Text>
                     {e.plot ? (
                       <Text style={s.epPlot} numberOfLines={2}>
@@ -168,7 +169,7 @@ export default function Detail({ item }: { item: Item }) {
 
         {cast.length ? (
           <View style={{ marginTop: px(30) }}>
-            <Text style={s.rowTitle}>Reparto</Text>
+            <Text style={s.rowTitle}>{t('Reparto')}</Text>
             <FlatList
               horizontal
               data={cast}
@@ -199,7 +200,7 @@ export default function Detail({ item }: { item: Item }) {
 
         {similar.length ? (
           <View style={{ marginTop: px(30) }}>
-            <RowView row={{ title: 'Más títulos como este', type: 'poster', items: similar }} onItem={it => openItem(nav, it)} onSpecial={() => {}} />
+            <RowView row={{ title: t('Más títulos como este'), type: 'poster', items: similar }} onItem={it => openItem(nav, it)} onSpecial={() => {}} />
           </View>
         ) : null}
       </ScrollView>

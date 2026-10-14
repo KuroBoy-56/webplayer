@@ -9,6 +9,7 @@ import { catalog, Item } from '../data/catalog';
 import { clock, digits, nowSec } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, toggleFav, useAppState } from '../state';
+import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
 
 export default function Live() {
@@ -38,7 +39,7 @@ export default function Live() {
     }, 600);
   }, [focused]);
 
-  if (!st.loaded.live) return <Spinner label="Cargando los canales…" />;
+  if (!st.loaded.live) return <Spinner label={t('Cargando los canales…')} />;
 
   const now = nowSec();
   const cur = epg.find(e => e.s <= now && now < e.e);
@@ -89,7 +90,7 @@ export default function Live() {
             )}
           />
         ) : (
-          <Message text={cat === 'fav' ? 'Aún no tienes canales favoritos. Abre un canal y pulsa ★ en el reproductor.' : 'No hay canales en esta categoría.'} />
+          <Message text={cat === 'fav' ? t('Aún no tienes canales favoritos. Abre un canal y pulsa ★ en el reproductor.') : t('No hay canales en esta categoría.')} />
         )}
       </View>
       <View style={s.guide}>
@@ -99,7 +100,7 @@ export default function Live() {
             <Text style={s.guideName}>{focused.name}</Text>
             {cur ? (
               <>
-                <Text style={s.live}>AHORA · {clock(cur.s)} - {clock(cur.e)}</Text>
+                <Text style={s.live}>{t('AHORA')} · {clock(cur.s)} - {clock(cur.e)}</Text>
                 <Text style={s.prog}>{cur.t}</Text>
                 <View style={s.bar}>
                   <View style={[s.barFill, { width: `${Math.min(100, ((now - cur.s) / Math.max(1, cur.e - cur.s)) * 100)}%` }]} />
@@ -111,7 +112,7 @@ export default function Live() {
                 ) : null}
               </>
             ) : (
-              <Text style={s.desc}>Sin información de la guía.</Text>
+              <Text style={s.desc}>{t('Sin información de la guía.')}</Text>
             )}
             {epg
               .filter(e => e.s > now)
@@ -123,14 +124,14 @@ export default function Live() {
               ))}
             <View style={s.favBtn}>
               <Button
-                label={isFav('live', focused.id) ? '★ Quitar de favoritos' : '☆ Agregar a favoritos'}
+                label={isFav('live', focused.id) ? '★ ' + t('Quitar de favoritos') : '☆ ' + t('Agregar a favoritos')}
                 last
                 onPress={() => toggleFav('live', focused.id, focused.name, focused.poster, focused.cat)}
               />
             </View>
           </>
         ) : (
-          <Text style={s.desc}>Elige un canal para ver la guía.</Text>
+          <Text style={s.desc}>{t('Elige un canal para ver la guía.')}</Text>
         )}
       </View>
       <PinDialog

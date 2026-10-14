@@ -3,12 +3,14 @@
 import React, { useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { panelSetPin } from '../api/panel';
+import { Key, t } from '../lib/i18n';
 import { deviceId, parentalPin } from '../state';
 import { C, px, themed } from '../theme';
 import { Button } from './ui';
 
 type Step = 'old' | 'new' | 'confirm';
-const TITLES: Record<Step, string> = { old: 'Escribe el PIN actual (de fábrica 0000)', new: 'Escribe el nuevo PIN (4 números)', confirm: 'Confirma el nuevo PIN' };
+// se traducen al mostrarlos
+const TITLES: Record<Step, Key> = { old: 'Escribe el PIN actual (de fábrica 0000)', new: 'Escribe el nuevo PIN (4 números)', confirm: 'Confirma el nuevo PIN' };
 
 export default function ChangePinDialog({ visible, onClose, onSaved }: { visible: boolean; onClose: () => void; onSaved: () => void }) {
   const [step, setStep] = useState<Step>('old');
@@ -31,12 +33,12 @@ export default function ChangePinDialog({ visible, onClose, onSaved }: { visible
   };
   const next = async () => {
     if (busy) return;
-    if (pin.length !== 4) return setErr('El PIN tiene 4 números');
+    if (pin.length !== 4) return setErr(t('El PIN tiene 4 números'));
     setErr('');
     if (step === 'old') {
       if (pin !== parentalPin()) {
         setPin('');
-        return setErr('PIN incorrecto');
+        return setErr(t('PIN incorrecto'));
       }
       setOldPin(pin);
       setPin('');
@@ -50,7 +52,7 @@ export default function ChangePinDialog({ visible, onClose, onSaved }: { visible
     if (pin !== newPin) {
       setPin('');
       setStep('new');
-      return setErr('Los PIN no coinciden');
+      return setErr(t('Los PIN no coinciden'));
     }
     setBusy(true);
     const r = await panelSetPin(deviceId(), oldPin, newPin);
@@ -61,15 +63,15 @@ export default function ChangePinDialog({ visible, onClose, onSaved }: { visible
     } else {
       setPin('');
       setStep('new');
-      setErr(r.error || 'No se pudo guardar el PIN en el panel');
+      setErr(r.error || t('No se pudo guardar el PIN en el panel'));
     }
   };
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
       <View style={s.back}>
         <View style={s.box}>
-          <Text style={s.title}>Control parental</Text>
-          <Text style={s.sub}>{busy ? 'Guardando el PIN en el panel…' : TITLES[step]}</Text>
+          <Text style={s.title}>{t('Control parental')}</Text>
+          <Text style={s.sub}>{busy ? t('Guardando el PIN en el panel…') : t(TITLES[step])}</Text>
           <TextInput
             key={step}
             style={s.input}
@@ -82,8 +84,8 @@ export default function ChangePinDialog({ visible, onClose, onSaved }: { visible
           />
           {err ? <Text style={s.err}>{err}</Text> : null}
           <View style={s.btns}>
-            <Button label="Aceptar" primary onPress={next} />
-            <Button label="Cancelar" last onPress={close} />
+            <Button label={t('Aceptar')} primary onPress={next} />
+            <Button label={t('Cancelar')} last onPress={close} />
           </View>
         </View>
       </View>

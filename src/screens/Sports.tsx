@@ -8,6 +8,7 @@ import { loadSports, matchSports, SportMatch, SportsData } from '../data/sports'
 import { clock, int, localDay, nowSec, parseIso, str } from '../lib/util';
 import { useNav } from '../nav';
 import { useAppState } from '../state';
+import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
 let cache: { data: SportsData; at: number } | null = null;
@@ -41,7 +42,7 @@ export default function Sports() {
       if (d) {
         cache = { data: d, at: nowSec() };
         setData(d);
-      } else setErr('No se pudo cargar la agenda deportiva. Inténtalo más tarde.');
+      } else setErr(t('No se pudo cargar la agenda deportiva. Inténtalo más tarde.'));
     });
   }, []);
 
@@ -81,34 +82,34 @@ export default function Sports() {
     const now = nowSec();
     const start = parseIso(str(e.ts));
     const ending = start + minutes(str(e.sp)) * 60;
-    if (e.pp === true) return say('El evento está aplazado'), false;
-    if (isFinal(str(e.st)) || (start && now >= ending)) return say('Este evento ya terminó'), false;
-    if (start && localDay(start) !== localDay(now) && !(start <= now && now < ending)) return say('El evento aún no está en línea'), false;
+    if (e.pp === true) return say(t('El evento está aplazado')), false;
+    if (isFinal(str(e.st)) || (start && now >= ending)) return say(t('Este evento ya terminó')), false;
+    if (start && localDay(start) !== localDay(now) && !(start <= now && now < ending)) return say(t('El evento aún no está en línea')), false;
     return true;
   };
   const folder = (prefix: string) => {
     if (found?.folder) {
-      say(prefix + 'te mostramos los eventos (' + found.folder.name + ')');
+      say(prefix + t('te mostramos los eventos ({x})', { x: found.folder.name }));
       openItem(nav, found.folder);
-    } else say('No encontramos un canal para este evento');
+    } else say(t('No encontramos un canal para este evento'));
   };
   const watch = (e: any, how: 'auto' | 'teams' | number) => {
     setPick(null);
     const m = map?.[str(e.id)];
-    if (!m) return folder('Aún no aparece el canal exacto; ');
-    if (how === 'auto') return m.best ? openItem(nav, m.best) : folder('Aún no aparece el canal exacto; ');
-    if (how === 'teams') return m.teams ? openItem(nav, m.teams) : folder('No hay un canal con esos equipos; ');
-    const t = m.tv[how];
-    if (t?.ch) return openItem(nav, t.ch);
+    if (!m) return folder(t('Aún no aparece el canal exacto; '));
+    if (how === 'auto') return m.best ? openItem(nav, m.best) : folder(t('Aún no aparece el canal exacto; '));
+    if (how === 'teams') return m.teams ? openItem(nav, m.teams) : folder(t('No hay un canal con esos equipos; '));
+    const tv = m.tv[how];
+    if (tv?.ch) return openItem(nav, tv.ch);
     if (m.teams) {
-      say('No tienes ' + t.n + '; te mostramos ' + m.teams.name);
+      say(t('No tienes {x}; te mostramos {y}', { x: tv.n, y: m.teams.name }));
       return openItem(nav, m.teams);
     }
-    folder('No tienes ' + t.n + '; ');
+    folder(t('No tienes {x}; ', { x: tv.n }));
   };
   const open = (e: any) => {
     if (!playable(e)) return;
-    if (!map) return say('Buscando los canales, un momento…');
+    if (!map) return say(t('Buscando los canales, un momento…'));
     const m = map[str(e.id)];
     if (m && m.tv.length) setPick(e);
     else watch(e, 'auto');
@@ -132,23 +133,24 @@ export default function Sports() {
       const ending = start + minutes(str(e.sp)) * 60;
       const live = start <= now && now < ending && !isFinal(str(e.st)) && e.pp !== true;
       if (!((day === 0 && (dayIdx === 0 || live)) || (day === 1 && dayIdx === 1))) continue;
-      let time = live ? 'EN VIVO' : clock(start);
-      if (e.pp === true) time = 'Aplazado';
-      if (isFinal(str(e.st)) || (now >= ending && str(e.hs))) time = 'Final';
-      const score = str(e.hs) && str(e.as) && (live || time === 'Final') ? str(e.hs) + ' - ' + str(e.as) : 'vs';
+      let time = live ? t('EN VIVO') : clock(start);
+      if (e.pp === true) time = t('Aplazado');
+      const final = isFinal(str(e.st)) || (now >= ending && !!str(e.hs));
+      if (final) time = t('Final');
+      const score = str(e.hs) && str(e.as) && (live || final) ? str(e.hs) + ' - ' + str(e.as) : 'vs';
       out.push({ e, start, time, live, score });
     }
     return out.sort((a, b) => Number(b.live) - Number(a.live) || a.start - b.start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, day, sport]);
 
-  if (!data) return err ? <Message text={err} /> : <Spinner label="Cargando la agenda deportiva…" />;
+  if (!data) return err ? <Message text={err} /> : <Spinner label={t('Cargando la agenda deportiva…')} />;
 
   return (
     <View style={s.root}>
       <View style={s.chips}>
-        <Chip label="Hoy" on={day === 0} onPress={() => setDay(0)} />
-        <Chip label="Mañana" on={day === 1} onPress={() => setDay(1)} />
+        <Chip label={t('Hoy')} on={day === 0} onPress={() => setDay(0)} />
+        <Chip label={t('Mañana')} on={day === 1} onPress={() => setDay(1)} />
       </View>
       <FlatList
         horizontal
@@ -156,7 +158,7 @@ export default function Sports() {
         data={['', ...sportKeys]}
         keyExtractor={k => k || 'all'}
         contentContainerStyle={{ paddingHorizontal: SIDE }}
-        renderItem={({ item: k }) => <Chip label={k ? label(k) : 'Todos'} on={sport === k} onPress={() => setSport(k)} />}
+        renderItem={({ item: k }) => <Chip label={k ? label(k) : t('Todos')} on={sport === k} onPress={() => setSport(k)} />}
       />
       {toast ? <Text style={s.toast}>{toast}</Text> : null}
       {rows.length ? (
@@ -169,7 +171,7 @@ export default function Sports() {
             const mm = map ? map[str(e.id)] : undefined;
             const ch = mm?.best || null;
             const tvList: any[] = Array.isArray(e.tv) ? e.tv : [];
-            const tvText = tvList.length ? 'En TV: ' + tvList.slice(0, 4).map(t => str(t.n)).join(' · ') + (tvList.length > 4 ? '  +' + (tvList.length - 4) : '') : '';
+            const tvText = tvList.length ? t('En TV:') + ' ' + tvList.slice(0, 4).map(x => str(x.n)).join(' · ') + (tvList.length > 4 ? '  +' + (tvList.length - 4) : '') : '';
             const home = str(e.h) || str(e.ev);
             const away = str(e.a);
             return (
@@ -203,7 +205,7 @@ export default function Sports() {
                       ) : null}
                     </View>
                     <Text style={[s.chan, !ch && s.chanNone, f && { color: C.onFocus }]} numberOfLines={1}>
-                      {map === null ? 'Buscando…' : ch ? '▶ ' + ch.name : 'Sin canal'}
+                      {map === null ? t('Buscando…') : ch ? '▶ ' + ch.name : t('Sin canal')}
                     </Text>
                   </>
                 )}
@@ -212,7 +214,7 @@ export default function Sports() {
           }}
         />
       ) : (
-        <Message text="No hay partidos para mostrar." />
+        <Message text={t('No hay partidos para mostrar.')} />
       )}
       {pick ? (
         <View style={s.menuShade}>
@@ -220,13 +222,13 @@ export default function Sports() {
             <Text style={s.menuTitle} numberOfLines={2}>
               {str(pick.h) && str(pick.a) ? str(pick.h) + ' vs ' + str(pick.a) : str(pick.ev)}
             </Text>
-            <Text style={s.menuSub}>¿Dónde quieres verlo?</Text>
+            <Text style={s.menuSub}>{t('¿Dónde quieres verlo?')}</Text>
             <ScrollView style={{ maxHeight: px(620) }}>
-              <MenuRow title="▶  Ver el evento" sub="Busca el mejor canal automáticamente" first onPress={() => watch(pick, 'auto')} />
-              {(map?.[str(pick.id)]?.tv || []).map((t, i) => (
-                <MenuRow key={i} title={t.n} sub={(t.c ? t.c + ' · ' : '') + (t.ch ? 'en tu lista: ' + t.ch.name : 'no está en tu lista: se busca el evento')} onPress={() => watch(pick, i)} />
+              <MenuRow title={'▶  ' + t('Ver el evento')} sub={t('Busca el mejor canal automáticamente')} first onPress={() => watch(pick, 'auto')} />
+              {(map?.[str(pick.id)]?.tv || []).map((tv, i) => (
+                <MenuRow key={i} title={tv.n} sub={(tv.c ? tv.c + ' · ' : '') + (tv.ch ? t('en tu lista: {x}', { x: tv.ch.name }) : t('no está en tu lista: se busca el evento'))} onPress={() => watch(pick, i)} />
               ))}
-              <MenuRow title="Buscar por equipos" sub="En las carpetas de eventos de tu lista" onPress={() => watch(pick, 'teams')} />
+              <MenuRow title={t('Buscar por equipos')} sub={t('En las carpetas de eventos de tu lista')} onPress={() => watch(pick, 'teams')} />
             </ScrollView>
           </View>
         </View>

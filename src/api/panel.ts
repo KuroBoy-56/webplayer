@@ -5,6 +5,7 @@ import { hasMasterKey, panelDecrypt, panelEncrypt } from '../lib/aes';
 import { formBody, http, HttpResult, json } from '../lib/http';
 import { read, remove, write } from '../lib/storage';
 import { APP_ID, Brand, parseConfig, reportTenantProblem, scoped, TENANT_ERRORS, TENANT_FATAL, tenantCode, tenantFields } from '../lib/tenant';
+import { t } from '../lib/i18n';
 import { normalizeBase, str } from '../lib/util';
 
 export type Session = {
@@ -137,9 +138,9 @@ export async function panelDnsList(): Promise<Server[]> {
 export async function panelPlaylists(deviceId: string): Promise<{ lines: Line[]; error: string }> {
   if (tenantCode()) return { lines: [], error: '' };
   const r = await panel('auth.php', 'POST', JSON.stringify({ data: mopeEncrypt(JSON.stringify({ mac_address: deviceId })) }), 'application/json');
-  if (r.code === 0) return { lines: [], error: 'No se pudo conectar con el panel. Revisa tu conexión a internet.' };
+  if (r.code === 0) return { lines: [], error: t('No se pudo conectar con el panel. Revisa tu conexión a internet.') };
   const outer = json(r);
-  if (!outer) return { lines: [], error: 'Respuesta no válida del panel' };
+  if (!outer) return { lines: [], error: t('Respuesta no válida del panel') };
   let resp: any = null;
   if (str(outer.data)) {
     try {
@@ -156,7 +157,7 @@ export async function panelPlaylists(deviceId: string): Promise<{ lines: Line[];
   const lines: Line[] = [];
   const seen = new Set<string>();
   for (const o of resp.urls || []) {
-    const ln = lineFromUrl(str(o?.name) || 'Servidor', str(o?.url));
+    const ln = lineFromUrl(str(o?.name) || t('Servidor'), str(o?.url));
     if (ln && !seen.has(ln.base + '|' + ln.user)) {
       seen.add(ln.base + '|' + ln.user);
       lines.push(ln);
@@ -254,7 +255,7 @@ async function panelLogin(action: string, payload: Record<string, any>): Promise
     const ts = Math.floor(Date.now() / 1000) + clockSkew;
     // platform: en qué equipo está esta MAC (Clientes MAC › Dispositivo) y la pantalla falsa de esta app
     const data = panelEncrypt(JSON.stringify({ ...payload, ...tenantFields(), platform: APP_ID, ts }));
-    if (!data) return { code: -1, body: '', ok: false, error: 'Esta versión no tiene la llave del panel.' };
+    if (!data) return { code: -1, body: '', ok: false, error: t('Esta versión no tiene la llave del panel.') };
     r = await panel('login.php', 'POST', formBody({ action, data }), 'application/x-www-form-urlencoded');
     const j = r.code === 401 ? json<any>(r) : null;
     if (attempt === 0 && j && /^ts_/.test(str(j.code)) && Number(j.server_time) > 0) {
@@ -263,7 +264,7 @@ async function panelLogin(action: string, payload: Record<string, any>): Promise
     }
     break;
   }
-  return r.code === 0 ? { ...r, error: 'No se pudo conectar con el panel.' } : r;
+  return r.code === 0 ? { ...r, error: t('No se pudo conectar con el panel.') } : r;
 }
 
 // respuesta de login.php que se pidió con "enc": 1: el éxito (200) llega cifrado igual que
@@ -287,11 +288,11 @@ function panelError(r: HttpResult & { error?: string }, fallback: string): strin
   const code = j && typeof j === 'object' ? str(j.code) : '';
   if (tenantCode() && TENANT_ERRORS[code]) {
     if (TENANT_FATAL.includes(code)) reportTenantProblem(code);
-    return TENANT_ERRORS[code];
+    return t(TENANT_ERRORS[code]);
   }
   const msg = j && typeof j === 'object' ? str(j.error) || str(j.message) : '';
-  if (msg === 'Server not configured') return 'El panel no está configurado';
-  if (msg === 'Decryption failed') return 'La llave de la app no coincide con la del panel';
+  if (msg === 'Server not configured') return t('El panel no está configurado');
+  if (msg === 'Decryption failed') return t('La llave de la app no coincide con la del panel');
   return msg || fallback;
 }
 
@@ -326,7 +327,7 @@ export async function panelCheckMac(deviceId: string): Promise<Line | null> {
   if (!j || j.exists !== true) return null;
   // PIN parental del panel: es el que usa la app
   if (/^\d{4}$/.test(str(j.pin))) write(scoped('panel_pin'), str(j.pin));
-  const ln = lineFromUrl('Servidor', str(j.url), str(j.username), str(j.password));
+  const ln = lineFromUrl(t('Servidor'), str(j.url), str(j.username), str(j.password));
   return ln ? { ...ln, demo: j.demo === true, demoExpires: Number(j.demo_expires) || 0, demoDuration: Number(j.demo_duration) || 0 } : null;
 }
 
@@ -343,7 +344,7 @@ export async function panelSetPin(deviceId: string, oldPin: string, pin: string)
     write(scoped('panel_pin'), pin);
     return { ok: true };
   }
-  return { ok: false, error: panelError(r, 'El panel no guardó el PIN (' + r.code + ')') };
+  return { ok: false, error: panelError(r, t('El panel no guardó el PIN ({code})', { code: r.code })) };
 }
 
 // registra el equipo (código MAC) con la cuenta en el panel
@@ -351,7 +352,7 @@ export async function panelSubmit(deviceId: string, user: string, pass: string, 
   const r = await panelLogin('submit_url', { mac_address: deviceId, username: user, password: pass, url: dns });
   const j = json(r);
   if (r.ok && j && str(j.status) === 'ok') return { ok: true };
-  return { ok: false, error: panelError(r, 'No se pudo registrar el equipo') };
+  return { ok: false, error: panelError(r, t('No se pudo registrar el equipo')) };
 }
 
 // código de demo de un revendedor: 6 letras y números con al menos una letra (solo números sería
@@ -380,11 +381,11 @@ export async function panelDemo(
       duration: Number(j.demo_duration) || 0,
       code: r.code,
     };
-  let fb = 'No se pudo crear la demo';
-  if (r.code === 403) fb = 'Demo ya utilizada en este dispositivo o dispositivo ya registrado.';
-  if (r.code === 429) fb = 'Demasiadas demos desde esta conexión. Inténtalo mañana.';
-  if (r.code === 503) fb = 'La demo no está disponible en este momento. Inténtalo más tarde.';
-  if (r.code === 404 && code) fb = 'El código de revendedor no existe o no está activo.';
+  let fb = t('No se pudo crear la demo');
+  if (r.code === 403) fb = t('Demo ya utilizada en este dispositivo o dispositivo ya registrado.');
+  if (r.code === 429) fb = t('Demasiadas demos desde esta conexión. Inténtalo mañana.');
+  if (r.code === 503) fb = t('La demo no está disponible en este momento. Inténtalo más tarde.');
+  if (r.code === 404 && code) fb = t('El código de revendedor no existe o no está activo.');
   return { ok: false, error: panelError(r, fb), code: r.code };
 }
 
@@ -410,17 +411,17 @@ export type TenantResult =
   | { ok: false; network: boolean; code: string; message: string };
 
 export async function panelTenantConfig(code: string, device: string, now: number): Promise<TenantResult> {
-  if (!hasMasterKey()) return { ok: false, network: false, code: 'no_key', message: 'Esta versión de la app no tiene la llave del panel' };
+  if (!hasMasterKey()) return { ok: false, network: false, code: 'no_key', message: t('Esta versión de la app no tiene la llave del panel') };
   const data = panelEncrypt(JSON.stringify({ code, app: APP_ID, device }));
   const r = await panel('login.php', 'POST', formBody({ action: 'tenant_config', data }), 'application/x-www-form-urlencoded');
-  if (r.code === 0 || r.code >= 500) return { ok: false, network: true, code: '', message: 'No se pudo conectar con el panel. Revisa tu conexión a internet.' };
+  if (r.code === 0 || r.code >= 500) return { ok: false, network: true, code: '', message: t('No se pudo conectar con el panel. Revisa tu conexión a internet.') };
   if (!r.ok) {
     const j = json(r);
     const c = j && typeof j === 'object' ? str(j.code) : '';
-    if (TENANT_ERRORS[c]) return { ok: false, network: false, code: c, message: TENANT_ERRORS[c] };
+    if (TENANT_ERRORS[c]) return { ok: false, network: false, code: c, message: t(TENANT_ERRORS[c]) };
     const msg = j && typeof j === 'object' ? str(j.error) : '';
-    if (msg === 'Decryption failed') return { ok: false, network: false, code: 'key', message: 'La llave de la app no coincide con la del panel' };
-    return { ok: false, network: true, code: '', message: msg || 'Respuesta no válida del panel (' + r.code + ')' };
+    if (msg === 'Decryption failed') return { ok: false, network: false, code: 'key', message: t('La llave de la app no coincide con la del panel') };
+    return { ok: false, network: true, code: '', message: msg || t('Respuesta no válida del panel ({code})', { code: r.code }) };
   }
   const plain = panelDecrypt(r.body);
   let j: any = null;
@@ -430,6 +431,6 @@ export async function panelTenantConfig(code: string, device: string, now: numbe
     j = null;
   }
   const brand = parseConfig(j, now);
-  if (!brand || brand.code !== code) return { ok: false, network: true, code: '', message: 'Respuesta no válida del panel' };
+  if (!brand || brand.code !== code) return { ok: false, network: true, code: '', message: t('Respuesta no válida del panel') };
   return { ok: true, brand };
 }

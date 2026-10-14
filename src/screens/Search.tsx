@@ -4,6 +4,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { catalog, Item } from '../data/catalog';
 import { useAppState } from '../state';
 import { C, px, SIDE, themed } from '../theme';
+import { t } from '../lib/i18n';
 import { ItemGrid } from './Grid';
 
 export default function Search() {
@@ -22,12 +23,12 @@ export default function Search() {
         style={s.input}
         value={q}
         onChangeText={setQ}
-        placeholder="Títulos, series, canales…"
+        placeholder={t('Títulos, series, canales…')}
         placeholderTextColor={C.dim}
         autoCorrect={false}
         autoCapitalize="none"
       />
-      {q.trim().length >= 2 && !items.length ? <Text style={s.none}>No hay resultados para «{q.trim()}»</Text> : null}
+      {q.trim().length >= 2 && !items.length ? <Text style={s.none}>{t('No hay resultados para «{q}»', { q: q.trim() })}</Text> : null}
       <ItemGrid items={items} channels />
     </View>
   );

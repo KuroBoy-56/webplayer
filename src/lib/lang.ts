@@ -1,4 +1,5 @@
 // Nombres de idiomas y códecs de las pistas de audio y subtítulos (igual que PlayerTracks.brs de Roku).
+import { Key, t } from './i18n';
 
 const THREE: Record<string, string> = { spa: 'es', eng: 'en', por: 'pt', fre: 'fr', fra: 'fr', ger: 'de', deu: 'de', ita: 'it', jpn: 'ja', kor: 'ko' };
 
@@ -15,7 +16,8 @@ export function sameLang(a: string, b: string): boolean {
   return ka !== '' && ka === langKey(b);
 }
 
-const NAMES: Record<string, string> = {
+// se traducen al mostrarlos (t)
+const NAMES: Record<string, Key> = {
   es: 'Español',
   en: 'Inglés',
   pt: 'Portugués',
@@ -31,12 +33,12 @@ export function langName(code: string, name: string): string {
   const c = (code || '').toLowerCase();
   const n = (name || '').toLowerCase().trim();
   const k = langKey(code) || langKey(guessLang(name));
-  let label = NAMES[k] || '';
+  let label = NAMES[k] ? t(NAMES[k]) : '';
   if (k === 'es') {
-    if (n.includes('lat')) label = 'Español latino';
-    if (n.includes('cast') || n.includes('spain') || n.includes('españa')) label = 'Español de España';
+    if (n.includes('lat')) label = t('Español latino');
+    if (n.includes('cast') || n.includes('spain') || n.includes('españa')) label = t('Español de España');
   }
-  if (!label) return name || (code ? code.toUpperCase() : 'Pista');
+  if (!label) return name || (code ? code.toUpperCase() : t('Pista'));
   if (n && n !== c && !label.toLowerCase().includes(n) && !LANG_WORD.test(n)) label += ' · ' + name.trim();
   return label;
 }

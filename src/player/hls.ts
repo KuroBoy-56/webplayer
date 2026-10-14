@@ -4,6 +4,7 @@
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { http, UA } from '../lib/http';
 import { engineError } from '../api/media';
+import { t } from '../lib/i18n';
 
 type Seg = { url: string; start: number; dur: number };
 
@@ -43,7 +44,7 @@ export class PanelHls {
   async start(): Promise<string> {
     const err = await this.refresh(60000);
     if (err) return err;
-    if (!this.segs.length) return 'El panel no devolvió el audio';
+    if (!this.segs.length) return t('El panel no devolvió el audio');
     if (!this.alive) return '';
     const ms: any = new MediaSource();
     this.ms = ms;
@@ -55,11 +56,11 @@ export class PanelHls {
       (this.v as any).srcObject = ms;
     }
     await Promise.race([opened, sleep(10000)]);
-    if (ms.readyState !== 'open') return 'El reproductor no aceptó el audio del panel';
+    if (ms.readyState !== 'open') return t('El reproductor no aceptó el audio del panel');
     try {
       this.sb = ms.addSourceBuffer('video/mp2t');
     } catch {
-      return 'Este equipo no acepta el video que prepara el panel';
+      return t('Este equipo no acepta el video que prepara el panel');
     }
     // en orden desde 0 (el HLS empieza en el segundo pedido)
     try {
@@ -141,9 +142,9 @@ export class PanelHls {
 
   private async refresh(timeout: number): Promise<string> {
     const r = await http(this.listUrl, { timeout });
-    if (!r.ok) return engineError(r.body, r.code ? 'No se pudo preparar el audio (' + r.code + ')' : 'No se pudo conectar con el panel.');
+    if (!r.ok) return engineError(r.body, r.code ? t('No se pudo preparar el audio ({code})', { code: r.code }) : t('No se pudo conectar con el panel.'));
     const segs: Seg[] = [];
-    let t = 0;
+    let at = 0;
     let dur = 0;
     let ended = false;
     for (const raw of r.body.split(/\r?\n/)) {
@@ -151,11 +152,11 @@ export class PanelHls {
       if (line.startsWith('#EXTINF:')) dur = parseFloat(line.slice(8)) || 0;
       else if (line === '#EXT-X-ENDLIST') ended = true;
       else if (line && !line.startsWith('#')) {
-        segs.push({ url: /^https?:\/\//i.test(line) ? line : this.dir + line, start: t, dur });
-        t += dur;
+        segs.push({ url: /^https?:\/\//i.test(line) ? line : this.dir + line, start: at, dur });
+        at += dur;
       }
     }
-    if (!segs.length) return 'El panel no devolvió el audio';
+    if (!segs.length) return t('El panel no devolvió el audio');
     this.segs = segs;
     this.ended = ended;
     return '';
@@ -233,7 +234,7 @@ export class PanelHls {
         if (!this.alive || g !== this.gen) continue;
         if (!data) {
           if (++fails > 4) {
-            this.onError('Se cortó la conexión con el panel');
+            this.onError(t('Se cortó la conexión con el panel'));
             return;
           }
           await sleep(1500);
@@ -243,7 +244,7 @@ export class PanelHls {
         await this.trim();
         if (g !== this.gen) continue;
         if (!(await this.append(data))) {
-          this.onError('El reproductor no aceptó el audio del panel');
+          this.onError(t('El reproductor no aceptó el audio del panel'));
           return;
         }
         this.next++;

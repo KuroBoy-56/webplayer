@@ -2,6 +2,7 @@
 import React, { memo } from 'react';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { isItem, Item, Row, Special } from '../data/catalog';
+import { t } from '../lib/i18n';
 import { C, px, SIDE, themed } from '../theme';
 import { Focusable } from './ui';
 
@@ -62,7 +63,7 @@ export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: {
   }
   return (
     <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.tile, s.more, f && s.tileF]}>
-      <Text style={s.moreText}>Ver todo ›</Text>
+      <Text style={s.moreText}>{t('Ver todo')} ›</Text>
     </Focusable>
   );
 });

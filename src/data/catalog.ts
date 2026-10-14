@@ -3,6 +3,11 @@
 import { Kind } from '../api/xtream';
 import { fold, float, isAdult, str } from '../lib/util';
 import { pref, readJson } from '../lib/storage';
+import { Key, t } from '../lib/i18n';
+
+// nombre en el idioma de la app (las marcas como Netflix no están en los diccionarios y quedan igual);
+// las palabras clave (kw) siguen en español: buscan en los nombres de categoría del servidor
+export const label = (p: { label: string }) => t(p.label as Key);
 
 export type Item = {
   kind: Kind;
@@ -120,7 +125,7 @@ class Catalog {
       const cid = str(it.category_id);
       if (!d.byCat.has(cid)) {
         d.byCat.set(cid, []);
-        d.cats.push({ id: cid, name: 'Otros' });
+        d.cats.push({ id: cid, name: t('Otros') });
       }
       d.byCat.get(cid)!.push(i);
     });
@@ -203,13 +208,13 @@ class Catalog {
     const vodIdx = this.allIdx('vod');
     const serIdx = this.allIdx('series');
 
-    const plats: Row = { title: 'Plataformas', type: 'platform', items: [] };
+    const plats: Row = { title: t('Plataformas'), type: 'platform', items: [] };
     const platRows: { p: Platform; mv: number[]; sv: number[] }[] = [];
     for (const p of PLATFORMS) {
       const mv = this.idxForKw('vod', p.kw);
       const sv = this.idxForKw('series', p.kw);
       if (mv.length + sv.length > 0) {
-        plats.items.push({ kind: 'platform', key: p.key, label: p.label, image: p.image, color: p.color });
+        plats.items.push({ kind: 'platform', key: p.key, label: label(p), image: p.image, color: p.color });
         platRows.push({ p, mv, sv });
       }
     }
@@ -219,57 +224,57 @@ class Catalog {
     if (recentMovies.length) {
       hero = this.items('vod', [recentMovies[Math.floor(Math.random() * Math.min(10, recentMovies.length))]])[0];
       rows.push({
-        title: 'Películas agregadas recientemente',
+        title: t('Películas agregadas recientemente'),
         type: 'poster',
-        items: [...this.items('vod', recentMovies), { kind: 'more', key: 'recent', label: 'Ver todo', color: '', extra: 'vod' }],
+        items: [...this.items('vod', recentMovies), { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'vod' }],
       });
     }
     const top10 = this.top('vod', vodIdx, 'rating', 10);
-    if (top10.length >= 5) rows.push({ title: 'Top 10 películas', type: 'top10', items: this.items('vod', top10) });
+    if (top10.length >= 5) rows.push({ title: t('Top 10 películas'), type: 'top10', items: this.items('vod', top10) });
 
     const recentSeries = this.top('series', serIdx, 'added', 30);
     if (recentSeries.length) {
       rows.push({
-        title: 'Series con episodios nuevos',
+        title: t('Series con episodios nuevos'),
         type: 'poster',
-        items: [...this.items('series', recentSeries), { kind: 'more', key: 'recent', label: 'Ver todo', color: '', extra: 'series' }],
+        items: [...this.items('series', recentSeries), { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'series' }],
       });
       if (!hero) hero = this.items('series', [recentSeries[0]])[0];
     }
     const topSeries = this.top('series', serIdx, 'rating', 10);
-    if (topSeries.length >= 5) rows.push({ title: 'Top 10 series', type: 'top10', items: this.items('series', topSeries) });
+    if (topSeries.length >= 5) rows.push({ title: t('Top 10 series'), type: 'top10', items: this.items('series', topSeries) });
 
     for (const pr of platRows) {
       rows.push({
-        title: pr.p.label,
+        title: label(pr.p),
         type: 'poster',
         items: [
           ...this.items('vod', this.top('vod', pr.mv, 'added', 15)),
           ...this.items('series', this.top('series', pr.sv, 'added', 15)),
-          { kind: 'more', key: pr.p.key, label: 'Ver todo', color: pr.p.color, extra: 'platform' },
+          { kind: 'more', key: pr.p.key, label: t('Ver todo'), color: pr.p.color, extra: 'platform' },
         ],
       });
     }
 
-    const gen: Row = { title: 'Géneros', type: 'genre', items: [] };
+    const gen: Row = { title: t('Géneros'), type: 'genre', items: [] };
     const genRows: { g: Platform; mv: number[]; sv: number[] }[] = [];
     for (const g of GENRES) {
       const mv = this.idxForKw('vod', g.kw);
       const sv = this.idxForKw('series', g.kw);
       if (mv.length + sv.length > 0) {
-        gen.items.push({ kind: 'genre', key: g.key, label: g.label, color: g.color });
+        gen.items.push({ kind: 'genre', key: g.key, label: label(g), color: g.color });
         genRows.push({ g, mv, sv });
       }
     }
     if (gen.items.length) rows.push(gen);
     for (const gr of genRows.slice(0, 8)) {
       rows.push({
-        title: gr.g.label,
+        title: label(gr.g),
         type: 'poster',
         items: [
           ...this.items('vod', this.top('vod', gr.mv, 'added', 15)),
           ...this.items('series', this.top('series', gr.sv, 'added', 15)),
-          { kind: 'more', key: gr.g.key, label: 'Ver todo', color: gr.g.color, extra: 'genre' },
+          { kind: 'more', key: gr.g.key, label: t('Ver todo'), color: gr.g.color, extra: 'genre' },
         ],
       });
     }
@@ -286,21 +291,21 @@ class Catalog {
     const hero = recent.length ? this.items(kind, [recent[Math.floor(Math.random() * Math.min(10, recent.length))]])[0] : null;
     if (recent.length) {
       rows.push({
-        title: 'Agregadas recientemente',
+        title: t('Agregadas recientemente'),
         type: 'poster',
-        items: [...this.items(kind, recent), { kind: 'more', key: 'recent', label: 'Ver todo', color: '', extra: kind }],
+        items: [...this.items(kind, recent), { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: kind }],
       });
     }
-    const gen: Row = { title: 'Géneros', type: 'genre', items: [] };
-    for (const g of GENRES) if (this.idxForKw(kind, g.kw).length) gen.items.push({ kind: 'genre', key: g.key, label: g.label, color: g.color, extra: kind });
+    const gen: Row = { title: t('Géneros'), type: 'genre', items: [] };
+    for (const g of GENRES) if (this.idxForKw(kind, g.kw).length) gen.items.push({ kind: 'genre', key: g.key, label: label(g), color: g.color, extra: kind });
     if (gen.items.length) rows.push(gen);
     const top = this.top(kind, all, 'rating', 10);
-    if (top.length >= 5) rows.push({ title: 'Top 10', type: 'top10', items: this.items(kind, top) });
+    if (top.length >= 5) rows.push({ title: t('Top 10'), type: 'top10', items: this.items(kind, top) });
     for (const c of this.visibleCats(kind)) {
       const idx = d.byCat.get(c.id) || [];
       if (!idx.length) continue;
       const items: (Item | Special)[] = this.items(kind, idx, 25);
-      if (idx.length > 25) items.push({ kind: 'more', key: c.id, label: 'Ver todo', color: '', extra: 'cat:' + kind });
+      if (idx.length > 25) items.push({ kind: 'more', key: c.id, label: t('Ver todo'), color: '', extra: 'cat:' + kind });
       rows.push({ title: c.name, type: 'poster', items });
     }
     return { rows, hero };
@@ -355,9 +360,9 @@ class Catalog {
   // ---------- TV en vivo ----------
   liveCats(): { id: string; name: string; count: number; locked: boolean }[] {
     const d = this.k.live;
-    const out = [{ id: 'fav', name: 'Favoritos', count: 0, locked: false }];
+    const out = [{ id: 'fav', name: t('Favoritos'), count: 0, locked: false }];
     if (!d) return out;
-    out.push({ id: 'all', name: 'Todos los canales', count: d.index.size, locked: false });
+    out.push({ id: 'all', name: t('Todos los canales'), count: d.index.size, locked: false });
     for (const c of d.cats) {
       const n = (d.byCat.get(c.id) || []).length;
       if (n) out.push({ id: c.id, name: c.name, count: n, locked: !this.unlocked && this.isCatLocked('live', c.name, c.id) });

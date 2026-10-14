@@ -1,6 +1,7 @@
 // API de Xtream Codes del proveedor.
 import { b64Decode } from '../lib/crypto';
 import { http, json } from '../lib/http';
+import { t } from '../lib/i18n';
 import { digits, enc, int, nowSec, parseIso, str } from '../lib/util';
 import { cloud, Server, Session } from './panel';
 
@@ -50,17 +51,17 @@ export function xuiError(body: string): string {
 }
 
 export function xuiMessage(code: string): string {
-  if (code === 'INVALID_CREDENTIALS') return 'El servidor no reconoce el usuario o la contraseña';
-  if (code === 'EXPIRED') return 'Tu cuenta está vencida';
-  if (code === 'BANNED' || code === 'DISABLED') return 'Tu cuenta está desactivada en el servidor';
-  return 'El servidor rechazó la cuenta (' + code + ')';
+  if (code === 'INVALID_CREDENTIALS') return t('El servidor no reconoce el usuario o la contraseña');
+  if (code === 'EXPIRED') return t('Tu cuenta está vencida');
+  if (code === 'BANNED' || code === 'DISABLED') return t('Tu cuenta está desactivada en el servidor');
+  return t('El servidor rechazó la cuenta ({code})', { code });
 }
 
 // Prueba el usuario en todos los servidores a la vez y se queda con el primero que lo acepte. El panel
 // (https) manda los servidores IPTV con https:// y muchos solo responden en http (p. ej. puerto 8080):
 // cada servidor se prueba también con el otro protocolo, así la app nunca se queda sin entrar por eso.
 export async function loginAll(input: Server[], user: string, pass: string): Promise<{ session?: Session; error?: string }> {
-  if (!input.length) return { error: 'El panel no devolvió servidores. Inténtalo de nuevo.' };
+  if (!input.length) return { error: t('El panel no devolvió servidores. Inténtalo de nuevo.') };
   const seen = new Set<string>();
   const servers: Server[] = [];
   for (const sv of input) {
@@ -73,7 +74,8 @@ export async function loginAll(input: Server[], user: string, pass: string): Pro
     }
   }
   const ctrl = new AbortController();
-  let lastErr = 'No se pudo conectar con ningún servidor';
+  const none = t('No se pudo conectar con ningún servidor');
+  let lastErr = none;
   return new Promise(resolve => {
     let pending = servers.length;
     let done = false;
@@ -97,14 +99,14 @@ export async function loginAll(input: Server[], user: string, pass: string): Pro
             resolve({ session: sessionFrom(sv, user, pass, ui) });
             return;
           }
-          lastErr = 'Tu cuenta está ' + st;
-        } else if (ui && lastErr === 'No se pudo conectar con ningún servidor') {
-          lastErr = 'Usuario o contraseña incorrectos';
+          lastErr = t('Tu cuenta está {st}', { st });
+        } else if (ui && lastErr === none) {
+          lastErr = t('Usuario o contraseña incorrectos');
         } else if (!ui && xuiError(r.body)) {
           lastErr = xuiMessage(xuiError(r.body));
-        } else if (!ui && r.code > 0 && lastErr === 'No se pudo conectar con ningún servidor') {
+        } else if (!ui && r.code > 0 && lastErr === none) {
           // el servidor respondió pero no con la cuenta (línea bloqueada, vencida o servidor caído)
-          lastErr = 'El servidor no aceptó la conexión (código ' + r.code + ')';
+          lastErr = t('El servidor no aceptó la conexión (código {code})', { code: r.code });
         }
         console.log('[LatMpx] login ' + sv.base.replace(/^[a-z]+:\/\//i, '') + ' -> http ' + r.code + (ui ? ' auth=' + str(ui.auth) + ' status=' + str(ui.status) : ' sin JSON'));
         finish();

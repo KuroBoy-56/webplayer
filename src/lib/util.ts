@@ -1,4 +1,5 @@
 // Utilidades compartidas (mismo comportamiento que la web, Android y Roku).
+import { lang, t } from './i18n';
 
 export function str(v: unknown): string {
   if (v === null || v === undefined) return '';
@@ -49,30 +50,41 @@ export function pad2(n: number): string {
   return n < 10 ? '0' + n : String(n);
 }
 
+// hora en el idioma de la app: "18:45" (inglés: "6:45 PM")
+function hm(h: number, m: number): string {
+  if (lang() === 'en') return (h % 12 || 12) + ':' + pad2(m) + (h < 12 ? ' AM' : ' PM');
+  return pad2(h) + ':' + pad2(m);
+}
+
+// fecha en el idioma de la app: "13/10/2026" (inglés: "10/13/2026")
+export function ymd(y: number, m: number, d: number): string {
+  return lang() === 'en' ? pad2(m) + '/' + pad2(d) + '/' + y : pad2(d) + '/' + pad2(m) + '/' + y;
+}
+
 export function clock(epoch: number): string {
   const d = new Date(epoch * 1000);
-  return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  return hm(d.getHours(), d.getMinutes());
 }
 
 export function dateText(epoch: number): string {
-  if (epoch <= 0) return 'Ilimitado';
+  if (epoch <= 0) return t('Ilimitado');
   const d = new Date(epoch * 1000);
-  return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear();
+  return ymd(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
 
 // fecha y hora exactas del equipo: "13/10/2026 18:45"
 export function dateTimeText(epoch: number): string {
   const d = new Date(epoch * 1000);
-  return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  return ymd(d.getFullYear(), d.getMonth() + 1, d.getDate()) + ' ' + hm(d.getHours(), d.getMinutes());
 }
 
 // "1 hora", "2 horas", "30 minutos", "1 día"… según la duración de la demo del panel ('' si no la mandó)
 export function demoLength(sec: number): string {
   if (!(sec > 0)) return '';
-  if (sec % 86400 === 0) return sec / 86400 + (sec === 86400 ? ' día' : ' días');
-  if (sec % 3600 === 0) return sec / 3600 + (sec === 3600 ? ' hora' : ' horas');
+  if (sec % 86400 === 0) return sec === 86400 ? t('1 día') : t('{n} días', { n: sec / 86400 });
+  if (sec % 3600 === 0) return sec === 3600 ? t('1 hora') : t('{n} horas', { n: sec / 3600 });
   const m = Math.round(sec / 60);
-  return m + (m === 1 ? ' minuto' : ' minutos');
+  return m === 1 ? t('1 minuto') : t('{n} minutos', { n: m });
 }
 
 // número de día local (para separar Hoy / Mañana)

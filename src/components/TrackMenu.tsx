@@ -2,6 +2,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MenuItem } from '../player/playback';
+import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
 import { Button } from './ui';
 
@@ -18,21 +19,21 @@ export default function TrackMenu({ items, favLabel, onFav, onPick }: { items: M
   );
   return (
     <View style={s.menu}>
-      <Text style={s.menuTitle}>Audio y subtítulos</Text>
+      <Text style={s.menuTitle}>{t('Audio y subtítulos')}</Text>
       <ScrollView>
         {favLabel ? (
           <View style={s.opt}>
             <Button label={favLabel} left last preferred onPress={onFav} />
           </View>
         ) : null}
-        <Text style={s.head}>Audio</Text>
-        {realAudio.length ? null : <Text style={s.note}>Audio predeterminado</Text>}
+        <Text style={s.head}>{t('Audio')}</Text>
+        {realAudio.length ? null : <Text style={s.note}>{t('Audio predeterminado')}</Text>}
         {audio.map(row)}
-        {realAudio.length === 1 ? <Text style={s.note}>Este contenido tiene una sola pista de audio.</Text> : null}
-        <Text style={s.head}>Subtítulos</Text>
+        {realAudio.length === 1 ? <Text style={s.note}>{t('Este contenido tiene una sola pista de audio.')}</Text> : null}
+        <Text style={s.head}>{t('Subtítulos')}</Text>
         {subs.map(row)}
       </ScrollView>
-      <Text style={s.hint}>Atrás para cerrar</Text>
+      <Text style={s.hint}>{t('Atrás para cerrar')}</Text>
     </View>
   );
 }

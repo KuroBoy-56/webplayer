@@ -8,6 +8,7 @@ import { catalog, Item } from '../data/catalog';
 import { fold } from '../lib/util';
 import { useNav } from '../nav';
 import { useAppState } from '../state';
+import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
 export const COLS = 7;
@@ -68,7 +69,7 @@ export default function Grid({ title, mode, keyName, kind }: { title: string; mo
     <View style={s.root}>
       <View style={s.head}>
         <Text style={s.title} numberOfLines={1}>
-          {name} <Text style={s.count}>{shown.length ? '· ' + shown.length + ' títulos' : ''}</Text>
+          {name} <Text style={s.count}>{shown.length ? '· ' + t('{n} títulos', { n: shown.length }) : ''}</Text>
         </Text>
         {canSearch ? (
           <View style={s.searchBox}>
@@ -78,7 +79,7 @@ export default function Grid({ title, mode, keyName, kind }: { title: string; mo
                 style={s.input}
                 value={q}
                 onChangeText={setQ}
-                placeholder={'Buscar en ' + name + '…'}
+                placeholder={t('Buscar en {x}…', { x: name })}
                 placeholderTextColor={C.dim}
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -94,7 +95,7 @@ export default function Grid({ title, mode, keyName, kind }: { title: string; mo
       {shown.length ? (
         <ItemGrid items={shown} />
       ) : (
-        <Message text={needle ? 'No hay títulos que coincidan con «' + q.trim() + '».' : 'No hay títulos en esta sección.'} />
+        <Message text={needle ? t('No hay títulos que coincidan con «{q}».', { q: q.trim() }) : t('No hay títulos en esta sección.')} />
       )}
     </View>
   );

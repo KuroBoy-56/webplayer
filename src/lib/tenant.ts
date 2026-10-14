@@ -3,7 +3,8 @@
 import { useSyncExternalStore } from 'react';
 import { Palette, setPalette, validPalette } from '../theme';
 import { read, readJson, remove, write, writeJson } from './storage';
-import { str } from './util';
+import { Key, t } from './i18n';
+import { str, ymd } from './util';
 
 export const APP_ID = 'vega';
 export const APP_NAME = 'MPX Player';
@@ -100,11 +101,10 @@ export function parseConfig(j: any, now: number): Brand | null {
 // fecha de vencimiento DD/MM/AAAA (hora de Panamá)
 export function expiryText(b: Brand): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(b.expiresDate);
-  if (m) return m[3] + '/' + m[2] + '/' + m[1];
+  if (m) return ymd(+m[1], +m[2], +m[3]);
   if (b.expiresAt <= 0) return '';
   const d = new Date((b.expiresAt + PANAMA) * 1000);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return p(d.getUTCDate()) + '/' + p(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear();
+  return ymd(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
 }
 
 // expires_at 0 = sin vencimiento
@@ -114,10 +114,11 @@ export function locallyExpired(b: Brand, now: number): boolean {
 
 export function expiredMessage(b: Brand): string {
   const d = expiryText(b);
-  return d ? 'Tu distribuidor venció el ' + d + ' (hora de Panamá). Contacta a tu distribuidor.' : TENANT_ERRORS.tenant_expired;
+  return d ? t('Tu distribuidor venció el {d} (hora de Panamá). Contacta a tu distribuidor.', { d }) : t(TENANT_ERRORS.tenant_expired);
 }
 
-export const TENANT_ERRORS: Record<string, string> = {
+// se traducen al mostrarlos: t(TENANT_ERRORS[code])
+export const TENANT_ERRORS: Record<string, Key> = {
   tenant_invalid: 'Número de distribuidor no válido',
   tenant_expired: 'El servicio de este distribuidor venció. Contacta a tu distribuidor.',
   tenant_suspended: 'Este distribuidor está suspendido. Contacta a tu distribuidor.',

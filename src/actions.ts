@@ -1,6 +1,7 @@
 // Abrir fichas, cuadrículas y el reproductor (igual que Play.brs de Roku).
 import type { Episode } from './api/xtream';
-import { GENRES, Item, PLATFORMS, Special } from './data/catalog';
+import { GENRES, Item, label, PLATFORMS, Special } from './data/catalog';
+import { t } from './lib/i18n';
 import type { Nav } from './nav';
 import { progressMovie } from './state';
 
@@ -23,14 +24,16 @@ export function openSpecial(nav: Nav, sp: Special) {
   } else {
     const extra = sp.extra || '';
     if (extra === 'platform') {
-      nav.push({ name: 'grid', title: PLATFORMS.find(p => p.key === sp.key)?.label || 'Plataforma', mode: 'platform', key: sp.key });
+      const p = PLATFORMS.find(x => x.key === sp.key);
+      nav.push({ name: 'grid', title: p ? label(p) : t('Plataforma'), mode: 'platform', key: sp.key });
     } else if (extra === 'genre') {
-      nav.push({ name: 'grid', title: GENRES.find(g => g.key === sp.key)?.label || 'Género', mode: 'genre', key: sp.key });
+      const g = GENRES.find(x => x.key === sp.key);
+      nav.push({ name: 'grid', title: g ? label(g) : t('Género'), mode: 'genre', key: sp.key });
     } else if (extra.startsWith('cat:')) {
-      nav.push({ name: 'grid', title: 'Categoría', mode: 'cat', key: sp.key, kind: extra.slice(4) as 'vod' | 'series' });
+      nav.push({ name: 'grid', title: t('Categoría'), mode: 'cat', key: sp.key, kind: extra.slice(4) as 'vod' | 'series' });
     } else {
       const kind = extra === 'series' ? 'series' : 'vod';
-      nav.push({ name: 'grid', title: kind === 'series' ? 'Series recientes' : 'Películas recientes', mode: 'recent', key: 'recent', kind });
+      nav.push({ name: 'grid', title: kind === 'series' ? t('Series recientes') : t('Películas recientes'), mode: 'recent', key: 'recent', kind });
     }
   }
 }
