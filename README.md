@@ -105,7 +105,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - Cada pedido al panel lleva el idioma (`?lang=`; en `login.php`, `"lang"` dentro del JSON cifrado) para
   que el panel traduzca sus mensajes y el aviso de `alerta.php`. TMDB: la búsqueda y el emparejamiento con
   el catálogo siguen en es-MX; reparto, biografía y carátulas del inicio de sesión van en el idioma de la
-  app (es-MX, en-US, pt-BR o fr-FR).
+  app (es-MX, en-US, pt-BR o fr-FR). En inglés, portugués o francés la ficha muestra la sinopsis de TMDB
+  (`movie|tv/{id}` en ese idioma) en lugar de la del servidor; si TMDB no la tiene, no hay coincidencia o
+  no hay clave, queda la del servidor. En español no cambia nada.
 
 ## Panel: dispositivo, pantalla falsa y errores
 

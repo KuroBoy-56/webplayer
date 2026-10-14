@@ -32,29 +32,41 @@ async function get(path: string, query = ''): Promise<any> {
 export type CastMember = { id: number; name: string; character: string; photo: string };
 
 const castCache = new Map<string, CastMember[]>();
+const idCache = new Map<string, string>();
+const overviewCache = new Map<string, string>();
 
-// reparto de una película o serie: por tmdb_id del servidor o buscando el título (+ año). La búsqueda
-// va en es-MX (títulos del catálogo); el reparto en el idioma de la app (caché por idioma)
+// id de TMDB de una película o serie: el tmdb_id del servidor o buscando el título (+ año) en es-MX
+// (los títulos del catálogo están en español). '' si no hay coincidencia segura.
+async function tmdbIdFor(item: Item, tmdbId: string, year: string): Promise<string> {
+  if (/^\d+$/.test(tmdbId)) return tmdbId;
+  const kind = item.kind === 'series' ? 'tv' : 'movie';
+  const ck = kind + ':' + item.id;
+  const hit = idCache.get(ck);
+  if (hit !== undefined) return hit;
+  const k = titleKeys(item.name);
+  const y = catalogYear(item.name, year || item.year);
+  const q = encodeURIComponent(k.base || item.name);
+  const j = await get('search/' + kind, 'language=es-MX&include_adult=false&query=' + q);
+  let id = '';
+  for (const r of (j && Array.isArray(j.results) ? j.results : []).slice(0, 8)) {
+    const names = [str(r.title), str(r.name), str(r.original_title), str(r.original_name)].filter(Boolean).map(n => titleKeys(n).exact);
+    const ry = Number(str(r.release_date || r.first_air_date).slice(0, 4)) || null;
+    if ((names.includes(k.exact) || names.includes(k.base)) && yearsOk(y, ry)) {
+      id = str(r.id);
+      break;
+    }
+  }
+  if (j) idCache.set(ck, id);
+  return id;
+}
+
+// reparto de una película o serie en el idioma de la app (caché por idioma)
 export async function castFor(item: Item, tmdbId: string, year: string): Promise<CastMember[]> {
   const kind = item.kind === 'series' ? 'tv' : 'movie';
   const ck = kind + ':' + item.id + ':' + tmdbLang();
   const hit = castCache.get(ck);
   if (hit) return hit;
-  let id = /^\d+$/.test(tmdbId) ? tmdbId : '';
-  if (!id) {
-    const k = titleKeys(item.name);
-    const y = catalogYear(item.name, year || item.year);
-    const q = encodeURIComponent(k.base || item.name);
-    const j = await get('search/' + kind, 'language=es-MX&include_adult=false&query=' + q);
-    for (const r of (j && Array.isArray(j.results) ? j.results : []).slice(0, 8)) {
-      const names = [str(r.title), str(r.name), str(r.original_title), str(r.original_name)].filter(Boolean).map(n => titleKeys(n).exact);
-      const ry = Number(str(r.release_date || r.first_air_date).slice(0, 4)) || null;
-      if ((names.includes(k.exact) || names.includes(k.base)) && yearsOk(y, ry)) {
-        id = str(r.id);
-        break;
-      }
-    }
-  }
+  const id = await tmdbIdFor(item, tmdbId, year);
   if (!id) return [];
   const j = await get(kind + '/' + id + '/' + (kind === 'tv' ? 'aggregate_credits' : 'credits'), 'language=' + tmdbLang());
   const list: CastMember[] = [];
@@ -69,6 +81,23 @@ export async function castFor(item: Item, tmdbId: string, year: string): Promise
   }
   if (j) castCache.set(ck, list);
   return list;
+}
+
+// sinopsis de TMDB en el idioma de la app; '' en español (queda la del servidor), sin coincidencia o
+// si TMDB no la tiene en ese idioma (caché por idioma)
+export async function overviewFor(item: Item, tmdbId: string, year: string): Promise<string> {
+  const language = tmdbLang();
+  if (language === 'es-MX') return '';
+  const kind = item.kind === 'series' ? 'tv' : 'movie';
+  const ck = kind + ':' + item.id + ':' + language;
+  const hit = overviewCache.get(ck);
+  if (hit !== undefined) return hit;
+  const id = await tmdbIdFor(item, tmdbId, year);
+  if (!id) return '';
+  const j = await get(kind + '/' + id, 'language=' + language);
+  const text = str(j?.overview).trim();
+  if (j) overviewCache.set(ck, text);
+  return text;
 }
 
 export type Person = { id: number; name: string; bio: string; birthday: string; place: string; photo: string; items: Item[] };
