@@ -36,6 +36,8 @@ enum Panel {
         if tag { Tenant.tag(&p) }
         // en qué equipo está esta MAC (Clientes MAC › Dispositivo) y la pantalla falsa de esta app
         p["platform"] = Tenant.app
+        // idioma de la app: el panel responde sus mensajes en ese idioma
+        p["lang"] = L10n.current
         // check_mac y auto_demo traen la línea (usuario y contraseña): se piden cifradas
         let secret = action == "check_mac" || action == "auto_demo"
         if secret { p["enc"] = 1 }

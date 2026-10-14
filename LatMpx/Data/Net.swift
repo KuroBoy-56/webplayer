@@ -34,7 +34,12 @@ enum Net {
         return URLSession(configuration: c)
     }()
 
-    static func exec(_ req: URLRequest) async -> Resp {
+    static func exec(_ request: URLRequest) async -> Resp {
+        var req = request
+        // el panel traduce sus mensajes al idioma de la app (los códigos de error no cambian)
+        if !PanelUrl.apiBase.isEmpty, req.url?.absoluteString.hasPrefix(PanelUrl.apiBase) == true {
+            req.setValue(L10n.current, forHTTPHeaderField: "Accept-Language")
+        }
         let r = await send(req)
         // sin respuesta con el DNS del equipo y con un DNS elegido: se prueba la IP que da ese DNS
         // (con el nombre en Host); con respuesta se usa tal cual, para no romper servidores que van por nombre

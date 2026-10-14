@@ -9,7 +9,8 @@ enum Posters {
     private static var mem: [String: String] = [:]
     private static let prefs = UserDefaults(suiteName: "posters") ?? .standard
 
-    private static func keyOf(_ i: Item) -> String { "\(i.kind.rawValue)|\(i.name.lowercased())" }
+    /** por idioma: TMDB devuelve la carátula del idioma de la app */
+    private static func keyOf(_ i: Item) -> String { "\(Tmdb.lang)|\(i.kind.rawValue)|\(i.name.lowercased())" }
 
     static func cached(_ i: Item) -> String? {
         let k = keyOf(i)

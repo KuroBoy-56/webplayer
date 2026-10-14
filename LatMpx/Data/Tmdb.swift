@@ -11,6 +11,16 @@ enum Tmdb {
     private static var detailCache: [String: Details] = [:]
     private static var photoCache: [String: String] = [:]
 
+    /** idioma de TMDB según el de la app (sinopsis, títulos de la ficha y carátulas) */
+    static var lang: String {
+        switch L10n.current {
+        case "en": return "en-US"
+        case "pt": return "pt-BR"
+        case "fr": return "fr-FR"
+        default: return "es-MX"
+        }
+    }
+
     /** imágenes en alta calidad: fotos del elenco a 632 px de alto y fondos en su tamaño original (Full HD / 4K) */
     static let profileSize = "h632", backdropSize = "original", posterSize = "w780"
 
@@ -46,7 +56,7 @@ enum Tmdb {
         if q.count < 2 { return "" }
         let ck = q.folded
         if let c = lock.locked({ photoCache[ck] }) { return c }
-        guard let res = await get("search/person?language=es-MX&include_adult=false&query=\(urlEnc(q))") else { return "" }
+        guard let res = await get("search/person?language=\(lang)&include_adult=false&query=\(urlEnc(q))") else { return "" }
         let people = res.objs("results")
         let pick = people.first { $0.s("known_for_department") == "Acting" && !$0.s("profile_path").isEmpty }
             ?? people.first { !$0.s("profile_path").isEmpty }
@@ -71,12 +81,12 @@ enum Tmdb {
      * tmdb_key_not_set y no hay carrusel.
      */
     static func nowPlaying() async -> [String] {
-        let who = Tenant.code
+        let who = Tenant.code + "|" + lang
         if let c = lock.locked({ nowPlayingFor == who ? nowPlayingCache : nil }) { return c }
         var out = [String]()
         for p in 1...3 {
             // ?path= (no tmdb.php/movie/now_playing): muchos hostings no pasan PATH_INFO
-            let url = PanelUrl.api("tmdb.php") + "?path=movie/now_playing&language=es-MX&page=\(p)" + Tenant.query()
+            let url = PanelUrl.api("tmdb.php") + "?path=movie/now_playing&language=\(lang)&page=\(p)" + Tenant.query()
             let r = await Net.get(url, timeout: 15)
             guard r.ok, let j = r.json(), j["error"] == nil else { break }
             for o in j.objs("results") {
@@ -121,7 +131,7 @@ enum Tmdb {
         var answered = false
         for (t, q, yr) in tries {
             let yp = yr.count == 4 ? (t == "tv" ? "&first_air_date_year=\(yr)" : "&year=\(yr)") : ""
-            guard let res = await get("search/\(t)?language=es-MX&include_adult=false&query=\(urlEnc(q))\(yp)") else { continue }
+            guard let res = await get("search/\(t)?language=\(lang)&include_adult=false&query=\(urlEnc(q))\(yp)") else { continue }
             answered = true
             for o in res.objs("results") {
                 let pp = o.s("poster_path")
@@ -138,19 +148,19 @@ enum Tmdb {
         let (ct, cy) = clean(title)
         let cleanTitle = ct.isEmpty ? title.trimmed : ct
         let yr = year.isEmpty ? cy : year
-        let ck = "\(type)|\(cleanTitle)|\(yr)|\(tmdbId)"
+        let ck = "\(lang)|\(type)|\(cleanTitle)|\(yr)|\(tmdbId)"
         if let d = lock.locked({ detailCache[ck] }) { return d }
         var id = tmdbId.filter { $0.isNumber }
         if id.isEmpty {
             let q = urlEnc(cleanTitle)
             let y = String(yr.filter { $0.isNumber }.prefix(4))
             var res: JObj?
-            if !y.isEmpty { res = await get("search/\(type)?language=es-MX&query=\(q)" + (type == "tv" ? "&first_air_date_year=\(y)" : "&primary_release_year=\(y)")) }
-            if res == nil || res!.objs("results").isEmpty { res = await get("search/\(type)?language=es-MX&query=\(q)") }
+            if !y.isEmpty { res = await get("search/\(type)?language=\(lang)&query=\(q)" + (type == "tv" ? "&first_air_date_year=\(y)" : "&primary_release_year=\(y)")) }
+            if res == nil || res!.objs("results").isEmpty { res = await get("search/\(type)?language=\(lang)&query=\(q)") }
             if let f = res?.objs("results").first { id = f.s("id") }
         }
         if id.isEmpty { return nil }
-        guard let d = await get("\(type)/\(id)?language=es-MX&append_to_response=credits,aggregate_credits,videos") else { return nil }
+        guard let d = await get("\(type)/\(id)?language=\(lang)&append_to_response=credits,aggregate_credits,videos") else { return nil }
         let pp = d.s("poster_path"), bp = d.s("backdrop_path")
         let credits = d.o("credits") ?? d.o("aggregate_credits")
         let cast = (credits?.objs("cast") ?? []).prefix(15).map { c -> CastMember in

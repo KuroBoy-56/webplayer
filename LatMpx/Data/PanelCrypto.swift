@@ -8,7 +8,7 @@ import Crypto
 /** Cifrados que usa el panel: AES-256-GCM con HKDF (login.php, report.php) y "mope" (auth.php). */
 enum PanelCrypto {
     struct MissingKey: Error {}
-    static let missingKeyMessage = "Falta la llave del panel (PANEL_MASTER_KEY). Pide al administrador una versión de la app configurada."
+    static var missingKeyMessage: String { tr("Falta la llave del panel (PANEL_MASTER_KEY). Pide al administrador una versión de la app configurada.") }
 
     private static let saltLen = 16
     private static let ivLen = 12
