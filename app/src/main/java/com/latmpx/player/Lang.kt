@@ -33,6 +33,9 @@ object Lang {
     var current: String = "es"
         private set
 
+    /** idioma de TMDB para fichas y carátulas (las búsquedas siguen en es-MX: se comparan con el catálogo en español) */
+    val tmdb: String get() = when (current) { "en" -> "en-US"; "pt" -> "pt-BR"; "fr" -> "fr-FR"; else -> "es-MX" }
+
     /** idioma elegido + idioma del equipo -> idioma a usar */
     fun resolve(setting: String, systemLang: String): String {
         if (setting in SUPPORTED) return setting

@@ -1,4 +1,5 @@
 package com.latmpx.player.data
+import com.latmpx.player.Lang
 
 import org.json.JSONObject
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -6,7 +7,7 @@ import java.net.URLEncoder
 
 object Tmdb {
     private var cached: List<String>? = null
-    /** número de distribuidor de las carátulas guardadas (cada uno tiene su clave TMDB) */
+    /** distribuidor|idioma de las carátulas guardadas (cada distribuidor tiene su clave TMDB) */
     private var cachedFor: String? = null
     private const val FALLBACK_KEY = "0c23c3f0458f0f9e4d0a35048d3a199a"
     /** la llave del panel respondió 401 (vencida o mal copiada): se usa la de respaldo */
@@ -38,7 +39,8 @@ object Tmdb {
      * tmdb_key_not_set y no hay carrusel (nunca con la clave de respaldo de la app).
      */
     suspend fun nowPlaying(pages: Int = 3): List<String> {
-        val who = Tenant.code
+        val lang = Lang.tmdb
+        val who = "${Tenant.code}|$lang"
         if (cachedFor == who) cached?.let { return it }
         val out = ArrayList<String>()
         for (p in 1..pages) {
@@ -46,7 +48,7 @@ object Tmdb {
             val url = PanelUrl.api("tmdb.php").toHttpUrlOrNull()?.newBuilder()
                 ?.addQueryParameter("path", "movie/now_playing")
                 ?.let { Tenant.tag(it) }
-                ?.addQueryParameter("language", "es-MX")?.addQueryParameter("page", p.toString())
+                ?.addQueryParameter("language", lang)?.addQueryParameter("page", p.toString())
                 ?.build()?.toString() ?: break
             val r = Net.get(url)
             val j = (if (r.ok) r.json() else null) ?: break
@@ -149,7 +151,8 @@ object Tmdb {
     suspend fun getDetails(type: String, title: String, year: String, tmdbId: String = ""): Details? {
         val cleanTitle = clean(title).first.ifEmpty { title.trim() }
         val year = year.ifEmpty { clean(title).second }
-        val cacheKey = "$type|$cleanTitle|$year|$tmdbId"
+        val lang = Lang.tmdb // la búsqueda sigue en es-MX; la ficha (resumen, elenco, videos) en el idioma de la app
+        val cacheKey = "$type|$cleanTitle|$year|$tmdbId|$lang"
         cache[cacheKey]?.let { return it }
 
         var idToFetch = tmdbId.filter { it.isDigit() }
@@ -176,7 +179,7 @@ object Tmdb {
 
         if (idToFetch.isEmpty() || idToFetch == "null") return null
 
-        val d = get("$fetchedType/$idToFetch?language=es-MX&append_to_response=credits,aggregate_credits,videos") ?: return null
+        val d = get("$fetchedType/$idToFetch?language=$lang&append_to_response=credits,aggregate_credits,videos") ?: return null
 
         val poster = d.optString("poster_path").let { if (it.isNotEmpty() && it != "null") "https://image.tmdb.org/t/p/w500$it" else "" }
         val backdrop = d.optString("backdrop_path").let { if (it.isNotEmpty() && it != "null") "https://image.tmdb.org/t/p/w1280$it" else "" }
