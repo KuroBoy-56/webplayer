@@ -11,7 +11,10 @@ enum Tmdb {
     private static var detailCache: [String: Details] = [:]
     private static var photoCache: [String: String] = [:]
 
-    /** idioma de TMDB según el de la app (sinopsis, títulos de la ficha y carátulas) */
+    /**
+     * idioma de TMDB según el de la app: ficha (sinopsis) y carátulas de now_playing. Las búsquedas siguen en
+     * es-MX porque comparan título y año con el catálogo del servidor, que está en español.
+     */
     static var lang: String {
         switch L10n.current {
         case "en": return "en-US"
@@ -56,7 +59,7 @@ enum Tmdb {
         if q.count < 2 { return "" }
         let ck = q.folded
         if let c = lock.locked({ photoCache[ck] }) { return c }
-        guard let res = await get("search/person?language=\(lang)&include_adult=false&query=\(urlEnc(q))") else { return "" }
+        guard let res = await get("search/person?language=es-MX&include_adult=false&query=\(urlEnc(q))") else { return "" }
         let people = res.objs("results")
         let pick = people.first { $0.s("known_for_department") == "Acting" && !$0.s("profile_path").isEmpty }
             ?? people.first { !$0.s("profile_path").isEmpty }
@@ -131,7 +134,7 @@ enum Tmdb {
         var answered = false
         for (t, q, yr) in tries {
             let yp = yr.count == 4 ? (t == "tv" ? "&first_air_date_year=\(yr)" : "&year=\(yr)") : ""
-            guard let res = await get("search/\(t)?language=\(lang)&include_adult=false&query=\(urlEnc(q))\(yp)") else { continue }
+            guard let res = await get("search/\(t)?language=es-MX&include_adult=false&query=\(urlEnc(q))\(yp)") else { continue }
             answered = true
             for o in res.objs("results") {
                 let pp = o.s("poster_path")
@@ -155,8 +158,8 @@ enum Tmdb {
             let q = urlEnc(cleanTitle)
             let y = String(yr.filter { $0.isNumber }.prefix(4))
             var res: JObj?
-            if !y.isEmpty { res = await get("search/\(type)?language=\(lang)&query=\(q)" + (type == "tv" ? "&first_air_date_year=\(y)" : "&primary_release_year=\(y)")) }
-            if res == nil || res!.objs("results").isEmpty { res = await get("search/\(type)?language=\(lang)&query=\(q)") }
+            if !y.isEmpty { res = await get("search/\(type)?language=es-MX&query=\(q)" + (type == "tv" ? "&first_air_date_year=\(y)" : "&primary_release_year=\(y)")) }
+            if res == nil || res!.objs("results").isEmpty { res = await get("search/\(type)?language=es-MX&query=\(q)") }
             if let f = res?.objs("results").first { id = f.s("id") }
         }
         if id.isEmpty { return nil }
