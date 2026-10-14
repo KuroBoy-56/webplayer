@@ -33,16 +33,16 @@ struct MainView: View {
 
     var body: some View {
         TabView(selection: selection) {
-            stack(.home) { HomeView() }.tabItem { Label("Inicio", systemImage: "house.fill") }.tag(Tab.home)
-            stack(.series) { CatalogView(kind: .series) }.tabItem { Label("Series", systemImage: "tv") }.tag(Tab.series)
-            stack(.movies) { CatalogView(kind: .movie) }.tabItem { Label("Películas", systemImage: "film") }.tag(Tab.movies)
-            stack(.live) { LiveView() }.tabItem { Label("TV en vivo", systemImage: "dot.radiowaves.left.and.right") }.tag(Tab.live)
+            stack(.home) { HomeView() }.tabItem { Label(tr("Inicio"), systemImage: "house.fill") }.tag(Tab.home)
+            stack(.series) { CatalogView(kind: .series) }.tabItem { Label(tr("Series"), systemImage: "tv") }.tag(Tab.series)
+            stack(.movies) { CatalogView(kind: .movie) }.tabItem { Label(tr("Películas"), systemImage: "film") }.tag(Tab.movies)
+            stack(.live) { LiveView() }.tabItem { Label(tr("TV en vivo"), systemImage: "dot.radiowaves.left.and.right") }.tag(Tab.live)
             stack(.account) { AccountView(onLogout: onLogout, onChangeDistributor: onChangeDistributor) }
-                .tabItem { Label("Cuenta", systemImage: "person.crop.circle") }.tag(Tab.account)
+                .tabItem { Label(tr("Cuenta"), systemImage: "person.crop.circle") }.tag(Tab.account)
         }
         .toast($state.toast)
         // línea demo: Mi lista y el progreso no se guardan
-        .onReceive(NotificationCenter.default.publisher(for: Cloud.demoBlocked)) { _ in state.toast = "No disponible en la DEMO" }
+        .onReceive(NotificationCenter.default.publisher(for: Cloud.demoBlocked)) { _ in state.toast = tr("No disponible en la DEMO") }
     }
 
     private func stack<V: View>(_ t: Tab, @ViewBuilder _ root: () -> V) -> some View {
@@ -60,9 +60,9 @@ struct RouteView: View {
         switch route {
         case .detail(let it): DetailView(media: it)
         case .browse(let title, let kind, let ids): BrowseView(title: title, kind: kind, categoryIds: ids, platform: nil)
-        case .platform(let p): BrowseView(title: p.label, kind: nil, categoryIds: [], platform: p)
+        case .platform(let p): BrowseView(title: tr(p.label), kind: nil, categoryIds: [], platform: p)
         case .saved(let cw): SavedView(continueWatching: cw)
-        case .sports: if tenant.sportsEnabled { SportsView() } else { EmptyMessage(text: "Deportes no está disponible.") }
+        case .sports: if tenant.sportsEnabled { SportsView() } else { EmptyMessage(text: tr("Deportes no está disponible.")) }
         case .search: SearchView()
         case .downloads: DownloadsView()
         }

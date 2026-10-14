@@ -39,35 +39,35 @@ enum StreamProbe {
             }
             switch code {
             case 200..<300 where type.contains("text/html"):
-                return Result(message: "El servidor respondió una página en lugar del video", detail: got)
+                return Result(message: tr("El servidor respondió una página en lugar del video"), detail: got)
             case 200..<300:
                 return Result(message: nil, detail: "el servidor sí entrega datos · \(got)")
             case 401, 403:
-                return Result(message: "El servidor rechazó el video (\(code))", detail: got)
+                return Result(message: tr("El servidor rechazó el video (%d)", code), detail: got)
             case 404, 410:
-                return Result(message: "El servidor no tiene este video (\(code))", detail: got)
+                return Result(message: tr("El servidor no tiene este video (%d)", code), detail: got)
             case 429:
-                return Result(message: "El servidor tiene demasiadas conexiones de tu línea (429)", detail: got)
+                return Result(message: tr("El servidor tiene demasiadas conexiones de tu línea (429)"), detail: got)
             case 500...:
-                return Result(message: "El servidor de video tiene un error (\(code))", detail: got)
+                return Result(message: tr("El servidor de video tiene un error (%d)", code), detail: got)
             default:
-                return Result(message: "El servidor respondió \(code)", detail: got)
+                return Result(message: tr("El servidor respondió %d", code), detail: got)
             }
         } catch {
             let e = (error as? URLError)?.code ?? .unknown
             let msg: String
             switch e {
             case .cannotFindHost, .dnsLookupFailed:
-                msg = "No se encuentra el servidor de video (\(host)). Prueba otro DNS en Ajustes"
+                msg = tr("No se encuentra el servidor de video (%@). Prueba otro DNS en Ajustes", host)
             case .timedOut, .cannotConnectToHost, .networkConnectionLost:
-                msg = "El servidor de video (\(host)) no responde"
+                msg = tr("El servidor de video (%@) no responde", host)
             case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate,
                  .serverCertificateNotYetValid, .serverCertificateHasUnknownRoot:
-                msg = "Falla la conexión segura (https) con \(host)"
+                msg = tr("Falla la conexión segura (https) con %@", host)
             case .notConnectedToInternet:
-                msg = "Sin conexión a internet"
+                msg = tr("Sin conexión a internet")
             default:
-                msg = "No hay conexión con el servidor de video (\(host))"
+                msg = tr("No hay conexión con el servidor de video (%@)", host)
             }
             return Result(message: msg, detail: "\(error.localizedDescription) · \(u.scheme ?? "")://\(host)")
         }
@@ -78,16 +78,16 @@ enum StreamProbe {
         switch code {
         case "INVALID_CREDENTIALS", "EXPIRED", "BANNED", "DISABLED": return Xtream.xuiMessage(code)
         case "USER_ALREADY_CONNECTED", "MAX_CONNECTIONS", "CONNECTION_LIMIT":
-            return "Tu línea ya se está usando en otro equipo (límite de conexiones)"
-        case "NOT_IN_BOUQUET": return "Tu línea no incluye este contenido"
-        case "USER_DISALLOW_EXT": return "Tu línea no permite este formato de video"
-        case "NOT_IN_ALLOWED_COUNTRY": return "El servidor no permite ver desde tu país"
-        case "DEVICE_NOT_ALLOWED", "USER_AGENT_BAN", "UA_BLOCKED": return "El servidor no permite este equipo"
+            return tr("Tu línea ya se está usando en otro equipo (límite de conexiones)")
+        case "NOT_IN_BOUQUET": return tr("Tu línea no incluye este contenido")
+        case "USER_DISALLOW_EXT": return tr("Tu línea no permite este formato de video")
+        case "NOT_IN_ALLOWED_COUNTRY": return tr("El servidor no permite ver desde tu país")
+        case "DEVICE_NOT_ALLOWED", "USER_AGENT_BAN", "UA_BLOCKED": return tr("El servidor no permite este equipo")
         case "IP_BLOCKED", "ISP_BLOCKED", "ASN_BLOCKED", "PROXY_DETECT", "HOSTING_DETECT", "VPN_DETECT":
-            return "El servidor bloquea tu red (\(code))"
+            return tr("El servidor bloquea tu red (%@)", code)
         case "STREAM_OFFLINE", "NO_SERVERS_AVAILABLE", "STREAM_NOT_FOUND":
-            return "Este contenido no está disponible ahora en el servidor"
-        default: return "El servidor rechazó el video (\(code))"
+            return tr("Este contenido no está disponible ahora en el servidor")
+        default: return tr("El servidor rechazó el video (%@)", code)
         }
     }
 }

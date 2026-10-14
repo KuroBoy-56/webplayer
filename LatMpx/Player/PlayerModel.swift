@@ -131,10 +131,10 @@ final class PlayerModel: ObservableObject {
             resumeTo = request.startAt
         } else if request.offline, let d = Downloads.shared.get(q.key), d.position > 30_000, d.duration <= 0 || Double(d.position) < Double(d.duration) * 0.95 {
             resumeTo = d.position
-            toast = "Continuando desde \(fmtTime(d.position))"
+            toast = tr("Continuando desde %@", fmtTime(d.position))
         } else if kind != .live, !request.offline, let p = Cloud.shared.progress(q.key), p.position > 30_000, p.duration <= 0 || Double(p.position) < Double(p.duration) * 0.95 {
             resumeTo = p.position
-            toast = "Continuando desde \(fmtTime(p.position))"
+            toast = tr("Continuando desde %@", fmtTime(p.position))
         }
         everPlayed = false; appliedLang = false
         audio = []; subs = []; time = 0; length = 0; error = nil; errorDetail = nil
@@ -169,7 +169,7 @@ final class PlayerModel: ObservableObject {
     }
 
     private func start(_ url: String) {
-        guard let u = URL(string: url) else { error = "Dirección no válida"; return }
+        guard let u = URL(string: url) else { error = tr("Dirección no válida"); return }
         let m = VLCMedia(url: u)
         // películas y episodios: más búfer (4K / HDR de alto bitrate se cortaban con 1,5 s)
         m.addOption(":network-caching=\(kind == .live ? 2500 : 3000)")
@@ -251,8 +251,9 @@ final class PlayerModel: ObservableObject {
             return
         }
         if error == nil {
+            // el informe al panel va en español; la pantalla, en el idioma de la app
             let generic = kind == .live ? "No se pudo reproducir este canal" : "No se pudo reproducir este video"
-            error = generic
+            error = tr(generic)
             let info = "\(entry.title) · \(kind.rawValue) \(entry.id) · estado \(player.state.rawValue)"
             let my = loadSeq, url = urls.first ?? ""
             if request.offline || url.isEmpty {
@@ -262,7 +263,7 @@ final class PlayerModel: ObservableObject {
                 Task { @MainActor [weak self] in
                     let p = await StreamProbe.check(url)
                     ErrorReport.report("playback", p.message ?? generic, detail: "\(info) · \(p.detail)", screen: "player")
-                    guard let self = self, self.loadSeq == my, self.error == generic else { return }
+                    guard let self = self, self.loadSeq == my, self.error == tr(generic) else { return }
                     self.errorDetail = p.detail
                     if let msg = p.message { self.error = msg }
                 }

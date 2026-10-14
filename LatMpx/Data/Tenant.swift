@@ -79,13 +79,13 @@ final class Tenant: ObservableObject {
 
     static func message(_ code: String, _ fallback: String = "") -> String {
         switch code {
-        case "tenant_invalid": return "Número de distribuidor no válido"
-        case "tenant_expired": return "El servicio de este distribuidor venció. Contacta a tu distribuidor."
-        case "tenant_suspended": return "Este distribuidor está suspendido. Contacta a tu distribuidor."
-        case "app_not_linked": return "Este número de distribuidor no está habilitado para esta aplicación."
-        case "too_many_attempts": return "Demasiados intentos. Espera 15 minutos e inténtalo de nuevo."
-        case "app_required": return "Error de la app: no envió su identificador al panel (app_required). Actualiza la app."
-        default: return fallback.isEmpty ? "No se pudo comprobar el distribuidor" : fallback
+        case "tenant_invalid": return tr("Número de distribuidor no válido")
+        case "tenant_expired": return tr("El servicio de este distribuidor venció. Contacta a tu distribuidor.")
+        case "tenant_suspended": return tr("Este distribuidor está suspendido. Contacta a tu distribuidor.")
+        case "app_not_linked": return tr("Este número de distribuidor no está habilitado para esta aplicación.")
+        case "too_many_attempts": return tr("Demasiados intentos. Espera 15 minutos e inténtalo de nuevo.")
+        case "app_required": return tr("Error de la app: no envió su identificador al panel (app_required). Actualiza la app.")
+        default: return fallback.isEmpty ? tr("No se pudo comprobar el distribuidor") : fallback
         }
     }
 
@@ -102,7 +102,7 @@ final class Tenant: ObservableObject {
     }
 
     static func expiredMessage(_ b: Brand) -> String {
-        b.expiresText.isEmpty ? message("tenant_expired") : "Tu distribuidor venció el \(b.expiresText) (hora de Panamá)."
+        b.expiresText.isEmpty ? message("tenant_expired") : tr("Tu distribuidor venció el %@ (hora de Panamá).", b.expiresText)
     }
 
     /* ---------- tenant_config ---------- */
@@ -116,15 +116,15 @@ final class Tenant: ObservableObject {
     static func fetch(_ code: String) async -> Check {
         let a = await Panel.tenantConfig(code)
         if let cfg = a.value {
-            guard let b = parse(Json.string(cfg)) else { return .problem("Respuesta no válida del panel") }
+            guard let b = parse(Json.string(cfg)) else { return .problem(tr("Respuesta no válida del panel")) }
             return .ok(b)
         }
         let c = a.errorCode
         if fatal.contains(c) { return .denied(message(c)) }
         if c == "too_many_attempts" || c == "app_required" { return .problem(message(c)) }
-        if c == "no_key" { return .problem("Esta versión de la app no tiene la llave del panel") }
-        if c == "offline" { return .offline(a.error ?? "No se pudo conectar con el panel") }
-        return .problem(a.error ?? "No se pudo comprobar el distribuidor")
+        if c == "no_key" { return .problem(tr("Esta versión de la app no tiene la llave del panel")) }
+        if c == "offline" { return .offline(a.error ?? tr("No se pudo conectar con el panel")) }
+        return .problem(a.error ?? tr("No se pudo comprobar el distribuidor"))
     }
 
     func choose(_ b: Brand) {

@@ -13,7 +13,7 @@ struct LoginView: View {
     /** Mis descargas sin internet */
     @State private var showDownloads = false
     @State private var busy = true
-    @State private var status = "Comprobando el equipo en el panel…"
+    @State private var status = tr("Comprobando el equipo en el panel…")
     @State private var err: String?
     @State private var lines: [Panel.Line] = []
     @State private var dns: [String] = []
@@ -89,29 +89,29 @@ struct LoginView: View {
     @ViewBuilder private var box: some View {
         VStack(spacing: 14) {
             if !PanelCrypto.hasKey {
-                ErrorBanner(text: "Esta versión de la app no tiene la llave del panel (PANEL_MASTER_KEY). La activación no funcionará hasta instalar una versión configurada.")
+                ErrorBanner(text: tr("Esta versión de la app no tiene la llave del panel (PANEL_MASTER_KEY). La activación no funcionará hasta instalar una versión configurada."))
             }
             // varias líneas para el equipo: se entra con la primera que funciona (ya no se pregunta)
             Group {
-                Text("Iniciar sesión").font(.system(size: 28, weight: .bold)).foregroundColor(.white).frame(maxWidth: .infinity, alignment: .leading)
+                Text(tr("Iniciar sesión")).font(.system(size: 28, weight: .bold)).foregroundColor(.white).frame(maxWidth: .infinity, alignment: .leading)
                 if let e = err { ErrorBanner(text: e) }
                 // sin internet (o el panel no responde): lo descargado se puede ver igual
-                if !online.connected || (err ?? "").hasPrefix("No se pudo conectar") {
-                    if !online.connected { Text("Sin conexión a internet").font(.system(size: 13)).foregroundColor(Theme.muted).frame(maxWidth: .infinity, alignment: .leading) }
-                    AppButton(text: "Mis descargas", icon: "arrow.down.circle", primary: !online.connected) { showDownloads = true }
+                if !online.connected || err == Xtream.noServer || err == Panel.noPanel {
+                    if !online.connected { Text(tr("Sin conexión a internet")).font(.system(size: 13)).foregroundColor(Theme.muted).frame(maxWidth: .infinity, alignment: .leading) }
+                    AppButton(text: tr("Mis descargas"), icon: "arrow.down.circle", primary: !online.connected) { showDownloads = true }
                 }
-                field("Usuario", text: $user, secure: false)
-                field("Contraseña", text: $pass, secure: true)
+                field(tr("Usuario"), text: $user, secure: false)
+                field(tr("Contraseña"), text: $pass, secure: true)
                 VStack(spacing: 2) {
-                    Text("Código MAC (Activación remota)").font(.system(size: 12)).foregroundColor(Theme.muted)
+                    Text(tr("Código MAC (Activación remota)")).font(.system(size: 12)).foregroundColor(Theme.muted)
                     Text(Device.id).font(.system(size: 18, weight: .bold, design: .monospaced)).foregroundColor(.white).textSelection(.enabled)
                 }
                 .frame(maxWidth: .infinity).padding(12).background(Color.white.opacity(0.2)).clipShape(RoundedRectangle(cornerRadius: 4))
-                AppButton(text: "Iniciar sesión") { act { await submit() } }
+                AppButton(text: tr("Iniciar sesión")) { act { await submit() } }
                 // Autodemo y DNS en la misma fila, como Android
                 HStack(spacing: 8) {
                     if tenant.demoEnabled {
-                        AppButton(text: "Autodemo", icon: "gift.fill", primary: false) { act { await demo() } }
+                        AppButton(text: tr("Autodemo"), icon: "gift.fill", primary: false) { act { await demo() } }
                     }
                     DnsButton(fill: true)
                 }
@@ -142,7 +142,7 @@ struct LoginView: View {
                         .frame(width: 36, height: 36).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(showPass ? "Ocultar contraseña" : "Ver contraseña")
+                .accessibilityLabel(tr(showPass ? "Ocultar contraseña" : "Ver contraseña"))
             }
         }
         .padding(.leading, 14).padding(.trailing, secure ? 6 : 14).frame(height: 52)
@@ -159,7 +159,7 @@ struct LoginView: View {
 
     /** true si entró; la demo (Autodemo o el panel dice "demo") se abre en modo DEMO */
     @MainActor @discardableResult private func connect(_ line: Panel.Line) async -> Bool {
-        status = "Conectando con \(line.name)…"
+        status = tr("Conectando con %@…", line.name)
         switch await Xtream.login([(line.name, line.base)], user: line.user, pass: line.pass) {
         case .ok(let s): Cloud.shared.setDemo(line.demo || fromAutodemo, expires: line.demoExpires, duration: line.demoDuration); onLogged(s); return true
         case .fail(let m): err = m; return false
@@ -179,7 +179,7 @@ struct LoginView: View {
 
     /** líneas del equipo en el panel; con una sola se entra (después de comprobarla en el servidor) */
     @MainActor private func resolve() async -> Bool {
-        busy = true; status = "Comprobando el equipo en el panel…"
+        busy = true; status = tr("Comprobando el equipo en el panel…")
         let a = await Panel.playlists()
         var found = a.value ?? []
         var problem = a.error
@@ -197,22 +197,22 @@ struct LoginView: View {
 
     @MainActor private func submit() async {
         let u = user.trimmed, p = pass.trimmed
-        if u.isEmpty || p.isEmpty { err = "Escribe tu usuario y contraseña"; return }
+        if u.isEmpty || p.isEmpty { err = tr("Escribe tu usuario y contraseña"); return }
         if dns.isEmpty {
             let d = await Panel.fetchDns()
             if let v = d.value { dns = v } else { err = d.error }
         }
-        guard let server = dns.first else { if err == nil { err = "El panel no tiene servidores disponibles" }; return }
-        status = "Activando…"
+        guard let server = dns.first else { if err == nil { err = tr("El panel no tiene servidores disponibles") }; return }
+        status = tr("Activando…")
         fromAutodemo = false
         let r = await Panel.submitUrl(user: u, pass: p, dns: server)
         if r.value == nil { err = r.error; return }
-        if !(await resolve()) && err == nil { await connect(Panel.Line(name: "Servidor 1", base: Xtream.normalize(server), user: u, pass: p)) }
+        if !(await resolve()) && err == nil { await connect(Panel.Line(name: tr("Servidor %d", 1), base: Xtream.normalize(server), user: u, pass: p)) }
     }
 
     /** el panel decide (si el dueño borró el registro, el equipo puede pedir otra demo); un código de revendedor en Contraseña deja la demo a su nombre */
     @MainActor private func demo() async {
-        status = "Creando demo…"
+        status = tr("Creando demo…")
         let r = await Panel.autoDemo(reseller: pass)
         guard let demo = r.value else {
             err = r.error
@@ -235,14 +235,14 @@ struct LoginView: View {
 
     /** demo recién creada: su servidor (el que dijo el panel) y luego los DNS del panel, hasta que uno responda */
     @MainActor private func connectDemo(_ demo: Panel.Demo, servers: [String]) async -> Bool {
-        status = "Conectando con la demo…"
+        status = tr("Conectando con la demo…")
         var list: [String] = []
         for s in servers where !s.trimmed.isEmpty {
             let n = Xtream.normalize(s)
             if !list.contains(n) { list.append(n) }
         }
-        if list.isEmpty { err = "Demo creada, pero el panel no devolvió el servidor."; return false }
-        let named = list.enumerated().map { ($0.offset == 0 ? "Demo" : "Servidor \($0.offset + 1)", $0.element) }
+        if list.isEmpty { err = tr("Demo creada, pero el panel no devolvió el servidor."); return false }
+        let named = list.enumerated().map { ($0.offset == 0 ? "Demo" : tr("Servidor %d", $0.offset + 1), $0.element) }
         switch await Xtream.login(named, user: demo.user, pass: demo.pass) {
         case .ok(let s): Cloud.shared.setDemo(true, expires: demo.expires, duration: demo.duration); onLogged(s); return true
         case .fail(let m): err = m; return false

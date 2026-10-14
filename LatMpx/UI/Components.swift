@@ -133,7 +133,7 @@ struct ShelfRow<T, Cell: View>: View {
                     Text(title).font(.system(size: 18, weight: .bold)).foregroundColor(.white).lineLimit(1)
                     Spacer()
                     if let v = onViewAll {
-                        Button(action: v) { HStack(spacing: 2) { Text("Ver todo"); Image(systemName: "chevron.right") }.font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.muted) }
+                        Button(action: v) { HStack(spacing: 2) { Text(tr("Ver todo")); Image(systemName: "chevron.right") }.font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.muted) }
                     }
                 }.padding(.horizontal, pad)
                 ScrollView(.horizontal, showsIndicators: false) {

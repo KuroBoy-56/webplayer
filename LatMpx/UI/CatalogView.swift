@@ -14,7 +14,7 @@ struct CatalogView: View {
         GeometryReader { g in
             let all = state.visibleItems(kind == .movie ? state.movies : state.series)
             if state.loading && all.isEmpty {
-                LoadingView(text: "Preparando tu catálogo…")
+                LoadingView(text: tr("Preparando tu catálogo…"))
             } else {
                 content(g.size, all)
             }
@@ -42,10 +42,10 @@ struct CatalogView: View {
                     ScrollOffsetReader(space: "cat\(title)")
                     if !hero.isEmpty { HeroCards(items: hero, width: size.width, topPad: 104).padding(.bottom, 8) }
                     else { Color.clear.frame(height: 104) }
-                    ShelfRow(title: "Agregadas recientemente", items: recent, pad: pad, onViewAll: { state.push(.browse("Agregadas recientemente", kind, [])) }) { _, it in
+                    ShelfRow(title: tr("Agregadas recientemente"), items: recent, pad: pad, onViewAll: { state.push(.browse(tr("Agregadas recientemente"), kind, [])) }) { _, it in
                         PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                     }
-                    ShelfRow(title: "Top 10", items: top10, pad: pad) { i, it in
+                    ShelfRow(title: tr("Top 10"), items: top10, pad: pad) { i, it in
                         Top10Card(rank: i + 1, item: it, width: pw * 1.15) { state.push(.detail(it)) }
                     }
                     ForEach(rows) { row in
@@ -53,7 +53,7 @@ struct CatalogView: View {
                             PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                         }
                     }
-                    if all.isEmpty { EmptyMessage(text: "No hay \(title.lowercased()) en tu lista.").frame(height: 240) }
+                    if all.isEmpty { EmptyMessage(text: tr(kind == .movie ? "No hay películas en tu lista." : "No hay series en tu lista.")).frame(height: 240) }
                     Spacer(minLength: 40)
                 }
             }
@@ -113,7 +113,7 @@ struct BrowseView: View {
                 let l = categoryIds.isEmpty ? all : all.filter { categoryIds.contains($0.categoryId) }
                 return l.sorted { $0.added > $1.added }
             }()
-            if list.isEmpty { EmptyMessage(text: "No hay títulos.") } else { PosterGrid(items: list, size: g.size) }
+            if list.isEmpty { EmptyMessage(text: tr("No hay títulos.")) } else { PosterGrid(items: list, size: g.size) }
         }
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle(title)
@@ -138,11 +138,11 @@ struct SavedView: View {
                 }
                 return cloud.favList().filter { $0.kind != .live }
             }()
-            if list.isEmpty { EmptyMessage(text: continueWatching ? "Todavía no empezaste nada." : "Agrega películas y series con \"Mi lista\".") }
+            if list.isEmpty { EmptyMessage(text: tr(continueWatching ? "Todavía no empezaste nada." : "Agrega películas y series con \"Mi lista\".")) }
             else { PosterGrid(items: list, size: g.size, withProgress: continueWatching) }
         }
         .background(Theme.bg.ignoresSafeArea())
-        .navigationTitle(continueWatching ? "Continuar viendo" : "Mi lista")
+        .navigationTitle(tr(continueWatching ? "Continuar viendo" : "Mi lista"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -162,12 +162,12 @@ struct SearchView: View {
             let pad = sidePad(g.size), pw = posterWidth(g.size)
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
-                    if ql.count < 2 { Text("Escribe al menos 2 letras").foregroundColor(Theme.muted).padding(pad) }
-                    else if movies.isEmpty && series.isEmpty && live.isEmpty { Text("Sin resultados para \"\(shown)\"").foregroundColor(Theme.muted).padding(pad) }
-                    ShelfRow(title: "Películas", items: movies, pad: pad) { _, it in PosterCard(item: it, width: pw) { state.push(.detail(it)) } }
-                    ShelfRow(title: "Series", items: series, pad: pad) { _, it in PosterCard(item: it, width: pw) { state.push(.detail(it)) } }
+                    if ql.count < 2 { Text(tr("Escribe al menos 2 letras")).foregroundColor(Theme.muted).padding(pad) }
+                    else if movies.isEmpty && series.isEmpty && live.isEmpty { Text(tr("Sin resultados para \"%@\"", shown)).foregroundColor(Theme.muted).padding(pad) }
+                    ShelfRow(title: tr("Películas"), items: movies, pad: pad) { _, it in PosterCard(item: it, width: pw) { state.push(.detail(it)) } }
+                    ShelfRow(title: tr("Series"), items: series, pad: pad) { _, it in PosterCard(item: it, width: pw) { state.push(.detail(it)) } }
                     if !live.isEmpty {
-                        Text("Canales").font(.system(size: 18, weight: .bold)).foregroundColor(.white).padding(.horizontal, pad).padding(.top, 8)
+                        Text(tr("Canales")).font(.system(size: 18, weight: .bold)).foregroundColor(.white).padding(.horizontal, pad).padding(.top, 8)
                         ForEach(live, id: \.key) { ch in
                             Button { state.playChannel(ch) } label: {
                                 HStack(spacing: 12) {
@@ -183,9 +183,9 @@ struct SearchView: View {
             }
         }
         .background(Theme.bg.ignoresSafeArea())
-        .navigationTitle("Buscar")
+        .navigationTitle(tr("Buscar"))
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $q, placement: .navigationBarDrawer(displayMode: .always), prompt: "Películas, series o canales")
+        .searchable(text: $q, placement: .navigationBarDrawer(displayMode: .always), prompt: tr("Películas, series o canales"))
         .task(id: q) {
             try? await Task.sleep(nanoseconds: 250_000_000)
             if !Task.isCancelled { shown = q }

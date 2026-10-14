@@ -46,16 +46,18 @@ final class Cloud: ObservableObject {
     var demoLength: String {
         let s = demoDuration
         if s <= 0 { return "" }
-        if s % 86400 == 0 { return "\(s / 86400) día" + (s == 86400 ? "" : "s") }
-        if s % 3600 == 0 { return "\(s / 3600) hora" + (s == 3600 ? "" : "s") }
-        return "\(s / 60) minuto" + (s / 60 == 1 ? "" : "s")
+        if s % 86400 == 0 { return s == 86400 ? tr("1 día") : tr("%d días", s / 86400) }
+        if s % 3600 == 0 { return s == 3600 ? tr("1 hora") : tr("%d horas", s / 3600) }
+        return s / 60 == 1 ? tr("1 minuto") : tr("%d minutos", s / 60)
     }
 
     /** fin de la demo con la hora exacta del equipo: "13/10/2026 18:45" ("" si el panel no lo mandó) */
     var demoEndText: String {
         if demoExpires <= 0 { return "" }
         let f = DateFormatter()
-        f.dateFormat = "dd/MM/yyyy HH:mm"
+        // fecha y hora en el idioma de la app
+        f.locale = L10n.locale
+        f.setLocalizedDateFormatFromTemplate("ddMMyyyy HH:mm")
         return f.string(from: Date(timeIntervalSince1970: TimeInterval(demoExpires)))
     }
 

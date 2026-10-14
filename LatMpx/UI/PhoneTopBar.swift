@@ -18,26 +18,27 @@ struct PhoneTopBar: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 18) {
                 if current == nil {
-                    Text("Para \(cloud.shownUser(state.session))").font(.system(size: 22, weight: .bold)).foregroundColor(.white).lineLimit(1)
+                    Text(tr("Para %@", cloud.shownUser(state.session))).font(.system(size: 22, weight: .bold)).foregroundColor(.white).lineLimit(1)
                 } else {
                     LogoHeader(height: 28)
                 }
                 Spacer()
                 Button { state.push(.search) } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).foregroundColor(.white) }
+                    .accessibilityLabel(tr("Buscar"))
                 Button { profile = true } label: {
                     Text(String(cloud.shownUser(state.session).prefix(1)).uppercased()).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
                         .frame(width: 30, height: 30)
                         .background(LinearGradient(colors: [Theme.accent, Theme.accent.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .clipShape(RoundedRectangle(cornerRadius: 5))
-                }
+                }.accessibilityLabel(tr("Perfil"))
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    if current != nil { Chip(text: "✕") { state.open(.home) } }
-                    Chip(text: "Series", selected: current == .series) { state.open(.series) }
-                    Chip(text: "Películas", selected: current == .movies) { state.open(.movies) }
-                    if tenant.sportsEnabled { Chip(text: "Deportes") { state.push(.sports) } }
-                    Chip(text: "Mi lista") { state.push(.saved(false)) }
+                    if current != nil { Chip(text: "✕") { state.open(.home) }.accessibilityLabel(tr("Inicio")) }
+                    Chip(text: tr("Series"), selected: current == .series) { state.open(.series) }
+                    Chip(text: tr("Películas"), selected: current == .movies) { state.open(.movies) }
+                    if tenant.sportsEnabled { Chip(text: tr("Deportes")) { state.push(.sports) } }
+                    Chip(text: tr("Mi lista")) { state.push(.saved(false)) }
                 }
             }
         }
@@ -63,17 +64,17 @@ struct ProfileSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Perfil").font(.system(size: 20, weight: .bold)).foregroundColor(.white)
+            Text(tr("Perfil")).font(.system(size: 20, weight: .bold)).foregroundColor(.white)
             VStack(alignment: .leading, spacing: 4) {
                 Text(cloud.shownUser(state.session)).font(.system(size: 16)).foregroundColor(.white)
-                Text(cloud.demo ? (cloud.demoEndText.isEmpty ? "" : "Vence: \(cloud.demoEndText)") : (state.session?.dnsName ?? "")).font(.system(size: 13)).foregroundColor(Theme.muted)
+                Text(cloud.demo ? (cloud.demoEndText.isEmpty ? "" : tr("Vence: %@", cloud.demoEndText)) : (state.session?.dnsName ?? "")).font(.system(size: 13)).foregroundColor(Theme.muted)
             }
             Divider().background(Color.white.opacity(0.2))
-            row("person.fill", "Mi cuenta") { go { state.open(.account) } }
-            row("gearshape.fill", "Ajustes") { go { state.open(.account) } }
-            if tenant.sportsEnabled { row("sportscourt.fill", "Deportes") { go { state.push(.sports) } } }
-            row("bookmark.fill", "Mi lista") { go { state.push(.saved(false)) } }
-            HStack { Spacer(); Button("Cerrar") { dismiss() }.foregroundColor(Theme.accent) }
+            row("person.fill", tr("Mi cuenta")) { go { state.open(.account) } }
+            row("gearshape.fill", tr("Ajustes")) { go { state.open(.account) } }
+            if tenant.sportsEnabled { row("sportscourt.fill", tr("Deportes")) { go { state.push(.sports) } } }
+            row("bookmark.fill", tr("Mi lista")) { go { state.push(.saved(false)) } }
+            HStack { Spacer(); Button(tr("Cerrar")) { dismiss() }.foregroundColor(Theme.accent) }
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

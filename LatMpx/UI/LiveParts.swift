@@ -69,9 +69,9 @@ struct LivePlayerBox: View {
     @ViewBuilder private func status(_ ch: Item) -> some View {
         if active && preview.failedId == ch.id {
             VStack(spacing: 10) {
-                Text("No se pudo reproducir este canal").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+                Text(tr("No se pudo reproducir este canal")).font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
                 Button(action: onRetry) {
-                    Text("Reintentar").font(.system(size: 13, weight: .bold)).foregroundColor(.black)
+                    Text(tr("Reintentar")).font(.system(size: 13, weight: .bold)).foregroundColor(.black)
                         .padding(.horizontal, 14).padding(.vertical, 6).background(Color.white).clipShape(RoundedRectangle(cornerRadius: 4))
                 }.buttonStyle(.plain)
             }
@@ -83,7 +83,7 @@ struct LivePlayerBox: View {
                     .frame(width: 64, height: 64)
                     .background(Circle().fill(Color.black.opacity(0.6)))
                     .overlay(Circle().stroke(Color.white.opacity(0.8), lineWidth: 2))
-            }.buttonStyle(.plain).accessibilityLabel("Ver")
+            }.buttonStyle(.plain).accessibilityLabel(tr("Ver"))
         }
     }
 
@@ -101,7 +101,7 @@ struct LivePlayerBox: View {
     private var chrome: some View {
         VStack {
             HStack {
-                Text("EN VIVO").font(.system(size: 11, weight: .bold)).foregroundColor(.white)
+                Text(tr("EN VIVO")).font(.system(size: 11, weight: .bold)).foregroundColor(.white)
                     .padding(.horizontal, 6).padding(.vertical, 2).background(Theme.accent).clipShape(RoundedRectangle(cornerRadius: 3))
                 Spacer()
             }
@@ -112,7 +112,7 @@ struct LivePlayerBox: View {
                     Button(action: onFull) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
                             .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.55)))
-                    }.buttonStyle(.plain).accessibilityLabel("Pantalla completa")
+                    }.buttonStyle(.plain).accessibilityLabel(tr("Pantalla completa"))
                 }
             }
         }
@@ -122,7 +122,7 @@ struct LivePlayerBox: View {
     private var placeholder: some View {
         VStack(spacing: 12) {
             Image(systemName: "tv").font(.system(size: 46)).foregroundColor(LiveColors.empty.opacity(0.5))
-            Text("Selecciona un canal para comenzar a ver").font(.system(size: 14)).foregroundColor(LiveColors.empty).multilineTextAlignment(.center)
+            Text(tr("Selecciona un canal para comenzar a ver")).font(.system(size: 14)).foregroundColor(LiveColors.empty).multilineTextAlignment(.center)
         }
         .padding(16)
     }

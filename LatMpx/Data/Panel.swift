@@ -23,7 +23,7 @@ enum Panel {
         var code: Int = 0
     }
 
-    static let noPanel = "No se pudo conectar con el panel. Revisa tu conexión a internet."
+    static var noPanel: String { tr("No se pudo conectar con el panel. Revisa tu conexión a internet.") }
 
     private static func device() -> JObj { ["mac_address": Device.id] }
 
@@ -48,7 +48,7 @@ enum Panel {
             let data: String
             do { data = try PanelCrypto.encrypt(Json.string(p)) } catch is PanelCrypto.MissingKey {
                 return Answer(value: nil, error: PanelCrypto.missingKeyMessage)
-            } catch { return Answer(value: nil, error: "No se pudo preparar la solicitud al panel") }
+            } catch { return Answer(value: nil, error: tr("No se pudo preparar la solicitud al panel")) }
             r = await Net.postForm(PanelUrl.api("login.php"), ["action": action, "data": data])
             if attempt == 0, r.code == 401, let j = r.json(), j.s("code").hasPrefix("ts_"), j.i("server_time") > 0 {
                 clockSkew = j.i("server_time") - Int(Date().timeIntervalSince1970)
@@ -61,7 +61,7 @@ enum Panel {
         let body = r.text.trimmed
         if encReply && r.code == 200 && !body.isEmpty && !body.hasPrefix("{") {
             guard let dec = (try? PanelCrypto.decrypt(body)) ?? nil else {
-                return Answer(value: nil, error: "La llave de la app no coincide con la del panel")
+                return Answer(value: nil, error: tr("La llave de la app no coincide con la del panel"))
             }
             return Answer(value: Resp(code: r.code, data: Data(dec.utf8)))
         }
@@ -80,8 +80,8 @@ enum Panel {
         var msg = j?.s("error") ?? ""
         if msg.isEmpty { msg = j?.s("message") ?? "" }
         switch msg {
-        case "Server not configured": return "El panel no está configurado"
-        case "Decryption failed": return "La llave de la app no coincide con la del panel"
+        case "Server not configured": return tr("El panel no está configurado")
+        case "Decryption failed": return tr("La llave de la app no coincide con la del panel")
         case "": return fallback
         default: return msg
         }
@@ -94,14 +94,14 @@ enum Panel {
     static func checkMac() async -> Answer<Line> {
         let a = await login("check_mac", device())
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
-        if Tenant.active && (400..<500).contains(r.code) { return Answer(value: nil, error: errorOf(r, "El panel rechazó la solicitud")) }
-        guard let j = r.json() else { return Answer(value: nil, error: errorOf(r, "Respuesta no válida del panel")) }
+        if Tenant.active && (400..<500).contains(r.code) { return Answer(value: nil, error: errorOf(r, tr("El panel rechazó la solicitud"))) }
+        guard let j = r.json() else { return Answer(value: nil, error: errorOf(r, tr("Respuesta no válida del panel"))) }
         fakeScreen = FakeScreen.parse(j)
         if !j.b("exists") { return Answer(value: nil, error: nil) }
         // PIN parental del panel: es el que usa la app
         let pin = j.s("pin")
         if pin.count == 4 && pin.isDigits { Store.parentalPin = pin }
-        var line = lineFromUrl("Servidor", j.s("url"), j.s("username"), j.s("password"))
+        var line = lineFromUrl(tr("Servidor"), j.s("url"), j.s("username"), j.s("password"))
         line?.demo = j.b("demo")
         line?.demoExpires = j.i("demo_expires")
         line?.demoDuration = j.i("demo_duration")
@@ -112,11 +112,11 @@ enum Panel {
     static func fetchDns() async -> Answer<[String]> {
         let a = await login("fetch_dns", [:])
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
-        if !r.ok { return Answer(value: nil, error: errorOf(r, "El panel no devolvió los servidores")) }
+        if !r.ok { return Answer(value: nil, error: errorOf(r, tr("El panel no devolvió los servidores"))) }
         let dec: String?
         do { dec = try PanelCrypto.decrypt(r.text) } catch { return Answer(value: nil, error: PanelCrypto.missingKeyMessage) }
-        guard let plain = dec else { return Answer(value: nil, error: "La llave de la app no coincide con la del panel") }
-        guard let arr = Json.parse(Data(plain.utf8)) as? [Any] else { return Answer(value: nil, error: "Lista de servidores no válida") }
+        guard let plain = dec else { return Answer(value: nil, error: tr("La llave de la app no coincide con la del panel")) }
+        guard let arr = Json.parse(Data(plain.utf8)) as? [Any] else { return Answer(value: nil, error: tr("Lista de servidores no válida")) }
         return Answer(value: arr.compactMap { ($0 as? String)?.trimmed }.filter { !$0.isEmpty })
     }
 
@@ -127,7 +127,7 @@ enum Panel {
         let a = await login("submit_url", p)
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
         if r.ok && r.json()?.s("status") == "ok" { return Answer(value: true) }
-        return Answer(value: nil, error: errorOf(r, "No se pudo activar el equipo"))
+        return Answer(value: nil, error: errorOf(r, tr("No se pudo activar el equipo")))
     }
 
     /** Demo automática. Con el código de un revendedor la demo queda a su nombre en el panel. */
@@ -145,11 +145,11 @@ enum Panel {
         }
         let fallback: String
         switch r.code {
-        case 403: fallback = "Demo ya utilizado en este dispositivo o dispositivo ya registrado."
-        case 404: fallback = "Código de revendedor no válido o sin demo disponible."
-        case 429: fallback = "Demasiadas demos desde esta conexión. Inténtalo mañana."
-        case 503: fallback = "La demo no está disponible en este momento. Inténtalo más tarde."
-        default: fallback = "No se pudo crear la demo"
+        case 403: fallback = tr("Demo ya utilizado en este dispositivo o dispositivo ya registrado.")
+        case 404: fallback = tr("Código de revendedor no válido o sin demo disponible.")
+        case 429: fallback = tr("Demasiadas demos desde esta conexión. Inténtalo mañana.")
+        case 503: fallback = tr("La demo no está disponible en este momento. Inténtalo más tarde.")
+        default: fallback = tr("No se pudo crear la demo")
         }
         return Answer(value: nil, error: errorOf(r, fallback), code: r.code)
     }
@@ -164,14 +164,14 @@ enum Panel {
             Store.parentalPin = new
             return Answer(value: true)
         }
-        return Answer(value: nil, error: errorOf(r, "El panel no guardó el PIN (\(r.code))"), code: r.code)
+        return Answer(value: nil, error: errorOf(r, tr("El panel no guardó el PIN (%d)", r.code)), code: r.code)
     }
 
     struct TenantAnswer { var value: JObj?; var error: String?; var errorCode: String = "" }
 
     /** tenant_config con {code, app, device} cifrado; la respuesta viene cifrada. */
     static func tenantConfig(_ code: String) async -> TenantAnswer {
-        if !PanelCrypto.hasKey { return TenantAnswer(value: nil, error: "Esta versión de la app no tiene la llave del panel", errorCode: "no_key") }
+        if !PanelCrypto.hasKey { return TenantAnswer(value: nil, error: tr("Esta versión de la app no tiene la llave del panel"), errorCode: "no_key") }
         let a = await login("tenant_config", ["code": code, "app": Tenant.app, "device": Device.id], tag: false)
         guard let r = a.value else { return TenantAnswer(value: nil, error: a.error, errorCode: "offline") }
         if r.code >= 500 { return TenantAnswer(value: nil, error: noPanel, errorCode: "offline") }
@@ -181,17 +181,17 @@ enum Panel {
             let m = j?.s("error") ?? ""
             let msg: String
             switch m {
-            case "Decryption failed": msg = "La llave de la app no coincide con la del panel"
-            case "Server not configured": msg = "El panel no está configurado"
-            case "": msg = "El panel rechazó el número (\(r.code))"
+            case "Decryption failed": msg = tr("La llave de la app no coincide con la del panel")
+            case "Server not configured": msg = tr("El panel no está configurado")
+            case "": msg = tr("El panel rechazó el número (%d)", r.code)
             default: msg = m
             }
             return TenantAnswer(value: nil, error: msg, errorCode: c.isEmpty ? "http_\(r.code)" : c)
         }
         let dec: String?
-        do { dec = try PanelCrypto.decrypt(r.text) } catch { return TenantAnswer(value: nil, error: "Esta versión de la app no tiene la llave del panel", errorCode: "no_key") }
-        guard let plain = dec else { return TenantAnswer(value: nil, error: "La llave de la app no coincide con la del panel", errorCode: "bad_key") }
-        guard let j = Json.obj(plain), j.s("status") == "ok" else { return TenantAnswer(value: nil, error: "Respuesta no válida del panel", errorCode: "bad_response") }
+        do { dec = try PanelCrypto.decrypt(r.text) } catch { return TenantAnswer(value: nil, error: tr("Esta versión de la app no tiene la llave del panel"), errorCode: "no_key") }
+        guard let plain = dec else { return TenantAnswer(value: nil, error: tr("La llave de la app no coincide con la del panel"), errorCode: "bad_key") }
+        guard let j = Json.obj(plain), j.s("status") == "ok" else { return TenantAnswer(value: nil, error: tr("Respuesta no válida del panel"), errorCode: "bad_response") }
         return TenantAnswer(value: j)
     }
 
@@ -202,19 +202,19 @@ enum Panel {
         let body: JObj = ["data": PanelCrypto.mopeEncrypt(Json.string(device()))]
         let r = await Net.postJson(PanelUrl.api("auth.php"), body)
         if r.code == 0 { return Answer(value: nil, error: noPanel) }
-        guard let outer = r.json() else { return Answer(value: nil, error: "Respuesta no válida del panel") }
-        if !r.ok { return Answer(value: nil, error: errorOf(r, "El panel rechazó la solicitud")) }
+        guard let outer = r.json() else { return Answer(value: nil, error: tr("Respuesta no válida del panel")) }
+        if !r.ok { return Answer(value: nil, error: errorOf(r, tr("El panel rechazó la solicitud"))) }
         var resp: JObj?
         let d = outer.s("data")
         if !d.isEmpty, let plain = PanelCrypto.mopeDecrypt(d) { resp = Json.obj(plain) }
-        guard let res = resp ?? outer.o("plain") else { return Answer(value: nil, error: "Respuesta no válida del panel") }
+        guard let res = resp ?? outer.o("plain") else { return Answer(value: nil, error: tr("Respuesta no válida del panel")) }
         let k = res.s("tmdbKey")
         if !k.isEmpty && k != "missing_tmdb_key" { Store.tmdbKey = k }
         let pc = res.s("parent_control")
         if pc.count == 4 && pc.isDigits { Store.parentalPin = pc }
         var seen = Set<String>()
         let lines = res.objs("urls").compactMap { o -> Line? in
-            lineFromUrl(o.s("name").ifEmpty("Servidor"), o.s("url"), "", "")
+            lineFromUrl(o.s("name").ifEmpty(tr("Servidor")), o.s("url"), "", "")
         }.filter { seen.insert("\($0.base)|\($0.user)").inserted }
         return Answer(value: lines)
     }

@@ -30,7 +30,7 @@ struct LiveView: View {
     private struct Cat: Hashable { let id: String; let name: String }
 
     private var cats: [Cat] {
-        [Cat(id: LiveView.favs, name: "★ Favoritos"), Cat(id: LiveView.all, name: "Todos")] + state.visible(state.liveCats).map { Cat(id: $0.id, name: $0.name) }
+        [Cat(id: LiveView.favs, name: "★ " + tr("Favoritos")), Cat(id: LiveView.all, name: tr("Todos"))] + state.visible(state.liveCats).map { Cat(id: $0.id, name: $0.name) }
     }
 
     private var currentCat: String { cat ?? (cloud.favList(.live).isEmpty ? LiveView.all : LiveView.favs) }
@@ -109,7 +109,7 @@ struct LiveView: View {
         it.kind = .live
         if cloud.demo { _ = Cloud.shared.blockedForDemo(); return }
         let on = Cloud.shared.toggleFav(it)
-        state.toast = on ? "Agregado a favoritos" : "Quitado de favoritos"
+        state.toast = tr(on ? "Agregado a favoritos" : "Quitado de favoritos")
     }
 
     private func openFull(_ list: [Item], byRotation: Bool) {
@@ -156,15 +156,15 @@ struct LiveView: View {
             LazyVStack(spacing: 0) {
                 catMenu
                 HStack(alignment: .lastTextBaseline, spacing: 6) {
-                    Text("Canales").font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                    Text(tr("Canales")).font(.system(size: 16, weight: .bold)).foregroundColor(.white)
                     if !list.isEmpty { Text("(\(list.count))").font(.system(size: 12)).foregroundColor(LiveColors.empty) }
                     Spacer()
                 }.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
                 filterField
                 if state.loading && state.live.isEmpty {
-                    LoadingView(text: "Cargando canales…").padding(.top, 20)
+                    LoadingView(text: tr("Cargando canales…")).padding(.top, 20)
                 } else if list.isEmpty {
-                    Text(currentCat == LiveView.favs && q.trimmed.isEmpty ? "Aún no tienes canales favoritos." : "No hay canales en esta sección.")
+                    Text(tr(currentCat == LiveView.favs && q.trimmed.isEmpty ? "Aún no tienes canales favoritos." : "No hay canales en esta sección."))
                         .font(.system(size: 14)).foregroundColor(LiveColors.empty).multilineTextAlignment(.center).padding(16)
                 }
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
@@ -189,14 +189,14 @@ struct LiveView: View {
                     .frame(width: 40, height: 40)
                     .background(Circle().fill(on ? Color.white : Color(hex: 0x2A2A2A).opacity(0.6)))
                     .overlay(Circle().stroke(on ? Color.white : Color.white.opacity(0.6), lineWidth: 2))
-            }.buttonStyle(.plain).accessibilityLabel("Favorito")
+            }.buttonStyle(.plain).accessibilityLabel(tr("Favorito"))
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
     }
 
     private func guidePanel(_ l: [EpgEntry], maxH: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Guía de programas").font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+            Text(tr("Guía de programas")).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
                 .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
             ScrollView {
                 LazyVStack(spacing: 0) { ForEach(l, id: \.self) { p in ProgramRow(program: p, now: now) } }
@@ -214,7 +214,7 @@ struct LiveView: View {
             }
         } label: {
             HStack {
-                Text(cats.first { $0.id == currentCat }?.name ?? "Categorías").font(.system(size: 14)).foregroundColor(.white).lineLimit(1)
+                Text(cats.first { $0.id == currentCat }?.name ?? tr("Categorías")).font(.system(size: 14)).foregroundColor(.white).lineLimit(1)
                 Spacer()
                 Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
             }
@@ -229,7 +229,7 @@ struct LiveView: View {
     private var filterField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundColor(Theme.muted)
-            TextField("", text: $q, prompt: Text("Buscar canal...").foregroundColor(Theme.muted))
+            TextField("", text: $q, prompt: Text(tr("Buscar canal...")).foregroundColor(Theme.muted))
                 .font(.system(size: 14)).foregroundColor(.white)
                 .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.search)
             if !q.isEmpty {

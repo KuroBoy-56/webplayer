@@ -10,7 +10,7 @@ struct HomeView: View {
     var body: some View {
         GeometryReader { g in
             if state.loading && state.movies.isEmpty {
-                LoadingView(text: "Preparando tu catálogo…")
+                LoadingView(text: tr("Preparando tu catálogo…"))
             } else {
                 content(g.size)
             }
@@ -49,26 +49,26 @@ struct HomeView: View {
                 ScrollOffsetReader(space: "home")
                 if !hero.isEmpty { HeroCards(items: hero, width: size.width, topPad: 104).padding(.bottom, 8) }
                 else { Color.clear.frame(height: 104) }
-                ShelfRow(title: "Continuar viendo para \(cloud.shownUser(state.session))", items: cont, pad: pad, onViewAll: { state.push(.saved(true)) }) { _, p in
+                ShelfRow(title: tr("Continuar viendo para %@", cloud.shownUser(state.session)), items: cont, pad: pad, onViewAll: { state.push(.saved(true)) }) { _, p in
                     if let it = state.item(from: p) { ContinueCard(item: it, progress: p, width: pw) }
                 }
-                ShelfRow(title: "Mi lista", items: favs, pad: pad, onViewAll: { state.push(.saved(false)) }) { _, it in
+                ShelfRow(title: tr("Mi lista"), items: favs, pad: pad, onViewAll: { state.push(.saved(false)) }) { _, it in
                     PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                 }
-                ShelfRow(title: "Top 10 de hoy", items: top10, pad: pad) { i, it in
+                ShelfRow(title: tr("Top 10 de hoy"), items: top10, pad: pad) { i, it in
                     Top10Card(rank: i + 1, item: it, width: pw * 1.15) { state.push(.detail(it)) }
                 }
-                ShelfRow(title: "Plataformas", items: platforms, pad: pad) { _, p in
+                ShelfRow(title: tr("Plataformas"), items: platforms, pad: pad) { _, p in
                     PlatformCard(platform: p, width: size.width >= 700 ? 200 : 150) { state.push(.platform(p)) }
                 }
-                ShelfRow(title: "Películas recién agregadas", items: recentM, pad: pad, onViewAll: { state.push(.browse("Películas recién agregadas", .movie, [])) }) { _, it in
+                ShelfRow(title: tr("Películas recién agregadas"), items: recentM, pad: pad, onViewAll: { state.push(.browse(tr("Películas recién agregadas"), .movie, [])) }) { _, it in
                     PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                 }
-                ShelfRow(title: "Series recién agregadas", items: recentS, pad: pad, onViewAll: { state.push(.browse("Series recién agregadas", .series, [])) }) { _, it in
+                ShelfRow(title: tr("Series recién agregadas"), items: recentS, pad: pad, onViewAll: { state.push(.browse(tr("Series recién agregadas"), .series, [])) }) { _, it in
                     PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                 }
                 ForEach(Array(genreRows.enumerated()), id: \.offset) { _, row in
-                    ShelfRow(title: row.0, items: row.2, pad: pad, onViewAll: { state.push(.browse(row.0, .movie, row.1)) }) { _, it in
+                    ShelfRow(title: tr(row.0), items: row.2, pad: pad, onViewAll: { state.push(.browse(tr(row.0), .movie, row.1)) }) { _, it in
                         PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                     }
                 }
@@ -132,7 +132,7 @@ struct PlatformCard: View {
             ZStack {
                 Color(hex: platform.color)
                 if !platform.image.isEmpty { Image(platform.image).resizable().scaledToFill() }
-                else { Text(platform.label).font(.system(size: 20, weight: .black)).foregroundColor(.white) }
+                else { Text(tr(platform.label)).font(.system(size: 20, weight: .black)).foregroundColor(.white) }
             }
             .frame(width: width, height: width * 0.56).clipShape(RoundedRectangle(cornerRadius: 8))
         }.buttonStyle(.plain)

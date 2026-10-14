@@ -19,11 +19,11 @@ struct DistributorView: View {
                         HStack { LogoHeader(height: 46); Spacer() }.padding(.horizontal, sidePad(g.size)).padding(.vertical, 20)
                         Spacer(minLength: 16)
                         VStack(spacing: 14) {
-                            Text("Número de distribuidor").font(.system(size: 28, weight: .bold)).foregroundColor(.white).frame(maxWidth: .infinity, alignment: .leading)
-                            Text("Escribe el número de 6 dígitos que te dio tu distribuidor. Si no tienes uno, elige Omitir.")
+                            Text(tr("Número de distribuidor")).font(.system(size: 28, weight: .bold)).foregroundColor(.white).frame(maxWidth: .infinity, alignment: .leading)
+                            Text(tr("Escribe el número de 6 dígitos que te dio tu distribuidor. Si no tienes uno, elige Omitir."))
                                 .font(.system(size: 14)).foregroundColor(Theme.muted).frame(maxWidth: .infinity, alignment: .leading)
                             if let e = err { ErrorBanner(text: e) }
-                            TextField("", text: $code, prompt: Text("Número de distribuidor").foregroundColor(Theme.muted))
+                            TextField("", text: $code, prompt: Text(tr("Número de distribuidor")).foregroundColor(Theme.muted))
                                 .keyboardType(.numberPad).font(.system(size: 22, design: .monospaced)).foregroundColor(.white)
                                 .padding(.horizontal, 14).frame(height: 56).background(Color(hex: 0x333333)).clipShape(RoundedRectangle(cornerRadius: 4))
                                 .onChange(of: code) { v in
@@ -32,10 +32,10 @@ struct DistributorView: View {
                                     err = nil
                                 }
                                 .disabled(busy)
-                            AppButton(text: "Continuar") { submit() }
-                            AppButton(text: "Omitir", primary: false) { if !busy { tenant.skip(); onDone() } }
+                            AppButton(text: tr("Continuar")) { submit() }
+                            AppButton(text: tr("Omitir"), primary: false) { if !busy { tenant.skip(); onDone() } }
                             if busy {
-                                VStack(spacing: 8) { ProgressView().tint(Theme.accent); Text("Comprobando el número…").font(.system(size: 13)).foregroundColor(Theme.muted) }
+                                VStack(spacing: 8) { ProgressView().tint(Theme.accent); Text(tr("Comprobando el número…")).font(.system(size: 13)).foregroundColor(Theme.muted) }
                             }
                         }
                         .padding(.horizontal, 24).padding(.vertical, 28).background(Color.black.opacity(0.75)).clipShape(RoundedRectangle(cornerRadius: 6))
@@ -52,8 +52,8 @@ struct DistributorView: View {
 
     private func submit() {
         if busy { return }
-        if code.count != 6 { err = "Escribe los 6 dígitos del número de distribuidor"; return }
-        if !PanelCrypto.hasKey { err = "Esta versión de la app no tiene la llave del panel"; return }
+        if code.count != 6 { err = tr("Escribe los 6 dígitos del número de distribuidor"); return }
+        if !PanelCrypto.hasKey { err = tr("Esta versión de la app no tiene la llave del panel"); return }
         err = nil; busy = true
         Task { @MainActor in
             switch await Tenant.fetch(code) {
@@ -75,11 +75,11 @@ struct TenantRetryView: View {
     var body: some View {
         VStack(spacing: 14) {
             LogoHeader(height: 46)
-            Text("No se pudo comprobar tu distribuidor").font(.system(size: 22, weight: .bold)).foregroundColor(.white).multilineTextAlignment(.center)
+            Text(tr("No se pudo comprobar tu distribuidor")).font(.system(size: 22, weight: .bold)).foregroundColor(.white).multilineTextAlignment(.center)
             ErrorBanner(text: message)
             if busy { ProgressView().tint(Theme.accent) }
-            AppButton(text: "Reintentar") { if !busy { onRetry() } }
-            AppButton(text: "Cambiar distribuidor", primary: false) { if !busy { onChange() } }
+            AppButton(text: tr("Reintentar")) { if !busy { onRetry() } }
+            AppButton(text: tr("Cambiar distribuidor"), primary: false) { if !busy { onChange() } }
         }
         .padding(.horizontal, 24).padding(.vertical, 28).background(Color.black.opacity(0.75)).clipShape(RoundedRectangle(cornerRadius: 6))
         .frame(maxWidth: 460).padding(24)
@@ -94,15 +94,15 @@ struct DistributorCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Distribuidor").font(.system(size: 18, weight: .bold)).foregroundColor(.white)
+            Text(tr("Distribuidor")).font(.system(size: 18, weight: .bold)).foregroundColor(.white)
             VStack(spacing: 10) {
                 if let b = tenant.brand {
-                    InfoRow(k: "Distribuidor", v: "\(b.name.isEmpty ? "Distribuidor" : b.name) (\(b.code))")
-                    InfoRow(k: "Vence", v: b.expiresText.isEmpty ? "Sin vencimiento" : "\(b.expiresText) (hora de Panamá)")
+                    InfoRow(k: tr("Distribuidor"), v: "\(b.name.isEmpty ? tr("Distribuidor") : b.name) (\(b.code))")
+                    InfoRow(k: tr("Vence"), v: b.expiresText.isEmpty ? tr("Sin vencimiento") : tr("%@ (hora de Panamá)", b.expiresText))
                 } else {
-                    InfoRow(k: "Distribuidor", v: "Ninguno")
+                    InfoRow(k: tr("Distribuidor"), v: tr("Ninguno"))
                 }
-                AppButton(text: "Cambiar distribuidor", icon: "arrow.left.arrow.right", primary: false, action: onChange)
+                AppButton(text: tr("Cambiar distribuidor"), icon: "arrow.left.arrow.right", primary: false, action: onChange)
             }
             .padding(16).background(Color(hex: 0x1F1F1F)).clipShape(RoundedRectangle(cornerRadius: 12))
         }

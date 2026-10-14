@@ -117,7 +117,7 @@ final class AppState: ObservableObject {
 
     func playEpisode(_ series: Item, _ eps: [Episode], _ index: Int) {
         let q = eps.map { e in
-            QueueEntry(id: e.id, title: "\(series.name) · T\(e.season) E\(e.num)" + (!e.title.isEmpty && !e.title.contains(series.name) ? " · \(e.title)" : ""),
+            QueueEntry(id: e.id, title: "\(series.name) · " + tr("T%d E%d", e.season, e.num) + (!e.title.isEmpty && !e.title.contains(series.name) ? " · \(e.title)" : ""),
                        key: "series:\(series.id):\(e.id)", poster: e.image.ifEmpty(series.poster), ext: e.ext)
         }
         play = PlayRequest(kind: .series, queue: q, index: max(0, min(index, q.count - 1)), saveTitle: series.name, savePoster: series.poster, category: series.categoryId)
@@ -128,7 +128,7 @@ final class AppState: ObservableObject {
         guard !list.isEmpty else { return }
         let i = max(0, min(index, list.count - 1))
         let q = list.map { e in
-            QueueEntry(id: e.streamId, title: e.isMovie ? e.title : "\(e.seriesName) · T\(e.season) E\(e.episode) · \(e.title)",
+            QueueEntry(id: e.streamId, title: e.isMovie ? e.title : "\(e.seriesName) · " + tr("T%d E%d", e.season, e.episode) + " · \(e.title)",
                        key: e.key, poster: Downloads.image(e.poster, e.posterUrl), ext: e.ext)
         }
         let first = list[i]

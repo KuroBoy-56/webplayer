@@ -26,10 +26,10 @@ struct FakeScreenView: View {
             }
             Text("ID \(Device.id)").font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.33)).padding(.bottom, 4)
         }
-        .alert("Código", isPresented: $askCode) {
-            SecureField("Código", text: $code).keyboardType(.numberPad)
-            Button("Abrir") { if !screen.unlock.isEmpty && code == screen.unlock { onUnlock() }; code = "" }
-            Button("Cancelar", role: .cancel) { code = "" }
+        .alert(tr("Código"), isPresented: $askCode) {
+            SecureField(tr("Código"), text: $code).keyboardType(.numberPad)
+            Button(tr("Abrir")) { if !screen.unlock.isEmpty && code == screen.unlock { onUnlock() }; code = "" }
+            Button(tr("Cancelar"), role: .cancel) { code = "" }
         }
     }
 

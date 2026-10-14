@@ -34,6 +34,8 @@ targets:
       path: LatMpx/Info.plist
       properties:
         CFBundleDisplayName: MPX Player
+        # idiomas de la app (L10n.swift): los controles del sistema siguen el idioma del equipo
+        CFBundleLocalizations: [es, en, pt, fr]
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true

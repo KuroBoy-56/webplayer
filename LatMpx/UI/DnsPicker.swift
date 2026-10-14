@@ -10,7 +10,7 @@ struct DnsButton: View {
         Button { open = true } label: {
             HStack(spacing: 6) {
                 Image(systemName: "server.rack").font(.system(size: 15, weight: .semibold))
-                Text("DNS: \(current.label)").font(.system(size: 14, weight: .bold)).lineLimit(1).minimumScaleFactor(0.8)
+                Text("DNS: " + tr(current.label)).font(.system(size: 14, weight: .bold)).lineLimit(1).minimumScaleFactor(0.8)
             }
             .foregroundColor(.white)
             .padding(.horizontal, 14).frame(maxWidth: fill ? .infinity : nil, minHeight: 48)
@@ -39,8 +39,8 @@ struct DnsSheet: View {
                         } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(o.label).font(.system(size: 16, weight: o.key == sel ? .bold : .regular)).foregroundColor(.white)
-                                    Text(o.note).font(.system(size: 12)).foregroundColor(Theme.muted)
+                                    Text(tr(o.label)).font(.system(size: 16, weight: o.key == sel ? .bold : .regular)).foregroundColor(.white)
+                                    Text(tr(o.note)).font(.system(size: 12)).foregroundColor(Theme.muted)
                                 }
                                 Spacer()
                                 if o.key == sel { Image(systemName: "checkmark").foregroundColor(Theme.accent) }
@@ -50,14 +50,14 @@ struct DnsSheet: View {
                         .listRowBackground(Color(hex: 0x1F1F1F))
                     }
                 } footer: {
-                    Text("Cambia el DNS si algún canal o servidor no abre en tu red. Se aplica a los servidores IPTV y al video.")
+                    Text(tr("Cambia el DNS si algún canal o servidor no abre en tu red. Se aplica a los servidores IPTV y al video."))
                         .foregroundColor(Theme.muted)
                 }
             }
             .scrollContentBackground(.hidden)
             .background(Color(hex: 0x141414).ignoresSafeArea())
             .navigationTitle("DNS").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cerrar") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(tr("Cerrar")) { dismiss() } } }
         }
         .presentationDetents([.large])
         .preferredColorScheme(.dark)

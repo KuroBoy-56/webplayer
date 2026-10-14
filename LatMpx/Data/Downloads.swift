@@ -78,7 +78,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
             self.mutate { list in
                 for i in list.indices where (list[i].state == .running || list[i].state == .queued) && !alive.contains(list[i].key) {
                     list[i].state = .failed
-                    list[i].error = "Se interrumpió. Toca para seguir."
+                    list[i].error = tr("Se interrumpió. Toca para seguir.")
                 }
             }
         }
@@ -117,7 +117,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
 
     func addEpisode(_ s: Session, _ series: Item, _ ep: Episode) {
         let e = ep.ext.ifEmpty("mp4")
-        add(Entry(key: "series:\(series.id):\(ep.id)", kind: "series", streamId: ep.id, title: ep.title.ifEmpty("Episodio \(ep.num)"), ext: e,
+        add(Entry(key: "series:\(series.id):\(ep.id)", kind: "series", streamId: ep.id, title: ep.title.ifEmpty(tr("Episodio %d", ep.num)), ext: e,
                   url: Xtream.episodeUrl(s, ep.id, e), posterUrl: ep.image.ifEmpty(series.poster), seriesId: series.id, seriesName: series.name,
                   seriesPosterUrl: series.poster, season: ep.season, episode: ep.num, file: Self.safe("ep_\(series.id)_\(ep.id)") + "." + Self.safe(e)))
     }
@@ -147,7 +147,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
         if let r = resume {
             task = session.downloadTask(withResumeData: r)
         } else {
-            guard let u = URL(string: e.url) else { fail(e.key, "Dirección no válida"); return }
+            guard let u = URL(string: e.url) else { fail(e.key, tr("Dirección no válida")); return }
             var req = URLRequest(url: u)
             req.setValue(Net.ua, forHTTPHeaderField: "User-Agent")
             task = session.downloadTask(with: req)
@@ -188,7 +188,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
     func urlSession(_ s: URLSession, downloadTask t: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let key = t.taskDescription, let e = get(key) else { return }
         if let h = t.response as? HTTPURLResponse, !(200...299).contains(h.statusCode) {
-            fail(key, h.statusCode == 401 || h.statusCode == 403 ? "El servidor no permitió la descarga (\(h.statusCode))" : "Error del servidor (\(h.statusCode))")
+            fail(key, h.statusCode == 401 || h.statusCode == 403 ? tr("El servidor no permitió la descarga (%d)", h.statusCode) : tr("Error del servidor (%d)", h.statusCode))
             return
         }
         // el archivo temporal hay que moverlo antes de salir de este método
@@ -201,7 +201,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
                 if let i = list.firstIndex(where: { $0.key == key }) { list[i].state = .done; list[i].size = size; list[i].total = size; list[i].error = "" }
             }
         } catch {
-            fail(key, "No se pudo guardar el archivo (¿espacio en el equipo?)")
+            fail(key, tr("No se pudo guardar el archivo (¿espacio en el equipo?)"))
         }
     }
 
@@ -210,7 +210,7 @@ final class Downloads: NSObject, ObservableObject, URLSessionDownloadDelegate {
         if err.code == NSURLErrorCancelled && lockedGet(key) == nil { return } // se borró
         if let r = (error as? URLError)?.downloadTaskResumeData, let e = lockedGet(key) { try? r.write(to: resumeFile(e)) }
         let msg = err.code == NSURLErrorNotConnectedToInternet || err.code == NSURLErrorNetworkConnectionLost
-            ? "Sin conexión. Toca para seguir." : (err.localizedDescription.isEmpty ? "No se pudo descargar" : err.localizedDescription)
+            ? tr("Sin conexión. Toca para seguir.") : (err.localizedDescription.isEmpty ? tr("No se pudo descargar") : err.localizedDescription)
         fail(key, msg)
         ErrorReport.report("error", "Descarga fallida", detail: "\(key) · \(err.code) \(err.localizedDescription)", screen: "downloads")
     }

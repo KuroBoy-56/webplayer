@@ -11,14 +11,18 @@ enum Xtream {
     private static func date(_ raw: String) -> String? {
         guard let t = Double(raw), t > 0 else { return nil }
         let f = DateFormatter()
-        f.dateFormat = "dd/MM/yyyy"
-        f.locale = Locale(identifier: "en_US_POSIX")
+        // fecha corta en el idioma de la app (13/10/2026, 10/13/2026…)
+        f.locale = L10n.locale
+        f.setLocalizedDateFormatFromTemplate("ddMMyyyy")
         return f.string(from: Date(timeIntervalSince1970: t))
     }
 
+    /** el servidor no respondió (sin conexión no se cierra la sesión) */
+    static var noServer: String { tr("No se pudo conectar con el servidor") }
+
     /** Prueba el usuario en cada DNS (en orden) y se queda con el primero que lo acepta. */
     static func login(_ dns: [(String, String)], user: String, pass: String) async -> LoginResult {
-        var last = "No se pudo conectar con el servidor"
+        var last = noServer
         for (name, raw) in dns {
             // el panel (https) cambia http:// por https:// en las direcciones de los servidores IPTV; muchos
             // solo responden en http (p. ej. el puerto 8080). Si no contesta, se prueba el otro protocolo.
@@ -37,16 +41,16 @@ enum Xtream {
             guard let j = found else {
                 // el servidor respondió pero no con la cuenta: XUI dice el motivo; si no, el código HTTP
                 if let xui = xuiError(r.text) { last = xuiMessage(xui); print("[LatMpx] login rechazado por XUI: \(xui)"); continue }
-                if r.code > 0 && last == "No se pudo conectar con el servidor" { last = "El servidor no aceptó la conexión (código \(r.code))" }
+                if r.code > 0 && last == noServer { last = tr("El servidor no aceptó la conexión (código %d)", r.code) }
                 continue
             }
-            guard let ui = j.o("user_info"), ui.i("auth") == 1 else { last = "Usuario o contraseña incorrectos"; continue }
+            guard let ui = j.o("user_info"), ui.i("auth") == 1 else { last = tr("Usuario o contraseña incorrectos"); continue }
             let st = ui.s("status")
-            if !st.isEmpty && st.lowercased() != "active" { last = st.lowercased() == "expired" ? "Tu cuenta está vencida" : "Tu cuenta está \(st)"; continue }
-            if let e = Double(ui.s("exp_date")), e > 0, e < Date().timeIntervalSince1970 { last = "Tu cuenta está vencida"; continue }
+            if !st.isEmpty && st.lowercased() != "active" { last = st.lowercased() == "expired" ? tr("Tu cuenta está vencida") : tr("Tu cuenta está %@", st); continue }
+            if let e = Double(ui.s("exp_date")), e > 0, e < Date().timeIntervalSince1970 { last = tr("Tu cuenta está vencida"); continue }
             var s = probe
-            s.expires = date(ui.s("exp_date")) ?? "Ilimitado"
-            s.createdAt = date(ui.s("created_at")) ?? ui.s("created_at").ifEmpty("Desconocido")
+            s.expires = date(ui.s("exp_date")) ?? tr("Ilimitado")
+            s.createdAt = date(ui.s("created_at")) ?? ui.s("created_at").ifEmpty(tr("Desconocido"))
             s.activeCons = ui.s("active_cons").ifEmpty("0")
             s.maxCons = ui.s("max_connections").ifEmpty("0")
             return .ok(s)
@@ -94,10 +98,10 @@ enum Xtream {
 
     static func xuiMessage(_ code: String) -> String {
         switch code {
-        case "INVALID_CREDENTIALS": return "El servidor no reconoce el usuario o la contraseña"
-        case "EXPIRED": return "Tu cuenta está vencida"
-        case "BANNED", "DISABLED": return "Tu cuenta está desactivada en el servidor"
-        default: return "El servidor rechazó la cuenta (\(code))"
+        case "INVALID_CREDENTIALS": return tr("El servidor no reconoce el usuario o la contraseña")
+        case "EXPIRED": return tr("Tu cuenta está vencida")
+        case "BANNED", "DISABLED": return tr("Tu cuenta está desactivada en el servidor")
+        default: return tr("El servidor rechazó la cuenta (%@)", code)
         }
     }
 

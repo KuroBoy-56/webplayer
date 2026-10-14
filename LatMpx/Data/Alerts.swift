@@ -13,7 +13,7 @@ enum Alerts {
     static func forLaunch(_ s: Session) async -> Alert? {
         let key = "\(s.user)@\(s.base)"
         if shownFor == key || !Tenant.shared.alertsEnabled { return nil }
-        let url = PanelUrl.api("alerta.php") + "?format=json" + Tenant.query() + "&user=\(urlEnc(s.user))&pass=\(urlEnc(s.pass))&dns=\(urlEnc(s.base))&title=\(urlEnc(s.dnsName))"
+        let url = PanelUrl.api("alerta.php") + "?format=json" + Tenant.query() + "&user=\(urlEnc(s.user))&pass=\(urlEnc(s.pass))&dns=\(urlEnc(s.base))&title=\(urlEnc(s.dnsName))&lang=\(L10n.current)"
         let r = await Net.get(url, timeout: 15)
         guard r.ok, let j = r.json() else { return nil }
         let type = j.s("type")
@@ -28,6 +28,6 @@ enum Alerts {
                 image = base + path
             } else if j.s("image").hasPrefix("http") { image = j.s("image") }
         }
-        return Alert(expiry: type == "expiry", title: j.s("title"), message: j.s("message"), image: image, button: j.s("button").ifEmpty("Entendido"))
+        return Alert(expiry: type == "expiry", title: j.s("title"), message: j.s("message"), image: image, button: j.s("button").ifEmpty(tr("Entendido")))
     }
 }

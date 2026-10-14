@@ -103,11 +103,11 @@ private struct HeroCard: View {
                 let tags = heroTags(state, item)
                 if !tags.isEmpty { Text(tags).font(.system(size: 13)).foregroundColor(Color(hex: 0xE5E5E5)).lineLimit(1) }
                 HStack(spacing: 10) {
-                    AppButton(text: "Reproducir", icon: "play.fill", height: 44) {
+                    AppButton(text: tr("Reproducir"), icon: "play.fill", height: 44) {
                         if item.kind == .movie { state.playMovie(item, ext: item.ext) } else { state.push(.detail(item)) }
                     }
                     let fav = cloud.isFav(item.key)
-                    AppButton(text: fav ? "En mi lista" : "Mi lista", icon: fav ? "checkmark" : "plus", primary: false, height: 44) { Cloud.shared.toggleFav(item) }
+                    AppButton(text: tr(fav ? "En mi lista" : "Mi lista"), icon: fav ? "checkmark" : "plus", primary: false, height: 44) { Cloud.shared.toggleFav(item) }
                 }.padding(.top, 8)
             }.padding(16)
         }

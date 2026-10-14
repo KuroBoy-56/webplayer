@@ -10,6 +10,8 @@ struct AccountView: View {
     @ObservedObject private var dl = Downloads.shared
     @State private var pinOpen = false
     @State private var confirmLogout = false
+    @State private var langOpen = false
+    @ObservedObject private var lang = L10n.shared
 
     var body: some View {
         GeometryReader { g in
@@ -25,60 +27,63 @@ struct AccountView: View {
                                 // demo: nunca el usuario ni la contraseña de la línea
                                 Text(cloud.shownUser(s)).font(.system(size: 24, weight: .bold)).foregroundColor(.white).lineLimit(1)
                                 if cloud.demo {
-                                    Text(cloud.demoLength.isEmpty ? "Cuenta DEMO" : "Cuenta DEMO · \(cloud.demoLength)").font(.system(size: 14)).foregroundColor(Color(hex: 0xFFB300))
+                                    Text(cloud.demoLength.isEmpty ? tr("Cuenta DEMO") : tr("Cuenta DEMO · %@", cloud.demoLength)).font(.system(size: 14)).foregroundColor(Color(hex: 0xFFB300))
                                 } else {
-                                    Text("Suscripción activa").font(.system(size: 14)).foregroundColor(Color(hex: 0x4CAF50))
+                                    Text(tr("Suscripción activa")).font(.system(size: 14)).foregroundColor(Color(hex: 0x4CAF50))
                                 }
                             }
                         }
                         let cont = cloud.progressList()
-                        ShelfRow(title: "Continuar viendo", items: cont, pad: 0) { _, p in
+                        ShelfRow(title: tr("Continuar viendo"), items: cont, pad: 0) { _, p in
                             if let it = state.item(from: p) { ContinueCard(item: it, progress: p, width: posterWidth(g.size)) }
                         }
-                        section("Detalles de la cuenta") {
+                        section(tr("Detalles de la cuenta")) {
                             // demo: solo el fin que dice el panel (hora exacta); nada de la línea demo del servidor
                             if cloud.demo {
-                                InfoRow(k: "Vencimiento", v: cloud.demoEndText.isEmpty ? "—" : cloud.demoEndText)
+                                InfoRow(k: tr("Vencimiento"), v: cloud.demoEndText.isEmpty ? "—" : cloud.demoEndText)
                             } else {
-                                InfoRow(k: "Vencimiento", v: s.expires); Divider().background(Color(hex: 0x333333))
-                                InfoRow(k: "Conexiones", v: "\(s.activeCons) / \(s.maxCons)"); Divider().background(Color(hex: 0x333333))
-                                InfoRow(k: "Servidor", v: s.dnsName); Divider().background(Color(hex: 0x333333))
-                                InfoRow(k: "Miembro desde", v: s.createdAt)
+                                InfoRow(k: tr("Vencimiento"), v: s.expires); Divider().background(Color(hex: 0x333333))
+                                InfoRow(k: tr("Conexiones"), v: "\(s.activeCons) / \(s.maxCons)"); Divider().background(Color(hex: 0x333333))
+                                InfoRow(k: tr("Servidor"), v: s.dnsName); Divider().background(Color(hex: 0x333333))
+                                InfoRow(k: tr("Miembro desde"), v: s.createdAt)
                             }
                         }
                     }
-                    section("Configuración de la aplicación") {
-                        setting("lock.fill", "Control parental", "Activado · el PIN lo administra el panel") { pinOpen = true }
+                    section(tr("Configuración de la aplicación")) {
+                        setting("lock.fill", tr("Control parental"), tr("Activado · el PIN lo administra el panel")) { pinOpen = true }
                         Divider().background(Color(hex: 0x333333))
                         // películas y episodios guardados para ver sin internet
                         let done = dl.entries.filter { $0.state == .done }.count
                         let busy = dl.entries.filter { $0.state == .running || $0.state == .queued }.count
-                        setting("arrow.down.circle", "Mis descargas", busy > 0 ? "\(done) listas · \(busy) descargando" : done > 0 ? "\(done) para ver sin internet" : "Películas y episodios para ver sin internet") {
+                        setting("arrow.down.circle", tr("Mis descargas"), busy > 0 ? tr("%d listas · %d descargando", done, busy) : done > 0 ? tr("%d para ver sin internet", done) : tr("Películas y episodios para ver sin internet")) {
                             state.push(.downloads)
                         }
                         Divider().background(Color(hex: 0x333333))
-                        setting("play.rectangle", "Formato de canales", streamFormat == "ts" ? "MPEG-TS (.ts)" : "HLS (.m3u8)") {
+                        // idioma de la app: automático (el del equipo) o uno fijo; se aplica al momento
+                        setting("globe", tr("Idioma de la app"), L10n.label(lang.choice)) { langOpen = true }
+                        Divider().background(Color(hex: 0x333333))
+                        setting("play.rectangle", tr("Formato de canales"), streamFormat == "ts" ? "MPEG-TS (.ts)" : "HLS (.m3u8)") {
                             streamFormat = streamFormat == "ts" ? "m3u8" : "ts"
                             Store.streamFormat = streamFormat
                         }
                         Divider().background(Color(hex: 0x333333))
-                        setting("pip", "Reproductor", nativePlayer ? "De iOS · imagen en imagen y AirPlay (MKV y TS en el de la app)" : "De la app (sin imagen en imagen)") {
+                        setting("pip", tr("Reproductor"), nativePlayer ? tr("De iOS · imagen en imagen y AirPlay (MKV y TS en el de la app)") : tr("De la app (sin imagen en imagen)")) {
                             nativePlayer.toggle()
                             Store.nativePlayer = nativePlayer
                         }
                         Divider().background(Color(hex: 0x333333))
                         DnsButton(fill: true)
                         Divider().background(Color(hex: 0x333333))
-                        InfoRow(k: "Versión", v: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
+                        InfoRow(k: tr("Versión"), v: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
                         Divider().background(Color(hex: 0x333333))
                         HStack {
-                            Text("Dirección MAC").font(.system(size: 15)).foregroundColor(Theme.muted)
+                            Text(tr("Dirección MAC")).font(.system(size: 15)).foregroundColor(Theme.muted)
                             Spacer()
                             Text(Device.id).font(.system(size: 15, weight: .bold, design: .monospaced)).foregroundColor(.white).textSelection(.enabled)
                         }
                     }
                     DistributorCard(onChange: onChangeDistributor)
-                    AppButton(text: "Cerrar sesión", icon: "rectangle.portrait.and.arrow.right", primary: false) { confirmLogout = true }
+                    AppButton(text: tr("Cerrar sesión"), icon: "rectangle.portrait.and.arrow.right", primary: false) { confirmLogout = true }
                     Spacer(minLength: 40)
                 }
                 .padding(pad)
@@ -87,10 +92,16 @@ struct AccountView: View {
         .background(Theme.bg.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $pinOpen) { ParentalSheet().environmentObject(state) }
-        .confirmationDialog("¿Cerrar sesión?", isPresented: $confirmLogout, titleVisibility: .visible) {
-            Button("Cerrar sesión", role: .destructive, action: onLogout)
-            Button("Cancelar", role: .cancel) {}
-        } message: { Text("La próxima vez la app volverá a comprobar este equipo con el panel.") }
+        .confirmationDialog(tr("¿Cerrar sesión?"), isPresented: $confirmLogout, titleVisibility: .visible) {
+            Button(tr("Cerrar sesión"), role: .destructive, action: onLogout)
+            Button(tr("Cancelar"), role: .cancel) {}
+        } message: { Text(tr("La próxima vez la app volverá a comprobar este equipo con el panel.")) }
+        .confirmationDialog(tr("Idioma de la app"), isPresented: $langOpen, titleVisibility: .visible) {
+            ForEach(L10n.choices, id: \.self) { c in
+                Button(L10n.label(c) + (c == lang.choice ? " ✓" : "")) { lang.choice = c }
+            }
+            Button(tr("Cancelar"), role: .cancel) {}
+        }
     }
 
     private func section<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
@@ -146,11 +157,11 @@ struct ParentalSheet: View {
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color(hex: 0x141414).ignoresSafeArea())
-            .navigationTitle(step == .create ? "Nuevo PIN" : step == .cats ? "Carpetas bloqueadas" : "Control parental")
+            .navigationTitle(tr(step == .create ? "Nuevo PIN" : step == .cats ? "Carpetas bloqueadas" : "Control parental"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(step == .cats || step == .create ? "Atrás" : "Cerrar") {
+                    Button(tr(step == .cats || step == .create ? "Atrás" : "Cerrar")) {
                         if step == .cats { blocked = Store.blockedCats; step = .settings }
                         else if step == .create { pin = ""; err = nil; step = .settings }
                         else { dismiss() }
@@ -158,7 +169,7 @@ struct ParentalSheet: View {
                 }
                 if step == .cats {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Guardar") { Store.blockedCats = blocked; state.refresh += 1; step = .settings }
+                        Button(tr("Guardar")) { Store.blockedCats = blocked; state.refresh += 1; step = .settings }
                     }
                 }
             }
@@ -168,23 +179,23 @@ struct ParentalSheet: View {
 
     private var pinStep: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(step == .create ? "Escribe el nuevo PIN de 4 números (se guarda también en el panel):" : "Ingresa tu PIN (el de fábrica es 0000):")
+            Text(tr(step == .create ? "Escribe el nuevo PIN de 4 números (se guarda también en el panel):" : "Ingresa tu PIN (el de fábrica es 0000):"))
                 .foregroundColor(.white)
             SecureField("PIN", text: $pin)
                 .keyboardType(.numberPad).font(.system(size: 26, weight: .bold, design: .monospaced)).foregroundColor(.white)
                 .padding(.horizontal, 14).frame(height: 56).background(Color(hex: 0x333333)).clipShape(RoundedRectangle(cornerRadius: 6))
                 .onChange(of: pin) { v in let f = String(v.filter { $0.isNumber }.prefix(4)); if f != v { pin = f }; err = nil }
             if let e = err { Text(e).font(.system(size: 13)).foregroundColor(Color(hex: 0xFF8A80)) }
-            if busy { HStack { ProgressView(); Text("Guardando en el panel…").foregroundColor(Theme.muted) } }
-            AppButton(text: "Aceptar") { accept() }.disabled(busy)
+            if busy { HStack { ProgressView(); Text(tr("Guardando en el panel…")).foregroundColor(Theme.muted) } }
+            AppButton(text: tr("Aceptar")) { accept() }.disabled(busy)
         }
     }
 
     private var settings: some View {
         VStack(spacing: 12) {
-            row("lock.rotation", "Cambiar PIN", "Se guarda en el panel") { pin = ""; err = nil; step = .create }
-            row("folder.badge.minus", "Carpetas bloqueadas", "\(blocked.count) carpetas ocultas") { step = .cats }
-            row("folder", "Mostrar todas las carpetas", "Quita las carpetas bloqueadas (el PIN sigue activo)") {
+            row("lock.rotation", tr("Cambiar PIN"), tr("Se guarda en el panel")) { pin = ""; err = nil; step = .create }
+            row("folder.badge.minus", tr("Carpetas bloqueadas"), tr("%d carpetas ocultas", blocked.count)) { step = .cats }
+            row("folder", tr("Mostrar todas las carpetas"), tr("Quita las carpetas bloqueadas (el PIN sigue activo)")) {
                 Store.blockedCats = []; blocked = []; state.refresh += 1
             }
         }
@@ -201,7 +212,7 @@ struct ParentalSheet: View {
                     Image(systemName: blocked.contains(c.id) ? "checkmark.square.fill" : "square").foregroundColor(blocked.contains(c.id) ? Theme.accent : Theme.muted)
                     Text(c.name).foregroundColor(.white)
                     Spacer()
-                    Text(c.kind == .live ? "TV" : c.kind == .movie ? "Película" : "Serie").font(.system(size: 12)).foregroundColor(Theme.muted)
+                    Text(tr(c.kind == .live ? "TV" : c.kind == .movie ? "Película" : "Serie")).font(.system(size: 12)).foregroundColor(Theme.muted)
                 }
             }.listRowBackground(Color(hex: 0x1C1C1C))
         }
@@ -221,9 +232,9 @@ struct ParentalSheet: View {
 
     private func accept() {
         if busy { return }
-        if pin.count != 4 { err = "El PIN tiene 4 números"; return }
+        if pin.count != 4 { err = tr("El PIN tiene 4 números"); return }
         if step == .enter {
-            if pin == Store.parentalPin { current = pin; pin = ""; step = .settings } else { err = "PIN incorrecto"; pin = "" }
+            if pin == Store.parentalPin { current = pin; pin = ""; step = .settings } else { err = tr("PIN incorrecto"); pin = "" }
             return
         }
         let new = pin
@@ -231,8 +242,8 @@ struct ParentalSheet: View {
         Task { @MainActor in
             let r = await Panel.setPin(old: current, new: new)
             busy = false
-            if r.value != nil { current = new; pin = ""; err = nil; step = .settings; state.toast = "PIN guardado en el panel" }
-            else { err = r.error ?? "No se pudo guardar el PIN en el panel" }
+            if r.value != nil { current = new; pin = ""; err = nil; step = .settings; state.toast = tr("PIN guardado en el panel") }
+            else { err = r.error ?? tr("No se pudo guardar el PIN en el panel") }
         }
     }
 }

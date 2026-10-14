@@ -50,6 +50,12 @@ enum Store {
         set { p.set(newValue, forKey: "dns") }
     }
 
+    /** idioma de la app: "auto" (el del equipo) o es / en / pt / fr */
+    static var appLang: String {
+        get { p.string(forKey: "app_lang") ?? "auto" }
+        set { p.set(newValue, forKey: "app_lang") }
+    }
+
     /** último canal visto (por línea) */
     static func lastChannel() -> Int { p.integer(forKey: "last_ch|" + scope()) }
     static func setLastChannel(_ id: Int) { p.set(id, forKey: "last_ch|" + scope()) }

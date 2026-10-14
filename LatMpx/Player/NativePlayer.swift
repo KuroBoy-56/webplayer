@@ -136,7 +136,7 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         let ms = Self.startPoint(r)
         if ms > 0 {
             p.seek(to: CMTime(value: ms, timescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero)
-            if r.startAt <= 0 { state.toast = "Continuando desde \(fmtTime(ms))" }
+            if r.startAt <= 0 { state.toast = tr("Continuando desde %@", fmtTime(ms)) }
         }
         PlayerDiag.log("nativo: abriendo \(u.isFileURL ? "archivo" : (u.host ?? ""))")
         top.present(c, animated: true) { p.play() }
@@ -218,9 +218,9 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         let c = vc
         cleanup()
         if let c = c, c.presentingViewController != nil {
-            c.dismiss(animated: true) { [weak self] in self?.backToApp(r, ms, "Se abrió en el reproductor de la app") }
+            c.dismiss(animated: true) { [weak self] in self?.backToApp(r, ms, tr("Se abrió en el reproductor de la app")) }
         } else {
-            backToApp(r, ms, "Se abrió en el reproductor de la app")
+            backToApp(r, ms, tr("Se abrió en el reproductor de la app"))
         }
     }
 

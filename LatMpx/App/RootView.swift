@@ -7,6 +7,8 @@ struct RootView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var tenant: Tenant
     @Environment(\.scenePhase) private var phase
+    /** idioma de la app: al cambiarlo en Cuenta las pestañas se vuelven a dibujar (sin cerrar sesión) */
+    @ObservedObject private var lang = L10n.shared
     @State private var booted = false
     @State private var gate: Gate = .open
     @State private var distMsg: String?
@@ -38,6 +40,7 @@ struct RootView: View {
                 }
             } else {
                 MainView(onLogout: logout, onChangeDistributor: { wipe(nil) })
+                    .id(lang.choice)
             }
             if let a = alert, state.session != nil {
                 PanelAlertView(alert: a) { alert = nil }
@@ -135,7 +138,7 @@ struct RootView: View {
             guard state.session == s else { return }
             if c.error == nil && c.value == nil { clearAll(); return }
             guard let line = c.value else { return }
-            if case .fail(let m) = await Xtream.login([(line.name, line.base)], user: line.user, pass: line.pass), m != "No se pudo conectar con el servidor" {
+            if case .fail(let m) = await Xtream.login([(line.name, line.base)], user: line.user, pass: line.pass), m != Xtream.noServer {
                 if state.session == s { clearAll() }
             }
         }

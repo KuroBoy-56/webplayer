@@ -18,11 +18,11 @@ struct SportsView: View {
     var body: some View {
         GeometryReader { g in
             if let d = data { content(d, g.size) }
-            else if loaded { EmptyMessage(text: "La agenda deportiva no está disponible.\nVuelve a intentarlo en unos minutos.") }
-            else { LoadingView(text: "Cargando partidos…") }
+            else if loaded { EmptyMessage(text: tr("La agenda deportiva no está disponible.\nVuelve a intentarlo en unos minutos.")) }
+            else { LoadingView(text: tr("Cargando partidos…")) }
         }
         .background(Theme.bg.ignoresSafeArea())
-        .navigationTitle("Deportes")
+        .navigationTitle(tr("Deportes"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             data = await Sports.load()
@@ -30,18 +30,18 @@ struct SportsView: View {
         }
         .onReceive(timer) { _ in now = Date().timeIntervalSince1970 }
         .confirmationDialog(pick.map(title) ?? "", isPresented: Binding(get: { pick != nil }, set: { if !$0 { pick = nil } }), titleVisibility: .visible, presenting: pick) { e in
-            Button("▶ Ver el evento") { watch(e, nil, false) }
+            Button("▶ " + tr("Ver el evento")) { watch(e, nil, false) }
             ForEach(e.tv, id: \.self) { c in
                 Button(c.country.isEmpty ? c.name : "\(c.name) · \(c.country)") { watch(e, c, false) }
             }
-            Button("Buscar por equipos") { watch(e, nil, true) }
-            Button("Cancelar", role: .cancel) {}
+            Button(tr("Buscar por equipos")) { watch(e, nil, true) }
+            Button(tr("Cancelar"), role: .cancel) {}
         } message: { e in
-            Text("Se transmite por \(e.tv.count) canal\(e.tv.count == 1 ? "" : "es"). Elige uno o deja que lo busquemos.")
+            Text(e.tv.count == 1 ? tr("Se transmite por 1 canal. Elige uno o deja que lo busquemos.") : tr("Se transmite por %d canales. Elige uno o deja que lo busquemos.", e.tv.count))
         }
     }
 
-    private func title(_ e: SportEvent) -> String { !e.home.isEmpty && !e.away.isEmpty ? "\(e.home) vs \(e.away)" : e.title.ifEmpty("Evento") }
+    private func title(_ e: SportEvent) -> String { !e.home.isEmpty && !e.away.isEmpty ? "\(e.home) vs \(e.away)" : e.title.ifEmpty(tr("Evento")) }
 
     private func dayKey(_ t: Double) -> Int {
         let c = Calendar.current.dateComponents([.year, .day, .month], from: Date(timeIntervalSince1970: t))
@@ -71,31 +71,31 @@ struct SportsView: View {
             LazyVStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading) {
-                        Text("Deportes").font(.system(size: 28, weight: .heavy)).foregroundColor(.white)
-                        Text("Partidos de hoy y mañana en tu hora local.").font(.system(size: 13.5)).foregroundColor(Theme.muted)
+                        Text(tr("Deportes")).font(.system(size: 28, weight: .heavy)).foregroundColor(.white)
+                        Text(tr("Partidos de hoy y mañana en tu hora local.")).font(.system(size: 13.5)).foregroundColor(Theme.muted)
                     }
                     Spacer()
                     if !live.isEmpty {
-                        HStack(spacing: 6) { LiveDot(); Text(live.count == 1 ? "1 en vivo" : "\(live.count) en vivo").font(.system(size: 13, weight: .bold)).foregroundColor(.white) }
+                        HStack(spacing: 6) { LiveDot(); Text(live.count == 1 ? tr("1 en vivo") : tr("%d en vivo", live.count)).font(.system(size: 13, weight: .bold)).foregroundColor(.white) }
                             .padding(.horizontal, 12).padding(.vertical, 7).background(Color(hex: 0xE50914, alpha: 0.15)).clipShape(Capsule())
                     }
                 }
                 HStack(spacing: 8) {
-                    Chip(text: "Hoy", selected: cur == 0) { day = 0; sport = "" }
-                    Chip(text: "Mañana", selected: cur == 1) { day = 1; sport = "" }
+                    Chip(text: tr("Hoy"), selected: cur == 0) { day = 0; sport = "" }
+                    Chip(text: tr("Mañana"), selected: cur == 1) { day = 1; sport = "" }
                 }
-                TextField("", text: $q, prompt: Text("Buscar equipo o liga").foregroundColor(Theme.muted))
+                TextField("", text: $q, prompt: Text(tr("Buscar equipo o liga")).foregroundColor(Theme.muted))
                     .foregroundColor(.white).padding(.horizontal, 12).frame(height: 40).background(Color(hex: 0x262626)).clipShape(RoundedRectangle(cornerRadius: 6))
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        Chip(text: "Todos \(ofDay.count)", selected: sport.isEmpty) { sport = "" }
+                        Chip(text: tr("Todos") + " \(ofDay.count)", selected: sport.isEmpty) { sport = "" }
                         ForEach(d.sports.keys.sorted(), id: \.self) { k in
                             if let n = counts[k], let info = d.sports[k] { Chip(text: "\(info.icon) \(info.label) \(n)", selected: sport == k) { sport = k } }
                         }
                     }
                 }
                 if showLive {
-                    HStack(spacing: 8) { LiveDot(); Text("En vivo ahora").font(.system(size: 20, weight: .bold)).foregroundColor(.white) }.padding(.top, 8)
+                    HStack(spacing: 8) { LiveDot(); Text(tr("En vivo ahora")).font(.system(size: 20, weight: .bold)).foregroundColor(.white) }.padding(.top, 8)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) { ForEach(live) { e in card(e, d).frame(width: 300) } }
                     }
@@ -111,8 +111,8 @@ struct SportsView: View {
                 }
                 if order.isEmpty && !showLive {
                     VStack(spacing: 4) {
-                        Text("No hay partidos con estos filtros").font(.system(size: 20, weight: .bold)).foregroundColor(.white)
-                        Text("Prueba con otro día o deporte.").foregroundColor(Theme.muted)
+                        Text(tr("No hay partidos con estos filtros")).font(.system(size: 20, weight: .bold)).foregroundColor(.white)
+                        Text(tr("Prueba con otro día o deporte.")).foregroundColor(Theme.muted)
                     }.frame(maxWidth: .infinity).padding(.vertical, 60)
                 }
             }
@@ -131,7 +131,7 @@ struct SportsView: View {
         let st = Sports.status(e, d.sports[e.sport], now)
         let today = dayKey(e.start) == dayKey(now)
         if !today || st == .fin || st == .postponed {
-            state.toast = st == .fin && today ? "Este evento ya terminó" : "El evento no está en línea"
+            state.toast = tr(st == .fin && today ? "Este evento ya terminó" : "El evento no está en línea")
             return
         }
         busy = true
@@ -159,14 +159,14 @@ struct SportsView: View {
                 return (nil, false, prepared.first { $0.isEvent }?.item)
             }.value
             if let m = match {
-                if let c = channel, !viaTv { state.toast = "No tienes \(c.name); te mostramos \(m.name)" }
+                if let c = channel, !viaTv { state.toast = tr("No tienes %@; te mostramos %@", c.name, m.name) }
                 state.playChannel(m)
             } else if let f = firstEvent {
-                let name = cats.first { $0.id == f.categoryId }?.name ?? "eventos"
-                state.toast = (channel.map { "No tienes \($0.name). " } ?? "") + "Aún no aparece el canal exacto, te mostramos \(name)"
+                let name = cats.first { $0.id == f.categoryId }?.name ?? tr("eventos")
+                state.toast = (channel.map { tr("No tienes %@.", $0.name) + " " } ?? "") + tr("Aún no aparece el canal exacto, te mostramos %@", name)
                 state.playChannel(f)
             } else {
-                state.toast = channel.map { "No encontramos \($0.name) en tu lista" } ?? "No encontramos un canal para este evento"
+                state.toast = channel.map { tr("No encontramos %@ en tu lista", $0.name) } ?? tr("No encontramos un canal para este evento")
             }
         }
     }
@@ -212,7 +212,7 @@ struct SportCard: View {
                 Text(event.venue.ifEmpty(st == .soon ? hm(event.start) : "")).font(.system(size: 12.5)).foregroundColor(Theme.muted).lineLimit(1)
                 Spacer()
                 Button(action: onWatch) {
-                    Text(event.tv.isEmpty ? "TV en vivo" : "Ver canales").font(.system(size: 13, weight: .bold)).foregroundColor(.white)
+                    Text(tr(event.tv.isEmpty ? "TV en vivo" : "Ver canales")).font(.system(size: 13, weight: .bold)).foregroundColor(.white)
                         .padding(.horizontal, 10).padding(.vertical, 6).background(Color.white.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 4))
                 }.buttonStyle(.plain)
             }
@@ -236,9 +236,9 @@ struct SportCard: View {
 
     @ViewBuilder private func pill(_ st: SpStatus) -> some View {
         switch st {
-        case .live: HStack(spacing: 4) { LiveDot(); Text("En vivo") }.font(.system(size: 11, weight: .bold)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Color(hex: 0xE50914)).clipShape(Capsule())
-        case .fin: Text("Final").font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
-        case .postponed: Text("Aplazado").font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
+        case .live: HStack(spacing: 4) { LiveDot(); Text(tr("En vivo")) }.font(.system(size: 11, weight: .bold)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Color(hex: 0xE50914)).clipShape(Capsule())
+        case .fin: Text(tr("Final")).font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
+        case .postponed: Text(tr("Aplazado")).font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
         case .soon: Text(hm(event.start)).font(.system(size: 12, weight: .bold)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Color.white.opacity(0.12)).clipShape(Capsule())
         }
     }
