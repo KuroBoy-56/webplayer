@@ -95,10 +95,12 @@ private suspend fun resolveHero(s: Session, it: Item): TvHero? {
     val own = it.backdrop.ifBlank { d?.backdrop.orEmpty() }
     var plot = d?.plot?.ifBlank { null } ?: it.plot
     var tmdbBd = ""
-    if (own.isBlank() || plot.isBlank()) {
+    // fuera del español también se pide la ficha de TMDB: la sinopsis va en el idioma de la app
+    if (own.isBlank() || plot.isBlank() || com.latmpx.player.Lang.current != "es") {
         val t = runCatching { Tmdb.getDetails(if (it.kind == Kind.SERIES) "tv" else "movie", it.name, it.year, d?.tmdbId.orEmpty()) }.getOrNull()
         tmdbBd = t?.backdrop.orEmpty()
         if (plot.isBlank()) plot = t?.overview.orEmpty()
+        plot = Tmdb.localPlot(plot, t?.overview)
     }
     if (own.isBlank() && tmdbBd.isBlank()) return null
     val genre = d?.genre.orEmpty().split(',', '/').map { g -> g.trim() }.filter { g -> g.isNotEmpty() }.take(2).joinToString(", ")

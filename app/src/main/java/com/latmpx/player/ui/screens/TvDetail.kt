@@ -139,7 +139,7 @@ fun TvDetailScreen(state: AppState, media: Item) {
         }
     }
     val backdrop = tmdb?.backdrop?.ifEmpty { null } ?: det?.backdrop?.ifEmpty { null } ?: media.backdrop
-    val plot = det?.plot?.ifBlank { null } ?: tmdb?.overview?.ifBlank { null } ?: media.plot
+    val plot = Tmdb.localPlot(det?.plot?.ifBlank { null } ?: tmdb?.overview?.ifBlank { null } ?: media.plot, tmdb?.overview)
     val heroH = (conf.screenHeightDp * 0.80f).dp
 
     LazyColumn(Modifier.fillMaxSize().background(NfBg), state = list, contentPadding = PaddingValues(bottom = 48.dp)) {
