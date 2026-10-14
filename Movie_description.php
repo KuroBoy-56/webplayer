@@ -33,7 +33,7 @@ $tmdb = wp_tmdb_details('movie', $info['tmdb_id'] ?? ($info['tmdb'] ?? ''), $tit
 if (!empty($tmdb['poster'])) $img = $tmdb['poster'];
 if (!empty($tmdb['backdrop'])) $backdrop = $tmdb['backdrop'];
 if (empty($youtube_trailer)) $youtube_trailer = $tmdb['trailer'];
-if ($description === '' && $tmdb['overview'] !== '') $description = $tmdb['overview'];
+$description = wp_tmdb_plot($tmdb, $description); // sinopsis en el idioma de la app (en español, como siempre)
 $youtube_trailer = preg_replace('/[^A-Za-z0-9_\-]/', '', (string)$youtube_trailer);
 $img_url = wp_img($img);
 $bg_url = $backdrop ? wp_img($backdrop, '') : $img_url;

@@ -18,10 +18,21 @@ $cat = preg_replace('/[^0-9a-zA-Z_\-]/', '', (string)($_GET['cat'] ?? ''));
 $sort = in_array($_GET['sort'] ?? '', ['recent', 'az', 'rating', 'default'], true) ? $_GET['sort'] : 'recent';
 $q = trim((string)($_GET['q'] ?? ''));
 
-/** Tipo del destacado (en caché en español) en el idioma de la app. */
+/**
+ * Destacados (en caché en español) en el idioma de la app: el tipo y, fuera del español,
+ * la sinopsis de TMDB en ese idioma (si no hay, la del servidor). Máx. 8 s; los que falten quedan como están.
+ */
 function wp_hero_kind(array $items)
 {
-    foreach ($items as &$it) $it['kind'] = t((string)($it['kind'] ?? ''));
+    $deadline = microtime(true) + 8;
+    foreach ($items as &$it) {
+        $it['kind'] = t((string)($it['kind'] ?? ''));
+        if (wp_lang() === 'es' || !wp_tmdb_key() || microtime(true) > $deadline) continue;
+        $isS = strpos((string)($it['play_link'] ?? ''), 'seriesvideo') === 0;
+        $tm = wp_tmdb_details($isS ? 'tv' : 'movie', $it['tm'] ?? '', (string)($it['title'] ?? ''), (string)($it['year'] ?? ''));
+        $it['description'] = wp_tmdb_plot($tm, (string)($it['description'] ?? ''));
+    }
+    unset($it);
     return $items;
 }
 
@@ -167,6 +178,7 @@ switch ($action) {
                 'play_link' => $link,
                 'info_link' => $link,
                 'kind' => $isS ? 'Serie' : 'Película',
+                'tm' => is_scalar($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) ? (string)($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) : '',
             ];
             if (count($items) >= 6) break;
         }

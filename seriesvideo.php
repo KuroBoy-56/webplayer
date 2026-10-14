@@ -37,7 +37,7 @@ $tmdb = wp_tmdb_details('tv', $series_info['tmdb_id'] ?? ($series_info['tmdb'] ?
 if (!empty($tmdb['poster'])) $poster = $tmdb['poster'];
 if (!empty($tmdb['backdrop'])) $backdrop = $tmdb['backdrop'];
 if (!$youtube_trailer) $youtube_trailer = $tmdb['trailer'];
-if ($description === '' && $tmdb['overview'] !== '') $description = $tmdb['overview'];
+$description = wp_tmdb_plot($tmdb, $description); // sinopsis en el idioma de la app (en español, como siempre)
 $youtube_trailer = preg_replace('/[^A-Za-z0-9_\-]/', '', (string)$youtube_trailer);
 
 /* ---------- Favorito ---------- */

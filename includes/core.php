@@ -1158,17 +1158,18 @@ function wp_tmdb_search($type, $title, $year = '')
 
 /**
  * Datos completos de TMDB. $type = 'movie' | 'tv'. Usa el tmdb_id del servidor si existe (más exacto).
- * Devuelve ['id','poster','backdrop','cast','trailer','overview'] (caché 7 días, por idioma de la app).
+ * Devuelve ['id','poster','backdrop','cast','trailer','overview','ol'] (caché 7 días, por idioma de la app);
+ * 'ol' = idioma TMDB en el que llegó la sinopsis ('' si no hay).
  * La búsqueda del título sigue en es-MX (wp_tmdb_find); la ficha llega en el idioma de la app.
  */
 function wp_tmdb_details($type, $tmdbId, $title, $year = '')
 {
     $tl = wp_tmdb_lang();
     $l2 = substr($tl, 0, 2);
-    $ck = 'tmdbd3|' . $tl . '|' . $type . '|' . (preg_replace('/\D/', '', (string)$tmdbId) ?: wp_norm_title(wp_tmdb_clean_title($title)) . '|' . $year);
+    $ck = 'tmdbd4|' . $tl . '|' . $type . '|' . (preg_replace('/\D/', '', (string)$tmdbId) ?: wp_norm_title(wp_tmdb_clean_title($title)) . '|' . $year);
     $d = wp_cache_get($ck, 604800);
     if (is_array($d) && ($d['id'] || time() - (int)($d['_t'] ?? 0) < 172800)) return $d;
-    $d = ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', '_t' => time()];
+    $d = ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', 'ol' => '', '_t' => time()];
     if (!wp_tmdb_key()) return $d;
     $r = wp_tmdb_find($type, $title, $year, $tmdbId);
     if (!$r) { wp_cache_set($ck, $d); return $d; }
@@ -1176,7 +1177,8 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '')
     $body = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $r['id'] . '?api_key=' . wp_tmdb_key()
         . '&language=' . $tl . '&append_to_response=credits,aggregate_credits,videos,images&include_video_language=' . $l2 . ',es,en,null&include_image_language=' . $l2 . ',es,en,null', 7);
     $j = $body ? json_decode($body, true) : null;
-    if (!is_array($j) || empty($j['id'])) $j = $r;
+    $inLang = is_array($j) && !empty($j['id']); // ficha en el idioma de la app (si no, el resultado de la búsqueda es-MX)
+    if (!$inLang) $j = $r;
     $d['id'] = $j['id'];
     $poster = $j['poster_path'] ?? ($r['poster_path'] ?? '');
     if (!$poster && !empty($j['images']['posters'][0]['file_path'])) $poster = $j['images']['posters'][0]['file_path'];
@@ -1185,12 +1187,13 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '')
     $d['poster'] = $poster ? 'https://image.tmdb.org/t/p/w500' . $poster : '';
     $d['backdrop'] = $back ? 'https://image.tmdb.org/t/p/w1280' . $back : '';
     $d['overview'] = trim((string)($j['overview'] ?? ''));
+    $d['ol'] = $d['overview'] === '' ? '' : ($inLang ? $tl : 'es-MX');
     if ($d['overview'] === '') {
         // sin descripción en ese idioma: español de España (si es español) y luego inglés
         foreach (array_diff($l2 === 'es' ? ['es-ES', 'en-US'] : ['en-US'], [$tl]) as $lang) {
             $b2 = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $j['id'] . '?api_key=' . wp_tmdb_key() . '&language=' . $lang, 5);
             $j2 = $b2 ? json_decode($b2, true) : null;
-            if (!empty($j2['overview'])) { $d['overview'] = trim($j2['overview']); break; }
+            if (!empty($j2['overview'])) { $d['overview'] = trim($j2['overview']); $d['ol'] = $lang; break; }
         }
     }
     $cast = $j['credits']['cast'] ?? [];
@@ -1207,6 +1210,19 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '')
     }
     if ($body !== null) wp_cache_set($ck, $d);
     return $d;
+}
+
+/**
+ * Sinopsis para mostrar. En español, igual que siempre: la del servidor y, si no trae, la de TMDB.
+ * En otro idioma: la de TMDB en ese idioma; si no hay (sin clave, sin coincidencia o vacía), la del servidor.
+ */
+function wp_tmdb_plot(array $tmdb, $serverPlot)
+{
+    $serverPlot = (string)$serverPlot;
+    $ov = (string)($tmdb['overview'] ?? '');
+    if (wp_lang() === 'es') return $serverPlot === '' ? $ov : $serverPlot;
+    if ($ov !== '' && ($tmdb['ol'] ?? '') === wp_tmdb_lang()) return $ov;
+    return $serverPlot !== '' ? $serverPlot : $ov;
 }
 
 /**
