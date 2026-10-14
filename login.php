@@ -258,6 +258,7 @@ $dist_step = $dist_view['step'];
         </form>
 
         <form id="login-form" class="nf-login-box" method="POST" autocomplete="on" novalidate<?php echo $dist_step === 'login' ? '' : ' hidden'; ?>>
+            <input type="hidden" name="dist_pick" value="<?php echo e($dist_view['choice']); ?>">
             <h1><?php echo t('Iniciar sesión'); ?></h1>
             <?php if ($dist_view['code'] !== ''): ?>
             <p class="nf-dist-now"><?php echo t('Distribuidor:'); ?> <b><?php echo e(($brand_name !== '' ? $brand_name . ' ' : '') . '(' . $dist_view['code'] . ')'); ?></b></p>
@@ -333,6 +334,9 @@ $dist_step = $dist_view['step'];
         if (saved && !user.value) { user.value = saved; remember.checked = true; }
     } catch (e) {}
 
+    // la elección ya va en la cookie: la dirección queda limpia
+    if (location.search.indexOf('dist_pick=') !== -1 && history.replaceState) history.replaceState(null, '', 'login');
+
     function showStep(step) {
         dform.hidden = step !== 'dist';
         form.hidden = step !== 'login';
@@ -377,7 +381,7 @@ $dist_step = $dist_view['step'];
         fd.append('action', 'dist_skip');
         post(fd).then(function () {
             try { localStorage.removeItem('wp_dist_brand'); } catch (e) {}
-            window.location.href = 'login';
+            window.location.href = 'login?dist_pick=skip';
         }).catch(function () { showDistError(<?php echo tj('Error de conexión. Inténtalo de nuevo.'); ?>); });
     });
     dform.addEventListener('submit', function (ev) {
@@ -395,7 +399,7 @@ $dist_step = $dist_view['step'];
         post(fd).then(function (data) {
             if (data.success) {
                 try { localStorage.setItem('wp_dist_brand', JSON.stringify(data.brand)); } catch (e) {}
-                window.location.href = 'login';
+                window.location.href = 'login?dist_pick=' + dcode.value;
                 return;
             }
             showDistError(data.message || <?php echo tj('No se pudo comprobar el número.'); ?>);

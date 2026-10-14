@@ -61,8 +61,16 @@ function wp_tenant_is_hard($code)
 /** '' (sin elegir), 'skip' u 'NNNNNN'. */
 function wp_dist_choice()
 {
+    $ok = function ($v) { return $v === 'skip' || preg_match('/^\d{6}$/', $v); };
     $v = isset($_COOKIE[WP_DIST_COOKIE]) && is_string($_COOKIE[WP_DIST_COOKIE]) ? trim($_COOKIE[WP_DIST_COOKIE]) : '';
-    return ($v === 'skip' || preg_match('/^\d{6}$/', $v)) ? $v : '';
+    if ($ok($v)) return $v;
+    // la pantalla del distribuidor manda también la elección (dist_pick): sirve aunque el navegador o el
+    // hosting no hayan guardado la cookie (antes se volvía a la pantalla del distribuidor una y otra vez)
+    $p = $_POST['dist_pick'] ?? ($_GET['dist_pick'] ?? '');
+    $p = is_string($p) ? trim($p) : '';
+    if (!$ok($p)) return '';
+    wp_dist_set($p);
+    return $p;
 }
 
 /** Número elegido en este navegador ('' con Omitir o sin elegir). */
