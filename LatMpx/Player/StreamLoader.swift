@@ -34,6 +34,9 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDat
     private var ranges = false
     private var mime = ""
     private var closed = false
+    private var got: Int64 = 0
+    /** bytes recibidos del servidor (para no abandonar un video pesado que sigue llegando) */
+    var received: Int64 { queue.sync { got } }
 
     init?(_ url: URL) {
         guard let s = url.scheme?.lowercased(), s == "http" || s == "https",
@@ -176,6 +179,7 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDat
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        got += Int64(data.count)
         guard var a = active, a.task === dataTask, let d = a.req.dataRequest else { return }
         if a.req.isCancelled { active = nil; dataTask.cancel(); next(); return }
         var chunk = data

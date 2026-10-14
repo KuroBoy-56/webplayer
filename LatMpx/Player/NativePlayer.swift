@@ -63,6 +63,8 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     private var lastDurMs: Int64 = 0
     private var playedThisWay = false
     private var retriedThisWay = false
+    /** vías que fallaron en este video (motivo), para el reporte al panel */
+    private var failures: [String] = []
 
     var active: Bool { vc != nil }
 
@@ -95,10 +97,10 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         switch r.kind {
         case .live:
             guard let m = Xtream.liveUrls(s, q.id).first(where: { $0.lowercased().hasSuffix(".m3u8") }) else { return [] }
-            let u = flip(m)
+            let u = await preferHttp(flip(m))
             out = [.redirected(u), .direct(u), .direct(Xtream.otherScheme(u))]
         case .movie, .series:
-            let u = flip(r.kind == .movie ? Xtream.movieUrl(s, q.id, q.ext) : Xtream.episodeUrl(s, q.id, q.ext))
+            let u = await preferHttp(flip(r.kind == .movie ? Xtream.movieUrl(s, q.id, q.ext) : Xtream.episodeUrl(s, q.id, q.ext)))
             if compatible(u) {
                 out = [.loader(u), .redirected(u), .loader(Xtream.otherScheme(u))]
             }
@@ -107,6 +109,19 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         var seen: [Way] = []
         for w in out where !seen.contains(w) { seen.append(w) }
         return seen
+    }
+
+    /**
+     * DNS en https con el servidor del video en http (XUI.one salta de https a http): el video se pide por
+     * http desde el principio, como con una DNS http, y la sesión lo recuerda (Xtream.streamFlip).
+     */
+    @MainActor
+    private static func preferHttp(_ u: String) async -> String {
+        guard u.lowercased().hasPrefix("https://"), let hop = await StreamRedirect.firstHop(u),
+              hop.lowercased().hasPrefix("http://") else { return u }
+        PlayerDiag.log("nativo: la DNS https entrega el video por http")
+        Xtream.streamFlip.toggle()
+        return Xtream.otherScheme(u)
     }
 
     /** punto de inicio: el de la petición (vuelta de otro reproductor) o el progreso guardado */
@@ -133,6 +148,7 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         self.ways = ways
         wayIx = 0
         retriedThisWay = false
+        failures = []
         lastDurMs = 0
         if r.kind == .live, r.queue.indices.contains(r.index) { Store.setLastChannel(r.queue[r.index].id) }
 
@@ -182,8 +198,9 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
             item.preferredForwardBufferDuration = 30
             self.itemWatch = item.observe(\.status, options: [.new]) { [weak self] it, _ in
                 guard it.status == .failed else { return }
-                let err = it.error?.localizedDescription ?? ""
-                DispatchQueue.main.async { if self?.loadId == id { self?.failed(err) } }
+                let e = it.error as NSError?
+                let err = (e?.localizedDescription ?? "") + " (\(e?.code ?? 0))"
+                DispatchQueue.main.async { if self?.loadId == id { self?.failed(err, format: Self.formatError(e)) } }
             }
             self.endObs = [
                 NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
@@ -200,16 +217,38 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
             }
             // si no arranca, la vía siguiente (el panel tarda más: prepara los primeros segmentos)
             let wait: Double
-            if case .engine = way { wait = 75 } else { wait = 12 }
-            let t = DispatchWorkItem { [weak self] in
-                guard let s = self, s.loadId == id, p.timeControlStatus != .playing, !s.pipActive else { return }
-                s.failed("sin respuesta", retry: false)
-            }
-            self.timeout = t
-            DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: t)
+            if case .engine = way { wait = 75 } else { wait = 15 }
+            self.armTimeout(id, p, wait, until: Date().addingTimeInterval(90), bytes: -1)
             PlayerDiag.log("nativo: vía \(self.wayIx + 1)/\(self.ways.count) \(way.label)")
             p.play()
         }
+    }
+
+    /**
+     * Si no arranca en `wait` s, la vía siguiente; pero mientras el video siga llegando (archivos pesados, 4K,
+     * índice al final del archivo) se espera más, hasta `until`.
+     */
+    private func armTimeout(_ id: UUID, _ p: AVPlayer, _ wait: Double, until: Date, bytes: Int64) {
+        let t = DispatchWorkItem { [weak self] in
+            guard let s = self, s.loadId == id, p.timeControlStatus != .playing, !s.pipActive else { return }
+            let now = s.loader?.received ?? Int64(p.currentItem?.accessLog()?.events.last?.numberOfBytesTransferred ?? 0)
+            if now > max(bytes, 0) && Date() < until {
+                s.armTimeout(id, p, 8, until: until, bytes: now)
+                return
+            }
+            s.failed("sin respuesta", retry: false)
+        }
+        timeout = t
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: t)
+    }
+
+    /** errores de AVFoundation de un formato o códec que el reproductor de iOS no abre (no es la red) */
+    private static func formatError(_ e: NSError?) -> Bool {
+        guard let e = e else { return false }
+        let codes = [-11828, -11829, -11833, -11821, -11838, -12847]
+        if e.domain == AVFoundationErrorDomain && codes.contains(e.code) { return true }
+        if let u = e.userInfo[NSUnderlyingErrorKey] as? NSError { return formatError(u) }
+        return false
     }
 
     @MainActor
@@ -252,10 +291,15 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         if !playedThisWay { PlayerDiag.log("nativo: reproduciendo") }
         playedThisWay = true
         let id = loadId
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+        if !failures.isEmpty {
+            // las vías que no sirvieron: a Errores de las apps del panel, para ver por qué
+            ErrorReport.report("playback", "El reproductor de iOS abrió el video por otra vía", detail: failures.joined(separator: " | "), screen: "player")
+            failures = []
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
             guard let s = self, s.vc === c, s.loadId == id, let item = c.player?.currentItem, !s.pipActive else { return }
             // presentationSize sigue en cero cuando Apple no puede decodificar la imagen (en HLS assetTrack puede venir vacío)
-            if item.presentationSize == .zero { s.failed("sin imagen", retry: false) }
+            if item.presentationSize == .zero && item.currentTime().seconds > 3 { s.failed("sin imagen", retry: false, format: true) }
         }
     }
 
@@ -328,23 +372,28 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
      * Esta vía no pudo: si ya se veía y se cortó, la misma otra vez (una vez) desde donde iba; si no, la
      * siguiente. Sin vías: al reproductor de la app, donde iba.
      */
-    private func failed(_ err: String, retry: Bool = true) {
+    private func failed(_ err: String, retry: Bool = true, format: Bool = false) {
         guard vc != nil, let r = request else { return }
         let pos = currentMs()
         let ms = r.kind == .live ? 0 : (pos > 0 ? pos : Self.startPoint(r))
         PlayerDiag.log("nativo: falló \(err) (vía \(wayIx + 1)/\(ways.count))")
-        if retry && playedThisWay && !retriedThisWay {
+        if ways.indices.contains(wayIx) { failures.append(ways[wayIx].label + ": " + err) }
+        if retry && !format && playedThisWay && !retriedThisWay {
             retriedThisWay = true
             again(ms)
             return
         }
-        if wayIx + 1 < ways.count {
-            wayIx += 1
+        // formato o códec que Apple no abre: las otras vías directas darían lo mismo, sigue el motor del panel
+        var next = wayIx + 1
+        if format, let e = ways.lastIndex(where: { if case .engine = $0 { return true } else { return false } }), e > wayIx { next = e }
+        if next < ways.count {
+            wayIx = next
             retriedThisWay = false
             again(ms)
             return
         }
-        ErrorReport.report("playback", "El reproductor de iOS no pudo abrir el video", detail: err, screen: "player")
+        ErrorReport.report("playback", "El reproductor de iOS no pudo abrir el video", detail: failures.joined(separator: " | "), screen: "player")
+        failures = []
         let c = vc
         cleanup()
         if let c = c, c.presentingViewController != nil {

@@ -23,6 +23,15 @@ enum StreamRedirect {
         return URLSession(configuration: c, delegate: Stop(), delegateQueue: nil)
     }()
 
+    /** adónde manda el servidor principal (sin seguir el salto: el servidor del video no se toca); nil = no redirige */
+    static func firstHop(_ url: String) async -> String? {
+        guard let u = URL(string: url), let (bytes, resp) = try? await session.bytes(for: URLRequest(url: u)) else { return nil }
+        bytes.task.cancel()
+        guard let h = resp as? HTTPURLResponse, (300..<400).contains(h.statusCode),
+              let loc = h.value(forHTTPHeaderField: "Location") else { return nil }
+        return URL(string: loc, relativeTo: u)?.absoluteString
+    }
+
     static func resolve(_ url: String) async -> String {
         guard var cur = URL(string: url), let s = cur.scheme?.lowercased(), s == "http" || s == "https" else { return url }
         for _ in 0..<6 {
