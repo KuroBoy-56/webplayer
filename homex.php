@@ -1,7 +1,7 @@
 <?php
 include "session.php";
 include "config.php";
-$page_title = 'Inicio';
+$page_title = t('Inicio');
 include "header.php";
 
 /* ---------- Sólo títulos que existen en el servidor IPTV actual ---------- */
@@ -59,11 +59,11 @@ $platforms = wp_available_platforms();
 $genres = wp_available_genres('all');
 ?>
 
-<?php echo wp_hero_html('Destacado'); ?>
+<?php echo wp_hero_html(t('Destacado')); ?>
 
 <?php echo wp_platform_tiles(); ?>
 
-<nav class="nf-chips m-only" aria-label="Géneros">
+<nav class="nf-chips m-only" aria-label="<?php echo e(t('Géneros')); ?>">
     <?php foreach ($genres as $k => $g): ?>
         <a class="nf-chip" href="browse.php?genre=<?php echo e($k); ?>"><?php echo e($g['label']); ?></a>
     <?php endforeach; ?>
@@ -71,21 +71,21 @@ $genres = wp_available_genres('all');
 
 <div class="nf-rows">
     <?php
-    if ($cont_html) echo wp_row('Continuar viendo', [], '', '', 'sec_continuar', $cont_html);
-    if ($fav_html) echo wp_row('Mi lista', [], '', '', 'sec_favoritos', $fav_html);
+    if ($cont_html) echo wp_row(t('Continuar viendo'), [], '', '', 'sec_continuar', $cont_html);
+    if ($fav_html) echo wp_row(t('Mi lista'), [], '', '', 'sec_favoritos', $fav_html);
 
-    echo wp_row('Top 10 de hoy', [], 'browse.php?type=all&sort=rating', 'api.php?action=row&type=movie&sort=top', 'sec_top', null, 'top');
-    echo wp_row('Películas agregadas recientemente', [], 'browse.php?type=movie&sort=recent', 'api.php?action=row&type=movie&sort=recent&limit=30', 'sec_peliculas');
-    echo wp_row('Series nuevas', [], 'browse.php?type=series&sort=recent', 'api.php?action=row&type=series&sort=recent&limit=30', 'sec_series');
+    echo wp_row(t('Top 10 de hoy'), [], 'browse.php?type=all&sort=rating', 'api.php?action=row&type=movie&sort=top', 'sec_top', null, 'top');
+    echo wp_row(t('Películas agregadas recientemente'), [], 'browse.php?type=movie&sort=recent', 'api.php?action=row&type=movie&sort=recent&limit=30', 'sec_peliculas');
+    echo wp_row(t('Series nuevas'), [], 'browse.php?type=series&sort=recent', 'api.php?action=row&type=series&sort=recent&limit=30', 'sec_series');
 
     $i = 0;
     foreach ($platforms as $k => $p) {
         if (in_array($k, ['xmas', 'halloween'], true)) continue;
-        echo wp_row('Lo mejor de ' . $p['label'], [], 'browse.php?platform=' . $k, 'api.php?action=row&type=all&platform=' . $k . '&sort=recent&limit=30');
+        echo wp_row(t('Lo mejor de {p}', ['p' => $p['label']]), [], 'browse.php?platform=' . $k, 'api.php?action=row&type=all&platform=' . $k . '&sort=recent&limit=30');
         if (++$i >= 5) break;
     }
 
-    echo wp_row('Series para ti', [], 'seriesondemand.php', 'api.php?action=row&type=series&shuffle=1&limit=24');
+    echo wp_row(t('Series para ti'), [], 'seriesondemand.php', 'api.php?action=row&type=series&shuffle=1&limit=24');
 
     $preferred = ['accion', 'comedia', 'terror', 'anime', 'drama', 'suspenso', 'aventura', 'infantil', 'scifi', 'romance', 'documental'];
     foreach ($preferred as $k) {
@@ -93,7 +93,7 @@ $genres = wp_available_genres('all');
         echo wp_row($genres[$k]['label'], [], 'browse.php?genre=' . $k, 'api.php?action=row&type=all&genre=' . $k . '&sort=recent&limit=30');
     }
 
-    echo wp_row('Películas para ti', [], 'moviesondemand.php', 'api.php?action=row&type=movie&shuffle=1&limit=24');
+    echo wp_row(t('Películas para ti'), [], 'moviesondemand.php', 'api.php?action=row&type=movie&shuffle=1&limit=24');
     ?>
 </div>
 
@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function () {
     NF.api({ action: 'hero', type: 'all' }).then(function (res) {
         var items = res.items || [];
         if (!items.length) {
-            items = [{ title: 'Bienvenido', description: 'Selecciona una película o serie de nuestro catálogo para comenzar a disfrutar del contenido.', background_image: 'assets/images/overlay.webp', poster: 'assets/img/Logo.png', play_link: 'moviesondemand.php', info_link: 'browse.php', rating: '' }];
+            items = [{ title: <?php echo tj('Bienvenido'); ?>, description: <?php echo tj('Selecciona una película o serie de nuestro catálogo para comenzar a disfrutar del contenido.'); ?>, background_image: 'assets/images/overlay.webp', poster: 'assets/img/Logo.png', play_link: 'moviesondemand.php', info_link: 'browse.php', rating: '' }];
         }
         NF.hero(document.getElementById('nfHero'), items);
     }).catch(function () {});

@@ -2,6 +2,7 @@
 (function () {
     'use strict';
     var d = document, KEY = 'nfAlertShown';
+    var tr = window.NF_T || function (s) { return s; }; // idioma de la app (includes/i18n.php)
 
     function seen() { try { return sessionStorage.getItem(KEY) === '1'; } catch (e) { return false; } }
     function mark() { try { sessionStorage.setItem(KEY, '1'); } catch (e) { } }
@@ -25,7 +26,7 @@
             '<h2 class="nf-alert-title" id="nfAlertTitle">' + esc(a.title) + '</h2>' +
             (a.message ? '<p class="nf-alert-msg">' + esc(a.message) + '</p>' : '') +
             (a.image ? '<img class="nf-alert-img" src="' + esc(a.image) + '" alt="" onerror="this.remove()">' : '') +
-            '<button type="button" class="nf-btn nf-btn-white nf-alert-btn">' + esc(a.button || 'Entendido') + '</button>' +
+            '<button type="button" class="nf-btn nf-btn-white nf-alert-btn">' + esc(a.button || tr('Entendido')) + '</button>' +
             '</div>';
         var prev = d.activeElement;
         function close() {

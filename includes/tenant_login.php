@@ -23,7 +23,7 @@ function wp_tenant_login_post()
     }
     $code = preg_replace('/\D/', '', (string)($_POST['code'] ?? ''));
     if (strlen($code) !== 6) {
-        echo json_encode(['success' => false, 'message' => 'Escribe los 6 dígitos de tu número de distribuidor.']);
+        echo json_encode(['success' => false, 'message' => t('Escribe los 6 dígitos de tu número de distribuidor.')]);
         exit;
     }
     if (!wp_panel_ready()) {
@@ -88,7 +88,7 @@ function wp_tenant_login_view()
         }
     }
     if ($err === 'changed') {
-        $v['error'] = 'Se cambió el distribuidor en este navegador. Inicia sesión de nuevo.';
+        $v['error'] = t('Se cambió el distribuidor en este navegador. Inicia sesión de nuevo.');
     } elseif ($err !== '') {
         $v['error'] = wp_tenant_message($err, $cfgErr);
     }

@@ -31,9 +31,9 @@ function wp_line_state($body)
 function wp_line_message($code)
 {
     $m = [
-        'auth' => 'Tu usuario o contraseña ya no son válidos. Vuelve a iniciar sesión.',
-        'expired' => 'Tu cuenta está vencida. Renueva tu suscripción para seguir viendo.',
-        'disabled' => 'Tu cuenta está deshabilitada. Contacta a soporte.',
+        'auth' => t('Tu usuario o contraseña ya no son válidos. Vuelve a iniciar sesión.'),
+        'expired' => t('Tu cuenta está vencida. Renueva tu suscripción para seguir viendo.'),
+        'disabled' => t('Tu cuenta está deshabilitada. Contacta a soporte.'),
     ];
     return $m[$code] ?? '';
 }

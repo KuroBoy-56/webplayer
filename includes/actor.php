@@ -139,11 +139,16 @@ function wp_tmdb_person($id, $name = '')
         $id = (string)($s['results'][0]['id'] ?? '');
     }
     if ($id === '') return null;
-    $ck = 'tmdbp1|' . $id;
+    $ck = 'tmdbp1|' . $id . '|' . wp_lang(); // biografía en el idioma de la app
     $hit = wp_cache_get($ck, 604800);
     if (is_array($hit)) return $hit;
     $j = wp_tmdb_get('person/' . $id, 'language=es-MX&append_to_response=combined_credits');
     if (!is_array($j) || empty($j['id'])) return null;
+    // títulos de la filmografía en es-MX (se comparan con el catálogo); la biografía en el idioma de la app
+    if (wp_tmdb_lang() !== 'es-MX') {
+        $tl = wp_tmdb_get('person/' . $id, 'language=' . wp_tmdb_lang(), 5);
+        if (!empty($tl['biography'])) $j['biography'] = $tl['biography'];
+    }
     if (trim((string)($j['biography'] ?? '')) === '') {
         $en = wp_tmdb_get('person/' . $id, 'language=en-US', 5);
         if (!empty($en['biography'])) $j['biography'] = $en['biography'];

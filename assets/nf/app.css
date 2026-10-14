@@ -106,6 +106,10 @@ button { font-family: inherit; }
 .nf-menu a:hover { text-decoration: underline; color: #fff; }
 .nf-menu a i { width: 18px; text-align: center; color: var(--nf-gray2); }
 .nf-menu .sep { border-top: 1px solid rgba(255,255,255,.15); margin-top: 6px; padding-top: 6px; }
+/* idioma de la app (menú del perfil) */
+.nf-menu .lang { display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 8px; font-size: 13px; color: var(--nf-gray2); border-top: 1px solid rgba(255,255,255,.15); margin-top: 6px; }
+.nf-menu .lang i { width: 18px; text-align: center; }
+.nf-menu .lang .nf-select { width: 100%; font-size: 13px; }
 
 /* resultados de búsqueda instantánea */
 .nf-suggest {

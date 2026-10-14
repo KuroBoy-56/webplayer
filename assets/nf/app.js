@@ -4,6 +4,8 @@
     var NF = window.NF = window.NF || {};
     var NOIMG = 'assets/nf/noposter.svg';
     var d = document;
+    // textos en el idioma de la app (diccionario que deja la página: includes/i18n.php)
+    var tr = NF.t = window.NF_T || function (s) { return s; };
 
     function $(s, c) { return (c || d).querySelector(s); }
     function $$(s, c) { return Array.prototype.slice.call((c || d).querySelectorAll(s)); }
@@ -98,7 +100,7 @@
     /* ---------------- Favoritos (Mi lista) ---------------- */
     NF.fav = function (btn, data) {
         // DEMO: Mi lista no se guarda
-        if (NF.demo) { NF.toast('No disponible en la DEMO'); return; }
+        if (NF.demo) { NF.toast(tr('No disponible en la DEMO')); return; }
         var on = btn.classList.contains('on');
         var fd = new FormData();
         fd.append('id', data.id);
@@ -108,10 +110,10 @@
         if (data.poster) fd.append('poster_url', data.poster);
         btn.classList.toggle('on', !on);
         var lbl = btn.querySelector('.lbl');
-        if (lbl) lbl.textContent = on ? 'Mi lista' : 'En mi lista';
+        if (lbl) lbl.textContent = on ? tr('Mi lista') : tr('En mi lista');
         var ic = btn.querySelector('.ic');
         if (ic) ic.innerHTML = on ? NF.svg.plus : NF.svg.check;
-        NF.toast(on ? 'Quitado de Mi lista' : 'Agregado a Mi lista');
+        NF.toast(on ? tr('Quitado de Mi lista') : tr('Agregado a Mi lista'));
         fetch('save_favorite.php', { method: 'POST', body: fd, credentials: 'same-origin' }).catch(function () {});
     };
     NF.svg = {
@@ -187,7 +189,7 @@
         function more() {
             if (busy || done) return;
             busy = true;
-            if (status) status.textContent = 'Cargando...';
+            if (status) status.textContent = tr('Cargando...');
             NF.api(params()).then(function (res) {
                 total = res.total || 0;
                 if (opts.onTotal) opts.onTotal(total);
@@ -199,10 +201,10 @@
                 busy = false;
                 if (status) status.textContent = (page === 2 && !total) ? '' : (done ? '' : '');
                 if (page === 2 && !total) {
-                    box.innerHTML = '<div class="nf-empty" style="grid-column:1/-1"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.39-1.42 1.42-5.39-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>No encontramos títulos con estos filtros.</div>';
+                    box.innerHTML = '<div class="nf-empty" style="grid-column:1/-1"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.39-1.42 1.42-5.39-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>' + esc(tr('No encontramos títulos con estos filtros.')) + '</div>';
                 }
                 check();
-            }).catch(function () { busy = false; if (status) status.textContent = 'No se pudo cargar. Desliza para reintentar.'; });
+            }).catch(function () { busy = false; if (status) status.textContent = tr('No se pudo cargar. Desliza para reintentar.'); });
         }
         function check() {
             if (done || busy) return;
@@ -229,7 +231,7 @@
             $$('[data-h=desc]', root).forEach(function (e) { e.textContent = it.description || ''; });
             $$('[data-h=meta]', root).forEach(function (e) {
                 var m = [];
-                if (it.rating) m.push('<span class="nf-match">' + Math.min(99, Math.round(parseFloat(it.rating) * 10)) + '% para ti</span>');
+                if (it.rating) m.push('<span class="nf-match">' + Math.min(99, Math.round(parseFloat(it.rating) * 10)) + '% ' + esc(tr('para ti')) + '</span>');
                 if (it.year) m.push('<span>' + esc(it.year) + '</span>');
                 m.push('<span class="nf-badge">HD</span>');
                 if (it.genre) m.push('<span>' + esc(it.genre) + '</span>');
@@ -237,7 +239,7 @@
             });
             $$('[data-h=play]', root).forEach(function (e) { e.href = it.play_link; });
             $$('[data-h=info]', root).forEach(function (e) { e.href = it.info_link || it.play_link; });
-            $$('[data-h=kicker]', root).forEach(function (e) { e.innerHTML = '<span class="n">N</span>' + esc(it.kind || 'Destacado'); });
+            $$('[data-h=kicker]', root).forEach(function (e) { e.innerHTML = '<span class="n">N</span>' + esc(it.kind || tr('Destacado')); });
             var p = $('.nf-hero-poster', root);
             if (p) p.style.backgroundImage = "url('" + (it.poster || it.background_image) + "')";
         }
@@ -257,7 +259,7 @@
             idx = i;
         }
         if (dots) {
-            dots.innerHTML = items.map(function (_, i) { return '<button type="button" aria-label="Destacado ' + (i + 1) + '"></button>'; }).join('');
+            dots.innerHTML = items.map(function (_, i) { return '<button type="button" aria-label="' + esc(tr('Destacado {n}', { n: i + 1 })) + '"></button>'; }).join('');
             $$('button', dots).forEach(function (b, i) { b.addEventListener('click', function () { show(i); restart(); }); });
         }
         function restart() { clearInterval(timer); if (items.length > 1) timer = setInterval(function () { if (!d.hidden) show((idx + 1) % items.length); }, 8000); }
@@ -304,16 +306,16 @@
                 if (q.length < 2) { sug.classList.remove('show'); return; }
                 t = setTimeout(function () {
                     lastQ = q;
-                    sug.innerHTML = '<div class="empty">Buscando...</div>';
+                    sug.innerHTML = '<div class="empty">' + esc(tr('Buscando...')) + '</div>';
                     sug.classList.add('show');
                     NF.api({ action: 'search', q: q }).then(function (res) {
                         if (q !== lastQ) return;
                         var h = '';
-                        if (res.movies && res.movies.length) h += '<h4>Películas</h4><div class="grid">' + res.movies.map(function (c) { return NF.card(c); }).join('') + '</div>';
-                        if (res.series && res.series.length) h += '<h4>Series</h4><div class="grid">' + res.series.map(function (c) { return NF.card(c); }).join('') + '</div>';
-                        if (res.live && res.live.length) h += '<h4>TV en vivo</h4><div class="grid">' + res.live.map(function (c) { return NF.card(c); }).join('') + '</div>';
-                        if (!h) h = '<div class="empty">Sin resultados para "' + esc(q) + '"</div>';
-                        else h += '<a class="more" href="browse.php?q=' + encodeURIComponent(q) + '">Ver todos los resultados</a>';
+                        if (res.movies && res.movies.length) h += '<h4>' + esc(tr('Películas')) + '</h4><div class="grid">' + res.movies.map(function (c) { return NF.card(c); }).join('') + '</div>';
+                        if (res.series && res.series.length) h += '<h4>' + esc(tr('Series')) + '</h4><div class="grid">' + res.series.map(function (c) { return NF.card(c); }).join('') + '</div>';
+                        if (res.live && res.live.length) h += '<h4>' + esc(tr('TV en vivo')) + '</h4><div class="grid">' + res.live.map(function (c) { return NF.card(c); }).join('') + '</div>';
+                        if (!h) h = '<div class="empty">' + esc(tr('Sin resultados para "{q}"', { q: q })) + '</div>';
+                        else h += '<a class="more" href="browse.php?q=' + encodeURIComponent(q) + '">' + esc(tr('Ver todos los resultados')) + '</a>';
                         sug.innerHTML = h;
                     }).catch(function () { sug.classList.remove('show'); });
                 }, 280);
@@ -330,8 +332,8 @@
             var tick = function () {
                 var now = new Date();
                 try {
-                    clock.textContent = now.toLocaleTimeString('es-ES', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: !is24 });
-                    date.textContent = now.toLocaleDateString('es-ES', { timeZone: tz, weekday: 'short', day: '2-digit', month: 'short' });
+                    clock.textContent = now.toLocaleTimeString(window.NF_LOCALE || 'es-ES', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: !is24 });
+                    date.textContent = now.toLocaleDateString(window.NF_LOCALE || 'es-ES', { timeZone: tz, weekday: 'short', day: '2-digit', month: 'short' });
                 } catch (e) {
                     clock.textContent = now.toLocaleTimeString();
                 }

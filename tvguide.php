@@ -69,7 +69,7 @@ function tv_channel_data($id, $username, $fav_file)
             if (is_array($c) && (string)($c['stream_id'] ?? '') === (string)$id) { $info = $c; break; }
         }
     }
-    $name = $info['name'] ?? 'Canal';
+    $name = $info['name'] ?? t('Canal');
     $settings = isset($_COOKIE["settings_array"]) ? json_decode($_COOKIE["settings_array"], true) : [];
     $pref = (isset($settings["stream_type"]) && $settings["stream_type"] === 'ts') ? 'ts' : 'm3u8';
     $order = $pref === 'ts' ? ['ts', 'm3u8'] : ['m3u8', 'ts'];
@@ -126,7 +126,7 @@ if ($selectedCategoryId === '' && !$id) $selectedCategoryId = tv_fav_channels($u
 $initial = $id ? tv_channel_data($id, $username, $fav_file) : null;
 $use_vlc = (isset($_COOKIE["use_vlc"]) && !wp_is_demo()) ? $_COOKIE["use_vlc"] : "0";
 
-$page_title = 'TV en vivo';
+$page_title = t('TV en vivo');
 $body_class = 'nf-solid nf-live';
 $wp_head_extra = '<link rel="stylesheet" href="assets/nf/player.css?v=9">';
 include "header.php";
@@ -184,9 +184,9 @@ include "header.php";
 
 <div class="tv-wrap">
     <aside class="tv-col tv-cats">
-        <h3>Categorías</h3>
+        <h3><?php echo t('Categorías'); ?></h3>
         <div class="tv-list" id="catList">
-            <div class="tv-cat" data-id="favorites">⭐ Favoritos</div>
+            <div class="tv-cat" data-id="favorites">⭐ <?php echo t('Favoritos'); ?></div>
             <?php foreach ($categories as $c): ?>
                 <div class="tv-cat" data-id="<?php echo e($c['category_id']); ?>"><?php echo e($c['category_name']); ?></div>
             <?php endforeach; ?>
@@ -196,36 +196,36 @@ include "header.php";
     <section class="tv-col">
         <div class="tv-mcat">
             <select class="nf-select" id="catSel" style="width:100%">
-                <option value="favorites">⭐ Favoritos</option>
+                <option value="favorites">⭐ <?php echo t('Favoritos'); ?></option>
                 <?php foreach ($categories as $c): ?>
                     <option value="<?php echo e($c['category_id']); ?>"><?php echo e($c['category_name']); ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
-        <h3>Canales <span id="chCount" style="font-size:12px;color:#888;font-weight:400"></span></h3>
-        <div class="tv-filter"><input type="search" id="chFilter" placeholder="Buscar canal..."></div>
-        <div class="tv-list" id="channel-list"><div class="tv-empty">Cargando canales...</div></div>
+        <h3><?php echo t('Canales'); ?> <span id="chCount" style="font-size:12px;color:#888;font-weight:400"></span></h3>
+        <div class="tv-filter"><input type="search" id="chFilter" placeholder="<?php echo e(t('Buscar canal...')); ?>"></div>
+        <div class="tv-list" id="channel-list"><div class="tv-empty"><?php echo t('Cargando canales...'); ?></div></div>
     </section>
 
     <section class="tv-main" id="tvMain">
         <div class="tv-player" id="tvPlayer">
-            <div class="ph"><?php echo wp_icon('tv'); ?><span>Selecciona un canal para comenzar a ver</span></div>
+            <div class="ph"><?php echo wp_icon('tv'); ?><span><?php echo t('Selecciona un canal para comenzar a ver'); ?></span></div>
         </div>
         <div class="tv-info" id="tvInfo" style="display:none">
             <img id="tvLogo" src="" alt="" onerror="this.onerror=null;this.src='assets/img/Logo.png'">
             <h2 id="tvName"></h2>
-            <button type="button" class="nf-btn-circle" id="toggleLiveFav" title="Favorito"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 17.3 18.2 21l-1.6-7L22 9.2l-7.2-.6L12 2 9.2 8.6 2 9.2 7.4 14l-1.6 7z"/></svg></button>
+            <button type="button" class="nf-btn-circle" id="toggleLiveFav" title="<?php echo e(t('Favorito')); ?>"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 17.3 18.2 21l-1.6-7L22 9.2l-7.2-.6L12 2 9.2 8.6 2 9.2 7.4 14l-1.6 7z"/></svg></button>
         </div>
         <div class="tv-col tv-epg">
-            <h3>Guía de programas</h3>
-            <div class="tv-list" id="epg-list"><div class="tv-empty">Selecciona un canal para ver su guía.</div></div>
+            <h3><?php echo t('Guía de programas'); ?></h3>
+            <div class="tv-list" id="epg-list"><div class="tv-empty"><?php echo t('Selecciona un canal para ver su guía.'); ?></div></div>
         </div>
     </section>
 </div>
 
 <script src="assets/vendor/hls.min.js" defer></script>
 <script src="assets/vendor/mpegts.min.js" defer></script>
-<script src="assets/nf/player.js?v=29" defer></script>
+<script src="assets/nf/player.js?v=30" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [] };
@@ -234,13 +234,13 @@ document.addEventListener('DOMContentLoaded', function () {
     var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     var list = document.getElementById('channel-list'), filter = document.getElementById('chFilter');
 
-    function hm(ts) { return new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+    function hm(ts) { return new Date(ts * 1000).toLocaleTimeString(window.NF_LOCALE, { hour: '2-digit', minute: '2-digit' }); }
 
     function renderChannels() {
         var q = filter.value.trim().toLowerCase();
         var items = state.channels.filter(function (c) { return !q || c.n.toLowerCase().indexOf(q) > -1; });
         document.getElementById('chCount').textContent = items.length ? '(' + items.length + ')' : '';
-        if (!items.length) { list.innerHTML = '<div class="tv-empty">' + (state.cat === 'favorites' ? 'Aún no tienes canales favoritos.' : 'No hay canales en esta sección.') + '</div>'; return; }
+        if (!items.length) { list.innerHTML = '<div class="tv-empty">' + (state.cat === 'favorites' ? <?php echo tj('Aún no tienes canales favoritos.'); ?> : <?php echo tj('No hay canales en esta sección.'); ?>) + '</div>'; return; }
         list.innerHTML = items.map(function (c) {
             return '<div class="tv-ch' + (state.ch === c.id ? ' active' : '') + '" data-id="' + NF.esc(c.id) + '"><img src="' + NF.esc(c.i) + '" alt="" loading="lazy" onerror="this.onerror=null;this.src=\'assets/img/Logo.png\'"><span>' + NF.esc(c.n) + '</span></div>';
         }).join('');
@@ -250,17 +250,17 @@ document.addEventListener('DOMContentLoaded', function () {
         state.cat = cat;
         Array.prototype.forEach.call(document.querySelectorAll('.tv-cat'), function (x) { x.classList.toggle('active', x.getAttribute('data-id') === cat); });
         document.getElementById('catSel').value = cat;
-        list.innerHTML = '<div class="tv-empty">Cargando canales...</div>';
+        list.innerHTML = '<div class="tv-empty">' + <?php echo tj('Cargando canales...'); ?> + '</div>';
         fetch('tvguide.php?ajax=channels&category_id=' + encodeURIComponent(cat), { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (d) { state.channels = d || []; renderChannels(); })
-            .catch(function () { list.innerHTML = '<div class="tv-empty">No se pudieron cargar los canales.</div>'; });
+            .catch(function () { list.innerHTML = '<div class="tv-empty">' + <?php echo tj('No se pudieron cargar los canales.'); ?> + '</div>'; });
     }
 
     function renderEpg(epg) {
         var box = document.getElementById('epg-list'), now = Date.now() / 1000;
         document.getElementById('tvMain').classList.toggle('has-epg', !!(epg && epg.length));
-        if (!epg || !epg.length) { box.innerHTML = '<div class="tv-empty">No hay información de la guía de programas para este canal.</div>'; return; }
+        if (!epg || !epg.length) { box.innerHTML = '<div class="tv-empty">' + <?php echo tj('No hay información de la guía de programas para este canal.'); ?> + '</div>'; return; }
         box.innerHTML = epg.map(function (p) {
             var on = p.s <= now && p.e > now, pct = on ? Math.round((now - p.s) / (p.e - p.s) * 100) : 0;
             return '<div class="tv-prog' + (on ? ' now' : '') + '"><div class="h">' + hm(p.s) + ' - ' + hm(p.e) + '</div><div style="flex:1"><div class="t">' + NF.esc(p.t) + '</div>' + (on ? '<div class="bar"><i style="width:' + pct + '%"></i></div>' : '') + '</div></div>';
@@ -287,7 +287,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!data.direct && data.http) {
             // página https y canal por http: se abre el reproductor directo por http (no pasa por el hosting)
             box.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#000">'
-                + '<a class="nf-btn nf-btn-red" href="' + data.http.replace(/"/g, '&quot;') + '">&#9654; Ver ' + NF.esc(data.name) + '</a></div>';
+                + '<a class="nf-btn nf-btn-red" href="' + data.http.replace(/"/g, '&quot;') + '">&#9654; ' + NF.esc(<?php echo tj('Ver {n}'); ?>.replace('{n}', data.name)) + '</a></div>';
             return;
         }
         box.innerHTML = '';
@@ -301,7 +301,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 play(d);
                 if (push) history.replaceState(null, '', 'tvguide.php?id=' + encodeURIComponent(id) + '&slug=live&category_id=' + encodeURIComponent(state.cat));
             })
-            .catch(function () { NF.toast('No se pudo abrir el canal'); });
+            .catch(function () { NF.toast(<?php echo tj('No se pudo abrir el canal'); ?>); });
     }
 
     document.getElementById('catList').addEventListener('click', function (e) { var c = e.target.closest('.tv-cat'); if (c) loadChannels(c.getAttribute('data-id')); });

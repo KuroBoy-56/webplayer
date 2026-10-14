@@ -18,6 +18,13 @@ $cat = preg_replace('/[^0-9a-zA-Z_\-]/', '', (string)($_GET['cat'] ?? ''));
 $sort = in_array($_GET['sort'] ?? '', ['recent', 'az', 'rating', 'default'], true) ? $_GET['sort'] : 'recent';
 $q = trim((string)($_GET['q'] ?? ''));
 
+/** Tipo del destacado (en caché en español) en el idioma de la app. */
+function wp_hero_kind(array $items)
+{
+    foreach ($items as &$it) $it['kind'] = t((string)($it['kind'] ?? ''));
+    return $items;
+}
+
 function out($data)
 {
     echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -51,7 +58,7 @@ switch ($action) {
             'title' => wp_demo_mask($aj['title'] ?? ''),
             'message' => wp_demo_mask($aj['message'] ?? ''),
             'image' => $img,
-            'button' => (string)($aj['button'] ?? 'ENTENDIDO'),
+            'button' => (string)($aj['button'] ?? t('ENTENDIDO')),
             'logo' => wp_brand_logo(),
         ]);
 
@@ -121,7 +128,7 @@ switch ($action) {
     case 'hero':
         $ck = 'hero|' . $type . '|' . $platform . '|' . xt_cache_key('', []);
         $cached = wp_cache_get($ck, 1200);
-        if (is_array($cached) && $cached) out(['items' => $cached]);
+        if (is_array($cached) && $cached) out(['items' => wp_hero_kind($cached)]);
 
         $pool = [];
         $types = $type === 'all' ? ['movie', 'series'] : [$type];
@@ -164,9 +171,9 @@ switch ($action) {
             if (count($items) >= 6) break;
         }
         if ($items) wp_cache_set($ck, $items);
-        out(['items' => $items]);
+        out(['items' => wp_hero_kind($items)]);
 
     default:
         http_response_code(400);
-        out(['error' => 'acción no válida']);
+        out(['error' => t('acción no válida')]);
 }

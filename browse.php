@@ -20,25 +20,25 @@ if (!isset($platforms[$platform])) $platform = '';
 if (!isset($genres[$genre])) $genre = '';
 if ($cat !== '' && $type === 'all') $type = 'movie';
 
-$title = 'Explorar';
-$subtitle = 'Todo el catálogo de películas y series';
+$title = t('Explorar');
+$subtitle = t('Todo el catálogo de películas y series');
 $accent = '#e50914';
 $logo = '';
 if ($platform) {
     $title = $platforms[$platform]['label'];
-    $subtitle = 'Todo el contenido de ' . $platforms[$platform]['label'] . ', filtra por género o tipo';
+    $subtitle = t('Todo el contenido de {p}, filtra por género o tipo', ['p' => $platforms[$platform]['label']]);
     $accent = $platforms[$platform]['color'];
     $logo = $platforms[$platform]['img'];
 } elseif ($cat !== '') {
     $names = wp_category_names($type);
-    $title = $names[$cat] ?? 'Categoría';
-    $subtitle = ($type === 'series' ? 'Series' : 'Películas') . ' de la categoría ' . $title;
+    $title = $names[$cat] ?? t('Categoría');
+    $subtitle = t($type === 'series' ? 'Series de la categoría {c}' : 'Películas de la categoría {c}', ['c' => $title]);
 } elseif ($genre) {
     $title = $genres[$genre]['label'];
-    $subtitle = 'Películas y series de ' . mb_strtolower($genres[$genre]['label'], 'UTF-8');
+    $subtitle = t('Películas y series de {g}', ['g' => mb_strtolower($genres[$genre]['label'], 'UTF-8')]);
 } elseif ($q !== '') {
-    $title = 'Resultados para "' . $q . '"';
-    $subtitle = 'Películas y series que coinciden con tu búsqueda';
+    $title = t('Resultados para "{q}"', ['q' => $q]);
+    $subtitle = t('Películas y series que coinciden con tu búsqueda');
 }
 
 $page_title = $title;
@@ -55,8 +55,8 @@ if ($genre && !isset($availGenres[$genre])) $availGenres[$genre] = $genres[$genr
     <p><?php echo e($subtitle); ?></p>
     <?php if ($platform): ?>
     <div class="nf-psearch<?php echo $q !== '' ? ' open' : ''; ?>" id="fPSearch">
-        <input class="nf-psearch-in" id="fQ" type="search" placeholder="Buscar en <?php echo e($platforms[$platform]['label']); ?>..." aria-label="Filtrar por nombre" value="<?php echo e($q); ?>" autocomplete="off">
-        <button type="button" class="nf-psearch-btn" id="fPSearchBtn" aria-label="Buscar por nombre" title="Buscar por nombre">
+        <input class="nf-psearch-in" id="fQ" type="search" placeholder="<?php echo e(t('Buscar en {p}...', ['p' => $platforms[$platform]['label']])); ?>" aria-label="<?php echo e(t('Filtrar por nombre')); ?>" value="<?php echo e($q); ?>" autocomplete="off">
+        <button type="button" class="nf-psearch-btn" id="fPSearchBtn" aria-label="<?php echo e(t('Buscar por nombre')); ?>" title="<?php echo e(t('Buscar por nombre')); ?>">
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
         </button>
     </div>
@@ -67,30 +67,30 @@ if ($genre && !isset($availGenres[$genre])) $availGenres[$genre] = $genres[$genr
     <div class="row1">
         <?php if ($cat === ''): ?>
         <div class="nf-seg" id="fType" role="tablist">
-            <button type="button" data-v="all" class="<?php echo $type === 'all' ? 'active' : ''; ?>">Todo</button>
-            <button type="button" data-v="movie" class="<?php echo $type === 'movie' ? 'active' : ''; ?>">Películas</button>
-            <button type="button" data-v="series" class="<?php echo $type === 'series' ? 'active' : ''; ?>">Series</button>
+            <button type="button" data-v="all" class="<?php echo $type === 'all' ? 'active' : ''; ?>"><?php echo t('Todo'); ?></button>
+            <button type="button" data-v="movie" class="<?php echo $type === 'movie' ? 'active' : ''; ?>"><?php echo t('Películas'); ?></button>
+            <button type="button" data-v="series" class="<?php echo $type === 'series' ? 'active' : ''; ?>"><?php echo t('Series'); ?></button>
         </div>
         <?php endif; ?>
-        <select class="nf-select" id="fSort" aria-label="Ordenar">
-            <option value="recent" <?php echo $sort === 'recent' ? 'selected' : ''; ?>>Agregados recientemente</option>
+        <select class="nf-select" id="fSort" aria-label="<?php echo e(t('Ordenar')); ?>">
+            <option value="recent" <?php echo $sort === 'recent' ? 'selected' : ''; ?>><?php echo t('Agregados recientemente'); ?></option>
             <option value="az" <?php echo $sort === 'az' ? 'selected' : ''; ?>>A - Z</option>
-            <option value="rating" <?php echo $sort === 'rating' ? 'selected' : ''; ?>>Mejor valorados</option>
+            <option value="rating" <?php echo $sort === 'rating' ? 'selected' : ''; ?>><?php echo t('Mejor valorados'); ?></option>
         </select>
         <?php if (!$platform): ?>
-        <input class="nf-input" id="fQ" type="search" placeholder="Filtrar por título..." value="<?php echo e($q); ?>">
+        <input class="nf-input" id="fQ" type="search" placeholder="<?php echo e(t('Filtrar por título...')); ?>" value="<?php echo e($q); ?>">
         <?php endif; ?>
         <span class="nf-count" id="fCount"></span>
     </div>
     <?php if ($cat === ''): ?>
-    <nav class="nf-chips" id="fGenre" aria-label="Géneros">
-        <button type="button" class="nf-chip<?php echo $genre === '' ? ' active' : ''; ?>" data-v="">Todos los géneros</button>
+    <nav class="nf-chips" id="fGenre" aria-label="<?php echo e(t('Géneros')); ?>">
+        <button type="button" class="nf-chip<?php echo $genre === '' ? ' active' : ''; ?>" data-v=""><?php echo t('Todos los géneros'); ?></button>
         <?php foreach ($availGenres as $k => $g): ?>
             <button type="button" class="nf-chip<?php echo $genre === $k ? ' active' : ''; ?>" data-v="<?php echo e($k); ?>"><?php echo e($g['label']); ?></button>
         <?php endforeach; ?>
     </nav>
     <?php if (!$platform): ?>
-    <nav class="nf-chips" id="fPlat" aria-label="Plataformas" style="padding-top:2px">
+    <nav class="nf-chips" id="fPlat" aria-label="<?php echo e(t('Plataformas')); ?>" style="padding-top:2px">
         <?php foreach (wp_available_platforms() as $k => $p): ?>
             <a class="nf-chip" href="browse.php?platform=<?php echo e($k); ?>"><?php echo e($p['label']); ?></a>
         <?php endforeach; ?>
@@ -121,7 +121,7 @@ document.addEventListener('DOMContentLoaded', function () {
         params: function () {
             return { action: 'browse', type: state.type, platform: state.platform, genre: state.genre, cat: state.cat, sort: state.sort, q: state.q };
         },
-        onTotal: function (n) { count.textContent = n ? n.toLocaleString('es') + ' títulos' : ''; }
+        onTotal: function (n) { count.textContent = n ? <?php echo tj('{n} títulos'); ?>.replace('{n}', n.toLocaleString(window.NF_LOCALE)) : ''; }
     });
     function sync() {
         var p = new URLSearchParams();

@@ -13,8 +13,8 @@ header('Cache-Control: no-store');
 $d = wp_handoff_open((string)($_GET['d'] ?? ''));
 if (!$d || empty($d['srv']) || empty($d['usr'])) {
     http_response_code(403);
-    echo '<!DOCTYPE html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#000;color:#fff;font-family:sans-serif;text-align:center;padding:60px 20px">'
-        . '<h2>Este enlace caducó</h2><p>Vuelve a abrir el contenido desde la web.</p></body>';
+    echo '<!DOCTYPE html><html lang="' . wp_lang() . '"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="background:#000;color:#fff;font-family:sans-serif;text-align:center;padding:60px 20px">'
+        . '<h2>' . e(t('Este enlace caducó')) . '</h2><p>' . e(t('Vuelve a abrir el contenido desde la web.')) . '</p></body>';
     exit;
 }
 // Safari (iPhone) y Chrome cambian solos http por https cuando la web tiene SSL. Se devuelve a http
@@ -56,16 +56,17 @@ $raw_url = wp_stream_url($kind, $id, (string)($d['vlcExt'] ?? $ext));
 $title = (string)($d['title'] ?? '');
 ?>
 <!DOCTYPE html>
-<html lang="es">
+<html lang="<?php echo wp_lang(); ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#000000">
     <meta name="referrer" content="no-referrer">
-    <title><?php echo e($title ?: 'Reproductor'); ?></title>
+    <title><?php echo e($title ?: t('Reproductor')); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=6">
+    <link rel="stylesheet" href="assets/nf/app.css?v=10">
     <link rel="stylesheet" href="assets/nf/player.css?v=9">
+    <?php echo wp_i18n_script(); ?>
     <style>
         html, body { height: 100%; overflow: hidden; background: #000; }
         #player-container { position: fixed; inset: 0; }
@@ -75,8 +76,8 @@ $title = (string)($d['title'] ?? '');
     <div id="player-container"></div>
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
-    <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=29" defer></script>
+    <script src="assets/nf/mp4mse.js?v=2" defer></script>
+    <script src="assets/nf/player.js?v=30" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

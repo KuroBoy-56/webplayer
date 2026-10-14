@@ -55,9 +55,9 @@ function wp_row($title, array $items = [], $more = '', $src = '', $id = '', $htm
 {
     $o = '<section class="nf-row' . ($variant ? ' nf-' . e($variant) : '') . '"' . ($id ? ' id="' . e($id) . '"' : '') . '>';
     $o .= '<div class="nf-row-head"><h2 class="nf-row-title">' . e($title) . '</h2>';
-    if ($more) $o .= '<a class="nf-row-more" href="' . e($more) . '">Ver todo ›</a>';
+    if ($more) $o .= '<a class="nf-row-more" href="' . e($more) . '">' . e(t('Ver todo')) . ' ›</a>';
     $o .= '</div><div class="nf-row-viewport">';
-    $o .= '<button class="nf-arrow l" type="button" aria-label="Anterior" hidden>' . wp_icon('left') . '</button>';
+    $o .= '<button class="nf-arrow l" type="button" aria-label="' . e(t('Anterior')) . '" hidden>' . wp_icon('left') . '</button>';
     $o .= '<div class="nf-slider"' . ($src ? ' data-src="' . e($src) . '"' : '') . ($variant ? ' data-variant="' . e($variant) . '"' : '') . '>';
     if ($html !== null) {
         $o .= $html;
@@ -66,15 +66,15 @@ function wp_row($title, array $items = [], $more = '', $src = '', $id = '', $htm
     } elseif ($src) {
         $o .= str_repeat('<div class="nf-skel"></div>', 8);
     }
-    $o .= '</div><button class="nf-arrow r" type="button" aria-label="Siguiente">' . wp_icon('right') . '</button>';
+    $o .= '</div><button class="nf-arrow r" type="button" aria-label="' . e(t('Siguiente')) . '">' . wp_icon('right') . '</button>';
     return $o . '</div></section>';
 }
 
 function wp_genre_chips($baseUrl, $active = '', $type = 'all', $withAll = true)
 {
     $sep = strpos($baseUrl, '?') === false ? '?' : '&';
-    $o = '<nav class="nf-chips" aria-label="Géneros">';
-    if ($withAll) $o .= '<a class="nf-chip' . ($active === '' ? ' active' : '') . '" href="' . e($baseUrl) . '">Todo</a>';
+    $o = '<nav class="nf-chips" aria-label="' . e(t('Géneros')) . '">';
+    if ($withAll) $o .= '<a class="nf-chip' . ($active === '' ? ' active' : '') . '" href="' . e($baseUrl) . '">' . e(t('Todo')) . '</a>';
     foreach (wp_available_genres($type) as $k => $g) {
         $o .= '<a class="nf-chip' . ($active === $k ? ' active' : '') . '" href="' . e($baseUrl . $sep . 'genre=' . $k) . '">' . e($g['label']) . '</a>';
     }
@@ -94,7 +94,7 @@ function wp_platform_tiles()
         }
         $o .= '</a>';
     }
-    return $o ? '<nav class="nf-platforms" aria-label="Plataformas">' . $o . '</nav>' : '';
+    return $o ? '<nav class="nf-platforms" aria-label="' . e(t('Plataformas')) . '">' . $o . '</nav>' : '';
 }
 
 function wp_footer_html()
@@ -106,18 +106,19 @@ function wp_footer_html()
     return '<footer class="nf-footer"><p>© ' . date('Y') . ' <a href="https://www.latmpx.com" target="_blank" rel="noopener">Garevyn TV</a></p></footer>';
 }
 
-function wp_hero_html($kindLabel = 'Destacado')
+function wp_hero_html($kindLabel = null)
 {
+    if ($kindLabel === null) $kindLabel = t('Destacado');
     $o = '<section class="nf-hero" id="nfHero">';
     $o .= '<div class="nf-hero-bg"></div><div class="nf-hero-bg"></div>';
     $o .= '<div class="nf-hero-info">';
     // vista celular (póster centrado como la app)
     $o .= '<div class="nf-hero-poster m-only"><div class="in"><div class="nf-hero-kicker" data-h="kicker"><span class="n">N</span>' . e($kindLabel) . '</div><h2 class="nf-hero-title" data-h="title">&nbsp;</h2><div class="nf-hero-meta" data-h="meta"></div></div></div>';
-    $o .= '<div class="nf-hero-btns m-only"><a class="nf-btn nf-btn-white" data-h="play" href="#">' . wp_icon('play') . 'Reproducir</a><a class="nf-btn nf-btn-gray" data-h="info" href="#">' . wp_icon('info') . 'Info</a></div>';
+    $o .= '<div class="nf-hero-btns m-only"><a class="nf-btn nf-btn-white" data-h="play" href="#">' . wp_icon('play') . e(t('Reproducir')) . '</a><a class="nf-btn nf-btn-gray" data-h="info" href="#">' . wp_icon('info') . e(t('Info')) . '</a></div>';
     // vista PC
     $o .= '<div class="d-only"><div class="nf-hero-kicker" data-h="kicker"><span class="n">N</span>' . e($kindLabel) . '</div>';
     $o .= '<h1 class="nf-hero-title" data-h="title">&nbsp;</h1><div class="nf-hero-meta" data-h="meta"></div><p class="nf-hero-desc" data-h="desc"></p>';
-    $o .= '<div class="nf-hero-btns"><a class="nf-btn nf-btn-white" data-h="play" href="#">' . wp_icon('play') . 'Reproducir</a><a class="nf-btn nf-btn-gray" data-h="info" href="#">' . wp_icon('info') . 'Más información</a></div></div>';
+    $o .= '<div class="nf-hero-btns"><a class="nf-btn nf-btn-white" data-h="play" href="#">' . wp_icon('play') . e(t('Reproducir')) . '</a><a class="nf-btn nf-btn-gray" data-h="info" href="#">' . wp_icon('info') . e(t('Más información')) . '</a></div></div>';
     $o .= '</div><div class="nf-hero-dots"></div></section>';
     return $o;
 }

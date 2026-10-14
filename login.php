@@ -12,23 +12,23 @@ wp_fake_unlock_post();
 
 // La llave del panel es obligatoria (includes/panel_secret.php, no se sube a GitHub)
 $panel_ready = wp_panel_ready();
-$panel_msg = 'Falta configurar la conexión con el panel: configura includes/panel_secret.php (copia includes/panel_secret.sample.php y pon la llave maestra del panel).';
+$panel_msg = t('Falta configurar la conexión con el panel: configura includes/panel_secret.php (copia includes/panel_secret.sample.php y pon la llave maestra del panel).');
 
 /* ---------- Fondo de pósters: api/tmdb.php del panel, como las apps ----------
  * Clave TMDB del distribuidor (o la del dueño con Omitir / sin número). Sin clave el panel responde
  * tmdb_key_not_set y no hay fondo. Caché por distribuidor: 6 h con carátulas, 10 min sin ellas (si se
- * pone una clave en el panel, el fondo aparece pronto). */
+ * pone una clave en el panel, el fondo aparece pronto). Títulos en el idioma de la app: caché también por idioma. */
 function getMoviesFromPanel($pages = 4)
 {
     $base = wp_panel_base();
     if ($base === '') return [];
-    $ck = wp_panel_ck('login|posters');
+    $ck = wp_panel_ck('login|posters|' . wp_lang());
     $c = wp_cache_get($ck, 6 * 3600, $stale);
     if (is_array($c) && (!empty($c['m']) || time() - (int)($c['at'] ?? 0) < 600)) return (array)($c['m'] ?? []);
     $refresh = function () use ($base, $pages, $ck) {
         $urls = [];
         for ($p = 1; $p <= $pages; $p++) {
-            $urls[$p] = $base . wp_panel_tenant_query('tmdb.php?path=movie/now_playing&language=es-MX&page=' . $p);
+            $urls[$p] = $base . wp_panel_tenant_query('tmdb.php?path=movie/now_playing&language=' . wp_tmdb_lang() . '&page=' . $p);
         }
         $movies = [];
         foreach (wp_http_multi($urls, 5) as $body) {
@@ -57,11 +57,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
     $password = trim((string)$_POST["password"]);
 
     if ($username === '' || $password === '') {
-        echo json_encode(['success' => false, 'message' => 'Escribe tu usuario y contraseña.']);
+        echo json_encode(['success' => false, 'message' => t('Escribe tu usuario y contraseña.')]);
         exit;
     }
     if (wp_rate_limited('login', 15, 300)) {
-        echo json_encode(['success' => false, 'message' => 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.']);
+        echo json_encode(['success' => false, 'message' => t('Demasiados intentos. Espera unos minutos e inténtalo de nuevo.')]);
         exit;
     }
 
@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
     // Número de distribuidor guardado en este navegador (Omitir = como siempre)
     $dist_choice = wp_dist_choice();
     if ($dist_choice === '') {
-        echo json_encode(['success' => false, 'dist' => true, 'message' => 'Escribe tu número de distribuidor o pulsa Omitir.']);
+        echo json_encode(['success' => false, 'dist' => true, 'message' => t('Escribe tu número de distribuidor o pulsa Omitir.')]);
         exit;
     }
     $dist_code = $dist_choice === 'skip' ? '' : $dist_choice;
@@ -93,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
     // DNS desde el panel (caché de 10 minutos; si el panel no responde, la última lista buena)
     $servers = wp_dns_list();
     if (!$servers) {
-        echo json_encode(['success' => false, 'message' => 'No se pudo obtener la lista de servidores del panel. Inténtalo de nuevo en unos minutos.']);
+        echo json_encode(['success' => false, 'message' => t('No se pudo obtener la lista de servidores del panel. Inténtalo de nuevo en unos minutos.')]);
         exit;
     }
 
@@ -166,16 +166,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
 
     if ($states) {
         $st = strtolower($states[0]);
-        $msg = $st === 'expired' ? 'Tu cuenta está vencida. Renueva tu suscripción para seguir viendo.'
-            : ($st === 'banned' || $st === 'disabled' ? 'Tu cuenta está deshabilitada. Contacta a soporte.' : 'Estado de cuenta: ' . $states[0]);
+        $msg = $st === 'expired' ? t('Tu cuenta está vencida. Renueva tu suscripción para seguir viendo.')
+            : ($st === 'banned' || $st === 'disabled' ? t('Tu cuenta está deshabilitada. Contacta a soporte.') : t('Estado de cuenta: {s}', ['s' => $states[0]]));
         echo json_encode(['success' => false, 'message' => $msg]);
         exit;
     }
     if (!$anyReply) {
-        echo json_encode(['success' => false, 'message' => 'No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.']);
+        echo json_encode(['success' => false, 'message' => t('No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.')]);
         exit;
     }
-    echo json_encode(['success' => false, 'message' => 'Usuario o contraseña incorrectos.']);
+    echo json_encode(['success' => false, 'message' => t('Usuario o contraseña incorrectos.')]);
     exit;
 }
 
@@ -201,7 +201,7 @@ $brand_name = wp_brand_name('', $dist_cfg);
 $dist_step = $dist_view['step'];
 ?>
 <!DOCTYPE html>
-<html lang="es">
+<html lang="<?php echo wp_lang(); ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -209,7 +209,8 @@ $dist_step = $dist_view['step'];
     <title><?php echo $brand_name !== '' ? e($brand_name) : 'LatMpx - WebPlayer'; ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="preconnect" href="https://image.tmdb.org">
-    <link rel="stylesheet" href="assets/nf/app.css?v=6">
+    <link rel="stylesheet" href="assets/nf/app.css?v=10">
+    <?php echo wp_i18n_script(); ?>
     <?php echo wp_tenant_css($dist_cfg); ?>
     <style>
         .nf-btn-skip { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.45); border-radius: 4px; cursor: pointer; font-weight: 700; }
@@ -218,6 +219,8 @@ $dist_step = $dist_view['step'];
         #dist-code { letter-spacing: 6px; font-size: 22px; font-variant-numeric: tabular-nums; }
         .nf-dist-now { color: #b3b3b3; font-size: 14px; margin: -14px 0 18px; }
         .nf-dist-now b { color: #fff; }
+        .nf-login-lang { position: absolute; top: 18px; right: 18px; z-index: 5; }
+        .nf-login-lang .nf-select { background: rgba(0,0,0,.6); width: auto; max-width: 60vw; }
         .nf-link-btn { background: none; border: 0; padding: 0; color: #fff; font: inherit; text-decoration: underline; cursor: pointer; }
     </style>
 <script>try{sessionStorage.removeItem("nfAlertShown")}catch(e){}</script>
@@ -234,29 +237,30 @@ $dist_step = $dist_view['step'];
     <div class="nf-login-shade"></div>
 
     <header class="nf-login-header">
+        <div class="nf-login-lang"><?php echo wp_lang_select(); ?></div>
         <img src="<?php echo e(wp_brand_logo($dist_cfg)); ?>" alt="<?php echo e($brand_name !== '' ? $brand_name : 'Logo'); ?>" class="nf-login-logo" id="brand-logo" onerror="this.onerror=null;this.src='assets/img/Logo.png'">
     </header>
 
     <main class="nf-login-main">
         <form id="dist-form" class="nf-login-box" method="POST" autocomplete="off" novalidate<?php echo $dist_step === 'dist' ? '' : ' hidden'; ?>>
-            <h1>Número de distribuidor</h1>
+            <h1><?php echo t('Número de distribuidor'); ?></h1>
             <div id="dist-error" class="nf-login-error" role="alert"<?php echo ($dist_step === 'dist' && $dist_view['error'] !== '') ? '' : ' hidden'; ?>><?php echo $dist_step === 'dist' ? e($dist_view['error']) : ''; ?></div>
             <label class="nf-field">
                 <input type="text" id="dist-code" name="code" placeholder=" " inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" spellcheck="false" value="<?php echo e($dist_view['code']); ?>"<?php echo $dist_step === 'dist' ? ' autofocus' : ''; ?>>
-                <span>Número de distribuidor</span>
+                <span><?php echo t('Número de distribuidor'); ?></span>
             </label>
             <button class="nf-btn-red nf-btn-block" type="submit" id="dist-btn">
-                <span class="lbl">Continuar</span>
+                <span class="lbl"><?php echo t('Continuar'); ?></span>
                 <span class="nf-spinner" aria-hidden="true"></span>
             </button>
-            <button class="nf-btn-skip nf-btn-block" type="button" id="dist-skip">Omitir</button>
-            <p class="nf-login-hint">Escribe el número de 6 dígitos que te dio tu distribuidor. Si no tienes uno, pulsa Omitir.</p>
+            <button class="nf-btn-skip nf-btn-block" type="button" id="dist-skip"><?php echo t('Omitir'); ?></button>
+            <p class="nf-login-hint"><?php echo t('Escribe el número de 6 dígitos que te dio tu distribuidor. Si no tienes uno, pulsa Omitir.'); ?></p>
         </form>
 
         <form id="login-form" class="nf-login-box" method="POST" autocomplete="on" novalidate<?php echo $dist_step === 'login' ? '' : ' hidden'; ?>>
-            <h1>Iniciar sesión</h1>
+            <h1><?php echo t('Iniciar sesión'); ?></h1>
             <?php if ($dist_view['code'] !== ''): ?>
-            <p class="nf-dist-now">Distribuidor: <b><?php echo e(($brand_name !== '' ? $brand_name . ' ' : '') . '(' . $dist_view['code'] . ')'); ?></b></p>
+            <p class="nf-dist-now"><?php echo t('Distribuidor:'); ?> <b><?php echo e(($brand_name !== '' ? $brand_name . ' ' : '') . '(' . $dist_view['code'] . ')'); ?></b></p>
             <?php endif; ?>
             <?php $login_err = !$panel_ready ? $panel_msg : ($dist_step === 'login' ? $dist_view['error'] : ''); ?>
             <?php if ($login_err === '' && $dist_step === 'login' && isset($_GET['line_err'])) { require_once __DIR__ . '/includes/line_guard.php'; $login_err = wp_line_message((string)$_GET['line_err']); } ?>
@@ -264,27 +268,27 @@ $dist_step = $dist_view['step'];
 
             <label class="nf-field">
                 <input type="text" id="username" name="username" placeholder=" " autocomplete="username" autocapitalize="none" spellcheck="false" value="<?php echo e($remember); ?>" required>
-                <span>Usuario</span>
+                <span><?php echo t('Usuario'); ?></span>
             </label>
 
             <label class="nf-field">
                 <input type="password" id="password" name="password" placeholder=" " autocomplete="current-password" required>
-                <span>Contraseña</span>
-                <button type="button" class="nf-eye" id="togglePassword" aria-label="Mostrar contraseña">
+                <span><?php echo t('Contraseña'); ?></span>
+                <button type="button" class="nf-eye" id="togglePassword" aria-label="<?php echo e(t('Mostrar contraseña')); ?>">
                     <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7zm0 11.5A4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
                 </button>
             </label>
 
             <button class="nf-btn-red nf-btn-block proceedLogin" type="submit" id="login-btn">
-                <span class="lbl">Iniciar sesión</span>
+                <span class="lbl"><?php echo t('Iniciar sesión'); ?></span>
                 <span class="nf-spinner" aria-hidden="true"></span>
             </button>
 
             <label class="nf-remember">
-                <input type="checkbox" id="remember" <?php echo $remember !== '' ? 'checked' : ''; ?>> Recordarme
+                <input type="checkbox" id="remember" <?php echo $remember !== '' ? 'checked' : ''; ?>> <?php echo t('Recordarme'); ?>
             </label>
-            <p class="nf-login-hint">Ingresa con el usuario y la contraseña de tu suscripción.
-                <button type="button" class="nf-link-btn" id="dist-change">Cambiar distribuidor</button></p>
+            <p class="nf-login-hint"><?php echo t('Ingresa con el usuario y la contraseña de tu suscripción.'); ?>
+                <button type="button" class="nf-link-btn" id="dist-change"><?php echo t('Cambiar distribuidor'); ?></button></p>
         </form>
     </main>
 
@@ -374,13 +378,13 @@ $dist_step = $dist_view['step'];
         post(fd).then(function () {
             try { localStorage.removeItem('wp_dist_brand'); } catch (e) {}
             window.location.href = 'login';
-        }).catch(function () { showDistError('Error de conexión. Inténtalo de nuevo.'); });
+        }).catch(function () { showDistError(<?php echo tj('Error de conexión. Inténtalo de nuevo.'); ?>); });
     });
     dform.addEventListener('submit', function (ev) {
         ev.preventDefault();
         derr.hidden = true;
         if (!/^\d{6}$/.test(dcode.value)) {
-            showDistError('Escribe los 6 dígitos de tu número de distribuidor.');
+            showDistError(<?php echo tj('Escribe los 6 dígitos de tu número de distribuidor.'); ?>);
             return;
         }
         dbtn.classList.add('loading');
@@ -394,11 +398,11 @@ $dist_step = $dist_view['step'];
                 window.location.href = 'login';
                 return;
             }
-            showDistError(data.message || 'No se pudo comprobar el número.');
+            showDistError(data.message || <?php echo tj('No se pudo comprobar el número.'); ?>);
             dbtn.classList.remove('loading');
             dbtn.disabled = false;
         }).catch(function () {
-            showDistError('Error de conexión. Inténtalo de nuevo.');
+            showDistError(<?php echo tj('Error de conexión. Inténtalo de nuevo.'); ?>);
             dbtn.classList.remove('loading');
             dbtn.disabled = false;
         });
@@ -409,7 +413,7 @@ $dist_step = $dist_view['step'];
         ev.preventDefault();
         err.hidden = true;
         if (!user.value.trim() || !pass.value.trim()) {
-            showError('Escribe tu usuario y contraseña.');
+            showError(<?php echo tj('Escribe tu usuario y contraseña.'); ?>);
             return;
         }
         btn.classList.add('loading');
@@ -422,22 +426,22 @@ $dist_step = $dist_view['step'];
         post(new FormData(form))
         .then(function (data) {
             if (data.success) {
-                btn.querySelector('.lbl').textContent = 'Entrando...';
+                btn.querySelector('.lbl').textContent = <?php echo tj('Entrando...'); ?>;
                 window.location.href = data.redirect;
             } else if (data.dist) {
                 try { localStorage.removeItem('wp_dist_brand'); } catch (e) {}
                 btn.classList.remove('loading');
                 btn.disabled = false;
-                showDistError(data.message || 'Escribe tu número de distribuidor.');
+                showDistError(data.message || <?php echo tj('Escribe tu número de distribuidor.'); ?>);
                 showStep('dist');
             } else {
-                showError(data.message || 'No se pudo iniciar sesión.');
+                showError(data.message || <?php echo tj('No se pudo iniciar sesión.'); ?>);
                 btn.classList.remove('loading');
                 btn.disabled = false;
             }
         })
         .catch(function () {
-            showError('Error de conexión. Inténtalo de nuevo.');
+            showError(<?php echo tj('Error de conexión. Inténtalo de nuevo.'); ?>);
             btn.classList.remove('loading');
             btn.disabled = false;
         });

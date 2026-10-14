@@ -42,7 +42,7 @@ if ($slug == "movie") {
                 $episodes_list[] = [
                     'id' => (string)$ep['id'],
                     'ext' => strtolower($ep['container_extension'] ?? 'mp4') ?: 'mp4',
-                    'label' => 'T' . $season . ':E' . ($ep['episode_num'] ?? '') . (!empty($ep['title']) ? ' · ' . $ep['title'] : ''),
+                    'label' => t('T{s}:E{e}', ['s' => $season, 'e' => $ep['episode_num'] ?? '']) . (!empty($ep['title']) ? ' · ' . $ep['title'] : ''),
                 ];
             }
         }
@@ -136,23 +136,24 @@ if ($http_url !== '' && $use_vlc !== '1' && wp_needs_handoff($kind, $id, $source
 
 $back_url = ($slug == 'movie') ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get;
 $download_url = '?' . http_build_query(array_merge($_GET, ['action' => 'download_file']));
-$extra = $demo ? [] : [['label' => 'Descargar contenido', 'href' => $download_url]];
-if ($has_prev) $extra[] = ['label' => 'Capítulo anterior', 'href' => $prev_url];
-if ($slug === 'series') $extra[] = ['label' => 'Ver episodios', 'href' => $back_url . '#episodios'];
+$extra = $demo ? [] : [['label' => t('Descargar contenido'), 'href' => $download_url]];
+if ($has_prev) $extra[] = ['label' => t('Capítulo anterior'), 'href' => $prev_url];
+if ($slug === 'series') $extra[] = ['label' => t('Ver episodios'), 'href' => $back_url . '#episodios'];
 $diag_url = 'diag.php?id=' . $id . '&slug=' . $slug . '&ext=' . rawurlencode($ext) . ($series_id_get ? '&series_id=' . rawurlencode($series_id_get) : '');
-if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? Solucionar', 'act' => 'fix'];
+if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga? Solucionar'), 'act' => 'fix'];
 ?>
 <!DOCTYPE html>
-<html lang="es">
+<html lang="<?php echo wp_lang(); ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#000000">
     <meta name="referrer" content="no-referrer">
-    <title><?php echo e($content_name ?: 'Reproductor'); ?> - <?php echo e($sitename); ?></title>
+    <title><?php echo e($content_name ?: t('Reproductor')); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=7">
+    <link rel="stylesheet" href="assets/nf/app.css?v=10">
     <link rel="stylesheet" href="assets/nf/player.css?v=9">
+    <?php echo wp_i18n_script(); ?>
     <style>
         html, body { height: 100%; overflow: hidden; background: #000; }
         #player-container { position: fixed; inset: 0; }
@@ -163,17 +164,17 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => '¿Sin audio o no carga? 
 </head>
 <body>
     <div id="vlc-overlay" class="vlc-overlay">
-        <h2>Abriendo VLC Player...</h2>
-        <p>Si el contenido no se abre automáticamente, presiona el botón.</p>
-        <a href="<?php echo $demo ? '#' : 'vlc://' . e($raw_url); ?>" class="nf-btn nf-btn-red">Reproducir en VLC</a>
-        <p style="margin-top:22px"><a href="<?php echo e($back_url); ?>" style="color:#aaa">Volver</a></p>
+        <h2><?php echo t('Abriendo VLC Player...'); ?></h2>
+        <p><?php echo t('Si el contenido no se abre automáticamente, presiona el botón.'); ?></p>
+        <a href="<?php echo $demo ? '#' : 'vlc://' . e($raw_url); ?>" class="nf-btn nf-btn-red"><?php echo t('Reproducir en VLC'); ?></a>
+        <p style="margin-top:22px"><a href="<?php echo e($back_url); ?>" style="color:#aaa"><?php echo t('Volver'); ?></a></p>
     </div>
     <div id="player-container"></div>
 
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
-    <script src="assets/nf/mp4mse.js?v=1" defer></script>
-    <script src="assets/nf/player.js?v=29" defer></script>
+    <script src="assets/nf/mp4mse.js?v=2" defer></script>
+    <script src="assets/nf/player.js?v=30" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

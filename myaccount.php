@@ -1,19 +1,19 @@
 <?php
 include "session.php";
-$pagename = "Mi cuenta";
+$pagename = t('Mi cuenta');
 include "config.php";
 
 $data = xt_get('', [], 300, 10); // player_api.php sin acción = datos de la cuenta
 $ui = is_array($data["user_info"] ?? null) ? $data["user_info"] : [];
 $exp = $ui["exp_date"] ?? null;
-$acc_active = $ui["status"] ?? 'Desconocido';
+$acc_active = $ui["status"] ?? t('Desconocido');
 // DEMO: nunca se muestra el usuario de la línea
 $acc_demo = wp_is_demo();
 $acc_user = $acc_demo ? 'DEMO' : ($ui["username"] ?? $username);
 $max_conn = $ui['max_connections'] ?? '';
 $active_conn = $ui['active_cons'] ?? '';
-$created = !empty($ui['created_at']) ? date('d/m/Y', (int)$ui['created_at']) : '';
-$expire = ($exp == NULL) ? "ILIMITADO" : gmdate("d/m/Y", (int)$exp);
+$created = !empty($ui['created_at']) ? wp_date((int)$ui['created_at']) : '';
+$expire = ($exp == NULL) ? t('ILIMITADO') : wp_date((int)$exp);
 $days_left = ($exp && is_numeric($exp)) ? (int)floor(((int)$exp - time()) / 86400) : null;
 
 // Lo que el usuario está viendo (guardado en el panel, igual que en las apps)
@@ -43,44 +43,48 @@ include "header.php";
     .ac-row .t.series { background: rgba(0,168,225,.15); color: #4fc3f7; }
     .ac-row .d { color: #8c8c8c; font-size: 13px; white-space: nowrap; }
     .ac-acts { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 26px; }
+    .ac-lang { background: #1a1a1a; border-radius: 8px; padding: 16px 18px; margin-bottom: 26px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .ac-lang label { color: #fff; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .ac-lang label i { color: var(--nf-red); }
     @media (max-width: 600px) { .ac-row { flex-wrap: wrap; } .ac-row .d { width: 100%; } }
 </style>
 <div class="nf-page account-wrapper">
     <div class="ac-wrap">
-        <h1 class="nf-page-title">Mi cuenta</h1>
-        <p class="nf-page-sub">Detalles de tu suscripción y lo que estás viendo.</p>
-        <?php if ($acc_demo): ?><p class="nf-page-sub"><b style="background:var(--nf-red);color:#fff;padding:3px 8px;border-radius:3px;font-size:12px;letter-spacing:1px">Cuenta DEMO</b> En la DEMO no se guardan "Continuar viendo" ni "Mi lista".</p><?php endif; ?>
+        <h1 class="nf-page-title"><?php echo t('Mi cuenta'); ?></h1>
+        <p class="nf-page-sub"><?php echo t('Detalles de tu suscripción y lo que estás viendo.'); ?></p>
+        <?php if ($acc_demo): ?><p class="nf-page-sub"><b style="background:var(--nf-red);color:#fff;padding:3px 8px;border-radius:3px;font-size:12px;letter-spacing:1px"><?php echo t('Cuenta DEMO'); ?></b> <?php echo e(t('En la DEMO no se guardan "Continuar viendo" ni "Mi lista".')); ?></p><?php endif; ?>
         <div class="ac-grid">
-            <div class="ac-item"><small>Usuario</small><b><?php echo e($acc_user); ?></b></div>
-            <div class="ac-item"><small>Estado</small><b class="<?php echo strcasecmp($acc_active, 'Active') === 0 ? 'ok' : 'bad'; ?>"><?php echo strcasecmp($acc_active, 'Active') === 0 ? 'Activa' : e($acc_active); ?></b></div>
-            <div class="ac-item"><small>Vence</small><b><?php echo e($expire); ?></b><?php if ($days_left !== null): ?><div style="color:#999;font-size:13px;margin-top:4px"><?php echo $days_left >= 0 ? 'Quedan ' . $days_left . ' días' : 'Vencida'; ?></div><?php endif; ?></div>
-            <?php if ($max_conn !== ''): ?><div class="ac-item"><small>Conexiones</small><b><?php echo e($active_conn); ?> / <?php echo e($max_conn); ?></b></div><?php endif; ?>
-            <?php if (!empty($_SESSION['server_name'])): ?><div class="ac-item"><small>Servidor</small><b><?php echo e($_SESSION['server_name']); ?></b></div><?php endif; ?>
-            <?php if ($created): ?><div class="ac-item"><small>Cliente desde</small><b><?php echo e($created); ?></b></div><?php endif; ?>
+            <div class="ac-item"><small><?php echo t('Usuario'); ?></small><b><?php echo e($acc_user); ?></b></div>
+            <div class="ac-item"><small><?php echo t('Estado'); ?></small><b class="<?php echo strcasecmp($acc_active, 'Active') === 0 ? 'ok' : 'bad'; ?>"><?php echo strcasecmp($acc_active, 'Active') === 0 ? t('Activa') : e($acc_active); ?></b></div>
+            <div class="ac-item"><small><?php echo t('Vence'); ?></small><b><?php echo e($expire); ?></b><?php if ($days_left !== null): ?><div style="color:#999;font-size:13px;margin-top:4px"><?php echo $days_left >= 0 ? t('Quedan {n} días', ['n' => $days_left]) : t('Vencida'); ?></div><?php endif; ?></div>
+            <?php if ($max_conn !== ''): ?><div class="ac-item"><small><?php echo t('Conexiones'); ?></small><b><?php echo e($active_conn); ?> / <?php echo e($max_conn); ?></b></div><?php endif; ?>
+            <?php if (!empty($_SESSION['server_name'])): ?><div class="ac-item"><small><?php echo t('Servidor'); ?></small><b><?php echo e(!empty($_SESSION['server_id']) ? t('Servidor {n}', ['n' => $_SESSION['server_id']]) : $_SESSION['server_name']); ?></b></div><?php endif; ?>
+            <?php if ($created): ?><div class="ac-item"><small><?php echo t('Cliente desde'); ?></small><b><?php echo e($created); ?></b></div><?php endif; ?>
             <?php if ($dist_code !== ''): ?>
-            <div class="ac-item"><small>Distribuidor</small><b><?php echo e(($dist_cfg && $dist_cfg['name'] ? $dist_cfg['name'] . ' ' : '') . '(' . $dist_code . ')'); ?></b></div>
-            <div class="ac-item"><small>Vence</small><b><?php echo $dist_exp !== '' ? e($dist_exp) : 'Sin vencimiento'; ?></b><?php if ($dist_exp !== ''): ?><div style="color:#999;font-size:13px;margin-top:4px">Hora de Panamá</div><?php endif; ?></div>
+            <div class="ac-item"><small><?php echo t('Distribuidor'); ?></small><b><?php echo e(($dist_cfg && $dist_cfg['name'] ? $dist_cfg['name'] . ' ' : '') . '(' . $dist_code . ')'); ?></b></div>
+            <div class="ac-item"><small><?php echo t('Vence'); ?></small><b><?php echo $dist_exp !== '' ? e($dist_exp) : t('Sin vencimiento'); ?></b><?php if ($dist_exp !== ''): ?><div style="color:#999;font-size:13px;margin-top:4px"><?php echo t('Hora de Panamá'); ?></div><?php endif; ?></div>
             <?php endif; ?>
         </div>
         <div class="ac-acts">
-            <a class="nf-btn nf-btn-dark" href="settings.php"><i class="fas fa-cog"></i> Ajustes</a>
-            <a class="nf-btn nf-btn-dark" href="logout.php?dist=1" data-noprefetch onclick="try{localStorage.removeItem('wp_dist_brand')}catch(e){}"><i class="fas fa-exchange-alt"></i> Cambiar distribuidor</a>
-            <a class="nf-btn nf-btn-dark" href="logout.php" data-noprefetch><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+            <a class="nf-btn nf-btn-dark" href="settings.php"><i class="fas fa-cog"></i> <?php echo t('Ajustes'); ?></a>
+            <a class="nf-btn nf-btn-dark" href="logout.php?dist=1" data-noprefetch onclick="try{localStorage.removeItem('wp_dist_brand')}catch(e){}"><i class="fas fa-exchange-alt"></i> <?php echo t('Cambiar distribuidor'); ?></a>
+            <a class="nf-btn nf-btn-dark" href="logout.php" data-noprefetch><i class="fas fa-sign-out-alt"></i> <?php echo t('Cerrar sesión'); ?></a>
         </div>
+        <div class="ac-lang"><label for="acLang"><i class="fas fa-globe"></i> <?php echo t('Idioma de la app'); ?></label><?php echo str_replace('<select ', '<select id="acLang" ', wp_lang_select()); ?></div>
         <div class="ac-hist history-section">
-            <h3>Continuar viendo</h3>
+            <h3><?php echo t('Continuar viendo'); ?></h3>
             <?php if ($acc_demo): ?>
-                <div class="nf-empty" style="padding:30px">No disponible en la DEMO.</div>
+                <div class="nf-empty" style="padding:30px"><?php echo t('No disponible en la DEMO.'); ?></div>
             <?php elseif ($history_items): ?>
                 <?php foreach (array_slice($history_items, 0, 200) as $item): ?>
                     <div class="ac-row">
                         <span class="n"><?php echo e($item['title'] ?? ''); ?></span>
-                        <span class="t <?php echo ($item['type'] ?? '') === 'movie' ? 'movie' : 'series'; ?>"><?php echo ($item['type'] ?? '') === 'movie' ? 'Película' : 'Serie'; ?></span>
-                        <span class="d"><?php echo !empty($item['last_watched']) ? date('d M Y - g:i A', (int)$item['last_watched']) : ''; ?></span>
+                        <span class="t <?php echo ($item['type'] ?? '') === 'movie' ? 'movie' : 'series'; ?>"><?php echo ($item['type'] ?? '') === 'movie' ? t('Película') : t('Serie'); ?></span>
+                        <span class="d"><?php echo !empty($item['last_watched']) ? e(wp_date((int)$item['last_watched'], true)) : ''; ?></span>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
-                <div class="nf-empty" style="padding:30px">Aún no tienes contenido en progreso.</div>
+                <div class="nf-empty" style="padding:30px"><?php echo t('Aún no tienes contenido en progreso.'); ?></div>
             <?php endif; ?>
         </div>
     </div>

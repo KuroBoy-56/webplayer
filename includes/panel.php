@@ -77,6 +77,9 @@ function wp_panel_encrypt($plain)
 {
     $key = wp_panel_key();
     if ($key === null) return null;
+    // idioma de la app en todo cuerpo cifrado (JSON): el panel traduce sus mensajes
+    $j = json_decode((string)$plain, true);
+    if (is_array($j) && !isset($j[0]) && !isset($j['lang'])) $plain = json_encode($j + ['lang' => wp_lang()], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     $salt = random_bytes(16);
     $iv = random_bytes(12);
     $tag = '';
@@ -111,7 +114,11 @@ function wp_panel_request($endpoint, $body = null, array $headers = [], $timeout
     $code = 0;
     $base = wp_panel_base();
     if ($base === '' || !function_exists('curl_init')) return null;
+    // idioma de la app en cada llamada (?lang=, Accept-Language y en el JSON): el panel traduce sus mensajes
+    $endpoint .= (strpos($endpoint, '?') === false ? '?' : '&') . 'lang=' . wp_lang();
+    $headers[] = 'Accept-Language: ' . wp_lang();
     if (is_array($body)) {
+        if (!isset($body['lang'])) $body['lang'] = wp_lang();
         $post = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $headers[] = 'Content-Type: application/json';
     } elseif (is_string($body)) {
@@ -529,11 +536,11 @@ function wp_panel_epg(array $channels, $ttl = 900)
 function wp_panel_sports()
 {
     // cada distribuidor elige sus deportes: caché por número
-    $data = wp_cache_get(wp_panel_ck('panel|sports'), 600, $stale);
+    $data = wp_cache_get(wp_panel_ck('panel|sports|' . wp_lang()), 600, $stale);
     if (is_array($data)) return $data;
     $j = wp_panel_call('sports.php', null, 12);
     if (is_array($j) && is_array($j['events'] ?? null)) {
-        wp_cache_set(wp_panel_ck('panel|sports'), $j);
+        wp_cache_set(wp_panel_ck('panel|sports|' . wp_lang()), $j);
         return $j;
     }
     return is_array($stale) ? $stale : ['events' => []];

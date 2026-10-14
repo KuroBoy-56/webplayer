@@ -23,18 +23,18 @@ define('WP_TENANT_OFFLINE_MAX', 259200); // sin panel: se sigue con la copia has
 define('WP_TENANT_FAILS', 8);            // números no válidos desde el hosting en 15 min (el panel espera con 10)
 define('WP_TENANT_FAILS_DAY', 25);       // ... y en 24 h (el panel bloquea la IP con 30)
 
-/** Mensajes en español por código de error del panel. */
+/** Mensajes por código de error del panel (en el idioma de la app). */
 function wp_tenant_messages()
 {
     return [
-        'tenant_invalid' => 'Número de distribuidor no válido',
-        'tenant_expired' => 'El servicio de este distribuidor venció. Contacta a tu distribuidor.',
-        'tenant_suspended' => 'Este distribuidor está suspendido. Contacta a tu distribuidor.',
-        'app_not_linked' => 'Este número de distribuidor no está habilitado para esta aplicación.',
-        'too_many_attempts' => 'Demasiados intentos. Espera 15 minutos e inténtalo de nuevo.',
-        'app_required' => 'Error interno: falta indicar la aplicación (app_required). Avisa a soporte.',
-        'no_key' => 'Esta versión de la app no tiene la llave del panel',
-        'offline' => 'No se pudo conectar con el panel del distribuidor. Revisa tu conexión e inténtalo de nuevo.',
+        'tenant_invalid' => t('Número de distribuidor no válido'),
+        'tenant_expired' => t('El servicio de este distribuidor venció. Contacta a tu distribuidor.'),
+        'tenant_suspended' => t('Este distribuidor está suspendido. Contacta a tu distribuidor.'),
+        'app_not_linked' => t('Este número de distribuidor no está habilitado para esta aplicación.'),
+        'too_many_attempts' => t('Demasiados intentos. Espera 15 minutos e inténtalo de nuevo.'),
+        'app_required' => t('Error interno: falta indicar la aplicación (app_required). Avisa a soporte.'),
+        'no_key' => t('Esta versión de la app no tiene la llave del panel'),
+        'offline' => t('No se pudo conectar con el panel del distribuidor. Revisa tu conexión e inténtalo de nuevo.'),
     ];
 }
 
@@ -42,7 +42,7 @@ function wp_tenant_message($code, array $cfg = null)
 {
     if ($code === 'tenant_expired' && is_array($cfg)) {
         $d = wp_tenant_expiry_text($cfg);
-        if ($d !== '') return 'Tu distribuidor venció el ' . $d . ' (hora de Panamá)';
+        if ($d !== '') return t('Tu distribuidor venció el {d} (hora de Panamá)', ['d' => $d]);
     }
     $m = wp_tenant_messages();
     return $m[$code] ?? $m['tenant_invalid'];

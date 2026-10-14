@@ -256,14 +256,14 @@ function fetchAndProcessContent($target_url) {
 
 /* ---------- Agenda deportiva: la entrega el panel (api/sports.php, caché 10 min) ---------- */
 $sp_sports = [
-    'Soccer' => ['Fútbol', '⚽', 120],
-    'Basketball' => ['Baloncesto', '🏀', 150],
-    'American Football' => ['Fútbol americano', '🏈', 210],
-    'Baseball' => ['Béisbol', '⚾', 190],
-    'Fighting' => ['Combate', '🥊', 240],
-    'Motorsport' => ['Motor', '🏁', 150],
-    'Tennis' => ['Tenis', '🎾', 150],
-    'Ice Hockey' => ['Hockey', '🏒', 160],
+    'Soccer' => [t('Fútbol'), '⚽', 120],
+    'Basketball' => [t('Baloncesto'), '🏀', 150],
+    'American Football' => [t('Fútbol americano'), '🏈', 210],
+    'Baseball' => [t('Béisbol'), '⚾', 190],
+    'Fighting' => [t('Combate'), '🥊', 240],
+    'Motorsport' => [t('Motor'), '🏁', 150],
+    'Tennis' => [t('Tenis'), '🎾', 150],
+    'Ice Hockey' => [t('Hockey'), '🏒', 160],
 ];
 
 $sp_panel = wp_panel_sports();
@@ -297,7 +297,7 @@ if (!$events) {
 $sp_meta = [];
 foreach ($sp_sports as $k => $m) $sp_meta[$k] = ['n' => $m[0], 'i' => $m[1], 'd' => $m[2]];
 
-$page_title = 'Deportes';
+$page_title = t('Deportes');
 $nav_active = 'sports';
 $body_class = 'nf-solid';
 include "header.php";
@@ -409,33 +409,33 @@ include "header.php";
 <main class="sp" id="sp">
     <div class="sp-head">
         <div>
-            <h1>Deportes</h1>
-            <p>Partidos de hoy y mañana en tu hora local.</p>
+            <h1><?php echo t('Deportes'); ?></h1>
+            <p><?php echo t('Partidos de hoy y mañana en tu hora local.'); ?></p>
         </div>
         <span class="sp-livecount" id="spLiveCount" hidden><span class="sp-dot"></span><span></span></span>
     </div>
 
 <?php if ($events): ?>
     <div class="sp-bar">
-        <div class="sp-days" role="tablist" aria-label="Día">
-            <button type="button" class="on" data-day="0" role="tab">Hoy</button>
-            <button type="button" data-day="1" role="tab">Mañana</button>
+        <div class="sp-days" role="tablist" aria-label="<?php echo e(t('Día')); ?>">
+            <button type="button" class="on" data-day="0" role="tab"><?php echo t('Hoy'); ?></button>
+            <button type="button" data-day="1" role="tab"><?php echo t('Mañana'); ?></button>
         </div>
-        <div class="sp-search"><input type="search" id="spQ" placeholder="Buscar equipo o liga" aria-label="Buscar equipo o liga"></div>
+        <div class="sp-search"><input type="search" id="spQ" placeholder="<?php echo e(t('Buscar equipo o liga')); ?>" aria-label="<?php echo e(t('Buscar equipo o liga')); ?>"></div>
         <div class="sp-chips" id="spChips"></div>
     </div>
     <section class="sp-livewrap" id="spLive" hidden>
-        <h2 class="sp-h2"><span class="sp-dot"></span>En vivo ahora</h2>
+        <h2 class="sp-h2"><span class="sp-dot"></span><?php echo t('En vivo ahora'); ?></h2>
         <div class="sp-live-row"></div>
     </section>
     <div id="spList"></div>
 <?php else: ?>
     <?php if (!empty($sports['t1']) || !empty($sports['t2'])): ?>
-        <div class="sp-search" style="max-width:420px;margin-bottom:14px"><input type="search" id="spQ2" placeholder="Buscar equipos, ligas o canales" aria-label="Buscar"></div>
+        <div class="sp-search" style="max-width:420px;margin-bottom:14px"><input type="search" id="spQ2" placeholder="<?php echo e(t('Buscar equipos, ligas o canales')); ?>" aria-label="<?php echo e(t('Buscar')); ?>"></div>
         <?php if (!empty($sports['t1'])): ?><div class="sp-fallback"><?php echo $sports['t1']; ?></div><?php endif; ?>
         <?php if (!empty($sports['t2'])): ?><div class="sp-fallback"><?php echo $sports['t2']; ?></div><?php endif; ?>
     <?php else: ?>
-        <div class="sp-empty"><b>La agenda deportiva no está disponible</b>Vuelve a intentarlo en unos minutos.</div>
+        <div class="sp-empty"><b><?php echo t('La agenda deportiva no está disponible'); ?></b><?php echo t('Vuelve a intentarlo en unos minutos.'); ?></div>
     <?php endif; ?>
 <?php endif; ?>
 </main>
@@ -457,7 +457,7 @@ include "header.php";
 
     var FIN = /^(FT|AET|AOT|PEN|Match Finished|Finished|After Over Time|Final)$/i;
     var state = { day: 0, sport: '', q: '' };
-    var fmtT = new Intl.DateTimeFormat('es', { hour: 'numeric', minute: '2-digit' });
+    var fmtT = new Intl.DateTimeFormat(window.NF_LOCALE, { hour: 'numeric', minute: '2-digit' });
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var dayKey = function (d) { return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); };
 
@@ -494,9 +494,9 @@ include "header.php";
     }
     function card(e) {
         var st = status(e), pill;
-        if (st === 'live') pill = '<span class="sp-pill live"><span class="sp-dot"></span>En vivo</span>';
-        else if (st === 'fin') pill = '<span class="sp-pill fin">Final</span>';
-        else if (st === 'pp') pill = '<span class="sp-pill fin">Aplazado</span>';
+        if (st === 'live') pill = '<span class="sp-pill live"><span class="sp-dot"></span>' + <?php echo tj('En vivo'); ?> + '</span>';
+        else if (st === 'fin') pill = '<span class="sp-pill fin">' + <?php echo tj('Final'); ?> + '</span>';
+        else if (st === 'pp') pill = '<span class="sp-pill fin">' + <?php echo tj('Aplazado'); ?> + '</span>';
         else pill = '<span class="sp-pill time">' + esc(fmtT.format(e.t)) + '</span>';
         var hasScore = e.hs !== null && e.hs !== '' && e.as !== null && e.as !== '' && st !== 'soon';
         var mid;
@@ -512,7 +512,7 @@ include "header.php";
             '<div class="sp-top"><span class="lg">' + esc(m.i + ' ' + (e.lg || m.n)) + '</span>' + pill + '</div>' + mid +
             tvLine(e) +
             '<div class="sp-foot"><span class="v">' + esc(e.v || (st === 'soon' ? fmtT.format(e.t) : '')) + '</span>' +
-            '<a href="tvguide.php" class="sp-tv" data-i="' + EV.indexOf(e) + '">' + (hasTv(e) ? 'Ver canales' : 'TV en vivo') + '</a></div></article>';
+            '<a href="tvguide.php" class="sp-tv" data-i="' + EV.indexOf(e) + '">' + (hasTv(e) ? <?php echo tj('Ver canales'); ?> : <?php echo tj('TV en vivo'); ?>) + '</a></div></article>';
     }
 
     var today = new Date(), tomorrow = new Date(Date.now() + 86400000);
@@ -530,7 +530,7 @@ include "header.php";
     function renderChips() {
         var count = {}, total = 0;
         EV.forEach(function (e) { if (e.dk === keys[state.day]) { count[e.sp] = (count[e.sp] || 0) + 1; total++; } });
-        var h = '<button type="button" class="nf-chip' + (state.sport ? '' : ' active') + '" data-sp="">Todos<b>' + total + '</b></button>';
+        var h = '<button type="button" class="nf-chip' + (state.sport ? '' : ' active') + '" data-sp="">' + <?php echo tj('Todos'); ?> + '<b>' + total + '</b></button>';
         Object.keys(META).forEach(function (k) {
             if (!count[k]) return;
             h += '<button type="button" class="nf-chip' + (state.sport === k ? ' active' : '') + '" data-sp="' + esc(k) + '">' + META[k].i + ' ' + esc(META[k].n) + '<b>' + count[k] + '</b></button>';
@@ -543,7 +543,7 @@ include "header.php";
         var live = EV.filter(function (e) { return status(e) === 'live' && (!state.sport || e.sp === state.sport); });
         var lc = document.getElementById('spLiveCount');
         lc.hidden = !live.length;
-        lc.lastChild.textContent = live.length + (live.length === 1 ? ' partido en vivo' : ' partidos en vivo');
+        lc.lastChild.textContent = (live.length === 1 ? <?php echo tj('{n} partido en vivo'); ?> : <?php echo tj('{n} partidos en vivo'); ?>).replace('{n}', live.length);
         var lw = document.getElementById('spLive');
         lw.hidden = !(live.length && state.day === 0 && !state.q);
         if (!lw.hidden) lw.querySelector('.sp-live-row').innerHTML = live.map(card).join('');
@@ -560,7 +560,7 @@ include "header.php";
             return '<section class="sp-league"><div class="sp-lhead">' + (G.lb ? '<img src="' + esc(G.lb) + '/tiny" alt="" loading="lazy" onerror="this.remove()">' : '') +
                 '<h3>' + esc(g) + '</h3><span>' + G.items.length + '</span></div><div class="sp-grid">' + G.items.map(card).join('') + '</div></section>';
         }).join('');
-        if (!h && lw.hidden) h = '<div class="sp-empty"><b>No hay partidos con estos filtros</b>Prueba con otro día o deporte.</div>';
+        if (!h && lw.hidden) h = '<div class="sp-empty"><b>' + <?php echo tj('No hay partidos con estos filtros'); ?> + '</b>' + <?php echo tj('Prueba con otro día o deporte.'); ?> + '</div>';
         document.getElementById('spList').innerHTML = h;
     }
 
@@ -582,7 +582,7 @@ include "header.php";
     // Con canales del panel se abre un menú: el evento (prueba los canales y luego los equipos), cada canal o los equipos.
     var menu = document.createElement('div');
     menu.className = 'sp-menu'; menu.hidden = true;
-    menu.innerHTML = '<div class="sp-menu-box" role="dialog" aria-modal="true" aria-labelledby="spMenuT"><h3 id="spMenuT"></h3><p></p><div class="sp-menu-list"></div><button type="button" class="sp-menu-close">Cerrar</button></div>';
+    menu.innerHTML = '<div class="sp-menu-box" role="dialog" aria-modal="true" aria-labelledby="spMenuT"><h3 id="spMenuT"></h3><p></p><div class="sp-menu-list"></div><button type="button" class="sp-menu-close">' + <?php echo tj('Cerrar'); ?> + '</button></div>';
     document.body.appendChild(menu);
     var menuEv = null, menuBtn = null;
     function closeMenu() { menu.hidden = true; if (menuBtn) menuBtn.focus(); menuEv = null; }
@@ -597,11 +597,11 @@ include "header.php";
 
     function openMenu(e, b) {
         menuEv = e; menuBtn = b;
-        menu.querySelector('h3').textContent = e.h && e.a ? e.h + ' vs ' + e.a : (e.ev || 'Evento');
-        menu.querySelector('p').textContent = 'Se transmite por ' + e.tv.length + (e.tv.length === 1 ? ' canal' : ' canales') + '. Elige uno o deja que lo busquemos.';
-        var h = '<button type="button" class="main" data-m="auto">▶ Ver el evento</button>';
+        menu.querySelector('h3').textContent = e.h && e.a ? e.h + ' vs ' + e.a : (e.ev || <?php echo tj('Evento'); ?>);
+        menu.querySelector('p').textContent = (e.tv.length === 1 ? <?php echo tj('Se transmite por {n} canal. Elige uno o deja que lo busquemos.'); ?> : <?php echo tj('Se transmite por {n} canales. Elige uno o deja que lo busquemos.'); ?>).replace('{n}', e.tv.length);
+        var h = '<button type="button" class="main" data-m="auto">▶ ' + <?php echo tj('Ver el evento'); ?> + '</button>';
         e.tv.forEach(function (c, i) { h += '<button type="button" data-m="tv" data-k="' + i + '">' + esc(c.n) + (c.c ? '<span>' + esc(c.c) + '</span>' : '') + '</button>'; });
-        h += '<button type="button" data-m="teams">🔎 Buscar por equipos</button>';
+        h += '<button type="button" data-m="teams">🔎 ' + <?php echo tj('Buscar por equipos'); ?> + '</button>';
         menu.querySelector('.sp-menu-list').innerHTML = h;
         menu.hidden = false;
         menu.querySelector('.sp-menu-list button').focus();
@@ -609,17 +609,17 @@ include "header.php";
 
     function watch(e, b, mode, tvs) {
         if (b.classList.contains('busy')) return;
-        b.classList.add('busy'); var txt = b.textContent; b.textContent = 'Buscando canal…';
+        b.classList.add('busy'); var txt = b.textContent; b.textContent = <?php echo tj('Buscando canal…'); ?>;
         if (mode === 'auto') tvs = hasTv(e) ? e.tv.map(function (c) { return c.n; }) : [];
         var url = 'sportsschedule.php?ajax=channel&mode=' + mode + '&h=' + encodeURIComponent(e.h || '') + '&a=' + encodeURIComponent(e.a || '') +
             '&lg=' + encodeURIComponent(e.lg || '') + '&ev=' + encodeURIComponent(e.ev || '') + '&tv=' + encodeURIComponent((tvs || []).join('|'));
         fetch(url, { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (j) {
-                var miss = j.missing ? 'No tienes ' + j.missing + '. ' : '';
-                if (!j.ok) { NF.toast(miss + 'No encontramos un canal para este evento'); return; }
-                if (j.partial) { NF.toast(miss + 'Aún no aparece el canal exacto, te mostramos ' + j.name); setTimeout(function () { location.href = j.url; }, 1200); return; }
-                if (miss) { NF.toast(miss + 'Te mostramos ' + j.name); setTimeout(function () { location.href = j.url; }, 1200); return; }
+                var miss = j.missing ? <?php echo tj('No tienes {c}.'); ?>.replace('{c}', j.missing) + ' ' : '';
+                if (!j.ok) { NF.toast(miss + <?php echo tj('No encontramos un canal para este evento'); ?>); return; }
+                if (j.partial) { NF.toast(miss + <?php echo tj('Aún no aparece el canal exacto, te mostramos {c}'); ?>.replace('{c}', j.name)); setTimeout(function () { location.href = j.url; }, 1200); return; }
+                if (miss) { NF.toast(miss + <?php echo tj('Te mostramos {c}'); ?>.replace('{c}', j.name)); setTimeout(function () { location.href = j.url; }, 1200); return; }
                 location.href = j.url;
             })
             .catch(function () { location.href = 'tvguide.php'; })
@@ -631,7 +631,7 @@ include "header.php";
         ev.preventDefault();
         var e = EV[+b.getAttribute('data-i')]; if (!e) return;
         var st = status(e);
-        if (e.dk !== keys[0] || st === 'fin' || st === 'pp') { NF.toast(st === 'fin' && e.dk === keys[0] ? 'Este evento ya terminó' : 'El evento no está en línea'); return; }
+        if (e.dk !== keys[0] || st === 'fin' || st === 'pp') { NF.toast(st === 'fin' && e.dk === keys[0] ? <?php echo tj('Este evento ya terminó'); ?> : <?php echo tj('El evento no está en línea'); ?>); return; }
         if (hasTv(e)) openMenu(e, b);
         else watch(e, b, 'teams', null);
     });

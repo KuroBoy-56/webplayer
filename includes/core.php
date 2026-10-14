@@ -15,6 +15,7 @@ define('WP_ROOT', dirname(__DIR__));
 define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36');
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
+require_once __DIR__ . '/i18n.php';
 
 
 /**
@@ -143,7 +144,7 @@ function wp_dns_list()
 {
     $list = [];
     foreach (wp_panel_dns_urls() as $i => $url) {
-        $list[] = ['id' => (string)($i + 1), 'name' => 'Servidor ' . ($i + 1), 'url' => rtrim($url, '/')];
+        $list[] = ['id' => (string)($i + 1), 'name' => t('Servidor {n}', ['n' => $i + 1]), 'url' => rtrim($url, '/')];
     }
     return $list;
 }
@@ -714,7 +715,7 @@ function wp_platforms()
         'apple' => ['label' => 'Apple TV+', 'img' => 'img/appletv.webp', 'kw' => ['apple'], 'color' => '#555'],
         'paramount' => ['label' => 'Paramount+', 'img' => 'img/paramount.webp', 'kw' => ['paramount'], 'color' => '#0064ff'],
         'dc' => ['label' => 'DC', 'img' => 'img/dc.webp', 'kw' => ['/\bdc\b/', 'dc comics'], 'color' => '#0476f2'],
-        'xmas' => ['label' => 'Navidad', 'img' => 'img/xmas.webp', 'kw' => ['navidad', 'navide', 'christmas', 'xmas'], 'color' => '#1f7a3a'],
+        'xmas' => ['label' => t('Navidad'), 'img' => 'img/xmas.webp', 'kw' => ['navidad', 'navide', 'christmas', 'xmas'], 'color' => '#1f7a3a'],
         'halloween' => ['label' => 'Halloween', 'img' => 'img/halloween.webp', 'kw' => ['halloween', 'terror', 'horror'], 'color' => '#ff6a00'],
     ];
 }
@@ -722,26 +723,26 @@ function wp_platforms()
 function wp_genres()
 {
     return [
-        'accion' => ['label' => 'Acción', 'kw' => ['accion', 'action', 'artes marciales']],
-        'suspenso' => ['label' => 'Suspenso', 'kw' => ['suspenso', 'suspense', 'thriller', 'misterio', 'mystery', 'intriga']],
-        'aventura' => ['label' => 'Aventura', 'kw' => ['aventura', 'adventure']],
+        'accion' => ['label' => t('Acción'), 'kw' => ['accion', 'action', 'artes marciales']],
+        'suspenso' => ['label' => t('Suspenso'), 'kw' => ['suspenso', 'suspense', 'thriller', 'misterio', 'mystery', 'intriga']],
+        'aventura' => ['label' => t('Aventura'), 'kw' => ['aventura', 'adventure']],
         'anime' => ['label' => 'Anime', 'kw' => ['anime', 'crunchyroll', 'otaku']],
         'drama' => ['label' => 'Drama', 'kw' => ['drama']],
-        'comedia' => ['label' => 'Comedia', 'kw' => ['comedia', 'comedy', 'humor']],
-        'terror' => ['label' => 'Terror', 'kw' => ['terror', 'horror', 'miedo']],
-        'scifi' => ['label' => 'Ciencia ficción', 'kw' => ['ciencia ficcion', 'sci-fi', 'scifi', 'science fiction', 'ficcion']],
-        'fantasia' => ['label' => 'Fantasía', 'kw' => ['fantasia', 'fantasy']],
+        'comedia' => ['label' => t('Comedia'), 'kw' => ['comedia', 'comedy', 'humor']],
+        'terror' => ['label' => t('Terror'), 'kw' => ['terror', 'horror', 'miedo']],
+        'scifi' => ['label' => t('Ciencia ficción'), 'kw' => ['ciencia ficcion', 'sci-fi', 'scifi', 'science fiction', 'ficcion']],
+        'fantasia' => ['label' => t('Fantasía'), 'kw' => ['fantasia', 'fantasy']],
         'romance' => ['label' => 'Romance', 'kw' => ['romance', 'romantic', 'romantica', 'romantico', 'amor']],
-        'crimen' => ['label' => 'Crimen', 'kw' => ['crimen', 'crime', 'policia', 'policiaco', 'mafia']],
-        'animacion' => ['label' => 'Animación', 'kw' => ['animacion', 'animation', 'animada', 'animado', 'cartoon', 'dibujos']],
-        'infantil' => ['label' => 'Infantil y familia', 'kw' => ['infantil', 'kids', 'ninos', 'familia', 'family', 'familiar']],
-        'documental' => ['label' => 'Documentales', 'kw' => ['documental', 'documentary', 'docu']],
-        'belica' => ['label' => 'Bélicas', 'kw' => ['belica', 'belico', 'guerra', 'war']],
-        'dorama' => ['label' => 'Doramas', 'kw' => ['dorama', 'k-drama', 'kdrama', 'corea', 'korean', 'asiatic']],
-        'novela' => ['label' => 'Novelas', 'kw' => ['novela', 'telenovela']],
+        'crimen' => ['label' => t('Crimen'), 'kw' => ['crimen', 'crime', 'policia', 'policiaco', 'mafia']],
+        'animacion' => ['label' => t('Animación'), 'kw' => ['animacion', 'animation', 'animada', 'animado', 'cartoon', 'dibujos']],
+        'infantil' => ['label' => t('Infantil y familia'), 'kw' => ['infantil', 'kids', 'ninos', 'familia', 'family', 'familiar']],
+        'documental' => ['label' => t('Documentales'), 'kw' => ['documental', 'documentary', 'docu']],
+        'belica' => ['label' => t('Bélicas'), 'kw' => ['belica', 'belico', 'guerra', 'war']],
+        'dorama' => ['label' => t('Doramas'), 'kw' => ['dorama', 'k-drama', 'kdrama', 'corea', 'korean', 'asiatic']],
+        'novela' => ['label' => t('Novelas'), 'kw' => ['novela', 'telenovela']],
         'western' => ['label' => 'Western', 'kw' => ['western', 'vaquer', 'oeste']],
-        'musical' => ['label' => 'Música', 'kw' => ['musical', 'music', 'musica', 'concierto']],
-        'deportes' => ['label' => 'Deportes', 'kw' => ['deporte', 'sport', 'futbol']],
+        'musical' => ['label' => t('Música'), 'kw' => ['musical', 'music', 'musica', 'concierto']],
+        'deportes' => ['label' => t('Deportes'), 'kw' => ['deporte', 'sport', 'futbol']],
     ];
 }
 
@@ -1157,11 +1158,14 @@ function wp_tmdb_search($type, $title, $year = '')
 
 /**
  * Datos completos de TMDB. $type = 'movie' | 'tv'. Usa el tmdb_id del servidor si existe (más exacto).
- * Devuelve ['id','poster','backdrop','cast','trailer','overview'] (caché 7 días).
+ * Devuelve ['id','poster','backdrop','cast','trailer','overview'] (caché 7 días, por idioma de la app).
+ * La búsqueda del título sigue en es-MX (wp_tmdb_find); la ficha llega en el idioma de la app.
  */
 function wp_tmdb_details($type, $tmdbId, $title, $year = '')
 {
-    $ck = 'tmdbd3|' . $type . '|' . (preg_replace('/\D/', '', (string)$tmdbId) ?: wp_norm_title(wp_tmdb_clean_title($title)) . '|' . $year);
+    $tl = wp_tmdb_lang();
+    $l2 = substr($tl, 0, 2);
+    $ck = 'tmdbd3|' . $tl . '|' . $type . '|' . (preg_replace('/\D/', '', (string)$tmdbId) ?: wp_norm_title(wp_tmdb_clean_title($title)) . '|' . $year);
     $d = wp_cache_get($ck, 604800);
     if (is_array($d) && ($d['id'] || time() - (int)($d['_t'] ?? 0) < 172800)) return $d;
     $d = ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', '_t' => time()];
@@ -1170,7 +1174,7 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '')
     if (!$r) { wp_cache_set($ck, $d); return $d; }
     $rtype = $r['_type'] ?? $type;
     $body = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $r['id'] . '?api_key=' . wp_tmdb_key()
-        . '&language=es-MX&append_to_response=credits,aggregate_credits,videos,images&include_video_language=es,en,null&include_image_language=es,en,null', 7);
+        . '&language=' . $tl . '&append_to_response=credits,aggregate_credits,videos,images&include_video_language=' . $l2 . ',es,en,null&include_image_language=' . $l2 . ',es,en,null', 7);
     $j = $body ? json_decode($body, true) : null;
     if (!is_array($j) || empty($j['id'])) $j = $r;
     $d['id'] = $j['id'];
@@ -1182,8 +1186,8 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '')
     $d['backdrop'] = $back ? 'https://image.tmdb.org/t/p/w1280' . $back : '';
     $d['overview'] = trim((string)($j['overview'] ?? ''));
     if ($d['overview'] === '') {
-        // sin descripción en español: se intenta España y luego inglés
-        foreach (['es-ES', 'en-US'] as $lang) {
+        // sin descripción en ese idioma: español de España (si es español) y luego inglés
+        foreach (array_diff($l2 === 'es' ? ['es-ES', 'en-US'] : ['en-US'], [$tl]) as $lang) {
             $b2 = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $j['id'] . '?api_key=' . wp_tmdb_key() . '&language=' . $lang, 5);
             $j2 = $b2 ? json_decode($b2, true) : null;
             if (!empty($j2['overview'])) { $d['overview'] = trim($j2['overview']); break; }
@@ -1197,7 +1201,7 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '')
         $d['cast'][] = ['id' => (int)($a['id'] ?? 0), 'n' => $a['name'] ?? '', 'c' => $a['character'] ?? '', 'p' => !empty($a['profile_path']) ? 'https://image.tmdb.org/t/p/w185' . $a['profile_path'] : ''];
     }
     $vids = $j['videos']['results'] ?? [];
-    usort($vids, function ($a, $b) { return (($b['iso_639_1'] ?? '') === 'es') <=> (($a['iso_639_1'] ?? '') === 'es'); });
+    usort($vids, function ($a, $b) use ($l2) { return (($b['iso_639_1'] ?? '') === $l2) <=> (($a['iso_639_1'] ?? '') === $l2); });
     foreach ($vids as $v) {
         if (($v['site'] ?? '') === 'YouTube' && in_array($v['type'] ?? '', ['Trailer', 'Teaser'], true)) { $d['trailer'] = $v['key']; break; }
     }
@@ -1269,7 +1273,7 @@ function wp_lang_name($code)
         'de' => 'Alemán', 'ita' => 'Italiano', 'it' => 'Italiano', 'jpn' => 'Japonés', 'ja' => 'Japonés', 'kor' => 'Coreano', 'ko' => 'Coreano',
         'chi' => 'Chino', 'zho' => 'Chino', 'rus' => 'Ruso', 'ara' => 'Árabe', 'hin' => 'Hindi', 'tur' => 'Turco', 'pol' => 'Polaco', 'dut' => 'Neerlandés', 'nld' => 'Neerlandés'];
     $c = strtolower((string)$code);
-    return $m[$c] ?? ($c !== '' && $c !== 'und' ? strtoupper($c) : '');
+    return isset($m[$c]) ? t($m[$c]) : ($c !== '' && $c !== 'und' ? strtoupper($c) : '');
 }
 
 require_once __DIR__ . '/panel.php';

@@ -70,12 +70,12 @@ function wp_probe_labels(array $p)
 {
     foreach ($p['audio'] as &$a) {
         $ln = wp_lang_name($a['lang']);
-        $a['label'] = trim(($ln ?: 'Audio ' . ($a['i'] + 1)) . ($a['title'] !== '' && ($ln === '' || stripos($a['title'], $ln) === false) ? ' · ' . $a['title'] : '')
+        $a['label'] = trim(($ln ?: t('Audio {n}', ['n' => $a['i'] + 1])) . ($a['title'] !== '' && ($ln === '' || stripos($a['title'], $ln) === false) ? ' · ' . $a['title'] : '')
             . ' (' . strtoupper(str_replace(['eac3', 'truehd'], ['E-AC3', 'TrueHD'], $a['codec'])) . ($a['ch'] >= 6 ? ' 5.1' : '') . ')');
     }
     unset($a);
     foreach ($p['subs'] as &$s) {
-        $s['label'] = trim((wp_lang_name($s['lang']) ?: 'Subtítulo ' . ($s['i'] + 1)) . ($s['title'] !== '' ? ' · ' . $s['title'] : '') . ($s['forced'] ? ' (forzado)' : ''));
+        $s['label'] = trim((wp_lang_name($s['lang']) ?: t('Subtítulo {n}', ['n' => $s['i'] + 1])) . ($s['title'] !== '' ? ' · ' . $s['title'] : '') . ($s['forced'] ? ' (' . t('forzado') . ')' : ''));
     }
     unset($s);
     $p['ok'] = true;

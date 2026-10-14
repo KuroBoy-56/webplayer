@@ -12,11 +12,14 @@
 
     var MS = window.ManagedMediaSource || window.MediaSource || window.WebKitMediaSource;
     var LIB = 'assets/vendor/mp4box.min.js?v=1';
+    // nombres de idioma en el idioma de la app (includes/i18n.php)
+    var tr = window.NF_T || function (s) { return s; };
+    var L = { es: tr('Español'), en: tr('Inglés'), pt: tr('Portugués'), fr: tr('Francés'), de: tr('Alemán'), it: tr('Italiano'), ja: tr('Japonés'),
+        ko: tr('Coreano'), zh: tr('Chino'), ru: tr('Ruso'), ar: tr('Árabe'), hi: tr('Hindi'), tr: tr('Turco'), pl: tr('Polaco'), nl: tr('Neerlandés'), ca: tr('Catalán') };
     var NAMES = {
-        spa: 'Español', es: 'Español', eng: 'Inglés', en: 'Inglés', por: 'Portugués', pt: 'Portugués', fre: 'Francés', fra: 'Francés', fr: 'Francés',
-        ger: 'Alemán', deu: 'Alemán', de: 'Alemán', ita: 'Italiano', it: 'Italiano', jpn: 'Japonés', ja: 'Japonés', kor: 'Coreano', ko: 'Coreano',
-        chi: 'Chino', zho: 'Chino', zh: 'Chino', rus: 'Ruso', ru: 'Ruso', ara: 'Árabe', ar: 'Árabe', hin: 'Hindi', hi: 'Hindi', tur: 'Turco', tr: 'Turco',
-        pol: 'Polaco', pl: 'Polaco', dut: 'Neerlandés', nld: 'Neerlandés', nl: 'Neerlandés', cat: 'Catalán', ca: 'Catalán'
+        spa: L.es, es: L.es, eng: L.en, en: L.en, por: L.pt, pt: L.pt, fre: L.fr, fra: L.fr, fr: L.fr, ger: L.de, deu: L.de, de: L.de, ita: L.it, it: L.it,
+        jpn: L.ja, ja: L.ja, kor: L.ko, ko: L.ko, chi: L.zh, zho: L.zh, zh: L.zh, rus: L.ru, ru: L.ru, ara: L.ar, ar: L.ar, hin: L.hi, hi: L.hi,
+        tur: L.tr, tr: L.tr, pol: L.pl, pl: L.pl, dut: L.nl, nld: L.nl, nl: L.nl, cat: L.ca, ca: L.ca
     };
     var GENERIC = /^(sound|video|text|subtitle)?\s*(handler|media handler)?$|^(isomedia|gpac|apple|core media|l-smash|mainconcept|bento4)/i;
 
@@ -45,7 +48,7 @@
         var n = String(t.name || '').trim();
         var base = NAMES[lang] || (lang && lang !== 'und' ? lang.toUpperCase() : '');
         if (n && !GENERIC.test(n) && n.toLowerCase() !== lang) base = base ? base + ' · ' + n : n;
-        if (!base) base = (kind === 'sub' ? 'Subtítulo ' : 'Audio ') + (i + 1);
+        if (!base) base = kind === 'sub' ? tr('Subtítulo {n}', { n: i + 1 }) : tr('Audio {n}', { n: i + 1 });
         if (kind !== 'sub' && t.audio && t.audio.channel_count > 2) base += ' ' + (t.audio.channel_count >= 6 ? '5.1' : t.audio.channel_count + 'ch');
         return base;
     }

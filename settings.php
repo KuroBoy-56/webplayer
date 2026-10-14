@@ -1,6 +1,6 @@
 <?php
 include "session.php";
-$pagename = "Ajustes";
+$pagename = t('Ajustes');
 include "config.php";
 if (isset($_COOKIE["settings_array"])) {
     $SettingArray = json_decode($_COOKIE["settings_array"], true);
@@ -16,7 +16,7 @@ include "header.php";
 function opt($name, $value, $label, $desc, $current)
 {
     $id = $name . '_' . $value;
-    return '<label class="st-opt" for="' . $id . '"><input type="radio" id="' . $id . '" name="' . $name . '" value="' . e($value) . '"' . ($current === $value ? ' checked' : '') . '><span class="dot"></span><span><b>' . e($label) . '</b><small>' . e($desc) . '</small></span></label>';
+    return '<label class="st-opt" for="' . $id . '"><input type="radio" id="' . $id . '" name="' . $name . '" value="' . e($value) . '"' . ($current === $value ? ' checked' : '') . '><span class="dot"></span><span><b>' . e(t($label)) . '</b><small>' . e(t($desc)) . '</small></span></label>';
 }
 ?>
 <style>
@@ -40,39 +40,39 @@ function opt($name, $value, $label, $desc, $current)
 </style>
 <div class="nf-page settings-wrapper">
     <div class="st-wrap">
-        <h1 class="nf-page-title">Ajustes</h1>
-        <p class="nf-page-sub">Personaliza la reproducción según tu dispositivo.</p>
-        <?php if (isset($_GET['saved'])): ?><div class="st-saved" id="flash">Ajustes guardados correctamente.</div><?php endif; ?>
+        <h1 class="nf-page-title"><?php echo t('Ajustes'); ?></h1>
+        <p class="nf-page-sub"><?php echo t('Personaliza la reproducción según tu dispositivo.'); ?></p>
+        <?php if (isset($_GET['saved'])): ?><div class="st-saved" id="flash"><?php echo t('Ajustes guardados correctamente.'); ?></div><?php endif; ?>
         <form action="setting/save" method="POST" id="settings-form">
             <div class="st-card">
-                <h3><i class="fa fa-play-circle"></i> Formato de TV en vivo</h3>
-                <p>Si un canal no carga, prueba con el otro formato. El reproductor también cambia solo si uno falla.</p>
+                <h3><i class="fa fa-play-circle"></i> <?php echo t('Formato de TV en vivo'); ?></h3>
+                <p><?php echo t('Si un canal no carga, prueba con el otro formato. El reproductor también cambia solo si uno falla.'); ?></p>
                 <div class="st-opts">
                     <?php echo opt('stream_format', 'm3u8', 'HLS (m3u8)', 'Recomendado, compatible con todos los navegadores y celulares', $stream_type); ?>
                     <?php echo opt('stream_format', 'ts', 'MPEG (ts)', 'Menor retraso en PC y Android', $stream_type); ?>
                 </div>
             </div>
             <div class="st-card">
-                <h3><i class="fa fa-list-alt"></i> Guía de programas (EPG)</h3>
-                <p>Origen de la guía de programación de los canales.</p>
+                <h3><i class="fa fa-list-alt"></i> <?php echo t('Guía de programas (EPG)'); ?></h3>
+                <p><?php echo t('Origen de la guía de programación de los canales.'); ?></p>
                 <div class="st-opts">
                     <?php echo opt('epg_source', 'server', 'Servidor primero', 'Guía de tu proveedor; si un canal no tiene, se usa la guía del panel', $epg_source); ?>
                     <?php echo opt('epg_source', 'custom', 'Guía del panel primero', 'Usa primero la guía de respaldo del panel (guías públicas configuradas en el panel)', $epg_source); ?>
                 </div>
             </div>
             <div class="st-card">
-                <h3><i class="fa fa-mobile"></i> Reproductor en celulares</h3>
-                <p>Elige si en el celular se reproduce aquí mismo o en la app VLC.</p>
+                <h3><i class="fa fa-mobile"></i> <?php echo t('Reproductor en celulares'); ?></h3>
+                <p><?php echo t('Elige si en el celular se reproduce aquí mismo o en la app VLC.'); ?></p>
                 <div class="st-opts">
                     <?php echo opt('use_vlc', '0', 'Reproductor web', 'Se reproduce dentro de la página', $use_vlc); ?>
                     <?php echo opt('use_vlc', '1', 'VLC (externo)', 'Abre los videos en la app VLC', $use_vlc); ?>
                 </div>
                 <div class="vlc-downloads" id="vlc-downloads" style="display: <?php echo ($use_vlc == "1" ? 'flex' : 'none'); ?>;">
-                    <a href="https://play.google.com/store/apps/details?id=org.videolan.vlc" target="_blank" rel="noopener" class="nf-btn nf-btn-dark"><i class="fab fa-google-play"></i> VLC para Android</a>
-                    <a href="https://apps.apple.com/app/vlc-media-player/id650377962" target="_blank" rel="noopener" class="nf-btn nf-btn-dark"><i class="fab fa-apple"></i> VLC para iPhone</a>
+                    <a href="https://play.google.com/store/apps/details?id=org.videolan.vlc" target="_blank" rel="noopener" class="nf-btn nf-btn-dark"><i class="fab fa-google-play"></i> <?php echo t('VLC para Android'); ?></a>
+                    <a href="https://apps.apple.com/app/vlc-media-player/id650377962" target="_blank" rel="noopener" class="nf-btn nf-btn-dark"><i class="fab fa-apple"></i> <?php echo t('VLC para iPhone'); ?></a>
                 </div>
             </div>
-            <button name="submit" type="submit" class="nf-btn nf-btn-red submit-btn">Guardar ajustes</button>
+            <button name="submit" type="submit" class="nf-btn nf-btn-red submit-btn"><?php echo t('Guardar ajustes'); ?></button>
         </form>
     </div>
 </div>

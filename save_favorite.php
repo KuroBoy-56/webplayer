@@ -20,7 +20,7 @@ if (!$stream_id || !$username || !$action) {
 
 // DEMO: Mi lista no está disponible (no se llama al panel)
 if (wp_is_demo()) {
-    echo json_encode(['ok' => false, 'demo' => true, 'message' => 'No disponible en la DEMO'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'demo' => true, 'message' => t('No disponible en la DEMO')], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

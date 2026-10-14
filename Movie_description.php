@@ -13,7 +13,7 @@ $channel_api = xt_get('get_vod_info', ['vod_id' => $id], 21600);
 $info = is_array($channel_api["info"] ?? null) ? $channel_api["info"] : [];
 $movie_data = is_array($channel_api["movie_data"] ?? null) ? $channel_api["movie_data"] : [];
 
-$title = $info["name"] ?? ($movie_data['name'] ?? 'Desconocido');
+$title = $info["name"] ?? ($movie_data['name'] ?? t('Desconocido'));
 $description = $info["plot"] ?? ($info['description'] ?? '');
 $youtube_trailer = $info["youtube_trailer"] ?? '';
 $movie_genre = $info["genre"] ?? '';
@@ -75,7 +75,7 @@ include "header.php";
         <div class="nf-detail-info">
             <h1><?php echo e($title); ?></h1>
             <div class="nf-detail-meta">
-                <?php if ($movie_rating !== '' && (float)$movie_rating > 0): ?><span class="nf-match"><?php echo min(99, round((float)$movie_rating * 10)); ?>% para ti</span><?php endif; ?>
+                <?php if ($movie_rating !== '' && (float)$movie_rating > 0): ?><span class="nf-match"><?php echo min(99, round((float)$movie_rating * 10)); ?>% <?php echo t('para ti'); ?></span><?php endif; ?>
                 <?php if ($year): ?><span><?php echo e($year); ?></span><?php endif; ?>
                 <?php if ($duration): ?><span><?php echo e($duration); ?></span><?php endif; ?>
                 <span class="nf-badge"><?php echo e(strtoupper($container_extension)); ?></span>
@@ -85,29 +85,29 @@ include "header.php";
             <?php if ($resume_time > 0 && $total_time > 0): ?>
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;max-width:380px">
                     <div style="flex:1;height:4px;background:#555;border-radius:2px;overflow:hidden"><div style="height:100%;width:<?php echo (int)$pct; ?>%;background:var(--nf-red)"></div></div>
-                    <span style="font-size:13px;color:#bbb">Quedan <?php echo max(1, round(($total_time - $resume_time) / 60)); ?> min</span>
+                    <span style="font-size:13px;color:#bbb"><?php echo t('Quedan {n} min', ['n' => max(1, round(($total_time - $resume_time) / 60))]); ?></span>
                 </div>
             <?php endif; ?>
-            <p class="nf-detail-plot"><?php echo e($description ?: 'Sin descripción disponible.'); ?></p>
+            <p class="nf-detail-plot"><?php echo e($description ?: t('Sin descripción disponible.')); ?></p>
             <div class="nf-detail-btns">
                 <?php if ($resume_time > 0): ?>
-                    <a href="<?php echo e($play); ?>" class="nf-btn nf-btn-white button-primary"><?php echo wp_icon('play'); ?>Reanudar</a>
-                    <a href="<?php echo e($play); ?>&restart=1" class="nf-btn nf-btn-gray">Ver desde el inicio</a>
+                    <a href="<?php echo e($play); ?>" class="nf-btn nf-btn-white button-primary"><?php echo wp_icon('play'); ?><?php echo t('Reanudar'); ?></a>
+                    <a href="<?php echo e($play); ?>&restart=1" class="nf-btn nf-btn-gray"><?php echo t('Ver desde el inicio'); ?></a>
                 <?php else: ?>
-                    <a href="<?php echo e($play); ?>" class="nf-btn nf-btn-white button-primary"><?php echo wp_icon('play'); ?>Reproducir</a>
+                    <a href="<?php echo e($play); ?>" class="nf-btn nf-btn-white button-primary"><?php echo wp_icon('play'); ?><?php echo t('Reproducir'); ?></a>
                 <?php endif; ?>
                 <div class="icons" style="gap:12px">
                     <button type="button" class="nf-btn nf-btn-dark<?php echo $is_favorite ? ' on' : ''; ?>" id="toggleFavorite">
-                        <span class="ic" style="display:inline-flex"><?php echo $is_favorite ? wp_icon('check') : wp_icon('plus'); ?></span><span class="lbl"><?php echo $is_favorite ? 'En mi lista' : 'Mi lista'; ?></span>
+                        <span class="ic" style="display:inline-flex"><?php echo $is_favorite ? wp_icon('check') : wp_icon('plus'); ?></span><span class="lbl"><?php echo $is_favorite ? t('En mi lista') : t('Mi lista'); ?></span>
                     </button>
                     <?php if ($youtube_trailer): ?>
-                        <button type="button" class="nf-btn nf-btn-dark" id="btnTrailer"><?php echo wp_icon('yt'); ?>Tráiler</button>
+                        <button type="button" class="nf-btn nf-btn-dark" id="btnTrailer"><?php echo wp_icon('yt'); ?><?php echo t('Tráiler'); ?></button>
                     <?php endif; ?>
                 </div>
             </div>
             <div class="nf-detail-extra">
-                <?php if ($director): ?><div><b>Dirección:</b> <?php echo e($director); ?></div><?php endif; ?>
-                <?php if (!$tmdb['cast'] && $actors_txt): ?><div><b>Elenco:</b> <?php echo e($actors_txt); ?></div><?php endif; ?>
+                <?php if ($director): ?><div><b><?php echo t('Dirección:'); ?></b> <?php echo e($director); ?></div><?php endif; ?>
+                <?php if (!$tmdb['cast'] && $actors_txt): ?><div><b><?php echo t('Elenco:'); ?></b> <?php echo e($actors_txt); ?></div><?php endif; ?>
             </div>
         </div>
     </div>
@@ -115,10 +115,10 @@ include "header.php";
 
 <?php if ($tmdb['cast']): ?>
 <section class="nf-section">
-    <h2>Elenco</h2>
+    <h2><?php echo t('Elenco'); ?></h2>
     <div class="nf-cast">
         <?php foreach ($tmdb['cast'] as $a): ?>
-            <a class="nf-actor" href="<?php echo e(wp_actor_url($a)); ?>" title="Ver filmografía de <?php echo e($a['n']); ?>">
+            <a class="nf-actor" href="<?php echo e(wp_actor_url($a)); ?>" title="<?php echo e(t('Ver filmografía de {n}', ['n' => $a['n']])); ?>">
                 <img src="<?php echo e($a['p'] ?: 'https://ui-avatars.com/api/?name=' . urlencode($a['n']) . '&background=333&color=fff'); ?>" alt="" loading="lazy">
                 <div class="a"><?php echo e($a['n']); ?></div>
                 <div class="c"><?php echo e($a['c']); ?></div>
@@ -133,14 +133,14 @@ include "header.php";
     <?php
     $cards = [];
     foreach ($similar as $s) $cards[] = wp_card($s, 'movie');
-    echo wp_row('Más títulos similares', $cards, $self ? 'movies.php?id=' . rawurlencode($self['cat']) : '');
+    echo wp_row(t('Más títulos similares'), $cards, $self ? 'movies.php?id=' . rawurlencode($self['cat']) : '');
     ?>
 </div>
 <?php endif; ?>
 
-<div class="nf-modal" id="trailerModal" role="dialog" aria-label="Tráiler">
+<div class="nf-modal" id="trailerModal" role="dialog" aria-label="<?php echo e(t('Tráiler')); ?>">
     <div class="nf-modal-box">
-        <button class="nf-modal-close" type="button" aria-label="Cerrar">&times;</button>
+        <button class="nf-modal-close" type="button" aria-label="<?php echo e(t('Cerrar')); ?>">&times;</button>
         <div class="nf-ratio" id="trailerBox"></div>
     </div>
 </div>

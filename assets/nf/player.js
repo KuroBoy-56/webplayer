@@ -5,6 +5,8 @@
  */
 (function () {
     'use strict';
+    // textos en el idioma de la app (diccionario que deja la página: includes/i18n.php)
+    var tr = window.NF_T || function (s) { return s; };
 
     var ICONS = {
         play: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 4v16a1 1 0 0 0 1.5.86l13-8a1 1 0 0 0 0-1.72l-13-8A1 1 0 0 0 6 4z"/></svg>',
@@ -135,7 +137,7 @@
         this.msg = r.appendChild(el('div', 'nfp-msg'));
 
         var top = r.appendChild(el('div', 'nfp-top'));
-        if (o.backUrl) top.innerHTML = '<a class="nfp-ib nfp-back" href="' + o.backUrl + '" aria-label="Volver">' + ICONS.back + '</a>';
+        if (o.backUrl) top.innerHTML = '<a class="nfp-ib nfp-back" href="' + o.backUrl + '" aria-label="' + NF_esc(tr('Volver')) + '">' + ICONS.back + '</a>';
         var tt = el('div', 'nfp-title');
         tt.innerHTML = '<b></b><span></span>';
         tt.querySelector('b').textContent = o.title || '';
@@ -144,10 +146,10 @@
         if (o.topRight) top.insertAdjacentHTML('beforeend', o.topRight);
 
         var mid = this.mid = r.appendChild(el('div', 'nfp-mid'));
-        if (!this.live) mid.appendChild(this.mkBtn('back10', 'Retroceder 10 s', function () { this.seekBy(-10); }));
-        this.midPlay = mid.appendChild(this.mkBtn('play', 'Reproducir', function () { this.toggle(); }));
+        if (!this.live) mid.appendChild(this.mkBtn('back10', tr('Retroceder 10 s'), function () { this.seekBy(-10); }));
+        this.midPlay = mid.appendChild(this.mkBtn('play', tr('Reproducir'), function () { this.toggle(); }));
         this.midPlay.classList.add('big');
-        if (!this.live) mid.appendChild(this.mkBtn('fwd10', 'Adelantar 10 s', function () { this.seekBy(10); }));
+        if (!this.live) mid.appendChild(this.mkBtn('fwd10', tr('Adelantar 10 s'), function () { this.seekBy(10); }));
 
         var bot = r.appendChild(el('div', 'nfp-bottom'));
         if (!this.live) {
@@ -155,27 +157,27 @@
             bar.innerHTML = '<div class="nfp-rail"><i class="buf"></i><i class="cur"></i><span class="knob"></span></div><div class="nfp-tip"></div>';
             this.time = bot.appendChild(el('div', 'nfp-time'));
         } else {
-            bot.appendChild(el('div', 'nfp-live', '<i></i>EN VIVO'));
+            bot.appendChild(el('div', 'nfp-live', '<i></i>' + NF_esc(tr('EN VIVO'))));
         }
         var row = bot.appendChild(el('div', 'nfp-row'));
-        this.bPlay = row.appendChild(this.mkBtn('play', 'Reproducir', function () { this.toggle(); }));
+        this.bPlay = row.appendChild(this.mkBtn('play', tr('Reproducir'), function () { this.toggle(); }));
         if (!this.live) {
-            row.appendChild(this.mkBtn('back10', 'Retroceder 10 s', function () { this.seekBy(-10); })).classList.add('d');
-            row.appendChild(this.mkBtn('fwd10', 'Adelantar 10 s', function () { this.seekBy(10); })).classList.add('d');
+            row.appendChild(this.mkBtn('back10', tr('Retroceder 10 s'), function () { this.seekBy(-10); })).classList.add('d');
+            row.appendChild(this.mkBtn('fwd10', tr('Adelantar 10 s'), function () { this.seekBy(10); })).classList.add('d');
         }
         var volWrap = row.appendChild(el('div', 'nfp-vol'));
-        this.bVol = volWrap.appendChild(this.mkBtn('vol', 'Silenciar', function () { this.v.muted = !this.v.muted; }));
+        this.bVol = volWrap.appendChild(this.mkBtn('vol', tr('Silenciar'), function () { this.v.muted = !this.v.muted; }));
         this.volRange = volWrap.appendChild(el('input', 'nfp-range'));
         this.volRange.type = 'range'; this.volRange.min = 0; this.volRange.max = 1; this.volRange.step = 0.05;
         if (!this.live) this.timeRow = row.appendChild(el('div', 'nfp-time2'));
         var mt = row.appendChild(el('div', 'nfp-midtitle'));
         mt.textContent = (o.title || '') + (o.subtitle ? '  ·  ' + o.subtitle : '');
-        if (o.nextUrl) this.bNext = row.appendChild(this.mkBtn('next', 'Siguiente episodio', function () { this.goNext(); }));
-        this.bSubs = row.appendChild(this.mkBtn('subs', 'Audio y subtítulos', function (e) { this.menu('tracks', e); }));
-        if (!this.live) row.appendChild(this.mkBtn('speed', 'Velocidad', function (e) { this.menu('speed', e); }));
-        if (document.pictureInPictureEnabled) row.appendChild(this.mkBtn('pip', 'Imagen en imagen', function () { this.pip(); })).classList.add('d');
-        if (o.extraMenu && o.extraMenu.length) row.appendChild(this.mkBtn('dots', 'Más opciones', function (e) { this.menu('extra', e); }));
-        this.bFull = row.appendChild(this.mkBtn('full', 'Pantalla completa', function () { this.fullscreen(); }));
+        if (o.nextUrl) this.bNext = row.appendChild(this.mkBtn('next', tr('Siguiente episodio'), function () { this.goNext(); }));
+        this.bSubs = row.appendChild(this.mkBtn('subs', tr('Audio y subtítulos'), function (e) { this.menu('tracks', e); }));
+        if (!this.live) row.appendChild(this.mkBtn('speed', tr('Velocidad'), function (e) { this.menu('speed', e); }));
+        if (document.pictureInPictureEnabled) row.appendChild(this.mkBtn('pip', tr('Imagen en imagen'), function () { this.pip(); })).classList.add('d');
+        if (o.extraMenu && o.extraMenu.length) row.appendChild(this.mkBtn('dots', tr('Más opciones'), function (e) { this.menu('extra', e); }));
+        this.bFull = row.appendChild(this.mkBtn('full', tr('Pantalla completa'), function () { this.fullscreen(); }));
 
         this.pop = r.appendChild(el('div', 'nfp-pop'));
         this.endBox = r.appendChild(el('div', 'nfp-end'));
@@ -215,7 +217,7 @@
             if (!self.tc && !self.resumed && self.o.resume > 5 && isFinite(v.duration) && self.o.resume < v.duration - 10) {
                 try { v.currentTime = self.o.resume; } catch (e) {}
                 self.resumed = true;
-                self.toastMsg('Continuando desde ' + fmt(self.o.resume));
+                self.toastMsg(tr('Continuando desde {t}', { t: fmt(self.o.resume) }));
             }
             self.applyAudioPref();
             if (self.maybeMse()) return;
@@ -251,10 +253,10 @@
                 // vez de seguir "Cargando". Un error rápido (ffmpeg no pudo con el formato) sí prueba los otros modos.
                 if (!self.tc.played && v.readyState < 1 && Date.now() - (self.tc.at || 0) > 12000) { self.tcGiveUp('sin respuesta'); return; }
                 // el navegador no pudo con el video copiado (HEVC/10 bits en equipos sin soporte): se intenta convertir también el video
-                if (!self.tc.vt && !self._fullTried) { self._fullTried = true; self.toastMsg('Adaptando el video para este navegador…'); self.startTc(self.T(), self.tc.a, true); return; }
+                if (!self.tc.vt && !self._fullTried) { self._fullTried = true; self.toastMsg(tr('Adaptando el video para este navegador…')); self.startTc(self.T(), self.tc.a, true); return; }
                 // archivo dañado o con marcas de tiempo rotas: modo seguro (480p, audio resincronizado)
-                if (self.tc.vt !== 2 && !self._safeTried) { self._safeTried = true; self.toastMsg('Probando un modo de reproducción más compatible…'); self.startTc(self.T(), self.tc.a, 2); return; }
-                self.tc = null; self.o.media = null; self.toastMsg('No se pudo convertir este contenido'); self.idx--; self.next(); return;
+                if (self.tc.vt !== 2 && !self._safeTried) { self._safeTried = true; self.toastMsg(tr('Probando un modo de reproducción más compatible…')); self.startTc(self.T(), self.tc.a, 2); return; }
+                self.tc = null; self.o.media = null; self.toastMsg(tr('No se pudo convertir este contenido')); self.idx--; self.next(); return;
             }
             // el navegador no abre el archivo (MKV/AVI, audio Dolby, HEVC...): se intenta la conversión del servidor antes de cambiar de formato
             if (self.o.media && !self.live && !self._rescued) { self._rescued = true; self.rescueTc(); return; }
@@ -500,8 +502,8 @@
             this.showError(); return;
         }
         var s = list[this.idx];
-        if (!this._stStarted) { this._stStarted = true; this.status('Cargando el contenido'); }
-        else if (this._stFailed) { this._stFailed = false; this.status(['Error de reproducción en este navegador', 'Probando otra forma de reproducir']); }
+        if (!this._stStarted) { this._stStarted = true; this.status(tr('Cargando el contenido')); }
+        else if (this._stFailed) { this._stFailed = false; this.status([tr('Error de reproducción en este navegador'), tr('Probando otra forma de reproducir')]); }
         this.log('probando ' + (this.idx + 1) + ': ' + s.engine + ' ' + s.ext + (s.cors ? ' por hosting' : ' directo') + (s.nomse ? ' (respaldo)' : ''));
         this.root.classList.add('buffering');
         var t = this.lastTime || 0;
@@ -550,7 +552,7 @@
             b = document.createElement('button');
             b.type = 'button';
             b.className = 'nfp-unmute';
-            b.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg><span>Activar sonido</span>';
+            b.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg><span>' + NF_esc(tr('Activar sonido')) + '</span>';
             b.addEventListener('click', function (e) {
                 e.stopPropagation();
                 self.v.muted = false;
@@ -578,7 +580,7 @@
                 return false;
             },
             onTracks: function () {
-                if (resume) self.toastMsg('Continuando desde ' + fmt(resume));
+                if (resume) self.toastMsg(tr('Continuando desde {t}', { t: fmt(resume) }));
                 self.autoplay();
             },
             onError: function (why) { if (self.idx === idx && self.mp4) self.fail('mp4 ' + why); },
@@ -602,7 +604,7 @@
         var back = {}; for (var k in s) back[k] = s[k]; back.nomse = true;
         list.splice(this.idx + 1, 0, { url: alt.url, engine: 'mp4', ext: alt.ext }, back);
         this.next();
-        this.status(['Este contenido tiene varios idiomas', 'Preparando la selección de idioma']);
+        this.status([tr('Este contenido tiene varios idiomas'), tr('Preparando la selección de idioma')]);
         return true;
     };
     /* pistas aún desconocidas en el hosting: se cuentan en segundo plano (tracks.php, sin ffmpeg).
@@ -755,16 +757,16 @@
         // antes de mostrar el error se busca una solución automáticamente (VLC queda como último recurso)
         if (canFix && !this._fixTried && !this._autoFixed) { this._autoFixed = true; this.fix(true); return; }
         var hard = /^(mkv|avi|wmv|flv|divx|xvid|mpg|mpeg)$/i.test(o.ext || '');
-        var h = '<h3>No se pudo reproducir este contenido</h3><p>' + (canFix ? 'Toca Solucionar para adaptar el audio y el formato, o ábrelo en VLC.'
-            : (hard || CAPS.mobile ? 'Este navegador no puede reproducir el formato de este contenido. Ábrelo en VLC (o en otra app de video) o reintenta.' : 'Puedes reintentar o abrirlo en VLC.')) + '</p><div class="acts">';
-        if (canFix) h += '<button type="button" class="nf-btn nf-btn-white" data-act="fix">Solucionar</button>';
-        h += '<button type="button" class="nf-btn ' + (canFix ? 'nf-btn-gray' : 'nf-btn-white') + '" data-act="retry">Reintentar</button>';
-        if (NFPlayer.canVlc(o)) h += '<button type="button" class="nf-btn nf-btn-gray" data-act="vlc">Abrir en VLC</button>';
-        if (o.downloadUrl) h += '<a class="nf-btn nf-btn-gray" href="' + o.downloadUrl + '">Descargar</a>';
+        var h = '<h3>' + NF_esc(tr('No se pudo reproducir este contenido')) + '</h3><p>' + (canFix ? tr('Toca Solucionar para adaptar el audio y el formato, o ábrelo en VLC.')
+            : (hard || CAPS.mobile ? tr('Este navegador no puede reproducir el formato de este contenido. Ábrelo en VLC (o en otra app de video) o reintenta.') : tr('Puedes reintentar o abrirlo en VLC.'))) + '</p><div class="acts">';
+        if (canFix) h += '<button type="button" class="nf-btn nf-btn-white" data-act="fix">' + NF_esc(tr('Solucionar')) + '</button>';
+        h += '<button type="button" class="nf-btn ' + (canFix ? 'nf-btn-gray' : 'nf-btn-white') + '" data-act="retry">' + NF_esc(tr('Reintentar')) + '</button>';
+        if (NFPlayer.canVlc(o)) h += '<button type="button" class="nf-btn nf-btn-gray" data-act="vlc">' + NF_esc(tr('Abrir en VLC')) + '</button>';
+        if (o.downloadUrl) h += '<a class="nf-btn nf-btn-gray" href="' + o.downloadUrl + '">' + NF_esc(tr('Descargar')) + '</a>';
         h += '</div>';
         // detalle técnico de cada intento (para soporte) y enlace al diagnóstico
         if (this._whys && this._whys.length) h += '<p class="nfp-why">' + this._whys.map(function (w) { return w.replace(/[<>&]/g, ''); }).join(' · ')
-            + (o.diagUrl ? ' · <a href="' + o.diagUrl + '">Diagnóstico</a>' : '') + (location.protocol === 'https:' ? ' · https' : ' · http') + (/play\.php/.test(location.pathname) ? ' · p' : '') + '</p>';
+            + (o.diagUrl ? ' · <a href="' + o.diagUrl + '">' + NF_esc(tr('Diagnóstico')) + '</a>' : '') + (location.protocol === 'https:' ? ' · https' : ' · http') + (/play\.php/.test(location.pathname) ? ' · p' : '') + '</p>';
         this.msg.innerHTML = h;
         this.msg.classList.add('show');
         NFPlayer.report('playback', 'No se pudo reproducir: ' + (o.title || '') + (o.subtitle ? ' · ' + o.subtitle : ''),
@@ -783,14 +785,14 @@
         this.closePop && this.closePop();
         try { this.v.pause(); } catch (e) {}
         var t = this.T() > 5 ? this.T() : (this.lastTime || this.o.resume || 0);
-        this.msg.innerHTML = '<div class="nfp-spin"></div><h3>Buscando una solución…</h3><p>Estamos adaptando el audio y el formato de este contenido. Puede tardar unos segundos.</p>';
+        this.msg.innerHTML = '<div class="nfp-spin"></div><h3>' + NF_esc(tr('Buscando una solución…')) + '</h3><p>' + NF_esc(tr('Estamos adaptando el audio y el formato de este contenido. Puede tardar unos segundos.')) + '</p>';
         this.msg.classList.add('show');
         fetch(m.check, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
             if (!j || !j.ok) throw 0;
             var mode = j.mode === 'safe' ? 2 : (j.mode === 'video' ? 1 : 0);
-            self.msg.innerHTML = '<h3>Posible solución a la reproducción o el audio</h3><p>' + (mode ? 'Se adaptó el video y el audio de este contenido para tu navegador.' : 'Se adaptó el audio de este contenido para tu navegador.')
-                + (j.speed && j.speed < 1.2 ? ' Tu servidor convierte lento, puede que tenga pausas.' : '') + '</p><div class="acts"><button type="button" class="nf-btn nf-btn-white" data-act="play">&#9654; Volver a reproducir</button></div>'
-                + (auto ? '<p class="nfp-count">Reproduciendo en <b>4</b>…</p>' : '');
+            self.msg.innerHTML = '<h3>' + NF_esc(tr('Posible solución a la reproducción o el audio')) + '</h3><p>' + (mode ? tr('Se adaptó el video y el audio de este contenido para tu navegador.') : tr('Se adaptó el audio de este contenido para tu navegador.'))
+                + (j.speed && j.speed < 1.2 ? ' ' + tr('Tu servidor convierte lento, puede que tenga pausas.') : '') + '</p><div class="acts"><button type="button" class="nf-btn nf-btn-white" data-act="play">&#9654; ' + NF_esc(tr('Volver a reproducir')) + '</button></div>'
+                + (auto ? '<p class="nfp-count">' + NF_esc(tr('Reproduciendo en {n}…')).replace('{n}', '<b>4</b>') + '</p>' : '');
             var played = false, cd = 4, b = self.msg.querySelector('.nfp-count b');
             var play = function () {
                 if (played) return;
@@ -811,9 +813,9 @@
         }).catch(function () {
             store(self.fixKey, '1');
             self._fixTried = true;
-            self.msg.innerHTML = '<h3>No fue posible adaptar este contenido</h3><p>Es posible que el archivo esté dañado o que el servidor no lo entregue completo. Prueba abrirlo en VLC.</p><div class="acts">'
-                + '<button type="button" class="nf-btn nf-btn-white" data-act="retry">Reintentar</button>'
-                + (NFPlayer.canVlc(self.o) ? '<button type="button" class="nf-btn nf-btn-gray" data-act="vlc">Abrir en VLC</button>' : '') + '</div>';
+            self.msg.innerHTML = '<h3>' + NF_esc(tr('No fue posible adaptar este contenido')) + '</h3><p>' + NF_esc(tr('Es posible que el archivo esté dañado o que el servidor no lo entregue completo. Prueba abrirlo en VLC.')) + '</p><div class="acts">'
+                + '<button type="button" class="nf-btn nf-btn-white" data-act="retry">' + NF_esc(tr('Reintentar')) + '</button>'
+                + (NFPlayer.canVlc(self.o) ? '<button type="button" class="nf-btn nf-btn-gray" data-act="vlc">' + NF_esc(tr('Abrir en VLC')) + '</button>' : '') + '</div>';
             self.msg.querySelector('[data-act=retry]').addEventListener('click', function () { self.hideMsg(); self._whys = []; self.idx = -1; self.next(); });
             var vb = self.msg.querySelector('[data-act=vlc]');
             if (vb) vb.addEventListener('click', function () { NFPlayer.openVlc(self.o); });
@@ -839,12 +841,12 @@
                 out.push({ label: t.label, lang: t.lang, on: self.mp4.audioId === t.id, set: function () { if (self.mp4 && self.mp4.audioId !== t.id) { self.root.classList.add('buffering'); self.mp4.setAudio(t.id); } } });
             });
         } else if (this.hls && this.hls.audioTracks && this.hls.audioTracks.length) {
-            this.hls.audioTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || ('Audio ' + (i + 1)), lang: t.lang || '', on: self.hls.audioTrack === i, set: function () { self.hls.audioTrack = i; } }); });
+            this.hls.audioTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || tr('Audio {n}', { n: i + 1 }), lang: t.lang || '', on: self.hls.audioTrack === i, set: function () { self.hls.audioTrack = i; } }); });
         } else if (this.info && this.info.audio && this.info.audio.length && this._media0 && (isIos || !(this.v.audioTracks && this.v.audioTracks.length > 1))) {
             // Safari iOS/Mac native fallback bypassed. Usamos el panel (startTc) para transcodificar.
             var cur = this.tc ? this.tc.a : -1;
             if (!isIos) {
-                out.push({ label: 'Automático (Nativo)', lang: 'auto', on: cur === -1, set: function () { if (cur !== -1 || self.tc) { self.tc = null; self.playNative(self._media0); } } });
+                out.push({ label: tr('Automático (Nativo)'), lang: 'auto', on: cur === -1, set: function () { if (cur !== -1 || self.tc) { self.tc = null; self.playNative(self._media0); } } });
             } else if (cur === -1) {
                 // En iOS forzamos transcodificación, por lo que el estado "Nativo" se mapea visualmente al primer track.
                 cur = 0;
@@ -855,7 +857,7 @@
         } else if (this.v.audioTracks && this.v.audioTracks.length) {
             var at = this.v.audioTracks;
             for (var i = 0; i < at.length; i++) (function (t, i) {
-                out.push({ label: t.label || t.language || ('Audio ' + (i + 1)), lang: t.language || '', on: t.enabled, set: function () { for (var j = 0; j < at.length; j++) at[j].enabled = j === i; } });
+                out.push({ label: t.label || t.language || tr('Audio {n}', { n: i + 1 }), lang: t.language || '', on: t.enabled, set: function () { for (var j = 0; j < at.length; j++) at[j].enabled = j === i; } });
             })(at[i], i);
         }
         return out;
@@ -882,13 +884,13 @@
     NFPlayer.prototype.subList = function () {
         var out = [], self = this, v = this.v;
         if (this.hls && this.hls.subtitleTracks && this.hls.subtitleTracks.length) {
-            this.hls.subtitleTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || ('Subtítulo ' + (i + 1)), on: self.hls.subtitleTrack === i, set: function () { self.hls.subtitleTrack = i; self.hls.subtitleDisplay = true; } }); });
+            this.hls.subtitleTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || tr('Subtítulo {n}', { n: i + 1 }), on: self.hls.subtitleTrack === i, set: function () { self.hls.subtitleTrack = i; self.hls.subtitleDisplay = true; } }); });
             out.off = function () { self.hls.subtitleTrack = -1; };
         } else if (this.info && this.info.subs && this.info.subs.length && this._media0) {
             this.info.subs.forEach(function (t) {
                 if (!t.text) {
                     // subtítulos de imagen (PGS/VobSub de los Blu-ray 4K): el navegador no los puede mostrar como texto
-                    out.push({ label: t.label + ' (imagen)', on: false, set: function () { self.toastMsg('Este subtítulo es de imagen (Blu-ray). Para verlo abre el contenido en VLC.'); } });
+                    out.push({ label: t.label + ' (' + tr('imagen') + ')', on: false, set: function () { self.toastMsg(tr('Este subtítulo es de imagen (Blu-ray). Para verlo abre el contenido en VLC.')); } });
                     return;
                 }
                 out.push({ label: t.label, on: self.subSel === t.i, set: function () { self.loadSub(t.i); } });
@@ -897,7 +899,7 @@
         } else if (v.textTracks && v.textTracks.length) {
             for (var i = 0; i < v.textTracks.length; i++) (function (t) {
                 if (t.kind !== 'subtitles' && t.kind !== 'captions') return;
-                out.push({ label: t.label || t.language || 'Subtítulo', on: t.mode === 'showing', set: function () { for (var j = 0; j < v.textTracks.length; j++) v.textTracks[j].mode = 'disabled'; t.mode = 'showing'; } });
+                out.push({ label: t.label || t.language || tr('Subtítulo'), on: t.mode === 'showing', set: function () { for (var j = 0; j < v.textTracks.length; j++) v.textTracks[j].mode = 'disabled'; t.mode = 'showing'; } });
             })(v.textTracks[i]);
             out.off = function () { for (var j = 0; j < v.textTracks.length; j++) v.textTracks[j].mode = 'disabled'; };
         }
@@ -912,38 +914,38 @@
         if (kind === 'tracks') {
             var a = this.audioList(), s = this.subList();
             if (!this.info && this._media0 && !this.live && !this.hls) this.findTracks();
-            h += '<div class="col"><h4>Audio</h4>';
+            h += '<div class="col"><h4>' + NF_esc(tr('Audio')) + '</h4>';
             if (a.length) a.forEach(function (t, i) { h += '<button type="button" data-a="' + i + '" class="' + (t.on ? 'on' : '') + '">' + NF_esc(t.label) + '</button>'; });
-            else h += '<span class="na">' + (this._probing ? 'Buscando pistas…' : 'Audio predeterminado') + '</span>';
-            h += '</div><div class="col"><h4>Subtítulos</h4>';
+            else h += '<span class="na">' + (this._probing ? tr('Buscando pistas…') : tr('Audio predeterminado')) + '</span>';
+            h += '</div><div class="col"><h4>' + NF_esc(tr('Subtítulos')) + '</h4>';
             if (s.length) {
                 var any = s.some(function (t) { return t.on; });
-                h += '<button type="button" data-s="-1" class="' + (any ? '' : 'on') + '">Desactivados</button>';
+                h += '<button type="button" data-s="-1" class="' + (any ? '' : 'on') + '">' + NF_esc(tr('Desactivados')) + '</button>';
                 s.forEach(function (t, i) { h += '<button type="button" data-s="' + i + '" class="' + (t.on ? 'on' : '') + '">' + NF_esc(t.label) + '</button>'; });
-            } else h += '<span class="na">' + (this._probing ? 'Buscando subtítulos…' : 'Este contenido no trae subtítulos') + '</span>';
+            } else h += '<span class="na">' + (this._probing ? tr('Buscando subtítulos…') : tr('Este contenido no trae subtítulos')) + '</span>';
             h += '</div>';
             pop.innerHTML = h;
             Array.prototype.forEach.call(pop.querySelectorAll('[data-a]'), function (b) {
-                b.addEventListener('click', function () { var t = a[+b.getAttribute('data-a')]; t.set(); store('nfp_audio', t.lang + '|' + t.label); if (t.lang) store('nfp_audio_lang', t.lang); self.closePop(); self.toastMsg('Audio: ' + t.label); });
+                b.addEventListener('click', function () { var t = a[+b.getAttribute('data-a')]; t.set(); store('nfp_audio', t.lang + '|' + t.label); if (t.lang) store('nfp_audio_lang', t.lang); self.closePop(); self.toastMsg(tr('Audio: {a}', { a: t.label })); });
             });
             Array.prototype.forEach.call(pop.querySelectorAll('[data-s]'), function (b) {
                 b.addEventListener('click', function () { var i = +b.getAttribute('data-s'); if (i < 0) s.off(); else s[i].set(); self.closePop(); });
             });
         } else if (kind === 'speed') {
-            h = '<div class="col"><h4>Velocidad</h4>';
-            [0.5, 0.75, 1, 1.25, 1.5, 2].forEach(function (r) { h += '<button type="button" data-r="' + r + '" class="' + (self.v.playbackRate === r ? 'on' : '') + '">' + (r === 1 ? 'Normal' : r + 'x') + '</button>'; });
+            h = '<div class="col"><h4>' + NF_esc(tr('Velocidad')) + '</h4>';
+            [0.5, 0.75, 1, 1.25, 1.5, 2].forEach(function (r) { h += '<button type="button" data-r="' + r + '" class="' + (self.v.playbackRate === r ? 'on' : '') + '">' + (r === 1 ? NF_esc(tr('Normal')) : r + 'x') + '</button>'; });
             pop.innerHTML = h + '</div>';
             Array.prototype.forEach.call(pop.querySelectorAll('[data-r]'), function (b) {
                 b.addEventListener('click', function () { self.v.playbackRate = parseFloat(b.getAttribute('data-r')); self.closePop(); });
             });
         } else if (kind === 'extra') {
-            h = '<div class="col"><h4>Opciones</h4>';
+            h = '<div class="col"><h4>' + NF_esc(tr('Opciones')) + '</h4>';
             var fixOk = this._media0 && !store(this.fixKey);
             this.o.extraMenu.forEach(function (m) {
                 if (m.act === 'fix') { if (fixOk) h += '<button type="button" data-x="fix">' + NF_esc(m.label) + '</button>'; return; }
                 h += '<a href="' + NF_esc(m.href) + '"' + (m.attrs || '') + '>' + NF_esc(m.label) + '</a>';
             });
-            if (NFPlayer.canVlc(this.o)) h += '<button type="button" data-x="vlc">Abrir en VLC</button>';
+            if (NFPlayer.canVlc(this.o)) h += '<button type="button" data-x="vlc">' + NF_esc(tr('Abrir en VLC')) + '</button>';
             pop.innerHTML = h + '</div>';
             var fx = pop.querySelector('[data-x=fix]'), vx = pop.querySelector('[data-x=vlc]');
             if (fx) fx.addEventListener('click', function () { self.closePop(); self.fix(); });
@@ -1016,13 +1018,13 @@
         if (!this.o.nextUrl) return;
         this.endShown = true;
         var self = this, n = ended ? 6 : 0;
-        this.endBox.innerHTML = '<button type="button" class="nf-btn nf-btn-white nfp-nextbtn">' + ICONS.next + '<span>Siguiente episodio</span></button>';
+        this.endBox.innerHTML = '<button type="button" class="nf-btn nf-btn-white nfp-nextbtn">' + ICONS.next + '<span>' + NF_esc(tr('Siguiente episodio')) + '</span></button>';
         this.endBox.classList.add('show');
         this.endBox.querySelector('button').addEventListener('click', function () { self.goNext(); });
         if (ended) {
             var lbl = this.endBox.querySelector('span');
             var tick = function () {
-                lbl.textContent = 'Siguiente episodio en ' + n;
+                lbl.textContent = tr('Siguiente episodio en {n}', { n: n });
                 if (n-- <= 0) self.goNext(); else self.endT = setTimeout(tick, 1000);
             };
             tick();
@@ -1102,7 +1104,7 @@
         var isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         var cur = j.audio && j.audio[0];
         if (cur && !canAudio(cur.codec) && !this.hls) {
-            this.toastMsg('Convirtiendo audio ' + cur.codec.toUpperCase() + ' para este navegador');
+            this.toastMsg(tr('Convirtiendo audio {c} para este navegador', { c: cur.codec.toUpperCase() }));
             this.startTc(this.curT(), this.prefAudioIndex(), j.video && !videoOk(j.video));
         } else if (j.audio && j.audio.length > 1) {
             var w = this.prefAudioIndex();
@@ -1129,7 +1131,7 @@
         var go = function (j) {
             if (!j || !j.ok) { self.o.media = null; self.fail('sin conversión'); return; }
             self.info = j;
-            self.toastMsg('Adaptando este contenido para el navegador');
+            self.toastMsg(tr('Adaptando este contenido para el navegador'));
             self.startTc(t, self.prefAudioIndex(), j.video && !videoOk(j.video));
         };
         if (this.info) { go(this.info); return; }
@@ -1178,10 +1180,10 @@
         this.log('ffmpeg: convertir desde ' + Math.round(t || 0) + 's audio ' + a + (vt ? ' video ' + vt : '') + (m ? '' : ' (sin motor)'));
         if (!m) return;
         // al adelantar o cambiar de idioma durante la conversión basta con "Cargando"
-        if (this.tc) this.status('Cargando');
+        if (this.tc) this.status(tr('Cargando'));
         else {
-            this.status(this.ok && !this._stFailed ? ['Convirtiendo a un formato compatible'] : ['Tu navegador no es compatible con este formato', 'Convirtiendo a un archivo compatible']);
-            this._stSlow = setTimeout(function () { if (!self.ok || self.root.classList.contains('buffering')) self.status('Ya casi: la conversión puede tardar unos segundos, no cierres el video'); }, 15000);
+            this.status(this.ok && !this._stFailed ? [tr('Convirtiendo a un formato compatible')] : [tr('Tu navegador no es compatible con este formato'), tr('Convirtiendo a un archivo compatible')]);
+            this._stSlow = setTimeout(function () { if (!self.ok || self.root.classList.contains('buffering')) self.status(tr('Ya casi: la conversión puede tardar unos segundos, no cierres el video')); }, 15000);
         }
         this._stFailed = false;
         var dur = (this.tc && this.tc.dur) || (this.info && this.info.dur) || (isFinite(v.duration) ? v.duration : 0);
@@ -1270,7 +1272,7 @@
         this.log('conversión ' + why + ': se vuelve al video original');
         if (this.T() > 5) this.lastTime = this.T();
         this.tc = null; this.o.media = null;
-        this.toastMsg('La conversión no respondió: se reproduce con el audio original');
+        this.toastMsg(tr('La conversión no respondió: se reproduce con el audio original'));
         this.idx--; this.next();
     };
 
@@ -1288,20 +1290,20 @@
         this.log('conversión ' + why + ': rescate ' + ((tc.retries || 0) + 1));
         if ((tc.retries || 0) < 3) {
             var r = (tc.retries || 0) + 1;
-            this.toastMsg('Reanudando la conversión…');
+            this.toastMsg(tr('Reanudando la conversión…'));
             this.startTc(this.T(), tc.a, tc.vt);
             if (this.tc) this.tc.retries = r;
             return;
         }
         if (tc.vt !== 2 && !this._safeTried) {
             this._safeTried = true;
-            this.toastMsg('Probando un modo de reproducción más compatible…');
+            this.toastMsg(tr('Probando un modo de reproducción más compatible…'));
             this.startTc(this.T(), tc.a, 2);
             return;
         }
         // no se pudo convertir: se pasa a otra fuente (http directo / VLC) o al aviso de error
         this.tc = null; this.o.media = null;
-        this.toastMsg('No se pudo convertir este contenido');
+        this.toastMsg(tr('No se pudo convertir este contenido'));
         this.idx--; this.next();
     };
 
@@ -1320,10 +1322,10 @@
                 (self.info && self.info.audio && self.info.audio[0] && !canAudio(self.info.audio[0].codec));
             if (!silent) return;
             if (self.o.media) {
-                self.toastMsg('Activando audio compatible…');
+                self.toastMsg(tr('Activando audio compatible…'));
                 self.startTc(self.T(), self.info ? self.prefAudioIndex() : 0, self.info && self.info.video && !videoOk(self.info.video));
             } else {
-                self.showNote('Este contenido tiene audio Dolby (AC3/E-AC3) o DTS, que este navegador no reproduce. Ábrelo en Safari o Microsoft Edge, o usa VLC.');
+                self.showNote(tr('Este contenido tiene audio Dolby (AC3/E-AC3) o DTS, que este navegador no reproduce. Ábrelo en Safari o Microsoft Edge, o usa VLC.'));
             }
         };
         this._aw = setTimeout(check, 4000);
@@ -1332,7 +1334,7 @@
     NFPlayer.prototype.showNote = function (t) {
         var n = this.root.querySelector('.nfp-note');
         if (!n) { n = document.createElement('div'); n.className = 'nfp-note'; this.root.appendChild(n); }
-        n.innerHTML = '<span>' + NF_esc(t) + '</span><button type="button" aria-label="Cerrar">×</button>';
+        n.innerHTML = '<span>' + NF_esc(t) + '</span><button type="button" aria-label="' + NF_esc(tr('Cerrar')) + '">×</button>';
         n.querySelector('button').onclick = function () { n.remove(); };
     };
 
@@ -1344,14 +1346,14 @@
         this.subCache = this.subCache || {};
         if (this.subCache[i]) { this.applySub(); return; }
         var tries = 0;
-        this.toastMsg('Preparando subtítulos…');
+        this.toastMsg(tr('Preparando subtítulos…'));
         var ask = function () {
             if (self.subSel !== i) return;
             fetch(m.sub + '&i=' + i, { credentials: 'same-origin' }).then(function (r) {
                 if (r.status === 202) {
                     // el servidor todavía está extrayendo el subtítulo del archivo completo
-                    if (++tries < 200) { if (tries % 10 === 0) self.toastMsg('Preparando subtítulos… (la primera vez tarda un poco)'); setTimeout(ask, 3000); }
-                    else self.toastMsg('Los subtítulos están tardando demasiado');
+                    if (++tries < 200) { if (tries % 10 === 0) self.toastMsg(tr('Preparando subtítulos… (la primera vez tarda un poco)')); setTimeout(ask, 3000); }
+                    else self.toastMsg(tr('Los subtítulos están tardando demasiado'));
                     return null;
                 }
                 if (!r.ok) throw 0;
@@ -1359,8 +1361,8 @@
             }).then(function (txt) {
                 if (txt == null) return;
                 self.subCache[i] = parseVtt(txt);
-                if (self.subSel === i) { self.applySub(); self.toastMsg('Subtítulos activados'); }
-            }).catch(function () { self.toastMsg('No se pudieron cargar los subtítulos'); });
+                if (self.subSel === i) { self.applySub(); self.toastMsg(tr('Subtítulos activados')); }
+            }).catch(function () { self.toastMsg(tr('No se pudieron cargar los subtítulos')); });
         };
         ask();
     };
@@ -1375,7 +1377,7 @@
         var v = this.v, off = this.tc ? this.tc.off : 0;
         if (!this.subTrack) {
             for (var j = 0; j < v.textTracks.length; j++) v.textTracks[j].mode = 'disabled';
-            this.subTrack = v.addTextTrack('subtitles', 'Subtítulos', 'es');
+            this.subTrack = v.addTextTrack('subtitles', tr('Subtítulos'), 'es');
         }
         this.clearSub();
         var t = this.subTrack;
@@ -1431,16 +1433,16 @@
     NFPlayer.vlc = function (o) {
         var raw = vlcRaw(o), k = devKind();
         if (!raw) return null;
-        if (k === 'android') { var m = raw.match(/^(https?):\/\/(.*)$/); return { label: 'Abrir en VLC', href: m ? 'intent://' + m[2] + '#Intent;scheme=' + m[1] + ';package=org.videolan.vlc;type=video/*;S.browser_fallback_url=' + encodeURIComponent(VLC_STORE.android) + ';end' : 'vlc://' + raw }; }
-        if (k === 'ios') return { label: 'Abrir en VLC', href: 'vlc-x-callback://x-callback-url/stream?url=' + encodeURIComponent(raw) };
-        return o.vlcPc ? { label: 'Abrir en VLC', href: o.vlcPc } : null;
+        if (k === 'android') { var m = raw.match(/^(https?):\/\/(.*)$/); return { label: tr('Abrir en VLC'), href: m ? 'intent://' + m[2] + '#Intent;scheme=' + m[1] + ';package=org.videolan.vlc;type=video/*;S.browser_fallback_url=' + encodeURIComponent(VLC_STORE.android) + ';end' : 'vlc://' + raw }; }
+        if (k === 'ios') return { label: tr('Abrir en VLC'), href: 'vlc-x-callback://x-callback-url/stream?url=' + encodeURIComponent(raw) };
+        return o.vlcPc ? { label: tr('Abrir en VLC'), href: o.vlcPc } : null;
     };
 
     NFPlayer.vlcModal = function (title, text, kinds, extra) {
         var old = document.querySelector('.nfv-modal');
         if (old) old.remove();
-        var names = { android: 'Descargar para Android', ios: 'Descargar para iPhone / iPad', win: 'Descargar para Windows (Microsoft Store)', mac: 'Descargar para Mac', pc: 'Descargar VLC' };
-        var h = '<div class="nfv-box"><button type="button" class="nfv-x" aria-label="Cerrar">×</button><div class="nfv-ico">&#9654;</div><h3>' + title + '</h3><p>' + text + '</p><div class="nfv-acts">';
+        var names = { android: tr('Descargar para Android'), ios: tr('Descargar para iPhone / iPad'), win: tr('Descargar para Windows (Microsoft Store)'), mac: tr('Descargar para Mac'), pc: tr('Descargar VLC') };
+        var h = '<div class="nfv-box"><button type="button" class="nfv-x" aria-label="' + NF_esc(tr('Cerrar')) + '">×</button><div class="nfv-ico">&#9654;</div><h3>' + title + '</h3><p>' + text + '</p><div class="nfv-acts">';
         if (extra) h += extra;
         kinds.forEach(function (k, i) { h += '<a class="nf-btn ' + (i === 0 && !extra ? 'nf-btn-white' : 'nf-btn-gray') + '" href="' + VLC_STORE[k] + '" target="_blank" rel="noopener">' + names[k] + '</a>'; });
         h += '</div></div>';
@@ -1470,7 +1472,7 @@
             setTimeout(function () {
                 done();
                 if (left) return;
-                NFPlayer.vlcModal('No encontramos VLC en tu celular', 'Instala VLC (es gratis) y vuelve a tocar "Abrir en VLC": el contenido se abrirá directo en la app.',
+                NFPlayer.vlcModal(tr('No encontramos VLC en tu celular'), tr('Instala VLC (es gratis) y vuelve a tocar "Abrir en VLC": el contenido se abrirá directo en la app.'),
                     k === 'ios' ? ['ios', 'android'] : ['android', 'ios']);
             }, 2500);
             return;
@@ -1486,9 +1488,9 @@
         setTimeout(function () {
             done();
             if (left) return;
-            var dl = o.vlcPc ? '<a class="nf-btn nf-btn-white" href="' + NF_esc(o.vlcPc) + '" download>Descargar lista para VLC</a>' : '';
+            var dl = o.vlcPc ? '<a class="nf-btn nf-btn-white" href="' + NF_esc(o.vlcPc) + '" download>' + NF_esc(tr('Descargar lista para VLC')) + '</a>' : '';
             if (o.vlcPc) { var a = document.createElement('a'); a.href = o.vlcPc; a.setAttribute('download', ''); document.body.appendChild(a); a.click(); a.remove(); }
-            NFPlayer.vlcModal('Abrir en VLC', 'Se descargó una lista de reproducción. Ábrela y se reproducirá en VLC. Si no tienes VLC instalado, descárgalo aquí (es gratis) y vuelve a tocar "Abrir en VLC".',
+            NFPlayer.vlcModal(tr('Abrir en VLC'), tr('Se descargó una lista de reproducción. Ábrela y se reproducirá en VLC. Si no tienes VLC instalado, descárgalo aquí (es gratis) y vuelve a tocar "Abrir en VLC".'),
                 [k, k === 'win' ? 'pc' : (k === 'mac' ? 'pc' : 'win')].filter(function (x, i, arr) { return arr.indexOf(x) === i; }), dl);
         }, 1800);
     };
