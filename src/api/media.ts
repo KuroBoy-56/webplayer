@@ -6,7 +6,7 @@ import { b64Encode } from '../lib/crypto';
 import { http, json } from '../lib/http';
 import { str } from '../lib/util';
 import { cloudToken, panel, panelApiBase, panelScheme } from './panel';
-import { t } from '../lib/i18n';
+import { lang, t } from '../lib/i18n';
 
 const FILE = 'media_tizen.php';
 
@@ -43,12 +43,12 @@ function b64u(s: string): string {
 
 // HLS con el audio a (orden en el archivo) desde el segundo t
 export function hlsLink(e: Engine, url: string, a: number, t: number): string {
-  return e.base + FILE + '?do=hls&token=' + encodeURIComponent(e.token) + '&u=' + b64u(url) + '&a=' + a + '&t=' + Math.max(0, Math.floor(t));
+  return e.base + FILE + '?do=hls&token=' + encodeURIComponent(e.token) + '&u=' + b64u(url) + '&a=' + a + '&t=' + Math.max(0, Math.floor(t)) + '&lang=' + lang();
 }
 
 // subtítulo s del archivo en WebVTT (o = segundos que se adelanta)
 export function subLink(e: Engine, url: string, s: number, o = 0): string {
-  return e.base + FILE + '?do=sub&token=' + encodeURIComponent(e.token) + '&u=' + b64u(url) + '&s=' + s + '&o=' + Math.max(0, Math.floor(o));
+  return e.base + FILE + '?do=sub&token=' + encodeURIComponent(e.token) + '&u=' + b64u(url) + '&s=' + s + '&o=' + Math.max(0, Math.floor(o)) + '&lang=' + lang();
 }
 
 // ¿ya está listo el subtítulo? (la primera vez el panel lee el archivo entero: puede tardar)
