@@ -67,7 +67,7 @@ struct AccountView: View {
                             Store.streamFormat = streamFormat
                         }
                         Divider().background(Color(hex: 0x333333))
-                        setting("pip", tr("Reproductor"), nativePlayer ? tr("De iOS · imagen en imagen y AirPlay (MKV y TS en el de la app)") : tr("De la app (sin imagen en imagen)")) {
+                        setting("pip", tr("Reproductor"), nativePlayer ? tr("De iOS · imagen en imagen y AirPlay (VLC de la app solo si no abre)") : tr("De la app (sin imagen en imagen)")) {
                             nativePlayer.toggle()
                             Store.nativePlayer = nativePlayer
                         }

@@ -61,21 +61,26 @@ enum PlayerPresenter {
     }
 
     private static func present(_ req: PlayRequest, _ state: AppState, _ tenant: Tenant) {
-        // lo que Apple puede abrir va a su reproductor (imagen en imagen); si falla vuelve aquí con forceApp
-        if let url = NativePlayer.source(req) {
+        // primero el reproductor de iOS (imagen en imagen), por todas sus vías; el de la app (VLC) es el último recurso
+        if NativePlayer.wanted(req) {
             shownId = req.id
-            if req.offline || URL(string: url).map(StreamLoader.handles) == true {
-                NativePlayer.shared.open(req, url: url, state: state)
-                return
-            }
-            // HLS (canales): la redirección de https a http (que el reproductor de iOS no sigue) se resuelve antes
             Task { @MainActor in
-                let u = await StreamRedirect.resolve(url)
+                let ways = await NativePlayer.ways(req)
                 guard shownId == req.id, state.play?.id == req.id else { return }
-                NativePlayer.shared.open(req, url: u, state: state)
+                if ways.isEmpty {
+                    shownId = nil
+                    presentApp(req, state, tenant)
+                } else {
+                    NativePlayer.shared.open(req, ways: ways, state: state)
+                }
             }
             return
         }
+        presentApp(req, state, tenant)
+    }
+
+    /** reproductor de la app (VLC) */
+    private static func presentApp(_ req: PlayRequest, _ state: AppState, _ tenant: Tenant) {
         guard let top = topController() else { return }
         let view = PlayerScreen(request: req)
             .environmentObject(state)

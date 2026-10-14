@@ -99,6 +99,12 @@ final class Cloud: ObservableObject {
         return t
     }
 
+    /** token vigente de la línea (motor de video del panel, api/media_ios.php) */
+    func lineToken() async -> String? {
+        guard let s = Store.session() else { return nil }
+        return await token(s)
+    }
+
     /** Llama a un endpoint del panel con el token; si venció, pide otro una vez. */
     func call(_ block: (String) async -> Resp) async -> Resp? {
         guard let s = Store.session(), var tok = await token(s) else { return nil }
