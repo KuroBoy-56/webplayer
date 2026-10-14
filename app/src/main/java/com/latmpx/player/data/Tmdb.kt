@@ -144,6 +144,13 @@ object Tmdb {
         val trailer: String
     )
 
+    /**
+     * Sinopsis a mostrar: en español queda la de siempre (server); en otro idioma, el resumen de la ficha
+     * de TMDB (pedida en ese idioma) y, si TMDB no lo tiene o no hubo coincidencia, la del servidor.
+     */
+    fun localPlot(server: String, overview: String?): String =
+        if (Lang.current == "es") server else overview?.ifBlank { null } ?: server
+
     data class CastMember(val name: String, val character: String, val profile: String, val id: Int = 0)
 
     private val cache = mutableMapOf<String, Details>()
