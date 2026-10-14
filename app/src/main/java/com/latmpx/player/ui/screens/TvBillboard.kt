@@ -120,7 +120,7 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
     val ctx = LocalContext.current
     val conf = LocalConfiguration.current
     val height = minOf(conf.screenWidthDp * 0.5625f, conf.screenHeightDp * 0.88f).dp
-    val key = "$cacheKey|${s.user}@${s.base}" // otra cuenta u otro servidor: otros destacados
+    val key = "$cacheKey|${s.user}@${s.base}|${com.latmpx.player.Lang.current}" // otra cuenta, otro servidor u otro idioma (resumen de TMDB): otros destacados
     val heroes = remember(key) { mutableStateListOf<TvHero>().apply { addAll(HeroCache.map[key].orEmpty()) } }
     var done by remember(key) { mutableStateOf(heroes.isNotEmpty()) }
     var index by remember(key) { mutableIntStateOf(0) }
