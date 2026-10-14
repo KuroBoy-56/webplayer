@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem, playEpisodes, playMovie } from '../actions';
-import { CastMember, castFor } from '../api/tmdb';
+import { CastMember, castFor, overviewFor } from '../api/tmdb';
 import { SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
 import { Button, Focusable } from '../components/ui';
 import { RowView } from '../components/Tiles';
@@ -21,6 +21,8 @@ export default function Detail({ item }: { item: Item }) {
   const [season, setSeason] = useState(0);
   const [loading, setLoading] = useState(true);
   const [cast, setCast] = useState<CastMember[]>([]);
+  // sinopsis de TMDB en el idioma de la app (en español queda la del servidor)
+  const [tmdbPlot, setTmdbPlot] = useState('');
 
   useEffect(() => {
     const s = getState().session;
@@ -50,7 +52,9 @@ export default function Detail({ item }: { item: Item }) {
     if (loading) return;
     let alive = true;
     setCast([]);
+    setTmdbPlot('');
     castFor(item, info?.tmdb || '', info?.year || item.year).then(c => alive && setCast(c));
+    overviewFor(item, info?.tmdb || '', info?.year || item.year).then(p => alive && setTmdbPlot(p));
     return () => {
       alive = false;
     };
@@ -99,7 +103,7 @@ export default function Detail({ item }: { item: Item }) {
           <Text style={s.meta}>{meta}</Text>
           {info?.genre ? <Text style={s.genre}>{info.genre}</Text> : null}
           <Text style={s.plot} numberOfLines={5}>
-            {info?.plot || item.plot || (loading ? t('Cargando…') : '')}
+            {tmdbPlot || info?.plot || item.plot || (loading ? t('Cargando…') : '')}
           </Text>
           {info?.cast && !cast.length ? (
             <Text style={s.small} numberOfLines={2}>
