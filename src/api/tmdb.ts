@@ -2,6 +2,7 @@
 // Clave: la que entrega el panel (tmdbKey) y, si falta o no sirve, la incorporada (igual que la web).
 import { catalog, Item } from '../data/catalog';
 import { http, json } from '../lib/http';
+import { tmdbLang } from '../lib/i18n';
 import { read } from '../lib/storage';
 import { scoped } from '../lib/tenant';
 import { buildTitleIndex, catalogYear, lookupTitle, TitleIndex, titleKeys, yearsOk } from '../lib/titles';
@@ -32,10 +33,11 @@ export type CastMember = { id: number; name: string; character: string; photo: s
 
 const castCache = new Map<string, CastMember[]>();
 
-// reparto de una película o serie: por tmdb_id del servidor o buscando el título (+ año)
+// reparto de una película o serie: por tmdb_id del servidor o buscando el título (+ año). La búsqueda
+// va en es-MX (títulos del catálogo); el reparto en el idioma de la app (caché por idioma)
 export async function castFor(item: Item, tmdbId: string, year: string): Promise<CastMember[]> {
   const kind = item.kind === 'series' ? 'tv' : 'movie';
-  const ck = kind + ':' + item.id;
+  const ck = kind + ':' + item.id + ':' + tmdbLang();
   const hit = castCache.get(ck);
   if (hit) return hit;
   let id = /^\d+$/.test(tmdbId) ? tmdbId : '';
@@ -54,7 +56,7 @@ export async function castFor(item: Item, tmdbId: string, year: string): Promise
     }
   }
   if (!id) return [];
-  const j = await get(kind + '/' + id + '/' + (kind === 'tv' ? 'aggregate_credits' : 'credits'), 'language=es-MX');
+  const j = await get(kind + '/' + id + '/' + (kind === 'tv' ? 'aggregate_credits' : 'credits'), 'language=' + tmdbLang());
   const list: CastMember[] = [];
   for (const a of (j && Array.isArray(j.cast) ? j.cast : []).slice(0, 20)) {
     if (!a || !a.id) continue;
@@ -89,11 +91,13 @@ function indexFor(kind: 'vod' | 'series'): TitleIndex | null {
   return idx;
 }
 
-// actor con su filmografía, solo lo que el servidor tiene (más reciente primero)
+// actor con su filmografía, solo lo que el servidor tiene (más reciente primero). La filmografía se
+// empareja en es-MX (títulos del catálogo); nombre y biografía en el idioma de la app
 export async function personWithCatalog(personId: number): Promise<Person | null> {
   const j = await get('person/' + personId, 'language=es-MX&append_to_response=combined_credits');
   if (!j || !j.id) return null;
-  let bio = str(j.biography).trim();
+  const local = tmdbLang() === 'es-MX' ? j : await get('person/' + personId, 'language=' + tmdbLang());
+  let bio = str(local?.biography).trim();
   if (!bio) {
     const en = await get('person/' + personId, 'language=en-US');
     bio = str(en?.biography).trim();
@@ -125,7 +129,7 @@ export async function personWithCatalog(personId: number): Promise<Person | null
   }
   return {
     id: Number(j.id),
-    name: str(j.name),
+    name: str(local?.name) || str(j.name),
     bio,
     birthday: str(j.birthday),
     place: str(j.place_of_birth),
