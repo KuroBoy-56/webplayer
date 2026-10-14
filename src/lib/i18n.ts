@@ -56,6 +56,12 @@ export function lang(): Lang {
   return c === 'auto' ? deviceLang() : c;
 }
 
+// idioma para TMDB (detalles, reparto, biografía y carátulas; la búsqueda y el emparejamiento con el
+// catálogo siguen en es-MX)
+export function tmdbLang(): string {
+  return { es: 'es-MX', en: 'en-US', pt: 'pt-BR', fr: 'fr-FR' }[lang()];
+}
+
 let listener: () => void = () => {};
 let justChanged = false;
 export function onLangChange(fn: () => void): void {

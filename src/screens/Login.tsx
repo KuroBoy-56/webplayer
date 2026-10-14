@@ -7,7 +7,7 @@ import { loginAll } from '../api/xtream';
 import { Button, Focusable, Logo } from '../components/ui';
 import { json } from '../lib/http';
 import { hasMasterKey } from '../lib/aes';
-import { t } from '../lib/i18n';
+import { t, tmdbLang } from '../lib/i18n';
 import { DNS_OPTIONS, dnsChoice, setDnsChoice } from '../lib/securedns';
 import { read, write } from '../lib/storage';
 import { APP_ID, features, scoped, tenantCode } from '../lib/tenant';
@@ -17,13 +17,13 @@ import { deviceId, setSession } from '../state';
 import { alpha, C, px, themed } from '../theme';
 
 // fondo: carátulas de TMDB con la clave del panel (la del distribuidor o la del dueño) por
-// api/tmdb.php; sin clave el panel responde tmdb_key_not_set y no hay carrusel
+// api/tmdb.php (en el idioma de la app); sin clave el panel responde tmdb_key_not_set y no hay carrusel
 async function tmdbPosters(): Promise<string[]> {
   const code = tenantCode();
   const tq = code ? '&t=' + encodeURIComponent(code) + '&app=' + APP_ID : '';
   const out: string[] = [];
   for (const path of ['movie/now_playing', 'trending/tv/week', 'movie/popular']) {
-    const j = json<any>(await panel('tmdb.php', 'GET', '', '', '?path=' + path + '&language=es-MX' + tq));
+    const j = json<any>(await panel('tmdb.php', 'GET', '', '', '?path=' + path + '&language=' + tmdbLang() + tq));
     if (!j || j.error) break;
     for (const it of j.results || []) if (str(it.poster_path)) out.push('https://image.tmdb.org/t/p/w342' + it.poster_path);
     if (out.length >= 48) break;
