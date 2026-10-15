@@ -51,6 +51,10 @@ final class PlayerModel: ObservableObject {
     private var lastSave = Date()
     private var everPlayed = false
     private var appliedLang = false
+    /** último recurso: el HLS del motor del panel (api/media_ios.php) en VLC; empieza en offsetMs */
+    private var engineTried = false
+    private var onEngine = false
+    private var offsetMs: Int64 = 0
     var onFinish: (() -> Void)?
 
     var kind: Kind { request.kind }
@@ -125,6 +129,7 @@ final class PlayerModel: ObservableObject {
         urlIdx = 0
         retriedSame = false
         resumeTo = 0
+        engineTried = false; onEngine = false; offsetMs = 0
         if kind != .live && i == request.index && request.startAt > 0 && !startUsed {
             // de vuelta de imagen en imagen: donde iba
             startUsed = true
@@ -197,17 +202,18 @@ final class PlayerModel: ObservableObject {
         PlayerDiag.phase("tick: time")
         let t = Int64(player.time.intValue)
         PlayerDiag.phase("tick: length")
-        if t > 0 { time = t }
-        if let l = player.media?.length.intValue, l > 0 { length = Int64(l) }
+        // con el motor del panel VLC cuenta desde el punto en que empezó la conversión: se muestra el tiempo real
+        if t > 0 { time = offsetMs + t }
+        if onEngine, entry.durMs > 0 { length = entry.durMs } else if let l = player.media?.length.intValue, l > 0 { length = Int64(l) + offsetMs }
         if player.isPlaying {
             if !everPlayed {
                 everPlayed = true
                 // protocolo con el que el servidor entrega el video (http / https), para los siguientes
-                if !request.offline, request.directUrls.isEmpty, let s = Store.session(), urls.indices.contains(urlIdx) {
+                if !request.offline, !onEngine, request.directUrls.isEmpty, let s = Store.session(), urls.indices.contains(urlIdx) {
                     let scheme = (s.base.lowercased().components(separatedBy: "://").first ?? "http") + "://"
                     Xtream.streamFlip = !urls[urlIdx].lowercased().hasPrefix(scheme)
                 }
-                if resumeTo > 0 { player.time = VLCTime(int: Int32(truncatingIfNeeded: resumeTo)) }
+                if resumeTo > 0 && !onEngine { player.time = VLCTime(int: Int32(truncatingIfNeeded: resumeTo)) }
             }
             if !appliedLang && time > 1500 { appliedLang = true; readTracks(); applyPreferredLanguages() }
             if Date().timeIntervalSince(lastSave) >= 10 { save() }
@@ -221,7 +227,8 @@ final class PlayerModel: ObservableObject {
         case .ended: ended()
         case .opening, .buffering, .stopped:
             // canal o video que no arranca en 25 s: se prueba la siguiente dirección
-            if !everPlayed && error == nil && Date().timeIntervalSince(openedAt) > 25 { failed() }
+            // el motor del panel tarda más en dar los primeros segmentos (convierte en el servidor)
+            if !everPlayed && error == nil && Date().timeIntervalSince(openedAt) > (onEngine ? 75 : 25) { failed() }
         default: break
         }
     }
@@ -250,6 +257,7 @@ final class PlayerModel: ObservableObject {
             open(urls[urlIdx])
             return
         }
+        if tryEngine() { return }
         if error == nil {
             // el informe al panel va en español; la pantalla, en el idioma de la app
             let generic = kind == .live ? "No se pudo reproducir este canal" : "No se pudo reproducir este video"
@@ -273,17 +281,56 @@ final class PlayerModel: ObservableObject {
         freshPlayer()
     }
 
+    /**
+     * Ninguna dirección abrió en VLC (formato o códec que no decodifica, servidor que corta): el motor del panel
+     * convierte el video a HLS desde donde iba. Solo películas y episodios, una vez por video y si el panel lo tiene.
+     */
+    private func tryEngine() -> Bool {
+        guard !engineTried, kind != .live, !request.offline, request.directUrls.isEmpty, let src = urls.first else { return false }
+        engineTried = true
+        retriedSame = true
+        let my = loadSeq
+        let fromMs = max(resumeTo, time)
+        buffering = true
+        connecting = false
+        openedAt = Date()
+        freshPlayer()
+        PlayerDiag.log("VLC: motor del panel desde \(fromMs / 1000) s")
+        Task { @MainActor [weak self] in
+            let e = await StreamEngine.available() ? await StreamEngine.url(src, from: Int(fromMs / 1000)) : nil
+            guard let self = self, !self.stopped, self.loadSeq == my, self.error == nil else { return }
+            guard let e = e else { self.failed(); return }
+            self.onEngine = true
+            self.offsetMs = fromMs / 1000 * 1000
+            self.resumeTo = 0
+            self.everPlayed = false
+            self.urls.append(e)
+            self.urlIdx = self.urls.count - 1
+            self.start(e)
+        }
+        return true
+    }
+
     private func ended() {
         if kind == .live { failed(); return }
         save(force: true, done: true)
         if kind == .series && hasNext { load(index + 1) } else { freshPlayer(); onFinish?() }
     }
 
-    func retry() { error = nil; errorDetail = nil; urlIdx = 0; retriedSame = false; open(urls.first ?? "") }
+    func retry() {
+        error = nil; errorDetail = nil; urlIdx = 0; retriedSame = false
+        if onEngine { urls.removeLast() }
+        engineTried = false; onEngine = false; offsetMs = 0
+        open(urls.first ?? "")
+    }
 
     func toggle() { player.isPlaying ? player.pause() : player.play(); if !player.isPlaying { save(force: true) } }
     func seek(by s: Int32) { s >= 0 ? player.jumpForward(s) : player.jumpBackward(-s) }
-    func seek(to fraction: Double) { if length > 0 { player.time = VLCTime(int: Int32(truncatingIfNeeded: Int64(Double(length) * fraction))) } }
+    func seek(to fraction: Double) {
+        guard length > 0 else { return }
+        let ms = max(0, Int64(Double(length) * fraction) - offsetMs)
+        player.time = VLCTime(int: Int32(truncatingIfNeeded: ms))
+    }
     func next() { save(force: true); if hasNext { load(index + 1) } else if kind == .live { load(0) } }
     func previous() {
         if kind != .live { return }
@@ -345,7 +392,8 @@ final class PlayerModel: ObservableObject {
         lastSave = Date()
         guard kind != .live, request.queue.indices.contains(index) else { return }
         let q = entry
-        let dur = length
+        // en el motor del panel VLC solo ve lo ya convertido: la duración es la del servidor
+        let dur = (onEngine || length <= 0) && q.durMs > 0 ? q.durMs : length
         let pos = done ? dur : time
         if pos < 5_000 { return }
         // sin internet: donde se dejó queda en el equipo
@@ -353,7 +401,7 @@ final class PlayerModel: ObservableObject {
         guard request.directUrls.isEmpty else { return }
         Cloud.shared.saveProgress(Progress(key: q.key, title: request.saveTitle.ifEmpty(q.title), label: q.title,
                                            poster: request.savePoster.ifEmpty(q.poster), position: pos, duration: dur,
-                                           updated: Date().timeIntervalSince1970, url: urls.indices.contains(urlIdx) ? urls[urlIdx] : "",
+                                           updated: Date().timeIntervalSince1970, url: onEngine ? (urls.first ?? "") : (urls.indices.contains(urlIdx) ? urls[urlIdx] : ""),
                                            categoryId: request.category), force: force)
     }
 }

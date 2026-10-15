@@ -145,15 +145,18 @@ struct DetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(Array(people.enumerated()), id: \.offset) { _, p in
-                        VStack(spacing: 4) {
-                            ZStack {
-                                Color(hex: 0x333333)
-                                if p.2.isEmpty { Text(String(p.0.prefix(1))).font(.system(size: 22, weight: .bold)).foregroundColor(.white) }
-                                else { RemoteImage(url: p.2, maxPixel: 360) }
-                            }.frame(width: 60, height: 60).clipShape(Circle())
-                            Text(p.0).font(.system(size: 12)).foregroundColor(.white).lineLimit(2).multilineTextAlignment(.center)
-                            if !p.1.isEmpty { Text(p.1).font(.system(size: 11)).foregroundColor(Theme.muted).lineLimit(1) }
-                        }.frame(width: 80)
+                        // como Android: el actor abre sus películas y series del servidor
+                        Button { state.push(.actor(p.0, tmdb?.cast.first { $0.name == p.0 }?.id ?? 0, p.2)) } label: {
+                            VStack(spacing: 4) {
+                                ZStack {
+                                    Color(hex: 0x333333)
+                                    if p.2.isEmpty { Text(String(p.0.prefix(1))).font(.system(size: 22, weight: .bold)).foregroundColor(.white) }
+                                    else { RemoteImage(url: p.2, maxPixel: 360) }
+                                }.frame(width: 60, height: 60).clipShape(Circle())
+                                Text(p.0).font(.system(size: 12)).foregroundColor(.white).lineLimit(2).multilineTextAlignment(.center)
+                                if !p.1.isEmpty { Text(p.1).font(.system(size: 11)).foregroundColor(Theme.muted).lineLimit(1) }
+                            }.frame(width: 80)
+                        }.buttonStyle(.plain)
                     }
                 }.padding(.horizontal, pad).padding(.vertical, 8)
             }
@@ -200,7 +203,7 @@ struct DetailView: View {
 
     private func play(_ lastEp: Progress?, _ seasons: [(Int, [Episode])]) {
         guard let d = det else { return }
-        if media.kind == .movie { state.playMovie(d.item, ext: d.item.ext); return }
+        if media.kind == .movie { state.playMovie(d.item, ext: d.item.ext, duration: d.duration); return }
         let all = seasons.flatMap { $0.1 }
         if all.isEmpty { state.toast = tr("Esta serie todavía no tiene episodios"); return }
         let eid = lastEp.flatMap { episodeId($0.key) }

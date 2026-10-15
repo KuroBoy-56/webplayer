@@ -468,6 +468,8 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         // el HLS del panel solo conoce lo que ya convirtió: la duración es la de una vía anterior (o 0)
         var dur: Int64 = offsetMs > 0 ? lastDurMs : 0
         if offsetMs == 0, let d = vc?.player?.currentItem?.duration, d.isNumeric, d.seconds > 0 { dur = Int64(d.seconds * 1000) }
+        // el motor del panel no sabe la duración total: la del servidor, para que Continuar viendo tenga su avance
+        if dur <= 0 { dur = q.durMs }
         let pos = done ? dur : currentMs()
         if pos < 5_000 { return }
         // sin internet: donde se dejó queda en el equipo

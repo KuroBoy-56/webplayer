@@ -68,6 +68,27 @@ enum Tmdb {
         return url
     }
 
+    /**
+     * id de TMDB de una persona por su nombre (prefiere a quien actúa).
+     * 0 = TMDB no la conoce; nil = sin respuesta.
+     */
+    static func searchPersonId(_ name: String) async -> Int? {
+        let q = name.trimmed
+        if q.count < 2 { return 0 }
+        guard let res = await get("search/person?language=es-MX&include_adult=false&query=\(urlEnc(q))") else { return nil }
+        let people = res.objs("results").filter { $0.i("id") > 0 }
+        return (people.first { $0.s("known_for_department") == "Acting" } ?? people.first)?.i("id") ?? 0
+    }
+
+    /**
+     * persona con su filmografía completa (películas y series) en un solo pedido; nil = sin respuesta.
+     * En es-MX como Android: los títulos se comparan con el catálogo del servidor, que está en español.
+     */
+    static func person(_ id: Int) async -> JObj? { await get("person/\(id)?language=es-MX&append_to_response=combined_credits") }
+
+    /** biografía en inglés cuando no hay traducción */
+    static func personBioEn(_ id: Int) async -> String { await get("person/\(id)?language=en-US")?.s("biography") ?? "" }
+
     /** fotos de varios nombres a la vez (hasta 15), nombre → dirección */
     static func personPhotos(_ names: [String]) async -> [String: String] {
         await withTaskGroup(of: (String, String).self) { g in

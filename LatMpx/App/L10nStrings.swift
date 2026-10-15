@@ -5,6 +5,14 @@ import Foundation
 
 extension L10n {
     static let en: [String: String] = [
+        "Ver más": "See more",
+        "Ver menos": "See less",
+        "Nació el %@": "Born %@",
+        "Buscando sus títulos en el servidor…": "Looking for their titles on the server…",
+        "%d títulos disponibles en el servidor": "%d titles available on the server",
+        "1 título disponible en el servidor": "1 title available on the server",
+        "No encontramos títulos de %@ en el servidor.": "We found no titles with %@ on the server.",
+        "No hay información de este actor.": "There is no information about this actor.",
         "%@ (hora de Panamá)": "%@ (Panama time)",
         "%d carpetas ocultas": "%d hidden folders",
         "%d días": "%d days",
@@ -297,6 +305,14 @@ extension L10n {
     ]
 
     static let pt: [String: String] = [
+        "Ver más": "Ver mais",
+        "Ver menos": "Ver menos",
+        "Nació el %@": "Nasceu em %@",
+        "Buscando sus títulos en el servidor…": "Procurando os títulos no servidor…",
+        "%d títulos disponibles en el servidor": "%d títulos disponíveis no servidor",
+        "1 título disponible en el servidor": "1 título disponível no servidor",
+        "No encontramos títulos de %@ en el servidor.": "Não encontramos títulos com %@ no servidor.",
+        "No hay información de este actor.": "Não há informações sobre este ator.",
         "%@ (hora de Panamá)": "%@ (horário do Panamá)",
         "%d carpetas ocultas": "%d pastas ocultas",
         "%d días": "%d dias",
@@ -556,6 +572,14 @@ extension L10n {
     ]
 
     static let fr: [String: String] = [
+        "Ver más": "Voir plus",
+        "Ver menos": "Voir moins",
+        "Nació el %@": "Né le %@",
+        "Buscando sus títulos en el servidor…": "Recherche de ses titres sur le serveur…",
+        "%d títulos disponibles en el servidor": "%d titres disponibles sur le serveur",
+        "1 título disponible en el servidor": "1 titre disponible sur le serveur",
+        "No encontramos títulos de %@ en el servidor.": "Aucun titre avec %@ sur le serveur.",
+        "No hay información de este actor.": "Aucune information sur cet acteur.",
         "%@ (hora de Panamá)": "%@ (heure du Panama)",
         "%d carpetas ocultas": "%d dossiers masqués",
         "%d días": "%d jours",

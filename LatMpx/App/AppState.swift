@@ -14,10 +14,26 @@ enum Route: Hashable {
     case search
     /** Cuenta › Mis descargas */
     case downloads
+    /** actor del elenco: nombre, id de TMDB (0 = se busca por nombre) y foto */
+    case actor(String, Int, String)
 }
 
 /** Entrada de la lista de reproducción (siguiente episodio o canal anterior/siguiente). */
-struct QueueEntry: Hashable { let id: Int; let title: String; let key: String; let poster: String; let ext: String }
+struct QueueEntry: Hashable {
+    let id: Int; let title: String; let key: String; let poster: String; let ext: String
+    /** duración que da el servidor (ms): el progreso la usa cuando el reproductor no la sabe (HLS del motor del panel) */
+    var durMs: Int64 = 0
+}
+
+/** duración del servidor IPTV ("01:52:13", "112 min", "6720") en ms; 0 si no se entiende */
+func serverDurationMs(_ raw: String) -> Int64 {
+    let t = raw.trimmingCharacters(in: .whitespaces).lowercased()
+    let parts = t.split(separator: ":").compactMap { Int64($0) }
+    if parts.count >= 2, parts.count == t.split(separator: ":").count { return parts.reduce(0) { $0 * 60 + $1 } * 1000 }
+    let digits = t.prefix { $0.isNumber }
+    guard let n = Int64(digits), n > 0 else { return 0 }
+    return t.contains("min") ? n * 60_000 : n * 1000  // "112 min" o segundos (duration_secs)
+}
 
 struct PlayRequest: Identifiable {
     let id = UUID()
@@ -110,15 +126,16 @@ final class AppState: ObservableObject {
     }
 
     /* ---------- reproducción ---------- */
-    func playMovie(_ item: Item, ext: String) {
-        play = PlayRequest(kind: .movie, queue: [QueueEntry(id: item.id, title: item.name, key: item.key, poster: item.poster, ext: ext.ifEmpty(item.ext))],
+    func playMovie(_ item: Item, ext: String, duration: String = "") {
+        play = PlayRequest(kind: .movie, queue: [QueueEntry(id: item.id, title: item.name, key: item.key, poster: item.poster, ext: ext.ifEmpty(item.ext),
+                                                            durMs: serverDurationMs(duration))],
                            index: 0, saveTitle: item.name, savePoster: item.poster, category: item.categoryId)
     }
 
     func playEpisode(_ series: Item, _ eps: [Episode], _ index: Int) {
         let q = eps.map { e in
             QueueEntry(id: e.id, title: "\(series.name) · " + tr("T%d E%d", e.season, e.num) + (!e.title.isEmpty && !e.title.contains(series.name) ? " · \(e.title)" : ""),
-                       key: "series:\(series.id):\(e.id)", poster: e.image.ifEmpty(series.poster), ext: e.ext)
+                       key: "series:\(series.id):\(e.id)", poster: e.image.ifEmpty(series.poster), ext: e.ext, durMs: serverDurationMs(e.duration))
         }
         play = PlayRequest(kind: .series, queue: q, index: max(0, min(index, q.count - 1)), saveTitle: series.name, savePoster: series.poster, category: series.categoryId)
     }

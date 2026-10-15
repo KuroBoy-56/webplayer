@@ -65,6 +65,7 @@ struct RouteView: View {
         case .sports: if tenant.sportsEnabled { SportsView() } else { EmptyMessage(text: tr("Deportes no está disponible.")) }
         case .search: SearchView()
         case .downloads: DownloadsView()
+        case .actor(let name, let id, let photo): ActorView(name: name, tmdbId: id, photo: photo)
         }
     }
 }
