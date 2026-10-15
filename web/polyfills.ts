@@ -63,7 +63,8 @@ if (typeof w.AbortController === 'undefined') {
   if (orig) {
     w.fetch = (input: any, init?: any) => {
       const sig: Signal | undefined = init?.signal;
-      const p = orig(input, init);
+      // con el this de window: un fetch suelto da 'Illegal invocation'
+      const p = orig.call(w, input, init);
       if (!sig) return p;
       return new Promise((resolve, reject) => {
         const stop = () => reject(new Error('AbortError'));
