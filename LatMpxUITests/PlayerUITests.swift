@@ -43,6 +43,18 @@ final class PlayerUITests: XCTestCase {
         }
     }
 
+    /**
+     * toca un botón del reproductor: los controles se ocultan solos, así que antes se muestran y se espera el
+     * botón (sin esto la prueba fallaba al azar cuando el botón desaparecía justo antes del toque)
+     */
+    private func press(_ app: XCUIApplication, _ b: XCUIElement) {
+        for _ in 0..<3 {
+            controls(app)
+            if b.waitForExistence(timeout: 2) && b.isHittable { b.tap(); return }
+        }
+        XCTFail("no aparece el botón \(b.identifier)")
+    }
+
     private func wait(_ timeout: TimeInterval, _ cond: () -> Bool) -> Bool {
         let end = Date().addingTimeInterval(timeout)
         while Date() < end {
@@ -70,18 +82,16 @@ final class PlayerUITests: XCTestCase {
         let f = app.windows.firstMatch.frame
         XCTAssertGreaterThan(f.width, f.height, "el reproductor no está en horizontal")
 
-        controls(app)
-        toggle.tap()
+        press(app, toggle)
         XCTAssertTrue(wait(5) { controls(app); return value(toggle) == "paused" }, "no se pudo pausar")
         shot("3-pelicula-pausada")
-        controls(app)
-        toggle.tap()
+        press(app, toggle)
         XCTAssertTrue(wait(10) { controls(app); return value(toggle) == "playing" }, "no se pudo reanudar")
 
         controls(app)
         let before = app.staticTexts["player.time"].label
-        app.buttons["player.forward"].tap()
-        app.buttons["player.forward"].tap()
+        press(app, app.buttons["player.forward"])
+        press(app, app.buttons["player.forward"])
         RunLoop.current.run(until: Date().addingTimeInterval(2))
         controls(app)
         shot("4-pelicula-adelantada")
@@ -89,7 +99,7 @@ final class PlayerUITests: XCTestCase {
 
         controls(app)
         let c0 = Date()
-        app.buttons["player.close"].tap()
+        press(app, app.buttons["player.close"])
         XCTAssertTrue(wait(5) { !app.otherElements["player.screen"].exists }, "no se pudo salir del reproductor")
         note(String(format: "película cerrada en %.2f s", Date().timeIntervalSince(c0)))
         RunLoop.current.run(until: Date().addingTimeInterval(1.5))
@@ -105,8 +115,7 @@ final class PlayerUITests: XCTestCase {
         let playing = wait(60) { controls(app); return value(toggle) == "playing" }
         shot("6-canal-reproduciendo")
         XCTAssertTrue(playing, "el canal no empezó a reproducirse")
-        controls(app)
-        app.buttons["player.close"].tap()
+        press(app, app.buttons["player.close"])
         XCTAssertTrue(wait(5) { !app.otherElements["player.screen"].exists }, "no se pudo salir del canal")
         shot("7-canal-cerrado")
     }
@@ -120,7 +129,7 @@ final class PlayerUITests: XCTestCase {
         shot("8-servidor-sin-respuesta")
         let t0 = Date()
         note("toco cerrar")
-        app.buttons["player.close"].tap()
+        press(app, app.buttons["player.close"])
         note(String(format: "tap terminado en %.2f s", Date().timeIntervalSince(t0)))
         XCTAssertTrue(wait(5) { !app.otherElements["player.screen"].exists }, "la pantalla quedó pegada con un servidor que no responde")
         XCTAssertLessThan(Date().timeIntervalSince(t0), 6)
