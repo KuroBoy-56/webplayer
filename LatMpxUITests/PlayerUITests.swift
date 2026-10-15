@@ -65,7 +65,11 @@ final class PlayerUITests: XCTestCase {
         return cond()
     }
 
-    private func value(_ e: XCUIElement) -> String { e.exists ? ((e.value as? String) ?? "") : "" }
+    /** reproduciendo / en pausa, de un texto que siempre está (el botón se oculta solo y leerlo daba carreras) */
+    private func state(_ app: XCUIApplication) -> String {
+        let s = app.staticTexts["player.state"]
+        return s.waitForExistence(timeout: 1) ? s.label : ""
+    }
 
     private func note(_ s: String) { print("TIEMPO \(name): \(s)") }
 
@@ -75,7 +79,7 @@ final class PlayerUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["player.screen"].exists, "no se encuentra la pantalla del reproductor")
         shot("1-pelicula-abierta")
         let toggle = app.buttons["player.toggle"]
-        let playing = wait(60) { controls(app); return value(toggle) == "playing" }
+        let playing = wait(60) { state(app) == "playing" }
         shot("2-pelicula-reproduciendo")
         XCTAssertTrue(playing, "el video no empezó a reproducirse")
 
@@ -84,10 +88,10 @@ final class PlayerUITests: XCTestCase {
         XCTAssertGreaterThan(f.width, f.height, "el reproductor no está en horizontal")
 
         press(app, toggle)
-        XCTAssertTrue(wait(5) { controls(app); return value(toggle) == "paused" }, "no se pudo pausar")
+        XCTAssertTrue(wait(5) { state(app) == "paused" }, "no se pudo pausar")
         shot("3-pelicula-pausada")
         press(app, toggle)
-        XCTAssertTrue(wait(10) { controls(app); return value(toggle) == "playing" }, "no se pudo reanudar")
+        XCTAssertTrue(wait(10) { state(app) == "playing" }, "no se pudo reanudar")
 
         controls(app)
         let before = app.staticTexts["player.time"].label
@@ -112,8 +116,7 @@ final class PlayerUITests: XCTestCase {
     func testLiveChannelPlaysAndCloses() {
         let app = launch(live, live: true)
         XCTAssertTrue(app.buttons["player.close"].waitForExistence(timeout: 30), "no se abrió el canal")
-        let toggle = app.buttons["player.toggle"]
-        let playing = wait(60) { controls(app); return value(toggle) == "playing" }
+        let playing = wait(60) { state(app) == "playing" }
         shot("6-canal-reproduciendo")
         XCTAssertTrue(playing, "el canal no empezó a reproducirse")
         press(app, app.buttons["player.close"])

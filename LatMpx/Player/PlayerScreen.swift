@@ -45,6 +45,9 @@ struct PlayerScreen: View {
                 if m.buffering && m.error == nil { ProgressView().tint(.white).scaleEffect(1.6).allowsHitTesting(false) }
                 if let e = m.error { errorBox(e) }
                 if controls && m.error == nil { overlay }
+                // estado para la prueba del simulador: siempre presente (los controles se ocultan solos)
+                Text(m.playing ? "playing" : "paused").font(.system(size: 1)).opacity(0.02).frame(width: 1, height: 1)
+                    .allowsHitTesting(false).accessibilityIdentifier("player.state")
             }
         }
         .accessibilityElement(children: .contain)
