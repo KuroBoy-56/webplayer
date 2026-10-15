@@ -50,7 +50,8 @@ final class PlayerUITests: XCTestCase {
     private func press(_ app: XCUIApplication, _ b: XCUIElement) {
         for _ in 0..<3 {
             controls(app)
-            if b.waitForExistence(timeout: 2) && b.isHittable { b.tap(); return }
+            // sin isHittable: con el botón ocultándose XCUITest da error al calcularlo
+            if b.waitForExistence(timeout: 2) { b.tap(); return }
         }
         XCTFail("no aparece el botón \(b.identifier)")
     }
@@ -129,7 +130,8 @@ final class PlayerUITests: XCTestCase {
         shot("8-servidor-sin-respuesta")
         let t0 = Date()
         note("toco cerrar")
-        press(app, app.buttons["player.close"])
+        // el toque directo (los controles ya se mostraron arriba): esta prueba mide cuánto tarda en salir
+        app.buttons["player.close"].tap()
         note(String(format: "tap terminado en %.2f s", Date().timeIntervalSince(t0)))
         XCTAssertTrue(wait(5) { !app.otherElements["player.screen"].exists }, "la pantalla quedó pegada con un servidor que no responde")
         XCTAssertLessThan(Date().timeIntervalSince(t0), 6)
