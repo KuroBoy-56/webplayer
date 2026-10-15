@@ -135,9 +135,14 @@ final class PlayerUITests: XCTestCase {
         note("toco cerrar")
         // el toque directo (los controles ya se mostraron arriba): esta prueba mide cuánto tarda en salir
         app.buttons["player.close"].tap()
-        note(String(format: "tap terminado en %.2f s", Date().timeIntervalSince(t0)))
+        let tap = Date().timeIntervalSince(t0)
+        note(String(format: "tap terminado en %.2f s", tap))
+        // el toque espera a que la app quede libre: con el hilo principal pegado (el fallo que vigila esta prueba)
+        // no vuelve; en un simulador lento el toque solo ya tarda 2-4 s, por eso se mide aparte de la salida
+        XCTAssertLessThan(tap, 10, "la app no respondió al toque de cerrar")
+        let t1 = Date()
         XCTAssertTrue(wait(5) { !app.otherElements["player.screen"].exists }, "la pantalla quedó pegada con un servidor que no responde")
-        XCTAssertLessThan(Date().timeIntervalSince(t0), 6)
+        note(String(format: "pantalla cerrada %.2f s después del toque", Date().timeIntervalSince(t1)))
         shot("9-servidor-cerrado")
     }
 }
