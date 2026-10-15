@@ -41,6 +41,7 @@ const en = {
   "Buscar en {x}…": "Search in {x}…",
   "Buscar por equipos": "Search by teams",
   "Cambiando a {x}…": "Switching to {x}…",
+  "Este equipo no abre el video directo: se prepara con el panel…": "This device can't open the video directly: the panel is preparing it…",
   "Cambiando idioma…": "Changing language…",
   "Cambiar distribuidor": "Change distributor",
   "Cancelar": "Cancel",

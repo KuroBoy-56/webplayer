@@ -1,7 +1,8 @@
 import { createContext, useContext } from 'react';
 import type { Item } from './data/catalog';
 
-export type QueueEntry = { id: string; title: string; ext: string; poster: string; season?: number; num?: number };
+// dur: duración que da el servidor (segundos), para el progreso cuando el reproductor no la sabe
+export type QueueEntry = { id: string; title: string; ext: string; poster: string; season?: number; num?: number; dur?: number };
 
 export type PlayParams =
   | { kind: 'movie' | 'episode'; queue: QueueEntry[]; index: number; saveTitle: string; savePoster: string; cat: string; seriesId: string; resume: number }

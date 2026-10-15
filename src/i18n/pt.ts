@@ -42,6 +42,7 @@ const pt: Record<Key, string> = {
   "Buscar en {x}…": "Buscar em {x}…",
   "Buscar por equipos": "Buscar por times",
   "Cambiando a {x}…": "Mudando para {x}…",
+  "Este equipo no abre el video directo: se prepara con el panel…": "Este aparelho não abre o vídeo direto: o painel está preparando…",
   "Cambiando idioma…": "Mudando o idioma…",
   "Cambiar distribuidor": "Trocar distribuidor",
   "Cancelar": "Cancelar",

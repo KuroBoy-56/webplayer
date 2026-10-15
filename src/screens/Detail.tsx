@@ -114,8 +114,8 @@ export default function Detail({ item }: { item: Item }) {
           <View style={s.btns}>
             {item.kind === 'vod' ? (
               <>
-                <Button label={canResume ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onPress={() => playMovie(nav, item, vod?.ext || item.ext)} />
-                {canResume ? <Button label={t('Desde el inicio')} icon="↺" onPress={() => playMovie(nav, item, vod?.ext || item.ext, true)} /> : null}
+                <Button label={canResume ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onPress={() => playMovie(nav, item, vod?.ext || item.ext, false, vod?.duration)} />
+                {canResume ? <Button label={t('Desde el inicio')} icon="↺" onPress={() => playMovie(nav, item, vod?.ext || item.ext, true, vod?.duration)} /> : null}
               </>
             ) : (
               <Button label={resumeEp ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onPress={playSeries} />
