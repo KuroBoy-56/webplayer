@@ -1,5 +1,6 @@
-// Control remoto de Samsung: las teclas llegan como keydown. Se pasan a los useTVEventHandler (como
-// en Vega), las flechas mueven el foco (spatial.ts) y Atrás va al BackHandler.
+// Control remoto de LG (Magic Remote o el básico): las teclas llegan como keydown. Se pasan a los
+// useTVEventHandler (como en Vega), las flechas mueven el foco (spatial.ts) y Atrás (461) va al BackHandler.
+// webOS entrega todas las teclas sin registrarlas (appinfo.json: disableBackHistoryAPI para recibir Atrás).
 import { pressBack } from './back';
 import { keepFocus, move } from './spatial';
 
@@ -14,21 +15,15 @@ export function onRemote(l: Listener): () => void {
   };
 }
 
-// teclas del control que Tizen solo entrega a la app si las pide
-const TIZEN_KEYS = [
-  'MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaRewind', 'MediaFastForward',
-  'MediaTrackPrevious', 'MediaTrackNext', 'ChannelUp', 'ChannelDown', 'Info', 'Tools', 'Caption',
-  'ColorF0Red', 'ColorF1Green', 'ColorF2Yellow', 'ColorF3Blue',
-];
-
 // keyCode → evento de Vega (useTVEventHandler)
 const EVENTS: Record<number, string> = {
   37: 'left', 38: 'up', 39: 'right', 40: 'down', 13: 'select',
-  10252: 'playpause', 415: 'play', 19: 'pause', 413: 'pause', 412: 'rewind', 417: 'fastforward',
-  10232: 'skip_backward', 10233: 'skip_forward', 427: 'channel_up', 428: 'channel_down',
-  457: 'info', 10135: 'menu', 10221: 'menu', 403: 'menu',
+  415: 'play', 19: 'pause', 413: 'pause', 412: 'rewind', 417: 'fastforward',
+  33: 'channel_up', 34: 'channel_down', 457: 'info',
+  // colores: rojo y verde abren el menú de audio y subtítulos (como TOOLS en Samsung)
+  403: 'menu', 404: 'menu',
 };
-const BACK = new Set([10009, 27]);
+const BACK = new Set([461, 27]);
 const ARROWS: Record<number, 'left' | 'up' | 'right' | 'down'> = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
 
 function inText(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement {
@@ -37,14 +32,6 @@ function inText(el: Element | null): el is HTMLInputElement | HTMLTextAreaElemen
 
 export function installRemote(): void {
   keepFocus();
-  const tvinput = (globalThis as any).tizen?.tvinputdevice;
-  for (const k of TIZEN_KEYS) {
-    try {
-      tvinput?.registerKey(k);
-    } catch {
-      // ese modelo no tiene la tecla
-    }
-  }
 
   // en captura: las casillas de texto no se quedan con las flechas
   document.addEventListener('keydown', e => {

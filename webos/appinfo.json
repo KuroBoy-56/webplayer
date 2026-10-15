@@ -1,0 +1,21 @@
+{
+  "id": "com.mpxplayer.app",
+  "version": "1.0.0",
+  "vendor": "MPX Player",
+  "type": "web",
+  "main": "index.html",
+  "title": "MPX Player",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "splashBackground": "splash.png",
+  "bgColor": "#141414",
+  "iconColor": "#141414",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "handlesRelaunch": false,
+  "transparent": false,
+  "requiredACG": [
+    "deviceinfo.query",
+    "systemconfig.query"
+  ]
+}

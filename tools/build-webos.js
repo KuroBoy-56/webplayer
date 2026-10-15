@@ -1,5 +1,5 @@
-// Compila la app de Tizen en dist/: app.js (src/ de Vega + react-native-web + piezas del televisor),
-// imágenes, index.html, config.xml e icono. Después `tizen package -t wgt` la empaqueta (ver README).
+// Compila la app de webOS (LG) en dist/: app.js (src/ de Vega + react-native-web + piezas del televisor),
+// imágenes, index.html, appinfo.json e iconos. Después `ares-package dist` arma el .ipk (ver README).
 require('./prepare-key.js');
 const esbuild = require('esbuild');
 const fs = require('fs');
@@ -17,8 +17,8 @@ esbuild
     bundle: true,
     minify: true,
     format: 'iife',
-    // Tizen 4.0 (televisores 2018) trae Chromium 56
-    target: ['chrome56'],
+    // webOS 4.x (televisores LG 2018-2019) trae Chromium 53; lo que le falta está en web/polyfills.ts
+    target: ['chrome53'],
     jsx: 'automatic',
     alias: {
       'react-native': './web/shims/react-native.tsx',
@@ -33,7 +33,7 @@ esbuild
     logLevel: 'info',
   })
   .then(() => {
-    for (const f of ['index.html', 'config.xml', 'icon.png']) fs.copyFileSync(path.join(root, 'tizen', f), path.join(dist, f));
+    for (const f of ['index.html', 'appinfo.json', 'icon.png', 'largeIcon.png', 'splash.png']) fs.copyFileSync(path.join(root, 'webos', f), path.join(dist, f));
     console.log('Listo: dist/ (abre dist/index.html en un navegador para probar)');
   })
   .catch(() => process.exit(1));

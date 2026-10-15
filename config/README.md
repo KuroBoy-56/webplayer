@@ -7,7 +7,7 @@ Hay dos formas de dársela a la compilación. En las dos la llave **no** queda e
 
 1. **Secreto de GitHub (recomendado, sirve desde el móvil):** en el repositorio
    *Settings › Secrets and variables › Actions*, secreto `PANEL_KEY` (o `PANEL_MASTER_KEY`, el mismo que
-   usan Vega OS e iOS). Después corre de nuevo el workflow (Actions › App Tizen OS (Samsung) › Run workflow).
+   usan Vega OS e iOS). Después corre de nuevo el workflow (Actions › App webOS (LG) › Run workflow).
 2. **Archivo local:** guarda la llave en `config/panel.key` (una línea) en tu PC y compila ahí
    con `npm run build`. Este archivo está en `.gitignore`.
 

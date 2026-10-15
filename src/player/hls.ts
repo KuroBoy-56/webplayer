@@ -1,5 +1,5 @@
-// HLS del motor del panel (video copiado + audio AAC en MPEG-TS). En el televisor Samsung, AVPlay lo abre
-// directo; sin AVPlay (navegador) va por Media Source Extensions: la lista y los segmentos se bajan aquí y
+// HLS del motor del panel (video copiado + audio AAC en MPEG-TS). En el televisor LG, el <video> de webOS lo abre
+// directo; si el reproductor no abre HLS (Chrome de escritorio) va por Media Source Extensions: la lista y los segmentos se bajan aquí y
 // se entregan al SourceBuffer en orden. La lista es de tipo "event": crece mientras ffmpeg convierte.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { http, UA } from '../lib/http';
@@ -31,14 +31,19 @@ export class PanelHls {
     this.dir = path.slice(0, path.lastIndexOf('/') + 1);
   }
 
-  // el reproductor abre HLS directo (AVPlay del televisor Samsung)
+  // el reproductor abre HLS directo (<video> de webOS)
   private get native(): boolean {
     return !!(this.v as any).nativeHls;
   }
 
-  // ¿AVPlay o el equipo acepta MPEG-TS por MSE?
+  // ¿el equipo abre HLS solo o acepta MPEG-TS por MSE?
   static supported(): boolean {
-    if ((globalThis as any).webapis?.avplay) return true;
+    try {
+      const v = document.createElement('video');
+      if (v.canPlayType('application/vnd.apple.mpegurl') || v.canPlayType('application/x-mpegURL')) return true;
+    } catch {
+      // sin DOM
+    }
     try {
       return MediaSource.isTypeSupported('video/mp2t', true);
     } catch {
@@ -157,7 +162,7 @@ export class PanelHls {
     }
   }
 
-  // AVPlay: la lista se sigue leyendo hasta que termina (duración y hasta dónde se puede adelantar)
+  // HLS directo: la lista se sigue leyendo hasta que termina (duración y hasta dónde se puede adelantar)
   private async watch(): Promise<void> {
     while (this.alive && !this.ended) {
       await sleep(5000);

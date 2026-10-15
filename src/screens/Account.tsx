@@ -193,7 +193,7 @@ export default function Account() {
           nav.reset({ name: 'login' });
         }}
       />
-      <Text style={s.ver}>{t('{x} para {p} · versión {v}', { x: brandName(), p: 'Samsung Smart TV (Tizen OS)', v: '1.0.0' })}</Text>
+      <Text style={s.ver}>{t('{x} para {p} · versión {v}', { x: brandName(), p: 'LG Smart TV (webOS)', v: '1.0.0' })}</Text>
       <ChangePinDialog
         visible={changePin}
         onClose={() => setChangePin(false)}

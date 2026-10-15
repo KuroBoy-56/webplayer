@@ -1,13 +1,14 @@
 {
-  "name": "mpx-tizen",
+  "name": "mpx-webos",
   "version": "1.0.0",
   "private": true,
-  "description": "MPX Player para Samsung Smart TV (Tizen OS): la app de Vega OS con react-native-web",
+  "description": "MPX Player para LG Smart TV (webOS): la app de Vega OS con react-native-web",
   "scripts": {
     "prepare:key": "node tools/prepare-key.js",
     "pretypecheck": "node tools/prepare-key.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "node tools/build-tizen.js",
+    "build": "node tools/build-webos.js",
+    "package": "node tools/build-webos.js && ares-package -o out dist",
     "test": "node --test tools/*.test.js"
   },
   "dependencies": {

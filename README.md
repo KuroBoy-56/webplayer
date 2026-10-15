@@ -1,20 +1,27 @@
-# MPX Player para Samsung Smart TV (Tizen OS)
+# MPX Player para LG Smart TV (webOS)
 
-**Es la misma app de Vega OS** (`src/`, React Native) corriendo en el navegador del televisor Samsung con
-[react-native-web](https://necolas.github.io/react-native-web/). Solo cambian las piezas propias de cada
-equipo, que viven en `web/`: el reproductor (AVPlay), el control remoto, el botón Atrás y el
-almacenamiento. Mismo panel, mismo diseño Netflix y mismas funciones que la web, Android, Android TV,
-Windows, Roku y Vega OS. Un cambio en `src/` de la rama `vega-os` se trae aquí con un `git merge`.
+**Es la misma app de Vega OS y Tizen OS** (`src/`, React Native) corriendo en el navegador del televisor LG con
+[react-native-web](https://necolas.github.io/react-native-web/). Salió de la rama `tizenOS`; solo cambian las
+piezas propias del equipo, que viven en `web/`: el reproductor (`<video>` de webOS), el control remoto LG, el
+botón Atrás, el id del televisor y el empaquetado. Mismo panel, mismo diseño Netflix y mismas funciones que la
+web, Android, Android TV, iOS, Windows, Roku, Vega OS y Tizen OS. Un cambio en `src/` de `vega-os` / `tizenOS`
+se trae aquí con un `git merge`.
 
-**Descarga:** pestaña **Releases › tizen-latest** de este repositorio (`MPXPlayer.wgt`). GitHub Actions la
-compila sola en cada cambio de la rama `tizenOS` (workflow `App Tizen OS (Samsung)`), con la llave del panel
-del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
+**Descarga:** pestaña **Releases › webos-latest** de este repositorio (`MPXPlayer.ipk`). GitHub Actions la
+compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
+`PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
 ## Qué trae
 
 - **Inicio de sesión** solo con usuario y contraseña: se prueba a la vez en todos los DNS
   del panel y entra en el que coincida. Si el panel tiene una cuenta asignada a este equipo
   aparece un botón para entrar con ella. Fondo con carteles de estreno (TMDB del panel).
+- **Manda el panel (lo que se aprendió en Roku):** al abrir se pide primero `check_mac` (la línea que el panel le
+  da hoy a esta MAC, demo vigente incluida con su marca DEMO); `auth.php` solo sin llave o si `check_mac` no da
+  línea. Cada servidor tiene hasta **30 s** para contestar (XUI lentos). Si la línea del panel (o de la Autodemo)
+  no contesta, la misma cuenta se prueba en los DNS del panel y, si ningún servidor la **rechazó** (solo no
+  contestaron), se entra con ella igual: el catálogo lo vuelve a intentar. Solo un rechazo del servidor (usuario o
+  contraseña, vencida, bloqueada) deja en el inicio de sesión.
 - **Botón DNS** (como Android e iOS): Automático, Cloudflare, Google, Quad9, AdGuard, NextDNS u OpenDNS.
   Si el DNS de la red no encuentra el servidor IPTV (bloqueo del proveedor de internet), la app lo resuelve
   con DNS sobre HTTPS y se conecta a esa IP: catálogo, inicio de sesión y reproductor (una vez por video).
@@ -37,7 +44,7 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
   No hay textos de «24 horas»: la duración siempre sale del panel.
 - **Fondo del inicio de sesión**: carátulas de TMDB pedidas por `api/tmdb.php` del panel (clave del
   distribuidor o del dueño); sin clave no hay carrusel.
-- **Audio y subtítulos del panel**: `media_tizen.php?do=status&token=` — si el dueño desactivó ffmpeg
+- **Audio y subtítulos del panel**: `media_webos.php?do=status&token=` — si el dueño desactivó ffmpeg
   para el distribuidor de la línea, el panel responde `ffmpeg:false` y se queda el audio original.
 - **Botones iguales a Roku, Windows y la web**: un solo componente en toda la app (inicio de sesión,
   distribuidor, avisos, diálogos, Cuenta y menú del reproductor). Principal = color del distribuidor
@@ -50,14 +57,21 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
   *Atrás* vuelve a Inicio y, en Inicio, pregunta si quieres salir.
 - **Ficha** con sinopsis, reparto, temporadas, episodios con su avance y "Más títulos como este".
 - **Actores**: en la ficha, el reparto (fotos de TMDB) abre la página del actor con su filmografía, solo los títulos que el servidor tiene (título normalizado y año ±1, como la app de Windows y la web). Clave TMDB del panel o la incorporada.
-- **Reproductor del televisor (AVPlay de Samsung)**: MP4, MKV, AVI, MOV, MPEG-TS y HLS sin límite de
-  resolución ni de bitrate (4K si el televisor y el archivo lo tienen): continuar donde quedó, ◀▶ 10 s, OK pausa,
-  ▼ o MENÚ para audio y subtítulos, idioma preferido automático y siguiente episodio solo.
+- **Reproductor del televisor (`<video>` de webOS, por hardware)**: MP4, MKV, MOV, MPEG-TS y HLS sin límite de
+  resolución ni de bitrate (4K / HDR si el televisor y el archivo lo tienen): continuar donde quedó, ◀▶ 10 s, OK
+  pausa, ▼ o los botones rojo / verde para audio y subtítulos, idioma preferido automático y siguiente episodio solo.
+- **Cualquier formato, en este orden:** el video directo con el reproductor del televisor → el otro protocolo
+  (http ↔ https) → la IP del DNS elegido → **el motor del panel** (`api/media_webos.php`: video sin cambios y audio
+  en AAC, en HLS que el televisor abre directo) cuando el televisor no abre el archivo (AVI, MKV o códecs que no
+  reconoce) o no decodifica su audio (DTS, TrueHD…). Solo si todo eso falla sale el error.
+- **El progreso se guarda siempre** (cada pocos segundos, al pausar, salir y terminar), también con el motor del
+  panel: como ese HLS no sabe la duración total, se usa la del servidor (`serverDurationSec`), así Continuar
+  viendo muestra el avance en todas las apps.
 - **Audio y subtítulos como en Roku**: se lee la cabecera del MKV/MP4 para listar todas las pistas
   con su idioma (Español latino, Inglés…) y su códec. El cambio de audio se comprueba en el
   reproductor; si el equipo no lo toma o no decodifica ese audio (DTS, TrueHD…), lo prepara el
-  **motor del panel** (`api/media_tizen.php`: video sin cambios + ese audio en AAC, HLS que AVPlay abre
-  directo desde el segundo actual). Los subtítulos de texto del archivo se eligen en el
+  **motor del panel** (`api/media_webos.php`: video sin cambios + ese audio en AAC, HLS que el
+  televisor abre directo desde el segundo actual). Los subtítulos de texto del archivo se eligen en el
   reproductor o, si el equipo no los muestra, el panel los convierte a WebVTT y se dibujan encima del
   video. *Desactivados* los quita. El panel necesita ffmpeg (Guía EPG).
 - **TV en vivo**: categorías, canales, guía EPG (proveedor y, si no hay, la del panel),
@@ -72,7 +86,7 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 - **Aviso del panel al abrir la app** (`api/alerta.php?format=json`, página **Alertas** del panel): bienvenida con el texto general y la imagen, o aviso de vencimiento con el texto de 3, 2, 1 o 0 días. Una vez por arranque y otra vez tras iniciar sesión; botón **Entendido** enfocado, *Atrás* también lo cierra.
 - **Número de distribuidor** (primera vez): 6 dígitos con teclado en pantalla. Con número, la
   app usa el logo, el nombre y los colores de ese distribuidor (`login.php` acción
-  `tenant_config`, app `tizen`) y todas las llamadas al panel llevan `tenant` + `app` (DNS,
+  `tenant_config`, app `webos`) y todas las llamadas al panel llevan `tenant` + `app` (DNS,
   demo, registro, progreso, EPG, deportes y `alerta.php?t=`). **Omitir** deja la app como
   siempre. No vuelve a preguntar: abre en el inicio de sesión o directo en Inicio. Al abrir, al
   volver a la app y cada 6 h se revisa el número: si venció, está suspendido o ya no vale se
@@ -93,8 +107,8 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 ## Idiomas
 
 - La app está en **español, inglés, portugués (Brasil) y francés**. La primera vez (y con *Automático*)
-  usa el idioma del televisor (`LOCALE` de `tizen.systeminfo` o `navigator.language`, las 2 primeras
-  letras; shim `web/shims/kepler.ts`); si no es uno de esos cuatro, español.
+  usa el idioma del televisor (`navigator.language`, que en webOS es el idioma del menú del televisor; las 2
+  primeras letras; shim `web/shims/kepler.ts`); si no es uno de esos cuatro, español.
 - **Cuenta › Idioma de la app**: Automático (idioma del equipo), Español, English, Português o Français.
   Se guarda en el equipo (`pref_app_lang`) y se aplica enseguida, sin cerrar sesión.
 - Textos: `src/lib/i18n.ts` (`t('Texto en español')`, con `{x}` para los valores) y los diccionarios
@@ -113,60 +127,47 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
 ## Panel: dispositivo, pantalla falsa y errores
 
-- Todo lo que va a `login.php` lleva `"platform": "tizen"` (Clientes MAC › Dispositivo: «Samsung Smart TV
-  (Tizen OS)»), `"enc": 1` y `"ts"` (verificador antihack); con distribuidor `"tenant"` + `"app": "tizen"`.
+- Todo lo que va a `login.php` lleva `"platform": "webos"` (Clientes MAC › Dispositivo: «LG Smart TV (webOS)»),
+  `"enc": 1` y `"ts"` (verificador antihack); con distribuidor `"tenant"` + `"app": "webos"`.
   `progress.php` lleva `platform` y `device`.
-- **Código del equipo (MAC)**: `AA:BB:CC:DD:EE:FF` armado con el id del televisor
-  (`webapis.productinfo.getDuid()`, SHA-256): es el mismo aunque se desinstale y se vuelva a instalar la
-  app, así el registro del panel no se pierde (`src/lib/platform.ts`).
-- **Pantalla falsa** (`src/components/FakeScreen.tsx`): calculadora (funciona de verdad), carrusel, imagen y,
-  como el televisor sí tiene navegador y reproductor, también **video** (en bucle, sin sonido) y **web**.
-- **Errores al panel** (`api/report.php`, cifrado) con el modelo real del televisor (`getRealModel`) y la
-  versión de Tizen.
+- **Código del equipo (MAC)**: `AA:BB:CC:DD:EE:FF` armado con el **LGUDID** del televisor
+  (`luna://com.webos.service.sm/deviceid/getIDs`, SHA-256): es el mismo aunque se desinstale y se vuelva a
+  instalar la app, así el registro del panel no se pierde (`src/lib/platform.ts`). Se pide antes de mostrar la
+  app (`web/index.tsx`); sin respuesta en 3 s queda un código al azar guardado en el equipo.
+- **Permisos de webOS** (`requiredACG` en `webos/appinfo.json`): `deviceinfo.query` (LGUDID) y
+  `systemconfig.query` (modelo y versión). Sin ellos los webOS nuevos niegan esas llamadas.
+- **Pantalla falsa** (`src/components/FakeScreen.tsx`): calculadora (funciona de verdad), carrusel, imagen,
+  **video** (en bucle, sin sonido) y **web**.
+- **Errores al panel** (`api/report.php`, cifrado) con el modelo del televisor (`modelName`) y la versión de webOS.
 
 ## Cómo está hecha
 
-| Pieza de Vega | En Tizen (`web/`) |
+| Pieza de Vega | En webOS (`web/`) |
 | --- | --- |
-| `react-native` | `react-native-web` + `BackHandler` con el botón Atrás del control (keyCode 10009) y `hasTVPreferredFocus` |
-| `@amazon-devices/react-native-w3cmedia` (`VideoPlayer`) | `web/shims/w3cmedia.tsx`: el mismo `VideoPlayer` sobre **AVPlay** (`webapis.avplay`): pistas de audio y subtítulos del archivo (`getTotalTrackInfo` / `setSelectTrack`), subtítulos dibujados encima, `suspend`/`restore` al pasar a segundo plano y la página transparente sobre el video. En un navegador usa `<video>` |
-| `@amazon-devices/react-native-kepler` | `useTVEventHandler` con las teclas del control (flechas, OK, ▶❚❚, ⏪⏩, CH+/CH−, INFO, TOOLS y colores, registradas con `tizen.tvinputdevice.registerKey`) |
-| Foco del control (nativo en Vega) | `web/spatial.ts`: las flechas van al botón más cercano en esa dirección (misma fila o columna, sin saltos en diagonal), siempre hay algo con foco y al volver a una pantalla se vuelve al último botón |
+| `react-native` | `react-native-web` + `BackHandler` con el botón Atrás del control LG (keyCode 461; `disableBackHistoryAPI` en `appinfo.json`) y `hasTVPreferredFocus` |
+| `@amazon-devices/react-native-w3cmedia` (`VideoPlayer`) | `web/shims/w3cmedia.tsx`: el `<video>` de webOS (reproductor por hardware del televisor, pistas de audio con `audioTracks`, HLS directo) |
+| `@amazon-devices/react-native-kepler` | `useTVEventHandler` con las teclas del control LG (flechas, OK, ▶ ❚❚ ■ ⏪ ⏩, CH+ / CH− = 33 / 34, INFO, rojo / verde = menú de audio y subtítulos) |
+| Foco del control (nativo en Vega) | `web/spatial.ts`: las flechas van al botón más cercano en esa dirección; el puntero del Magic Remote también hace clic |
 | AsyncStorage | `localStorage` del televisor (se borra al desinstalar la app) |
-| HLS del motor del panel por MSE | AVPlay lo abre directo (`src/player/hls.ts`, modo `nativeHls`) |
+| HLS del motor del panel por MSE | el `<video>` de webOS lo abre directo (`src/player/hls.ts`, modo `nativeHls`) |
+| Televisores viejos | `web/polyfills.ts`: `globalThis`, `padStart`, `Promise.finally`, `Object.entries` y un `AbortController` que sí corta las peticiones (webOS 4.x, Chromium 53) |
 
-`tools/build-tizen.js` compila todo con esbuild en `dist/` (`app.js` para Chromium 56 = Tizen 4.0, televisores
-2018 en adelante) y copia `tizen/index.html`, `tizen/config.xml` e `icon.png`. `tools/sign-tizen.sh` lo firma
-como `.wgt` con la CLI de Tizen Studio.
+`tools/build-webos.js` compila todo con esbuild en `dist/` (`app.js` para Chromium 53 = webOS 4.0, televisores LG
+2018 en adelante) y copia `webos/index.html`, `appinfo.json`, iconos y la pantalla de carga. `ares-package dist`
+(CLI oficial de LG, `@webos-tools/cli`) arma el `.ipk`.
 
-## Instalarla en tu televisor Samsung
+## Instalarla en tu televisor LG
 
-Samsung solo instala apps firmadas con un **certificado Samsung** que incluye el id (DUID) de tus televisores.
-Es gratis con una cuenta de Samsung. Se hace una vez:
+LG instala apps propias con la app **Developer Mode** (gratis con una cuenta de LG):
 
-1. En el televisor: **Apps**, marca **1 2 3 4 5** con el control, activa **Developer mode** y escribe la IP de
-   tu PC. Reinicia el televisor.
-2. En el PC instala [Tizen Studio](https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/installing-tv-sdk.html)
-   con la extensión **Samsung Certificate Extension** (Package Manager › Extension SDK).
-3. **Device Manager** › conecta el televisor por IP. **Certificate Manager** › nuevo perfil **Samsung**
-   (inicia sesión con tu cuenta; el DUID del televisor conectado se agrega solo).
-4. Instala: `tizen install -n MPXPlayer.wgt -t <nombre del televisor>` (o arrastra el `.wgt` en Device Manager).
-   Si el `.wgt` de GitHub no está firmado con tu certificado, vuelve a firmar `MPXPlayer-web.zip`
-   (descomprímelo y `tizen package -t wgt -s <tu perfil> -- carpeta`).
-
-**Para que GitHub la firme sola con tu certificado** (y el `.wgt` de Releases se instale directo), guarda en
-el repositorio (*Settings › Secrets and variables › Actions*) estos secretos con los archivos de tu perfil
-Samsung (están en `~/SamsungCertificate/<perfil>/`):
-
-| Secreto | Valor |
-| --- | --- |
-| `TIZEN_AUTHOR_P12` | `author.p12` en base64 (`base64 -w0 author.p12`) |
-| `TIZEN_AUTHOR_PASS` | contraseña del certificado de autor |
-| `TIZEN_DISTRIBUTOR_P12` | `distributor.p12` en base64 |
-| `TIZEN_DISTRIBUTOR_PASS` | contraseña del certificado de distribuidor |
-
-Sin esos secretos GitHub firma con un certificado de autor nuevo y el distribuidor público de Tizen (sirve
-para el emulador de Tizen o para volver a firmar).
+1. En el televisor abre **LG Content Store**, instala **Developer Mode** y entra con tu cuenta de LG
+   (créala en [webostv.developer.lge.com](https://webostv.developer.lge.com)). Activa **Dev Mode Status** y
+   **Key Server**; el televisor se reinicia. La sesión dura 50 h y se renueva con *Extend* (o sola si el
+   televisor tiene internet).
+2. En tu PC: `npm i -g @webos-tools/cli` y agrega el televisor con `ares-setup-device` (IP del televisor, usuario
+   `prisoner`); trae la llave con `ares-novacom --device <nombre> --getkey` (la frase que muestra Developer Mode).
+3. Instala: `ares-install --device <nombre> MPXPlayer.ipk` y ábrela desde el menú de apps (o
+   `ares-launch --device <nombre> com.mpxplayer.app`).
 
 ## Compilar y probar en tu PC
 
@@ -174,15 +175,15 @@ para el emulador de Tizen o para volver a firmar).
 npm ci
 npm run typecheck && npm test
 npm run build            # dist/ (con config/panel.key incluye Autodemo, DNS y registro del equipo)
+npx @webos-tools/cli ares-package -o out dist   # o: npm run package (con la CLI instalada)
 ```
 
-`dist/index.html` se abre en Chrome para probar (flechas = cruceta, Enter = OK, Esc = Atrás; en el
-navegador el video va por `<video>`). Para el televisor: `tools/sign-tizen.sh` con la CLI de Tizen Studio.
+`dist/index.html` se abre en Chrome para probar (flechas = cruceta, Enter = OK, Esc = Atrás; en el navegador el
+HLS del panel va por MSE).
 
 ## Límites conocidos
 
-- Probada en Chromium (con un servidor Xtream de prueba y un AVPlay simulado): inicio de sesión, inicio,
-  ficha, reproductor, menú de audio y subtítulos, TV en vivo y el control remoto. **No se ha probado todavía
-  en un televisor Samsung real.**
-- Televisores de 2018 o más nuevos (Tizen 4.0+). Los de 2015–2017 tienen un navegador demasiado viejo.
-- El tipo «Player» y «Obligar» de la pantalla falsa no aplican (igual que en Roku y la web player).
+- Probada en Chromium (con el panel real y un bus de servicios de webOS simulado): distribuidor, inicio de sesión,
+  código del equipo con el LGUDID y el control remoto. **No se ha probado todavía en un televisor LG real.**
+- Televisores LG de 2018 o más nuevos (webOS 4.0+).
+- El tipo «Player» y «Obligar» de la pantalla falsa no aplican (igual que en Roku, Tizen y la web player).

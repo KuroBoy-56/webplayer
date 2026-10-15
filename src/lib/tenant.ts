@@ -6,7 +6,7 @@ import { read, readJson, remove, write, writeJson } from './storage';
 import { Key, t } from './i18n';
 import { str, ymd } from './util';
 
-export const APP_ID = 'tizen';
+export const APP_ID = 'webos';
 export const APP_NAME = 'MPX Player';
 // sin respuesta del panel se sigue con la marca guardada hasta 72 h
 export const OFFLINE_GRACE = 72 * 3600;

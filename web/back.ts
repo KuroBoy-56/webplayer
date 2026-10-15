@@ -1,14 +1,17 @@
-// BackHandler de React Native con el botón Atrás del control de Samsung: el último que se registró
+// BackHandler de React Native con el botón Atrás del control de LG: el último que se registró
 // contesta primero; si nadie lo usa, se sale de la app (como en Android TV).
 type Handler = () => boolean | null | undefined;
 const handlers: Handler[] = [];
 
 export function exitApp(): void {
+  // webOS: vuelve al lanzador de LG (como Atrás en las apps del televisor); en un navegador cierra la ventana
   try {
-    (globalThis as any).tizen.application.getCurrentApplication().exit();
+    const w = (globalThis as any).webOS;
+    if (w?.platformBack) return w.platformBack();
   } catch {
-    window.close();
+    // sin webOS.js
   }
+  window.close();
 }
 
 export const BackHandler = {

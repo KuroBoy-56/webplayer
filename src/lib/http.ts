@@ -3,7 +3,7 @@ import { viaDns } from './securedns';
 
 export type HttpResult = { code: number; body: string; ok: boolean };
 
-export const UA = 'LatMpxTizen/1.0 (Samsung Smart TV; Tizen OS)';
+export const UA = 'LatMpxWebOS/1.0 (LG Smart TV; webOS)';
 
 type HttpOpts = { method?: string; body?: string; type?: string; timeout?: number; signal?: AbortSignal };
 

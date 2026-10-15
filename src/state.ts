@@ -287,7 +287,7 @@ export function removeProgress(title: string) {
 export function deviceId(): string {
   const saved = read('device_id');
   if (saved) return saved;
-  // Tizen: MAC armada con el id del televisor (no cambia al reinstalar la app)
+  // webOS: MAC armada con el id del televisor (LGUDID, no cambia al reinstalar la app)
   const tv = tvMac();
   if (tv) {
     write('device_id', tv);

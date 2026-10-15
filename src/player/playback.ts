@@ -79,6 +79,8 @@ export class Playback {
   private subTimer: ReturnType<typeof setInterval> | null = null;
   private prefsTimer: ReturnType<typeof setTimeout> | null = null;
   private lastSub = '';
+  // el equipo no abrió el archivo y ya se le pidió al panel que lo convierta (una vez por video)
+  private formatTried = false;
 
   constructor(private v: VideoPlayer, private hooks: Hooks) {}
 
@@ -101,6 +103,7 @@ export class Playback {
     this.pendingNative = -1;
     this.setExt(null);
     this.subWait = null;
+    this.formatTried = false;
     this.direct(resume);
   }
 
@@ -201,14 +204,26 @@ export class Playback {
     }
     const g = this.gen;
     if (!this.probe) this.probe = await probeTracks(this.url);
-    if (g !== this.gen || !this.probe.ok || !this.probe.audio.length) return false;
-    const items = this.audioItems();
+    if (g !== this.gen) return false;
+    const items = this.probe.ok ? this.audioItems() : [];
     const def = items[this.probeDefault()];
-    if (!def || def.probe === undefined || this.decodable(def)) return false;
-    // el panel lo convierte a AAC: de una vez el idioma preferido
-    const want = this.preferredAudio(items) || def;
-    this.toRemux(want.probe ?? def.probe, want.label, true, Math.floor(this.resumeAt || this.realPos()));
-    return true;
+    if (def && def.probe !== undefined && !this.decodable(def)) {
+      // el panel lo convierte a AAC: de una vez el idioma preferido
+      const want = this.preferredAudio(items) || def;
+      this.toRemux(want.probe ?? def.probe, want.label, true, Math.floor(this.resumeAt || this.realPos()));
+      return true;
+    }
+    return this.formatFallback(items);
+  }
+
+  // el equipo no abre el archivo (contenedor o códec que no reconoce, AVI, MKV raros…): el motor del panel lo
+  // entrega como HLS (video sin cambios, audio en AAC) desde donde iba, antes de dar el error. Una vez por video.
+  private async formatFallback(items: AudioItem[]): Promise<boolean> {
+    if (this.formatTried || this.live) return false;
+    this.formatTried = true;
+    const it = this.preferredAudio(items) || items[this.probeDefault()];
+    this.hooks.toast(t('Este equipo no abre el video directo: se prepara con el panel…'));
+    return this.toRemux(it?.probe ?? 0, it?.label || t('Audio {n}', { n: 1 }), false, Math.floor(this.resumeAt || this.realPos()));
   }
 
   // ---------- listas ----------
@@ -469,23 +484,24 @@ export class Playback {
     return r.engine;
   }
 
-  private async toRemux(a: number, label: string, announce: boolean, at?: number): Promise<void> {
-    if (this.live || this.remux?.a === a) return;
+  // true = el panel empezó a preparar el video
+  private async toRemux(a: number, label: string, announce: boolean, at?: number): Promise<boolean> {
+    if (this.live || this.remux?.a === a) return false;
     if (!PanelHls.supported()) {
       this.audioKey = '';
       this.hooks.toast(t('Este equipo no puede reproducir el audio que prepara el panel.'));
       this.hooks.changed();
-      return;
+      return false;
     }
     const g = this.gen;
     this.hooks.status(t('Preparando {x}…', { x: label }));
     const e = await this.getEngine();
-    if (g !== this.gen) return;
+    if (g !== this.gen) return false;
     if (!e) {
       this.hooks.status('');
       this.audioKey = '';
       this.hooks.changed();
-      return;
+      return false;
     }
     const pos = at ?? this.realPos();
     this.duration();
@@ -493,6 +509,7 @@ export class Playback {
     this.audioKey = 'p:' + a;
     if (announce) this.hooks.toast(t('Cambiando a {x}…', { x: label }));
     this.startRemux(pos);
+    return true;
   }
 
   private async startRemux(pos: number): Promise<void> {
