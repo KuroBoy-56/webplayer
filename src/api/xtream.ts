@@ -11,7 +11,7 @@ export function api(s: { base: string; user: string; pass: string }, action = ''
   return u + extra;
 }
 
-function sessionFrom(sv: Server, user: string, pass: string, ui: any): Session {
+export function sessionFrom(sv: Server, user: string, pass: string, ui: any): Session {
   return {
     dns: sv.name,
     base: sv.base,
@@ -60,7 +60,8 @@ export function xuiMessage(code: string): string {
 // Prueba el usuario en todos los servidores a la vez y se queda con el primero que lo acepte. El panel
 // (https) manda los servidores IPTV con https:// y muchos solo responden en http (p. ej. puerto 8080):
 // cada servidor se prueba también con el otro protocolo, así la app nunca se queda sin entrar por eso.
-export async function loginAll(input: Server[], user: string, pass: string): Promise<{ session?: Session; error?: string }> {
+// offline = ningún servidor contestó (ni aceptó ni rechazó la cuenta)
+export async function loginAll(input: Server[], user: string, pass: string): Promise<{ session?: Session; error?: string; offline?: boolean }> {
   if (!input.length) return { error: t('El panel no devolvió servidores. Inténtalo de nuevo.') };
   const seen = new Set<string>();
   const servers: Server[] = [];
@@ -83,11 +84,12 @@ export async function loginAll(input: Server[], user: string, pass: string): Pro
       pending--;
       if (pending === 0 && !done) {
         done = true;
-        resolve({ error: lastErr });
+        resolve({ error: lastErr, offline: lastErr === none });
       }
     };
     for (const sv of servers) {
-      http(api({ base: sv.base, user, pass }), { timeout: 15000, signal: ctrl.signal }).then(r => {
+      // servidores XUI lentos: hasta 30 s (con 15 s una línea buena podía quedarse sin entrar)
+      http(api({ base: sv.base, user, pass }), { timeout: 30000, signal: ctrl.signal }).then(r => {
         if (done) return;
         const j = json(r);
         const ui = j && typeof j === 'object' ? j.user_info : null;

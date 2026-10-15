@@ -42,6 +42,7 @@ const fr: Record<Key, string> = {
   "Buscar en {x}…": "Rechercher dans {x}…",
   "Buscar por equipos": "Rechercher par équipes",
   "Cambiando a {x}…": "Passage à {x}…",
+  "Este equipo no abre el video directo: se prepara con el panel…": "Cet appareil n’ouvre pas la vidéo directement : le panneau la prépare…",
   "Cambiando idioma…": "Changement de langue…",
   "Cambiar distribuidor": "Changer de distributeur",
   "Cancelar": "Annuler",
