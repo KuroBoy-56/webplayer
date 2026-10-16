@@ -90,6 +90,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # la versión que ya estaba publicada se guarda una sola vez como respaldo (ipa-anterior) y no se toca después
+          if ! gh release view ipa-anterior >/dev/null 2>&1 && gh release download ipa-latest -p LatMpx.ipa -O anterior.ipa; then
+            gh release create ipa-anterior anterior.ipa --title "MPX Player iPhone / iPad (versión anterior, respaldo)" \
+              --notes "La versión que estaba publicada antes de la 1.0.1. Si la nueva falla, instala esta." --prerelease
+          fi
+          # cada compilación queda también con su número de versión (no se borra)
+          VER=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Payload/*.app/Info.plist)
+          gh release create "ipa-$VER-${GITHUB_SHA::7}" LatMpx.ipa --target "$GITHUB_SHA" --title "MPX Player iPhone / iPad $VER (${GITHUB_SHA::7})" \
+            --notes "Compilado desde la rama ios ($GITHUB_SHA)." --prerelease || true
           gh release delete ipa-latest --yes --cleanup-tag || true
           gh release create ipa-latest LatMpx.ipa --target "$GITHUB_SHA" --title "MPX Player iPhone / iPad (última versión)" \
             --notes "Compilado automáticamente desde la rama ios ($GITHUB_SHA). Sin firma: instálalo con Sideloadly o AltStore (ver README de la rama ios)." --prerelease

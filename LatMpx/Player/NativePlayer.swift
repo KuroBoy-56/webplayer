@@ -15,9 +15,10 @@ private final class NativePlayerController: AVPlayerViewController {
  * sus controles. Es el reproductor de todo lo que se pueda: cada video se le da por varias vías, en orden,
  * sin cerrar la pantalla (ways): la app le baja el archivo (StreamLoader), la dirección directa (ya
  * redirigida), el otro protocolo (http / https) y, para lo que Apple no abre solo (MKV, AVI…) o si nada
- * de eso arrancó, el motor del panel (api/media_ios.php, HLS en fMP4). Si un video que ya se veía se
- * corta, la misma vía se reintenta una vez desde donde iba. Solo cuando no queda ninguna vía pasa al
- * reproductor de la app (VLC), en el mismo punto. Ajustes › "Reproductor de iOS" lo apaga.
+ * de eso arrancó, el motor del panel (api/media_ios.php, HLS en fMP4; también canales). Si un video que ya
+ * se veía se corta, la misma vía se reintenta una vez desde donde iba. Las vías se repiten hasta que pasa
+ * un minuto sin imagen; solo entonces (y como mucho a los 90 s) pasa al reproductor de la app (VLC), en el
+ * mismo punto. Ajustes › "Reproductor de iOS" lo apaga.
  */
 final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     static let shared = NativePlayer()
@@ -65,6 +66,11 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     private var retriedThisWay = false
     /** vías que fallaron en este video (motivo), para el reporte al panel */
     private var failures: [String] = []
+    /** desde cuándo no se ve nada (al abrir o desde el último corte); nil = está reproduciendo */
+    private var failingSince: Date?
+    /** el reproductor de la app (VLC) solo cuando el de iOS lleva este tiempo sin poder (y nunca antes de minTry) */
+    private static let minTry: TimeInterval = 60
+    private static let maxTry: TimeInterval = 90
 
     var active: Bool { vc != nil }
 
@@ -99,12 +105,18 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
             guard let m = Xtream.liveUrls(s, q.id).first(where: { $0.lowercased().hasSuffix(".m3u8") }) else { return [] }
             let u = await preferHttp(flip(m))
             out = [.redirected(u), .direct(u), .direct(Xtream.otherScheme(u))]
+            // el motor del panel convierte el canal (MPEG-TS) a HLS: última vía antes del reproductor de la app
+            if await StreamEngine.available() { out.append(.engine(u.replacingOccurrences(of: ".m3u8", with: ".ts", options: [.backwards, .anchored]))) }
         case .movie, .series:
             let u = await preferHttp(flip(r.kind == .movie ? Xtream.movieUrl(s, q.id, q.ext) : Xtream.episodeUrl(s, q.id, q.ext)))
+            let engine = await StreamEngine.available()
             if compatible(u) {
                 out = [.loader(u), .redirected(u), .loader(Xtream.otherScheme(u))]
+                if engine { out.append(.engine(u)) }
+            } else {
+                // MKV, AVI…: primero el motor del panel; igual se intenta directo (hay archivos con otra extensión)
+                out = (engine ? [.engine(u)] : []) + [.loader(u), .redirected(u)]
             }
-            if await StreamEngine.available() { out.append(.engine(u)) }
         }
         var seen: [Way] = []
         for w in out where !seen.contains(w) { seen.append(w) }
@@ -150,6 +162,7 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         retriedThisWay = false
         failures = []
         lastDurMs = 0
+        failingSince = Date()
         if r.kind == .live, r.queue.indices.contains(r.index) { Store.setLastChannel(r.queue[r.index].id) }
 
         let p = AVPlayer()
@@ -218,7 +231,9 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
             // si no arranca, la vía siguiente (el panel tarda más: prepara los primeros segmentos)
             let wait: Double
             if case .engine = way { wait = 75 } else { wait = 15 }
-            self.armTimeout(id, p, wait, until: Date().addingTimeInterval(90), bytes: -1)
+            // sin pasar el límite total (maxTry), salvo los 15 s mínimos de cada vía
+            let left = (self.failingSince ?? Date()).addingTimeInterval(Self.maxTry).timeIntervalSinceNow
+            self.armTimeout(id, p, max(15, min(wait, left)), until: Date().addingTimeInterval(max(15, min(90, left))), bytes: -1)
             PlayerDiag.log("nativo: vía \(self.wayIx + 1)/\(self.ways.count) \(way.label)")
             p.play()
         }
@@ -299,7 +314,9 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
             guard let s = self, s.vc === c, s.loadId == id, let item = c.player?.currentItem, !s.pipActive else { return }
             // presentationSize sigue en cero cuando Apple no puede decodificar la imagen (en HLS assetTrack puede venir vacío)
-            if item.presentationSize == .zero && item.currentTime().seconds > 3 { s.failed("sin imagen", retry: false, format: true) }
+            if item.presentationSize == .zero && item.currentTime().seconds > 3 { s.failed("sin imagen", retry: false, format: true); return }
+            // ya hay imagen: el plazo para pasar a VLC vuelve a contar desde el próximo corte
+            s.failingSince = nil
         }
     }
 
@@ -376,7 +393,9 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         guard vc != nil, let r = request else { return }
         let pos = currentMs()
         let ms = r.kind == .live ? 0 : (pos > 0 ? pos : Self.startPoint(r))
-        PlayerDiag.log("nativo: falló \(err) (vía \(wayIx + 1)/\(ways.count))")
+        if failingSince == nil { failingSince = Date() }
+        let trying = Date().timeIntervalSince(failingSince ?? Date())
+        PlayerDiag.log("nativo: falló \(err) (vía \(wayIx + 1)/\(ways.count), \(Int(trying)) s)")
         if ways.indices.contains(wayIx) { failures.append(ways[wayIx].label + ": " + err) }
         if retry && !format && playedThisWay && !retriedThisWay {
             retriedThisWay = true
@@ -386,7 +405,17 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         // formato o códec que Apple no abre: las otras vías directas darían lo mismo, sigue el motor del panel
         var next = wayIx + 1
         if format, let e = ways.lastIndex(where: { if case .engine = $0 { return true } else { return false } }), e > wayIx { next = e }
-        if next < ways.count {
+        let engineIx = ways.firstIndex { if case .engine = $0 { return true } else { return false } }
+        if next >= ways.count && trying < Self.minTry {
+            // sin vías antes del minuto: otra vuelta (el motor del panel primero si lo hay), con una pausa para el servidor
+            next = engineIx ?? 0
+            PlayerDiag.log("nativo: otra vuelta por las vías")
+            wayIx = next
+            retriedThisWay = false
+            again(ms, after: 4)
+            return
+        }
+        if next < ways.count && trying < Self.maxTry {
             wayIx = next
             retriedThisWay = false
             again(ms)
@@ -404,11 +433,11 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     }
 
     /** otra vía en la misma pantalla; antes, un segundo para que el servidor suelte la conexión anterior (líneas de 1 conexión) */
-    private func again(_ ms: Int64) {
+    private func again(_ ms: Int64, after: Double = 1) {
         releaseItem()
         let id = UUID()
         loadId = id
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + after) { [weak self] in
             guard let s = self, s.loadId == id, s.vc != nil else { return }
             s.load(ms)
         }
