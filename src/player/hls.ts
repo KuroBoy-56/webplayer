@@ -172,7 +172,7 @@ export class PanelHls {
 
   private async refresh(timeout: number): Promise<string> {
     const r = await http(this.listUrl, { timeout });
-    if (!r.ok) return engineError(r.body, r.code ? t('No se pudo preparar el audio ({code})', { code: r.code }) : t('No se pudo conectar con el panel.'));
+    if (!r.ok) return engineError(r.body, r.code ? t('No compatible con el dispositivo') : t('No se pudo conectar con el panel.'));
     const segs: Seg[] = [];
     let at = 0;
     let dur = 0;
