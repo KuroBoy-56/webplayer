@@ -25,8 +25,9 @@ export async function mediaEngine(): Promise<{ ok: true; engine: Engine } | { ok
   const st = await panel(FILE, 'GET', '', '', '?do=status&token=' + encodeURIComponent(token));
   const j = json(st);
   if (st.code === 0) return { ok: false, error: t('No se pudo conectar con el panel.') };
-  if (st.code === 404 || !j) return { ok: false, error: t('El panel todavía no tiene el motor de audio y subtítulos (actualízalo).') };
-  if (j.ffmpeg !== true) return { ok: false, error: t('El cambio de idioma desde el panel no está disponible.') };
+  // sin el servicio, apagado por el dueño o sin permiso: solo el texto del panel ("Sin permisos" / "No compatible…")
+  if (st.code === 404 || !j) return { ok: false, error: t('No compatible con el dispositivo') };
+  if (j.ffmpeg !== true) return { ok: false, error: str(j.error) || t('No compatible con el dispositivo') };
   if (panelScheme() === 'http') base = base.replace(/^https:/i, 'http:');
   cached = { base, token };
   return { ok: true, engine: cached };
