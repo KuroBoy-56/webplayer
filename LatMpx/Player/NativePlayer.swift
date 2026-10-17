@@ -15,7 +15,7 @@ private final class NativePlayerController: AVPlayerViewController {
  * sus controles. Es el reproductor de todo lo que se pueda: cada video se le da por varias vías, en orden,
  * sin cerrar la pantalla (ways): la app le baja el archivo (StreamLoader), la dirección directa (ya
  * redirigida), el otro protocolo (http / https) y, para lo que Apple no abre solo (MKV, AVI…) o si nada
- * de eso arrancó, el motor del panel (api/media_ios.php, HLS en fMP4; también canales). Si un video que ya
+ * de eso arrancó, el motor del panel (api/media_ios.php, HLS en fMP4; películas y episodios). Si un video que ya
  * se veía se corta, la misma vía se reintenta una vez desde donde iba. Las vías se repiten hasta que pasa
  * un minuto sin imagen; solo entonces (y como mucho a los 90 s) pasa al reproductor de la app (VLC), en el
  * mismo punto. Ajustes › "Reproductor de iOS" lo apaga.
@@ -104,9 +104,8 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         case .live:
             guard let m = Xtream.liveUrls(s, q.id).first(where: { $0.lowercased().hasSuffix(".m3u8") }) else { return [] }
             let u = await preferHttp(flip(m))
+            // canales: sin el motor del panel (solo convierte películas y episodios)
             out = [.redirected(u), .direct(u), .direct(Xtream.otherScheme(u))]
-            // el motor del panel convierte el canal (MPEG-TS) a HLS: última vía antes del reproductor de la app
-            if await StreamEngine.available() { out.append(.engine(u.replacingOccurrences(of: ".m3u8", with: ".ts", options: [.backwards, .anchored]))) }
         case .movie, .series:
             let u = await preferHttp(flip(r.kind == .movie ? Xtream.movieUrl(s, q.id, q.ext) : Xtream.episodeUrl(s, q.id, q.ext)))
             let engine = await StreamEngine.available()
