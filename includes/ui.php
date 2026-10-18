@@ -109,14 +109,15 @@ function wp_footer_html()
 function wp_hero_html($kindLabel = null)
 {
     if ($kindLabel === null) $kindLabel = t('Destacado');
+    $n = e(wp_brand_initial()); // la "N" del banner: inicial de la marca, en el color de acento (--nf-red)
     $o = '<section class="nf-hero" id="nfHero">';
     $o .= '<div class="nf-hero-bg"></div><div class="nf-hero-bg"></div>';
     $o .= '<div class="nf-hero-info">';
     // vista celular (póster centrado como la app)
-    $o .= '<div class="nf-hero-poster m-only"><div class="in"><div class="nf-hero-kicker" data-h="kicker"><span class="n">N</span>' . e($kindLabel) . '</div><h2 class="nf-hero-title" data-h="title">&nbsp;</h2><div class="nf-hero-meta" data-h="meta"></div></div></div>';
+    $o .= '<div class="nf-hero-poster m-only"><div class="in"><div class="nf-hero-kicker" data-h="kicker"><span class="n">' . $n . '</span>' . e($kindLabel) . '</div><h2 class="nf-hero-title" data-h="title">&nbsp;</h2><div class="nf-hero-meta" data-h="meta"></div></div></div>';
     $o .= '<div class="nf-hero-btns m-only"><a class="nf-btn nf-btn-white" data-h="play" href="#">' . wp_icon('play') . e(t('Reproducir')) . '</a><a class="nf-btn nf-btn-gray" data-h="info" href="#">' . wp_icon('info') . e(t('Info')) . '</a></div>';
     // vista PC
-    $o .= '<div class="d-only"><div class="nf-hero-kicker" data-h="kicker"><span class="n">N</span>' . e($kindLabel) . '</div>';
+    $o .= '<div class="d-only"><div class="nf-hero-kicker" data-h="kicker"><span class="n">' . $n . '</span>' . e($kindLabel) . '</div>';
     $o .= '<h1 class="nf-hero-title" data-h="title">&nbsp;</h1><div class="nf-hero-meta" data-h="meta"></div><p class="nf-hero-desc" data-h="desc"></p>';
     $o .= '<div class="nf-hero-btns"><a class="nf-btn nf-btn-white" data-h="play" href="#">' . wp_icon('play') . e(t('Reproducir')) . '</a><a class="nf-btn nf-btn-gray" data-h="info" href="#">' . wp_icon('info') . e(t('Más información')) . '</a></div></div>';
     $o .= '</div><div class="nf-hero-dots"></div></section>';

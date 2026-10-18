@@ -27,8 +27,19 @@ if (!wp_verify_signed($url) || !isset($_GET['e'])) {
 $do = $_GET['do'] ?? 'probe';
 // motor apagado desde el panel (Guía EPG): el reproductor sigue con el video directo
 require_once __DIR__ . '/includes/media_admin.php';
-if (!wp_media_enabled() && $do !== 'seg') {
+// sin permiso de ffmpeg para el distribuidor: igual que apagado (el video va directo)
+if ((!wp_media_enabled() || !wp_tenant_feature('ffmpeg')) && $do !== 'seg') {
     http_response_code(503);
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    // mismo formato que el motor del panel: el reproductor muestra el texto una vez y sigue con el video directo
+    echo json_encode(['ffmpeg' => false, 'error' => wp_media_off_text()], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+if ($do === 'status') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo json_encode(['ffmpeg' => wp_bin('ffmpeg') !== null] + (wp_bin('ffmpeg') ? [] : ['error' => t('No compatible con el dispositivo')]), JSON_UNESCAPED_UNICODE);
     exit;
 }
 // DNS elegido por el usuario: ffmpeg no usa curl, se le pasa la IP resuelta y la cabecera Host

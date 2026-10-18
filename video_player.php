@@ -111,8 +111,10 @@ $multi_audio = wp_content_multi_audio($kind, $id, $exts, true);
 $tracks_url = ($multi_audio === null && wp_content_direct($kind, $id, $exts)) ? wp_proxy_url(wp_tracks_target($kind, $id, $exts), 'tracks.php') : '';
 $multi_audio = $multi_audio === true;
 require_once __DIR__ . '/includes/media_admin.php';
-// el dueño puede apagar el motor desde el panel (Guía EPG): entonces el video va directo
-if (wp_media_enabled() && wp_bin('ffprobe') && wp_bin('ffmpeg')) {
+// el dueño puede apagar el motor desde el panel (Guía EPG) o quitárselo al distribuidor: entonces el video va directo
+// y el reproductor solo muestra este texto si se elige algo que lo necesita
+$media_off = wp_media_off_text();
+if ($media_off === '') {
     $mb = wp_proxy_url($raw_url, 'media.php');
     $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'hls' => $mb . '&do=hls', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
     // sin varios audios conocidos: ffmpeg no se usa salvo que el iPhone descubra varios audios y el motor MP4 no pueda con ellos
@@ -174,7 +176,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=2" defer></script>
-    <script src="assets/nf/player.js?v=30" defer></script>
+    <script src="assets/nf/player.js?v=31" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -191,6 +193,8 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
             'downloadUrl' => $demo ? '' : $download_url,
             'demo' => $demo,
             'media' => $media_cfg,
+            'mediaOff' => $media_cfg ? '' : $media_off,
+            'multi' => $multi_audio,
             'tracks' => $tracks_url,
             'ext' => $ext,
             'diagUrl' => $diag_url,

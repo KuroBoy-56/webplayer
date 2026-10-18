@@ -63,7 +63,20 @@ function wp_tenant_palette(array $cfg = null)
         // texto al 65 % sobre el fondo (color sólido para que sirva en cualquier lugar)
         'textMuted' => wp_rgb_hex([$bg[0] + ($text[0] - $bg[0]) * .65, $bg[1] + ($text[1] - $bg[1]) * .65, $bg[2] + ($text[2] - $bg[2]) * .65]),
         'card' => wp_mix($p['surface'], $p['text'], 0.08),
+        'focus' => wp_focus_color($p['accent'], $p['bg']),
     ];
+}
+
+/** Color del foco/realce: el acento, aclarado hasta que se vea sobre el fondo oscuro (contraste 3:1). */
+function wp_focus_color($accent, $bg)
+{
+    $lb = wp_luminance($bg);
+    foreach ([0, .25, .45, .65] as $t) {
+        $c = wp_mix($accent, '#FFFFFF', $t);
+        $lc = wp_luminance($c);
+        if ((max($lc, $lb) + .05) / (min($lc, $lb) + .05) >= 3) return $c;
+    }
+    return '#FFFFFF';
 }
 
 /** <style> con las variables del tema del distribuidor ('' con el tema incorporado). */
@@ -77,7 +90,14 @@ function wp_tenant_css(array $cfg = null)
         . '.nf-btn-red,.nf-btn-red:visited{color:var(--nf-on-accent)}'
         . '.nf-avatar{background:linear-gradient(135deg,' . $p['accent'] . ',' . wp_mix($p['accent'], '#000000', .45) . ');color:' . $p['onAccent'] . '}'
         . '.nf-login-page{background:' . $p['bg'] . '}.nf-login-box{background:' . wp_tenant_rgba($p['bg'], '.82') . '}'
-        . '.nf-login-box h1,.nf-nav a.active{color:' . $p['text'] . '}</style>';
+        . '.nf-login-box h1,.nf-nav a.active{color:' . $p['text'] . '}'
+        // foco y realce (teclado, control remoto, TV) con el acento del distribuidor en vez del blanco
+        . ':root{--nf-focus:' . $p['focus'] . '}'
+        . '.nf-plat:hover,.nf-plat:focus-visible,.nf-input:focus{border-color:var(--nf-focus)}'
+        . '.nf-field input:focus{border-color:var(--nf-focus);box-shadow:0 0 0 1px var(--nf-focus)}'
+        . 'a.nf-actor:focus-visible img{box-shadow:0 0 0 3px var(--nf-focus)}'
+        . '.nf-card:focus-visible,.nf-chip:focus-visible,.nf-btn:focus-visible,.nf-ep:focus-visible,.nf-arrow:focus-visible{outline:3px solid var(--nf-focus);outline-offset:2px}'
+        . '.nf-alert-btn:focus-visible{outline-color:var(--nf-focus)}</style>';
 }
 
 function wp_tenant_rgba($hex, $a)
@@ -91,6 +111,13 @@ function wp_brand_name($default = 'WebPlayer', array $cfg = null)
 {
     $cfg = $cfg === null ? wp_tenant_cfg() : $cfg;
     return (is_array($cfg) && !empty($cfg['name'])) ? (string)$cfg['name'] : $default;
+}
+
+/** Inicial de la marca para los banners (en lugar de la "N"): la del distribuidor o la de "MPX Player". */
+function wp_brand_initial(array $cfg = null)
+{
+    $n = wp_brand_name('MPX Player', $cfg);
+    return preg_match('/[\p{L}\p{N}]/u', $n, $m) ? mb_strtoupper($m[0], 'UTF-8') : 'M';
 }
 
 /** URL del logo para <img> (el incorporado con Omitir o sin logo). */

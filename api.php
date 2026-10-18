@@ -136,6 +136,11 @@ switch ($action) {
         }
         out($res);
 
+    case 'counts':
+        // Mi cuenta: cantidad de contenido de la línea (catálogos en caché, los mismos que usa el resto de la web)
+        $live = xt_get('get_live_streams', [], 1800, 25);
+        out(['live' => is_array($live) ? count($live) : null, 'movie' => count(wp_catalog('movie')), 'series' => count(wp_catalog('series'))]);
+
     case 'hero':
         $ck = 'hero|' . $type . '|' . $platform . '|' . xt_cache_key('', []);
         $cached = wp_cache_get($ck, 1200);

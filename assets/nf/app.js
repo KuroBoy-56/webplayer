@@ -184,13 +184,15 @@
 
     /* ---------------- Rejilla infinita ---------------- */
     NF.grid = function (opts) {
-        var box = opts.el, status = opts.status, page = 1, busy = false, done = false, total = 0;
+        var box = opts.el, status = opts.status, page = 1, busy = false, done = false, total = 0, gen = 0, raf = 0;
         function params() { var p = opts.params(); p.page = page; return p; }
         function more() {
             if (busy || done) return;
             busy = true;
             if (status) status.textContent = tr('Cargando...');
+            var g = gen;
             NF.api(params()).then(function (res) {
+                if (g !== gen) return; // se cambió el filtro mientras cargaba: esta respuesta ya no sirve
                 total = res.total || 0;
                 if (opts.onTotal) opts.onTotal(total);
                 var html = (res.items || []).map(function (c) { return NF.card(c); }).join('');
@@ -204,17 +206,18 @@
                     box.innerHTML = '<div class="nf-empty" style="grid-column:1/-1"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.39-1.42 1.42-5.39-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>' + esc(tr('No encontramos títulos con estos filtros.')) + '</div>';
                 }
                 check();
-            }).catch(function () { busy = false; if (status) status.textContent = tr('No se pudo cargar. Desliza para reintentar.'); });
+            }).catch(function () { if (g !== gen) return; busy = false; if (status) status.textContent = tr('No se pudo cargar. Desliza para reintentar.'); });
         }
         function check() {
             if (done || busy) return;
             var rect = box.getBoundingClientRect();
             if (rect.bottom - window.innerHeight < 900) more();
         }
-        window.addEventListener('scroll', function () { requestAnimationFrame(check); }, { passive: true });
+        // un solo cálculo por cuadro (antes uno por cada evento de scroll)
+        window.addEventListener('scroll', function () { if (!raf) raf = requestAnimationFrame(function () { raf = 0; check(); }); }, { passive: true });
         return {
             reset: function () {
-                page = 1; done = false;
+                gen++; busy = false; page = 1; done = false;
                 box.innerHTML = new Array(19).join('<div class="nf-skel" style="width:auto"></div>');
                 more();
             }
@@ -226,6 +229,7 @@
         if (!root || !items || !items.length) return;
         var bgs = $$('.nf-hero-bg', root), idx = 0, cur = 0, timer;
         var dots = $('.nf-hero-dots', root);
+        var ini = $('[data-h=kicker] .n', root), letter = ini ? ini.textContent : 'M'; // inicial de la marca (no la "N")
         function fill(it) {
             $$('[data-h=title]', root).forEach(function (e) { e.textContent = it.title; });
             $$('[data-h=desc]', root).forEach(function (e) { e.textContent = it.description || ''; });
@@ -239,7 +243,7 @@
             });
             $$('[data-h=play]', root).forEach(function (e) { e.href = it.play_link; });
             $$('[data-h=info]', root).forEach(function (e) { e.href = it.info_link || it.play_link; });
-            $$('[data-h=kicker]', root).forEach(function (e) { e.innerHTML = '<span class="n">N</span>' + esc(it.kind || tr('Destacado')); });
+            $$('[data-h=kicker]', root).forEach(function (e) { e.innerHTML = '<span class="n">' + esc(letter) + '</span>' + esc(it.kind || tr('Destacado')); });
             var p = $('.nf-hero-poster', root);
             if (p) p.style.backgroundImage = "url('" + (it.poster || it.background_image) + "')";
         }
@@ -247,11 +251,15 @@
             var it = items[i];
             var next = bgs[(cur + 1) % bgs.length];
             var img = new Image();
-            img.onload = img.onerror = function () {
-                next.style.backgroundImage = "url('" + it.background_image + "')";
-                bgs.forEach(function (b) { b.classList.remove('on'); });
-                next.classList.add('on');
-                cur = (cur + 1) % bgs.length;
+            img.onload = img.onerror = function (ev) {
+                // imagen que no carga: se queda el banner anterior de fondo (nunca negro)
+                if (ev.type === 'load' || !bgs.some(function (b) { return b.classList.contains('on'); })) {
+                    next.style.backgroundImage = "url('" + it.background_image + "')";
+                    bgs.forEach(function (b) { b.classList.remove('on'); });
+                    next.classList.add('on');
+                    cur = (cur + 1) % bgs.length;
+                    if (ev.type === 'load') try { sessionStorage.setItem('nf_hero_bg', it.background_image); } catch (e) {}
+                }
                 fill(it);
                 if (dots) $$('button', dots).forEach(function (b, j) { b.classList.toggle('on', j === i); });
             };
@@ -400,7 +408,15 @@
         d.addEventListener('dragstart', function (e) { if (e.target.tagName === 'IMG') e.preventDefault(); });
     }
 
+    /* el último banner visto se queda de fondo mientras llegan los destacados de esta página (sin pantalla negra) */
+    function heroLast() {
+        var b = $('#nfHero .nf-hero-bg'), u = null;
+        try { u = sessionStorage.getItem('nf_hero_bg'); } catch (e) {}
+        if (b && u && !$('#nfHero .nf-hero-bg.on')) { b.style.backgroundImage = "url('" + u + "')"; b.classList.add('on'); }
+    }
+
     function boot() {
+        heroLast();
         initHeader();
         NF.initRows(d);
         NF.posters(d);

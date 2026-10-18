@@ -10,5 +10,6 @@ if (!wp_verify_signed($url) || !isset($_GET['e'])) {
 header('Content-Type: application/json');
 header('Cache-Control: private, max-age=3600');
 @set_time_limit(90);
-// en segundo plano se puede esperar a ffprobe si la lectura rápida no alcanzó
-echo json_encode(['n' => wp_audio_track_count($url, false, true)]);
+// en segundo plano se puede esperar a ffprobe si la lectura rápida no alcanzó (solo con permiso del motor)
+require_once __DIR__ . '/includes/media_admin.php';
+echo json_encode(['n' => wp_audio_track_count($url, false, wp_media_off_text() === '')]);

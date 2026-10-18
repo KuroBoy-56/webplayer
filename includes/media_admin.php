@@ -16,6 +16,14 @@ function wp_media_enabled()
     return !is_file(wp_media_flag());
 }
 
+/** Por qué no se puede usar el motor (mismo texto que el motor del panel) o '' si se puede. */
+function wp_media_off_text()
+{
+    if (!wp_media_enabled() || !wp_tenant_feature('ffmpeg')) return t('Sin permisos');
+    if (!wp_bin('ffprobe') || !wp_bin('ffmpeg')) return t('No compatible con el dispositivo');
+    return '';
+}
+
 function wp_media_set_enabled($on)
 {
     if ($on) @unlink(wp_media_flag());

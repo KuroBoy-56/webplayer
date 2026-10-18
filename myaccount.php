@@ -60,6 +60,9 @@ include "header.php";
             <?php if ($max_conn !== ''): ?><div class="ac-item"><small><?php echo t('Conexiones'); ?></small><b><?php echo e($active_conn); ?> / <?php echo e($max_conn); ?></b></div><?php endif; ?>
             <?php if (!empty($_SESSION['server_name'])): ?><div class="ac-item"><small><?php echo t('Servidor'); ?></small><b><?php echo e(!empty($_SESSION['server_id']) ? t('Servidor {n}', ['n' => $_SESSION['server_id']]) : $_SESSION['server_name']); ?></b></div><?php endif; ?>
             <?php if ($created): ?><div class="ac-item"><small><?php echo t('Cliente desde'); ?></small><b><?php echo e($created); ?></b></div><?php endif; ?>
+            <div class="ac-item"><small><?php echo t('Canales en vivo'); ?></small><b data-count="live">…</b></div>
+            <div class="ac-item"><small><?php echo t('Películas'); ?></small><b data-count="movie">…</b></div>
+            <div class="ac-item"><small><?php echo t('Series'); ?></small><b data-count="series">…</b></div>
             <?php if ($dist_code !== ''): ?>
             <div class="ac-item"><small><?php echo t('Distribuidor'); ?></small><b><?php echo e(($dist_cfg && $dist_cfg['name'] ? $dist_cfg['name'] . ' ' : '') . '(' . $dist_code . ')'); ?></b></div>
             <div class="ac-item"><small><?php echo t('Vence'); ?></small><b><?php echo $dist_exp !== '' ? e($dist_exp) : t('Sin vencimiento'); ?></b><?php if ($dist_exp !== ''): ?><div style="color:#999;font-size:13px;margin-top:4px"><?php echo t('Hora de Panamá'); ?></div><?php endif; ?></div>
@@ -89,4 +92,15 @@ include "header.php";
         </div>
     </div>
 </div>
+<script>
+// cantidad de contenido del servidor: se carga aparte para no demorar la página (la primera vez el catálogo tarda)
+document.addEventListener('DOMContentLoaded', function () {
+    NF.api({ action: 'counts' }).then(function (c) {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-count]'), function (b) {
+            var n = c[b.getAttribute('data-count')];
+            b.textContent = typeof n === 'number' ? n.toLocaleString(window.NF_LOCALE) : '—';
+        });
+    }).catch(function () { Array.prototype.forEach.call(document.querySelectorAll('[data-count]'), function (b) { b.textContent = '—'; }); });
+});
+</script>
 <?php include "footer.php"; ?>

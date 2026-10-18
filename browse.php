@@ -89,7 +89,7 @@ if ($genre && !isset($availGenres[$genre])) $availGenres[$genre] = $genres[$genr
             <button type="button" class="nf-chip<?php echo $genre === $k ? ' active' : ''; ?>" data-v="<?php echo e($k); ?>"><?php echo e($g['label']); ?></button>
         <?php endforeach; ?>
     </nav>
-    <?php if (!$platform): ?>
+    <?php if (!$platform && wp_available_platforms()): ?>
     <nav class="nf-chips" id="fPlat" aria-label="<?php echo e(t('Plataformas')); ?>" style="padding-top:2px">
         <?php foreach (wp_available_platforms() as $k => $p): ?>
             <a class="nf-chip" href="browse.php?platform=<?php echo e($k); ?>"><?php echo e($p['label']); ?></a>

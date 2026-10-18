@@ -196,6 +196,9 @@ function wp_tenant_normalize(array $j)
         'features' => [
             'alerts' => !array_key_exists('alerts', $f) || !empty($f['alerts']),
             'sports' => !array_key_exists('sports', $f) || !empty($f['sports']),
+            // motor de audio y subtítulos (ffmpeg del hosting): el dueño se lo quita al distribuidor en el panel
+            'ffmpeg' => !array_key_exists('ffmpeg', $f) || !empty($f['ffmpeg']),
+            'platforms' => !array_key_exists('platforms', $f) || !empty($f['platforms']),
         ],
         'recheck_after' => max(600, (int)($j['recheck_after'] ?? 21600)),
     ];

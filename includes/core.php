@@ -708,6 +708,8 @@ function wp_norm_title($s)
 
 function wp_platforms()
 {
+    // el distribuidor no separa su contenido por plataformas: sin filas, tiles ni filtros de plataforma
+    if (function_exists('wp_tenant_feature') && !wp_tenant_feature('platforms')) return [];
     return [
         'netflix' => ['label' => 'Netflix', 'img' => 'img/netflix.webp', 'kw' => ['netflix'], 'color' => '#e50914'],
         'disney' => ['label' => 'Disney+', 'img' => 'img/DisneY.webp', 'kw' => ['disney', 'pixar', 'star+', 'star plus'], 'color' => '#113ccf'],
@@ -954,6 +956,8 @@ function wp_card($it, $t = null)
 /** Elementos presentes en el catálogo de cada plataforma (para mostrar sólo las que existen). */
 function wp_available_platforms()
 {
+    static $memo = null; // la página lo pide varias veces (tiles, filas, chips)
+    if ($memo !== null) return $memo;
     $out = [];
     $names = array_merge(array_values(wp_category_names('movie')), array_values(wp_category_names('series')));
     foreach (wp_platforms() as $k => $p) {
@@ -964,7 +968,7 @@ function wp_available_platforms()
             }
         }
     }
-    return $out;
+    return $memo = $out;
 }
 
 function wp_available_genres($type = 'all')
