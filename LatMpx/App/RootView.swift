@@ -9,6 +9,8 @@ struct RootView: View {
     @Environment(\.scenePhase) private var phase
     /** idioma de la app: al cambiarlo en Cuenta las pestañas se vuelven a dibujar (sin cerrar sesión) */
     @ObservedObject private var lang = L10n.shared
+    /** orden de borrado de caché del panel (check_mac › cache_clear) */
+    @ObservedObject private var cacheClear = CacheClear.shared
     @State private var booted = false
     @State private var gate: Gate = .open
     @State private var distMsg: String?
@@ -32,12 +34,12 @@ struct RootView: View {
             } else if gate == .retry {
                 TenantRetryView(message: retryMsg, busy: checking, onRetry: guardTenant, onChange: { wipe(nil) })
             } else if state.session == nil {
-                LoginView { s in
+                LoginView(onLogged: { s in
                     lastPanelCheck = Date()
                     Store.saveSession(s)
                     Xtream.clearCache()
                     state.session = s
-                }
+                }, onChangeDistributor: { wipe(nil) })
             } else {
                 MainView(onLogout: logout, onChangeDistributor: { wipe(nil) })
                     .id(lang.choice)
@@ -45,6 +47,7 @@ struct RootView: View {
             if let a = alert, state.session != nil {
                 PanelAlertView(alert: a) { alert = nil }
             }
+            if cacheClear.notice { CacheClearNotice() }
         }
         .onAppear(perform: boot)
         .onChange(of: tenant.revoked) { m in
@@ -53,6 +56,7 @@ struct RootView: View {
             if Tenant.active { wipe(m) }
         }
         .onChange(of: phase) { p in if p == .active { resumed() } }
+        .onChange(of: cacheClear.notice) { on in if on { clearCacheAndRestart() } }
         .task(id: state.session) {
             ErrorReport.prepareCrash()
             guard let s = state.session else { return }
@@ -90,6 +94,24 @@ struct RootView: View {
     }
 
     private func logout() { clearAll(); CatalogCache.clear() }
+
+    /**
+     * Orden del panel: aviso ~3 s, se borra la caché y la raíz se vuelve a crear como al abrir la app.
+     * La sesión del panel (token), el distribuidor y los ajustes se quedan: la app vuelve a entrar sola.
+     */
+    private func clearCacheAndRestart() {
+        state.play = nil // el aviso no queda detrás del reproductor
+        NativePlayer.shared.close()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            Alerts.reset(); alert = nil; Cloud.shared.clear()
+            await PanelEpg.shared.clear()
+            StreamEngine.reset()
+            state.reset(); state.session = nil
+            CacheClear.wipe()
+            CacheClear.shared.restarted()
+        }
+    }
 
     /** "Cambiar distribuidor" o número cortado: se borra el número, su marca, la sesión y el token */
     private func wipe(_ msg: String?) {
@@ -141,6 +163,22 @@ struct RootView: View {
             if case .fail(let m) = await Xtream.login([(line.name, line.base)], user: line.user, pass: line.pass), m != Xtream.noServer {
                 if state.session == s { clearAll() }
             }
+        }
+    }
+}
+
+private struct CacheClearNotice: View {
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.7).ignoresSafeArea()
+            VStack(spacing: 14) {
+                ProgressView().tint(Theme.accent)
+                Text(tr("Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará."))
+                    .font(.system(size: 16, weight: .semibold)).foregroundColor(.white).multilineTextAlignment(.center)
+            }
+            .padding(24).frame(maxWidth: 420)
+            .background(Color(hex: 0x1F1F1F)).clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(24)
         }
     }
 }

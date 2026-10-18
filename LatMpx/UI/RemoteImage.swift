@@ -25,6 +25,12 @@ final class ImageLoader {
 
     func cached(_ url: String) -> UIImage? { mem.object(forKey: url as NSString) }
 
+    /** borrado de caché del panel: memoria y disco */
+    func clear() {
+        mem.removeAllObjects()
+        session.configuration.urlCache?.removeAllCachedResponses()
+    }
+
     func load(_ url: String, maxPixel: CGFloat) async -> UIImage? {
         let key = url as NSString
         if let i = mem.object(forKey: key) { return i }

@@ -25,6 +25,9 @@ enum StreamEngine {
         return on
     }
 
+    /** borrado de caché del panel: se vuelve a preguntar */
+    static func reset() { known = nil }
+
     /** el motor respondió 503 / 501 (sin permiso o sin ffmpeg): apagado para esta línea, sin más pedidos */
     static func off() {
         PlayerDiag.log("motor del panel no disponible para esta línea")

@@ -104,6 +104,12 @@ enum Store {
         set { p.set(newValue, forKey: "fake_unlocked") }
     }
 
+    /** última orden de borrado de caché del panel ya aplicada (nil = todavía no llegó ninguna); el borrado no la toca */
+    static var cacheClearSeen: Int? {
+        get { p.object(forKey: tenantKey("cache_clear_seen")) as? Int }
+        set { p.set(newValue, forKey: tenantKey("cache_clear_seen")) }
+    }
+
     static func logout() {
         lock.lock(); mem = nil; lock.unlock()
         p.removeObject(forKey: tenantKey("cloud_token2"))

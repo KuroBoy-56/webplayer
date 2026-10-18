@@ -7,6 +7,8 @@ import SwiftUI
  */
 struct LoginView: View {
     let onLogged: (Session) -> Void
+    /** «Cambiar distribuidor»: vuelve a la pantalla «Número de distribuidor» */
+    let onChangeDistributor: () -> Void
     @EnvironmentObject var tenant: Tenant
     @EnvironmentObject var state: AppState
     @ObservedObject private var online = Online.shared
@@ -29,6 +31,8 @@ struct LoginView: View {
 
     /** primera consulta al panel (línea del equipo y pantalla falsa) todavía en curso */
     @State private var checking = true
+    /** features del panel: ¿hay demo configurada? nil = sin respuesta o panel viejo (se usa tenant_config) */
+    @State private var demoConfigured: Bool?
 
     var body: some View {
         // ZStack (una sola vista): la primera consulta no se cancela al cambiar lo que se muestra
@@ -54,6 +58,7 @@ struct LoginView: View {
             guard !started else { return }
             started = true
             Task { posters = await Tmdb.nowPlaying() }
+            Task { demoConfigured = await Panel.demoConfigured() }
             _ = await resolve()
             if lines.isEmpty && !Store.fakeUnlocked { fake = Panel.fakeScreen }
             checking = false
@@ -71,6 +76,14 @@ struct LoginView: View {
                         HStack { LogoHeader(height: 46); Spacer() }.padding(.horizontal, sidePad(g.size)).padding(.vertical, 20)
                         Spacer(minLength: 16)
                         box.frame(maxWidth: 400).padding(.horizontal, 16)
+                        // siempre visible (con número o con Omitir): vuelve a «Número de distribuidor»
+                        Button { if !busy { onChangeDistributor() } } label: {
+                            Label(tr("Cambiar distribuidor"), systemImage: "arrow.left.arrow.right")
+                                .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                                .padding(.horizontal, 16).frame(minHeight: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 12)
                         Spacer(minLength: 28)
                         Text("© " + String(Calendar.current.component(.year, from: Date())) + " " + tenant.nameOr("MPX Player"))
                             .font(.system(size: 14)).foregroundColor(Color(hex: 0x999999))
@@ -110,7 +123,8 @@ struct LoginView: View {
                 AppButton(text: tr("Iniciar sesión")) { act { await submit() } }
                 // Autodemo y DNS en la misma fila, como Android
                 HStack(spacing: 8) {
-                    if tenant.demoEnabled {
+                    // solo si el panel tiene una demo configurada (features); sin respuesta, lo de tenant_config
+                    if PanelCrypto.hasKey && (demoConfigured ?? tenant.demoEnabled) {
                         AppButton(text: tr("Autodemo"), icon: "gift.fill", primary: false) { act { await demo() } }
                     }
                     DnsButton(fill: true)
@@ -188,6 +202,8 @@ struct LoginView: View {
             if let l = c.value { found = [l] }
             if problem == nil { problem = c.error }
         }
+        // con las listas de auth.php no se pidió check_mac: se pide aparte por la orden de borrado de caché
+        if a.value?.isEmpty == false { Task { _ = await Panel.checkMac() } }
         lines = found
         if !found.isEmpty { await connectFirst(found) }
         else if let p = problem, PanelCrypto.hasKey { err = p } // sin llave ya lo dice el aviso de arriba

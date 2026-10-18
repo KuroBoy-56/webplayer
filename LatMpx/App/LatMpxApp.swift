@@ -12,6 +12,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         Store.boot()
+        #if DEBUG
+        CacheClear.selfCheck()
+        #endif
         ErrorReport.boot()
         Integrity.check()
         PlayerDiag.watchdog()
@@ -34,10 +37,13 @@ struct LatMpxApp: App {
     @StateObject private var state = AppState()
     @StateObject private var tenant = Tenant.shared
     @StateObject private var cloud = Cloud.shared
+    /** borrado de caché del panel: la raíz se vuelve a crear desde cero (iOS no deja relanzar la app) */
+    @StateObject private var cacheClear = CacheClear.shared
 
     var body: some Scene {
         WindowGroup {
             RootView()
+                .id(cacheClear.generation)
                 .environmentObject(state)
                 .environmentObject(tenant)
                 .environmentObject(cloud)

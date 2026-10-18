@@ -119,7 +119,7 @@ enum Xtream {
 
     private static func getMem<T>(_ k: String) -> T? { lock.locked { mem[k] as? T } }
     private static func setMem(_ k: String, _ v: Any) { lock.locked { mem[k] = v } }
-    static func clearCache() { lock.lock(); mem.removeAll(); lock.unlock() }
+    static func clearCache() { lock.lock(); mem.removeAll(); details.removeAll(); lock.unlock() }
 
     static func cached(_ s: Session, _ kind: Kind) -> ([Category], [Item])? {
         guard let c = CatalogCache.load(s, kind) else { return nil }

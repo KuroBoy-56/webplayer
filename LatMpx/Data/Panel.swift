@@ -2,7 +2,7 @@ import Foundation
 
 /**
  * "Anillos de seguridad" del panel para activar el equipo:
- *  - login.php (POST action + data cifrada AES-256-GCM): check_mac, fetch_dns, submit_url, auto_demo, set_pin, tenant_config
+ *  - login.php (POST action + data cifrada AES-256-GCM): check_mac, fetch_dns, submit_url, auto_demo, set_pin, tenant_config, features
  *  - auth.php (POST {"data": mope}): listas del equipo
  * El equipo se identifica con mac_address = Device.id.
  */
@@ -94,11 +94,16 @@ enum Panel {
 
     /** ¿El equipo ya tiene una línea activa en el panel? value nil + error nil = no la tiene. */
     static func checkMac() async -> Answer<Line> {
-        let a = await login("check_mac", device())
+        var p = device()
+        // última orden de borrado de caché que esta app ya aplicó (0 = ninguna)
+        p["cc"] = Store.cacheClearSeen ?? 0
+        let a = await login("check_mac", p)
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
         if Tenant.active && (400..<500).contains(r.code) { return Answer(value: nil, error: errorOf(r, tr("El panel rechazó la solicitud"))) }
         guard let j = r.json() else { return Answer(value: nil, error: errorOf(r, tr("Respuesta no válida del panel"))) }
         fakeScreen = FakeScreen.parse(j)
+        // orden de borrado de caché del panel (con línea o sin ella); un panel viejo no la manda
+        if j["cache_clear"] != nil { CacheClear.received(j.i("cache_clear")) }
         if !j.b("exists") { return Answer(value: nil, error: nil) }
         // PIN parental del panel: es el que usa la app
         let pin = j.s("pin")
@@ -167,6 +172,15 @@ enum Panel {
             return Answer(value: true)
         }
         return Answer(value: nil, error: errorOf(r, tr("El panel no guardó el PIN (%d)", r.code)), code: r.code)
+    }
+
+    /**
+     * features: ¿hay una demo activa en «Configurar Demo» de este distribuidor (o del dueño con Omitir)?
+     * Responde JSON sin cifrar. nil = sin respuesta o panel viejo ("Invalid action").
+     */
+    static func demoConfigured() async -> Bool? {
+        guard let r = await login("features", [:]).value, r.ok, let j = r.json(), j.s("status") == "ok", let f = j.o("features") else { return nil }
+        return f.b("demo")
     }
 
     struct TenantAnswer { var value: JObj?; var error: String?; var errorCode: String = "" }

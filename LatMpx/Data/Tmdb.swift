@@ -2,14 +2,14 @@ import Foundation
 
 /** TMDB con la llave que configura el panel (nunca una llave escrita en la app). */
 enum Tmdb {
-    private static var nowPlayingCache: [String]?
-    /** número de distribuidor de las carátulas guardadas (cada uno tiene su clave TMDB) */
-    private static var nowPlayingFor: String?
     /** la llave que TMDB rechazó (401); si el panel manda otra, se vuelve a usar */
     private static var badKey = ""
     private static let lock = NSLock()
     private static var detailCache: [String: Details] = [:]
     private static var photoCache: [String: String] = [:]
+
+    /** borrado de caché del panel */
+    static func clearCache() { lock.locked { detailCache = [:]; photoCache = [:]; badKey = "" } }
 
     /**
      * idioma de TMDB según el de la app: ficha (sinopsis) y carátulas de now_playing. Las búsquedas siguen en
@@ -102,11 +102,10 @@ enum Tmdb {
     /**
      * Carátulas del fondo del inicio de sesión y del número de distribuidor: solo con la clave TMDB del
      * panel (la del distribuidor o la del dueño), pedidas por api/tmdb.php. Sin clave el panel responde
-     * tmdb_key_not_set y no hay carrusel.
+     * tmdb_key_not_set y no hay carrusel. Se pregunta cada vez (sin copia guardada): si el panel deja de
+     * entregar la clave, no quedan carátulas viejas.
      */
     static func nowPlaying() async -> [String] {
-        let who = Tenant.code + "|" + lang
-        if let c = lock.locked({ nowPlayingFor == who ? nowPlayingCache : nil }) { return c }
         var out = [String]()
         for p in 1...3 {
             // ?path= (no tmdb.php/movie/now_playing): muchos hostings no pasan PATH_INFO
@@ -119,9 +118,7 @@ enum Tmdb {
             }
         }
         var seen = Set<String>()
-        let list = Array(out.filter { seen.insert($0).inserted }.prefix(48))
-        if !list.isEmpty { lock.locked { nowPlayingCache = list; nowPlayingFor = who } }
-        return list
+        return Array(out.filter { seen.insert($0).inserted }.prefix(48))
     }
 
     /** "ES - Avengers: Endgame (2019) [4K] LAT" → ("Avengers: Endgame", "2019") */

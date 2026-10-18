@@ -5,6 +5,7 @@ import Foundation
 
 extension L10n {
     static let en: [String: String] = [
+        "Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.": "Your provider updated the app. The cache will be cleared and the app will restart.",
         "Ver más": "See more",
         "Ver menos": "See less",
         "Nació el %@": "Born %@",
@@ -306,6 +307,7 @@ extension L10n {
     ]
 
     static let pt: [String: String] = [
+        "Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.": "Seu provedor atualizou o aplicativo. O cache será apagado e o aplicativo será reiniciado.",
         "Ver más": "Ver mais",
         "Ver menos": "Ver menos",
         "Nació el %@": "Nasceu em %@",
@@ -574,6 +576,7 @@ extension L10n {
     ]
 
     static let fr: [String: String] = [
+        "Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.": "Votre fournisseur a mis à jour l'application. Le cache sera vidé et l'application redémarrera.",
         "Ver más": "Voir plus",
         "Ver menos": "Voir moins",
         "Nació el %@": "Né le %@",

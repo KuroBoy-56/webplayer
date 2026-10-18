@@ -20,6 +20,12 @@ enum Posters {
         return nil
     }
 
+    /** borrado de caché del panel (se vuelven a buscar en TMDB) */
+    static func clear() {
+        lock.locked { mem = [:] }
+        prefs.removePersistentDomain(forName: "posters")
+    }
+
     static func resolve(_ i: Item) async -> String {
         if i.kind == .live { return "" }
         if let c = cached(i) { return c }

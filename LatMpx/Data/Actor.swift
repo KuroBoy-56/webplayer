@@ -15,6 +15,9 @@ enum Actor {
     private static var memo: [String: Page] = [:]
     private static let lock = NSLock()
 
+    /** borrado de caché del panel */
+    static func clear() { lock.locked { memo = [:] } }
+
     static func load(name: String, tmdbId: Int, movies: [Item], series: [Item]) async -> Page {
         let memoKey = "\(tmdbId)|\(name.folded)|\(movies.count)|\(series.count)"
         if let p = lock.locked({ memo[memoKey] }) { return p }
