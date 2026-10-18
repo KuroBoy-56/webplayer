@@ -109,10 +109,19 @@ export default function Login() {
     setBusy(t('Buscando tu cuenta en los servidores…'));
     const list = servers || (await panelDnsList());
     const r = await loginAll(list, u.trim(), p.trim());
+    if (r.session && hasMasterKey() && !fromPanel && !demo) {
+      // usuario y contraseña escritos: el panel los registra en Cuentas oficiales y decide si entra
+      // (una línea demo de otro equipo, vencida o borrada no pasa). 503 = el panel no llegó al
+      // servidor IPTV, que la app sí validó.
+      const reg = await panelSubmit(dev, r.session.user, r.session.pass, r.session.base).catch(() => ({ ok: false, code: 0, error: '' }));
+      if (!reg.ok && reg.code !== 503) {
+        setBusy('');
+        setError(reg.error || t('No se pudo conectar con el panel. Revisa tu conexión a internet.'));
+        return;
+      }
+    }
     setBusy('');
     if (r.session) {
-      // registra el código del equipo en el panel (igual que Android y Roku)
-      if (hasMasterKey() && !fromPanel) panelSubmit(dev, r.session.user, r.session.pass, r.session.base).catch(() => {});
       setSession(r.session, demo, demoExpires, demoDuration);
       nav.reset({ name: 'main' });
     } else {

@@ -168,6 +168,8 @@ const en = {
   "Mi lista no está disponible en la DEMO.": "My list isn't available in the DEMO.",
   "Más información": "More info",
   "Más títulos como este": "More like this",
+  "Leer biografía": "Read biography",
+  "Cerrar": "Close",
   "Nació el {d}": "Born {d}",
   "Navidad": "Christmas",
   "No": "No",

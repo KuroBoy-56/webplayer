@@ -157,7 +157,7 @@ export default function Sports() {
         style={s.sports}
         data={['', ...sportKeys]}
         keyExtractor={k => k || 'all'}
-        contentContainerStyle={{ paddingHorizontal: SIDE }}
+        contentContainerStyle={{ paddingHorizontal: SIDE, paddingVertical: px(6), alignItems: 'center' }}
         renderItem={({ item: k }) => <Chip label={k ? label(k) : t('Todos')} on={sport === k} onPress={() => setSport(k)} />}
       />
       {toast ? <Text style={s.toast}>{toast}</Text> : null}
@@ -256,9 +256,9 @@ function MenuRow({ title, sub, first, onPress }: { title: string; sub: string; f
 
 const s = themed(() =>
   StyleSheet.create({
-    root: { flex: 1, paddingTop: px(130) },
-    chips: { flexDirection: 'row', paddingHorizontal: SIDE, marginBottom: px(14) },
-    sports: { flexGrow: 0, marginBottom: px(20) },
+    root: { flex: 1, paddingTop: px(145) },
+    chips: { flexDirection: 'row', paddingHorizontal: SIDE, marginBottom: px(28) },
+    sports: { flexGrow: 0, height: px(76), minHeight: px(76), marginBottom: px(24) },
     chip: { height: px(56), paddingHorizontal: px(28), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: alpha(C.focus, 0.12), borderWidth: px(3), borderColor: 'transparent' },
     chipOn: { borderColor: C.red },
     chipF: { backgroundColor: C.focus },

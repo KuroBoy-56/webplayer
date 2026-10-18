@@ -86,8 +86,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   pide el actual y lo guarda en el panel (`login.php` acción `set_pin`); solo si el panel lo acepta cambia.
 - **Sin usuario ni contraseña guardados**: la sesión vive solo en memoria. Cada vez que se abre la app se le
   pide la línea al panel y se comprueba en el servidor IPTV; con una sola línea entra sola. Si el equipo no
-  está registrado o la línea venció, se queda en el inicio de sesión. Al volver a la app (como mucho cada
-  15 min) se pregunta otra vez: si el dueño quitó la línea del equipo, vuelve al inicio de sesión.
+  está registrado o la línea venció, se queda en el inicio de sesión. Con la app abierta se pregunta otra vez
+  cada 10 min (y al volver a la app, como mucho cada 15 min): si el dueño quitó la línea del equipo o la demo
+  venció, vuelve al inicio de sesión; la demo además se corta a su hora exacta (`demo_expires`).
+  Usuario y contraseña escritos a mano entran solo si el panel los registra (`submit_url`, Cuentas
+  oficiales); si el panel los rechaza (línea demo de otro equipo, vencida…) no entra. La línea de Autodemo
+  no se vuelve a registrar (el panel ya la tiene en el historial de demos).
 
 ## Idiomas
 
@@ -175,7 +179,8 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
 
 ## Límites conocidos
 
-- La TV en vivo usa MPEG-TS (`.ts`), que el reproductor de Vega abre directo. HLS (`.m3u8`) del
+- La TV en vivo usa MPEG-TS (`.ts`), que el reproductor de Vega abre directo; si un canal falla se prueba
+  `.m3u8` y luego la dirección corta sin `/live/` (`LIVE_FORMATS` en `src/api/xtream.ts`; LG empieza por `.m3u8`). HLS (`.m3u8`) del
   proveedor necesitaría integrar Shaka Player; no hace falta mientras el proveedor sirva `.ts`. El
   HLS del motor del panel (audio cambiado) se reproduce con un lector propio por MSE (`src/player/hls.ts`).
 - Autodemo, registrar el equipo y la activación por código MAC usan `login.php` con la llave

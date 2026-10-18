@@ -349,11 +349,12 @@ export async function panelSetPin(deviceId: string, oldPin: string, pin: string)
 }
 
 // registra el equipo (código MAC) con la cuenta en el panel
-export async function panelSubmit(deviceId: string, user: string, pass: string, dns: string): Promise<{ ok: boolean; error?: string }> {
+// code: respuesta HTTP del panel (0 = sin conexión)
+export async function panelSubmit(deviceId: string, user: string, pass: string, dns: string): Promise<{ ok: boolean; error?: string; code: number }> {
   const r = await panelLogin('submit_url', { mac_address: deviceId, username: user, password: pass, url: dns });
   const j = json(r);
-  if (r.ok && j && str(j.status) === 'ok') return { ok: true };
-  return { ok: false, error: panelError(r, t('No se pudo registrar el equipo')) };
+  if (r.ok && j && str(j.status) === 'ok') return { ok: true, code: r.code };
+  return { ok: false, error: panelError(r, t('No se pudo registrar el equipo')), code: r.code };
 }
 
 // código de demo de un revendedor: 6 letras y números con al menos una letra (solo números sería
