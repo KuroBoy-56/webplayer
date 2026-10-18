@@ -97,7 +97,8 @@ export default function Player({ params }: { params: PlayParams }) {
       if (params.kind === 'live' || !c || !ready.current) return;
       const e = params.queue[indexRef.current];
       const position = Math.floor(c.realPos());
-      const duration = Math.floor(c.duration());
+      // el motor del panel no sabe la duración total: la del servidor, para que Continuar viendo tenga su avance
+      const duration = Math.floor(c.duration()) || e.dur || 0;
       if (position < 5 || !Number.isFinite(duration)) return;
       saveProgress(
         {

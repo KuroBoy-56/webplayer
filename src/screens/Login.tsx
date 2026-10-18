@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
-import { loginAll } from '../api/xtream';
+import { loginAll, sessionFrom } from '../api/xtream';
 import { Button, Focusable, Logo } from '../components/ui';
 import { json } from '../lib/http';
 import { hasMasterKey } from '../lib/aes';
@@ -54,23 +54,30 @@ export default function Login() {
     let alive = true;
     // Cada vez que se abre la app: la línea del equipo se le pide al panel (nada guardado en el equipo).
     // Con una sola línea entra sola después de comprobarla en el servidor IPTV.
-    panelPlaylists(dev).then(async r => {
-      if (!alive) return;
+    (async () => {
       tmdbPosters().then(p => alive && setPosters(p));
-      let lines = r.lines;
-      // con la llave: línea activada por código MAC en el panel
-      if (!lines.length) {
+      // manda el panel: con la llave, check_mac primero (la línea que el panel le da hoy a esta MAC, demo
+      // vigente incluida, con su marca DEMO). auth.php solo sin llave o si check_mac no da línea: prefiere
+      // cualquier línea vieja no demo y no sabe si es demo (en Roku eso hacía rebotar el inicio).
+      let lines: Line[] = [];
+      let err = '';
+      if (hasMasterKey()) {
         const ln = await panelCheckMac(dev);
         if (ln) lines = [ln];
-        else if (read('fake_unlocked') !== '1') setFake(lastFakeScreen());
+      }
+      if (!lines.length) {
+        const r = await panelPlaylists(dev);
+        lines = r.lines;
+        err = r.error;
       }
       if (!alive) return;
+      if (!lines.length && read('fake_unlocked') !== '1') setFake(lastFakeScreen());
       setChecking(false);
       setBusy('');
       if (lines.length) setAssigned(lines);
       if (lines.length === 1) enter(lines[0].user, lines[0].pass, [{ name: lines[0].name, base: lines[0].base }], true, lines[0].demo, lines[0].demoExpires, lines[0].demoDuration);
-      else if (!lines.length && r.error) setError(r.error);
-    });
+      else if (!lines.length && err) setError(err);
+    })();
     return () => {
       alive = false;
     };
@@ -108,7 +115,16 @@ export default function Login() {
     setError('');
     setBusy(t('Buscando tu cuenta en los servidores…'));
     const list = servers || (await panelDnsList());
-    const r = await loginAll(list, u.trim(), p.trim());
+    let r = await loginAll(list, u.trim(), p.trim());
+    // línea que dio el panel (del equipo o de la Autodemo) y su servidor no contestó: la misma cuenta en los
+    // DNS del panel y, si ninguno la rechazó (solo no contestaron), se entra con ella igual (como la app de
+    // escritorio); el catálogo lo vuelve a intentar. Solo un rechazo del servidor deja en el inicio de sesión.
+    if (!r.session && r.offline && (fromPanel || demo) && servers?.length) {
+      setBusy(t('Buscando tu cuenta en los servidores…'));
+      const dns = await panelDnsList();
+      if (dns.length) r = await loginAll([...servers, ...dns], u.trim(), p.trim());
+      if (!r.session && r.offline) r = { session: sessionFrom(servers[0], u.trim(), p.trim(), {}) };
+    }
     if (r.session && hasMasterKey() && !fromPanel && !demo) {
       // usuario y contraseña escritos: el panel los registra en Cuentas oficiales y decide si entra
       // (una línea demo de otro equipo, vencida o borrada no pasa). 503 = el panel no llegó al
