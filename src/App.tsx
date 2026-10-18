@@ -62,8 +62,10 @@ function Notice() {
 
 export default function App() {
   const [stack, setStack] = useState<Route[] | null>(null);
-  // pantalla de inicio: fondo y logo del distribuidor (o los de la app con Omitir)
-  const [splash, setSplash] = useState(true);
+  // pantalla de inicio: fondo y logo del distribuidor (o los de la app con Omitir). null = aún no se
+  // sabe el distribuidor: solo el fondo. Sin distribuidor elegido no hay pantalla de inicio: lo primero
+  // es el número de distribuidor (como Roku)
+  const [splash, setSplash] = useState<boolean | null>(null);
   // cambia cuando cambian los colores o el idioma: se vuelven a montar las pantallas con los nuevos
   // estilos y textos
   const [skin, setSkin] = useState(0);
@@ -78,6 +80,11 @@ export default function App() {
       const logged = restoreSession();
       if (!distChoice()) setStack([{ name: 'distributor' }]);
       else setStack([logged ? { name: 'main' } : { name: 'login' }]);
+      if (!distChoice()) {
+        setSplash(false);
+        return;
+      }
+      setSplash(true);
       // el logo se ve al menos un momento (la primera pantalla ya se arma debajo)
       timer = setTimeout(() => setSplash(false), Math.max(0, 1500 - (Date.now() - started)));
     });
@@ -222,10 +229,8 @@ export default function App() {
           );
         })}
       </View>
-      {splash ? (
-        <View style={[StyleSheet.absoluteFill, s.root]}>
-          <Logo size={300} />
-        </View>
+      {splash !== false ? (
+        <View style={[StyleSheet.absoluteFill, s.root]}>{splash ? <Logo size={300} /> : null}</View>
       ) : (
         <AlertDialog alert={alert} onClose={() => setAlert(null)} />
       )}
