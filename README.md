@@ -70,7 +70,7 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
   las carpetas de eventos. Un índice de palabras de los canales evita comparar todos contra todos.
 - **Progreso y Mi lista sincronizados** con `api/progress.php`: lo que ves en la TV sigue en la web y el móvil, aunque cada app haya entrado por otra DNS del mismo servicio (el panel los une). Se vuelven a leer al regresar a la app.
 - **Aviso del panel al abrir la app** (`api/alerta.php?format=json`, página **Alertas** del panel): bienvenida con el texto general y la imagen, o aviso de vencimiento con el texto de 3, 2, 1 o 0 días. Una vez por arranque y otra vez tras iniciar sesión; botón **Entendido** enfocado, *Atrás* también lo cierra.
-- **Número de distribuidor** (primera vez): 6 dígitos con teclado en pantalla. Con número, la
+- **Número de distribuidor** (primera vez, sin pantalla de inicio antes: el logo de inicio es el del distribuidor elegido, o el de la app con *Omitir*): 6 dígitos con teclado en pantalla. Con número, la
   app usa el logo, el nombre y los colores de ese distribuidor (`login.php` acción
   `tenant_config`, app `tizen`) y todas las llamadas al panel llevan `tenant` + `app` (DNS,
   demo, registro, progreso, EPG, deportes y `alerta.php?t=`). **Omitir** deja la app como
