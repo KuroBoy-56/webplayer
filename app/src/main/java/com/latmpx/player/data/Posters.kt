@@ -17,6 +17,9 @@ object Posters {
 
     fun init(ctx: Context) { prefs = ctx.getSharedPreferences("posters", Context.MODE_PRIVATE) }
 
+    /** borrado de caché remoto: se olvidan las carátulas encontradas en TMDB */
+    fun clear() { mem.clear(); prefs?.edit()?.clear()?.commit() }
+
     private fun keyOf(item: Item) = item.kind.name + "|" + item.name.lowercase()
 
     /** póster ya conocido (sin red) o null */

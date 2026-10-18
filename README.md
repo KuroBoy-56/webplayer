@@ -96,6 +96,10 @@ Al abrir la app por primera vez sale **Número de distribuidor** (mismo diseño 
 - **Foco del control:** el borde de foco (`NfFocus` en `ui/theme/Theme.kt`: tarjetas, mosaicos, botones, reproductor) es blanco sin distribuidor y el acento del distribuidor con paleta (aclarado si es muy oscuro).
 - **Mi cuenta:** además de vencimiento, conexiones, servidor y alta muestra la cantidad del catálogo cargado: Canales en vivo, Películas y Series («…» mientras se baja).
 - **Cuenta → Cambiar distribuidor:** muestra distribuidor, número y vencimiento; borra todo, cierra sesión y vuelve a pedir el número.
+- **Inicio de sesión → Cambiar distribuidor:** siempre visible debajo de la caja (con número o con Omitir); vuelve a «Número de distribuidor» igual que desde Cuenta.
+- **Autodemo según el panel:** al abrir el inicio de sesión se pregunta `login.php` acción `features` (con número lleva `tenant` + `app`); el botón sale solo si `features.demo` es `true`. Si el panel no responde (sin red o panel viejo con «Invalid action»): con número vale `features.demo` de `tenant_config`, con Omitir se muestra como antes. Sin la llave del panel no hay botón.
+- **Fondo de pósters:** solo con lo que entrega `api/tmdb.php` del panel en ese momento (sin copia guardada ni clave de respaldo); con `tmdb_key_not_set` o error, fondo negro.
+- **Borrado de caché remoto** (`data/CacheClear.kt`): `check_mac` manda `"cc"` (última orden aplicada, 0 = ninguna) y el panel responde `"cache_clear"`. Sin nada guardado (`cache_clear_seen`) se guarda en silencio; un número mayor se guarda primero, sale el aviso ~3 s, se borran catálogo (`filesDir/catalog`), carátulas de TMDB y `cacheDir` (imágenes de Coil) y la app se reinicia. No se tocan sesión, distribuidor, ajustes ni descargas. Con listas de `auth.php` (Omitir) `check_mac` se pide igual en segundo plano.
 
 ## Datos que viven en el panel
 

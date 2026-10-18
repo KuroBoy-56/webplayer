@@ -166,6 +166,7 @@
     <string name="dist_checking">Comprobando el número…</string>
     <string name="dist_check_failed">No se pudo comprobar tu distribuidor</string>
     <string name="retry">Reintentar</string>
+    <string name="cache_clear_notice">Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.</string>
     <string name="change_distributor">Cambiar distribuidor</string>
     <string name="distributor">Distribuidor</string>
     <string name="expires">Vence</string>

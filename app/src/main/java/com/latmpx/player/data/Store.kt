@@ -38,6 +38,12 @@ object Store {
         get() = p.getString(tenantKey("tmdb_key"), "") ?: ""
         set(v) = p.edit().putString(tenantKey("tmdb_key"), v).apply()
 
+    /* ---------- borrado de caché remoto (ver CacheClear.kt) ---------- */
+    /** última orden de borrado aplicada (null = nunca recibida). commit(): la app se cierra justo después */
+    var cacheClearSeen: Long?
+        get() = if (p.contains("cache_clear_seen")) p.getLong("cache_clear_seen", 0L) else null
+        set(v) { p.edit().apply { if (v == null) remove("cache_clear_seen") else putLong("cache_clear_seen", v) }.commit() }
+
     /* ---------- distribuidor (ver Tenant.kt) ---------- */
     /** "" = sin elegir (se pregunta), "skip" = Omitir, "code" = con número */
     var distChoice: String

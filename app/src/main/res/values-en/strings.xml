@@ -165,6 +165,7 @@
     <string name="dist_checking">Checking the number…</string>
     <string name="dist_check_failed">Couldn\'t verify your distributor</string>
     <string name="retry">Retry</string>
+    <string name="cache_clear_notice">Your provider updated the app. The cache will be cleared and the app will restart.</string>
     <string name="change_distributor">Change distributor</string>
     <string name="distributor">Distributor</string>
     <string name="expires">Expires</string>

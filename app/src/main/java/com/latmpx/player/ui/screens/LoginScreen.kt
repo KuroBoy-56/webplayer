@@ -84,7 +84,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
+fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = {}, onLogged: (Session) -> Unit) {
     val ctx = LocalContext.current
     val tv = LocalIsTv.current
     val deviceId = remember { Device.id(ctx) }
@@ -107,6 +107,9 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
     var fake by remember { mutableStateOf<com.latmpx.player.data.FakeScreen?>(null) }
     /** primera consulta al panel (línea del equipo y pantalla falsa) todavía en curso */
     var checking by remember { mutableStateOf(true) }
+
+    // Autodemo: el panel dice si hay demo configurada (features); null = no respondió (se usa lo de antes)
+    var demoConfigured by remember { mutableStateOf<Boolean?>(null) }
 
     // la línea que se va a abrir viene del botón Autodemo (aunque el panel no lo diga)
     var fromAutodemo by remember { mutableStateOf(false) }
@@ -156,6 +159,9 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
             val c = Panel.checkMac(deviceId)
             c.value?.let { found = listOf(it) }
             if (problem == null) problem = c.error
+        } else {
+            // las listas vinieron de auth.php: check_mac igual, en segundo plano, por la orden de borrado de caché
+            scope.launch { Panel.checkMac(deviceId) }
         }
         lines = found
         if (found.isNotEmpty()) connectFirst(found)
@@ -171,6 +177,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
     }
 
     LaunchedEffect(Tenant.code) { posters = Tmdb.nowPlaying() }
+    LaunchedEffect(Tenant.code) { demoConfigured = Panel.demoConfigured(deviceId) }
     LaunchedEffect(Unit) {
         resolve()
         if (lines.isEmpty() && !Store.fakeUnlocked) fake = Panel.fakeScreen
@@ -220,7 +227,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
                 LogoHeader(height = 46.dp)
                 Spacer(Modifier.weight(1f))
             }
-            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Column(
                     Modifier.widthIn(max = 400.dp).fillMaxWidth()
                         .background(Color(0xBF000000), RoundedCornerShape(6.dp)).padding(horizontal = if (tv) 32.dp else 24.dp, vertical = 28.dp),
@@ -288,8 +295,9 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
                     }
                     
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // el distribuidor puede no tener demo (sin DNS): entonces no se muestra el botón
-                        if (Tenant.demoEnabled) HeroButton(stringResource(R.string.autodemo), Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
+                        // solo si hay demo configurada en el panel (features); si el panel no respondió: con distribuidor
+                        // lo de tenant_config, con Omitir como siempre. Sin la llave del panel no hay botón.
+                        if (PanelCrypto.hasKey() && (demoConfigured ?: Tenant.demoEnabled)) HeroButton(stringResource(R.string.autodemo), Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
                             // el panel decide (si el dueño borró el registro, el equipo puede pedir otra demo)
                             act {
                                 status = tr(R.string.login_creating_demo)
@@ -330,6 +338,12 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
                             Text(status, color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp), textAlign = TextAlign.Center)
                         }
                     }
+                }
+                // siempre visible (con número o con Omitir): vuelve a «Número de distribuidor»
+                FocusBox(onClick = { if (!busy) onChangeDistributor() }, modifier = Modifier.padding(top = 12.dp), shape = RoundedCornerShape(4.dp), focusScale = 1.05f) { f ->
+                    Text(stringResource(R.string.change_distributor), color = if (f) Color.Black else Color.White, fontSize = 15.sp,
+                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                        modifier = Modifier.background(if (f) Color.White else Color(0x99000000)).padding(horizontal = 14.dp, vertical = 10.dp))
                 }
             }
             Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} ${Tenant.nameOr("MPX Player")}", color = Color(0xFF999999), fontSize = 14.sp,

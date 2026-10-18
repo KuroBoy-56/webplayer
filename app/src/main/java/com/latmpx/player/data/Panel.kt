@@ -98,12 +98,15 @@ object Panel {
 
     /** ¿El equipo ya tiene una línea activa en el panel? */
     suspend fun checkMac(deviceId: String): Answer<Line> {
-        val a = login("check_mac", device(deviceId))
+        // "cc": última orden de borrado de caché que ya se aplicó (0 = ninguna)
+        val a = login("check_mac", device(deviceId).put("cc", Store.cacheClearSeen ?: 0L))
         val r = a.value ?: return Answer(null, a.error)
         // con distribuidor: un error del panel (vencido, suspendido…) se muestra en vez de "no hay línea"
         if (Tenant.active && r.code in 400..499) return Answer(null, errorOf(r, tr(R.string.err_panel_rejected)))
         val j = r.json() ?: return Answer(null, errorOf(r, tr(R.string.err_panel_bad_response)))
         fakeScreen = FakeScreen.parse(j)
+        // orden de borrado de caché del panel (viene con línea o sin ella; un panel viejo no la manda)
+        if (j.has("cache_clear")) CacheClear.received(j.optLong("cache_clear", 0L))
         if (!j.optBoolean("exists", false)) return Answer(null)
         // PIN parental del panel: es el que usa la app
         j.s("pin").takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { Store.parentalPin = it }
@@ -168,6 +171,16 @@ object Panel {
             return Answer(Unit)
         }
         return Answer(null, errorOf(r, tr(R.string.err_pin_not_saved_code, r.code)), r.code)
+    }
+
+    /**
+     * login.php action features: ¿hay una demo activa en «Configurar Demo» de este distribuidor (o del dueño
+     * con Omitir)? null = sin respuesta válida (sin red, sin llave o panel viejo con "Invalid action").
+     */
+    suspend fun demoConfigured(deviceId: String): Boolean? {
+        val r = login("features", device(deviceId)).value ?: return null
+        val f = r.json()?.takeIf { r.ok && it.s("status") == "ok" }?.optJSONObject("features") ?: return null
+        return if (f.has("demo")) f.optBoolean("demo") else null
     }
 
     /** Respuesta de tenant_config: la configuración descifrada o el código de error (tenant_invalid, offline, no_key…). */

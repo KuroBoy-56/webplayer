@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.latmpx.player.Device
 import com.latmpx.player.data.Alerts
+import com.latmpx.player.data.CacheClear
 import com.latmpx.player.data.CatalogCache
 import com.latmpx.player.data.Category
 import com.latmpx.player.data.Item
@@ -211,7 +212,7 @@ fun AppRoot() {
             }
             gate.value == Gate.RETRY -> TenantRetryScreen(retryMsg.value, checking.value, onRetry = { guard() }, onChange = { wipe(null) })
             state.session == null && offlineDownloads.value -> com.latmpx.player.ui.screens.DownloadsScreen { offlineDownloads.value = false }
-            state.session == null -> LoginScreen(onDownloads = { offlineDownloads.value = true }) { s ->
+            state.session == null -> LoginScreen(onDownloads = { offlineDownloads.value = true }, onChangeDistributor = { wipe(null) }) { s ->
                 lastPanelCheck.longValue = System.currentTimeMillis()
                 Store.saveSession(s)
                 Xtream.clearCache()
@@ -224,6 +225,25 @@ fun AppRoot() {
             }, onChangeDistributor = { wipe(null) })
         }
         alert.value?.takeIf { state.session != null }?.let { a -> PanelAlertDialog(a) { alert.value = null } }
+        if (CacheClear.pending) CacheClearNotice()
+    }
+    // el panel mandó una orden nueva de borrado de caché: aviso ~3 s, se borra y la app se reinicia
+    LaunchedEffect(CacheClear.pending) {
+        if (!CacheClear.pending) return@LaunchedEffect
+        kotlinx.coroutines.delay(3_000)
+        CacheClear.wipeAndRestart(ctx)
+    }
+}
+
+@Composable
+private fun CacheClearNotice() {
+    Box(Modifier.fillMaxSize().background(Color(0xE6000000)).padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(androidx.compose.ui.res.stringResource(com.latmpx.player.R.string.cache_clear_notice), color = Color.White, fontSize = 18.sp,
+                fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Spacer(Modifier.height(20.dp))
+            CircularProgressIndicator(color = NfRed)
+        }
     }
 }
 
