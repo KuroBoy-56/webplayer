@@ -97,6 +97,13 @@ export function move(dir: Dir): void {
 // hasTVPreferredFocus: el foco empieza ahí cuando el elemento aparece
 export function preferFocus(el: HTMLElement): void {
   setTimeout(() => {
-    if (el.isConnected && visible(el)) el.focus();
+    if (el.isConnected && visible(el)) {
+      // sin preventScroll el navegador corre la página al enfocar y la app queda fuera de la pantalla
+      try {
+        (el as any).focus({ preventScroll: true });
+      } catch {
+        el.focus();
+      }
+    }
   }, 50);
 }
