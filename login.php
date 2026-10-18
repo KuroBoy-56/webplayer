@@ -15,39 +15,29 @@ $panel_ready = wp_panel_ready();
 $panel_msg = t('Falta configurar la conexión con el panel: configura includes/panel_secret.php (copia includes/panel_secret.sample.php y pon la llave maestra del panel).');
 
 /* ---------- Fondo de pósters: api/tmdb.php del panel, como las apps ----------
- * Clave TMDB del distribuidor (o la del dueño con Omitir / sin número). Sin clave el panel responde
- * tmdb_key_not_set y no hay fondo. Caché por distribuidor: 6 h con carátulas, 10 min sin ellas (si se
- * pone una clave en el panel, el fondo aparece pronto). Títulos en el idioma de la app: caché también por idioma. */
+ * Clave TMDB del distribuidor (o la del dueño con Omitir / sin número). Sin clave (tmdb_key_not_set) o con
+ * error del panel no hay fondo: nunca pósters viejos guardados ni otra clave. Caché corta (10 min) por
+ * distribuidor e idioma, para que quitar o poner la clave en el panel se note pronto (el panel ya guarda
+ * las respuestas de TMDB en su propia caché). */
 function getMoviesFromPanel($pages = 4)
 {
     $base = wp_panel_base();
     if ($base === '') return [];
     $ck = wp_panel_ck('login|posters|' . wp_lang());
-    $c = wp_cache_get($ck, 6 * 3600, $stale);
-    if (is_array($c) && (!empty($c['m']) || time() - (int)($c['at'] ?? 0) < 600)) return (array)($c['m'] ?? []);
-    $refresh = function () use ($base, $pages, $ck) {
-        $urls = [];
-        for ($p = 1; $p <= $pages; $p++) {
-            $urls[$p] = $base . wp_panel_tenant_query('tmdb.php?path=movie/now_playing&language=' . wp_tmdb_lang() . '&page=' . $p);
-        }
-        $movies = [];
-        foreach (wp_http_multi($urls, 5) as $body) {
-            $data = $body ? json_decode($body, true) : null;
-            if (isset($data['results']) && is_array($data['results'])) $movies = array_merge($movies, $data['results']);
-        }
-        $movies = array_values(array_filter($movies, function ($m) { return !empty($m['poster_path']); }));
-        wp_cache_set($ck, ['m' => $movies, 'at' => time()]);
-        return $movies;
-    };
-    // copia anterior con carátulas: se muestra y se actualiza después de responder (sin bloquear el login)
-    if (is_array($stale) && !empty($stale['m'])) {
-        register_shutdown_function(function () use ($refresh) {
-            if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
-            $refresh();
-        });
-        return $stale['m'];
+    $c = wp_cache_get($ck, 600);
+    if (is_array($c)) return (array)($c['m'] ?? []);
+    $urls = [];
+    for ($p = 1; $p <= $pages; $p++) {
+        $urls[$p] = $base . wp_panel_tenant_query('tmdb.php?path=movie/now_playing&language=' . wp_tmdb_lang() . '&page=' . $p);
     }
-    return $refresh();
+    $movies = [];
+    foreach (wp_http_multi($urls, 5) as $body) {
+        $data = $body ? json_decode($body, true) : null;
+        if (isset($data['results']) && is_array($data['results'])) $movies = array_merge($movies, $data['results']);
+    }
+    $movies = array_values(array_filter($movies, function ($m) { return !empty($m['poster_path']); }));
+    wp_cache_set($ck, ['m' => $movies, 'at' => time()]);
+    return $movies;
 }
 
 /* ---------- Login: sólo usuario y contraseña, se prueba en todas las DNS ---------- */
@@ -194,6 +184,8 @@ if ($fake !== null && !wp_fake_unlocked($fake)) wp_fake_screen_render($fake);
 
 $movies = getMoviesFromPanel();
 $movies = is_array($movies) ? array_slice($movies, 0, 48) : [];
+// múltiplo de 8 (columnas del fondo): filas completas para que el carrusel vuelva al inicio sin salto
+if (count($movies) >= 8) $movies = array_slice($movies, 0, count($movies) - count($movies) % 8);
 $remember = isset($_COOKIE['username']) ? (string)$_COOKIE['username'] : '';
 $dist_cfg = $dist_view['cfg'];
 $dist_pal = wp_tenant_palette($dist_cfg);
@@ -222,6 +214,9 @@ $dist_step = $dist_view['step'];
         .nf-login-lang { position: absolute; top: 18px; right: 18px; z-index: 5; }
         .nf-login-lang .nf-select { background: rgba(0,0,0,.6); width: auto; max-width: 60vw; }
         .nf-link-btn { background: none; border: 0; padding: 0; color: #fff; font: inherit; text-decoration: underline; cursor: pointer; }
+        .nf-link-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+        /* el hueco de abajo iguala la altura a filas enteras: el -50% de la animación cae justo en una fila */
+        .nf-login-wall-inner { padding-bottom: 10px; }
     </style>
 <script>try{sessionStorage.removeItem("nfAlertShown")}catch(e){}</script>
 <?php if ($dist_cfg !== null || $dist_view['choice'] === 'skip' || ($dist_view['choice'] === '' && $dist_view['error'] !== '')) echo wp_brand_store_script($dist_cfg); ?>

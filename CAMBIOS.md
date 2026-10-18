@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Login: fondo de pósters solo con clave TMDB (18 de octubre)
+- **Fondo de pósters:** se ve solo si el panel lo entrega (`api/tmdb.php` con `t` = distribuidor, o sin él con Omitir). Con `tmdb_key_not_set` o un error del panel el fondo queda negro: ya no se muestran pósters viejos guardados (se quitó la copia de respaldo de 6 h) y la caché es de 10 min por distribuidor e idioma, así quitar o poner la clave en el panel se nota pronto. El carrusel sigue infinito y ahora vuelve al inicio sin el pequeño salto (filas completas).
+- **«Cambiar distribuidor»** sigue siempre visible debajo de la caja de inicio de sesión (con número o con Omitir) y lleva a la pantalla «Número de distribuidor»; ahora con borde de foco para teclado.
+- **No aplica a la web:** el botón Autodemo (el panel responde `demo: false` para la app web y la web no lo tiene) y el selector DNS (se quitó de la web, ver `includes/doh.php`).
+- Archivos: `login.php`.
+
 ## Distribuidor: motor sin permiso, marca en el banner, plataformas y Mi cuenta (18 de octubre)
 - **Motor de audio y subtítulos sin permiso (`features.ffmpeg` del panel):** sin permiso, con el motor apagado o sin ffmpeg, la página del video no ofrece el motor (`wp_media_off_text()` en `includes/media_admin.php`) y `media.php` responde 503 con `{"ffmpeg":false,"error":"Sin permisos"}` (mismo formato que el motor del panel; `?do=status` responde `{"ffmpeg":true}`). El reproductor no pasa por el motor de forma automática (formato no soportado → error normal o VLC) y `tracks.php` ya no usa ffprobe. Si el motor responde 503 a mitad del video, el reproductor muestra el texto **una vez**, deja de pedirle cosas en esa página y el video sigue directo, sin recargar ni spinner. Antes de soltar el video directo por una conversión que nada confirmó, se pregunta una sola vez (`do=status`). Con varios audios que el navegador no separa, el menú muestra *Otros idiomas*: al elegirlo solo aparece el aviso.
 - **Subtítulos:** al volver de una conversión al video directo los subtítulos se re-ubican (antes quedaban corridos por el desfase de la conversión). "Automático (Nativo)" volvía a abrir el video con una dirección inválida; ahora vuelve al directo en el mismo punto.
