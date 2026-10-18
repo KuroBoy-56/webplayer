@@ -1,5 +1,5 @@
 // Cuenta y ajustes.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import ChangePinDialog from '../components/ChangePinDialog';
 import PinDialog from '../components/PinDialog';
@@ -94,6 +94,12 @@ export default function Account() {
   const hideAdult = pref('hide_adult', '1') === '1';
   const dist = brand();
   const distDate = dist ? expiryText(dist) : '';
+  // cantidad de contenido del servidor ("…" mientras se carga esa lista)
+  const count = (k: 'live' | 'vod' | 'series') => (st.loaded[k] ? String(catalog.k[k]?.index.size ?? 0) : '…');
+  const missing = !st.loaded.live || !st.loaded.vod || !st.loaded.series;
+  useEffect(() => {
+    if (s0 && missing && !st.loading) loadCatalog();
+  }, [s0, missing, st.loading]);
 
   return (
     <ScrollView contentContainerStyle={s.root}>
@@ -113,6 +119,9 @@ export default function Account() {
               <Text style={s.row}>{t('Conexiones:')} <Text style={s.val}>{t('{a} de {b}', { a: s0.active || '0', b: s0.max || '1' })}</Text></Text>
             </>
           )}
+          <Text style={s.row}>{t('Canales en vivo:')} <Text style={s.val}>{count('live')}</Text></Text>
+          <Text style={s.row}>{t('Películas:')} <Text style={s.val}>{count('vod')}</Text></Text>
+          <Text style={s.row}>{t('Series:')} <Text style={s.val}>{count('series')}</Text></Text>
           <Text style={s.row}>{t('Código del equipo:')} <Text style={s.val}>{deviceId()}</Text></Text>
           {dist ? (
             <Text style={s.row}>

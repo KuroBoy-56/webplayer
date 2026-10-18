@@ -65,7 +65,8 @@ export default function Detail({ item }: { item: Item }) {
   void st.rev;
 
   const similar = useMemo(() => {
-    const list = catalog.grid('cat', item.cat, item.kind === 'series' ? 'series' : 'vod').filter(x => x.id !== item.id);
+    // solo los primeros de la categoría (antes se armaba la categoría entera, miles de fichas)
+    const list = catalog.grid('cat', item.cat, item.kind === 'series' ? 'series' : 'vod', 31).filter(x => x.id !== item.id);
     return list.slice(0, 30);
   }, [item]);
 
@@ -224,7 +225,7 @@ const s = themed(() =>
     plot: { color: C.text, fontSize: px(30), lineHeight: px(42), marginTop: px(18) },
     small: { color: C.sub, fontSize: px(24), marginTop: px(10) },
     btns: { flexDirection: 'row', marginTop: px(34) },
-    season: { paddingHorizontal: px(26), height: px(56), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: alpha(C.focus, 0.12), borderWidth: px(3), borderColor: 'transparent' },
+    season: { paddingHorizontal: px(26), height: px(56), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: alpha(C.text, 0.12), borderWidth: px(3), borderColor: 'transparent' },
     seasonOn: { borderColor: C.red },
     seasonF: { backgroundColor: C.focus },
     seasonText: { color: C.text, fontSize: px(26), fontWeight: '700' },

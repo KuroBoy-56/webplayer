@@ -1,5 +1,5 @@
 // Deportes: partidos de hoy y mañana con el canal encontrado automáticamente.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem } from '../actions';
 import { Focusable, Message, Spinner } from '../components/ui';
@@ -74,9 +74,15 @@ export default function Sports() {
     });
     return () => sub.remove();
   }, [pick]);
+  // un solo temporizador: un aviso nuevo no se borra antes de tiempo por el anterior
+  const sayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (sayTimer.current) clearTimeout(sayTimer.current);
+  }, []);
   const say = (t: string) => {
     setToast(t);
-    setTimeout(() => setToast(''), 3500);
+    if (sayTimer.current) clearTimeout(sayTimer.current);
+    sayTimer.current = setTimeout(() => setToast(''), 3500);
   };
   const playable = (e: any) => {
     const now = nowSec();
@@ -259,7 +265,7 @@ const s = themed(() =>
     root: { flex: 1, paddingTop: px(145) },
     chips: { flexDirection: 'row', paddingHorizontal: SIDE, marginBottom: px(28) },
     sports: { flexGrow: 0, height: px(76), minHeight: px(76), marginBottom: px(24) },
-    chip: { height: px(56), paddingHorizontal: px(28), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: alpha(C.focus, 0.12), borderWidth: px(3), borderColor: 'transparent' },
+    chip: { height: px(56), paddingHorizontal: px(28), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: alpha(C.text, 0.12), borderWidth: px(3), borderColor: 'transparent' },
     chipOn: { borderColor: C.red },
     chipF: { backgroundColor: C.focus },
     chipText: { color: C.text, fontSize: px(26), fontWeight: '700' },
@@ -281,7 +287,7 @@ const s = themed(() =>
     menu: { width: px(900), backgroundColor: C.bg2, borderRadius: px(14), padding: px(40) },
     menuTitle: { color: C.text, fontSize: px(36), fontWeight: '800' },
     menuSub: { color: C.sub, fontSize: px(24), marginTop: px(6), marginBottom: px(20) },
-    menuRow: { paddingHorizontal: px(24), paddingVertical: px(16), borderRadius: px(8), marginBottom: px(10), backgroundColor: alpha(C.focus, 0.1) },
+    menuRow: { paddingHorizontal: px(24), paddingVertical: px(16), borderRadius: px(8), marginBottom: px(10), backgroundColor: alpha(C.text, 0.1) },
     menuRowF: { backgroundColor: C.focus },
     menuRowTitle: { color: C.text, fontSize: px(28), fontWeight: '700' },
     menuRowSub: { color: C.sub, fontSize: px(22), marginTop: px(4) },
