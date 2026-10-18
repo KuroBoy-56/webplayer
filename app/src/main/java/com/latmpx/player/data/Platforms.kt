@@ -39,11 +39,15 @@ object Platforms {
         "4K" to listOf("4k", "uhd", "2160"),
     )
 
-    fun fold(s: String): String = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace("\\p{M}+".toRegex(), "")
+    // expresiones compiladas una sola vez (antes se compilaban en cada llamada, miles por pantalla)
+    private val MARKS = Regex("\\p{M}+")
+    private val kwRegex = java.util.concurrent.ConcurrentHashMap<String, Regex>()
+
+    fun fold(s: String): String = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(MARKS, "")
 
     fun matches(name: String, kw: List<String>): Boolean {
         val n = fold(name)
-        return kw.any { k -> if (k.contains("\\b")) Regex(k).containsMatchIn(n) else n.contains(k) }
+        return kw.any { k -> if (k.contains("\\b")) kwRegex.getOrPut(k) { Regex(k) }.containsMatchIn(n) else n.contains(k) }
     }
 
     fun categoriesFor(cats: List<Category>, kw: List<String>): Set<String> = cats.filter { matches(it.name, kw) }.map { it.id }.toSet()

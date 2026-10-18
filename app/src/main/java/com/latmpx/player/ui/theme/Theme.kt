@@ -79,6 +79,13 @@ val NfText: Color get() = current.value.text
 val NfGray: Color get() = current.value.gray
 val NfGray2: Color get() = current.value.textMuted
 
+/** borde de foco (control remoto): blanco sin paleta; con paleta el acento, aclarado si es muy oscuro para el fondo negro */
+val NfFocus: Color get() {
+    val p = current.value
+    if (p === DefaultPalette) return Color.White
+    return if (p.accent.luminance() < 0.18f) lerp(p.accent, Color.White, 0.45f) else p.accent
+}
+
 @Composable
 fun LatMpxTheme(content: @Composable () -> Unit) {
     val p = current.value

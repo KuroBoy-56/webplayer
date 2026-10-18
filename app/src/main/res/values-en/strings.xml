@@ -142,6 +142,7 @@
     <string name="connections">Connections</string>
     <string name="dns_server">DNS server</string>
     <string name="member_since">Member since</string>
+    <string name="live_channels">Live channels</string>
     <string name="app_settings">App settings</string>
     <string name="my_downloads">My downloads</string>
     <string name="dl_ready_busy">%1$d ready · %2$d downloading</string>

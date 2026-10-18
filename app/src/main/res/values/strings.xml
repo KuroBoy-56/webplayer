@@ -143,6 +143,7 @@
     <string name="connections">Conexiones</string>
     <string name="dns_server">Servidor DNS</string>
     <string name="member_since">Miembro desde</string>
+    <string name="live_channels">Canales en vivo</string>
     <string name="app_settings">Configuración de la aplicación</string>
     <string name="my_downloads">Mis descargas</string>
     <string name="dl_ready_busy">%1$d listas · %2$d descargando</string>

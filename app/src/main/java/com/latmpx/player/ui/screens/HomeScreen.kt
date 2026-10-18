@@ -99,7 +99,10 @@ fun HomeScreen(state: AppState) {
             if (list.size >= 4) label to list else null
         }
     }
-    val platforms = remember(state.movieCats, state.seriesCats) {
+    val platOn = com.latmpx.player.data.Tenant.platformsEnabled
+    val platforms = remember(state.movieCats, state.seriesCats, platOn) {
+        // platforms=false del distribuidor: sin fila de plataformas
+        if (!platOn) return@remember emptyList()
         val safeCats = (state.movieCats + state.seriesCats).filter { it.id !in com.latmpx.player.data.Store.blockedCats }
         Platforms.list.filter { p -> Platforms.categoriesFor(safeCats, p.kw).isNotEmpty() }
     }
@@ -151,7 +154,8 @@ fun HomeScreen(state: AppState) {
     }
 
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val solid = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 260
+    // derivedStateOf: la pantalla ya no se recompone en cada píxel de desplazamiento, solo al cambiar el valor
+    val solid by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 260 } }
     val cardHero = remember(movies, series) {
         // destacados: lo más nuevo y mejor valorado, películas y series mezcladas
         val m = recentMovies.take(30).sortedByDescending { it.rating }.take(4)

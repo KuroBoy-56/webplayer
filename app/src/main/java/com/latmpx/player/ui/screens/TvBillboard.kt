@@ -83,7 +83,11 @@ import kotlinx.coroutines.delay
 data class TvHero(val item: Item, val backdrop: String, val tmdbBackdrop: String, val plot: String, val genre: String)
 
 /** destacados ya resueltos por sección (al volver de una ficha no se vuelven a pedir ni cambian) */
-private object HeroCache { val map = java.util.concurrent.ConcurrentHashMap<String, List<TvHero>>() }
+private object HeroCache {
+    val map = java.util.concurrent.ConcurrentHashMap<String, List<TvHero>>()
+    /** último destacado mostrado: queda de fondo mientras la sección nueva busca los suyos (nunca pantalla negra) */
+    var last: TvHero? = null
+}
 
 /**
  * Igual que api.php?action=hero: de lo más reciente con carátula se eligen al azar 8 películas y 8 series,
@@ -113,7 +117,7 @@ fun heroPool(lists: List<List<Item>>): List<Item> =
 
 /**
  * Cartelera de la TV igual que .nf-hero de la web: fondo horizontal a todo el ancho (56.25% del ancho, máx. 88% del alto)
- * por detrás del menú, degradado oscuro desde la izquierda, "N" + tipo, título grande, % para ti / año / HD / género,
+ * por detrás del menú, degradado oscuro desde la izquierda, inicial de la marca + tipo, título grande, % para ti / año / HD / género,
  * sinopsis de tres líneas y los botones Reproducir / Más información. Cambia sola cada 8 s mientras el foco no está en ella.
  */
 @Composable
@@ -160,8 +164,10 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
         val hero = heroes.getOrNull(index.coerceIn(0, (heroes.size - 1).coerceAtLeast(0)))
         // sin destacados con fondo (todavía o nunca): la carátula del primero, sin estirarla, a la derecha
         val fallback = if (hero == null && done) pool.firstOrNull() else null
-        if (hero != null) {
-            Crossfade(targetState = hero, animationSpec = tween(900), label = "fondo") { h -> HeroBackdrop(h) }
+        val bg = hero ?: HeroCache.last.takeIf { fallback == null }
+        if (hero != null) androidx.compose.runtime.SideEffect { HeroCache.last = hero }
+        if (bg != null) {
+            Crossfade(targetState = bg, animationSpec = tween(900), label = "fondo") { h -> HeroBackdrop(h) }
         } else if (fallback != null) {
             Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF3A0A0D), Color.Black), radius = 1600f)))
             ItemPoster(fallback, Modifier.align(Alignment.CenterEnd).padding(end = 90.dp, top = 70.dp, bottom = 60.dp).fillMaxHeight().aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp)))
@@ -185,7 +191,8 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
                     .onFocusChanged { holding = it.hasFocus; if (it.hasFocus) onFocusTop() },
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("N", color = NfRed, fontSize = 26.sp, fontWeight = FontWeight.Black)
+                    // inicial de la marca (distribuidor o la app) en su color de acento
+                    Text(com.latmpx.player.data.Tenant.initial(stringResource(R.string.app_name)), color = NfRed, fontSize = 26.sp, fontWeight = FontWeight.Black)
                     Text(
                         stringResource(if (item.kind == Kind.SERIES) R.string.series_badge else R.string.movie_badge), color = Color(0xFFDDDDDD), fontSize = 13.sp,
                         fontWeight = FontWeight.Bold, letterSpacing = 3.sp, modifier = Modifier.padding(start = 8.dp),

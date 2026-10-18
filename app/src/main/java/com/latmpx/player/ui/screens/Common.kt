@@ -45,13 +45,28 @@ fun Empty(msg: String) {
     }
 }
 
+/** índice id → título que se rehace solo cuando cambia la lista (antes cada tarjeta recorría todo el catálogo) */
+private class IdIndex {
+    private var src: List<Item>? = null
+    private var map: Map<Int, Item> = emptyMap()
+
+    @Synchronized
+    fun get(list: List<Item>, id: Int): Item? {
+        if (src !== list) { map = list.associateBy { it.id }; src = list }
+        return map[id]
+    }
+}
+
+private val movieIndex = IdIndex()
+private val seriesIndex = IdIndex()
+
 /** Busca la película o serie completa a partir de una entrada de "Continuar viendo" ("movie:12" o "series:5:301"). */
 fun AppState.itemFromProgress(p: Progress): Item? {
     val parts = p.key.split(":")
     val id = parts.getOrNull(1)?.toIntOrNull() ?: return null
     return when (parts[0]) {
-        "movie" -> movies.firstOrNull { it.id == id } ?: Item(id, p.title, p.poster, Kind.MOVIE, categoryId = p.categoryId)
-        "series" -> series.firstOrNull { it.id == id } ?: Item(id, p.title, p.poster, Kind.SERIES, categoryId = p.categoryId)
+        "movie" -> movieIndex.get(movies, id) ?: Item(id, p.title, p.poster, Kind.MOVIE, categoryId = p.categoryId)
+        "series" -> seriesIndex.get(series, id) ?: Item(id, p.title, p.poster, Kind.SERIES, categoryId = p.categoryId)
         else -> null
     }
 }

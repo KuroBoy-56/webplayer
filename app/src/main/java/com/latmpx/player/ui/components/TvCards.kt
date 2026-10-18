@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.latmpx.player.data.Item
 import com.latmpx.player.data.Platform
+import com.latmpx.player.ui.theme.NfFocus
 import com.latmpx.player.ui.theme.NfBg
 import com.latmpx.player.ui.theme.NfCard
 import com.latmpx.player.ui.theme.NfRed
@@ -83,7 +84,7 @@ fun Modifier.pullUp(d: Dp): Modifier = layout { m, c ->
 }
 
 /**
- * Elemento enfocable con el control: crece, se pone por encima de sus vecinos, lleva sombra y borde blanco
+ * Elemento enfocable con el control: crece, se pone por encima de sus vecinos, lleva sombra y borde de foco (blanco o el acento del distribuidor)
  * (como .nf-card:focus-visible de la web y Netflix para TV).
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -108,7 +109,7 @@ fun TvFocusable(
             .graphicsLayer { scaleX = sc; scaleY = sc }
             .then(if (focused) Modifier.shadow(18.dp, shape) else Modifier)
             .clip(shape)
-            .then(if (focused && border) Modifier.border(3.dp, Color.White, shape) else Modifier)
+            .then(if (focused && border) Modifier.border(3.dp, NfFocus, shape) else Modifier)
             .combinedClickable(interactionSource = src, indication = null, onLongClick = onLongClick, onClick = onClick),
     ) { content(focused) }
 }
@@ -160,12 +161,12 @@ fun TvPlatformTile(p: Platform, width: Dp, onClick: () -> Unit) {
     TvFocusable(onClick = onClick, shape = shape, scale = 1.08f, border = false, modifier = Modifier.width(width).aspectRatio(16f / 9f)) { f ->
         Box(
             Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF1D1D1D), Color(0xFF0D0D0D))))
-                .border(2.dp, if (f) Color.White else Color(0x1FFFFFFF), shape),
+                .border(2.dp, if (f) NfFocus else Color(0x1FFFFFFF), shape),
             contentAlignment = Alignment.Center,
         ) {
             if (p.image != 0) Image(painterResource(p.image), p.label, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().clip(shape))
             else Text(p.label, color = Color(p.color), fontWeight = FontWeight.Black, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(6.dp))
-            if (p.image != 0 && f) Box(Modifier.fillMaxSize().border(2.dp, Color.White, shape))
+            if (p.image != 0 && f) Box(Modifier.fillMaxSize().border(2.dp, NfFocus, shape))
         }
     }
 }

@@ -33,11 +33,15 @@ import com.latmpx.player.ui.theme.NfGray2
 @Composable
 fun SearchScreen(state: AppState) {
     var q by rememberSaveable { mutableStateOf("") }
-    val results = remember(q, state.movies, state.series) {
+    // nombres normalizados una vez por catálogo y fuera del hilo de la interfaz (antes se normalizaba todo en cada tecla)
+    val index by androidx.compose.runtime.produceState(emptyList<Pair<String, com.latmpx.player.data.Item>>(), state.movies, state.series) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { (state.movies + state.series).map { Platforms.fold(it.name) to it } }
+    }
+    val results = remember(q, index) {
         val f = Platforms.fold(q.trim())
         if (f.length < 2) emptyList()
-        else (state.movies + state.series).filter { Platforms.fold(it.name).contains(f) }
-            .sortedWith(compareByDescending<com.latmpx.player.data.Item> { Platforms.fold(it.name).startsWith(f) }.thenByDescending { it.added }).take(120)
+        else index.filter { it.first.contains(f) }
+            .sortedWith(compareByDescending<Pair<String, com.latmpx.player.data.Item>> { it.first.startsWith(f) }.thenByDescending { it.second.added }).take(120).map { it.second }
     }
     Column(Modifier.fillMaxSize().background(NfBg)) {
         OutlinedTextField(

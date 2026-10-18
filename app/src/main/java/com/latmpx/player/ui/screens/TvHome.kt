@@ -102,7 +102,10 @@ fun TvHomeScreen(state: AppState) {
     val recentMovies = remember(movies) { movies.sortedByDescending { it.added }.take(30) }
     val recentSeries = remember(series) { series.sortedByDescending { it.added }.take(30) }
     val top10 = remember(movies) { movies.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10) }
-    val platforms = remember(state.movieCats, state.seriesCats) {
+    val platOn = com.latmpx.player.data.Tenant.platformsEnabled
+    val platforms = remember(state.movieCats, state.seriesCats, platOn) {
+        // platforms=false del distribuidor: sin mosaicos ni filas de plataformas
+        if (!platOn) return@remember emptyList()
         val cats = safe(state.movieCats + state.seriesCats)
         Platforms.list.filter { p -> Platforms.categoriesFor(cats, p.kw).isNotEmpty() }
     }

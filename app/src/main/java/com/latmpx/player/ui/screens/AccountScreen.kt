@@ -208,6 +208,11 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
                 Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
                 Row2(stringResource(R.string.member_since), s.createdAt)
             }
+            // contenido del servidor (catálogo cargado; "…" mientras se baja)
+            listOf(R.string.live_channels to state.live, R.string.movies to state.movies, R.string.series to state.series).forEach { (label, l) ->
+                Divider(color = Color(0xFF333333), modifier = Modifier.padding(vertical = 12.dp))
+                Row2(stringResource(label), if (l.isEmpty() && (state.catalogLoading || state.loading)) "…" else l.size.toString())
+            }
         }
 
         Spacer(Modifier.height(32.dp))

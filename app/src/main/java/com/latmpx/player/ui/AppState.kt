@@ -44,6 +44,8 @@ class AppState {
     var series by mutableStateOf<List<Item>>(emptyList())
     var live by mutableStateOf<List<Item>>(emptyList())
     var loading by mutableStateOf(false)
+    /** el catálogo (películas, series y canales) todavía se está bajando del servidor */
+    var catalogLoading by mutableStateOf(false)
     /** cambia cada vez que se vuelve del reproductor, para refrescar "Continuar viendo" */
     var refresh by mutableStateOf(0)
     /** TV: sección cuya cartelera ya tomó el foco (así no lo roba al volver a verse al hacer scroll) */
