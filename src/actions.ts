@@ -2,6 +2,7 @@
 import type { Episode } from './api/xtream';
 import { GENRES, Item, label, PLATFORMS, Special } from './data/catalog';
 import { t } from './lib/i18n';
+import { serverDurationSec } from './lib/util';
 import type { Nav } from './nav';
 import { progressMovie } from './state';
 
@@ -38,7 +39,7 @@ export function openSpecial(nav: Nav, sp: Special) {
   }
 }
 
-export function playMovie(nav: Nav, item: Item, ext: string, fromStart = false) {
+export function playMovie(nav: Nav, item: Item, ext: string, fromStart = false, duration = '') {
   let resume = 0;
   const p = progressMovie(item.id);
   if (p && !fromStart && p.position > 5 && (p.duration <= 0 || p.position < p.duration * 0.95)) resume = Math.floor(p.position);
@@ -46,7 +47,7 @@ export function playMovie(nav: Nav, item: Item, ext: string, fromStart = false) 
     name: 'player',
     params: {
       kind: 'movie',
-      queue: [{ id: item.id, title: item.name, ext: ext || item.ext, poster: item.poster }],
+      queue: [{ id: item.id, title: item.name, ext: ext || item.ext, poster: item.poster, dur: serverDurationSec(duration) }],
       index: 0,
       saveTitle: item.name,
       savePoster: item.poster,
@@ -62,7 +63,7 @@ export function playEpisodes(nav: Nav, series: Item, eps: Episode[], index: numb
   const queue = eps.map(e => {
     let t = series.name + ' · T' + e.season + ' E' + e.num;
     if (e.title && !e.title.includes(series.name)) t += ' · ' + e.title;
-    return { id: e.id, title: t, ext: e.ext, poster: e.image || series.poster, season: e.season, num: e.num };
+    return { id: e.id, title: t, ext: e.ext, poster: e.image || series.poster, season: e.season, num: e.num, dur: serverDurationSec(e.duration) };
   });
   nav.push({
     name: 'player',

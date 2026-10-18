@@ -14,6 +14,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Inicio de sesión** solo con usuario y contraseña: se prueba a la vez en todos los DNS
   del panel y entra en el que coincida. Si el panel tiene una cuenta asignada a este equipo
   aparece un botón para entrar con ella. Fondo con carteles de estreno (TMDB del panel).
+- **Manda el panel (lo que se aprendió en Roku):** al abrir se pide primero `check_mac` (la línea que el panel le
+  da hoy a esta MAC, demo vigente incluida con su marca DEMO); `auth.php` solo sin llave o si `check_mac` no da
+  línea. Cada servidor tiene hasta **30 s** para contestar. Si la línea del panel (o de la Autodemo) no contesta, la
+  misma cuenta se prueba en los DNS del panel y, si ningún servidor la **rechazó** (solo no contestaron), se entra
+  con ella igual. Solo un rechazo del servidor deja en el inicio de sesión.
+- **Cualquier formato:** si el equipo no abre el archivo (contenedor o códec que no reconoce), el **motor del
+  panel** lo convierte (video sin cambios, audio en AAC) desde donde iba antes de dar el error.
+- **El progreso se guarda siempre** con su duración: con el motor del panel (que no la sabe) se usa la del servidor.
 - **Botón DNS** (como Android e iOS): Automático, Cloudflare, Google, Quad9, AdGuard, NextDNS u OpenDNS.
   Si el DNS de la red no encuentra el servidor IPTV (bloqueo del proveedor de internet), la app lo resuelve
   con DNS sobre HTTPS y se conecta a esa IP: catálogo, inicio de sesión y reproductor (una vez por video).

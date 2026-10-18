@@ -136,3 +136,13 @@ const ADULT = /adult|xxx|\+18|18\+|porn|erot|playboy|hot ?club|venus/i;
 export function isAdult(name: string): boolean {
   return ADULT.test(name);
 }
+
+// duración del servidor IPTV ("01:52:13", "112 min", "6720") en segundos; 0 si no se entiende. El progreso la usa
+// cuando el reproductor no sabe la duración (HLS del motor del panel, que convierte por partes)
+export function serverDurationSec(raw: string): number {
+  const s = String(raw || '').trim().toLowerCase();
+  if (/^\d+(:\d+)+$/.test(s)) return s.split(':').reduce((a, x) => a * 60 + parseInt(x, 10), 0);
+  const n = parseInt(s, 10);
+  if (!(n > 0)) return 0;
+  return /min/.test(s) ? n * 60 : n;
+}
