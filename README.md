@@ -22,6 +22,9 @@ compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con 
   no contesta, la misma cuenta se prueba en los DNS del panel y, si ningún servidor la **rechazó** (solo no
   contestaron), se entra con ella igual: el catálogo lo vuelve a intentar. Solo un rechazo del servidor (usuario o
   contraseña, vencida, bloqueada) deja en el inicio de sesión.
+- **Cualquier formato:** si el televisor no abre el archivo (contenedor o códec que no reconoce), el **motor del
+  panel** lo convierte (video sin cambios, audio en AAC) desde donde iba antes de dar el error.
+- **El progreso se guarda siempre** con su duración: con el motor del panel (que no la sabe) se usa la del servidor.
 - **Botón DNS** (como Android e iOS): Automático, Cloudflare, Google, Quad9, AdGuard, NextDNS u OpenDNS.
   Si el DNS de la red no encuentra el servidor IPTV (bloqueo del proveedor de internet), la app lo resuelve
   con DNS sobre HTTPS y se conecta a esa IP: catálogo, inicio de sesión y reproductor (una vez por video).
