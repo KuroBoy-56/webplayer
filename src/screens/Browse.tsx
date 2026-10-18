@@ -1,5 +1,5 @@
 // Inicio, Series y Películas: portada grande + filas.
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem, openSpecial, playMovie } from '../actions';
 import { Button, Message, Spinner } from '../components/ui';
@@ -9,6 +9,7 @@ import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, Progress, toggleFav, useAppState } from '../state';
 import { t } from '../lib/i18n';
+import { brandInitial, features, useBrandRev } from '../lib/tenant';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
 // fila "Continuar viendo" a partir del progreso guardado en el panel
@@ -46,20 +47,34 @@ function favRow(): Row | null {
   return items.length ? { title: t('Mi lista'), type: 'poster', items } : null;
 }
 
+// última imagen de la portada: queda de fondo mientras carga la siguiente (nunca la pantalla en negro)
+let lastBanner = '';
+export const bannerUri = () => lastBanner;
+
 function Billboard({ hero }: { hero: Item }) {
   const nav = useNav();
   const st = useAppState();
   const fav = isFav(hero.kind, hero.id);
   void st.rev;
+  const uri = hero.backdrop || hero.poster;
+  const [under] = useState(lastBanner);
+  useEffect(() => {
+    if (uri) lastBanner = uri;
+  }, [uri]);
   return (
     <View style={s.hero}>
-      {hero.backdrop || hero.poster ? <Image source={{ uri: hero.backdrop || hero.poster }} style={s.heroImg} resizeMode="cover" /> : null}
+      {under && under !== uri ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
+      {uri ? <Image source={{ uri }} style={s.heroImg} resizeMode="cover" /> : null}
       {/* degradado teñido con el fondo del distribuidor */}
       <Image source={require('../../assets/image/grad_bottom.png')} style={[s.heroGrad, { tintColor: C.bg }]} resizeMode="stretch" />
       {/* sombra a la izquierda para leer el texto: degradado, sin borde marcado */}
       <Image source={require('../../assets/image/grad_left.png')} style={[s.heroShade, { tintColor: C.bg }]} resizeMode="stretch" />
       <View style={s.heroText}>
-        <Text style={s.heroKind}>{(hero.kind === 'series' ? t('SERIE') : t('PELÍCULA')).split('').join(' ')}</Text>
+        {/* la "N" de Netflix: la inicial de la marca en su color de acento */}
+        <Text style={s.heroKind}>
+          <Text style={s.heroMark}>{brandInitial()}</Text>
+          {'  ' + (hero.kind === 'series' ? t('SERIE') : t('PELÍCULA')).split('').join(' ')}
+        </Text>
         <Text style={s.heroTitle} numberOfLines={2}>
           {hero.name}
         </Text>
@@ -90,14 +105,17 @@ function Billboard({ hero }: { hero: Item }) {
 export default function Browse({ section }: { section: 'home' | 'series' | 'movies' }) {
   const nav = useNav();
   const st = useAppState();
+  // el distribuidor puede no separar su contenido por plataformas
+  const brandRev = useBrandRev();
+  const platforms = features().platforms;
   const ready = section === 'home' ? st.loaded.vod || st.loaded.series : section === 'series' ? st.loaded.series : st.loaded.vod;
 
   // las filas del catálogo solo se rehacen cuando llega una lista nueva
   const base = useMemo(() => {
     if (!ready) return { rows: [] as Row[], hero: null as Item | null };
-    return section === 'home' ? catalog.home() : catalog.browse(section === 'series' ? 'series' : 'vod');
+    return section === 'home' ? catalog.home(platforms) : catalog.browse(section === 'series' ? 'series' : 'vod');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, section, st.catalogRev]);
+  }, [ready, section, st.catalogRev, platforms, brandRev]);
 
   const rows = useMemo(() => {
     const extra: Row[] = [];
@@ -147,7 +165,8 @@ const s = themed(() =>
     heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(420) },
     heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1400) },
     heroText: { position: 'absolute', left: SIDE, top: px(220), width: px(980) },
-    heroKind: { color: C.red, fontSize: px(24), fontWeight: '800', marginBottom: px(8) },
+    heroKind: { color: C.sub, fontSize: px(24), fontWeight: '800', marginBottom: px(8) },
+    heroMark: { color: C.red, fontSize: px(44), fontWeight: '900' },
     heroTitle: { color: C.text, fontSize: px(76), fontWeight: '900', lineHeight: px(84) },
     heroMeta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },
     heroPlot: { color: C.text, fontSize: px(28), lineHeight: px(38), marginTop: px(16) },

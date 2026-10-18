@@ -146,7 +146,9 @@ export async function loadCatalog(force = false) {
       catalog.set(kind, cats, items);
       const loaded = { ...state.loaded, [kind]: true };
       const left = (['vod', 'series', 'live'] as Kind[]).find(k => !loaded[k]) || '';
-      set({ loaded, loading: left, catalogRev: state.catalogRev + 1, error: items.length ? state.error : t(LABEL[kind]) });
+      // los canales no cambian Inicio, Películas ni Series: no se rehacen sus filas (TV en vivo sigue loaded.live)
+      const rev = kind === 'live' ? state.catalogRev : state.catalogRev + 1;
+      set({ loaded, loading: left, catalogRev: rev, error: items.length ? state.error : t(LABEL[kind]) });
     }),
   );
 }

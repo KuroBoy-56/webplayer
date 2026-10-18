@@ -1,5 +1,5 @@
 // TV en vivo: categorías, canales y guía (EPG) del canal enfocado.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem } from '../actions';
 import { channelEpg, EpgEntry } from '../api/xtream';
@@ -21,6 +21,16 @@ export default function Live() {
   const [epg, setEpg] = useState<EpgEntry[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusedId = useRef('');
+  // al bajar por las categorías la lista de canales se arma cuando el foco se queda quieto (no en cada paso)
+  const catTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusCat = (id: string) => {
+    if (catTimer.current) clearTimeout(catTimer.current);
+    catTimer.current = setTimeout(() => setCat(id), 250);
+  };
+  useEffect(() => () => {
+    if (catTimer.current) clearTimeout(catTimer.current);
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
 
   const cats = useMemo(() => (st.loaded.live ? catalog.liveCats() : []), [st.loaded.live, st.catalogRev, pinFor]);
   const favIds = st.favorites.filter(f => f.type === 'live').map(f => digits(f.id));
@@ -39,6 +49,26 @@ export default function Live() {
     }, 600);
   }, [focused]);
 
+  // favoritos en un Set y la fila memorizada: enfocar un canal no vuelve a dibujar toda la lista
+  const favSet = useMemo(() => new Set(favIds), [favIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  const renderCh = useCallback(
+    ({ item: c, index }: { item: Item; index: number }) => (
+      <Focusable onPress={() => openItem(nav, c, channels)} onFocus={() => setFocused(c)} style={f => [s.ch, f && s.chF]}>
+        {f => (
+          <>
+            <Text style={[s.chNum, f && { color: C.onFocus }]}>{c.num || index + 1}</Text>
+            <View style={s.logoBox}>{c.poster ? <Image source={{ uri: c.poster }} style={s.logo} resizeMode="contain" /> : null}</View>
+            <Text style={[s.chName, f && { color: C.onFocus }]} numberOfLines={1}>
+              {c.name}
+            </Text>
+            {favSet.has(c.id) ? <Text style={s.star}>★</Text> : null}
+          </>
+        )}
+      </Focusable>
+    ),
+    [nav, channels, favSet],
+  );
+
   if (!st.loaded.live) return <Spinner label={t('Cargando los canales…')} />;
 
   const now = nowSec();
@@ -53,7 +83,7 @@ export default function Live() {
         renderItem={({ item: c }) => (
           <Focusable
             onPress={() => (c.locked ? setPinFor(c.id) : setCat(c.id))}
-            onFocus={() => !c.locked && setCat(c.id)}
+            onFocus={() => !c.locked && focusCat(c.id)}
             style={f => [s.cat, c.id === cat && s.catOn, f && s.catF]}>
             {f => (
               <>
@@ -74,20 +104,7 @@ export default function Live() {
             keyExtractor={c => c.id}
             initialNumToRender={12}
             getItemLayout={(_, i) => ({ length: px(96), offset: px(96) * i, index: i })}
-            renderItem={({ item: c, index }) => (
-              <Focusable onPress={() => openItem(nav, c, channels)} onFocus={() => setFocused(c)} style={f => [s.ch, f && s.chF]}>
-                {f => (
-                  <>
-                    <Text style={[s.chNum, f && { color: C.onFocus }]}>{c.num || index + 1}</Text>
-                    <View style={s.logoBox}>{c.poster ? <Image source={{ uri: c.poster }} style={s.logo} resizeMode="contain" /> : null}</View>
-                    <Text style={[s.chName, f && { color: C.onFocus }]} numberOfLines={1}>
-                      {c.name}
-                    </Text>
-                    {isFav('live', c.id) ? <Text style={s.star}>★</Text> : null}
-                  </>
-                )}
-              </Focusable>
-            )}
+            renderItem={renderCh}
           />
         ) : (
           <Message text={cat === 'fav' ? t('Aún no tienes canales favoritos. Abre un canal y pulsa ★ en el reproductor.') : t('No hay canales en esta categoría.')} />

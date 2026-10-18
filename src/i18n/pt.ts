@@ -298,6 +298,10 @@ const pt: Record<Key, string> = {
   "¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.": "Seu revendedor te deu um código? Digite em Senha e aperte Autodemo.",
   "▲▼ cambiar canal ({x}/{y}) · MENÚ audio y subtítulos": "▲▼ mudar de canal ({x}/{y}) · MENU áudio e legendas",
   "◀▶ 10 s · OK pausa · ▼ audio y subtítulos": "◀▶ 10 s · OK pausa · ▼ áudio e legendas",
+  "Sin permisos": "Sem permissão",
+  "Canales en vivo:": "Canais ao vivo:",
+  "Películas:": "Filmes:",
+  "Series:": "Séries:",
 };
 
 export default pt;

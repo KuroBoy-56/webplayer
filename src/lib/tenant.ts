@@ -12,7 +12,9 @@ export const APP_NAME = 'MPX Player';
 export const OFFLINE_GRACE = 72 * 3600;
 const PANAMA = -5 * 3600; // America/Panama, UTC-5 sin horario de verano
 
-export type Features = { demo: boolean; alerts: boolean; sports: boolean };
+// platforms: false = el distribuidor no separa su contenido por plataformas (sin fila ni filtros);
+// ffmpeg: esta app tiene permiso del motor de audio/subtítulos del panel
+export type Features = { demo: boolean; alerts: boolean; sports: boolean; platforms: boolean; ffmpeg: boolean };
 
 export type Brand = {
   code: string;
@@ -28,7 +30,7 @@ export type Brand = {
   lastOk: number;
 };
 
-const ALL: Features = { demo: true, alerts: true, sports: true };
+const ALL: Features = { demo: true, alerts: true, sports: true, platforms: true, ffmpeg: true };
 
 // '' (aún no eligió), 'skip' (Omitir) o 'code'
 export function distChoice(): '' | 'skip' | 'code' {
@@ -70,6 +72,11 @@ export function brandName(): string {
   return brand()?.name || APP_NAME;
 }
 
+// inicial de la marca para la portada (en lugar de la "N"): la del distribuidor o la de la app
+export function brandInitial(): string {
+  return (Array.from(brandName().trim())[0] || APP_NAME.charAt(0)).toUpperCase();
+}
+
 // logo del distribuidor ('' = el de la app)
 export function brandLogo(): string {
   const b = brand();
@@ -91,7 +98,7 @@ export function parseConfig(j: any, now: number): Brand | null {
     palette: validPalette(t.palette),
     expiresAt: Number(t.expires_at) || 0,
     expiresDate: str(t.expires_date),
-    features: { demo: f.demo !== false, alerts: f.alerts !== false, sports: f.sports !== false },
+    features: { demo: f.demo !== false, alerts: f.alerts !== false, sports: f.sports !== false, platforms: f.platforms !== false, ffmpeg: f.ffmpeg !== false },
     rev: Number(t.rev) || 0,
     recheckAfter: Number.isFinite(rec) && rec >= 60 ? rec : 21600,
     lastOk: now,

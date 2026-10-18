@@ -15,7 +15,7 @@ export default function Search() {
   useEffect(() => {
     const t = setTimeout(() => setItems(q.trim().length >= 2 ? catalog.search(q) : []), 350);
     return () => clearTimeout(t);
-  }, [q, st.catalogRev]);
+  }, [q, st.catalogRev, st.loaded.live]);
 
   return (
     <View style={s.root}>

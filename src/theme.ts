@@ -72,6 +72,21 @@ export function mix(a: string, b: string, t: number): string {
   return '#' + x.map((v, i) => hex2(v + (y[i] - v) * t)).join('');
 }
 
+function contrast(a: string, b: string): number {
+  const x = luminance(a);
+  const y = luminance(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+// foco con el acento del distribuidor; si casi no se ve sobre su fondo, se aclara hacia su texto
+export function focusFor(p: Palette): string {
+  for (let k = 0; k < 1; k += 0.2) {
+    const c = mix(p.accent, p.text, k);
+    if (contrast(c, p.bg) >= 3) return c;
+  }
+  return p.text;
+}
+
 export function paletteColors(p: Palette | null): typeof BASE {
   if (!p) return { ...BASE };
   return {
@@ -84,8 +99,8 @@ export function paletteColors(p: Palette | null): typeof BASE {
     text: p.text,
     sub: alpha(p.text, 0.65),
     dim: alpha(p.text, 0.45),
-    focus: p.text,
-    onFocus: p.bg,
+    focus: focusFor(p),
+    onFocus: onAccentFor(focusFor(p)),
   };
 }
 

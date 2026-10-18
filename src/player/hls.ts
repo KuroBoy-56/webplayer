@@ -3,7 +3,7 @@
 // se entregan al SourceBuffer en orden. La lista es de tipo "event": crece mientras ffmpeg convierte.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { http, UA } from '../lib/http';
-import { engineError } from '../api/media';
+import { engineError, markDenied } from '../api/media';
 import { t } from '../lib/i18n';
 
 type Seg = { url: string; start: number; dur: number };
@@ -172,7 +172,12 @@ export class PanelHls {
 
   private async refresh(timeout: number): Promise<string> {
     const r = await http(this.listUrl, { timeout });
-    if (!r.ok) return engineError(r.body, r.code ? t('No compatible con el dispositivo') : t('No se pudo conectar con el panel.'));
+    if (!r.ok) {
+      const msg = engineError(r.body, r.code ? t('No compatible con el dispositivo') : t('No se pudo conectar con el panel.'));
+      // sin permiso o sin ffmpeg: no se le vuelve a pedir nada al motor en esta línea
+      if (r.code === 503 || r.code === 501) markDenied(msg);
+      return msg;
+    }
     const segs: Seg[] = [];
     let at = 0;
     let dur = 0;
