@@ -167,6 +167,8 @@ El build también copia `app.js` e `img/` a `webos/` (sin subir a git): el simul
 quedaba en negro porque ahí no estaba `app.js`. Si algo falla al arrancar, `index.html` muestra el error en
 pantalla en lugar de dejarla negra. No hay pantalla de carga fija (`splashBackground`): la primera pantalla
 es el número de distribuidor y el logo de inicio es el del distribuidor (solo el icono y el nombre son fijos).
+El icono del menú de LG (`webos/icon.png`, `largeIcon.png`) es solo el logo sin fondo: el color de la tarjeta lo
+pone webOS con `iconColor` de `appinfo.json` (#141414), así no queda un cuadrado pegado encima.
 
 ## Instalarla en tu televisor LG
 
