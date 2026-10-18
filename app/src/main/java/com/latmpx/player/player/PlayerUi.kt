@@ -439,7 +439,7 @@ fun Focusable(onClick: () -> Unit, modifier: Modifier = Modifier, shape: android
     val f by src.collectIsFocusedAsState()
     Box(
         modifier.scale(if (f) 1.06f else 1f).clip(shape)
-            .then(if (f) Modifier.border(2.dp, Color.White, shape) else Modifier)
+            .then(if (f) Modifier.border(2.dp, com.latmpx.player.ui.theme.NfFocus, shape) else Modifier)
             .clickable(interactionSource = src, indication = null, onClick = onClick),
     ) { content(f) }
 }

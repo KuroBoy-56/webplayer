@@ -62,7 +62,8 @@ fun AppButton(
         else -> text0.copy(alpha = 0.15f)
     }
     val ring = when {
-        focused -> Color.White
+        // el principal ya tiene el acento de fondo: su aro sigue blanco para que se distinga
+        focused -> if (primary) Color.White else com.latmpx.player.ui.theme.NfFocus
         primary -> Color.Transparent
         else -> text0.copy(alpha = 0.35f)
     }

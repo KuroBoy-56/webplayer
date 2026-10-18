@@ -163,6 +163,7 @@ fun AppRoot() {
                 Kind.LIVE -> { if (cats.isNotEmpty()) state.liveCats = cats; state.live = items }
             }
         }
+        state.catalogLoading = true
         val saved = kinds.map { k -> async { k to Xtream.cached(s, k) } }.awaitAll()
         saved.forEach { (k, c) -> if (c != null) put(k, c.first, c.second) }
         state.loading = state.movies.isEmpty()
@@ -173,6 +174,7 @@ fun AppRoot() {
             }
         }.awaitAll()
         state.loading = false
+        state.catalogLoading = false
     }
     // al volver a la app: si el dueño quitó la línea de este equipo en el panel, se vuelve al inicio de sesión
     val lastPanelCheck = remember { mutableLongStateOf(System.currentTimeMillis()) }

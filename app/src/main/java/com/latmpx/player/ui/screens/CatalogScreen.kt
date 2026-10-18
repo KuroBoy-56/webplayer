@@ -48,7 +48,15 @@ fun CatalogScreen(state: AppState, kind: Kind) {
     if (state.loading && all.isEmpty()) { Loading(); return }
     
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val solid = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 260
+    // derivedStateOf: la pantalla ya no se recompone en cada píxel de desplazamiento, solo al cambiar el valor
+    val solid by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 260 } }
+    // filas calculadas una vez por catálogo (antes se filtraba todo el catálogo por cada categoría en cada recomposición)
+    val recent = remember(all) { all.sortedByDescending { it.added }.take(20) }
+    val top10 = remember(all) { all.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10) }
+    val rows = remember(all, cats) {
+        val byCat = all.groupBy { it.categoryId }
+        cats.mapNotNull { c -> byCat[c.id]?.sortedByDescending { it.added }?.take(20)?.let { c to it } }
+    }
     val cardHero = remember(all) { all.sortedByDescending { it.added }.take(40).sortedByDescending { it.rating }.take(6) }
     Box(Modifier.fillMaxSize().background(NfBg)) {
         val pw = posterWidth()
@@ -65,18 +73,13 @@ fun CatalogScreen(state: AppState, kind: Kind) {
                 }
             }
             
-            val recent = all.sortedByDescending { it.added }.take(20)
             item { ShelfRow(stringResource(R.string.recently_added), recent, sp, onViewAll = { state.push(Route.Browse(tr(R.string.recently_added), kind, emptySet())) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
             
-            val top10 = all.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10)
             item { ShelfRow(stringResource(R.string.top10), top10, sp) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) } }
             
-            cats.forEach { c ->
-                val list = all.filter { it.categoryId == c.id }.sortedByDescending { it.added }.take(20)
-                if (list.isNotEmpty()) {
-                    item(key = "c_${c.id}") {
-                        ShelfRow(c.name, list, sp, onViewAll = { state.push(Route.Browse(c.name, kind, setOf(c.id))) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) }
-                    }
+            rows.forEach { (c, list) ->
+                item(key = "c_${c.id}") {
+                    ShelfRow(c.name, list, sp, onViewAll = { state.push(Route.Browse(c.name, kind, setOf(c.id))) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) }
                 }
             }
             item { Spacer(Modifier.height(40.dp)) }

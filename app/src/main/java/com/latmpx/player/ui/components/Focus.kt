@@ -33,7 +33,7 @@ val LocalIsTv = compositionLocalOf { false }
 
 /**
  * Elemento que se puede elegir con el control remoto o con el dedo.
- * Con el control: crece un poco y muestra un borde blanco, como en Netflix para TV.
+ * Con el control: crece un poco y muestra un borde (blanco o el acento del distribuidor), como en Netflix para TV.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -54,7 +54,7 @@ fun FocusBox(
         modifier
             .scale(sc)
             .clip(shape)
-            .then(if (focused) Modifier.border(3.dp, Color.White, shape) else Modifier)
+            .then(if (focused) Modifier.border(3.dp, com.latmpx.player.ui.theme.NfFocus, shape) else Modifier)
             .combinedClickable(interactionSource = src, indication = null, onLongClick = onLongClick, onClick = onClick),
     ) { content(focused) }
 }

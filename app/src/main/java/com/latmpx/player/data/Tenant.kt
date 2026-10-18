@@ -37,6 +37,8 @@ object Tenant {
         val demo: Boolean,
         val alerts: Boolean,
         val sports: Boolean,
+        /** false: el distribuidor no separa su contenido por plataformas (sin fila ni páginas de plataformas) */
+        val platforms: Boolean = true,
         val rev: Int,
         val recheckAfter: Long,
     ) {
@@ -68,6 +70,10 @@ object Tenant {
     val demoEnabled: Boolean get() = brand?.demo ?: true
     val alertsEnabled: Boolean get() = brand?.alerts ?: true
     val sportsEnabled: Boolean get() = brand?.sports ?: true
+    val platformsEnabled: Boolean get() = brand?.platforms ?: true
+
+    /** letra de la marca para los destacados ("N SERIE"): inicial del distribuidor o de la app */
+    fun initial(appName: String): String = nameOr(appName).trim().firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "M"
 
     /** nombre del distribuidor o el de la app */
     fun nameOr(default: String): String = brand?.name?.takeIf { it.isNotBlank() } ?: default
@@ -222,6 +228,7 @@ object Tenant {
             demo = f?.optBoolean("demo", true) ?: true,
             alerts = f?.optBoolean("alerts", true) ?: true,
             sports = f?.optBoolean("sports", true) ?: true,
+            platforms = f?.optBoolean("platforms", true) ?: true,
             rev = t.i("rev"),
             recheckAfter = j.s("recheck_after").toLongOrNull()?.takeIf { it > 0 } ?: DEFAULT_RECHECK_S,
         )
@@ -234,7 +241,7 @@ object Tenant {
             .put("code", b.code).put("name", b.name).put("logo_url", b.logoUrl).put("logo_rev", b.logoRev)
             .put("palette", b.colors?.let { JSONObject().put("accent", it.accent).put("bg", it.bg).put("surface", it.surface).put("text", it.text) } ?: JSONObject.NULL)
             .put("expires_at", b.expiresAt).put("expires_date", b.expiresDate).put("rev", b.rev))
-        .put("features", JSONObject().put("demo", b.demo).put("alerts", b.alerts).put("sports", b.sports))
+        .put("features", JSONObject().put("demo", b.demo).put("alerts", b.alerts).put("sports", b.sports).put("platforms", b.platforms))
         .put("recheck_after", b.recheckAfter)
         .toString()
 }
