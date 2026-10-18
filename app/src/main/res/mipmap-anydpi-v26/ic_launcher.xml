@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Icono adaptable (Android 8+): fondo negro y el logo ocupando toda la parte visible del icono. -->
+<!-- Icono adaptable (Android 8+): fondo negro mate con brillo suave y el logo al centro. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/ic_launcher_bg" />
+    <background android:drawable="@drawable/ic_launcher_bg" />
     <foreground android:drawable="@drawable/ic_launcher_fg" />
 </adaptive-icon>
