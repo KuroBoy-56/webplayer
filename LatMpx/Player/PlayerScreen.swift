@@ -37,14 +37,17 @@ struct PlayerScreen: View {
                     .onChange(of: g.size) { s in size = s; m.applyFill(s) }
                 // capa de toques: mostrar u ocultar controles y, en canales, deslizar para cambiar
                 Color.clear.contentShape(Rectangle()).ignoresSafeArea()
-                    .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { controls.toggle() }; if controls { autoHide() } }
+                    .onTapGesture { withAnimation(.easeInOut(duration: 0.25)) { controls.toggle() }; if controls { autoHide() } }
                     .gesture(DragGesture(minimumDistance: 40).onEnded { v in
                         guard m.kind == .live, abs(v.translation.height) > abs(v.translation.width) else { return }
                         if v.translation.height < 0 { m.next() } else { m.previous() }
                     })
-                if m.buffering && m.error == nil { ProgressView().tint(.white).scaleEffect(1.6).allowsHitTesting(false) }
+                // cargando sin controles: solo el círculo con la rueda (con controles va dentro del botón central)
+                if m.buffering && m.error == nil && !controls {
+                    ProgressView().tint(.white).scaleEffect(1.5).glassCircle(84).allowsHitTesting(false).transition(.opacity)
+                }
                 if let e = m.error { errorBox(e) }
-                if controls && m.error == nil { overlay }
+                if controls && m.error == nil { controlsLayer.transition(.opacity) }
                 // estado para la prueba del simulador: siempre presente (los controles se ocultan solos)
                 Text(m.playing ? "playing" : "paused").font(.system(size: 1)).opacity(0.02).frame(width: 1, height: 1)
                     .allowsHitTesting(false).accessibilityIdentifier("player.state")
@@ -92,64 +95,124 @@ struct PlayerScreen: View {
         }
     }
 
-    private var overlay: some View {
+    /** controles: barra de arriba, botones del centro y barra de avance, sobre sombras arriba y abajo */
+    private var controlsLayer: some View {
         ZStack {
-            LinearGradient(colors: [Color.black.opacity(0.7), .clear, .clear, Color.black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea().allowsHitTesting(false)
-            VStack {
-                HStack(spacing: 18) {
-                    Button { close() } label: { Image(systemName: "xmark").font(.system(size: 22, weight: .semibold)).frame(width: 44, height: 44) }
-                        .accessibilityIdentifier("player.close").accessibilityLabel(tr("Cerrar"))
-                    Text(m.entry.title).font(.system(size: 17, weight: .semibold)).lineLimit(1)
-                    Spacer()
-                    if m.kind == .live { Button { channels = true } label: { Image(systemName: "list.bullet").font(.system(size: 20)) }.accessibilityLabel(tr("Canales")) }
-                    Button { m.readTracks(); tracks = true } label: { Image(systemName: "captions.bubble").font(.system(size: 20)) }
-                        .accessibilityLabel(tr("Audio y subtítulos"))
-                    Button { m.fill.toggle(); m.applyFill(size); state.toast = nil } label: {
-                        Image(systemName: m.fill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 20))
-                    }
-                }.padding(.horizontal, 20).padding(.top, 14)
+            VStack(spacing: 0) {
+                LinearGradient(colors: [Color.black.opacity(0.75), .clear], startPoint: .top, endPoint: .bottom).frame(height: 140)
                 Spacer()
-                HStack(spacing: 56) {
-                    if m.kind == .live {
-                        Button { m.previous(); autoHide() } label: { Image(systemName: "chevron.up.circle").font(.system(size: 38)) }
+                LinearGradient(colors: [.clear, Color.black.opacity(0.85)], startPoint: .top, endPoint: .bottom).frame(height: 190)
+            }
+            .ignoresSafeArea().allowsHitTesting(false)
+            VStack(spacing: 0) {
+                topBar
+                Spacer()
+                bottomBar
+            }
+            .padding(.horizontal, 16)
+            centerControls
+        }
+        .foregroundColor(.white)
+        .buttonStyle(PlayerPress())
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            Button { close() } label: { playerBarIcon("xmark") }
+                .accessibilityIdentifier("player.close").accessibilityLabel(tr("Cerrar"))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(m.entry.title).font(.system(size: 17, weight: .bold)).lineLimit(1)
+                subtitle
+            }
+            Spacer(minLength: 12)
+            if m.kind == .live { Button { channels = true } label: { playerBarIcon("list.bullet") }.accessibilityLabel(tr("Canales")) }
+            Button { m.readTracks(); tracks = true } label: { playerBarIcon("captions.bubble") }
+                .accessibilityLabel(tr("Audio y subtítulos"))
+            Button { m.fill.toggle(); m.applyFill(size); state.toast = nil } label: {
+                playerBarIcon(m.fill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+            }
+            .accessibilityLabel(tr("Pantalla completa"))
+        }
+        .padding(.top, 8)
+    }
+
+    /** debajo del título: EN VIVO en canales, el nombre de la serie en episodios */
+    @ViewBuilder private var subtitle: some View {
+        if m.kind == .live {
+            HStack(spacing: 6) {
+                Circle().fill(Theme.accent).frame(width: 7, height: 7)
+                Text(tr("EN VIVO")).font(.system(size: 11, weight: .heavy)).tracking(0.8)
+            }
+        } else if !m.request.saveTitle.isEmpty && m.request.saveTitle != m.entry.title {
+            Text(m.request.saveTitle).font(.system(size: 13, weight: .medium)).foregroundColor(.white.opacity(0.7)).lineLimit(1)
+        }
+    }
+
+    private var centerControls: some View {
+        HStack(spacing: 48) {
+            if m.kind == .live {
+                Button { m.previous(); autoHide() } label: { Image(systemName: "chevron.up").font(.system(size: 24, weight: .semibold)).glassCircle(60) }
+            } else {
+                Button { m.seek(by: -10); autoHide() } label: { Image(systemName: "gobackward.10").font(.system(size: 25, weight: .medium)).glassCircle(60) }
+            }
+            Button { m.toggle(); autoHide() } label: {
+                ZStack {
+                    if m.buffering {
+                        ProgressView().tint(.white).scaleEffect(1.5)
                     } else {
-                        Button { m.seek(by: -10); autoHide() } label: { Image(systemName: "gobackward.10").font(.system(size: 34)).frame(width: 56, height: 56) }
-                    }
-                    Button { m.toggle(); autoHide() } label: { Image(systemName: m.playing ? "pause.fill" : "play.fill").font(.system(size: 46)).frame(width: 70, height: 70) }
-                        .accessibilityIdentifier("player.toggle").accessibilityLabel(tr(m.playing ? "Pausar" : "Reproducir"))
-                        .accessibilityValue(m.playing ? "playing" : "paused")
-                    if m.kind == .live {
-                        Button { m.next(); autoHide() } label: { Image(systemName: "chevron.down.circle").font(.system(size: 38)) }
-                    } else {
-                        Button { m.seek(by: 10); autoHide() } label: { Image(systemName: "goforward.10").font(.system(size: 34)).frame(width: 56, height: 56) }
-                            .accessibilityIdentifier("player.forward")
+                        // el triángulo de play se ve corrido a la izquierda si se centra exacto
+                        Image(systemName: m.playing ? "pause.fill" : "play.fill").font(.system(size: 34, weight: .bold)).offset(x: m.playing ? 0 : 3)
                     }
                 }
-                Spacer()
-                if m.kind != .live {
-                    VStack(spacing: 6) {
-                        Slider(value: Binding(get: { scrub ?? (m.length > 0 ? Double(m.time) / Double(m.length) : 0) }, set: { scrub = $0 }),
-                               in: 0...1, onEditingChanged: { editing in
-                                   if !editing, let f = scrub { m.seek(to: f); scrub = nil; autoHide() }
-                               })
-                            .tint(Theme.accent)
-                        HStack {
-                            Text(fmtTime(scrub.map { Int64(Double(m.length) * $0) } ?? m.time)).font(.system(size: 13, design: .monospaced))
-                                .accessibilityIdentifier("player.time")
-                            Spacer()
-                            if m.kind == .series && m.hasNext {
-                                Button { m.next() } label: { Label(tr("Siguiente episodio"), systemImage: "forward.end.fill").font(.system(size: 14, weight: .semibold)) }
-                            }
-                            Spacer()
-                            Text("-" + fmtTime(max(0, m.length - m.time))).font(.system(size: 13, design: .monospaced))
+                .glassCircle(84)
+            }
+            .accessibilityIdentifier("player.toggle").accessibilityLabel(tr(m.playing ? "Pausar" : "Reproducir"))
+            .accessibilityValue(m.playing ? "playing" : "paused")
+            if m.kind == .live {
+                Button { m.next(); autoHide() } label: { Image(systemName: "chevron.down").font(.system(size: 24, weight: .semibold)).glassCircle(60) }
+            } else {
+                Button { m.seek(by: 10); autoHide() } label: { Image(systemName: "goforward.10").font(.system(size: 25, weight: .medium)).glassCircle(60) }
+                    .accessibilityIdentifier("player.forward")
+            }
+        }
+    }
+
+    @ViewBuilder private var bottomBar: some View {
+        if m.kind != .live {
+            let shown = scrub.map { Int64(Double(m.length) * $0) } ?? m.time
+            VStack(spacing: 8) {
+                if m.kind == .series && m.hasNext {
+                    HStack {
+                        Spacer()
+                        Button { m.next() } label: {
+                            Label(tr("Siguiente episodio"), systemImage: "forward.end.fill").font(.system(size: 14, weight: .semibold))
+                                .padding(.horizontal, 14).padding(.vertical, 8)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .contentShape(Capsule())
                         }
-                    }.padding(.horizontal, 24).padding(.bottom, 18)
-                } else {
-                    Text(tr("Desliza arriba o abajo para cambiar de canal")).font(.system(size: 12)).foregroundColor(.white.opacity(0.7)).padding(.bottom, 18)
+                    }
+                }
+                HStack(spacing: 12) {
+                    Text(fmtTime(shown)).font(.system(size: 13, weight: .semibold).monospacedDigit())
+                        .accessibilityIdentifier("player.time")
+                    ScrubBar(value: m.length > 0 ? Double(m.time) / Double(m.length) : 0, scrub: $scrub) { f in
+                        m.seek(to: f); scrub = nil; autoHide()
+                    }
+                    .accessibilityValue(fmtTime(shown))
+                    .accessibilityAdjustableAction { d in
+                        switch d {
+                        case .increment: m.seek(by: 10)
+                        case .decrement: m.seek(by: -10)
+                        @unknown default: break
+                        }
+                    }
+                    Text("-" + fmtTime(max(0, m.length - shown))).font(.system(size: 13, weight: .semibold).monospacedDigit())
+                        .foregroundColor(.white.opacity(0.75))
                 }
             }
-            .foregroundColor(.white)
+            .padding(.horizontal, 8).padding(.bottom, 12)
+        } else {
+            Text(tr("Desliza arriba o abajo para cambiar de canal")).font(.system(size: 12, weight: .medium)).foregroundColor(.white.opacity(0.7)).padding(.bottom, 16)
         }
     }
 
