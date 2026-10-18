@@ -364,4 +364,5 @@
         <item quantity="many">%1$d channels</item>
         <item quantity="other">%1$d channels</item>
     </plurals>
+    <string name="cache_clear_notice">Your provider updated the app. The cache will be cleared and the app will restart.</string>
 </resources>

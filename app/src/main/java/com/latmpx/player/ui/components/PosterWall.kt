@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 
@@ -44,13 +45,23 @@ fun PosterWall(posters: List<String>, columns: Int, modifier: Modifier = Modifie
             val anim = rememberInfiniteTransition(label = "wall")
             val p by anim.animateFloat(0f, 1f, infiniteRepeatable(tween(120_000, easing = LinearEasing), RepeatMode.Restart), label = "wallY")
             var h by remember { mutableIntStateOf(0) }
-            val safePosters = remember(posters, columns) { posters.take(posters.size - (posters.size % columns)) }
-            val rows = remember(safePosters, columns) { (safePosters + safePosters).chunked(columns) }
+            val gap = with(LocalDensity.current) { 10.dp.toPx() }
+            // una vuelta = al menos 6 filas (con pocos pósters se repiten) y dos vueltas seguidas: al subir media
+            // pared (más medio espacio entre filas) se vuelve al principio sin salto ni hueco negro
+            val rows = remember(posters, columns) {
+                val safe = posters.take(posters.size - (posters.size % columns))
+                if (safe.isEmpty()) emptyList()
+                else {
+                    val reps = (6 * columns + safe.size - 1) / safe.size
+                    val lap = List(reps) { safe }.flatten()
+                    (lap + lap).chunked(columns)
+                }
+            }
             Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = -8f; scaleX = 1.3f; scaleY = 1.3f }) {
                 Column(
                     Modifier.fillMaxWidth().wrapContentHeight(align = Alignment.Top, unbounded = true)
                         .onSizeChanged { h = it.height }
-                        .graphicsLayer { translationY = -p * h / 2f },
+                        .graphicsLayer { translationY = -p * (h + gap) / 2f },
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     rows.forEach { row ->

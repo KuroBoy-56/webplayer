@@ -98,12 +98,16 @@ object Panel {
 
     /** ¿El equipo ya tiene una línea activa en el panel? */
     suspend fun checkMac(deviceId: String): Answer<Line> {
-        val a = login("check_mac", device(deviceId))
+        // cc: última orden de borrado de caché que esta app ya aplicó (0 = ninguna)
+        val a = login("check_mac", device(deviceId).put("cc", CacheClear.seen))
         val r = a.value ?: return Answer(null, a.error)
         // con distribuidor: un error del panel (vencido, suspendido…) se muestra en vez de "no hay línea"
         if (Tenant.active && r.code in 400..499) return Answer(null, errorOf(r, tr(R.string.err_panel_rejected)))
         val j = r.json() ?: return Answer(null, errorOf(r, tr(R.string.err_panel_bad_response)))
         fakeScreen = FakeScreen.parse(j)
+        // orden de borrado de caché del panel (viene con línea o sin ella; un panel viejo no la manda)
+        CacheClear.asked = true
+        if (j.has("cache_clear")) CacheClear.onReply(j.optLong("cache_clear", 0L))
         if (!j.optBoolean("exists", false)) return Answer(null)
         // PIN parental del panel: es el que usa la app
         j.s("pin").takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { Store.parentalPin = it }
@@ -168,6 +172,19 @@ object Panel {
             return Answer(Unit)
         }
         return Answer(null, errorOf(r, tr(R.string.err_pin_not_saved_code, r.code)), r.code)
+    }
+
+    /**
+     * login.php action features: lo que ofrece la pantalla de inicio de sesión (con distribuidor lleva tenant + app,
+     * con Omitir nada). Responde JSON plano. Devuelve features.demo o null si no hubo respuesta válida
+     * (sin red, sin llave o panel viejo que responde "Invalid action").
+     */
+    suspend fun demoOffered(): Boolean? {
+        val r = login("features", JSONObject()).value ?: return null
+        val j = if (r.ok) r.json() else null
+        if (j?.s("status") != "ok") return null
+        val f = j.optJSONObject("features") ?: return null
+        return if (f.has("demo")) f.optBoolean("demo") else null
     }
 
     /** Respuesta de tenant_config: la configuración descifrada o el código de error (tenant_invalid, offline, no_key…). */

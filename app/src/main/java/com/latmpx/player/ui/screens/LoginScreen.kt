@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -84,7 +85,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
+fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = {}, onLogged: (Session) -> Unit) {
     val ctx = LocalContext.current
     val tv = LocalIsTv.current
     val deviceId = remember { Device.id(ctx) }
@@ -171,6 +172,10 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
     }
 
     LaunchedEffect(Tenant.code) { posters = Tmdb.nowPlaying() }
+    // botón Autodemo: lo dice el panel (features.demo, también con Omitir); sin respuesta (sin red, panel viejo)
+    // queda lo de antes: tenant_config con distribuidor y visible con Omitir
+    var demoOffered by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Tenant.code) { demoOffered = Panel.demoOffered() }
     LaunchedEffect(Unit) {
         resolve()
         if (lines.isEmpty() && !Store.fakeUnlocked) fake = Panel.fakeScreen
@@ -289,7 +294,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
                     
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // el distribuidor puede no tener demo (sin DNS): entonces no se muestra el botón
-                        if (Tenant.demoEnabled) HeroButton(stringResource(R.string.autodemo), Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
+                        if (PanelCrypto.hasKey() && (demoOffered ?: Tenant.demoEnabled)) HeroButton(stringResource(R.string.autodemo), Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
                             // el panel decide (si el dueño borró el registro, el equipo puede pedir otra demo)
                             act {
                                 status = tr(R.string.login_creating_demo)
@@ -331,6 +336,10 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onLogged: (Session) -> Unit) {
                         }
                     }
                 }
+            }
+            // siempre visible (con número o con Omitir): vuelve a «Número de distribuidor»
+            Box(Modifier.fillMaxWidth().padding(top = 16.dp), contentAlignment = Alignment.Center) {
+                AppButton(stringResource(R.string.change_distributor), icon = Icons.Filled.SwapHoriz, onClick = { if (!busy) onChangeDistributor() })
             }
             Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} ${Tenant.nameOr("MPX Player")}", color = Color(0xFF999999), fontSize = 14.sp,
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).background(Color(0x99000000)).padding(20.dp).navigationBarsPadding())

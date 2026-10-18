@@ -61,15 +61,17 @@ fun DnsButton(modifier: Modifier = Modifier, onChanged: () -> Unit = {}) {
             containerColor = NfBg2,
             title = { Text("DNS", color = Color.White, fontWeight = FontWeight.Bold) },
             text = {
+                // la lista se desplaza (dedo, rueda y flechas: la opción con el foco siempre entra en pantalla);
+                // el diálogo nunca pasa del alto de la ventana
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text(stringResource(R.string.dns_help), color = NfGray2, fontSize = 13.sp,
                         modifier = Modifier.padding(bottom = 8.dp))
-                    SecureDns.options.forEachIndexed { i, o ->
+                    SecureDns.options.forEach { o ->
                         val sel = o.key == current.key
                         FocusBox(
                             onClick = { Store.dns = o.key; current = SecureDns.current; open = false; onChanged() },
                             focusScale = 1.02f,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).then(if (sel) Modifier.focusRequester(first) else Modifier),
                         ) { f ->
                             Row(Modifier.fillMaxWidth().background(if (f) Color(0xFF333333) else Color(0xFF1F1F1F)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
@@ -80,9 +82,10 @@ fun DnsButton(modifier: Modifier = Modifier, onChanged: () -> Unit = {}) {
                             }
                         }
                     }
+                    // el foco empieza en el DNS elegido (aunque esté abajo, la lista baja hasta él)
+                    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
                 }
             },
         )
-        LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     }
 }

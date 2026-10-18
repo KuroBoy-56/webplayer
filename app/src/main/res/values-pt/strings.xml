@@ -364,4 +364,5 @@
         <item quantity="many">%1$d canais</item>
         <item quantity="other">%1$d canais</item>
     </plurals>
+    <string name="cache_clear_notice">Seu provedor atualizou o aplicativo. O cache será apagado e o aplicativo será reiniciado.</string>
 </resources>

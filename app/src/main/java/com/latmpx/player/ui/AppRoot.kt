@@ -153,6 +153,8 @@ fun AppRoot() {
     // después, en segundo plano, el del servidor si la copia ya es vieja o no existe
     LaunchedEffect(state.session) {
         val s = state.session ?: return@LaunchedEffect
+        // entró sin check_mac (Omitir con las listas de auth.php): se pregunta una vez por la orden de borrar caché
+        if (!com.latmpx.player.data.CacheClear.asked) launch { com.latmpx.player.data.Panel.checkMac(Store.deviceIdOrEmpty()) }
         launch { Cloud.load() } // continuar viendo y favoritos desde el panel (no bloquea la pantalla)
         launch { alert.value = Alerts.forLaunch(s) } // aviso del panel (bienvenida o vencimiento)
         val kinds = listOf(Kind.MOVIE, Kind.SERIES, Kind.LIVE)
@@ -211,7 +213,7 @@ fun AppRoot() {
             }
             gate.value == Gate.RETRY -> TenantRetryScreen(retryMsg.value, checking.value, onRetry = { guard() }, onChange = { wipe(null) })
             state.session == null && offlineDownloads.value -> com.latmpx.player.ui.screens.DownloadsScreen { offlineDownloads.value = false }
-            state.session == null -> LoginScreen(onDownloads = { offlineDownloads.value = true }) { s ->
+            state.session == null -> LoginScreen(onDownloads = { offlineDownloads.value = true }, onChangeDistributor = { wipe(null) }) { s ->
                 lastPanelCheck.longValue = System.currentTimeMillis()
                 Store.saveSession(s)
                 Xtream.clearCache()
@@ -224,6 +226,17 @@ fun AppRoot() {
             }, onChangeDistributor = { wipe(null) })
         }
         alert.value?.takeIf { state.session != null }?.let { a -> PanelAlertDialog(a) { alert.value = null } }
+        // el panel pidió borrar la caché: aviso de 3 s, se borra y la app se reinicia sola
+        if (com.latmpx.player.data.CacheClear.pending) {
+            Box(Modifier.fillMaxSize().background(Color(0xE6000000)).padding(32.dp), contentAlignment = Alignment.Center) {
+                Text(androidx.compose.ui.res.stringResource(com.latmpx.player.R.string.cache_clear_notice), color = Color.White, fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(3_000)
+                com.latmpx.player.data.CacheClear.wipeAndRestart(ctx)
+            }
+        }
     }
 }
 

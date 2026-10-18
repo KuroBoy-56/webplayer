@@ -6,9 +6,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.net.URLEncoder
 
 object Tmdb {
-    private var cached: List<String>? = null
-    /** distribuidor|idioma de las carátulas guardadas (cada distribuidor tiene su clave TMDB) */
-    private var cachedFor: String? = null
     private const val FALLBACK_KEY = "0c23c3f0458f0f9e4d0a35048d3a199a"
     /** la llave del panel respondió 401 (vencida o mal copiada): se usa la de respaldo */
     @Volatile private var panelKeyBad = false
@@ -39,9 +36,8 @@ object Tmdb {
      * tmdb_key_not_set y no hay carrusel (nunca con la clave de respaldo de la app).
      */
     suspend fun nowPlaying(pages: Int = 3): List<String> {
+        // sin copia en memoria: si el panel ya no entrega la clave, el fondo queda negro (nunca pósters viejos)
         val lang = Lang.tmdb
-        val who = "${Tenant.code}|$lang"
-        if (cachedFor == who) cached?.let { return it }
         val out = ArrayList<String>()
         for (p in 1..pages) {
             // ?path= (no tmdb.php/movie/now_playing): muchos hostings no pasan PATH_INFO
@@ -61,9 +57,7 @@ object Tmdb {
                 }
             }
         }
-        val list = out.distinct().take(48)
-        if (list.isNotEmpty()) { cached = list; cachedFor = who }
-        return list
+        return out.distinct().take(48)
     }
 
     /** "ES - Avengers: Endgame (2019) [4K] LAT" → ("Avengers: Endgame", "2019"): lo que TMDB entiende */

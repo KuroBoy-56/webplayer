@@ -103,6 +103,10 @@ Al abrir la app por primera vez sale **Número de distribuidor** (mismo diseño 
 - **Foco del control:** el borde de foco (`NfFocus` en `ui/theme/Theme.kt`: tarjetas, mosaicos, botones, reproductor) es blanco sin distribuidor y el acento del distribuidor con paleta (aclarado si es muy oscuro).
 - **Mi cuenta:** además de vencimiento, conexiones, servidor y alta muestra la cantidad del catálogo cargado: Canales en vivo, Películas y Series («…» mientras se baja).
 - **Cuenta → Cambiar distribuidor:** muestra distribuidor, número y vencimiento; borra todo, cierra sesión y vuelve a pedir el número.
+- **Inicio de sesión → Cambiar distribuidor:** botón siempre visible debajo de la caja (con número o con Omitir, enfocable con el control); hace lo mismo que el de Cuenta y vuelve a «Número de distribuidor».
+- **Autodemo según el panel:** al abrir el inicio de sesión se pide `login.php` acción `features` (con número lleva `tenant` + `app`, con Omitir nada; responde JSON plano) y el botón sale solo si `features.demo` es `true`. Sin respuesta (sin red, panel viejo con «Invalid action») queda lo de antes: con número `tenant_config.features.demo`, con Omitir visible. Sin la llave del panel no sale.
+- **Fondo de pósters del inicio de sesión:** solo con lo que entrega el panel (`api/tmdb.php`, `t` = número o nada con Omitir); con `tmdb_key_not_set` o error el fondo queda negro, sin copia guardada ni la clave de respaldo de la app. Con clave sube sin fin (con pocos pósters se repiten).
+- **Borrado de caché remoto** (`data/CacheClear.kt`): `check_mac` manda `"cc"` = última orden aplicada y el panel responde `"cache_clear"` = la orden más nueva para esta app. Sin número guardado (primera vez o app actualizada) solo se guarda; si llega uno mayor se guarda primero, sale el aviso «Tu proveedor actualizó la aplicación…» 3 s, se borra la caché (catálogo guardado, pósters de TMDB, imágenes, `cacheDir`) y la app se reinicia (actividad de inicio en tarea nueva y fin del proceso). No se borra la sesión, el distribuidor, los ajustes, las descargas ni `cache_clear_seen` (archivo de ajustes `cache_clear`). Si se entró sin `check_mac` (Omitir con listas de `auth.php`) se pregunta una vez al entrar.
 
 ## Datos que viven en el panel
 
@@ -119,6 +123,7 @@ Todas estas llamadas usan un token: la app hace `POST progress.php {"action":"au
 ## DNS
 
 Botón **DNS** en el inicio de sesión y en **Cuenta**: Automático (por defecto), Cloudflare, Google, Quad9, AdGuard (sin rastreo ni anuncios), NextDNS (anti-bloqueo geográfico) y OpenDNS.
+La lista se desplaza (dedo, rueda y flechas del control) y el foco empieza en el DNS elegido, así nunca queda cortada.
 Usa DNS sobre HTTPS (`okhttp-dnsoverhttps`) en el único cliente OkHttp de la app, así aplica a todo: panel, Xtream, imágenes y el reproductor. La elección se guarda en el equipo.
 
 ## Idiomas
