@@ -379,7 +379,11 @@ function wp_panel_userdata($refresh = false)
     if ($memo !== null && !$refresh) return $memo;
     // parámetro único: ninguna caché del hosting puede devolver un progreso viejo
     $j = wp_panel_call('progress.php?v=2&_=' . str_replace('.', '', (string)microtime(true)), null, 6);
-    // clave TMDB del panel (la usa la página de actor; si falta, la incorporada)
+    // clave TMDB del panel (la usa la página de actor; si falta, la incorporada). Vacía: el distribuidor
+    // no tiene clave (el panel nunca le da la del dueño) y se olvida la guardada
+    if (is_array($j) && in_array($j['tmdbKey'] ?? null, ['', 'missing_tmdb_key'], true)) {
+        wp_cache_set(wp_panel_ck('panel|tmdbkey'), '');
+    }
     if (is_array($j) && is_string($j['tmdbKey'] ?? null) && preg_match('/^[0-9a-f]{32}$/i', trim($j['tmdbKey']))
         && wp_cache_get(wp_panel_ck('panel|tmdbkey'), 86400) !== trim($j['tmdbKey'])) {
         wp_cache_set(wp_panel_ck('panel|tmdbkey'), trim($j['tmdbKey']));

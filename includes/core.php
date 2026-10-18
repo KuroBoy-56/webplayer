@@ -28,9 +28,11 @@ function wp_tmdb_key()
 {
     static $key = null;
     if ($key !== null) return $key;
-    $k = defined('WP_TMDB_KEY') ? (string)constant('WP_TMDB_KEY') : '';
+    // con número de distribuidor solo vale su clave (la que manda el panel), nunca la del servidor
+    $dist = function_exists('wp_panel_tenant') && wp_panel_tenant() !== '';
+    $k = !$dist && defined('WP_TMDB_KEY') ? (string)constant('WP_TMDB_KEY') : '';
     $file = __DIR__ . '/panel_secret.php';
-    if ($k === '' && is_file($file)) {
+    if (!$dist && $k === '' && is_file($file)) {
         $cfg = include $file;
         if (is_array($cfg)) $k = trim((string)($cfg['tmdb_key'] ?? ''));
     }
