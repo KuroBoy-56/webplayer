@@ -5,7 +5,9 @@ import { AppState, BackHandler, StatusBar, StyleSheet, Text, View } from 'react-
 import { fetchAlert, PanelAlert } from './api/alerts';
 import AlertDialog from './components/AlertDialog';
 import { Logo } from './components/ui';
-import { onLangChange } from './lib/i18n';
+import { clearStoredCache } from './lib/cacheclear';
+import { onLangChange, t } from './lib/i18n';
+import { clearDnsCache } from './lib/securedns';
 import { loadStorage } from './lib/storage';
 import { applyBrand, distChoice, features, onTenantProblem, tenantCode } from './lib/tenant';
 import { Nav, NavContext, Route } from './nav';
@@ -16,9 +18,13 @@ import Grid from './screens/Grid';
 import Login from './screens/Login';
 import Main from './screens/Main';
 import Player from './screens/Player';
+import { clearSportsCache } from './screens/Sports';
+import { clearTmdbCache } from './api/tmdb';
+import { resetEngine } from './api/media';
+import { setStreamFlip } from './api/xtream';
 import { bindReportContext, installCrashReporter } from './api/report';
-import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, tenantCheckDue, useAppState } from './state';
-import { panelAnswered, panelCheckMac } from './api/panel';
+import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppState } from './state';
+import { onCacheClear, panelAnswered, panelCheckMac } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
 installCrashReporter();
@@ -60,7 +66,35 @@ function Notice() {
   );
 }
 
-export default function App() {
+// La raíz se vuelve a montar tras el borrado de caché que pide el panel (Vega no puede relanzar la app)
+export default function Root() {
+  const [boot, setBoot] = useState(0);
+  useEffect(() => {
+    onCacheClear(() => {
+      showNotice(t('Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.'));
+      setTimeout(() => {
+        clearStoredCache();
+        // Tizen / webOS (react-native-web): arranque en frío
+        const loc = (globalThis as any).location;
+        if (typeof loc?.reload === 'function') {
+          loc.reload();
+          return;
+        }
+        // Vega: se vacía lo que queda en memoria y la app arranca otra vez (entra sola como siempre)
+        logout();
+        clearTmdbCache();
+        clearSportsCache();
+        resetEngine();
+        clearDnsCache();
+        setStreamFlip(false);
+        setBoot(b => b + 1);
+      }, 3000);
+    });
+  }, []);
+  return <App key={boot} />;
+}
+
+function App() {
   const [stack, setStack] = useState<Route[] | null>(null);
   // pantalla de inicio: fondo y logo del distribuidor (o los de la app con Omitir). null = aún no se
   // sabe el distribuidor: solo el fondo. Sin distribuidor elegido no hay pantalla de inicio: lo primero

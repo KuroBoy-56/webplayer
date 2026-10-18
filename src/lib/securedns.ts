@@ -28,6 +28,10 @@ export function dnsChoice(): DnsOption {
 
 export function setDnsChoice(key: string): void {
   setPref('dns', key);
+  clearDnsCache();
+}
+
+export function clearDnsCache(): void {
   for (const k of Object.keys(cache)) delete cache[k];
 }
 

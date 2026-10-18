@@ -30,6 +30,10 @@ compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con 
   Si el DNS de la red no encuentra el servidor IPTV (bloqueo del proveedor de internet), la app lo resuelve
   con DNS sobre HTTPS y se conecta a esa IP: catálogo, inicio de sesión y reproductor (una vez por video).
   Solo para servidores http (https necesita el nombre para el certificado). `src/lib/securedns.ts`.
+  Si las opciones no caben en la pantalla, la lista se desplaza (con las flechas del control).
+- **Botón Autodemo**: solo si el panel tiene una demo en «Configurar Demo» (`login.php` acción
+  `features`, `features.demo`, al abrir el inicio de sesión). Sin respuesta o con un panel viejo:
+  con distribuidor vale `tenant_config.features.demo`; con *Omitir* se muestra. Sin llave, nunca.
 - **Autodemo con código de revendedor**: si en *Contraseña* hay un código de 6 letras y números
   (con al menos una letra, p. ej. `RV7K2M`), *Autodemo* lo envía en mayúsculas (`reseller` dentro de
   `auto_demo`) y la demo queda a nombre de ese revendedor en el panel. Solo números o cualquier otra
@@ -47,7 +51,13 @@ compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con 
   (`demo_duration`); nunca el servidor, la fecha ni las conexiones de la línea demo del servidor IPTV.
   No hay textos de «24 horas»: la duración siempre sale del panel.
 - **Fondo del inicio de sesión**: carátulas de TMDB pedidas por `api/tmdb.php` del panel (clave del
-  distribuidor o del dueño); sin clave no hay carrusel.
+  distribuidor o del dueño); sin clave no hay carrusel (fondo liso, nada guardado ni otra clave).
+- **Borrado de caché desde el panel** (`cache_clear.php`): `check_mac` lleva `cc` (última orden
+  aplicada, `cache_clear_seen` por distribuidor) y responde `cache_clear` (orden más nueva). Sin nada
+  guardado se guarda en silencio; si llega una mayor se guarda, sale 3 s «Tu proveedor actualizó la
+  aplicación…», se borra la caché (catálogo, EPG, TMDB, deportes, motor, lista de servidores, clave
+  TMDB) y la app arranca otra vez (`window.location.reload()`) y entra
+  sola. Se quedan sesión, distribuidor, ajustes y PIN. `src/lib/cacheclear.ts` (`tools/cacheclear.test.js`).
 - **Audio y subtítulos del panel**: `media_webos.php?do=status&token=` — si el dueño desactivó ffmpeg
   para el distribuidor de la línea, el panel responde `ffmpeg:false` y se queda el audio original.
   La respuesta se guarda por línea (una pregunta por sesión). Sin permiso (`ffmpeg:false`,
@@ -106,7 +116,8 @@ compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con 
   siempre. No vuelve a preguntar: abre en el inicio de sesión o directo en Inicio. Al abrir, al
   volver a la app y cada 6 h se revisa el número: si venció, está suspendido o ya no vale se
   borra (con la sesión) y vuelve a pedirlo con el motivo; sin conexión sigue con lo guardado
-  hasta 72 h. **Cuenta › Cambiar distribuidor** cierra sesión y pide otro número. Necesita la
+  hasta 72 h. **Cambiar distribuidor** (siempre abajo del inicio de sesión y en Cuenta) cierra
+  sesión, olvida la marca y la clave TMDB del anterior y pide otro número. Necesita la
   llave del panel (sin llave, *Continuar* avisa y *Omitir* sigue funcionando).
   Con distribuidor, todo sigue su marca: pantalla de inicio (su fondo con su logo al centro; sin logo,
   su nombre), menú superior, inicio de sesión, Cuenta, avisos, reproductor, anillos de foco y barras

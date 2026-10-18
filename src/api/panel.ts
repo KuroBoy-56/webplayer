@@ -4,6 +4,7 @@ import { decodePanelUrl, dnsDecode, mopeDecrypt, mopeEncrypt } from '../lib/cryp
 import { hasMasterKey, panelDecrypt, panelEncrypt } from '../lib/aes';
 import { formBody, http, HttpResult, json } from '../lib/http';
 import { read, remove, write } from '../lib/storage';
+import { cacheSeen, takeCacheOrder } from '../lib/cacheclear';
 import { APP_ID, Brand, parseConfig, reportTenantProblem, scoped, TENANT_ERRORS, TENANT_FATAL, tenantCode, tenantFields } from '../lib/tenant';
 import { lang, t } from '../lib/i18n';
 import { normalizeBase, str } from '../lib/util';
@@ -330,10 +331,13 @@ function parseFake(j: any): FakeScreen | null {
 // línea activada para este equipo en el panel
 export async function panelCheckMac(deviceId: string): Promise<Line | null> {
   if (!hasMasterKey()) return null;
-  const r = await panelLogin('check_mac', { mac_address: deviceId, enc: 1 });
+  // cc: última orden de borrar la caché que esta app ya aplicó
+  const r = await panelLogin('check_mac', { mac_address: deviceId, enc: 1, cc: cacheSeen() });
   const j = loginReply(r);
   // el panel contestó (aunque sea "no hay línea"): sirve para cerrar la sesión al volver a la app
   lastCheckAnswered = r.code === 200 && !!j;
+  // orden del panel de borrar la caché (viene con o sin línea; un panel viejo no la manda)
+  if (lastCheckAnswered && takeCacheOrder(j.cache_clear)) cacheHook();
   fakeScreen = parseFake(j);
   if (!j || j.exists !== true) return null;
   // PIN parental del panel: es el que usa la app
@@ -343,6 +347,22 @@ export async function panelCheckMac(deviceId: string): Promise<Line | null> {
 }
 
 let lastCheckAnswered = false;
+
+// borrar la caché y reiniciar (lo hace App)
+let cacheHook: () => void = () => {};
+export function onCacheClear(fn: () => void): void {
+  cacheHook = fn;
+}
+
+// funciones que el panel tiene para esta app (login.php features, respuesta sin cifrar). demo: hay
+// una línea en «Configurar Demo» del distribuidor (o del dueño con Omitir). null = sin respuesta o
+// panel viejo ("Invalid action")
+export async function panelFeatures(): Promise<{ demo: boolean } | null> {
+  if (!hasMasterKey()) return null;
+  const j = json<any>(await panelLogin('features', {}));
+  const f = j && str(j.status) === 'ok' && j.features && typeof j.features === 'object' ? j.features : null;
+  return f && typeof f.demo === 'boolean' ? { demo: f.demo } : null;
+}
 export function panelAnswered(): boolean {
   return lastCheckAnswered;
 }

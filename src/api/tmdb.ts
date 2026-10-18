@@ -35,6 +35,13 @@ const castCache = new Map<string, CastMember[]>();
 const idCache = new Map<string, string>();
 const overviewCache = new Map<string, string>();
 
+// borrado de caché pedido por el panel
+export function clearTmdbCache(): void {
+  castCache.clear();
+  idCache.clear();
+  overviewCache.clear();
+}
+
 // id de TMDB de una película o serie: el tmdb_id del servidor o buscando el título (+ año) en es-MX
 // (los títulos del catálogo están en español). '' si no hay coincidencia segura.
 async function tmdbIdFor(item: Item, tmdbId: string, year: string): Promise<string> {
