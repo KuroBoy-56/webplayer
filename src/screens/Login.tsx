@@ -1,6 +1,6 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, BackHandler, Easing, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import { loginAll, sessionFrom } from '../api/xtream';
@@ -213,11 +213,7 @@ export default function Login() {
 
   return (
     <View style={s.root}>
-      <View style={s.mosaic}>
-        {posters.slice(0, 40).map((u, i) => (
-          <Image key={i} source={{ uri: u }} style={s.mosaicImg} />
-        ))}
-      </View>
+      <PosterDrift posters={posters} />
       <View style={s.shade} />
       <View style={s.top}>
         <Logo size={110} />
@@ -335,7 +331,8 @@ const s = themed(() =>
     dnsItems: { padding: px(10) },
     dnsNote: { color: C.sub, fontSize: px(26), marginBottom: px(24) },
     checking: { flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' },
-    mosaic: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, flexDirection: 'row', flexWrap: 'wrap', transform: [{ rotate: '-8deg' }, { scale: 1.3 }] },
+    mosaic: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, transform: [{ rotate: '-8deg' }, { scale: 1.3 }] },
+    mosaicBlock: { flexDirection: 'row', flexWrap: 'wrap' },
     mosaicImg: { width: px(192), height: px(288), margin: px(4), borderRadius: px(6) },
     shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha(C.bg, 0.72) },
     top: { position: 'absolute', left: px(80), top: px(40) },
@@ -358,3 +355,33 @@ const s = themed(() =>
     dist: { alignSelf: 'center', marginTop: px(24) },
   }),
 );
+
+/**
+ * Carrusel del login: el mosaico de carátulas sube despacio sin fin. Tres copias iguales apiladas; al
+ * subir una copia entera vuelve a 0 y la imagen es la misma (sin salto ni hueco abajo).
+ */
+function PosterDrift({ posters }: { posters: string[] }) {
+  const drift = useRef(new Animated.Value(0)).current;
+  const [blockH, setBlockH] = useState(0);
+  useEffect(() => {
+    if (!blockH) return;
+    drift.setValue(0);
+    const a = Animated.loop(Animated.timing(drift, { toValue: -blockH, duration: blockH * 45, easing: Easing.linear, useNativeDriver: true }));
+    a.start();
+    return () => a.stop();
+  }, [blockH, drift]);
+  if (!posters.length) return null;
+  // al menos 48 carátulas por copia: con pocas, la copia es más baja que la pantalla
+  const list: string[] = [];
+  while (list.length < 48) list.push(...posters.slice(0, 40));
+  const block = (k: number) => (
+    <View key={k} style={s.mosaicBlock} onLayout={k === 0 ? e => setBlockH(Math.round(e.nativeEvent.layout.height)) : undefined}>
+      {list.map((u, i) => <Image key={i} source={{ uri: u }} style={s.mosaicImg} />)}
+    </View>
+  );
+  return (
+    <View style={s.mosaic} pointerEvents="none">
+      <Animated.View style={{ transform: [{ translateY: drift }] }}>{[0, 1, 2].map(block)}</Animated.View>
+    </View>
+  );
+}
