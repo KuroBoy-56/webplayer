@@ -124,8 +124,11 @@ final class Cloud: ObservableObject {
     }
 
     private func rememberTmdbKey(_ j: JObj?) {
-        let k = j?.s("tmdbKey") ?? ""
-        if !k.isEmpty && k != "missing_tmdb_key" && k != Store.tmdbKey { Store.tmdbKey = k }
+        guard let j = j, j["tmdbKey"] != nil else { return }
+        // vacía: el distribuidor no tiene clave (el panel nunca le da la del dueño): se olvida la guardada
+        let s = j.s("tmdbKey")
+        let k = s == "missing_tmdb_key" ? "" : s
+        if k != Store.tmdbKey { Store.tmdbKey = k }
     }
 
     /* ---------- carga ---------- */
