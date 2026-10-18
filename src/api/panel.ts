@@ -180,6 +180,12 @@ export function onPanelDemo(fn: () => void): void {
   demoHook = fn;
 }
 
+// línea en uso (distribuidor + usuario@servidor): lo que se guarda por línea (estado del motor)
+export function lineKey(): string {
+  const s = sessionRef();
+  return s ? tenantCode() + '|' + s.user + '@' + s.base : '';
+}
+
 // el token es de cada distribuidor (con Omitir, la clave de siempre)
 export async function cloudToken(forceNew = false): Promise<string> {
   const s = sessionRef();

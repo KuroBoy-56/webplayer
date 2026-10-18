@@ -20,7 +20,7 @@ export default function MyList() {
       else if (f.title) out.push({ kind, id: digits(f.id), name: f.title, poster: f.poster, backdrop: '', plot: '', cat: f.categoryId, ext: '', rating: 0, year: '', epg: '', num: '' });
     }
     return out;
-  }, [st.favorites, st.catalogRev]);
+  }, [st.favorites, st.catalogRev, st.loaded.live]);
 
   if (st.demo) return <Message text={t('Mi lista no está disponible en la DEMO.')} />;
   if (!items.length) return <Message text={t('Tu lista está vacía. Agrega películas, series o canales con «Mi lista».')} />;

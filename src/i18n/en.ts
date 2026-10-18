@@ -297,6 +297,10 @@ const en = {
   "¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.": "Did your reseller give you a code? Type it in Password and press Autodemo.",
   "▲▼ cambiar canal ({x}/{y}) · MENÚ audio y subtítulos": "▲▼ change channel ({x}/{y}) · MENU audio and subtitles",
   "◀▶ 10 s · OK pausa · ▼ audio y subtítulos": "◀▶ 10 s · OK pause · ▼ audio and subtitles",
+  "Sin permisos": "No permission",
+  "Canales en vivo:": "Live channels:",
+  "Películas:": "Movies:",
+  "Series:": "Series:",
 };
 
 export default en;

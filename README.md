@@ -21,7 +21,8 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
   misma cuenta se prueba en los DNS del panel y, si ningún servidor la **rechazó** (solo no contestaron), se entra
   con ella igual. Solo un rechazo del servidor deja en el inicio de sesión.
 - **Cualquier formato:** si el televisor no abre el archivo (contenedor o códec que no reconoce), el **motor del
-  panel** lo convierte (video sin cambios, audio en AAC) desde donde iba antes de dar el error.
+  panel** lo convierte (video sin cambios, audio en AAC) desde donde iba antes de dar el error (solo si la línea
+  tiene permiso del motor; sin permiso, el error normal).
 - **El progreso se guarda siempre** con su duración: con el motor del panel (que no la sabe) se usa la del servidor.
 - **Televisores 2018–2020** (Tizen 4.0–5.5): `web/polyfills.ts` les da `globalThis`, `padStart`, `Promise.finally`
   y un `AbortController` que sí corta las peticiones (sin eso la app no abría en esos modelos).
@@ -49,13 +50,24 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
   distribuidor o del dueño); sin clave no hay carrusel.
 - **Audio y subtítulos del panel**: `media_tizen.php?do=status&token=` — si el dueño desactivó ffmpeg
   para el distribuidor de la línea, el panel responde `ffmpeg:false` y se queda el audio original.
+  La respuesta se guarda por línea (una pregunta por sesión). Sin permiso (`ffmpeg:false`,
+  `features.ffmpeg: false` de `tenant_config` o un 503 del motor), al elegir una pista que necesita el motor
+  sale una vez por video el texto del panel («Sin permisos» / «No compatible con el dispositivo») y el
+  video sigue directo: sin recargar, sin «preparando», sin reintentos ni pasos automáticos por el motor.
 - **Botones iguales a Roku, Windows y la web**: un solo componente en toda la app (inicio de sesión,
   distribuidor, avisos, diálogos, Cuenta y menú del reproductor). Principal = color del distribuidor
   (rojo sin distribuidor) con texto de contraste; secundario = blanco translúcido con borde fino; con
-  el foco del control, borde blanco de 3 px y crece un poco con una animación corta.
+  el foco del control, borde de 3 px y crece un poco con una animación corta. El foco (bordes y
+  realce) es blanco sin distribuidor y su color de acento con distribuidor (aclarado si casi no se ve
+  sobre su fondo).
 - **Inicio estilo Netflix**: portada grande, Continuar viendo, Mi lista, Top 10,
   plataformas (Netflix, Disney+, HBO Max, Prime, Marvel, Navidad, Halloween…) y géneros
-  (Acción, Suspenso, Aventura, Anime, Drama…), igual que la web.
+  (Acción, Suspenso, Aventura, Anime, Drama…), igual que la web. En la portada, en lugar de la «N»
+  de Netflix va la inicial de la marca (distribuidor; con *Omitir*, «M» de MPX Player) en su color de
+  acento. Con `features.platforms: false` (`tenant_config`) no hay fila ni filas de plataformas. Al
+  cambiar de sección o abrir una plataforma/género la última portada queda de fondo (nunca negro).
+- **Cuenta** muestra también cuánto contenido tiene el servidor: canales en vivo, películas y series
+  («…» mientras se carga esa lista).
 - **Menú superior**: Inicio, Series, Películas, TV en vivo, Deportes, Mi lista, Buscar, Cuenta.
   *Atrás* vuelve a Inicio y, en Inicio, pregunta si quieres salir.
 - **Ficha** con sinopsis, reparto, temporadas, episodios con su avance y "Más títulos como este".

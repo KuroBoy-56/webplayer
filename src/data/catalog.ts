@@ -202,7 +202,8 @@ class Catalog {
   }
 
   // ---------- inicio ----------
-  home(): { rows: Row[]; hero: Item | null } {
+  // platforms: false = el distribuidor no separa su contenido por plataformas (sin fila ni filas por plataforma)
+  home(platforms = true): { rows: Row[]; hero: Item | null } {
     const rows: Row[] = [];
     let hero: Item | null = null;
     const vodIdx = this.allIdx('vod');
@@ -210,7 +211,7 @@ class Catalog {
 
     const plats: Row = { title: t('Plataformas'), type: 'platform', items: [] };
     const platRows: { p: Platform; mv: number[]; sv: number[] }[] = [];
-    for (const p of PLATFORMS) {
+    for (const p of platforms ? PLATFORMS : []) {
       const mv = this.idxForKw('vod', p.kw);
       const sv = this.idxForKw('series', p.kw);
       if (mv.length + sv.length > 0) {
@@ -312,7 +313,7 @@ class Catalog {
   }
 
   // ---------- cuadrícula "Ver todo" ----------
-  grid(mode: 'cat' | 'platform' | 'genre' | 'recent', key: string, kind?: Kind): Item[] {
+  grid(mode: 'cat' | 'platform' | 'genre' | 'recent', key: string, kind?: Kind, max = 3000): Item[] {
     const kinds: Kind[] = kind ? [kind] : ['vod', 'series'];
     const out: Item[] = [];
     for (const k of kinds) {
@@ -330,7 +331,7 @@ class Catalog {
       } else {
         idx = this.top(k, this.allIdx(k), 'added', 300);
       }
-      out.push(...this.items(k, idx, 3000));
+      out.push(...this.items(k, idx, max));
     }
     return out;
   }

@@ -5,8 +5,10 @@
 // - Audio que el equipo no puede cambiar o decodificar (DTS, TrueHD…): el motor del panel lo prepara
 //   en AAC y llega como HLS desde el segundo actual (hls.ts). Subtítulos que el equipo no muestra:
 //   el panel los convierte a WebVTT y se dibujan encima del video.
+// - Sin permiso del motor (Sin permisos / No compatible): el texto del panel una vez por video y el
+//   video sigue directo; nada automático pasa por el motor (estado guardado por línea en media.ts).
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import { Engine, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
+import { Engine, engineDenied, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, sameLang, trackLang } from '../lib/lang';
 import { Probe, probeTracks } from '../lib/probe';
@@ -81,6 +83,8 @@ export class Playback {
   private lastSub = '';
   // el equipo no abrió el archivo y ya se le pidió al panel que lo convierta (una vez por video)
   private formatTried = false;
+  // el aviso de motor no disponible ya se mostró en este video
+  private deniedShown = false;
 
   constructor(private v: VideoPlayer, private hooks: Hooks) {}
 
@@ -104,6 +108,7 @@ export class Playback {
     this.setExt(null);
     this.subWait = null;
     this.formatTried = false;
+    this.deniedShown = false;
     this.direct(resume);
   }
 
@@ -202,6 +207,8 @@ export class Playback {
       this.remuxFailed(t('el reproductor no pudo abrirlo'));
       return true;
     }
+    // sin motor: el error normal, sin pasar por el panel
+    if (engineDenied()) return false;
     const g = this.gen;
     if (!this.probe) this.probe = await probeTracks(this.url);
     if (g !== this.gen) return false;
@@ -210,8 +217,8 @@ export class Playback {
     if (def && def.probe !== undefined && !this.decodable(def)) {
       // el panel lo convierte a AAC: de una vez el idioma preferido
       const want = this.preferredAudio(items) || def;
-      this.toRemux(want.probe ?? def.probe, want.label, true, Math.floor(this.resumeAt || this.realPos()));
-      return true;
+      const label = want.label;
+      return this.toRemux(want.probe ?? def.probe, label, false, t('Cambiando a {x}…', { x: label }), Math.floor(this.resumeAt || this.realPos()));
     }
     return this.formatFallback(items);
   }
@@ -222,8 +229,7 @@ export class Playback {
     if (this.formatTried || this.live) return false;
     this.formatTried = true;
     const it = this.preferredAudio(items) || items[this.probeDefault()];
-    this.hooks.toast(t('Este equipo no abre el video directo: se prepara con el panel…'));
-    return this.toRemux(it?.probe ?? 0, it?.label || t('Audio {n}', { n: 1 }), false, Math.floor(this.resumeAt || this.realPos()));
+    return this.toRemux(it?.probe ?? 0, it?.label || t('Audio {n}', { n: 1 }), false, t('Este equipo no abre el video directo: se prepara con el panel…'), Math.floor(this.resumeAt || this.realPos()));
   }
 
   // ---------- listas ----------
@@ -327,7 +333,7 @@ export class Playback {
     const on = this.audioOn(a);
     for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: it === on });
     // como "Reabrir en modo compatible" de Roku: si el equipo no cambió el idioma, lo hace el panel
-    if (!this.live && !this.remux && this.probe?.ok && a.length > 1) out.push({ kind: 'panel', key: 'panel', label: t('¿No cambia el idioma? Prepararlo con el panel'), on: false });
+    if (!this.live && !this.remux && this.probe?.ok && a.length > 1 && !engineDenied()) out.push({ kind: 'panel', key: 'panel', label: t('¿No cambia el idioma? Prepararlo con el panel'), on: false });
     const subs = this.subItems();
     const showing = this.nativeSubs().find(t => t.showing);
     out.push({ kind: 'text', key: 'off', label: t('Desactivados'), on: this.subKey === 'off' || (!this.ext && !showing) });
@@ -342,7 +348,7 @@ export class Playback {
     if (m.kind === 'panel') {
       const a = this.audioItems();
       const it = a.find(i => i.key === this.audioKey) || this.audioOn(a);
-      if (it && it.probe !== undefined) this.toRemux(it.probe, it.label, true);
+      if (it && it.probe !== undefined) this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
       return;
     }
     if (m.kind === 'audio') {
@@ -448,7 +454,7 @@ export class Playback {
           if (user) this.hooks.toast(t('Audio: {x}', { x: it.label }));
         } else if (it.probe !== undefined && !this.live && user) {
           // el equipo no tomó la pista: la prepara el panel
-          this.toRemux(it.probe, it.label, true);
+          this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
         } else {
           this.audioKey = '';
           if (user) this.hooks.toast(t('Este equipo no pudo cambiar a {x}.', { x: it.label }));
@@ -469,36 +475,32 @@ export class Playback {
       this.audioKey = '';
       return;
     }
-    if (!user) this.hooks.toast(t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: codecName(it.codec) }));
-    this.toRemux(it.probe, it.label, user);
+    this.toRemux(it.probe, it.label, user, user ? t('Cambiando a {x}…', { x: it.label }) : t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: codecName(it.codec) }));
   }
 
-  private async getEngine(): Promise<Engine | null> {
-    if (this.engine) return this.engine;
+  // motor del panel; sin él, el texto del panel una sola vez por video y solo si lo pidió el usuario
+  private async getEngine(user: boolean): Promise<Engine | null> {
     const r = await mediaEngine();
-    if (!r.ok) {
-      this.hooks.toast(r.error);
-      return null;
-    }
-    this.engine = r.engine;
-    return r.engine;
+    if (r.ok) return (this.engine = r.engine);
+    this.denied(r.error, user);
+    return null;
   }
 
-  // true = el panel empezó a preparar el video
-  private async toRemux(a: number, label: string, announce: boolean, at?: number): Promise<boolean> {
+  private denied(msg: string, user: boolean): void {
+    if (!user || this.deniedShown) return;
+    this.deniedShown = true;
+    this.hooks.toast(msg);
+  }
+
+  // true = el panel empezó a preparar el video. note: aviso que se muestra solo si el motor está
+  // (sin motor nada cambia: ni recarga, ni "preparando", ni reintentos)
+  private async toRemux(a: number, label: string, user: boolean, note: string, at?: number): Promise<boolean> {
     if (this.live || this.remux?.a === a) return false;
-    if (!PanelHls.supported()) {
-      this.audioKey = '';
-      this.hooks.toast(t('Este equipo no puede reproducir el audio que prepara el panel.'));
-      this.hooks.changed();
-      return false;
-    }
     const g = this.gen;
-    this.hooks.status(t('Preparando {x}…', { x: label }));
-    const e = await this.getEngine();
+    const e = await this.getEngine(user);
     if (g !== this.gen) return false;
-    if (!e) {
-      this.hooks.status('');
+    if (!e || !PanelHls.supported()) {
+      if (e && user) this.hooks.toast(t('Este equipo no puede reproducir el audio que prepara el panel.'));
       this.audioKey = '';
       this.hooks.changed();
       return false;
@@ -507,7 +509,7 @@ export class Playback {
     this.duration();
     this.remux = { a, label };
     this.audioKey = 'p:' + a;
-    if (announce) this.hooks.toast(t('Cambiando a {x}…', { x: label }));
+    if (note) this.hooks.toast(note);
     this.startRemux(pos);
     return true;
   }
@@ -545,7 +547,10 @@ export class Playback {
     this.remux = null;
     this.audioKey = '';
     this.hooks.status('');
-    this.hooks.toast(t('No se pudo cambiar a {x} ({msg}). Se sigue con el audio original.', { x: label, msg }));
+    // sin permiso (503): solo el texto del panel, una vez
+    const denied = engineDenied();
+    if (denied) this.denied(denied, true);
+    else this.hooks.toast(t('No se pudo cambiar a {x} ({msg}). Se sigue con el audio original.', { x: label, msg }));
     if (attached) this.direct(pos);
     else {
       this.stopHls();
@@ -628,7 +633,7 @@ export class Playback {
 
   private async extSub(s: number, label: string): Promise<void> {
     const g = this.gen;
-    const e = await this.getEngine();
+    const e = await this.getEngine(true);
     if (g !== this.gen) return;
     if (!e) {
       this.subKey = 'off';
@@ -661,7 +666,8 @@ export class Playback {
       if (r.failed || ++wait.tries > 100) {
         this.subWait = null;
         this.subKey = 'off';
-        this.hooks.toast(t('Este subtítulo no se puede mostrar (es de imagen o el servidor no respondió).'));
+        if (r.denied) this.denied(r.denied, true);
+        else this.hooks.toast(t('Este subtítulo no se puede mostrar (es de imagen o el servidor no respondió).'));
         this.hooks.changed();
         return;
       }
