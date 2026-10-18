@@ -13,6 +13,11 @@ import { alpha, C, px, SIDE, themed } from '../theme';
 
 let cache: { data: SportsData; at: number } | null = null;
 
+// borrado de caché pedido por el panel
+export function clearSportsCache(): void {
+  cache = null;
+}
+
 const isFinal = (st: string) => {
   const s = st.toLowerCase();
   return s === 'ft' || s === 'aet' || s === 'pen' || s.includes('finish') || s.includes('final') || s === 'ended';

@@ -23,6 +23,11 @@ export function write(key: string, value: string): void {
   AsyncStorage.setItem(PREFIX + key, value).catch(() => {});
 }
 
+// claves guardadas (sin el prefijo)
+export function keys(): string[] {
+  return Object.keys(mem);
+}
+
 export function remove(key: string): void {
   delete mem[key];
   AsyncStorage.removeItem(PREFIX + key).catch(() => {});

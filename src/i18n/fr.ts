@@ -273,6 +273,7 @@ const fr: Record<Key, string> = {
   "Tu cuenta está vencida": "Votre compte a expiré",
   "Tu cuenta está {st}": "Votre compte est {st}",
   "Tu distribuidor venció el {d} (hora de Panamá). Contacta a tu distribuidor.": "Votre distributeur a expiré le {d} (heure du Panama). Contactez votre distributeur.",
+  "Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.": "Votre fournisseur a mis à jour l'application. Le cache sera vidé et l'application redémarrera.",
   "Tu lista está vacía. Agrega películas, series o canales con «Mi lista».": "Votre liste est vide. Ajoutez des films, séries ou chaînes avec « Ma liste ».",
   "TV en vivo": "TV en direct",
   "Títulos, series, canales…": "Titres, séries, chaînes…",

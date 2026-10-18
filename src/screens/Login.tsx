@@ -1,7 +1,7 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Image, StyleSheet, Text, TextInput, View } from 'react-native';
-import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
+import { ActivityIndicator, BackHandler, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import { loginAll, sessionFrom } from '../api/xtream';
 import { Button, Focusable, Logo } from '../components/ui';
@@ -13,7 +13,7 @@ import { read, write } from '../lib/storage';
 import { APP_ID, features, scoped, tenantCode } from '../lib/tenant';
 import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
-import { deviceId, setSession } from '../state';
+import { deviceId, resetTenant, setSession } from '../state';
 import { alpha, C, px, themed } from '../theme';
 
 // fondo: carátulas de TMDB con la clave del panel (la del distribuidor o la del dueño) por
@@ -49,6 +49,8 @@ export default function Login() {
   // primera consulta al panel (línea del equipo y pantalla falsa) en curso: la pantalla falsa, si el
   // panel la tiene activada, es lo primero que se ve (nunca el inicio de sesión antes)
   const [checking, setChecking] = useState(true);
+  // login.php features: hay demo configurada en el panel (null = no respondió o panel viejo)
+  const [demoOk, setDemoOk] = useState<boolean | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -56,6 +58,7 @@ export default function Login() {
     // Con una sola línea entra sola después de comprobarla en el servidor IPTV.
     (async () => {
       tmdbPosters().then(p => alive && setPosters(p));
+      const feat = panelFeatures().then(f => alive && setDemoOk(f ? f.demo : null));
       // manda el panel: con la llave, check_mac primero (la línea que el panel le da hoy a esta MAC, demo
       // vigente incluida, con su marca DEMO). auth.php solo sin llave o si check_mac no da línea: prefiere
       // cualquier línea vieja no demo y no sabe si es demo (en Roku eso hacía rebotar el inicio).
@@ -70,6 +73,8 @@ export default function Login() {
         lines = r.lines;
         err = r.error;
       }
+      // el botón Autodemo ya se sabe antes de mostrar el inicio de sesión
+      await feat;
       if (!alive) return;
       if (!lines.length && read('fake_unlocked') !== '1') setFake(lastFakeScreen());
       setChecking(false);
@@ -174,7 +179,16 @@ export default function Login() {
     enter(ln.user, ln.pass, assigned.filter(a => a.user === ln.user).map(a => ({ name: a.name, base: a.base })), true, ln.demo, ln.demoExpires, ln.demoDuration);
   };
 
-  const canDemo = hasMasterKey() && features().demo;
+  // Autodemo solo si el panel tiene una demo configurada; sin respuesta, lo de antes (con distribuidor
+  // tenant_config; con Omitir se muestra)
+  const canDemo = hasMasterKey() && (demoOk ?? features().demo);
+
+  // vuelve al número de distribuidor (Continuar / Omitir): se olvidan la marca y la clave TMDB del anterior
+  const changeDist = () => {
+    if (busy) return;
+    resetTenant();
+    nav.rebrand({ name: 'distributor' });
+  };
 
   if (checking && !fake) {
     return (
@@ -255,6 +269,9 @@ export default function Login() {
         ) : null}
         <Text style={s.device}>{t('Código del equipo:')} {dev}</Text>
       </View>
+      <View style={s.dist}>
+        <Button label={t('Cambiar distribuidor')} small last onPress={changeDist} />
+      </View>
       {dnsOpen ? <DnsPicker onClose={() => setDnsOpen(false)} /> : null}
     </View>
   );
@@ -271,23 +288,26 @@ function DnsPicker({ onClose }: { onClose: () => void }) {
     return () => sub.remove();
   }, [onClose]);
   return (
-    <View style={s.dnsShade}>
+    <View style={s.dnsShade} aria-modal>
       <View style={s.dnsBox}>
         <Text style={s.title}>DNS</Text>
         <Text style={s.dnsNote}>{t('Si tu internet bloquea el servidor, elige otro DNS. La app lo usa cuando el de tu red no responde.')}</Text>
-        {DNS_OPTIONS.map(o => (
-          <Button
-            key={o.key}
-            label={(o.key === cur ? '✓ ' : '') + (o.key === 'auto' ? t('Automático') : o.label)}
-            value={t(o.note)}
-            preferred={o.key === cur}
-            onPress={() => {
-              setDnsChoice(o.key);
-              setCur(o.key);
-              onClose();
-            }}
-          />
-        ))}
+        {/* si no caben, la lista se desplaza (el foco la corre con las flechas); aria-modal: el foco no sale del menú */}
+        <ScrollView style={s.dnsList} contentContainerStyle={s.dnsItems}>
+          {DNS_OPTIONS.map(o => (
+            <Button
+              key={o.key}
+              label={(o.key === cur ? '✓ ' : '') + (o.key === 'auto' ? t('Automático') : o.label)}
+              value={t(o.note)}
+              preferred={o.key === cur}
+              onPress={() => {
+                setDnsChoice(o.key);
+                setCur(o.key);
+                onClose();
+              }}
+            />
+          ))}
+        </ScrollView>
       </View>
     </View>
   );
@@ -309,7 +329,10 @@ const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg },
     dnsShade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha('#000000', 0.7), alignItems: 'center', justifyContent: 'center' },
-    dnsBox: { width: px(820), backgroundColor: C.bg2, borderRadius: px(12), padding: px(50) },
+    dnsBox: { width: px(820), maxHeight: '92%', backgroundColor: C.bg2, borderRadius: px(12), padding: px(50) },
+    dnsList: { flexGrow: 0, flexShrink: 1 },
+    // margen para que el borde del botón enfocado (crece un poco) no se corte en los lados
+    dnsItems: { padding: px(10) },
     dnsNote: { color: C.sub, fontSize: px(26), marginBottom: px(24) },
     checking: { flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' },
     mosaic: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, flexDirection: 'row', flexWrap: 'wrap', transform: [{ rotate: '-8deg' }, { scale: 1.3 }] },
@@ -332,5 +355,6 @@ const s = themed(() =>
     btns: { flexDirection: 'row', marginTop: px(12) },
     tip: { color: C.dim, fontSize: px(22), marginTop: px(14) },
     device: { color: C.dim, fontSize: px(24), marginTop: px(30) },
+    dist: { alignSelf: 'center', marginTop: px(24) },
   }),
 );
