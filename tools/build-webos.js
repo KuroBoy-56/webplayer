@@ -33,7 +33,11 @@ esbuild
     logLevel: 'info',
   })
   .then(() => {
-    for (const f of ['index.html', 'appinfo.json', 'icon.png', 'largeIcon.png', 'splash.png']) fs.copyFileSync(path.join(root, 'webos', f), path.join(dist, f));
-    console.log('Listo: dist/ (abre dist/index.html en un navegador para probar)');
+    for (const f of ['index.html', 'appinfo.json', 'icon.png', 'largeIcon.png']) fs.copyFileSync(path.join(root, 'webos', f), path.join(dist, f));
+    // también en webos/ (sin subir a git): el simulador de LG abierto en esa carpeta quedaba en negro sin app.js
+    fs.copyFileSync(path.join(dist, 'app.js'), path.join(root, 'webos', 'app.js'));
+    fs.rmSync(path.join(root, 'webos', 'img'), { recursive: true, force: true });
+    fs.cpSync(path.join(dist, 'img'), path.join(root, 'webos', 'img'), { recursive: true });
+    console.log('Listo: dist/ y webos/ (abre dist/index.html en un navegador para probar)');
   })
   .catch(() => process.exit(1));

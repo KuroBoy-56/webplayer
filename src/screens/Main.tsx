@@ -96,9 +96,9 @@ export default function Main({ active }: { active: boolean }) {
 
 const s = themed(() =>
   StyleSheet.create({
-    root: { flex: 1, backgroundColor: C.bg },
-    content: { flex: 1 },
-    menu: { position: 'absolute', left: 0, top: 0, right: 0, height: px(110), flexDirection: 'row', alignItems: 'center', paddingHorizontal: SIDE, backgroundColor: alpha(C.bg, 0.7) },
+    root: { flex: 1, backgroundColor: C.bg, overflow: 'hidden' },
+    content: { flex: 1, overflow: 'hidden' },
+    menu: { position: 'absolute', left: 0, top: 0, right: 0, height: px(110), zIndex: 100, flexDirection: 'row', alignItems: 'center', paddingHorizontal: SIDE, backgroundColor: alpha(C.bg, 0.7) },
     items: { flexDirection: 'row', marginLeft: px(40), flex: 1 },
     item: { paddingHorizontal: px(20), height: px(56), justifyContent: 'center', alignItems: 'center', borderRadius: px(28), marginRight: px(4) },
     itemF: { backgroundColor: C.focus },

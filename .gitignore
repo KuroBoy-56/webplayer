@@ -7,3 +7,5 @@ generated/
 config/panel.key
 src/generated/
 out/
+webos/app.js
+webos/img/

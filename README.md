@@ -160,6 +160,11 @@ compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con 
 2018 en adelante) y copia `webos/index.html`, `appinfo.json`, iconos y la pantalla de carga. `ares-package dist`
 (CLI oficial de LG, `@webos-tools/cli`) arma el `.ipk`.
 
+El build también copia `app.js` e `img/` a `webos/` (sin subir a git): el simulador de LG abierto en `webos/`
+quedaba en negro porque ahí no estaba `app.js`. Si algo falla al arrancar, `index.html` muestra el error en
+pantalla en lugar de dejarla negra. No hay pantalla de carga fija (`splashBackground`): la primera pantalla
+es el número de distribuidor y el logo de inicio es el del distribuidor (solo el icono y el nombre son fijos).
+
 ## Instalarla en tu televisor LG
 
 LG instala apps propias con la app **Developer Mode** (gratis con una cuenta de LG):
