@@ -7,14 +7,28 @@ import Foundation
  */
 @MainActor
 enum StreamEngine {
-    private static var known: (on: Bool, at: Date)?
+    /** respuesta de ?do=status por línea (usuario@servidor): se pregunta una vez por sesión, no en cada video */
+    private static var known: (line: String, on: Bool)?
+
+    private static var line: String { Store.session().map { $0.user + "@" + $0.base } ?? "" }
 
     static func available() async -> Bool {
-        if let k = known, Date().timeIntervalSince(k.at) < 600 { return k.on }
+        // tenant_config dice que el distribuidor no tiene el motor para esta app: ni se pregunta
+        if Tenant.shared.brand?.ffmpeg == false { return false }
+        let l = line
+        if let k = known, k.line == l { return k.on }
         guard let t = await Cloud.shared.lineToken() else { return false }
-        let on = await Net.get(PanelUrl.api("media_ios.php") + "?do=status&token=" + urlEnc(t), timeout: 8).json()?.b("ffmpeg") ?? false
-        known = (on, Date())
+        // sin respuesta (red): no se guarda, el próximo video vuelve a preguntar
+        guard let j = await Net.get(PanelUrl.api("media_ios.php") + "?do=status&token=" + urlEnc(t), timeout: 8).json() else { return false }
+        let on = j.b("ffmpeg")
+        known = (l, on)
         return on
+    }
+
+    /** el motor respondió 503 / 501 (sin permiso o sin ffmpeg): apagado para esta línea, sin más pedidos */
+    static func off() {
+        PlayerDiag.log("motor del panel no disponible para esta línea")
+        known = (line, false)
     }
 
     /** HLS del video desde el segundo `from` (el reproductor empieza en 0 = ese segundo) */

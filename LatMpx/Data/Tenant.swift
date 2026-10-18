@@ -29,6 +29,10 @@ final class Tenant: ObservableObject {
         let demo: Bool
         let alerts: Bool
         let sports: Bool
+        /** false = el distribuidor no separa su contenido por plataformas (Netflix, Disney+…) */
+        let platforms: Bool
+        /** permiso del motor del panel para esta app (nil = el panel no lo dijo: se pregunta a media_ios.php) */
+        let ffmpeg: Bool?
         let rev: Int
         let recheckAfter: Double
 
@@ -56,6 +60,7 @@ final class Tenant: ObservableObject {
     var demoEnabled: Bool { brand?.demo ?? true }
     var alertsEnabled: Bool { brand?.alerts ?? true }
     var sportsEnabled: Bool { brand?.sports ?? true }
+    var platformsEnabled: Bool { brand?.platforms ?? true }
 
     func nameOr(_ def: String) -> String {
         if let n = brand?.name, !n.trimmed.isEmpty { return n }
@@ -178,6 +183,7 @@ final class Tenant: ObservableObject {
             logoRev: t.i("logo_rev"), colors: colors,
             expiresAt: Double(t.s("expires_at")) ?? 0, expiresDate: t.s("expires_date"),
             demo: f?.b("demo", true) ?? true, alerts: f?.b("alerts", true) ?? true, sports: f?.b("sports", true) ?? true,
+            platforms: f?.b("platforms", true) ?? true, ffmpeg: f?["ffmpeg"] == nil || f?["ffmpeg"] is NSNull ? nil : f?.b("ffmpeg"),
             rev: t.i("rev"),
             recheckAfter: Double(j.s("recheck_after")).flatMap { $0 > 0 ? $0 : nil } ?? defaultRecheck
         )
@@ -187,8 +193,9 @@ final class Tenant: ObservableObject {
         var tenant: JObj = ["code": b.code, "name": b.name, "logo_url": b.logoUrl, "logo_rev": b.logoRev,
                             "expires_at": b.expiresAt, "expires_date": b.expiresDate, "rev": b.rev]
         if let c = b.colors { tenant["palette"] = ["accent": c.accent, "bg": c.bg, "surface": c.surface, "text": c.text] }
-        let o: JObj = ["status": "ok", "tenant": tenant,
-                       "features": ["demo": b.demo, "alerts": b.alerts, "sports": b.sports], "recheck_after": b.recheckAfter]
+        var features: JObj = ["demo": b.demo, "alerts": b.alerts, "sports": b.sports, "platforms": b.platforms]
+        if let ff = b.ffmpeg { features["ffmpeg"] = ff }
+        let o: JObj = ["status": "ok", "tenant": tenant, "features": features, "recheck_after": b.recheckAfter]
         return Json.string(o)
     }
 }

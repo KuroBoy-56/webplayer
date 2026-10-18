@@ -47,6 +47,11 @@ struct AccountView: View {
                                 InfoRow(k: tr("Servidor"), v: s.dnsName); Divider().background(Color(hex: 0x333333))
                                 InfoRow(k: tr("Miembro desde"), v: s.createdAt)
                             }
+                            // contenido del servidor (catálogo cargado; "…" mientras llega)
+                            Divider().background(Color(hex: 0x333333))
+                            InfoRow(k: tr("Canales en vivo"), v: count(state.live)); Divider().background(Color(hex: 0x333333))
+                            InfoRow(k: tr("Películas"), v: count(state.movies)); Divider().background(Color(hex: 0x333333))
+                            InfoRow(k: tr("Series"), v: count(state.series))
                         }
                     }
                     section(tr("Configuración de la aplicación")) {
@@ -103,6 +108,8 @@ struct AccountView: View {
             Button(tr("Cancelar"), role: .cancel) {}
         }
     }
+
+    private func count(_ l: [Item]) -> String { l.isEmpty && state.loading ? "…" : "\(l.count)" }
 
     private func section<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 12) {

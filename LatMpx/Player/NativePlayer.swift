@@ -64,6 +64,8 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     private var lastDurMs: Int64 = 0
     private var playedThisWay = false
     private var retriedThisWay = false
+    /** el motor del panel ya falló en este video sin dar imagen: no se le vuelve a pedir */
+    private var engineDead = false
     /** vías que fallaron en este video (motivo), para el reporte al panel */
     private var failures: [String] = []
     /** desde cuándo no se ve nada (al abrir o desde el último corte); nil = está reproduciendo */
@@ -159,6 +161,7 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         self.ways = ways
         wayIx = 0
         retriedThisWay = false
+        engineDead = false
         failures = []
         lastDurMs = 0
         failingSince = Date()
@@ -396,6 +399,14 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         let trying = Date().timeIntervalSince(failingSince ?? Date())
         PlayerDiag.log("nativo: falló \(err) (vía \(wayIx + 1)/\(ways.count), \(Int(trying)) s)")
         if ways.indices.contains(wayIx) { failures.append(ways[wayIx].label + ": " + err) }
+        if isEngine(wayIx) && !playedThisWay {
+            // sin reintentos al motor en este video; 503 / 501 = sin permiso o sin ffmpeg: apagado para toda la línea
+            engineDead = true
+            if let ev = vc?.player?.currentItem?.errorLog()?.events.last,
+               [501, 503].contains(ev.errorStatusCode) || Rx.has(ev.errorComment ?? "", "\\b50[13]\\b") {
+                Task { @MainActor in StreamEngine.off() }
+            }
+        }
         if retry && !format && playedThisWay && !retriedThisWay {
             retriedThisWay = true
             again(ms)
@@ -403,11 +414,12 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         }
         // formato o códec que Apple no abre: las otras vías directas darían lo mismo, sigue el motor del panel
         var next = wayIx + 1
-        if format, let e = ways.lastIndex(where: { if case .engine = $0 { return true } else { return false } }), e > wayIx { next = e }
-        let engineIx = ways.firstIndex { if case .engine = $0 { return true } else { return false } }
-        if next >= ways.count && trying < Self.minTry {
+        if format, let e = ways.lastIndex(where: { if case .engine = $0 { return true } else { return false } }), e > wayIx, !engineDead { next = e }
+        next = usable(from: next)
+        let engineIx = engineDead ? nil : ways.firstIndex { if case .engine = $0 { return true } else { return false } }
+        if next >= ways.count && trying < Self.minTry && usable(from: engineIx ?? 0) < ways.count {
             // sin vías antes del minuto: otra vuelta (el motor del panel primero si lo hay), con una pausa para el servidor
-            next = engineIx ?? 0
+            next = usable(from: engineIx ?? 0)
             PlayerDiag.log("nativo: otra vuelta por las vías")
             wayIx = next
             retriedThisWay = false
@@ -429,6 +441,18 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         } else {
             backToApp(r, ms, tr("Se abrió en el reproductor de la app"))
         }
+    }
+
+    private func isEngine(_ i: Int) -> Bool {
+        guard ways.indices.contains(i), case .engine = ways[i] else { return false }
+        return true
+    }
+
+    /** la primera vía desde i que se puede usar (salta el motor si ya falló en este video) */
+    private func usable(from i: Int) -> Int {
+        var n = i
+        while n < ways.count && engineDead && isEngine(n) { n += 1 }
+        return n
     }
 
     /** otra vía en la misma pantalla; antes, un segundo para que el servidor suelte la conexión anterior (líneas de 1 conexión) */

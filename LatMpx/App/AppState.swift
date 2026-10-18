@@ -87,21 +87,30 @@ final class AppState: ObservableObject {
     func reset() {
         stacks = [:]; tab = .home; play = nil
         movies = []; series = []; live = []; movieCats = []; seriesCats = []; liveCats = []
+        indexCache = [:]
     }
 
-    /* ---------- títulos por categoría (se calcula una vez por catálogo, no en cada redibujo) ---------- */
-    private var groupCache: [Kind: (Int, [String: [Item]])] = [:]
+    /* ---------- índices del catálogo (se calculan una vez por catálogo, no en cada redibujo) ---------- */
+    private struct Index { let recent: [Item]; let byId: [Int: Item]; let groups: [String: [Item]] }
+    /** se borra al cambiar el catálogo (put / reset) */
+    private var indexCache: [Kind: Index] = [:]
+
+    private func index(_ kind: Kind) -> Index {
+        if let c = indexCache[kind] { return c }
+        let all = kind == .movie ? movies : series
+        let recent = all.sorted { $0.added > $1.added }
+        var g: [String: [Item]] = [:]
+        for it in recent { g[it.categoryId, default: []].append(it) }
+        let c = Index(recent: recent, byId: Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }), groups: g)
+        indexCache[kind] = c
+        return c
+    }
 
     /** categoría -> títulos, los más nuevos primero */
-    func grouped(_ kind: Kind) -> [String: [Item]] {
-        let all = kind == .movie ? movies : series
-        let sig = all.count &* 31 &+ (all.first?.id ?? 0)
-        if let c = groupCache[kind], c.0 == sig { return c.1 }
-        var g: [String: [Item]] = [:]
-        for it in all.sorted(by: { $0.added > $1.added }) { g[it.categoryId, default: []].append(it) }
-        groupCache[kind] = (sig, g)
-        return g
-    }
+    func grouped(_ kind: Kind) -> [String: [Item]] { index(kind).groups }
+
+    /** películas o series, las más nuevas primero */
+    func recent(_ kind: Kind) -> [Item] { index(kind).recent }
 
     /** carpetas que el control parental no oculta */
     func visible(_ cats: [Category]) -> [Category] {
@@ -119,8 +128,8 @@ final class AppState: ObservableObject {
         let parts = p.key.split(separator: ":")
         guard parts.count >= 2, let id = Int(parts[1]) else { return nil }
         switch parts[0] {
-        case "movie": return movies.first { $0.id == id } ?? Item(id: id, name: p.title, poster: p.poster, kind: .movie, categoryId: p.categoryId)
-        case "series": return series.first { $0.id == id } ?? Item(id: id, name: p.title, poster: p.poster, kind: .series, categoryId: p.categoryId)
+        case "movie": return index(.movie).byId[id] ?? Item(id: id, name: p.title, poster: p.poster, kind: .movie, categoryId: p.categoryId)
+        case "series": return index(.series).byId[id] ?? Item(id: id, name: p.title, poster: p.poster, kind: .series, categoryId: p.categoryId)
         default: return nil
         }
     }
@@ -171,6 +180,7 @@ final class AppState: ObservableObject {
 
     /* ---------- catálogo ---------- */
     private func put(_ kind: Kind, _ cats: [Category], _ items: [Item]) {
+        indexCache[kind] = nil
         switch kind {
         case .movie: if !cats.isEmpty { movieCats = cats }; movies = items
         case .series: if !cats.isEmpty { seriesCats = cats }; series = items

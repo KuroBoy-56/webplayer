@@ -12,7 +12,8 @@ struct CatalogView: View {
 
     var body: some View {
         GeometryReader { g in
-            let all = state.visibleItems(kind == .movie ? state.movies : state.series)
+            // las más nuevas primero, ordenadas una vez por catálogo
+            let all = state.visibleItems(state.recent(kind == .movie ? .movie : .series))
             if state.loading && all.isEmpty {
                 LoadingView(text: tr("Preparando tu catálogo…"))
             } else {
@@ -25,10 +26,9 @@ struct CatalogView: View {
 
     private func content(_ size: CGSize, _ all: [Item]) -> some View {
         let pad = sidePad(size), pw = posterWidth(size)
-        let recentAll = all.sorted { $0.added > $1.added }
-        let recent = Array(recentAll.prefix(20))
-        let top10 = Array(recentAll.prefix(300).sorted { $0.rating > $1.rating }.prefix(10))
-        let hero = Array(recentAll.prefix(40).sorted { $0.rating > $1.rating }.prefix(6))
+        let recent = Array(all.prefix(20))
+        let top10 = Array(all.prefix(300).sorted { $0.rating > $1.rating }.prefix(10))
+        let hero = Array(all.prefix(40).sorted { $0.rating > $1.rating }.prefix(6))
         let cats = state.visible(kind == .movie ? state.movieCats : state.seriesCats)
         let groups = state.grouped(kind)
         let rows: [CatRow] = cats.compactMap { c in
@@ -109,9 +109,8 @@ struct BrowseView: View {
                     let ids = Platforms.categoriesFor(state.visible(state.movieCats + state.seriesCats), p.kw)
                     return (state.movies + state.series).filter { ids.contains($0.categoryId) }.sorted { $0.added > $1.added }
                 }
-                let all = state.visibleItems(kind == .series ? state.series : state.movies)
-                let l = categoryIds.isEmpty ? all : all.filter { categoryIds.contains($0.categoryId) }
-                return l.sorted { $0.added > $1.added }
+                let all = state.visibleItems(state.recent(kind == .series ? .series : .movie))
+                return categoryIds.isEmpty ? all : all.filter { categoryIds.contains($0.categoryId) }
             }()
             if list.isEmpty { EmptyMessage(text: tr("No hay títulos.")) } else { PosterGrid(items: list, size: g.size) }
         }

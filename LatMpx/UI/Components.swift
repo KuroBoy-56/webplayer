@@ -50,9 +50,10 @@ struct Chip: View {
         Button(action: action) {
             Text(text).font(.system(size: 14, weight: .semibold)).lineLimit(1)
                 .padding(.horizontal, 14).padding(.vertical, 7)
-                .foregroundColor(selected ? .black : .white)
-                .background(selected ? Color.white : Color.white.opacity(0.08))
-                .overlay(Capsule().stroke(Color.white.opacity(selected ? 0 : 0.5), lineWidth: 1))
+                // elegido: en el acento del distribuidor (sin paleta, el rojo de siempre)
+                .foregroundColor(selected ? Theme.p.onAccent : .white)
+                .background(selected ? Theme.accent : Color.white.opacity(0.08))
+                .overlay(Capsule().stroke(Color.white.opacity(selected ? 0.25 : 0.5), lineWidth: 1))  // borde: se ve aunque el acento sea oscuro
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)

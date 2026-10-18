@@ -40,7 +40,12 @@ struct LiveView: View {
         let blocked = Store.blockedCats
         let base: [Item]
         switch currentCat {
-        case LiveView.favs: base = cloud.favList(.live).map { f in state.live.first { $0.id == f.id } ?? f }
+        case LiveView.favs:
+            // una pasada por los canales (no una búsqueda por cada favorito)
+            let favs = cloud.favList(.live), ids = Set(favs.map { $0.id })
+            var byId: [Int: Item] = [:]
+            for c in state.live where ids.contains(c.id) && byId[c.id] == nil { byId[c.id] = c }
+            base = favs.map { byId[$0.id] ?? $0 }
         case LiveView.all: base = blocked.isEmpty ? state.live : state.live.filter { !blocked.contains($0.categoryId) }
         default: base = state.live.filter { $0.categoryId == currentCat }
         }
@@ -185,10 +190,10 @@ struct LiveView: View {
             Text(ch.name).font(.system(size: 16, weight: .bold)).foregroundColor(.white).lineLimit(1)
             Spacer(minLength: 8)
             Button { toggleFav(ch) } label: {
-                Image(systemName: "star.fill").font(.system(size: 19)).foregroundColor(on ? .black : .white)
+                Image(systemName: "star.fill").font(.system(size: 19)).foregroundColor(on ? Theme.p.onAccent : .white)
                     .frame(width: 40, height: 40)
-                    .background(Circle().fill(on ? Color.white : Color(hex: 0x2A2A2A).opacity(0.6)))
-                    .overlay(Circle().stroke(on ? Color.white : Color.white.opacity(0.6), lineWidth: 2))
+                    .background(Circle().fill(on ? Theme.accent : Color(hex: 0x2A2A2A).opacity(0.6)))
+                    .overlay(Circle().stroke(on ? Theme.accent : Color.white.opacity(0.6), lineWidth: 2))
             }.buttonStyle(.plain).accessibilityLabel(tr("Favorito"))
         }
         .padding(.horizontal, 12).padding(.vertical, 8)

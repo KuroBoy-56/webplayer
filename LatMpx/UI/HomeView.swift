@@ -21,17 +21,19 @@ struct HomeView: View {
 
     private func content(_ size: CGSize) -> some View {
         let pad = sidePad(size), pw = posterWidth(size)
-        let movies = state.visibleItems(state.movies), series = state.visibleItems(state.series)
-        let recentM = Array(movies.sorted { $0.added > $1.added }.prefix(40))
-        let recentS = Array(series.sorted { $0.added > $1.added }.prefix(40))
+        // ya ordenadas (las más nuevas primero) una vez por catálogo: nada de ordenar miles de títulos en cada redibujo
+        let movies = state.visibleItems(state.recent(.movie)), series = state.visibleItems(state.recent(.series))
+        let recentM = Array(movies.prefix(40))
+        let recentS = Array(series.prefix(40))
         let top10 = Array(recentM.prefix(300).sorted { $0.rating > $1.rating }.prefix(10))
         let mcats = state.visible(state.movieCats)
         let safe = mcats + state.visible(state.seriesCats)
-        let platforms = Platforms.list.filter { !Platforms.categoriesFor(safe, $0.kw).isEmpty }
+        // el distribuidor puede no separar su contenido por plataformas (features.platforms = false)
+        let platforms = tenant.platformsEnabled ? Platforms.list.filter { !Platforms.categoriesFor(safe, $0.kw).isEmpty } : []
         let genreRows: [(String, Set<String>, [Item])] = Platforms.genres.compactMap { (label, kw) in
             let ids = Platforms.categoriesFor(mcats, kw)
             if ids.isEmpty { return nil }
-            let l = Array(movies.filter { ids.contains($0.categoryId) }.sorted { $0.added > $1.added }.prefix(30))
+            let l = Array(movies.lazy.filter { ids.contains($0.categoryId) }.prefix(30))
             return l.count >= 4 ? (label, ids, l) : nil
         }
         let cont = cloud.progressList()

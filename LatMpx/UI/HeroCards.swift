@@ -70,7 +70,7 @@ struct HeroCards: View {
     private var dots: some View {
         HStack(spacing: 6) {
             ForEach(0..<items.count, id: \.self) { i in
-                Capsule().fill(i == page ? Color.white : Color.white.opacity(0.33)).frame(width: i == page ? 18 : 6, height: 6)
+                Capsule().fill(i == page ? Theme.accent : Color.white.opacity(0.33)).frame(width: i == page ? 18 : 6, height: 6)
             }
         }
     }
