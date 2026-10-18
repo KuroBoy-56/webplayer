@@ -59,6 +59,11 @@ export function forgetEngine(): void {
   if (state?.engine) state = null;
 }
 
+// borrado de caché pedido por el panel: se vuelve a preguntar al motor
+export function resetEngine(): void {
+  state = null;
+}
+
 function b64u(s: string): string {
   return b64Encode(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }

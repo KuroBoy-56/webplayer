@@ -272,6 +272,7 @@ const en = {
   "Tu cuenta está vencida": "Your account has expired",
   "Tu cuenta está {st}": "Your account is {st}",
   "Tu distribuidor venció el {d} (hora de Panamá). Contacta a tu distribuidor.": "Your distributor expired on {d} (Panama time). Contact your distributor.",
+  "Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.": "Your provider updated the app. The cache will be cleared and the app will restart.",
   "Tu lista está vacía. Agrega películas, series o canales con «Mi lista».": "Your list is empty. Add movies, series or channels with “My list”.",
   "TV en vivo": "Live TV",
   "Títulos, series, canales…": "Titles, series, channels…",
