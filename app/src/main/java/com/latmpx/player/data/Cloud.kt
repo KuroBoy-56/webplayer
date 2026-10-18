@@ -81,8 +81,10 @@ object Cloud {
 
     /** llave TMDB del panel (settings.tmdb_key) que el panel envía junto al token: la usan las carátulas */
     private fun rememberTmdbKey(j: JSONObject?) {
-        val k = j?.s("tmdbKey").orEmpty()
-        if (k.isNotEmpty() && k != "missing_tmdb_key" && k != Store.tmdbKey) Store.tmdbKey = k
+        if (j == null || !j.has("tmdbKey")) return
+        // vacía: el distribuidor no tiene clave (el panel nunca le da la del dueño): se olvida la guardada
+        val k = j.s("tmdbKey").takeIf { it != "missing_tmdb_key" }.orEmpty()
+        if (k != Store.tmdbKey) Store.tmdbKey = k
     }
 
     /* ---------- carga ---------- */
