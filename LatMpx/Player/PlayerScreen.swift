@@ -89,6 +89,10 @@ struct PlayerScreen: View {
 
     private func autoHide() {
         hideTask?.cancel()
+        #if DEBUG
+        // prueba del simulador: los controles no se ocultan solos (ocultarse justo antes del toque la hacía fallar al azar)
+        if UserDefaults.standard.string(forKey: "ui_test_player") != nil { return }
+        #endif
         hideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 4_500_000_000)
             if !Task.isCancelled && m.playing && scrub == nil { withAnimation { controls = false } }
