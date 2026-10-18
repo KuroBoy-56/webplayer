@@ -168,6 +168,8 @@ const pt: Record<Key, string> = {
   "Mi lista no está disponible en la DEMO.": "Minha lista não está disponível na DEMO.",
   "Más información": "Mais informações",
   "Más títulos como este": "Mais títulos como este",
+  "Leer biografía": "Ler biografia",
+  "Cerrar": "Fechar",
   "Nació el {d}": "Nasceu em {d}",
   "Navidad": "Natal",
   "No": "Não",

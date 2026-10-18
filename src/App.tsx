@@ -111,12 +111,8 @@ export default function App() {
   useEffect(() => {
     let last = Date.now();
     let lastPanel = Date.now();
-    const sub = AppState.addEventListener('change', st => {
-      if (st !== 'active' || !getState().session || Date.now() - last < 60000) return;
-      last = Date.now();
-      loadCloud();
-      // como mucho cada 15 min: si el dueño quitó la línea de este equipo, vuelve al inicio de sesión
-      if (Date.now() - lastPanel < 15 * 60000) return;
+    // si el dueño quitó la línea de este equipo o la demo venció, vuelve al inicio de sesión
+    const recheck = () => {
       lastPanel = Date.now();
       const ses = getState().session;
       panelCheckMac(deviceId()).then(ln => {
@@ -125,8 +121,26 @@ export default function App() {
           setStack([{ name: 'login' }]);
         }
       });
+    };
+    const sub = AppState.addEventListener('change', st => {
+      if (st !== 'active' || !getState().session || Date.now() - last < 60000) return;
+      last = Date.now();
+      loadCloud();
+      if (Date.now() - lastPanel >= 15 * 60000) recheck();
     });
-    return () => sub.remove();
+    // la tele suele quedar encendida: la demo se corta a su hora y el panel se consulta cada 10 min
+    const tick = setInterval(() => {
+      const st = getState();
+      if (!st.session) return;
+      if (st.demo && st.demoExpires > 0 && Date.now() / 1000 >= st.demoExpires) {
+        logout();
+        setStack([{ name: 'login' }]);
+      } else if (Date.now() - lastPanel >= 10 * 60000) recheck();
+    }, 30000);
+    return () => {
+      sub.remove();
+      clearInterval(tick);
+    };
   }, []);
 
   const nav: Nav = useMemo(

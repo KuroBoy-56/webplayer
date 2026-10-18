@@ -101,8 +101,12 @@ compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con 
   pide el actual y lo guarda en el panel (`login.php` acción `set_pin`); solo si el panel lo acepta cambia.
 - **Sin usuario ni contraseña guardados**: la sesión vive solo en memoria. Cada vez que se abre la app se le
   pide la línea al panel y se comprueba en el servidor IPTV; con una sola línea entra sola. Si el equipo no
-  está registrado o la línea venció, se queda en el inicio de sesión. Al volver a la app (como mucho cada
-  15 min) se pregunta otra vez: si el dueño quitó la línea del equipo, vuelve al inicio de sesión.
+  está registrado o la línea venció, se queda en el inicio de sesión. Con la app abierta se pregunta otra vez
+  cada 10 min (y al volver a la app, como mucho cada 15 min): si el dueño quitó la línea del equipo o la demo
+  venció, vuelve al inicio de sesión; la demo además se corta a su hora exacta (`demo_expires`).
+  Usuario y contraseña escritos a mano entran solo si el panel los registra (`submit_url`, Cuentas
+  oficiales); si el panel los rechaza (línea demo de otro equipo, vencida…) no entra. La línea de Autodemo
+  no se vuelve a registrar (el panel ya la tiene en el historial de demos).
 
 ## Idiomas
 
@@ -187,3 +191,5 @@ HLS del panel va por MSE).
   código del equipo con el LGUDID y el control remoto. **No se ha probado todavía en un televisor LG real.**
 - Televisores LG de 2018 o más nuevos (webOS 4.0+).
 - El tipo «Player» y «Obligar» de la pantalla falsa no aplican (igual que en Roku, Tizen y la web player).
+- TV en vivo: si un canal falla se prueba `.m3u8`, `.ts` y la dirección corta sin `/live/`
+  (`LIVE_FORMATS` en `src/api/xtream.ts`).

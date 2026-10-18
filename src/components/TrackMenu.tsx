@@ -7,8 +7,9 @@ import { alpha, C, px, themed } from '../theme';
 import { Button } from './ui';
 
 export default function TrackMenu({ items, favLabel, onFav, onPick }: { items: MenuItem[]; favLabel: string; onFav: () => void; onPick: (m: MenuItem) => void }) {
-  const audio = items.filter(m => m.kind !== 'text');
-  const subs = items.filter(m => m.kind === 'text');
+  const safe = (items || []).filter(Boolean);
+  const audio = safe.filter(m => m.kind !== 'text');
+  const subs = safe.filter(m => m.kind === 'text');
   const realAudio = audio.filter(m => m.kind === 'audio');
   // el foco empieza en lo que suena ahora
   const first = (favLabel ? null : realAudio.find(m => m.on) || audio[0] || subs.find(m => m.on) || subs[0]) || null;

@@ -1,6 +1,6 @@
 // Catálogo en memoria: filas del inicio, plataformas, géneros, búsqueda y TV en vivo
 // (misma lógica que la app de Roku y Android).
-import { Kind } from '../api/xtream';
+import { imgPath, Kind } from '../api/xtream';
 import { fold, float, isAdult, str } from '../lib/util';
 import { pref, readJson } from '../lib/storage';
 import { Key, t } from '../lib/i18n';
@@ -85,12 +85,12 @@ type KindData = { cats: { id: string; name: string }[]; items: any[]; byCat: Map
 export function toItem(kind: Kind, it: any): Item {
   let rating = float(it.rating);
   if (rating > 10) rating = rating / 10;
-  const bd = Array.isArray(it.backdrop_path) && it.backdrop_path.length ? str(it.backdrop_path[0]) : '';
+  const bd = imgPath(it.backdrop_path, 'w1280');
   return {
     kind,
     id: kind === 'series' ? str(it.series_id) : str(it.stream_id),
     name: str(it.name),
-    poster: kind === 'series' ? str(it.cover) : str(it.stream_icon),
+    poster: imgPath(kind === 'series' ? it.cover : it.stream_icon, 'w500'),
     backdrop: bd,
     plot: str(it.plot),
     cat: str(it.category_id),

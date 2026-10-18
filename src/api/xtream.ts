@@ -149,8 +149,21 @@ export function episodeUrl(s: Session, id: string, ext: string): string {
 }
 
 export function liveUrl(s: Session, id: string, fmt: string): string {
+  // 'direct': la dirección corta sin /live/ ni extensión (algunos servidores solo entregan así)
+  if (fmt === 'direct') return s.base + '/' + enc(s.user) + '/' + enc(s.pass) + '/' + id;
   return s.base + '/live/' + enc(s.user) + '/' + enc(s.pass) + '/' + id + '.' + fmt;
 }
+
+// imagen del servidor: backdrop_path llega como lista o como texto, y a veces como ruta de TMDB
+// ("/abc.jpg") sin el dominio
+export function imgPath(u: any, size: string): string {
+  const v = Array.isArray(u) ? str(u[0]) : str(u);
+  return v.startsWith('/') ? 'https://image.tmdb.org/t/p/' + size + v : v;
+}
+
+// formatos de TV en vivo en orden: si uno falla se prueba el siguiente. LG (webOS) reproduce HLS
+// directo en <video>; Vega y Tizen entran mejor por MPEG-TS
+export const LIVE_FORMATS = (globalThis as any).PalmSystem ? ['m3u8', 'ts', 'direct'] : ['ts', 'm3u8', 'direct'];
 
 export type VodInfo = {
   tmdb: string;
@@ -173,7 +186,7 @@ export async function vodInfo(s: Session, id: string): Promise<VodInfo | null> {
   if (!j || typeof j !== 'object') return null;
   const info = obj(j.info);
   const md = obj(j.movie_data);
-  const bd = Array.isArray(info.backdrop_path) && info.backdrop_path.length ? str(info.backdrop_path[0]) : '';
+  const bd = imgPath(info.backdrop_path, 'w1280');
   return {
     tmdb: digits(str(info.tmdb_id) || str(info.tmdb)),
     plot: str(info.plot) || str(info.description),
@@ -182,7 +195,7 @@ export async function vodInfo(s: Session, id: string): Promise<VodInfo | null> {
     genre: str(info.genre),
     duration: str(info.duration),
     backdrop: bd,
-    poster: str(info.movie_image),
+    poster: imgPath(info.movie_image, 'w500'),
     ext: str(md.container_extension),
     year: (str(info.releasedate) || str(info.release_date)).slice(0, 4),
     rating: str(info.rating),
@@ -227,7 +240,7 @@ export async function seriesInfo(s: Session, id: string): Promise<SeriesInfo | n
       if (list.length) seasons.push({ season: int(k), episodes: list });
     }
   }
-  const bd = Array.isArray(info.backdrop_path) && info.backdrop_path.length ? str(info.backdrop_path[0]) : '';
+  const bd = imgPath(info.backdrop_path, 'w1280');
   return {
     tmdb: digits(str(info.tmdb_id) || str(info.tmdb)),
     plot: str(info.plot),
@@ -235,7 +248,7 @@ export async function seriesInfo(s: Session, id: string): Promise<SeriesInfo | n
     director: str(info.director),
     genre: str(info.genre),
     backdrop: bd,
-    poster: str(info.cover),
+    poster: imgPath(info.cover, 'w500'),
     year: str(info.releaseDate).slice(0, 4),
     rating: str(info.rating),
     seasons,

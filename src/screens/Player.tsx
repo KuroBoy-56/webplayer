@@ -9,7 +9,7 @@ import { reportError } from '../api/report';
 import { viaDns } from '../lib/securedns';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Image, StyleSheet, Text, View } from 'react-native';
-import { channelEpg, EpgEntry, episodeUrl, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
+import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
 import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
@@ -61,12 +61,14 @@ export default function Player({ params }: { params: PlayParams }) {
   const triedOther = useRef(false);
   // botón DNS: si tampoco abre, una vez por la IP que da el DNS elegido (solo ese video)
   const triedDns = useRef(false);
+  // TV en vivo: formato que se está probando (LIVE_FORMATS)
+  const fmtAt = useRef(0);
   const dnsUrl = useRef<{ i: number; url: string } | null>(null);
   const urlFor = useCallback(
     (i: number): string => {
       const s = getState().session!;
       let u: string;
-      if (params.kind === 'live') u = liveUrl(s, (params.channels[i] || params.channel).id, 'ts');
+      if (params.kind === 'live') u = liveUrl(s, (params.channels[i] || params.channel).id, LIVE_FORMATS[fmtAt.current]);
       else {
         const e = params.queue[i];
         u = params.kind === 'movie' ? movieUrl(s, e.id, e.ext) : episodeUrl(s, e.id, e.ext);
@@ -149,6 +151,8 @@ export default function Player({ params }: { params: PlayParams }) {
       const n = (indexRef.current + delta + params.channels.length) % params.channels.length;
       retried.current = false;
       triedDns.current = false;
+      triedOther.current = false;
+      fmtAt.current = 0;
       setIndex(n);
       setEpg([]);
       load(n);
@@ -203,6 +207,13 @@ export default function Player({ params }: { params: PlayParams }) {
       }
     };
     const onError = () => {
+      // TV en vivo: el canal se prueba en los otros formatos (m3u8, ts, directo)
+      if (params.kind === 'live' && fmtAt.current < LIVE_FORMATS.length - 1) {
+        fmtAt.current++;
+        setStatus(t('Reintentando…'));
+        setTimeout(() => alive && load(indexRef.current), 300);
+        return;
+      }
       // TV en vivo: un reintento automático (algunos servidores cortan el primer intento)
       if (params.kind === 'live' && !retried.current) {
         retried.current = true;
