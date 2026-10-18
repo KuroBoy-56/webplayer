@@ -198,8 +198,12 @@ export async function cloudToken(forceNew = false): Promise<string> {
   const j = json(r);
   if (j && j.demo === true && sessionRef() === s) demoHook();
   if (!j || !str(j.token)) return '';
-  const tmdb = str(j.tmdbKey);
-  if (tmdb && tmdb !== 'missing_tmdb_key') write(scoped('tmdb_key'), tmdb);
+  // vacía: el distribuidor no tiene clave (el panel nunca le da la del dueño): se olvida la guardada
+  if ('tmdbKey' in j) {
+    const tmdb = str(j.tmdbKey);
+    if (tmdb && tmdb !== 'missing_tmdb_key') write(scoped('tmdb_key'), tmdb);
+    else remove(scoped('tmdb_key'));
+  }
   write(key, j.token);
   return j.token;
 }
