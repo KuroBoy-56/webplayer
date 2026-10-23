@@ -25,7 +25,17 @@ function sp_alias($name)
         'colombia' => 'colombia', 'belgium' => 'belgica', 'switzerland' => 'suiza', 'croatia' => 'croacia', 'japan' => 'japon', 'south korea' => 'corea', 'peru' => 'peru',
         'bayern munich' => 'bayern', 'inter milan' => 'inter', 'atletico madrid' => 'atletico madrid', 'paris sg' => 'psg', 'paris saint germain' => 'psg',
         'manchester united' => 'man united', 'manchester city' => 'man city', 'tottenham hotspur' => 'tottenham', 'wolverhampton wanderers' => 'wolves',
-        'america' => 'america', 'club america' => 'america', 'guadalajara' => 'chivas', 'unam' => 'pumas', 'uanl' => 'tigres'];
+        'america' => 'america', 'club america' => 'america', 'guadalajara' => 'chivas', 'unam' => 'pumas', 'uanl' => 'tigres',
+        'scotland' => 'escocia', 'wales' => 'gales', 'ireland' => 'irlanda', 'republic of ireland' => 'irlanda', 'northern ireland' => 'irlanda del norte',
+        'denmark' => 'dinamarca', 'sweden' => 'suecia', 'norway' => 'noruega', 'finland' => 'finlandia', 'iceland' => 'islandia', 'poland' => 'polonia',
+        'turkey' => 'turquia', 'turkiye' => 'turquia', 'greece' => 'grecia', 'czech republic' => 'republica checa', 'czechia' => 'republica checa',
+        'slovakia' => 'eslovaquia', 'slovenia' => 'eslovenia', 'hungary' => 'hungria', 'romania' => 'rumania', 'ukraine' => 'ucrania', 'russia' => 'rusia',
+        'morocco' => 'marruecos', 'egypt' => 'egipto', 'tunisia' => 'tunez', 'algeria' => 'argelia', 'cameroon' => 'camerun', 'ivory coast' => 'costa de marfil',
+        'south africa' => 'sudafrica', 'saudi arabia' => 'arabia saudita', 'iraq' => 'irak', 'korea republic' => 'corea', 'new zealand' => 'nueva zelanda',
+        'dominican republic' => 'republica dominicana', 'trinidad and tobago' => 'trinidad y tobago',
+        'olympique marseille' => 'marsella', 'olympique lyonnais' => 'lyon', 'sporting cp' => 'sporting lisboa', 'west ham united' => 'west ham',
+        'club tijuana' => 'xolos', 'tijuana' => 'xolos', 'queretaro' => 'gallos blancos', 'santos laguna' => 'santos', 'atletico san luis' => 'san luis',
+        'monterrey' => 'rayados'];
     $n = trim(preg_replace('/[^a-z0-9]+/', ' ', wp_norm($name)));
     return isset($map[$n]) ? [$n, $map[$n]] : [$n];
 }
@@ -421,7 +431,7 @@ include "header.php";
             <button type="button" class="on" data-day="0" role="tab"><?php echo t('Hoy'); ?></button>
             <button type="button" data-day="1" role="tab"><?php echo t('Mañana'); ?></button>
         </div>
-        <div class="sp-search"><input type="search" id="spQ" placeholder="<?php echo e(t('Buscar equipo o liga')); ?>" aria-label="<?php echo e(t('Buscar equipo o liga')); ?>"></div>
+        <div class="sp-search"><input type="search" id="spQ" placeholder="<?php echo e(t('Buscar equipos, ligas o canales')); ?>" aria-label="<?php echo e(t('Buscar equipos, ligas o canales')); ?>"></div>
         <div class="sp-chips" id="spChips"></div>
     </div>
     <section class="sp-livewrap" id="spLive" hidden>
@@ -453,13 +463,17 @@ include "header.php";
 
     var EV = <?php echo json_encode($events, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
     var META = <?php echo json_encode($sp_meta, JSON_UNESCAPED_UNICODE); ?>;
+    // zona horaria del panel (la del distribuidor o del dueño): la hora y Hoy / Mañana van en ella, no en la del equipo
+    var TZ = <?php echo json_encode(is_string($sp_panel['tz'] ?? null) ? $sp_panel['tz'] : ''); ?>;
+    try { new Intl.DateTimeFormat('en', { timeZone: TZ || undefined }); } catch (x) { TZ = ''; }
     if (!EV.length) return;
 
     var FIN = /^(FT|AET|AOT|PEN|Match Finished|Finished|After Over Time|Final)$/i;
     var state = { day: 0, sport: '', q: '' };
-    var fmtT = new Intl.DateTimeFormat(window.NF_LOCALE, { hour: 'numeric', minute: '2-digit' });
+    var fmtT = new Intl.DateTimeFormat(window.NF_LOCALE, { hour: 'numeric', minute: '2-digit', timeZone: TZ || undefined });
+    var fmtD = TZ ? new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }) : null;
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-    var dayKey = function (d) { return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); };
+    var dayKey = function (d) { return fmtD ? fmtD.format(d) : d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); };
 
     EV.forEach(function (e) {
         e.t = new Date(e.ts);
@@ -518,13 +532,18 @@ include "header.php";
     var today = new Date(), tomorrow = new Date(Date.now() + 86400000);
     var keys = [dayKey(today), dayKey(tomorrow)];
 
+    // sin acentos ni signos: "américa" = "america", "ESPN-2" = "espn 2"
+    var fold = function (s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); };
+    EV.forEach(function (e) {
+        e.hay = fold([e.h, e.a, e.ev, e.lg, e.sp, (META[e.sp] || {}).n].concat((e.tv || []).map(function (t) { return t.n; })).join(' '));
+    });
+    // equipos, evento, liga, deporte y canales que lo transmiten, con todas las palabras ("america espn")
     function visible() {
-        var q = state.q.toLowerCase();
+        var words = fold(state.q).split(' ').filter(Boolean);
         return EV.filter(function (e) {
             if (e.dk !== keys[state.day]) return false;
             if (state.sport && e.sp !== state.sport) return false;
-            if (q && (e.h + ' ' + e.a + ' ' + e.lg + ' ' + e.ev).toLowerCase().indexOf(q) < 0) return false;
-            return true;
+            return words.every(function (w) { return e.hay.indexOf(w) > -1; });
         });
     }
     function renderChips() {
