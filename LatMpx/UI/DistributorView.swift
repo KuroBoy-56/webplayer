@@ -87,7 +87,7 @@ struct TenantRetryView: View {
     }
 }
 
-/** Cuenta: distribuidor, vencimiento y "Cambiar distribuidor". */
+/** Cuenta: distribuidor (marca y número; su vencimiento es privado) y "Cambiar distribuidor". */
 struct DistributorCard: View {
     @EnvironmentObject var tenant: Tenant
     let onChange: () -> Void
@@ -98,7 +98,6 @@ struct DistributorCard: View {
             VStack(spacing: 10) {
                 if let b = tenant.brand {
                     InfoRow(k: tr("Distribuidor"), v: "\(b.name.isEmpty ? tr("Distribuidor") : b.name) (\(b.code))")
-                    InfoRow(k: tr("Vence"), v: b.expiresText.isEmpty ? tr("Sin vencimiento") : tr("%@ (hora de Panamá)", b.expiresText))
                 } else {
                     InfoRow(k: tr("Distribuidor"), v: tr("Ninguno"))
                 }

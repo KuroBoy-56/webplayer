@@ -36,11 +36,6 @@ final class Tenant: ObservableObject {
         let rev: Int
         let recheckAfter: Double
 
-        /** "DD/MM/AAAA" o "" sin vencimiento */
-        var expiresText: String {
-            guard let g = Rx.groups(expiresDate, "^(\\d{4})-(\\d{2})-(\\d{2})$") else { return "" }
-            return "\(g[3])/\(g[2])/\(g[1])"
-        }
         func expired(_ now: Double = Date().timeIntervalSince1970) -> Bool { expiresAt > 0 && now > expiresAt }
     }
 
@@ -107,7 +102,7 @@ final class Tenant: ObservableObject {
     }
 
     static func expiredMessage(_ b: Brand) -> String {
-        b.expiresText.isEmpty ? message("tenant_expired") : tr("Tu distribuidor venció el %@ (hora de Panamá).", b.expiresText)
+        message("tenant_expired") // sin la fecha: el vencimiento del distribuidor es privado
     }
 
     /* ---------- tenant_config ---------- */
