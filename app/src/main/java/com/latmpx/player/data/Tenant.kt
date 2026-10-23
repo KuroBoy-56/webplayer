@@ -42,10 +42,6 @@ object Tenant {
         val rev: Int,
         val recheckAfter: Long,
     ) {
-        /** "DD/MM/AAAA" o "" sin vencimiento */
-        val expiresText: String
-            get() = Regex("^(\\d{4})-(\\d{2})-(\\d{2})$").find(expiresDate)?.groupValues?.let { "${it[3]}/${it[2]}/${it[1]}" }.orEmpty()
-
         /** expires_at 0 = sin vencimiento */
         fun expired(nowMs: Long = System.currentTimeMillis()): Boolean = expiresAt > 0 && nowMs / 1000 > expiresAt
     }
@@ -121,8 +117,9 @@ object Tenant {
         return if (c == "too_many_attempts" || c == "app_required") message(c) else null
     }
 
-    fun expiredMessage(b: Brand): String =
-        if (b.expiresText.isNotEmpty()) tr(R.string.tenant_expired_on, b.expiresText) else message("tenant_expired")
+    /** sin la fecha: el vencimiento del distribuidor es privado */
+    @Suppress("UNUSED_PARAMETER")
+    fun expiredMessage(b: Brand): String = message("tenant_expired")
 
     /* ---------- tenant_config ---------- */
 
