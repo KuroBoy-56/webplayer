@@ -9,7 +9,7 @@ import { panelSubmit } from '../api/panel';
 import { hasMasterKey } from '../lib/aes';
 import { Key, Lang, langChoice, setLang, t, takeLangChanged } from '../lib/i18n';
 import { pref, setPref } from '../lib/storage';
-import { brand, brandName, distChoice, expiryText } from '../lib/tenant';
+import { brand, brandName, distChoice } from '../lib/tenant';
 import { dateText, dateTimeText, demoLength } from '../lib/util';
 import { useNav } from '../nav';
 import { deviceId, loadCatalog, loadCloud, logout, refreshCatalog, resetTenant, useAppState } from '../state';
@@ -93,7 +93,6 @@ export default function Account() {
   const subs = pref('subs_lang', 'off');
   const hideAdult = pref('hide_adult', '1') === '1';
   const dist = brand();
-  const distDate = dist ? expiryText(dist) : '';
   // cantidad de contenido del servidor ("…" mientras se carga esa lista)
   const count = (k: 'live' | 'vod' | 'series') => (st.loaded[k] ? String(catalog.k[k]?.index.size ?? 0) : '…');
   const missing = !st.loaded.live || !st.loaded.vod || !st.loaded.series;
@@ -128,7 +127,6 @@ export default function Account() {
               {t('Distribuidor:')} <Text style={s.val}>{dist.name ? dist.name + ' (' + dist.code + ')' : dist.code}</Text>
             </Text>
           ) : null}
-          {distDate ? <Text style={s.row}>{t('Vence el distribuidor:')} <Text style={s.val}>{t('{d} (hora de Panamá)', { d: distDate })}</Text></Text> : null}
         </View>
       ) : null}
 
