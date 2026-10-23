@@ -4,13 +4,12 @@ import { useSyncExternalStore } from 'react';
 import { Palette, setPalette, validPalette } from '../theme';
 import { read, readJson, remove, write, writeJson } from './storage';
 import { Key, t } from './i18n';
-import { str, ymd } from './util';
+import { str } from './util';
 
 export const APP_ID = 'vega';
 export const APP_NAME = 'MPX Player';
 // sin respuesta del panel se sigue con la marca guardada hasta 72 h
 export const OFFLINE_GRACE = 72 * 3600;
-const PANAMA = -5 * 3600; // America/Panama, UTC-5 sin horario de verano
 
 // platforms: false = el distribuidor no separa su contenido por plataformas (sin fila ni filtros);
 // ffmpeg: esta app tiene permiso del motor de audio/subtítulos del panel
@@ -105,23 +104,14 @@ export function parseConfig(j: any, now: number): Brand | null {
   };
 }
 
-// fecha de vencimiento DD/MM/AAAA (hora de Panamá)
-export function expiryText(b: Brand): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(b.expiresDate);
-  if (m) return ymd(+m[1], +m[2], +m[3]);
-  if (b.expiresAt <= 0) return '';
-  const d = new Date((b.expiresAt + PANAMA) * 1000);
-  return ymd(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
-}
-
 // expires_at 0 = sin vencimiento
 export function locallyExpired(b: Brand, now: number): boolean {
   return b.expiresAt > 0 && now > b.expiresAt;
 }
 
-export function expiredMessage(b: Brand): string {
-  const d = expiryText(b);
-  return d ? t('Tu distribuidor venció el {d} (hora de Panamá). Contacta a tu distribuidor.', { d }) : t(TENANT_ERRORS.tenant_expired);
+// sin la fecha: el vencimiento del distribuidor es privado
+export function expiredMessage(_b: Brand): string {
+  return t(TENANT_ERRORS.tenant_expired);
 }
 
 // se traducen al mostrarlos: t(TENANT_ERRORS[code])
