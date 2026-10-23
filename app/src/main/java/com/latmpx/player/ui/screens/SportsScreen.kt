@@ -76,7 +76,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
 
-private fun dayKey(t: Long): Int = Calendar.getInstance().apply { timeInMillis = t }.let { it.get(Calendar.YEAR) * 1000 + it.get(Calendar.DAY_OF_YEAR) }
+private fun dayKey(t: Long): Int = Calendar.getInstance(Sports.zone).apply { timeInMillis = t }.let { it.get(Calendar.YEAR) * 1000 + it.get(Calendar.DAY_OF_YEAR) }
 
 /** Deportes: misma agenda y mismo diseño que sportsschedule.php de la web, con los datos de api/sports.php. */
 @Composable
@@ -106,7 +106,7 @@ fun SportsScreen(state: AppState) {
     val ql = q.trim().lowercase()
     val visible = ofDay.filter { e ->
         (sport.isEmpty() || e.sport == sport) &&
-            (ql.isEmpty() || "${e.home} ${e.away} ${e.league} ${e.title}".lowercase().contains(ql))
+            (ql.isEmpty() || Sports.matches(e, d.sports[e.sport]?.label.orEmpty(), ql))
     }
     val live = d.events.filter { spStatus(it, d.sports[it.sport], now) == SpStatus.LIVE && (sport.isEmpty() || it.sport == sport) }
     val showLive = live.isNotEmpty() && curDay == 0 && ql.isEmpty()

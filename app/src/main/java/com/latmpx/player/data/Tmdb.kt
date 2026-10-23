@@ -12,10 +12,12 @@ object Tmdb {
 
 
     /**
-     * Consulta TMDB con la llave del panel (Store.tmdbKey) y, si TMDB la rechaza, con la de respaldo.
-     * null = sin respuesta válida (sin conexión, error del servidor o llave rechazada).
+     * Consulta TMDB por el panel (api/tmdb.php: la clave del distribuidor o del dueño y su caché de 24 h).
+     * Solo si el panel no responde se pregunta a TMDB directo, con la llave del panel (Store.tmdbKey) y, si
+     * TMDB la rechaza, con la de respaldo. null = sin respuesta válida.
      */
     private suspend fun get(path: String): JSONObject? {
+        viaPanel(path)?.let { return it }
         val panel = Store.tmdbKey.takeIf { it.isNotBlank() && !panelKeyBad }
         val keys = listOfNotNull(panel, FALLBACK_KEY).distinct()
         for (k in keys) {
@@ -28,6 +30,20 @@ object Tmdb {
             return if (r.ok) r.json() else null
         }
         return null
+    }
+
+    /** "search/movie?language=es-MX&query=…" por api/tmdb.php del panel; null si el panel no la pudo dar */
+    private suspend fun viaPanel(path: String): JSONObject? {
+        val b = PanelUrl.api("tmdb.php").toHttpUrlOrNull()?.newBuilder() ?: return null
+        b.addQueryParameter("path", path.substringBefore('?'))
+        // los valores ya vienen codificados (URLEncoder)
+        for (kv in path.substringAfter('?', "").split('&')) {
+            if (kv.isNotEmpty()) b.addEncodedQueryParameter(kv.substringBefore('='), kv.substringAfter('=', ""))
+        }
+        val r = Net.get(Tenant.tag(b).build().toString())
+        val j = (if (r.ok) r.json() else null) ?: return null
+        // {"error": "tmdb_key_not_set"} del panel o {"success": false} de TMDB
+        return if (j.has("error") || !j.optBoolean("success", true)) null else j
     }
 
     /**

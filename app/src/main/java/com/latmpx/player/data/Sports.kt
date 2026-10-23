@@ -51,6 +51,11 @@ data class SportsData(val events: List<SportEvent>, val sports: Map<String, Spor
 
 /** Agenda deportiva del panel y búsqueda del canal en vivo (misma puntuación que la web). */
 object Sports {
+    /** Zona horaria del panel (la del distribuidor o del dueño, "tz" de api/sports.php): la hora de los partidos
+     *  y Hoy / Mañana van en esa zona, no en la del equipo. Un panel viejo sin "tz": la del equipo. */
+    @Volatile var zone: TimeZone = TimeZone.getDefault()
+        private set
+
     private val DEFAULT_STOP = setOf("fc", "cf", "sc", "ac", "cd", "ca", "club", "de", "del", "la", "el", "los", "las", "the", "and", "vs", "v",
         "city", "united", "real", "sporting", "atletico", "deportivo", "union", "women", "femenil", "w", "u20", "u21", "u23", "sub")
     private const val DEFAULT_EVENT_CAT = "event|ppv|pay per view|deportes? en vivo|live sport|partidos? (de )?hoy"
@@ -62,6 +67,9 @@ object Sports {
     }
 
     private fun parse(j: JSONObject): SportsData {
+        val tz = j.s("tz")
+        // getTimeZone() da GMT con un nombre que no conoce
+        zone = if (tz.isNotEmpty()) TimeZone.getTimeZone(tz).takeIf { it.id == tz } ?: TimeZone.getDefault() else TimeZone.getDefault()
         val events = j.optJSONArray("events").mapObj { e ->
             val start = parseTs(e.s("ts"))
             if (start <= 0) null else SportEvent(
@@ -111,6 +119,15 @@ object Sports {
     /* ---------- búsqueda del canal ---------- */
 
     /** minúsculas, sin acentos, todo lo que no sea [a-z0-9] -> espacio */
+    /** Buscador de la agenda: equipos, evento, liga, deporte y canales que lo transmiten; sin acentos y
+     *  con todas las palabras ("america espn"). */
+    fun matches(e: SportEvent, sportLabel: String, q: String): Boolean {
+        val words = norm(q).split(' ').filter { it.isNotEmpty() }
+        if (words.isEmpty()) return true
+        val hay = norm("${e.home} ${e.away} ${e.title} ${e.league} ${e.sport} $sportLabel ${e.tv.joinToString(" ") { it.name }}")
+        return words.all { hay.contains(it) }
+    }
+
     fun norm(s: String): String =
         Normalizer.normalize(s.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace("\\p{M}+".toRegex(), "")
             .replace("[^a-z0-9]+".toRegex(), " ").trim()
