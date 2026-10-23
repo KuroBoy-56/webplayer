@@ -218,7 +218,6 @@ fun DistributorAccountCard(onChange: () -> Unit) {
     ) {
         if (b != null) {
             InfoRow(stringResource(R.string.distributor), "${b.name.ifBlank { stringResource(R.string.distributor) }} (${b.code})")
-            InfoRow(stringResource(R.string.expires), if (b.expiresText.isNotEmpty()) stringResource(R.string.panama_time, b.expiresText) else stringResource(R.string.no_expiration))
         } else {
             InfoRow(stringResource(R.string.distributor), stringResource(R.string.none))
         }
