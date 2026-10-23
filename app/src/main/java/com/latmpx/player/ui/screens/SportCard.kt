@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.latmpx.player.data.SportEvent
 import com.latmpx.player.data.SportInfo
+import com.latmpx.player.data.Sports
 import com.latmpx.player.ui.components.FocusBox
 import com.latmpx.player.ui.theme.NfRed
 import java.text.SimpleDateFormat
@@ -58,7 +59,7 @@ fun spStatus(e: SportEvent, info: SportInfo?, now: Long): SpStatus {
 }
 
 private val hm = SimpleDateFormat("H:mm", Locale.US)
-fun spTime(t: Long): String = synchronized(hm) { hm.format(t) }
+fun spTime(t: Long): String = synchronized(hm) { hm.timeZone = Sports.zone; hm.format(t) }
 
 @Composable
 fun SpDot(size: Dp = 9.dp, color: Color = NfRed) { Box(Modifier.size(size).clip(CircleShape).background(color)) }
