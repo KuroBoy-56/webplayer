@@ -44,7 +44,9 @@ struct SportsView: View {
     private func title(_ e: SportEvent) -> String { !e.home.isEmpty && !e.away.isEmpty ? "\(e.home) vs \(e.away)" : e.title.ifEmpty(tr("Evento")) }
 
     private func dayKey(_ t: Double) -> Int {
-        let c = Calendar.current.dateComponents([.year, .day, .month], from: Date(timeIntervalSince1970: t))
+        var cal = Calendar.current
+        cal.timeZone = Sports.zone
+        let c = cal.dateComponents([.year, .day, .month], from: Date(timeIntervalSince1970: t))
         return (c.year ?? 0) * 10000 + (c.month ?? 0) * 100 + (c.day ?? 0)
     }
 
@@ -56,7 +58,7 @@ struct SportsView: View {
         var counts: [String: Int] = [:]
         ofDay.forEach { counts[$0.sport, default: 0] += 1 }
         let ql = q.trimmed.lowercased()
-        let visible = ofDay.filter { (sport.isEmpty || $0.sport == sport) && (ql.isEmpty || "\($0.home) \($0.away) \($0.league) \($0.title)".lowercased().contains(ql)) }
+        let visible = ofDay.filter { (sport.isEmpty || $0.sport == sport) && (ql.isEmpty || Sports.matches($0, d.sports[$0.sport]?.label ?? "", ql)) }
         let live = d.events.filter { Sports.status($0, d.sports[$0.sport], now) == .live && (sport.isEmpty || $0.sport == sport) }
         let showLive = !live.isEmpty && cur == 0 && ql.isEmpty
         var order: [String] = []
@@ -209,7 +211,7 @@ struct SportCard: View {
                     .font(.system(size: 12)).foregroundColor(Color(hex: 0xDDDDDD)).lineLimit(1)
             }
             HStack {
-                Text(event.venue.ifEmpty(st == .soon ? hm(event.start) : "")).font(.system(size: 12.5)).foregroundColor(Theme.muted).lineLimit(1)
+                Text(event.venue.ifEmpty(st == .soon ? Sports.time(event.start) : "")).font(.system(size: 12.5)).foregroundColor(Theme.muted).lineLimit(1)
                 Spacer()
                 Button(action: onWatch) {
                     Text(tr(event.tv.isEmpty ? "TV en vivo" : "Ver canales")).font(.system(size: 13, weight: .bold)).foregroundColor(.white)
@@ -239,7 +241,7 @@ struct SportCard: View {
         case .live: HStack(spacing: 4) { LiveDot(); Text(tr("En vivo")) }.font(.system(size: 11, weight: .bold)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Color(hex: 0xE50914)).clipShape(Capsule())
         case .fin: Text(tr("Final")).font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
         case .postponed: Text(tr("Aplazado")).font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
-        case .soon: Text(hm(event.start)).font(.system(size: 12, weight: .bold)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Color.white.opacity(0.12)).clipShape(Capsule())
+        case .soon: Text(Sports.time(event.start)).font(.system(size: 12, weight: .bold)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Color.white.opacity(0.12)).clipShape(Capsule())
         }
     }
 }

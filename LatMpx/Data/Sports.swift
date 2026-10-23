@@ -32,12 +32,25 @@ enum Sports {
         "city", "united", "real", "sporting", "atletico", "deportivo", "union", "women", "femenil", "w", "u20", "u21", "u23", "sub"]
     private static let defaultEventCat = "event|ppv|pay per view|deportes? en vivo|live sport|partidos? (de )?hoy"
 
+    /** Zona horaria del panel (la del distribuidor o del dueño, "tz" de api/sports.php): la hora de los partidos y
+     *  Hoy / Mañana van en esa zona, no en la del equipo. Un panel viejo sin "tz": la del equipo. */
+    static var zone = TimeZone.current
+
+    /** "HH:mm" en la zona del panel */
+    static func time(_ t: Double) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        f.timeZone = zone
+        return f.string(from: Date(timeIntervalSince1970: t))
+    }
+
     static func load() async -> SportsData? {
         guard let r = await Cloud.shared.call({ t in await Net.get(PanelUrl.api("sports.php") + "?token=" + urlEnc(t)) }), let j = r.json() else { return nil }
         return parse(j)
     }
 
     static func parse(_ j: JObj) -> SportsData {
+        zone = TimeZone(identifier: j.s("tz")) ?? .current
         let events = j.objs("events").compactMap { e -> SportEvent? in
             let st = parseTs(e.s("ts"))
             if st <= 0 { return nil }
@@ -90,6 +103,15 @@ enum Sports {
     }
 
     /* ---------- búsqueda del canal ---------- */
+
+    /** Buscador de la agenda: equipos, evento, liga, deporte y canales que lo transmiten; sin acentos y con todas
+     *  las palabras ("america espn"). */
+    static func matches(_ e: SportEvent, _ sportLabel: String, _ q: String) -> Bool {
+        let words = norm(q).split(separator: " ").map(String.init)
+        if words.isEmpty { return true }
+        let hay = norm("\(e.home) \(e.away) \(e.title) \(e.league) \(e.sport) \(sportLabel) " + e.tv.map { $0.name }.joined(separator: " "))
+        return words.allSatisfy { hay.contains($0) }
+    }
 
     /** minúsculas, sin acentos, todo lo que no sea [a-z0-9] -> espacio */
     static func norm(_ s: String) -> String { Rx.replace(s.folded, "[^a-z0-9]+", " ").trimmed }

@@ -39,13 +39,29 @@ enum Tmdb {
         return k
     }
 
+    /**
+     * TMDB por el panel (api/tmdb.php: la clave del distribuidor o del dueño y su caché de 24 h). Solo si el panel no
+     * responde se pregunta a TMDB directo con la llave que mandó el panel.
+     */
     private static func get(_ path: String) async -> JObj? {
+        if let j = await viaPanel(path) { return j }
         let k = await key()
         if k.isEmpty || k == lock.locked({ badKey }) { return nil }
         let sep = path.contains("?") ? "&" : "?"
         let r = await Net.get("https://api.themoviedb.org/3/\(path)\(sep)api_key=\(urlEnc(k))", timeout: 15)
         if r.code == 401 { lock.locked { badKey = k }; return nil }
         return r.ok ? r.json() : nil
+    }
+
+    /** "search/movie?language=es-MX&query=…" por el panel; nil si el panel no la pudo dar */
+    private static func viaPanel(_ path: String) async -> JObj? {
+        let parts = path.split(separator: "?", maxSplits: 1).map(String.init)
+        let q = parts.count > 1 ? "&" + parts[1] : ""
+        let r = await Net.get(PanelUrl.api("tmdb.php") + "?path=" + parts[0] + q + Tenant.query(), timeout: 15)
+        guard r.ok, let j = r.json() else { return nil }
+        // {"error": "tmdb_key_not_set"} del panel o {"success": false} de TMDB
+        if j["error"] != nil || (j["success"] as? Bool) == false { return nil }
+        return j
     }
 
     static func image(_ path: String, _ size: String) -> String { path.isEmpty ? "" : "https://image.tmdb.org/t/p/\(size)\(path)" }
