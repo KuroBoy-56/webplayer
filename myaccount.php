@@ -22,7 +22,6 @@ usort($history_items, function ($a, $b) { return ($b['_when'] ?? 0) <=> ($a['_wh
 // Distribuidor (número guardado en este navegador)
 $dist_cfg = wp_tenant_cfg();
 $dist_code = wp_panel_tenant();
-$dist_exp = $dist_cfg ? wp_tenant_expiry_text($dist_cfg) : '';
 $body_class = 'nf-solid';
 include "header.php";
 ?>
@@ -65,7 +64,6 @@ include "header.php";
             <div class="ac-item"><small><?php echo t('Series'); ?></small><b data-count="series">…</b></div>
             <?php if ($dist_code !== ''): ?>
             <div class="ac-item"><small><?php echo t('Distribuidor'); ?></small><b><?php echo e(($dist_cfg && $dist_cfg['name'] ? $dist_cfg['name'] . ' ' : '') . '(' . $dist_code . ')'); ?></b></div>
-            <div class="ac-item"><small><?php echo t('Vence'); ?></small><b><?php echo $dist_exp !== '' ? e($dist_exp) : t('Sin vencimiento'); ?></b><?php if ($dist_exp !== ''): ?><div style="color:#999;font-size:13px;margin-top:4px"><?php echo t('Hora de Panamá'); ?></div><?php endif; ?></div>
             <?php endif; ?>
         </div>
         <div class="ac-acts">

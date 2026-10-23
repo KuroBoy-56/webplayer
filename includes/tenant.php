@@ -40,10 +40,7 @@ function wp_tenant_messages()
 
 function wp_tenant_message($code, array $cfg = null)
 {
-    if ($code === 'tenant_expired' && is_array($cfg)) {
-        $d = wp_tenant_expiry_text($cfg);
-        if ($d !== '') return t('Tu distribuidor venció el {d} (hora de Panamá)', ['d' => $d]);
-    }
+    // the distributor's expiry is private: the message never carries its date
     $m = wp_tenant_messages();
     return $m[$code] ?? $m['tenant_invalid'];
 }
@@ -302,18 +299,6 @@ function wp_tenant_feature($name)
 {
     $cfg = wp_tenant_cfg();
     return $cfg === null || !empty($cfg['features'][$name]);
-}
-
-/** "DD/MM/AAAA" del vencimiento, o '' si no vence. */
-function wp_tenant_expiry_text(array $cfg)
-{
-    if (!empty($cfg['expires_date']) && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $cfg['expires_date'], $m)) {
-        return $m[3] . '/' . $m[2] . '/' . $m[1];
-    }
-    if ((int)($cfg['expires_at'] ?? 0) > 0) {
-        return gmdate('d/m/Y', (int)$cfg['expires_at'] - 5 * 3600); // Panamá = UTC-5, sin horario de verano
-    }
-    return '';
 }
 
 /** Cierra la sesión de PHP (al cambiar de distribuidor o cuando el panel lo corta). */
