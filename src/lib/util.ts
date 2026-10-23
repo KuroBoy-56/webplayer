@@ -51,7 +51,7 @@ export function pad2(n: number): string {
 }
 
 // hora en el idioma de la app: "18:45" (inglés: "6:45 PM")
-function hm(h: number, m: number): string {
+export function hm(h: number, m: number): string {
   if (lang() === 'en') return (h % 12 || 12) + ':' + pad2(m) + (h < 12 ? ' AM' : ' PM');
   return pad2(h) + ':' + pad2(m);
 }
