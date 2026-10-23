@@ -2,9 +2,10 @@
 // Clave: la que entrega el panel (tmdbKey) y, si falta o no sirve, la incorporada (igual que la web).
 import { catalog, Item } from '../data/catalog';
 import { http, json } from '../lib/http';
+import { panel } from './panel';
 import { tmdbLang } from '../lib/i18n';
 import { read } from '../lib/storage';
-import { scoped } from '../lib/tenant';
+import { APP_ID, scoped, tenantCode } from '../lib/tenant';
 import { buildTitleIndex, catalogYear, lookupTitle, TitleIndex, titleKeys, yearsOk } from '../lib/titles';
 import { str } from '../lib/util';
 
@@ -19,7 +20,14 @@ function keys(): string[] {
   return out;
 }
 
+// TMDB por el panel (api/tmdb.php: la clave del distribuidor o del dueño y su caché de 24 h); solo si el
+// panel no responde se pregunta a TMDB directo con la clave del panel o la incorporada
 async function get(path: string, query = ''): Promise<any> {
+  const code = tenantCode();
+  const tq = code ? '&t=' + encodeURIComponent(code) + '&app=' + APP_ID : '';
+  const p = json<any>(await panel('tmdb.php', 'GET', '', '', '?path=' + path + (query ? '&' + query : '') + tq));
+  // {"error": "tmdb_key_not_set"} del panel o {"success": false} de TMDB
+  if (p && !p.error && p.success !== false) return p;
   for (const k of keys()) {
     const r = await http(API + path + '?api_key=' + k + (query ? '&' + query : ''), { timeout: 12000 });
     if (r.code === 0) return null; // sin red: otra clave no ayuda

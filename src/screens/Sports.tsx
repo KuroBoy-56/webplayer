@@ -4,8 +4,8 @@ import { BackHandler, FlatList, Image, ScrollView, StyleSheet, Text, View } from
 import { openItem } from '../actions';
 import { Focusable, Message, Spinner } from '../components/ui';
 import { Item } from '../data/catalog';
-import { loadSports, matchSports, SportMatch, SportsData } from '../data/sports';
-import { clock, int, localDay, nowSec, parseIso, str } from '../lib/util';
+import { evClock, evDay, loadSports, matchSports, panelToday, SportMatch, SportsData } from '../data/sports';
+import { int, nowSec, parseIso, str } from '../lib/util';
 import { useNav } from '../nav';
 import { useAppState } from '../state';
 import { t } from '../lib/i18n';
@@ -58,10 +58,10 @@ export default function Sports() {
   const found = useMemo<{ map: Record<string, SportMatch>; folder: Item | null } | null>(() => {
     if (!data || !st.loaded.live) return null;
     const now = nowSec();
-    const today = localDay(now);
+    const today = panelToday(data, now);
     const events = data.events.filter(e => {
       const start = parseIso(str(e.ts));
-      const d = localDay(start) - today;
+      const d = evDay(e, start) - today;
       return start > 0 && (d === 0 || d === 1 || (start <= now && now < start + minutes(str(e.sp)) * 60));
     });
     return matchSports({ ...data, events });
@@ -95,7 +95,7 @@ export default function Sports() {
     const ending = start + minutes(str(e.sp)) * 60;
     if (e.pp === true) return say(t('El evento está aplazado')), false;
     if (isFinal(str(e.st)) || (start && now >= ending)) return say(t('Este evento ya terminó')), false;
-    if (start && localDay(start) !== localDay(now) && !(start <= now && now < ending)) return say(t('El evento aún no está en línea')), false;
+    if (start && evDay(e, start) !== panelToday(data, now) && !(start <= now && now < ending)) return say(t('El evento aún no está en línea')), false;
     return true;
   };
   const folder = (prefix: string) => {
@@ -135,16 +135,16 @@ export default function Sports() {
   const rows = useMemo(() => {
     if (!data) return [];
     const now = nowSec();
-    const today = localDay(now);
+    const today = panelToday(data, now);
     const out: any[] = [];
     for (const e of data.events) {
       const start = parseIso(str(e.ts));
       if (!start || (sport && str(e.sp) !== sport)) continue;
-      const dayIdx = localDay(start) - today;
+      const dayIdx = evDay(e, start) - today;
       const ending = start + minutes(str(e.sp)) * 60;
       const live = start <= now && now < ending && !isFinal(str(e.st)) && e.pp !== true;
       if (!((day === 0 && (dayIdx === 0 || live)) || (day === 1 && dayIdx === 1))) continue;
-      let time = live ? t('EN VIVO') : clock(start);
+      let time = live ? t('EN VIVO') : evClock(e, start);
       if (e.pp === true) time = t('Aplazado');
       const final = isFinal(str(e.st)) || (now >= ending && !!str(e.hs));
       if (final) time = t('Final');

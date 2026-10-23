@@ -2,7 +2,7 @@
 // (misma puntuación que la web, Android, Windows y Roku).
 import { cloud } from '../api/panel';
 import { json } from '../lib/http';
-import { fold, int, norm, str } from '../lib/util';
+import { clock, fold, hm, int, localDay, norm, str } from '../lib/util';
 import { catalog, Item, toItem } from './catalog';
 
 type Rules = {
@@ -96,12 +96,29 @@ function findChannel(ev: any, chans: Chan[], r: Rules): number {
   return best;
 }
 
-export type SportsData = { events: any[]; sports: Record<string, { label?: string; minutes?: number; icon?: string }>; match: any };
+export type SportsData = { events: any[]; sports: Record<string, { label?: string; minutes?: number; icon?: string }>; match: any; tzo?: number };
+
+// Hora y día en la zona horaria del panel (la del distribuidor o del dueño), no la del equipo:
+// api/sports.php manda "o" por evento (segundos a sumar a la hora UTC) y "tzo" (lo mismo ahora).
+// Un panel viejo sin ellos: la del equipo.
+export function evDay(e: any, start: number): number {
+  return typeof e?.o === 'number' ? Math.floor((start + e.o) / 86400) : localDay(start);
+}
+
+export function panelToday(data: SportsData | null, now: number): number {
+  return typeof data?.tzo === 'number' ? Math.floor((now + data.tzo) / 86400) : localDay(now);
+}
+
+export function evClock(e: any, start: number): string {
+  if (typeof e?.o !== 'number') return clock(start);
+  const d = new Date((start + e.o) * 1000);
+  return hm(d.getUTCHours(), d.getUTCMinutes());
+}
 
 export async function loadSports(): Promise<SportsData | null> {
   const j = json(await cloud('sports.php', 'GET', null));
   if (!j || !Array.isArray(j.events)) return null;
-  return { events: j.events, sports: j.sports && typeof j.sports === 'object' ? j.sports : {}, match: j.match };
+  return { events: j.events, sports: j.sports && typeof j.sports === 'object' ? j.sports : {}, match: j.match, tzo: typeof j.tzo === 'number' ? j.tzo : undefined };
 }
 
 // ---------- canal que transmite ("ESPN 2" -> los canales ESPN 2 del cliente) ----------
