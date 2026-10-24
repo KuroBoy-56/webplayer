@@ -233,6 +233,8 @@ const fr: Record<Key, string> = {
   "Registrando…": "Enregistrement…",
   "Registrar este equipo en el panel": "Enregistrer cet appareil sur le panneau",
   "Reintentando con el DNS elegido…": "Nouvel essai avec le DNS choisi…",
+  "Reconectando…": "Reconnexion…",
+  "Atrás para salir": "Retour pour quitter",
   "Reintentando…": "Nouvel essai…",
   "Reintentar": "Réessayer",
   "Reparto": "Distribution",
