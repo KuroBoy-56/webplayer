@@ -1,4 +1,5 @@
-// Pistas de audio y subtítulos de un MP4 o MKV leyendo solo su cabecera (peticiones Range de 64 KB),
+// Pistas de audio y subtítulos de un MP4 o MKV leyendo solo su cabecera (peticiones Range: 512 KB la primera,
+// 256 KB las demás; el índice moov de un MP4 de una sola vez; cada video se lee una sola vez por sesión),
 // igual que Probe.brs de Roku: cuántos audios y subtítulos trae el archivo, su idioma, su códec y su
 // orden (el mismo que usa el motor del panel: 0:a:N y 0:s:N).
 import { UA } from './http';
@@ -6,7 +7,10 @@ import { UA } from './http';
 export type ProbeTrack = { id: string; lang: string; codec: string; name: string; def: boolean; forced: boolean };
 export type Probe = { ok: boolean; container: '' | 'mp4' | 'mkv'; audio: ProbeTrack[]; subs: ProbeTrack[] };
 
-const CHUNK = 65536;
+const CHUNK = 262144;
+const FIRST = 524288;
+// el índice moov de un MP4 (o el final del archivo donde está) se trae entero si no pasa de esto
+const MOOV_MAX = 4194304;
 const MAX_REQ = 14;
 
 type Reader = { url: string; chunks: { start: number; data: Uint8Array }[]; size: number; requests: number; failed: boolean };
@@ -14,7 +18,8 @@ type Reader = { url: string; chunks: { start: number; data: Uint8Array }[]; size
 async function fetchRange(r: Reader, off: number, len: number): Promise<Uint8Array | null> {
   r.requests++;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 12000);
+  // un servidor lento no detiene la detección: 5 s por pedido (9 s el índice grande de un MP4)
+  const timer = setTimeout(() => ctrl.abort(), len > FIRST ? 9000 : 5000);
   try {
     const res = await fetch(r.url, { headers: { 'User-Agent': UA, Range: 'bytes=' + off + '-' + (off + len - 1) }, signal: ctrl.signal });
     if (res.status !== 206 && !(res.status === 200 && off === 0)) return null;
@@ -41,7 +46,7 @@ async function read(r: Reader, off: number, len: number): Promise<Uint8Array | n
     r.failed = true;
     return null;
   }
-  const data = await fetchRange(r, off, Math.max(len, CHUNK));
+  const data = await fetchRange(r, off, Math.max(len, off === 0 ? FIRST : CHUNK));
   if (!data) {
     r.failed = true;
     return null;
@@ -87,13 +92,25 @@ async function box(r: Reader, off: number, end: number): Promise<{ size: number;
   return size < hl ? null : { size, type, hl };
 }
 
+// [off, off + len) en un solo pedido si no está ya leído
+async function prefetch(r: Reader, off: number, len: number): Promise<void> {
+  if (r.chunks.some(c => off >= c.start && off + len <= c.start + c.data.length) || r.requests >= MAX_REQ) return;
+  const data = await fetchRange(r, off, len);
+  if (data) r.chunks.push({ start: off, data });
+}
+
 async function mp4(r: Reader): Promise<{ audio: ProbeTrack[]; subs: ProbeTrack[] }> {
   let off = 0;
   for (let i = 0; i < 20; i++) {
     const lim = r.size > 0 ? r.size : Number.MAX_SAFE_INTEGER;
+    // moov al final del archivo (después del video): el final entero en un solo pedido
+    if (off > 0 && r.size > 0 && r.size - off <= MOOV_MAX) await prefetch(r, off, r.size - off);
     const b = await box(r, off, lim);
     if (!b) break;
-    if (b.type === 'moov') return moov(r, off + b.hl, off + b.size);
+    if (b.type === 'moov') {
+      if (b.size <= MOOV_MAX) await prefetch(r, off, b.size);
+      return moov(r, off + b.hl, off + b.size);
+    }
     off += b.size;
     if (r.size > 0 && off >= r.size) break;
   }
@@ -251,7 +268,22 @@ async function mkvTracks(r: Reader, off: number, end: number) {
   return out;
 }
 
-export async function probeTracks(url: string): Promise<Probe> {
+// una lectura por video: la que arranca al abrirlo (load) la reutilizan "playing" y el error del reproductor
+const cache = new Map<string, Promise<Probe>>();
+
+export function probeTracks(url: string): Promise<Probe> {
+  const hit = cache.get(url);
+  if (hit) return hit;
+  const p = readTracks(url).then(res => {
+    if (!res.ok) cache.delete(url); // otra oportunidad la próxima vez
+    return res;
+  });
+  cache.set(url, p);
+  if (cache.size > 40) cache.delete(cache.keys().next().value as string);
+  return p;
+}
+
+async function readTracks(url: string): Promise<Probe> {
   const r: Reader = { url, chunks: [], size: 0, requests: 0, failed: false };
   const out: Probe = { ok: false, container: '', audio: [], subs: [] };
   try {
