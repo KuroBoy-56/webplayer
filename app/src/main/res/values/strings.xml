@@ -366,4 +366,7 @@
         <item quantity="many">%1$d canales</item>
         <item quantity="other">%1$d canales</item>
     </plurals>
+    <string name="watch_now">Ver ahora</string>
+    <string name="starts_in">Empieza en %1$d s</string>
+    <string name="leave_video">¿Salir del video?</string>
 </resources>

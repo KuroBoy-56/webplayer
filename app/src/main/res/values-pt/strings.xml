@@ -365,4 +365,7 @@
         <item quantity="many">%1$d canais</item>
         <item quantity="other">%1$d canais</item>
     </plurals>
+    <string name="watch_now">Assistir agora</string>
+    <string name="starts_in">Começa em %1$d s</string>
+    <string name="leave_video">Sair do vídeo?</string>
 </resources>

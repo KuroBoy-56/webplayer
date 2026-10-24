@@ -187,6 +187,8 @@ class PlayerActivity : ComponentActivity() {
                     // estaba usando. Con el canal cargando, reconectando o con error, sale directo: antes los
                     // controles volvían a aparecer con cada reintento y Atrás nunca salía del canal (deportes).
                     tv && ui2.visible && player.isPlaying && System.currentTimeMillis() - lastUserKey < 8_000 -> ui2.visible = false
+                    // película o capítulo: se pregunta antes de salir (PlayerNext.kt); en vivo sale directo
+                    !ui2.live -> ui2.askExit = true
                     else -> finish()
                 }
             }

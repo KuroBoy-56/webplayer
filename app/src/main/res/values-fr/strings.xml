@@ -365,4 +365,7 @@
         <item quantity="many">%1$d chaînes</item>
         <item quantity="other">%1$d chaînes</item>
     </plurals>
+    <string name="watch_now">Regarder</string>
+    <string name="starts_in">Commence dans %1$d s</string>
+    <string name="leave_video">Quitter la vidéo ?</string>
 </resources>
