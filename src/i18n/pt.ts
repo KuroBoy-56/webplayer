@@ -233,6 +233,8 @@ const pt: Record<Key, string> = {
   "Registrando…": "Registrando…",
   "Registrar este equipo en el panel": "Registrar este aparelho no painel",
   "Reintentando con el DNS elegido…": "Tentando de novo com o DNS escolhido…",
+  "Reconectando…": "Reconectando…",
+  "Atrás para salir": "Voltar para sair",
   "Reintentando…": "Tentando de novo…",
   "Reintentar": "Tentar de novo",
   "Reparto": "Elenco",
