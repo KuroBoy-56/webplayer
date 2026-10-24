@@ -365,4 +365,7 @@
         <item quantity="other">%1$d canais</item>
     </plurals>
     <string name="cache_clear_notice">Seu provedor atualizou o aplicativo. O cache será apagado e o aplicativo será reiniciado.</string>
+    <string name="watch_now">Assistir agora</string>
+    <string name="starts_in">Começa em %1$d s</string>
+    <string name="leave_video">Sair do vídeo?</string>
 </resources>

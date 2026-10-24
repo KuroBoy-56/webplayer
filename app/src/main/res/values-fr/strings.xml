@@ -365,4 +365,7 @@
         <item quantity="other">%1$d chaînes</item>
     </plurals>
     <string name="cache_clear_notice">Votre fournisseur a mis à jour l\'application. Le cache sera vidé et l\'application redémarrera.</string>
+    <string name="watch_now">Regarder</string>
+    <string name="starts_in">Commence dans %1$d s</string>
+    <string name="leave_video">Quitter la vidéo ?</string>
 </resources>

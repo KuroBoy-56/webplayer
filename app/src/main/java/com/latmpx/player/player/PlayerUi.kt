@@ -114,6 +114,10 @@ class PlayerUiModel(val player: ExoPlayer, val live: Boolean, val tv: Boolean) {
     var locked by mutableStateOf(false)
     var speed by mutableFloatStateOf(1f)
     var hasNext by mutableStateOf(false)
+    /** capítulo en el que se pulsó Cancelar en el aviso del siguiente (PlayerNext.kt) */
+    var nextDismissedFor by mutableIntStateOf(-1)
+    /** «¿Salir del video?» abierto */
+    var askExit by mutableStateOf(false)
     var episodes by mutableStateOf<List<String>>(emptyList())
     var index by mutableIntStateOf(0)
     var seekHint by mutableStateOf<String?>(null)
@@ -268,6 +272,8 @@ fun PlayerOverlay(m: PlayerUiModel, a: PlayerActions) {
         AnimatedVisibility(m.visible && m.panel == null, enter = fadeIn(), exit = fadeOut()) {
             if (m.locked) LockedLayer(m) else Controls(m, a)
         }
+        NextEpisodeCard(m, a, Modifier.align(Alignment.BottomEnd).padding(end = 32.dp, bottom = 96.dp))
+        ExitVideoDialog(m, a)
         m.panel?.let { Panel(m, a, it) }
         m.toast?.let { t ->
             Text(t, color = Color.White, fontSize = 15.sp, modifier = Modifier.align(Alignment.TopCenter).padding(top = 28.dp)
