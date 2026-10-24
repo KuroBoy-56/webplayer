@@ -10,7 +10,7 @@
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { Engine, engineDenied, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
-import { codecKey, codecName, imageSub, langKey, langName, sameLang, trackLang } from '../lib/lang';
+import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
 import { Probe, probeTracks } from '../lib/probe';
 import { pref, setPref } from '../lib/storage';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
@@ -267,34 +267,33 @@ export class Playback {
     const nat = this.nativeAudio();
     const pr = this.probe?.ok ? this.probe.audio : [];
     if (pr.length && pr.length >= nat.length) {
-      return pr.map((tr, i) => {
+      return numbered(pr.map((tr, i) => {
         const n = nat.length === pr.length ? i : this.byLang(nat, pr, i);
         return {
           key: 'p:' + i,
-          label: langName(tr.lang, tr.name) + (tr.codec ? '  (' + codecName(tr.codec) + ')' : ''),
+          label: langName(tr.lang, tr.name) || t('Audio {n}', { n: i + 1 }),
           lang: trackLang(tr.lang, tr.name),
           codec: tr.codec,
           probe: i,
           native: n >= 0 ? n : undefined,
         };
-      });
+      }));
     }
-    return nat.map((tr, i) => ({ key: 'n:' + i, label: langName(tr.language, tr.label) || t('Audio {n}', { n: i + 1 }), lang: trackLang(tr.language, tr.label), codec: '', native: i }));
+    return numbered(nat.map((tr, i) => ({ key: 'n:' + i, label: langName(tr.language, tr.label) || t('Audio {n}', { n: i + 1 }), lang: trackLang(tr.language, tr.label), codec: '', native: i })));
   }
 
   private subItems(): SubItem[] {
     const nat = this.nativeSubs();
     const pr = this.probe?.ok ? this.probe.subs : [];
     if (pr.length && pr.length >= nat.length) {
-      return pr.map((tr, i) => {
+      return numbered(pr.map((tr, i) => {
         const n = nat.length === pr.length ? i : this.byLang(nat, pr, i);
-        let label = langName(tr.lang, tr.name);
+        let label = langName(tr.lang, tr.name) || t('Subtítulos {n}', { n: i + 1 });
         if (tr.forced) label += ' · ' + t('forzados');
-        if (imageSub(tr.codec)) label += ' · ' + t('imagen');
         return { key: 'p:' + i, label, lang: trackLang(tr.lang, tr.name), image: imageSub(tr.codec), probe: i, native: n >= 0 ? nat[n].index : undefined };
-      });
+      }));
     }
-    return nat.map((tr, i) => ({ key: 'n:' + i, label: langName(tr.language, tr.label) || t('Subtítulos {n}', { n: i + 1 }), lang: trackLang(tr.language, tr.label), image: false, native: tr.index }));
+    return numbered(nat.map((tr, i) => ({ key: 'n:' + i, label: langName(tr.language, tr.label) || t('Subtítulos {n}', { n: i + 1 }), lang: trackLang(tr.language, tr.label), image: false, native: tr.index })));
   }
 
   private probeDefault(): number {
