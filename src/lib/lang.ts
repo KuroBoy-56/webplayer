@@ -28,22 +28,32 @@ const NAMES: Record<string, Key> = {
   ko: 'Coreano',
 };
 
-// "Español latino", "Inglés · Comentarios"… (el nombre de la pista solo si dice algo más)
+// Solo el idioma: "Español latino", "Inglés"… (nada de códecs ni números técnicos). Idioma desconocido:
+// su nombre si es una palabra corta, si no el código (FR, HIN); '' si no hay nada que mostrar.
 export function langName(code: string, name: string): string {
-  const c = (code || '').toLowerCase();
   const n = (name || '').toLowerCase().trim();
   const k = langKey(code) || langKey(guessLang(name));
-  let label = NAMES[k] ? t(NAMES[k]) : '';
-  if (k === 'es') {
-    if (n.includes('lat')) label = t('Español latino');
-    if (n.includes('cast') || n.includes('spain') || n.includes('españa')) label = t('Español de España');
+  if (NAMES[k]) {
+    if (k === 'es' && n.includes('lat')) return t('Español latino');
+    if (k === 'es' && (n.includes('cast') || n.includes('spain') || n.includes('españa'))) return t('Español de España');
+    return t(NAMES[k]);
   }
-  if (!label) return name || (code ? code.toUpperCase() : t('Pista'));
-  if (n && n !== c && !label.toLowerCase().includes(n) && !LANG_WORD.test(n)) label += ' · ' + name.trim();
-  return label;
+  const nm = (name || '').trim();
+  // sin \p{L}: los navegadores de televisores viejos no lo entienden
+  if (nm && nm.length <= 16 && !/[0-9.,:;()[\]/\\#_+=|-]/.test(nm)) return nm;
+  const c = (code || '').trim();
+  if (/^[a-z]{2,3}$/i.test(c) && c.toLowerCase() !== 'und') return c.toUpperCase();
+  return '';
 }
 
-const LANG_WORD = /^(english|spanish|español|espanol|inglés|ingles|castellano|portuguese|português|portugues)$/;
+// dos pistas con el mismo nombre: "Inglés", "Inglés 2"
+export function numbered<T extends { label: string }>(items: T[]): T[] {
+  const seen: Record<string, number> = {};
+  return items.map(it => {
+    const c = (seen[it.label] = (seen[it.label] || 0) + 1);
+    return c > 1 ? { ...it, label: it.label + ' ' + c } : it;
+  });
+}
 
 // pistas sin código de idioma pero con nombre ("Latino", "English")
 function guessLang(name: string): string {
