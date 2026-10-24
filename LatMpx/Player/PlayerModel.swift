@@ -45,6 +45,8 @@ final class PlayerModel: ObservableObject {
     private var urlIdx = 0
     /** la dirección actual ya se reintentó una vez (el servidor todavía contaba la conexión anterior) */
     private var retriedSame = false
+    /** vueltas automáticas por todas las direcciones (http y https) antes de rendirse: nada de «Reintentar» */
+    private var autoRounds = 0
     private var timer: Timer?
     private var openedAt = Date()
     private var resumeTo: Int64 = 0
@@ -128,6 +130,7 @@ final class PlayerModel: ObservableObject {
         index = i
         urlIdx = 0
         retriedSame = false
+        autoRounds = 0
         resumeTo = 0
         engineTried = false; onEngine = false; offsetMs = 0
         if kind != .live && i == request.index && request.startAt > 0 && !startUsed {
@@ -208,6 +211,7 @@ final class PlayerModel: ObservableObject {
         if player.isPlaying {
             if !everPlayed {
                 everPlayed = true
+                autoRounds = 0
                 // protocolo con el que el servidor entrega el video (http / https), para los siguientes
                 if !request.offline, !onEngine, request.directUrls.isEmpty, let s = Store.session(), urls.indices.contains(urlIdx) {
                     let scheme = (s.base.lowercased().components(separatedBy: "://").first ?? "http") + "://"
@@ -258,6 +262,20 @@ final class PlayerModel: ObservableObject {
             return
         }
         if tryEngine() { return }
+        if error == nil && autoRounds < 2 {
+            // otra vuelta sola tras una pausa (el servidor pudo cortar un momento)
+            autoRounds += 1
+            PlayerDiag.log("otra vuelta automática \(autoRounds)")
+            buffering = true
+            connecting = false
+            let my = loadSeq
+            freshPlayer()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self = self, !self.stopped, self.loadSeq == my, self.error == nil else { return }
+                self.retry()
+            }
+            return
+        }
         if error == nil {
             // el informe al panel va en español; la pantalla, en el idioma de la app
             let generic = kind == .live ? "No se pudo reproducir este canal" : "No se pudo reproducir este video"

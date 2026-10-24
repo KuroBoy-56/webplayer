@@ -244,7 +244,7 @@ struct PlayerScreen: View {
                 Text(d).font(.system(size: 11)).foregroundColor(.white.opacity(0.5)).multilineTextAlignment(.center).lineLimit(3)
             }
             HStack(spacing: 12) {
-                AppButton(text: tr("Reintentar"), height: 42) { m.retry() }.frame(width: 150)
+                // ya se probó solo varias veces (http y https, el motor del panel): sin «Reintentar»
                 if m.kind == .live { AppButton(text: tr("Siguiente canal"), primary: false, height: 42) { m.next() }.frame(width: 170) }
                 AppButton(text: tr("Salir"), primary: false, height: 42) { close() }.frame(width: 110).accessibilityIdentifier("player.exit")
             }
