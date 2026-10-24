@@ -345,8 +345,15 @@ final class PlayerModel: ObservableObject {
             let ns = (names ?? []).map { "\($0)" }
             return zip(ids, ns).map { Track(id: $0, name: $1) }
         }
-        audio = pairs(player.audioTrackIndexes, player.audioTrackNames).filter { $0.id >= 0 }
-        subs = pairs(player.videoSubTitlesIndexes, player.videoSubTitlesNames)
+        // solo el idioma ("Español latino", "Inglés"), sin códecs ni números técnicos
+        audio = TrackNames.numbered(pairs(player.audioTrackIndexes, player.audioTrackNames).filter { $0.id >= 0 }.enumerated().map {
+            Track(id: $1.id, name: TrackNames.clean($1.name).isEmpty ? tr("Audio %d", $0 + 1) : TrackNames.clean($1.name))
+        })
+        subs = TrackNames.numbered(pairs(player.videoSubTitlesIndexes, player.videoSubTitlesNames).enumerated().map { (i, t) -> Track in
+            if t.id < 0 { return Track(id: t.id, name: tr("Desactivados")) }
+            let c = TrackNames.clean(t.name)
+            return Track(id: t.id, name: c.isEmpty ? tr("Subtítulos %d", i) : c)
+        })
         currentAudio = player.currentAudioTrackIndex
         currentSub = player.currentVideoSubTitleIndex
     }

@@ -5,6 +5,10 @@ import Foundation
 
 extension L10n {
     static let en: [String: String] = [
+        "Español latino": "Latin Spanish",
+        "Audio %d": "Audio %d",
+        "Subtítulos %d": "Subtitles %d",
+        "Desactivados": "Off",
         "Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.": "Your provider updated the app. The cache will be cleared and the app will restart.",
         "Ver más": "See more",
         "Ver menos": "See less",
@@ -308,6 +312,10 @@ extension L10n {
     ]
 
     static let pt: [String: String] = [
+        "Español latino": "Espanhol latino",
+        "Audio %d": "Áudio %d",
+        "Subtítulos %d": "Legendas %d",
+        "Desactivados": "Desativadas",
         "Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.": "Seu provedor atualizou o aplicativo. O cache será apagado e o aplicativo será reiniciado.",
         "Ver más": "Ver mais",
         "Ver menos": "Ver menos",
@@ -578,6 +586,10 @@ extension L10n {
     ]
 
     static let fr: [String: String] = [
+        "Español latino": "Espagnol latino",
+        "Audio %d": "Audio %d",
+        "Subtítulos %d": "Sous-titres %d",
+        "Desactivados": "Désactivés",
         "Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.": "Votre fournisseur a mis à jour l'application. Le cache sera vidé et l'application redémarrera.",
         "Ver más": "Voir plus",
         "Ver menos": "Voir moins",
