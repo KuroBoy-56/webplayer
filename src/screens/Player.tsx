@@ -63,6 +63,8 @@ export default function Player({ params }: { params: PlayParams }) {
   // empieza con el protocolo que ya funcionó en esta sesión; triedOther: ya se probó el otro en este video
   const flipped = useRef(streamFlip());
   const triedOther = useRef(false);
+  // vueltas automáticas por todas las formas (http, https, DNS, motor) antes de rendirse: nada de «Reintentar»
+  const rounds = useRef(0);
   // botón DNS: si tampoco abre, una vez por la IP que da el DNS elegido (solo ese video)
   const triedDns = useRef(false);
   // TV en vivo: formato que se está probando (LIVE_FORMATS)
@@ -157,6 +159,7 @@ export default function Player({ params }: { params: PlayParams }) {
       triedDns.current = false;
       triedOther.current = false;
       fmtAt.current = 0;
+      rounds.current = 0;
       setIndex(n);
       setEpg([]);
       load(n);
@@ -194,6 +197,7 @@ export default function Player({ params }: { params: PlayParams }) {
       setBuffering(false);
       setPaused(false);
       setStatus('');
+      rounds.current = 0;
       c.onPlaying();
       // por este protocolo entrega el video el servidor: los siguientes videos van primero por él
       setStreamFlip(flipped.current);
@@ -244,6 +248,18 @@ export default function Player({ params }: { params: PlayParams }) {
       const giveUp = () =>
         c.onError().then(handled => {
           if (!alive || handled) return;
+          if (rounds.current < 2) {
+            // otra vuelta sola tras una pausa (el servidor pudo cortar un momento)
+            rounds.current++;
+            retried.current = false;
+            triedOther.current = false;
+            triedDns.current = false;
+            fmtAt.current = 0;
+            setStatus(t('Reconectando…'));
+            const at = params.kind === 'live' ? 0 : Math.floor(c.realPos());
+            setTimeout(() => alive && load(indexRef.current, at), 3000);
+            return;
+          }
           setBuffering(false);
           setStatus('');
           setError(params.kind === 'live' ? t('Este canal no está disponible en este momento.') : t('No se pudo reproducir este contenido.'));
@@ -526,7 +542,7 @@ export default function Player({ params }: { params: PlayParams }) {
       {error ? (
         <View style={s.center}>
           <Text style={s.error}>{error}</Text>
-          <Text style={s.hint}>{t('OK para reintentar · Atrás para salir')}</Text>
+          <Text style={s.hint}>{t('Atrás para salir')}</Text>
         </View>
       ) : null}
 

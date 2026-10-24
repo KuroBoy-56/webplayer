@@ -232,6 +232,8 @@ const en = {
   "Registrando…": "Registering…",
   "Registrar este equipo en el panel": "Register this device with the panel",
   "Reintentando con el DNS elegido…": "Retrying with the chosen DNS…",
+  "Reconectando…": "Reconnecting…",
+  "Atrás para salir": "Back to exit",
   "Reintentando…": "Retrying…",
   "Reintentar": "Retry",
   "Reparto": "Cast",
