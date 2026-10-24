@@ -157,7 +157,7 @@ fun audioOptions(p: ExoPlayer): List<TrackOption> {
             }
         }
     }
-    return out
+    return numbered(out)
 }
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
@@ -172,7 +172,8 @@ fun textOptions(p: ExoPlayer): List<TrackOption> {
             val f = g.getTrackFormat(i)
             val sel = !disabled && g.isTrackSelected(i)
             if (sel) any = true
-            out += TrackOption(langName(f.language, f.label) + if ((f.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) " (" + tr(R.string.forced) + ")" else "", sel) {
+            val name = langName(f.language, f.label).ifBlank { tr(R.string.subtitles_n, out.size + 1) }
+            out += TrackOption(name + if ((f.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) " (" + tr(R.string.forced) + ")" else "", sel) {
                 p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                     .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i)).build()
@@ -182,25 +183,20 @@ fun textOptions(p: ExoPlayer): List<TrackOption> {
     out.add(0, TrackOption(tr(R.string.off), !any) {
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
     })
-    return out
+    return numbered(out)
 }
 
-private fun audioLabel(f: Format, i: Int): String {
-    val ch = when {
-        f.channelCount >= 8 -> " 7.1"
-        f.channelCount >= 6 -> " 5.1"
-        f.channelCount == 2 -> " " + tr(R.string.stereo)
-        else -> ""
+// solo el idioma ("Español latino", "Inglés"): nada de canales, códecs ni el nombre técnico de la pista
+private fun audioLabel(f: Format, i: Int): String = langName(f.language, f.label).ifBlank { tr(R.string.audio_n, i + 1) }
+
+/** dos pistas con el mismo nombre: "Inglés", "Inglés 2" */
+fun numbered(list: List<TrackOption>): List<TrackOption> {
+    val seen = HashMap<String, Int>()
+    return list.map { o ->
+        val n = (seen[o.label] ?: 0) + 1
+        seen[o.label] = n
+        if (n > 1) o.copy(label = "${o.label} $n") else o
     }
-    val codec = when (f.sampleMimeType) {
-        "audio/eac3", "audio/eac3-joc" -> " · Dolby Digital Plus"
-        "audio/ac3" -> " · Dolby Digital"
-        "audio/true-hd" -> " · Dolby TrueHD"
-        "audio/vnd.dts", "audio/vnd.dts.hd" -> " · DTS"
-        else -> ""
-    }
-    val name = langName(f.language, f.label).ifBlank { tr(R.string.audio_n, i + 1) }
-    return name + ch + codec
 }
 
 /** códigos de 3 letras de las pistas -> 2 letras (el nombre sale del sistema en el idioma de la app) */
@@ -211,18 +207,26 @@ private val LANGS = mapOf(
 
 fun langName(lang: String?, label: String?): String {
     val l = (lang ?: "").lowercase(Locale.ROOT).substringBefore('-')
-    val code = LANGS[l] ?: l
-    val base = if (code.isNotEmpty() && code != "und") Locale(code).getDisplayLanguage(Locale.getDefault()).replaceFirstChar { it.uppercase() } else ""
     val lb = label?.trim().orEmpty()
-    if (lb.isNotEmpty() && !lb.equals(base, true) && !lb.equals(l, true)) {
-        val latino = Regex("lat|latino|latam|mx", RegexOption.IGNORE_CASE).containsMatchIn(lb)
-        return when {
-            base.isEmpty() -> lb
-            code == "es" && latino -> tr(R.string.spanish_latam)
-            else -> "$base · $lb"
-        }
+    val code = (LANGS[l] ?: l).ifEmpty { guessLang(lb) }
+    if (code.isEmpty() || code == "und") {
+        // sin idioma: el nombre solo si es una palabra corta ("Latino"), nunca "Track 1 ISO 144.96"
+        return if (lb.length <= 16 && lb.none { it.isDigit() || it in ".,:;()[]/\\#_+=|-" }) lb else ""
     }
-    return base.ifEmpty { lb }
+    if (code == "es" && Regex("lat|mx", RegexOption.IGNORE_CASE).containsMatchIn(lb)) return tr(R.string.spanish_latam)
+    val base = Locale(code).getDisplayLanguage(Locale.getDefault()).replaceFirstChar { it.uppercase() }
+    return if (base.isNotEmpty() && !base.equals(code, true)) base else code.uppercase(Locale.ROOT)
+}
+
+/** pistas sin código de idioma pero con nombre ("Latino", "English") */
+private fun guessLang(lb: String): String {
+    val n = lb.lowercase(Locale.ROOT)
+    return when {
+        Regex("\\b(latino|español|espanol|castellano|spanish)\\b").containsMatchIn(n) -> "es"
+        Regex("\\b(english|inglés|ingles)\\b").containsMatchIn(n) -> "en"
+        Regex("\\b(portugu[eê]s|portuguese)\\b").containsMatchIn(n) -> "pt"
+        else -> ""
+    }
 }
 
 fun fmtTime(ms: Long): String {
