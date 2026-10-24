@@ -105,6 +105,10 @@ final class PlayerUITests: XCTestCase {
         controls(app)
         let c0 = Date()
         press(app, app.buttons["player.close"])
+        // películas y series preguntan «¿Salir del video?» antes de cerrar (en vivo sale directo)
+        let leave = app.alerts.buttons.matching(NSPredicate(format: "label IN %@", ["Salir", "Exit", "Leave", "Sair", "Quitter"])).firstMatch
+        XCTAssertTrue(leave.waitForExistence(timeout: 5), "no preguntó «¿Salir del video?»")
+        leave.tap()
         XCTAssertTrue(wait(5) { !app.otherElements["player.screen"].exists }, "no se pudo salir del reproductor")
         note(String(format: "película cerrada en %.2f s", Date().timeIntervalSince(c0)))
         RunLoop.current.run(until: Date().addingTimeInterval(1.5))
