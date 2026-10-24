@@ -77,7 +77,7 @@ export class Playback {
   private subApplied = false;
   private pendingNative = -1;
   private ext: { s: number; cues: Cue[] } | null = null;
-  private subWait: { s: number; tries: number; label: string } | null = null;
+  private subWait: { s: number; tries: number; label: string; got: number } | null = null;
   private subTimer: ReturnType<typeof setInterval> | null = null;
   private prefsTimer: ReturnType<typeof setTimeout> | null = null;
   private lastSub = '';
@@ -338,7 +338,7 @@ export class Playback {
     out.push({ kind: 'text', key: 'off', label: t('Desactivados'), on: this.subKey === 'off' || (!this.ext && !showing) });
     for (const it of subs) {
       const isOn = this.ext ? it.probe === this.ext.s : this.subKey !== 'off' && !!showing && it.native === showing.index;
-      out.push({ kind: 'text', key: it.key, label: it.label + (this.subWait && this.subWait.s === it.probe ? ' (' + t('preparando…') + ')' : ''), on: isOn });
+      out.push({ kind: 'text', key: it.key, label: it.label + (this.subWait && this.subWait.s === it.probe && this.ext?.s !== it.probe ? ' (' + t('preparando…') + ')' : ''), on: isOn });
     }
     return out;
   }
@@ -641,29 +641,48 @@ export class Playback {
     }
     this.setNativeSub(-1);
     this.setExt(null);
-    const wait = { s, tries: 0, label };
+    const wait = { s, tries: 0, label, got: 0 };
     this.subWait = wait;
     this.hooks.toast(t('Preparando subtítulos {x}… (puede tardar un minuto)', { x: label }));
     this.hooks.changed();
     while (this.subWait === wait && g === this.gen) {
       const r = await subCheck(e, this.url, s);
       if (this.subWait !== wait || g !== this.gen) return;
+      // a medio leer (un servidor lento tarda minutos en dar el archivo entero): se muestra lo leído
+      // y se vuelve a pedir cada 20 s hasta tenerlo completo
+      if (r.partial && !r.ready) {
+        if (Date.now() - wait.got >= 20000) {
+          const part = parseVtt(await subText(e, this.url, s));
+          if (this.subWait !== wait || g !== this.gen) return;
+          wait.got = Date.now();
+          if (part.length) {
+            if (this.ext?.s !== s) this.hooks.toast(t('Subtítulos: {x}', { x: label }));
+            this.setExt({ s, cues: part });
+            this.hooks.changed();
+          }
+        }
+        await new Promise<void>(res => setTimeout(res, 3000));
+        continue;
+      }
       if (r.ready) {
         const cues = parseVtt(await subText(e, this.url, s));
         if (this.subWait !== wait || g !== this.gen) return;
         this.subWait = null;
+        if (!cues.length && this.ext?.s === s) return;
         if (!cues.length) {
           this.subKey = 'off';
           this.hooks.toast(t('Este subtítulo está vacío.'));
         } else {
+          if (this.ext?.s !== s) this.hooks.toast(t('Subtítulos: {x}', { x: label }));
           this.setExt({ s, cues });
-          this.hooks.toast(t('Subtítulos: {x}', { x: label }));
         }
         this.hooks.changed();
         return;
       }
       if (r.failed || ++wait.tries > 100) {
         this.subWait = null;
+        // ya se ve una parte: se queda con lo que hay
+        if (this.ext?.s === s) return;
         this.subKey = 'off';
         if (r.denied) this.denied(r.denied, true);
         else this.hooks.toast(t('Este subtítulo no se puede mostrar (es de imagen o el servidor no respondió).'));
