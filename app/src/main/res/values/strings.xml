@@ -274,7 +274,8 @@
     <string name="off">Desactivados</string>
     <string name="stereo">Estéreo</string>
     <string name="audio_n">Audio %1$d</string>
-    <string name="spanish_latam">Español (Latinoamérica)</string>
+    <string name="spanish_latam">Español latino</string>
+    <string name="subtitles_n">Subtítulos %1$d</string>
     <string name="unlock">Desbloquear</string>
     <string name="screen_locked">Pantalla bloqueada · toca para desbloquear</string>
     <string name="prev_channel">Canal anterior</string>

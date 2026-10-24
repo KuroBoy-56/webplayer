@@ -273,7 +273,8 @@
     <string name="off">Off</string>
     <string name="stereo">Stereo</string>
     <string name="audio_n">Audio %1$d</string>
-    <string name="spanish_latam">Spanish (Latin America)</string>
+    <string name="spanish_latam">Latin Spanish</string>
+    <string name="subtitles_n">Subtitles %1$d</string>
     <string name="unlock">Unlock</string>
     <string name="screen_locked">Screen locked · tap to unlock</string>
     <string name="prev_channel">Previous channel</string>

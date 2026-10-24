@@ -273,7 +273,8 @@
     <string name="off">Désactivés</string>
     <string name="stereo">Stéréo</string>
     <string name="audio_n">Audio %1$d</string>
-    <string name="spanish_latam">Espagnol (Amérique latine)</string>
+    <string name="spanish_latam">Espagnol latino</string>
+    <string name="subtitles_n">Sous-titres %1$d</string>
     <string name="unlock">Déverrouiller</string>
     <string name="screen_locked">Écran verrouillé · touchez pour déverrouiller</string>
     <string name="prev_channel">Chaîne précédente</string>
