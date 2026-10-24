@@ -25,6 +25,9 @@ struct PlayerScreen: View {
     @State private var tracks = false
     @State private var channels = false
     @State private var size: CGSize = .zero
+    /** capítulo en el que se pulsó Cancelar en el aviso del siguiente (NextEpisode.swift) */
+    @State private var nextDismissedFor = -1
+    @State private var askExit = false
 
     init(request: PlayRequest) { _m = StateObject(wrappedValue: PlayerModel(request: request)) }
 
@@ -48,6 +51,13 @@ struct PlayerScreen: View {
                 }
                 if let e = m.error { errorBox(e) }
                 if controls && m.error == nil { controlsLayer.transition(.opacity) }
+                let secs = NextEpisode.seconds(series: m.kind == .series, hasNext: m.hasNext, dismissed: nextDismissedFor == m.index,
+                                               timeMs: m.time, lengthMs: m.length)
+                if secs > 0 && m.error == nil {
+                    NextEpisodeCard(seconds: secs, watch: { m.next() }, cancel: { nextDismissedFor = m.index })
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .padding(.trailing, 24).padding(.bottom, 90)
+                }
                 // estado para la prueba del simulador: siempre presente (los controles se ocultan solos)
                 Text(m.playing ? "playing" : "paused").font(.system(size: 1)).opacity(0.02).frame(width: 1, height: 1)
                     .allowsHitTesting(false).accessibilityIdentifier("player.state")
@@ -75,6 +85,10 @@ struct PlayerScreen: View {
             Button(tr("Cancelar"), role: .cancel) {}
         }
         .sheet(isPresented: $channels) { channelList }
+        .alert(tr("¿Salir del video?"), isPresented: $askExit) {
+            Button(tr("Salir"), role: .destructive) { close() }
+            Button(tr("Seguir viendo"), role: .cancel) {}
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             // abierto al girar el teléfono en TV en vivo: ponerlo vertical vuelve a la miniatura
             if m.request.closeOnPortrait && UIDevice.current.orientation == .portrait { close() }
@@ -122,7 +136,8 @@ struct PlayerScreen: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            Button { close() } label: { playerBarIcon("xmark") }
+            // película o capítulo: se pregunta antes de salir; en vivo cierra directo
+            Button { if m.kind == .live { close() } else { askExit = true } } label: { playerBarIcon("xmark") }
                 .accessibilityIdentifier("player.close").accessibilityLabel(tr("Cerrar"))
             VStack(alignment: .leading, spacing: 3) {
                 Text(m.entry.title).font(.system(size: 17, weight: .bold)).lineLimit(1)

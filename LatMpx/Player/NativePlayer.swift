@@ -48,6 +48,9 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
     private var watch: [NSKeyValueObservation] = []
     private var itemWatch: NSKeyValueObservation?
     private var timeObs: Any?
+    /** aviso del siguiente capítulo (NextEpisode.swift) y si se canceló en este capítulo */
+    private var nextCard: NativeNextCard?
+    private var nextDismissed = false
     private var endObs: [NSObjectProtocol] = []
     private var timeout: DispatchWorkItem?
     private var pipActive = false
@@ -158,6 +161,8 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         self.state = state
         guard !ways.isEmpty, let top = Self.topController() else { backToApp(r, 0, nil); return }
         request = r
+        nextDismissed = false
+        hideNext()
         self.ways = ways
         wayIx = 0
         retriedThisWay = false
@@ -185,9 +190,10 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
                 DispatchQueue.main.async { self?.started(c) }
             },
         ]
-        timeObs = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 5, preferredTimescale: 1), queue: .main) { [weak self] _ in
-            guard let s = self, Date().timeIntervalSince(s.lastSave) >= 10 else { return }
-            s.saveProgress()
+        timeObs = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 1, preferredTimescale: 1), queue: .main) { [weak self] _ in
+            guard let s = self else { return }
+            s.tickNext()
+            if Date().timeIntervalSince(s.lastSave) >= 10 { s.saveProgress() }
         }
         let ms = Self.startPoint(r)
         if ms > 0 && r.startAt <= 0 { state.toast = tr("Continuando desde %@", fmtTime(ms)) }
@@ -349,6 +355,8 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         watch.forEach { $0.invalidate() }; watch = []
         if let o = timeObs { vc?.player?.removeTimeObserver(o) }
         timeObs = nil
+        hideNext()
+        nextDismissed = false
         vc?.onClose = nil
         vc?.player?.pause()
         vc?.player = nil
@@ -371,15 +379,46 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
 
     /** terminó: el siguiente episodio (por el mismo camino que cualquier video) o cerrar */
     private func ended() {
-        guard let r = request, let st = state else { return }
+        guard let r = request else { return }
         saveProgress(done: true)
-        if r.kind == .series && r.index + 1 < r.queue.count {
-            st.play = PlayRequest(kind: r.kind, queue: r.queue, index: r.index + 1, saveTitle: r.saveTitle, savePoster: r.savePoster,
-                                  category: r.category, directUrls: r.directUrls, offline: r.offline)
-            return
-        }
+        if goNextEpisode() { return }
         close(save: false)
         finish(r)
+    }
+
+    /** el siguiente episodio de la lista, si hay */
+    @discardableResult private func goNextEpisode() -> Bool {
+        guard let r = request, let st = state, r.kind == .series, r.index + 1 < r.queue.count else { return false }
+        hideNext()
+        st.play = PlayRequest(kind: r.kind, queue: r.queue, index: r.index + 1, saveTitle: r.saveTitle, savePoster: r.savePoster,
+                              category: r.category, directUrls: r.directUrls, offline: r.offline)
+        return true
+    }
+
+    /** cada segundo: el aviso del siguiente capítulo en los últimos 15 s (Cancelar deja ver el final; al terminar pasa solo) */
+    private func tickNext() {
+        guard let r = request, let c = vc else { return }
+        let secs = NextEpisode.seconds(series: r.kind == .series, hasNext: r.index + 1 < r.queue.count, dismissed: nextDismissed,
+                                       timeMs: currentMs(), lengthMs: durationMs())
+        if secs == 0 { hideNext(); return }
+        if nextCard == nil {
+            let card = NativeNextCard()
+            card.onWatch = { [weak self] in self?.saveProgress(); self?.goNextEpisode() }
+            card.onCancel = { [weak self] in self?.nextDismissed = true; self?.hideNext() }
+            card.translatesAutoresizingMaskIntoConstraints = false
+            c.view.addSubview(card)
+            NSLayoutConstraint.activate([
+                card.trailingAnchor.constraint(equalTo: c.view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
+                card.bottomAnchor.constraint(equalTo: c.view.safeAreaLayoutGuide.bottomAnchor, constant: -90),
+            ])
+            nextCard = card
+        }
+        nextCard?.set(seconds: secs)
+    }
+
+    private func hideNext() {
+        nextCard?.removeFromSuperview()
+        nextCard = nil
     }
 
     private func finish(_ r: PlayRequest?) {
@@ -513,15 +552,22 @@ final class NativePlayer: NSObject, AVPlayerViewControllerDelegate {
         return offsetMs + Int64(t.seconds * 1000)
     }
 
-    private func saveProgress(done: Bool = false) {
-        lastSave = Date()
-        guard let r = request, r.kind != .live, r.queue.indices.contains(r.index) else { return }
-        let q = r.queue[r.index]
+    /** duración real del video en ms (0 = no se sabe) */
+    private func durationMs() -> Int64 {
+        guard let r = request, r.queue.indices.contains(r.index) else { return 0 }
         // el HLS del panel solo conoce lo que ya convirtió: la duración es la de una vía anterior (o 0)
         var dur: Int64 = offsetMs > 0 ? lastDurMs : 0
         if offsetMs == 0, let d = vc?.player?.currentItem?.duration, d.isNumeric, d.seconds > 0 { dur = Int64(d.seconds * 1000) }
         // el motor del panel no sabe la duración total: la del servidor, para que Continuar viendo tenga su avance
-        if dur <= 0 { dur = q.durMs }
+        if dur <= 0 { dur = r.queue[r.index].durMs }
+        return dur
+    }
+
+    private func saveProgress(done: Bool = false) {
+        lastSave = Date()
+        guard let r = request, r.kind != .live, r.queue.indices.contains(r.index) else { return }
+        let q = r.queue[r.index]
+        let dur = durationMs()
         let pos = done ? dur : currentMs()
         if pos < 5_000 { return }
         // sin internet: donde se dejó queda en el equipo
