@@ -8,10 +8,10 @@
 // - Sin permiso del motor (Sin permisos / No compatible): el texto del panel una vez por video y el
 //   video sigue directo; nada automático pasa por el motor (estado guardado por línea en media.ts).
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import { Engine, engineDenied, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
+import { Engine, engineDenied, fileTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
-import { Probe, probeTracks } from '../lib/probe';
+import { Probe } from '../lib/probe';
 import { pref, setPref } from '../lib/storage';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
@@ -109,8 +109,8 @@ export class Playback {
     this.subWait = null;
     this.formatTried = false;
     this.deniedShown = false;
-    // la cabecera se lee mientras el video carga; onPlaying y onError usan esta misma lectura
-    if (!live) void probeTracks(url);
+    // los idiomas se buscan mientras el video carga (en el panel o en la cabecera); onPlaying y onError usan esto mismo
+    if (!live) void fileTracks(url);
     this.direct(resume);
   }
 
@@ -181,12 +181,12 @@ export class Playback {
     this.schedulePrefs();
   }
 
-  // primera vez "playing": se aplica lo leído de la cabecera del archivo (la lectura empezó al abrir el video, load)
+  // primera vez "playing": se aplican los idiomas del archivo (la búsqueda empezó al abrir el video, load)
   onPlaying(): void {
     if (this.live || this.probe || this.probing) return;
     this.probing = true;
     const g = this.gen;
-    probeTracks(this.url).then(p => {
+    fileTracks(this.url).then(p => {
       if (g !== this.gen) return;
       this.probe = p;
       if (p.ok) {
@@ -212,7 +212,7 @@ export class Playback {
     // sin motor: el error normal, sin pasar por el panel
     if (engineDenied()) return false;
     const g = this.gen;
-    if (!this.probe) this.probe = await probeTracks(this.url);
+    if (!this.probe) this.probe = await fileTracks(this.url);
     if (g !== this.gen) return false;
     const items = this.probe.ok ? this.audioItems() : [];
     const def = items[this.probeDefault()];

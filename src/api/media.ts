@@ -5,7 +5,8 @@
 import { b64Encode } from '../lib/crypto';
 import { http, json } from '../lib/http';
 import { str } from '../lib/util';
-import { cloudToken, lineKey, panel, panelApiBase, panelScheme } from './panel';
+import { cloud, cloudToken, lineKey, panel, panelApiBase, panelScheme } from './panel';
+import { Probe, probeTracks } from '../lib/probe';
 import { features } from '../lib/tenant';
 import { lang, t } from '../lib/i18n';
 
@@ -110,4 +111,34 @@ export function engineError(body: string, fallback: string): string {
   } catch {
     return fallback;
   }
+}
+
+// ---------- idiomas del archivo recordados por el panel (api/tracks.php) ----------
+
+// lo que ya leyó otro equipo (o este) de este video; null si el panel no lo tiene o tarda más de 2 s
+async function savedTracks(url: string): Promise<Probe | null> {
+  const r = await Promise.race([cloud('tracks.php', 'GET', { u: b64u(url) }), new Promise<null>(ok => setTimeout(() => ok(null), 2000))]);
+  const p = r ? json(r)?.probe : null;
+  if (!p || !Array.isArray(p.audio) || !Array.isArray(p.subs) || (p.container !== 'mkv' && p.container !== 'mp4')) return null;
+  return { ok: true, container: p.container, audio: p.audio, subs: p.subs };
+}
+
+const known = new Map<string, Promise<Probe>>();
+
+// idiomas de audio y subtítulos del archivo: primero el panel (al momento, sin tocar el servidor IPTV); si no los
+// tiene, se leen de la cabecera del archivo y se le dejan al panel para los demás equipos. Una vez por video.
+export function fileTracks(url: string): Promise<Probe> {
+  const hit = known.get(url);
+  if (hit) return hit;
+  const p = (async () => {
+    const saved = await savedTracks(url);
+    if (saved) return saved;
+    const read = await probeTracks(url);
+    if (read.ok) cloud('tracks.php', 'POST', { u: b64u(url), probe: { container: read.container, audio: read.audio, subs: read.subs } }).catch(() => {});
+    return read;
+  })();
+  known.set(url, p);
+  p.then(res => { if (!res.ok) known.delete(url); });
+  if (known.size > 40) known.delete(known.keys().next().value as string);
+  return p;
 }
