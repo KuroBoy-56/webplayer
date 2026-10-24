@@ -11,6 +11,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Image, StyleSheet, Text, View } from 'react-native';
 import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
+import { Button } from '../components/ui';
 import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
@@ -41,6 +42,9 @@ export default function Player({ params }: { params: PlayParams }) {
   const [work, setWork] = useState('');
   const [toast, setToast] = useState('');
   const [sub, setSub] = useState('');
+  // capítulo en el que se pulsó Cancelar en el aviso del siguiente; «¿Salir del video?» abierto
+  const [nextOff, setNextOff] = useState(-1);
+  const [askExit, setAskExit] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastUi = useRef(0);
@@ -200,6 +204,13 @@ export default function Player({ params }: { params: PlayParams }) {
       save(true);
     };
     const onEnded = () => {
+      // se cortó antes del final (servidor, audio del panel): no es el fin del capítulo, se trata como error
+      const d = c.duration();
+      const p = c.realPos();
+      if (params.kind !== 'live' && (d > 0 ? p < d - 90 && p < d * 0.9 : p < 60)) {
+        onError();
+        return;
+      }
       save(true);
       if (!next()) {
         if (params.kind === 'live') load(indexRef.current);
@@ -341,17 +352,39 @@ export default function Player({ params }: { params: PlayParams }) {
         setMenu(null);
         return true;
       }
-      leaving.current = true;
-      try {
-        video.current?.pause();
-      } catch {
-        // ya estaba detenido
+      if (askExit) {
+        setAskExit(false);
+        return true;
       }
-      nav.pop();
+      // película o capítulo: se pregunta antes de salir; en vivo sale directo
+      if (!live) {
+        setAskExit(true);
+        return true;
+      }
+      leave();
       return true;
     });
     return () => sub.remove();
-  }, [menu, nav]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menu, nav, askExit, live]);
+
+  const leave = () => {
+    leaving.current = true;
+    try {
+      video.current?.pause();
+    } catch {
+      // ya estaba detenido
+    }
+    nav.pop();
+  };
+
+  // siguiente capítulo como Netflix: aviso en los últimos 15 s; Ver ahora pasa ya, Cancelar deja ver el final y al
+  // terminar pasa solo (onEnded)
+  const left = dur - pos;
+  const nextSecs =
+    params.kind === 'episode' && index + 1 < params.queue.length && nextOff !== index && !error && dur > 120 && pos > 60 && left > 0 && left <= 15
+      ? Math.ceil(left)
+      : 0;
 
   const openMenu = () => ctl.current && setMenu(ctl.current.menu());
 
@@ -377,7 +410,7 @@ export default function Player({ params }: { params: PlayParams }) {
 
   useTVEventHandler((evt: HWEvent) => {
     if (evt.eventKeyAction !== undefined && evt.eventKeyAction !== 0) return;
-    if (menu) return; // el menú de pistas usa el foco normal
+    if (menu || askExit || nextSecs > 0) return; // menú, aviso del siguiente y «¿Salir?» usan el foco normal
     switch (evt.eventType) {
       case 'select':
         if (error) {
@@ -464,6 +497,29 @@ export default function Player({ params }: { params: PlayParams }) {
         <View style={s.center}>
           <View style={s.spinner} />
           {status || work ? <Text style={s.status}>{work || status}</Text> : null}
+        </View>
+      ) : null}
+
+      {nextSecs > 0 && !askExit ? (
+        <View style={s.nextCard}>
+          <Text style={s.nextTitle}>{t('Siguiente episodio')}</Text>
+          <Text style={s.hint}>{t('Empieza en {x} s', { x: nextSecs })}</Text>
+          <View style={s.nextRow}>
+            <Button label={t('Ver ahora')} primary preferred onPress={() => next()} />
+            <Button label={t('Cancelar')} onPress={() => setNextOff(index)} />
+          </View>
+        </View>
+      ) : null}
+
+      {askExit ? (
+        <View style={s.center}>
+          <View style={s.exitBox}>
+            <Text style={s.nextTitle}>{t('¿Salir del video?')}</Text>
+            <View style={s.nextRow}>
+              <Button label={t('Salir')} onPress={leave} />
+              <Button label={t('Seguir viendo')} primary preferred onPress={() => setAskExit(false)} />
+            </View>
+          </View>
         </View>
       ) : null}
 
@@ -580,5 +636,9 @@ const s = themed(() =>
     workText: { color: C.text, fontSize: px(26), fontWeight: '700' },
     toast: { position: 'absolute', bottom: px(200), alignSelf: 'center', maxWidth: px(1300), backgroundColor: alpha(C.bg2, 0.95), borderRadius: px(12), borderLeftWidth: px(6), borderLeftColor: C.red, paddingHorizontal: px(30), paddingVertical: px(16), zIndex: 9 },
     toastText: { color: C.text, fontSize: px(26) },
+    nextCard: { position: 'absolute', right: px(80), bottom: px(140), backgroundColor: alpha(C.bg2, 0.95), borderRadius: px(12), padding: px(30), zIndex: 10 },
+    exitBox: { backgroundColor: alpha(C.bg2, 0.97), borderRadius: px(12), padding: px(40), alignItems: 'center' },
+    nextTitle: { color: C.text, fontSize: px(34), fontWeight: '800' },
+    nextRow: { flexDirection: 'row', gap: px(20), marginTop: px(24) },
   }),
 );

@@ -299,6 +299,11 @@ const en = {
   "Canales en vivo:": "Live channels:",
   "Películas:": "Movies:",
   "Series:": "Series:",
+  "Siguiente episodio": "Next episode",
+  "Ver ahora": "Watch now",
+  "Empieza en {x} s": "Starts in {x} s",
+  "¿Salir del video?": "Leave the video?",
+  "Seguir viendo": "Keep watching",
 };
 
 export default en;
