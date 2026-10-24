@@ -300,6 +300,11 @@ const pt: Record<Key, string> = {
   "Canales en vivo:": "Canais ao vivo:",
   "Películas:": "Filmes:",
   "Series:": "Séries:",
+  "Siguiente episodio": "Próximo episódio",
+  "Ver ahora": "Assistir agora",
+  "Empieza en {x} s": "Começa em {x} s",
+  "¿Salir del video?": "Sair do vídeo?",
+  "Seguir viendo": "Continuar assistindo",
 };
 
 export default pt;
