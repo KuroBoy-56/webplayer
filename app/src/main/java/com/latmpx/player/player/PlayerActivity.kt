@@ -406,7 +406,7 @@ class PlayerActivity : ComponentActivity() {
             .setMessage(
                 getString(if (decoding) R.string.play_failed_decoder else R.string.play_failed_server),
             )
-            .setPositiveButton(R.string.retry) { _, _ -> retries = 0; player.prepare(); player.play() }
+            // ya se probó solo (el otro protocolo y 6 reconexiones): sin «Reintentar»
             .setNeutralButton(R.string.open_in_vlc) { _, _ -> openVlc(player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty(), q.title) }
             .setNegativeButton(R.string.close) { _, _ -> finish() }
             .setOnCancelListener { finish() } // Atrás sobre el aviso sale del reproductor
