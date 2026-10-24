@@ -109,6 +109,8 @@ export class Playback {
     this.subWait = null;
     this.formatTried = false;
     this.deniedShown = false;
+    // la cabecera se lee mientras el video carga; onPlaying y onError usan esta misma lectura
+    if (!live) void probeTracks(url);
     this.direct(resume);
   }
 
@@ -179,7 +181,7 @@ export class Playback {
     this.schedulePrefs();
   }
 
-  // primera vez "playing": se lee la cabecera del archivo (como Roku, ya con el video andando)
+  // primera vez "playing": se aplica lo leído de la cabecera del archivo (la lectura empezó al abrir el video, load)
   onPlaying(): void {
     if (this.live || this.probe || this.probing) return;
     this.probing = true;
