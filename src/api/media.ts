@@ -80,16 +80,18 @@ export function subLink(e: Engine, url: string, s: number, o = 0): string {
 
 // ¿ya está listo el subtítulo? (la primera vez el panel lee el archivo entero: puede tardar)
 // denied: el motor dijo que no (sin permiso / no compatible): no se vuelve a preguntar
-export async function subCheck(e: Engine, url: string, s: number): Promise<{ ready: boolean; failed: boolean; denied: string }> {
+export async function subCheck(e: Engine, url: string, s: number): Promise<{ ready: boolean; partial: boolean; failed: boolean; denied: string }> {
   const r = await http(subLink(e, url, s) + '&check=1', { timeout: 15000 });
   const j = json(r);
-  const out = { ready: false, failed: (r.code >= 400 && r.code < 500) || r.code === 501 || r.code === 503, denied: '' };
+  const out = { ready: false, partial: false, failed: (r.code >= 400 && r.code < 500) || r.code === 501 || r.code === 503, denied: '' };
   if (r.code === 503 || r.code === 501) {
     out.denied = engineError(r.body, t('No compatible con el dispositivo'));
     markDenied(out.denied);
   }
   if (j && typeof j === 'object') {
     out.ready = j.ready === true;
+    // a medio leer: el panel ya da lo leído hasta ahora
+    out.partial = j.partial === true;
     out.failed = out.failed || j.failed === true;
   }
   if (r.code === 401) forgetEngine();
