@@ -109,9 +109,25 @@ export class Playback {
     this.subWait = null;
     this.formatTried = false;
     this.deniedShown = false;
-    // los idiomas se buscan mientras el video carga (en el panel o en la cabecera); onPlaying y onError usan esto mismo
-    if (!live) void fileTracks(url);
-    this.direct(resume);
+    if (live) {
+      this.direct(resume);
+      return;
+    }
+    // Los idiomas (del panel o de la cabecera del archivo) se buscan ANTES de abrir el video, como mucho 6 s; onPlaying
+    // y onError usan esto mismo. Antes iban a la vez que el video: en servidores con una sola conexión por línea la
+    // lectura fallaba y solo quedaba el audio predeterminado.
+    const g = this.gen;
+    let opened = false;
+    const open = () => {
+      if (opened || g !== this.gen) return;
+      opened = true;
+      this.direct(resume);
+    };
+    const timer = setTimeout(open, 6000);
+    fileTracks(url).then(() => {
+      clearTimeout(timer);
+      open();
+    });
   }
 
   private direct(at: number): void {

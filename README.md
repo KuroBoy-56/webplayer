@@ -82,7 +82,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Reproductor nativo de Vega** (MP4, MKV, AVI, MOV, MPEG-TS) sin límite de resolución ni de
   bitrate (4K si el equipo y el archivo lo tienen): continuar donde quedó, ◀▶ 10 s, OK pausa,
   ▼ o MENÚ para audio y subtítulos, idioma preferido automático y siguiente episodio solo.
-- **Audio y subtítulos como en Roku**: se lee la cabecera del MKV/MP4 para listar todas las pistas
+- **Audio y subtítulos como en Roku**: los idiomas (del panel, `api/tracks.php`, o de la cabecera) se buscan **antes de
+  abrir el video**, como mucho 6 s (`load` en `src/player/playback.ts`): a la vez que el video fallaban en servidores con
+  una sola conexión por línea y solo quedaba el audio predeterminado. Se lee la cabecera del MKV/MP4 para listar todas las pistas
   con su idioma (Español latino, Inglés…) y su códec. El cambio de audio se comprueba en el
   reproductor; si el equipo no lo toma o no decodifica ese audio (DTS, TrueHD…), lo prepara el
   **motor del panel** (`api/media_vega.php`: video sin cambios + ese audio en AAC, HLS por Media
