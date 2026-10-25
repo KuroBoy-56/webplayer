@@ -91,12 +91,33 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   video. *Desactivados* los quita. El panel necesita ffmpeg (Guía EPG).
 - **TV en vivo**: categorías, canales, guía EPG (proveedor y, si no hay, la del panel),
   favoritos, cambio de canal con ▲▼ dentro del reproductor.
-- **Deportes**: partidos de hoy y mañana con el canal encontrado automáticamente
-  (mismas reglas `match` de `api/sports.php`). Debajo de cada partido, **En TV:** los canales que lo
-  transmiten (panel: `tv`). Al pulsarlo sale el menú **Ver el evento** (automático), cada canal y
-  **Buscar por equipos**; un canal se busca por su nombre sin calidad ni país (`ESPN 2` encuentra
-  `MX: ESPN 2 HD`, nunca `ESPN` ni `ESPN 3`) y, si no lo tienes, se busca el evento por equipos o nombre en
-  las carpetas de eventos. Un índice de palabras de los canales evita comparar todos contra todos.
+- **Deportes** (igual que Roku; pantallas en `src/screens/Sports*.tsx`, datos en `src/data/sports.ts` y
+  `src/data/sportsPanel.ts`): **Hoy / Mañana** y, si el panel los ofrece, **Tablas**, **Selecciones** y **Equipos**.
+  La agenda se guarda por usuario, distribuidor e idioma (sale al instante y la del panel la reemplaza al llegar)
+  y la hora de cada partido se lee una sola vez (el panel manda `s`). Orden: en vivo, por hora y al final los
+  terminados; otro día u otra disciplina empiezan arriba. Canal de cada partido: el que lo transmite (`tv`) si el
+  cliente lo tiene (por su nombre sin calidad ni país, «M+» = Movistar, exacto, por palabras o pegadas; `ESPN 2`
+  nunca da `ESPN`), el de la guía del panel (`api/sports_epg.php`) o el de los equipos; el índice de canales se
+  arma una vez por catálogo. Con «Solo los canales del servidor IPTV» (`chan: iptv`) solo se nombran los que el
+  cliente tiene. El menú del partido pinta en **verde** los canales de su lista y trae «Buscar canales: «Equipo»»
+  por cada equipo y «Buscar canal, equipo o evento…» (teclado; todas las palabras primero, si no, alguna de 4
+  letras o más; categorías de deportes primero).
+- **Deportes › Tablas** (`tables.on`): región (Todas, Copas, Selecciones, Europa, **América** —Latinoamérica,
+  Norteamérica y Suramérica juntas— y Resto del mundo), división (1.ª por defecto, las que habilitó el panel y al
+  final **Liga femenina**, ligas con `w`), ligas a la izquierda y la tabla a la derecha con PJ G E P GF GC DG PTS,
+  racha y la zona con su leyenda. Primero la copia guardada (7 días) y la nueva por detrás; se piden apenas llega
+  la agenda; si el panel está armando (`p: 1`) se ve lo que hay y se vuelve a preguntar cada 20 s. OK sobre un
+  equipo abre su ficha en el idioma de la app (`api/sports_team.php`) con **ENTENDIDO** (marcado) y **MÁS
+  DETALLES**: texto completo con todos los títulos (arriba / abajo desplazan).
+- **Deportes › Equipos** (`fixtures.on`): próximos partidos de un equipo (también en español con los alias del
+  panel) o de un país escrito completo; recuerda los últimos 5. **Selecciones** (`fixtures.nat`): «Todas», cada
+  competición y al final **Selección femenina**. Del JSON de 21 días del panel (`api/sports_fixtures.php`,
+  guardado en el equipo). Solo se abre lo que está en vivo.
+- **Carátulas desde el panel** (`src/lib/images.ts`, `ChainImage`): la copia pública ya achicada
+  (`api/imgc/<sha1>.jpg`, sin PHP), después `api/img.php` (con el título: si el servidor IPTV no tiene carátula, el
+  panel busca el póster en TMDB) y al final la original. Fondos de TMDB en Full HD hechos por el panel
+  (`w=1920`). Si el dueño apaga la caché (Tmdb Settings; `img: false` de `progress.php ?v=2`), todo va directo
+  al servidor IPTV y a TMDB, sin avisar nada.
 - **Progreso y Mi lista sincronizados** con `api/progress.php`: lo que ves en la TV sigue en la web y el móvil, aunque cada app haya entrado por otra DNS del mismo servicio (el panel los une). Se vuelven a leer al regresar a la app.
 - **Aviso del panel al abrir la app** (`api/alerta.php?format=json`, página **Alertas** del panel): bienvenida con el texto general y la imagen, o aviso de vencimiento con el texto de 3, 2, 1 o 0 días. Una vez por arranque y otra vez tras iniciar sesión; botón **Entendido** enfocado, *Atrás* también lo cierra.
 - **Número de distribuidor** (primera vez, sin pantalla de inicio antes: el logo de inicio es el del distribuidor elegido, o el de la app con *Omitir*): 6 dígitos con teclado en pantalla. Con número, la

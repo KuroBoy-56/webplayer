@@ -6,6 +6,8 @@ import { CastMember, castFor, overviewFor } from '../api/tmdb';
 import { SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
 import { Button, Focusable } from '../components/ui';
 import { RowView } from '../components/Tiles';
+import { ChainImage } from '../components/ChainImage';
+import { backdropSources, posterSources } from '../lib/images';
 import { catalog, Item } from '../data/catalog';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
@@ -61,6 +63,10 @@ export default function Detail({ item }: { item: Item }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, loading]);
   const backdrop = info?.backdrop || item.backdrop || info?.poster || item.poster;
+  const bdSrc = useMemo(
+    () => (info?.backdrop || item.backdrop ? backdropSources(info?.backdrop || item.backdrop) : posterSources(item.kind, info?.poster || item.poster, item.name, item.year)),
+    [info, item],
+  );
   const fav = isFav(item.kind, item.id);
   void st.rev;
 
@@ -94,7 +100,7 @@ export default function Detail({ item }: { item: Item }) {
 
   return (
     <View style={s.root}>
-      {backdrop ? <Image source={{ uri: backdrop }} style={s.bg} resizeMode="cover" /> : null}
+      {backdrop || bdSrc.length ? <ChainImage sources={bdSrc} style={s.bg} resizeMode="cover" /> : null}
       <View style={s.shade} />
       <ScrollView contentContainerStyle={{ paddingBottom: px(80) }}>
         <View style={s.head}>

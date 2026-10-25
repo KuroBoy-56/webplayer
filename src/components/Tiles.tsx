@@ -1,10 +1,12 @@
 // Portadas, tarjetas de plataformas/géneros y filas horizontales estilo Netflix.
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { isItem, Item, Row, Special } from '../data/catalog';
 import { t } from '../lib/i18n';
 import { C, px, SIDE, themed } from '../theme';
 import { Focusable } from './ui';
+import { ChainImage } from './ChainImage';
+import { posterSources } from '../lib/images';
 
 export const POSTER_W = px(210);
 export const POSTER_H = px(315);
@@ -26,6 +28,8 @@ export const PosterTile = memo(function PosterTile({
 }) {
   const w = wide ? px(300) : POSTER_W;
   const h = wide ? px(169) : POSTER_H;
+  // carátula del panel (o la de TMDB por el título si el servidor no tiene) y, si no carga, la original
+  const src = useMemo(() => posterSources(item.kind, item.poster, item.name, item.year), [item.kind, item.poster, item.name, item.year]);
   return (
     <View style={rank ? s.rankWrap : undefined}>
       {rank ? <Text style={s.rank}>{rank}</Text> : null}
@@ -34,7 +38,7 @@ export const PosterTile = memo(function PosterTile({
           <Text style={s.fallback} numberOfLines={4}>
             {item.name}
           </Text>
-          {item.poster ? <Image source={{ uri: item.poster }} style={s.img} resizeMode={wide || item.kind === 'live' ? 'contain' : 'cover'} /> : null}
+          {src.length ? <ChainImage sources={src} style={s.img} resizeMode={wide || item.kind === 'live' ? 'contain' : 'cover'} /> : null}
           {progress !== undefined && progress > 0 ? (
             <View style={s.bar}>
               <View style={[s.barFill, { width: `${Math.min(100, Math.max(3, progress * 100))}%` }]} />

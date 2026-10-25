@@ -4,6 +4,8 @@ import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem, openSpecial, playMovie } from '../actions';
 import { Button, Message, Spinner } from '../components/ui';
 import { RowView } from '../components/Tiles';
+import { ChainImage } from '../components/ChainImage';
+import { backdropSources, posterSources } from '../lib/images';
 import { catalog, Item, Row } from '../data/catalog';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
@@ -57,6 +59,8 @@ function Billboard({ hero }: { hero: Item }) {
   const fav = isFav(hero.kind, hero.id);
   void st.rev;
   const uri = hero.backdrop || hero.poster;
+  // fondo de TMDB en Full HD por el panel; sin fondo, la carátula (también por el panel)
+  const heroSrc = useMemo(() => (hero.backdrop ? backdropSources(hero.backdrop) : posterSources(hero.kind, hero.poster, hero.name, hero.year)), [hero]);
   const [under] = useState(lastBanner);
   useEffect(() => {
     if (uri) lastBanner = uri;
@@ -64,7 +68,7 @@ function Billboard({ hero }: { hero: Item }) {
   return (
     <View style={s.hero}>
       {under && under !== uri ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
-      {uri ? <Image source={{ uri }} style={s.heroImg} resizeMode="cover" /> : null}
+      {uri ? <ChainImage sources={heroSrc} style={s.heroImg} resizeMode="cover" /> : null}
       {/* degradado teñido con el fondo del distribuidor */}
       <Image source={require('../../assets/image/grad_bottom.png')} style={[s.heroGrad, { tintColor: C.bg }]} resizeMode="stretch" />
       {/* sombra a la izquierda para leer el texto: degradado, sin borde marcado */}

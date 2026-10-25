@@ -8,6 +8,7 @@ import { json } from './lib/http';
 import { read, readJson, remove, write, writeJson } from './lib/storage';
 import { brand, clearTenant, expiredMessage, locallyExpired, OFFLINE_GRACE, saveBrand, scoped, TENANT_FATAL, tenantCode } from './lib/tenant';
 import { digits, nowSec, parseIso, str } from './lib/util';
+import { setImgCache } from './lib/images';
 import { Key, t } from './lib/i18n';
 
 export type Progress = {
@@ -175,6 +176,8 @@ export async function loadCloud() {
   // la DEMO no tiene Continuar viendo ni Mi lista
   if (state.demo) return;
   const j = json(await cloud('progress.php', 'GET', { v: '2' }));
+  // caché de carátulas del panel (el dueño la puede apagar): apagada, imágenes directo a los servidores
+  if (j && typeof j === 'object' && typeof j.img === 'boolean') setImgCache(j.img);
   if (!j || typeof j !== 'object' || state.demo) return;
   const prog = j.progress && typeof j.progress === 'object' && !Array.isArray(j.progress) ? j.progress : {};
   const list: Progress[] = [];

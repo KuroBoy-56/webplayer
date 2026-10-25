@@ -130,12 +130,14 @@ const NOISE = new Set(['hd', 'fhd', 'uhd', 'sd', '4k', '8k', 'hq', 'hevc', 'h264
   've', 'venezuela', 'uy', 'uruguay', 'py', 'paraguay', 'bo', 'bolivia', 'cr', 'pa', 'panama', 'gt', 'hn', 'sv', 'ni', 'do', 'pr',
   'latam', 'latin', 'latino', 'latina', 'lat', 'america', 'es', 'esp', 'spain', 'espana', 'uk', 'gb', 'int', 'intl', 'international',
   'br', 'bra', 'brasil', 'brazil', 'pt', 'portugal', 'ca', 'can', 'canada', 'fr', 'france', 'it', 'italy', 'de', 'germany',
-  'nl', 'netherlands', 'au', 'australia', 'nz', 'zealand', 'new', 'ie', 'ireland']);
+  'nl', 'netherlands', 'au', 'australia', 'nz', 'zealand', 'new', 'ie', 'ireland', 'en', 'network', 'net']);
 
 // palabras que identifican el canal; un número va pegado a la palabra anterior ("espn 2" -> "espn2")
 export function channelKey(name: string): string[] {
   const out: string[] = [];
-  for (const t of norm(name).split(' ')) {
+  for (let t of norm(name).split(' ')) {
+    // "M+ LaLiga" (Movistar Plus) llega como "m laliga"
+    if (t === 'm') t = 'movistar';
     if (!t || NOISE.has(t)) continue;
     if (/^\d+$/.test(t) && out.length && !/^\d+$/.test(out[out.length - 1])) out[out.length - 1] += t;
     else out.push(t);
@@ -186,54 +188,126 @@ function teamCandidates(ev: any, ix: Index, r: Rules): Chan[] {
 }
 
 // el mejor canal del cliente para un canal que transmite: primero el que se llama igual (sin calidad
-// ni país), después el que contiene todas sus palabras. "ESPN 2" nunca da "ESPN" ni "ESPN 3".
+// ni país), después el que contiene todas sus palabras y, al final, el que las tiene pegadas ("La Liga
+// Hypermotion" = "laligahypermotion"). "ESPN 2" nunca da "ESPN" ni "ESPN 3". Cada nombre se busca una vez.
 function findByChannel(tvName: string, ix: Index, items: any[]): number {
+  const memo = (ix as any).memo || ((ix as any).memo = new Map<string, number>());
+  const hit = memo.get(tvName);
+  if (hit !== undefined) return hit;
+  const r = findByChannelOnce(tvName, ix, items);
+  memo.set(tvName, r);
+  return r;
+}
+
+function findByChannelOnce(tvName: string, ix: Index, items: any[]): number {
   const q = channelKey(tvName);
   const qs = q.join(' ');
   const qc = q.join('');
   if (!q.length || qc.length < 2) return -1;
-  const exact = ix.keys.get(qc);
-  const cand = exact || ix.words.get(q[0]) || [];
+  const len = (c: Chan) => str(items[c.idx].name).length;
   let best = -1;
   let bestScore = -999999;
-  for (const ci of cand) {
+  const exact = ix.keys.get(qc);
+  if (exact) {
+    for (const ci of exact) {
+      const c = ix.chans[ci];
+      const score = 1000 - c.key.length * 10 - len(c) + (c.key.join(' ') === qs ? 100 : 0);
+      if (best < 0 || score > bestScore) {
+        best = c.idx;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+  for (const ci of ix.words.get(q[0]) || []) {
     const c = ix.chans[ci];
-    const k = c.key;
-    let score: number;
-    if (k.join(' ') === qs) score = 1000 - k.length;
-    else if (k.join('') === qc) score = 900 - k.length;
-    else if (q.every(t => k.includes(t))) score = 500 - 10 * (k.length - q.length);
-    else continue;
-    score -= str(items[c.idx].name).length / 1000;
+    if (!q.every(t => c.key.includes(t))) continue;
+    const score = 500 - 10 * (c.key.length - q.length) - len(c);
     if (best < 0 || score > bestScore) {
       best = c.idx;
       bestScore = score;
     }
   }
+  return best >= 0 ? best : findLoose(q, ix, items);
+}
+
+// último intento: las palabras del canal pegadas contienen cada palabra buscada, sin que la siga un número
+function findLoose(q: string[], ix: Index, items: any[]): number {
+  const first = q[0];
+  if (first.length < 3) return -1;
+  const cand = new Set<number>();
+  for (let L = first.length; L >= 2; L--) ix.words.get(first.slice(0, L))?.forEach(i => cand.add(i));
+  let best = -1;
+  let bestScore = -999999;
+  const want = q.join('').length;
+  cand.forEach(ci => {
+    const c = ix.chans[ci];
+    const compact = c.key.join('');
+    if (!compact) return;
+    for (const t of q) {
+      const p = compact.indexOf(t);
+      if (p < 0 || /\d/.test(compact.charAt(p + t.length))) return;
+    }
+    const score = 300 - (compact.length - want) - str(items[c.idx].name).length;
+    if (best < 0 || score > bestScore) {
+      best = c.idx;
+      bestScore = score;
+    }
+  });
   return best;
 }
 
-export type SportMatch = { best: Item | null; teams: Item | null; tv: { n: string; c: string; ch: Item | null }[] };
+// canales deportivos para buscar el partido en la guía del panel (api/sports_epg.php): por el nombre del canal o
+// de su carpeta, sin las carpetas de eventos; primero los que tienen guía propia
+const SPORT_RE = /sport|deport|espn|fox|tnt|tudn|dazn|bein|sky|movistar|futbol|soccer|nba|nfl|mlb|nhl|ufc|liga|win |directv|dsports|claro|vix|paramount|peacock|tyc|gol|telemundo|univision|azteca|canal 5|caracol|rcn|tsn|eurosport|teledeporte|cbs|nbc|usa network|f1|golf|tenis|tennis|box|universo|sportsnet|telefe|tv publica|teletica|tigo|max|apple tv/i;
+
+function epgChannels(chans: Chan[], items: any[], cats: { id: string; name: string }[], maxN: number) {
+  const sportCat = new Set(cats.filter(c => SPORT_RE.test(fold(c.name))).map(c => c.id));
+  const withEpg: any[] = [];
+  const noEpg: any[] = [];
+  for (const c of chans) {
+    if (c.isEvent) continue;
+    const it = items[c.idx];
+    if (!sportCat.has(str(it.category_id)) && !SPORT_RE.test(c.norm)) continue;
+    const e = { id: str(it.stream_id), epg: str(it.epg_channel_id), name: str(it.name), idx: c.idx };
+    (e.epg ? withEpg : noEpg).push(e);
+    if (withEpg.length >= maxN) break;
+  }
+  return withEpg.concat(noEpg).slice(0, maxN);
+}
+
+export type SportMatch = { best: Item | null; teams: Item | null; tv: { n: string; c: string; ch: Item | null }[]; epg?: Item[] };
 
 // evento -> canales: el primero de sus canales de TV que tiene el cliente, si no por equipos / nombre
 // del evento. folder = primera carpeta de eventos (cuando no hay canal exacto).
-export function matchSports(data: SportsData): { map: Record<string, SportMatch>; folder: Item | null } {
+export type EpgChan = { id: string; epg: string; name: string; idx: number };
+
+let ixCache: { d: any; sig: string; chans: Chan[]; ix: Index } | null = null;
+
+export function matchSports(data: SportsData): { map: Record<string, SportMatch>; folder: Item | null; epgChans: EpgChan[] } {
   const map: Record<string, SportMatch> = {};
   const d = catalog.k.live;
-  if (!d) return { map, folder: null };
+  if (!d) return { map, folder: null, epgChans: [] };
   const r = rules(data.match);
-  const eventCats = new Set(d.cats.filter(c => r.eventRe.test(fold(c.name))).map(c => c.id));
-  const vis = new Set(catalog.visibleCats('live').map(c => c.id));
-  const chans: Chan[] = [];
-  d.index.forEach(i => {
-    const it = d.items[i];
-    const cid = str(it.category_id);
-    if (vis.has(cid)) {
-      const n = norm(str(it.name));
-      chans.push({ norm: n, isEvent: eventCats.has(cid), idx: i, key: channelKey(str(it.name)) });
-    }
-  });
-  const ix = buildIndex(chans);
+  // el índice de canales se arma una vez por catálogo, categorías visibles y reglas (no en cada búsqueda)
+  const visList = catalog.visibleCats('live').map(c => c.id);
+  const sig = visList.length + '|' + visList.join(',').length + '|' + r.eventRe.source;
+  if (!ixCache || ixCache.d !== d || ixCache.sig !== sig) {
+    const eventCats = new Set(d.cats.filter(c => r.eventRe.test(fold(c.name))).map(c => c.id));
+    const vis = new Set(visList);
+    const list: Chan[] = [];
+    d.index.forEach(i => {
+      const it = d.items[i];
+      const cid = str(it.category_id);
+      if (vis.has(cid)) {
+        const n = norm(str(it.name));
+        list.push({ norm: n, isEvent: eventCats.has(cid), idx: i, key: channelKey(str(it.name)) });
+      }
+    });
+    ixCache = { d, sig, chans: list, ix: buildIndex(list) };
+  }
+  const chans = ixCache.chans;
+  const ix = ixCache.ix;
   for (const ev of data.events) {
     const tv: SportMatch['tv'] = [];
     let best: Item | null = null;
@@ -248,5 +322,5 @@ export function matchSports(data: SportsData): { map: Record<string, SportMatch>
     map[str(ev.id)] = { best: best || teams, teams, tv };
   }
   const first = chans.find(c => c.isEvent);
-  return { map, folder: first ? toItem('live', d.items[first.idx]) : null };
+  return { map, folder: first ? toItem('live', d.items[first.idx]) : null, epgChans: epgChannels(chans, d.items, d.cats, 600) };
 }
