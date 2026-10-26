@@ -38,6 +38,24 @@ servidor IPTV. El servidor seguía contando la lectura de idiomas cuando se abr�
       apenas suena; si hay 2 o más, el aviso «N idiomas de audio…» sale una vez. Revisar que en Vega pase siempre
       (con los idiomas del panel, de la cabecera o del propio reproductor).
 
+## Falta en Vega (Roku build 55): borrado de caché del panel
+
+Problema en Roku: el dueño mandó «Borrar caché y reiniciar» y al abrir la app no pasó nada. Si la app no tenía
+número de orden guardado (reinstalada, datos borrados), la orden recién enviada se guardaba en silencio como «primera
+vez» y no se aplicaba. Vega tiene la misma regla (`cacheDecision` en `src/lib/cacheclear.ts`).
+
+- [ ] **Aplicar una orden reciente aunque no haya número guardado**: el panel ahora manda `cache_clear_at` (cuándo se
+      envió) en `check_mac`. Sin número guardado: si la orden tiene menos de 3 días, borrar y reiniciar; si es más
+      vieja, solo guardar. (Roku: `nfCacheClearAction(seen, got, at)` en `source/Utils.brs`; usar la hora corregida
+      con el desfase del panel.)
+- [ ] **Consulta de cada 10 min con `poll: 1`** (`recheck` en `src/App.tsx`): Vega ya vuelve a preguntar
+      `check_mac` cada 10 min; agregar `poll: 1` para que el panel no lo cuente como otra apertura en el Dashboard.
+      (Roku: `ccPoll` en `components/MainScene.brs`.)
+- [ ] **Viendo un video, aplicar al salir del reproductor**, no en medio de la película. (Roku: `m.ccPending`.)
+- [ ] Revisar que cada distribuidor reciba solo sus órdenes y Omitir solo las del dueño para Omitir o globales: lo
+      decide el panel con el código de distribuidor (`tenant` + `app=vega`) que manda `check_mac` (probado en el panel,
+      `tools/tenant_test/cases_cache.php`).
+
 ## Después de copiar
 
 - Subir la versión (`manifest.toml`, `package.json`, `src/version.ts`).
