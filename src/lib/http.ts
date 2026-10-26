@@ -3,7 +3,9 @@ import { viaDns } from './securedns';
 
 export type HttpResult = { code: number; body: string; ok: boolean };
 
-export const UA = 'LatMpxVega/1.0 (Fire TV; Vega OS)';
+// Sin «Vega/» en la identificación: es la firma de un escáner de vulnerabilidades y el cortafuegos del hosting
+// (Hostinger / LiteSpeed) responde 403 a todo pedido que la lleve (panel sin servidores, sin carátulas ni nada).
+export const UA = 'LatMpxFireTV/1.0 (Fire TV; Vega OS)';
 
 type HttpOpts = { method?: string; body?: string; type?: string; timeout?: number; signal?: AbortSignal };
 

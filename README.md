@@ -174,6 +174,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Errores al panel** (`src/api/report.ts` → `api/report.php`, cifrado): errores de JavaScript no atrapados y fallos de reproducción, con equipo, línea y servidor. El dueño los ve en «Errores de las apps».
 - **Autodemo:** ya no se bloquea en el equipo; el panel decide (si el dueño borró el registro, se puede pedir otra demo).
 
+## Identificación de la app (User-Agent)
+
+La app se identifica como `LatMpxFireTV/1.0 (Fire TV; Vega OS)` (`src/lib/http.ts`). Nunca debe llevar `Vega/`:
+es la firma de un escáner de vulnerabilidades y el cortafuegos de Hostinger / LiteSpeed responde **403** a todo
+pedido que la lleve (el panel parecía no tener servidores, sin carátulas ni Autodemo real).
+
 ## Subir a la Amazon Appstore
 
 1. Descarga los `.vpkg` de **Releases › vega-latest** (`latmpxvega_armv7.vpkg` y `latmpxvega_aarch64.vpkg`; el `x86_64` es solo para el simulador).
