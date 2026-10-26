@@ -45,6 +45,13 @@ servidor IPTV. El servidor seguía contando la lectura de idiomas cuando se abr�
 
 ## Falta en Vega (Roku build 59)
 
+- [ ] **Roku build 63 a 65**: (1) al fallar un video con un error HTTP, preguntar al servidor el código (con y sin DNS
+      seguro) y el estado de la cuenta; 403 → esperar 10 s y abrir otra vez; (2) película negada: `get_vod_info` dice
+      si ya no está («Video no disponible») o si tiene otra extensión (abrir con la de verdad); (3) Continuar viendo
+      **nunca** empieza solo desde el principio: agotado el panel, otra vez en el segundo guardado tras 10 s y, si no,
+      «No se pudo continuar donde quedó» y de vuelta (reemplaza `resumeFallback` de Vega, que salta desde el principio);
+      (4) idiomas: la lectura empieza a los 3 s de abrir el video y se repite (3, 6, 10 s y cada 15 s) hasta que salgan,
+      salvo AVI / TS. (Roku: `onStreamCheck`, `resumeFromStart`, `onLangCheck`, `lateProbeDone`.)
 - [ ] **Roku build 62**: si el intento con el panel falla, con un error de certificado pedir otra vez con `&plain=1`
       (la VPS / VDS por http) y, si no, con `&v=1` (el panel convierte también el video a H.264 en la VPS / VDS;
       «Convirtiendo el video en el panel…»; espera de 60 s). El reporte con cada intento. Idiomas: la lectura con el
