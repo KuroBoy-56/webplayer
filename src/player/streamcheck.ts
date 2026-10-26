@@ -6,22 +6,13 @@ import { api } from '../api/xtream';
 import { Session } from '../api/panel';
 import { http, json, UA } from '../lib/http';
 import { str } from '../lib/util';
+import { xuiError } from '../lib/xui';
 
 // xui: el código que da XUI.one en «Debug Mode» (contesta 200 con una página HTML en lugar del video: INVALID_STREAM_ID,
 // STREAM_OFFLINE, BLOCKED_USER_AGENT…) y su texto; html: el servidor devolvió una página en lugar del video
 export type StreamCheck = { code: number; type?: string; html?: boolean; xui?: string; xuiText?: string; status?: string; active?: number; max?: number; exists?: boolean; ext?: string };
 
-// código y texto de la página de error de XUI.one («XUI.ONE INVALID_STREAM_ID Stream ID doesn't exist.»)
-export function xuiError(html: string): { code: string; text: string } | null {
-  const text = html
-    .replace(/<(style|script|title)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const at = text.toUpperCase().lastIndexOf('XUI.ONE');
-  const m = (at >= 0 ? text.slice(at + 7) : text).trim().match(/^([A-Z][A-Z0-9_]{2,})\b\s*(.{0,160})/);
-  return m ? { code: m[1], text: m[2].trim() } : null;
-}
+export { xuiError };
 
 async function statusOf(url: string): Promise<{ code: number; type: string; body: string }> {
   const ctrl = new AbortController();
