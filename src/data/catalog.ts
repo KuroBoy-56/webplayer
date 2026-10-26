@@ -1,7 +1,7 @@
 // Catálogo en memoria: filas del inicio, plataformas, géneros, búsqueda y TV en vivo
 // (misma lógica que la app de Roku y Android).
 import { imgPath, Kind } from '../api/xtream';
-import { fold, float, isAdult, str } from '../lib/util';
+import { fold, float, isAdult, shuffle, str } from '../lib/util';
 import { pref, readJson } from '../lib/storage';
 import { Key, t } from '../lib/i18n';
 
@@ -22,6 +22,8 @@ export type Item = {
   year: string;
   epg: string;
   num: string;
+  // id de TMDB que manda el servidor IPTV (tmdb / tmdb_id): la carátula del panel es una por título
+  tm?: string;
 };
 
 export type Special = { kind: 'platform' | 'genre' | 'more'; key: string; label: string; image?: number; color: string; extra?: string };
@@ -99,7 +101,13 @@ export function toItem(kind: Kind, it: any): Item {
     year: str(it.year) || str(it.releaseDate).slice(0, 4) || str(it.release_date).slice(0, 4),
     epg: str(it.epg_channel_id),
     num: str(it.num),
+    tm: tmdbId(it),
   };
+}
+
+function tmdbId(it: any): string {
+  const v = str(it.tmdb) || str(it.tmdb_id);
+  return /^[1-9]\d{0,8}$/.test(v) ? v : '';
 }
 
 class Catalog {
@@ -166,9 +174,10 @@ class Catalog {
   idxForKw(kind: Kind, kw: string[]): number[] {
     const d = this.k[kind];
     if (!d) return [];
-    const out: number[] = [];
-    for (const c of this.visibleCats(kind)) if (matchesKw(c.name, kw)) out.push(...(d.byCat.get(c.id) || []));
-    return out;
+    // un título en dos categorías de la misma plataforma sale una sola vez
+    const out = new Set<number>();
+    for (const c of this.visibleCats(kind)) if (matchesKw(c.name, kw)) for (const i of d.byCat.get(c.id) || []) out.add(i);
+    return [...out];
   }
 
   sortKey(kind: Kind, it: any, by: 'added' | 'rating'): number {
@@ -201,7 +210,9 @@ class Catalog {
     return d && i !== undefined ? toItem(kind, d.items[i]) : null;
   }
 
-  // ---------- inicio ----------
+  // ---------- inicio (mismo orden que Roku) ----------
+  // Plataformas, Top 10 de hoy (películas y series juntas), Películas agregadas recientemente, Series nuevas,
+  // «Lo mejor de…» de 5 plataformas, Series para ti, los géneros y Películas para ti; «Ver todo» al final de cada fila.
   // platforms: false = el distribuidor no separa su contenido por plataformas (sin fila ni filas por plataforma)
   home(platforms = true): { rows: Row[]; hero: Item | null } {
     const rows: Row[] = [];
@@ -209,7 +220,7 @@ class Catalog {
     const vodIdx = this.allIdx('vod');
     const serIdx = this.allIdx('series');
 
-    const plats: Row = { title: t('Plataformas'), type: 'platform', items: [] };
+    const plats: Row = { title: '', type: 'platform', items: [] };
     const platRows: { p: Platform; mv: number[]; sv: number[] }[] = [];
     for (const p of platforms ? PLATFORMS : []) {
       const mv = this.idxForKw('vod', p.kw);
@@ -221,6 +232,15 @@ class Catalog {
     }
     if (plats.items.length) rows.push(plats);
 
+    // Top 10 de hoy: las mejor calificadas de películas y series juntas
+    const scored = [
+      ...this.top('vod', vodIdx, 'rating', 10).map(i => ({ kind: 'vod' as Kind, i, v: this.sortKey('vod', this.k.vod!.items[i], 'rating') })),
+      ...this.top('series', serIdx, 'rating', 10).map(i => ({ kind: 'series' as Kind, i, v: this.sortKey('series', this.k.series!.items[i], 'rating') })),
+    ]
+      .sort((x, y) => y.v - x.v)
+      .slice(0, 10);
+    if (scored.length >= 5) rows.push({ title: t('Top 10 de hoy'), type: 'top10', items: scored.map(x => this.items(x.kind, [x.i])[0]) });
+
     const recentMovies = this.top('vod', vodIdx, 'added', 30);
     if (recentMovies.length) {
       hero = this.items('vod', [recentMovies[Math.floor(Math.random() * Math.min(10, recentMovies.length))]])[0];
@@ -230,55 +250,45 @@ class Catalog {
         items: [...this.items('vod', recentMovies), { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'vod' }],
       });
     }
-    const top10 = this.top('vod', vodIdx, 'rating', 10);
-    if (top10.length >= 5) rows.push({ title: t('Top 10 películas'), type: 'top10', items: this.items('vod', top10) });
-
     const recentSeries = this.top('series', serIdx, 'added', 30);
     if (recentSeries.length) {
       rows.push({
-        title: t('Series con episodios nuevos'),
+        title: t('Series nuevas'),
         type: 'poster',
         items: [...this.items('series', recentSeries), { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'series' }],
       });
       if (!hero) hero = this.items('series', [recentSeries[0]])[0];
     }
-    const topSeries = this.top('series', serIdx, 'rating', 10);
-    if (topSeries.length >= 5) rows.push({ title: t('Top 10 series'), type: 'top10', items: this.items('series', topSeries) });
 
-    for (const pr of platRows) {
-      rows.push({
-        title: label(pr.p),
-        type: 'poster',
-        items: [
-          ...this.items('vod', this.top('vod', pr.mv, 'added', 15)),
-          ...this.items('series', this.top('series', pr.sv, 'added', 15)),
-          { kind: 'more', key: pr.p.key, label: t('Ver todo'), color: pr.p.color, extra: 'platform' },
-        ],
-      });
-    }
-
-    const gen: Row = { title: t('Géneros'), type: 'genre', items: [] };
-    const genRows: { g: Platform; mv: number[]; sv: number[] }[] = [];
-    for (const g of GENRES) {
-      const mv = this.idxForKw('vod', g.kw);
-      const sv = this.idxForKw('series', g.kw);
-      if (mv.length + sv.length > 0) {
-        gen.items.push({ kind: 'genre', key: g.key, label: label(g), color: g.color });
-        genRows.push({ g, mv, sv });
+    // «Lo mejor de…»: películas y series intercaladas, lo más nuevo primero
+    const mixed = (mv: number[], sv: number[]): Item[] => {
+      const a = this.items('vod', this.top('vod', mv, 'added', 15));
+      const b = this.items('series', this.top('series', sv, 'added', 15));
+      const out: Item[] = [];
+      for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        if (a[i]) out.push(a[i]);
+        if (b[i]) out.push(b[i]);
       }
+      return out;
+    };
+    for (const pr of platRows.filter(x => x.p.key !== 'xmas' && x.p.key !== 'halloween').slice(0, 5)) {
+      const items = mixed(pr.mv, pr.sv);
+      if (items.length) rows.push({ title: t('Lo mejor de {x}', { x: label(pr.p) }), type: 'poster', items: [...items, { kind: 'more', key: pr.p.key, label: t('Ver todo'), color: pr.p.color, extra: 'platform' }] });
     }
-    if (gen.items.length) rows.push(gen);
-    for (const gr of genRows.slice(0, 8)) {
-      rows.push({
-        title: label(gr.g),
-        type: 'poster',
-        items: [
-          ...this.items('vod', this.top('vod', gr.mv, 'added', 15)),
-          ...this.items('series', this.top('series', gr.sv, 'added', 15)),
-          { kind: 'more', key: gr.g.key, label: t('Ver todo'), color: gr.g.color, extra: 'genre' },
-        ],
-      });
+
+    const pick = (kind: Kind, idx: number[], n: number) => this.items(kind, shuffle(idx.slice()).slice(0, n));
+    const seriesForYou = pick('series', serIdx, 24);
+    if (seriesForYou.length) rows.push({ title: t('Series para ti'), type: 'poster', items: [...seriesForYou, { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'series' }] });
+
+    for (const key of ['accion', 'comedia', 'terror', 'anime', 'drama', 'suspenso', 'aventura', 'animacion', 'scifi', 'romance', 'documental']) {
+      const g = GENRES.find(x => x.key === key);
+      if (!g) continue;
+      const items = mixed(this.idxForKw('vod', g.kw), this.idxForKw('series', g.kw));
+      if (items.length) rows.push({ title: label(g), type: 'poster', items: [...items, { kind: 'more', key: g.key, label: t('Ver todo'), color: g.color, extra: 'genre' }] });
     }
+
+    const moviesForYou = pick('vod', vodIdx, 24);
+    if (moviesForYou.length) rows.push({ title: t('Películas para ti'), type: 'poster', items: [...moviesForYou, { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'vod' }] });
     return { rows, hero };
   }
 

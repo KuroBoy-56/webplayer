@@ -1,6 +1,7 @@
 // Errores de la app al panel (api/report.php, cifrado igual que login.php): el dueño los ve en
 // «Errores de las apps» con el equipo, la hora, la línea y el detalle. Nunca se manda la contraseña
 // de la línea (el panel además tapa usuario/contraseña de las direcciones).
+import { APP_VERSION } from '../version';
 import { hasMasterKey, panelEncrypt } from '../lib/aes';
 import { formBody } from '../lib/http';
 import { tvModel, tvOs } from '../lib/platform';
@@ -9,7 +10,8 @@ import { panel } from './panel';
 
 export type ErrorKind = 'crash' | 'error' | 'playback' | 'network' | 'panel' | 'warning';
 
-const VERSION = '1.0.0';
+// la versión real de la app (antes iba fija en 1.0.0 y los reportes no decían qué versión fallaba)
+const VERSION = APP_VERSION;
 const recent: Record<string, number> = {};
 let ctx: () => { device: string; user: string; server: string } = () => ({ device: '', user: '', server: '' });
 

@@ -7,13 +7,14 @@ import { alpha, C, px, themed } from '../theme';
 type FocusProps = {
   onPress?: () => void;
   onFocus?: () => void;
+  onBlur?: () => void;
   style?: StyleProp<ViewStyle> | ((focused: boolean) => StyleProp<ViewStyle>);
   children: React.ReactNode | ((focused: boolean) => React.ReactNode);
   preferred?: boolean;
   disabled?: boolean;
 };
 
-export function Focusable({ onPress, onFocus, style, children, preferred, disabled }: FocusProps) {
+export function Focusable({ onPress, onFocus, onBlur, style, children, preferred, disabled }: FocusProps) {
   const [focused, setFocused] = useState(false);
   return (
     <Pressable
@@ -24,7 +25,10 @@ export function Focusable({ onPress, onFocus, style, children, preferred, disabl
         setFocused(true);
         onFocus?.();
       }}
-      onBlur={() => setFocused(false)}
+      onBlur={() => {
+        setFocused(false);
+        onBlur?.();
+      }}
       style={typeof style === 'function' ? style(focused) : style}>
       {typeof children === 'function' ? children(focused) : children}
     </Pressable>

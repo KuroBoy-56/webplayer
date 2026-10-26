@@ -69,9 +69,11 @@ function b64u(s: string): string {
   return b64Encode(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-// HLS con el audio a (orden en el archivo) desde el segundo t
-export function hlsLink(e: Engine, url: string, a: number, t: number): string {
-  return e.base + FILE + '?do=hls&token=' + encodeURIComponent(e.token) + '&u=' + b64u(url) + '&a=' + a + '&t=' + Math.max(0, Math.floor(t)) + '&lang=' + lang();
+// HLS con el audio a (orden en el archivo) desde el segundo t. video: también el video convertido a H.264 (lo que el
+// equipo no reproduce; solo en la VPS / VDS); plain: la VPS / VDS por http (el equipo rechazó su certificado)
+export function hlsLink(e: Engine, url: string, a: number, t: number, opts: { video?: boolean; plain?: boolean } = {}): string {
+  return e.base + FILE + '?do=hls&token=' + encodeURIComponent(e.token) + '&u=' + b64u(url) + '&a=' + a + '&t=' + Math.max(0, Math.floor(t)) + '&lang=' + lang()
+    + (opts.video ? '&v=1' : '') + (opts.plain ? '&plain=1' : '');
 }
 
 // subtítulo s del archivo en WebVTT (o = segundos que se adelanta)
@@ -125,15 +127,31 @@ async function savedTracks(url: string): Promise<Probe | null> {
 
 const known = new Map<string, Promise<Probe>>();
 
-// idiomas de audio y subtítulos del archivo: primero el panel (al momento, sin tocar el servidor IPTV); si no los
-// tiene, se leen de la cabecera del archivo y se le dejan al panel para los demás equipos. Una vez por video.
-export function fileTracks(url: string): Promise<Probe> {
+// lo ya leído en este equipo (sin el protocolo: el mismo archivo por http o https es el mismo)
+const done = new Map<string, Probe>();
+const noScheme = (u: string) => u.replace(/^https?:\/\//i, '');
+
+// Idiomas que ya se saben SIN tocar el servidor IPTV: lo leído antes en este equipo o lo que recuerda el panel
+// (tracks.php, como mucho 2 s). Es lo único que se pide antes de abrir el video: leer el archivo antes (varias
+// peticiones seguidas) hacía que muchos servidores bloquearan la línea un rato y el video quedaba cargando sin fin.
+export async function knownTracks(url: string): Promise<Probe> {
+  const hit = done.get(noScheme(url));
+  if (hit) return hit;
+  const saved = await savedTracks(url);
+  if (saved) done.set(noScheme(url), saved);
+  return saved || { ok: false, container: '', audio: [], subs: [] };
+}
+
+// idiomas de audio y subtítulos del archivo: primero lo ya sabido; si no, se leen de la cabecera del archivo (con el
+// video ya abierto) y se le dejan al panel para los demás equipos. skipKnown: ya se preguntó al panel al abrir.
+export function fileTracks(url: string, skipKnown = false): Promise<Probe> {
   const hit = known.get(url);
   if (hit) return hit;
   const p = (async () => {
-    const saved = await savedTracks(url);
+    const saved = skipKnown ? done.get(noScheme(url)) || null : await knownTracks(url).then(k => (k.ok ? k : null));
     if (saved) return saved;
     const read = await probeTracks(url);
+    if (read.ok) done.set(noScheme(url), read);
     if (read.ok) cloud('tracks.php', 'POST', { u: b64u(url), probe: { container: read.container, audio: read.audio, subs: read.subs } }).catch(() => {});
     return read;
   })();

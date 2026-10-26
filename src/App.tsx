@@ -1,11 +1,11 @@
 // Navegación por pila: las pantallas de abajo quedan montadas (ocultas) para volver
 // al mismo lugar al pulsar Atrás.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, BackHandler, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { AppState, BackHandler, LayoutChangeEvent, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { fetchAlert, PanelAlert } from './api/alerts';
 import AlertDialog from './components/AlertDialog';
 import { Logo } from './components/ui';
-import { clearStoredCache } from './lib/cacheclear';
+import { clearStoredCache, whenNotPlaying } from './lib/cacheclear';
 import { onLangChange, t } from './lib/i18n';
 import { clearDnsCache } from './lib/securedns';
 import { loadStorage } from './lib/storage';
@@ -32,7 +32,7 @@ bindReportContext(() => {
   const s = getState().session;
   return { device: deviceId(), user: s?.user || '', server: s?.base || '' };
 });
-import { alpha, C, px, themed } from './theme';
+import { alpha, C, onScaleChange, px, setLayoutSize, themed } from './theme';
 
 function Screen({ route, active }: { route: Route; active: boolean }) {
   switch (route.name) {
@@ -70,7 +70,7 @@ function Notice() {
 export default function Root() {
   const [boot, setBoot] = useState(0);
   useEffect(() => {
-    onCacheClear(() => {
+    onCacheClear(() => whenNotPlaying(() => {
       showNotice(t('Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.'));
       setTimeout(() => {
         clearStoredCache();
@@ -89,7 +89,7 @@ export default function Root() {
         setStreamFlip(false);
         setBoot(b => b + 1);
       }, 3000);
-    });
+    }));
   }, []);
   return <App key={boot} />;
 }
@@ -104,6 +104,14 @@ function App() {
   // estilos y textos
   const [skin, setSkin] = useState(0);
   useEffect(() => onLangChange(() => setSkin(k => k + 1)), []);
+  useEffect(() => onScaleChange(() => setSkin(k => k + 1)), []);
+  // nada se dibuja hasta medir la pantalla (la escala sale de ese tamaño)
+  const [sized, setSized] = useState(false);
+  const onRootLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setLayoutSize(width, height);
+    if (width > 0) setSized(true);
+  }, []);
 
   useEffect(() => {
     const started = Date.now();
@@ -156,7 +164,7 @@ function App() {
     const recheck = () => {
       lastPanel = Date.now();
       const ses = getState().session;
-      panelCheckMac(deviceId()).then(ln => {
+      panelCheckMac(deviceId(), true).then(ln => {
         if (!ln && panelAnswered() && getState().session === ses) {
           logout();
           setStack([{ name: 'login' }]);
@@ -244,32 +252,32 @@ function App() {
     return () => sub.remove();
   }, [onBack]);
 
-  if (!stack) {
-    // mientras se lee lo guardado: solo el fondo (aún no se sabe si hay un distribuidor)
-    return <View style={s.root} />;
-  }
-
+  // mientras se lee lo guardado o se mide la pantalla: solo el fondo (aún no se sabe si hay un distribuidor)
   return (
-    <NavContext.Provider value={nav}>
-      <StatusBar hidden />
-      <View key={skin} style={s.app}>
-        {stack.map((r, i) => {
-          const active = i === stack.length - 1;
-          // el reproductor tapa todo; lo de abajo se oculta para que el foco no se escape
-          return (
-            <View key={i + r.name} style={[StyleSheet.absoluteFill, !active && s.hidden]}>
-              <Screen route={r} active={active} />
-            </View>
-          );
-        })}
-      </View>
-      {splash !== false ? (
-        <View style={[StyleSheet.absoluteFill, s.root]}>{splash ? <Logo size={300} /> : null}</View>
-      ) : (
-        <AlertDialog alert={alert} onClose={() => setAlert(null)} />
-      )}
-      <Notice />
-    </NavContext.Provider>
+    <View style={s.app} onLayout={onRootLayout}>
+      {stack && sized ? (
+        <NavContext.Provider value={nav}>
+          <StatusBar hidden />
+          <View key={skin} style={s.app}>
+            {stack.map((r, i) => {
+              const active = i === stack.length - 1;
+              // el reproductor tapa todo; lo de abajo se oculta para que el foco no se escape
+              return (
+                <View key={i + r.name} style={[StyleSheet.absoluteFill, !active && s.hidden]}>
+                  <Screen route={r} active={active} />
+                </View>
+              );
+            })}
+          </View>
+          {splash !== false ? (
+            <View style={[StyleSheet.absoluteFill, s.root]}>{splash ? <Logo size={300} /> : null}</View>
+          ) : (
+            <AlertDialog alert={alert} onClose={() => setAlert(null)} />
+          )}
+          <Notice />
+        </NavContext.Provider>
+      ) : null}
+    </View>
   );
 }
 

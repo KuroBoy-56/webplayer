@@ -15,6 +15,7 @@ import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
 import { deviceId, resetTenant, setSession } from '../state';
 import { alpha, C, px, themed } from '../theme';
+import { APP_VERSION } from '../version';
 
 // fondo: carátulas de TMDB con la clave del panel (la del distribuidor o la del dueño) por
 // api/tmdb.php (en el idioma de la app); sin clave el panel responde tmdb_key_not_set y no hay carrusel
@@ -218,55 +219,59 @@ export default function Login() {
       <View style={s.top}>
         <Logo size={110} />
       </View>
-      <View style={s.box}>
-        <Text style={s.title}>{t('Iniciar sesión')}</Text>
-        <TextInput
-          style={s.input}
-          value={user}
-          onChangeText={setUser}
-          placeholder={t('Usuario')}
-          placeholderTextColor={C.dim}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="next"
-          onSubmitEditing={() => passRef.current?.focus()}
-          hasTVPreferredFocus
-        />
-        <View style={s.passRow}>
+      <View style={s.center}>
+        <View style={s.box}>
+          <Text style={s.title}>{t('Iniciar sesión')}</Text>
           <TextInput
-            ref={passRef}
-            style={[s.input, s.passInput]}
-            value={pass}
-            onChangeText={setPass}
-            placeholder={t('Contraseña')}
+            style={s.input}
+            value={user}
+            onChangeText={setUser}
+            placeholder={t('Usuario')}
             placeholderTextColor={C.dim}
             autoCapitalize="none"
             autoCorrect={false}
-            secureTextEntry={!showPass}
-            returnKeyType="go"
-            onSubmitEditing={() => enter(user, pass)}
+            returnKeyType="next"
+            onSubmitEditing={() => passRef.current?.focus()}
+            hasTVPreferredFocus
           />
-          <Focusable onPress={() => setShowPass(v => !v)} style={f => [s.eye, f && s.eyeF]}>
-            <Eye open={showPass} />
-          </Focusable>
-        </View>
-        {error ? <Text style={s.error}>{error}</Text> : null}
-        {busy ? <Text style={s.busy}>{busy}</Text> : null}
-        <View style={s.btns}>
-          <Button label={busy ? t('Entrando…') : t('Ingresar')} primary onPress={() => !busy && enter(user, pass)} />
-          <Button label="DNS" last={!canDemo} onPress={() => setDnsOpen(true)} />
-          {canDemo ? <Button label="Autodemo" last onPress={() => !busy && demo()} /> : null}
-        </View>
-        {canDemo ? <Text style={s.tip}>{t('¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.')}</Text> : null}
-        {assigned.length ? (
-          <View style={s.btns}>
-            <Button label={t('Entrar con la cuenta de este equipo ({x})', { x: assigned[0].demo ? 'DEMO' : assigned[0].user })} small last onPress={() => !busy && enterAssigned()} />
+          <View style={s.passRow}>
+            <TextInput
+              ref={passRef}
+              style={[s.input, s.passInput]}
+              value={pass}
+              onChangeText={setPass}
+              placeholder={t('Contraseña')}
+              placeholderTextColor={C.dim}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={!showPass}
+              returnKeyType="go"
+              onSubmitEditing={() => enter(user, pass)}
+            />
+            <Focusable onPress={() => setShowPass(v => !v)} style={f => [s.eye, f && s.eyeF]}>
+              <Eye open={showPass} />
+            </Focusable>
           </View>
-        ) : null}
-        <Text style={s.device}>{t('Código del equipo:')} {dev}</Text>
-      </View>
-      <View style={s.dist}>
-        <Button label={t('Cambiar distribuidor')} small last onPress={changeDist} />
+          {error ? <Text style={s.error}>{error}</Text> : null}
+          {busy ? <Text style={s.busy}>{busy}</Text> : null}
+          <View style={s.btns}>
+            <Button label={busy ? t('Entrando…') : t('Ingresar')} primary onPress={() => !busy && enter(user, pass)} />
+            <Button label="DNS" last={!canDemo} onPress={() => setDnsOpen(true)} />
+            {canDemo ? <Button label="Autodemo" last onPress={() => !busy && demo()} /> : null}
+          </View>
+          {canDemo ? <Text style={s.tip}>{t('¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.')}</Text> : null}
+          {assigned.length ? (
+            <View style={s.btns}>
+              <Button label={t('Entrar con la cuenta de este equipo ({x})', { x: assigned[0].demo ? 'DEMO' : assigned[0].user })} small last onPress={() => !busy && enterAssigned()} />
+            </View>
+          ) : null}
+          <Text style={s.device}>
+            {t('Código del equipo:')} {dev}   ·   {t('Versión:')} {APP_VERSION}
+          </Text>
+        </View>
+        <View style={s.dist}>
+          <Button label={t('Cambiar distribuidor')} small last onPress={changeDist} />
+        </View>
       </View>
       {dnsOpen ? <DnsPicker onClose={() => setDnsOpen(false)} /> : null}
     </View>
@@ -336,9 +341,12 @@ const s = themed(() =>
     mosaicImg: { width: px(192), height: px(288), margin: px(4), borderRadius: px(6) },
     shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha(C.bg, 0.72) },
     top: { position: 'absolute', left: px(80), top: px(40) },
-    box: { alignSelf: 'center', marginTop: px(150), width: px(760), backgroundColor: alpha(C.bg2, 0.9), borderRadius: px(12), padding: px(60) },
+    // la caja queda en el centro de la pantalla (a lo alto y a lo ancho)
+    center: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+    box: { width: px(760), backgroundColor: alpha(C.bg2, 0.9), borderRadius: px(12), padding: px(60) },
     title: { color: C.text, fontSize: px(52), fontWeight: '800', marginBottom: px(30) },
-    input: { height: px(84), backgroundColor: C.card, borderRadius: px(8), color: C.text, fontSize: px(32), paddingHorizontal: px(24), marginBottom: px(22) },
+    // texto y ayuda («Usuario», «Contraseña») centrados a lo alto del campo
+    input: { height: px(84), backgroundColor: C.card, borderRadius: px(8), color: C.text, fontSize: px(32), paddingHorizontal: px(24), paddingVertical: 0, textAlignVertical: 'center', marginBottom: px(22) },
     passRow: { position: 'relative' },
     passInput: { paddingRight: px(120) },
     eye: { position: 'absolute', right: px(10), top: px(8), width: px(96), height: px(68), borderRadius: px(8), alignItems: 'center', justifyContent: 'center' },

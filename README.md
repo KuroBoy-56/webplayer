@@ -11,6 +11,34 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+## Novedades de la 1.1.0 (traídas de Vega OS 1.0.10 y de Roku)
+
+- **Continuar viendo por pasos** (como Roku): directo en el segundo guardado; si no suena, el motor del panel lo
+  prepara desde ese segundo; si tampoco, otra vez directo 10 s después. **Nunca empieza solo desde el principio**.
+- **Cuando un video no abre** se le pregunta una vez al servidor (código, cuenta con `user_info`, si la película
+  sigue con `get_vod_info`) y el aviso dice el motivo: video no disponible, otra extensión (se abre con la de
+  verdad), línea no activa, línea en uso en otro equipo, 403 (espera 10 s y reintenta una vez). Los servidores
+  **XUI.one en «Debug Mode»** contestan 200 con una página: se lee su código (`INVALID_STREAM_ID`,
+  `BLOCKED_USER_AGENT`…) y no se insiste (muchos intentos seguidos hacían que el servidor bloqueara el equipo).
+- **Conversión de video en el panel** (`v=1`): si la tele no abre el video ni con el audio preparado por el panel,
+  la VPS / VDS lo convierte a H.264 (solo si el dueño o el distribuidor tienen encendido el interruptor de
+  conversión de video para LG). Antes, el panel por http (`plain=1`) si falla su certificado. Motor:
+  `api/media_webos.php` (el panel ya lo tiene).
+- **Idiomas**: antes de abrir el video solo lo ya sabido (este equipo o `api/tracks.php`, 3 s como mucho); con el
+  video abierto se lee la cabecera del archivo y se reintenta hasta tener los idiomas. Menú de audio con
+  **Audio predeterminado** arriba y todos los idiomas del archivo por el panel (también el que suena por defecto:
+  volver a él ya no deja el video sin sonido).
+- **TV en vivo**: primero `.m3u8` (lo abre el `<video>` de webOS), después `.ts` y la dirección corta, el otro
+  protocolo y el DNS elegido; 25 s por intento. Si no abre, el aviso dice el motivo y al panel va cada intento.
+- **Interfaz como Roku**: menú de arriba con la lupa, el ícono del perfil y la hora (sin «Cuenta» ni «Salir»);
+  perfil con la línea a la izquierda y los ajustes a la derecha; **Atrás** dentro de una sección sube al menú y en
+  el menú pregunta si salir; la portada sigue al título enfocado (busca su fondo en el servidor y en TMDB, 7 días
+  guardado); plataformas con fondo liso y del tamaño correcto.
+- **Errores al panel** con la versión real de la app, el modelo de la tele y cada intento.
+- **Borrado de caché del panel**: una orden reciente se aplica aunque la app esté recién instalada
+  (`cache_clear_at`); la consulta de cada 10 min va con `poll: 1`; viendo un video espera a que se cierre.
+- **Carátulas por la caché del panel** (como Roku); si el dueño la apaga, directo al servidor IPTV y a TMDB.
+
 ## Qué trae
 
 - **Inicio de sesión** solo con usuario y contraseña: se prueba a la vez en todos los DNS

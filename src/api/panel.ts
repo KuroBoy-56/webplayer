@@ -329,15 +329,16 @@ function parseFake(j: any): FakeScreen | null {
 }
 
 // línea activada para este equipo en el panel
-export async function panelCheckMac(deviceId: string): Promise<Line | null> {
+// poll: la app ya abierta vuelve a preguntar (cada 10 min): el panel no lo cuenta como otra apertura
+export async function panelCheckMac(deviceId: string, poll = false): Promise<Line | null> {
   if (!hasMasterKey()) return null;
   // cc: última orden de borrar la caché que esta app ya aplicó
-  const r = await panelLogin('check_mac', { mac_address: deviceId, enc: 1, cc: cacheSeen() });
+  const r = await panelLogin('check_mac', { mac_address: deviceId, enc: 1, cc: cacheSeen(), ...(poll ? { poll: 1 } : {}) });
   const j = loginReply(r);
   // el panel contestó (aunque sea "no hay línea"): sirve para cerrar la sesión al volver a la app
   lastCheckAnswered = r.code === 200 && !!j;
   // orden del panel de borrar la caché (viene con o sin línea; un panel viejo no la manda)
-  if (lastCheckAnswered && takeCacheOrder(j.cache_clear)) cacheHook();
+  if (lastCheckAnswered && takeCacheOrder(j.cache_clear, j.cache_clear_at, Math.floor(Date.now() / 1000) + clockSkew)) cacheHook();
   fakeScreen = parseFake(j);
   if (!j || j.exists !== true) return null;
   // PIN parental del panel: es el que usa la app

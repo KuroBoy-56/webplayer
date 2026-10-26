@@ -1,102 +1,82 @@
-// Inicio, Series y Películas: portada grande + filas.
-import React, { useEffect, useMemo, useState } from 'react';
+// Inicio, Series y Películas como Roku y Netflix: la portada grande queda fija arriba y solo se mueven las filas.
+// Con el foco en los botones de la portada (Reproducir / Más información / Mi lista) las filas asoman abajo; al bajar
+// a las filas, la portada muestra el título enfocado (fondo, nombre, año y sinopsis) y la fila enfocada queda
+// siempre en el mismo lugar, con las de abajo asomando. Arriba desde la primera fila vuelve a los botones.
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem, openSpecial, playMovie } from '../actions';
 import { Button, Message, Spinner } from '../components/ui';
-import { RowView } from '../components/Tiles';
-import { catalog, Item, Row } from '../data/catalog';
+import { RowView, rowHeight } from '../components/Tiles';
+import { ChainImage } from '../components/ChainImage';
+import { backdropSources, posterSources } from '../lib/images';
+import { catalog, isItem, Item, Row, Special } from '../data/catalog';
+import { continueItems, favItems } from '../data/personal';
+import { Art, heroArt, savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
-import { getState, isFav, Progress, toggleFav, useAppState } from '../state';
+import { isFav, toggleFav, useAppState } from '../state';
 import { t } from '../lib/i18n';
 import { brandInitial, features, useBrandRev } from '../lib/tenant';
 import { alpha, C, px, SIDE, themed } from '../theme';
-
-// fila "Continuar viendo" a partir del progreso guardado en el panel
-function continueRow(progress: Progress[], only?: 'vod' | 'series'): Row | null {
-  const items: Item[] = [];
-  const seen = new Set<string>();
-  for (const p of progress) {
-    if (p.type === 'movie' && only !== 'series') {
-      const it = catalog.find('vod', digits(p.id)) || null;
-      if (it && !seen.has('v' + it.id)) {
-        seen.add('v' + it.id);
-        items.push(it);
-      }
-    } else if ((p.type === 'episode' || (p.type as string) === 'series') && only !== 'vod') {
-      // 'series' lo guardan otras apps (Windows) con el id de la serie
-      const it = catalog.find('series', digits(p.type === 'episode' ? p.seriesId : p.seriesId || p.id));
-      if (it && !seen.has('s' + it.id)) {
-        seen.add('s' + it.id);
-        items.push(it);
-      }
-    }
-    if (items.length >= 30) break;
-  }
-  return items.length ? { title: t('Continuar viendo'), type: 'poster', items } : null;
-}
-
-function favRow(): Row | null {
-  const items: Item[] = [];
-  for (const f of getState().favorites) {
-    if (f.type === 'live') continue;
-    const it = catalog.find(f.type === 'movie' ? 'vod' : 'series', digits(f.id));
-    if (it) items.push(it);
-    if (items.length >= 30) break;
-  }
-  return items.length ? { title: t('Mi lista'), type: 'poster', items } : null;
-}
 
 // última imagen de la portada: queda de fondo mientras carga la siguiente (nunca la pantalla en negro)
 let lastBanner = '';
 export const bannerUri = () => lastBanner;
 
-function Billboard({ hero }: { hero: Item }) {
-  const nav = useNav();
-  const st = useAppState();
-  const fav = isFav(hero.kind, hero.id);
-  void st.rev;
-  const uri = hero.backdrop || hero.poster;
-  const [under] = useState(lastBanner);
+// dónde empiezan las filas: con los botones de la portada (asoman) o recorriéndolas (la enfocada arriba)
+const ROWS_HERO = 818;
+const ROWS_IN = 560;
+
+type Info = { item: Item | null; title?: string; plot?: string };
+
+// el título con lo que se encontró para la portada (fondo, sinopsis, año y nota si el servidor no los tenía)
+const withArt = (x: Item, a: Art): Item => ({
+  ...x,
+  backdrop: x.backdrop || a.backdrop,
+  plot: x.plot || a.plot,
+  year: x.year || a.year,
+  rating: x.rating || Number(a.rating) || 0,
+});
+
+function Billboard({ info, compact }: { info: Info; compact: boolean }) {
+  const it = info.item;
+  const art = it?.backdrop || '';
+  const artSrc = useMemo(() => (art ? backdropSources(art) : []), [art]);
+  const sideSrc = useMemo(() => (it && !art ? posterSources(it.kind, it.poster, it.name, it.year, it.tm) : []), [it, art]);
+  // sin fondo propio queda el último (nunca negro) y la carátula va a la derecha
+  const [under, setUnder] = useState(lastBanner);
   useEffect(() => {
-    if (uri) lastBanner = uri;
-  }, [uri]);
+    if (art) {
+      lastBanner = art;
+      setUnder(art);
+    }
+  }, [art]);
+  const title = info.title ?? it?.name ?? '';
+  const plot = info.plot ?? it?.plot ?? '';
   return (
-    <View style={s.hero}>
-      {under && under !== uri ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
-      {uri ? <Image source={{ uri }} style={s.heroImg} resizeMode="cover" /> : null}
-      {/* degradado teñido con el fondo del distribuidor */}
+    <View style={s.hero} pointerEvents="none">
+      {under && under !== art ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
+      {art ? <ChainImage sources={artSrc} style={s.heroImg} resizeMode="cover" /> : null}
       <Image source={require('../../assets/image/grad_bottom.png')} style={[s.heroGrad, { tintColor: C.bg }]} resizeMode="stretch" />
-      {/* sombra a la izquierda para leer el texto: degradado, sin borde marcado */}
       <Image source={require('../../assets/image/grad_left.png')} style={[s.heroShade, { tintColor: C.bg }]} resizeMode="stretch" />
-      <View style={s.heroText}>
-        {/* la "N" de Netflix: la inicial de la marca en su color de acento */}
-        <Text style={s.heroKind}>
-          <Text style={s.heroMark}>{brandInitial()}</Text>
-          {'  ' + (hero.kind === 'series' ? t('SERIE') : t('PELÍCULA')).split('').join(' ')}
-        </Text>
-        <Text style={s.heroTitle} numberOfLines={2}>
-          {hero.name}
-        </Text>
-        <Text style={s.heroMeta}>
-          {[hero.year, hero.rating > 0 ? '★ ' + hero.rating.toFixed(1) : ''].filter(Boolean).join('   ')}
-        </Text>
-        {hero.plot ? (
-          <Text style={s.heroPlot} numberOfLines={3}>
-            {hero.plot}
+      {sideSrc.length ? <ChainImage sources={sideSrc} style={[s.side, compact && s.sideCompact]} resizeMode="cover" /> : null}
+      <View style={[s.heroText, compact && s.heroTextCompact]}>
+        {it ? (
+          <Text style={s.heroKind}>
+            {/* la "N" de Netflix: la inicial de la marca en su color de acento */}
+            <Text style={s.heroMark}>{brandInitial()}</Text>
+            {'  ' + (it.kind === 'series' ? t('SERIE') : it.kind === 'live' ? t('EN VIVO') : t('PELÍCULA')).split('').join(' ')}
           </Text>
         ) : null}
-        <View style={s.heroBtns}>
-          <Button
-            label={t('Reproducir')}
-            icon="▶"
-            primary
-            preferred
-            onPress={() => (hero.kind === 'vod' ? playMovie(nav, hero, hero.ext) : openItem(nav, hero))}
-          />
-          <Button label={t('Más información')} icon="ⓘ" onPress={() => openItem(nav, hero)} />
-          <Button label={fav ? t('En mi lista') : t('Mi lista')} icon={fav ? '✓' : '+'} last onPress={() => toggleFav(hero.kind, hero.id, hero.name, hero.poster, hero.cat)} />
-        </View>
+        <Text style={[s.heroTitle, compact && s.heroTitleCompact]} numberOfLines={2}>
+          {title}
+        </Text>
+        {it ? <Text style={s.heroMeta}>{[it.year, it.rating > 0 ? '★ ' + it.rating.toFixed(1) : ''].filter(Boolean).join('   ')}</Text> : null}
+        {plot ? (
+          <Text style={s.heroPlot} numberOfLines={compact ? 2 : 3}>
+            {plot}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -117,16 +97,20 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, section, st.catalogRev, platforms, brandRev]);
 
+  // Continuar viendo y Mi lista (del panel), después de las plataformas, con «Ver todo» al final
   const rows = useMemo(() => {
     const extra: Row[] = [];
     const only = section === 'series' ? 'series' : section === 'movies' ? 'vod' : undefined;
-    const cont = continueRow(st.progress, only);
-    if (cont) extra.push(cont);
+    const cont = continueItems(st.progress, only);
+    if (cont.length) extra.push({ title: t('Continuar viendo'), type: 'poster', items: [...cont, { kind: 'more', key: 'continue', label: t('Ver todo'), color: '', extra: 'continue' }] });
     if (section === 'home') {
-      const f = favRow();
-      if (f) extra.push(f);
+      const f = favItems(st.favorites);
+      if (f.length) extra.push({ title: t('Mi lista'), type: 'poster', items: [...f, { kind: 'more', key: 'mylist', label: t('Ver todo'), color: '', extra: 'mylist' }] });
     }
-    return [...extra, ...base.rows];
+    const out = [...base.rows];
+    const at = out.length && out[0].type === 'platform' ? 1 : 0;
+    out.splice(at, 0, ...extra);
+    return out;
   }, [base, st.progress, st.favorites, section]);
 
   const progressOf = useMemo(() => {
@@ -140,36 +124,145 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
     return (it: Item) => map.get(it.kind + it.id);
   }, [st.progress]);
 
+  const hero = base.hero;
+  const [inRows, setInRows] = useState(false);
+  const [rowIdx, setRowIdx] = useState(0);
+  const [info, setInfo] = useState<Info>({ item: hero });
+  useEffect(() => setInfo({ item: hero }), [hero]);
+  const list = useRef<FlatList<Row>>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const artTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // título enfocado (la respuesta del fondo solo se usa si sigue enfocado)
+  const focused = useRef<Item | null>(null);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (artTimer.current) clearTimeout(artTimer.current);
+  }, []);
+
+  // offset de cada fila (alto fijo por tipo)
+  const offsets = useMemo(() => {
+    const out: number[] = [];
+    let y = 0;
+    for (const r of rows) {
+      out.push(y);
+      y += rowHeight(r);
+    }
+    return out;
+  }, [rows]);
+
+  // foco en una tarjeta: su fila queda arriba y la portada muestra lo enfocado cuando el foco se detiene
+  const onFocusAt = useCallback(
+    (i: number, x: Item | Special) => {
+      setInRows(true);
+      setRowIdx(i);
+      list.current?.scrollToOffset({ offset: offsets[i] || 0, animated: true });
+      if (timer.current) clearTimeout(timer.current);
+      if (artTimer.current) clearTimeout(artTimer.current);
+      focused.current = isItem(x) ? x : null;
+      timer.current = setTimeout(() => {
+        if (isItem(x)) {
+          // como Roku: la portada cambia al título enfocado; sin fondo propio se busca (servidor y luego TMDB) tras una
+          // pausa breve, y lo ya encontrado sale al instante
+          const known = x.backdrop ? null : savedArt(x);
+          setInfo({ item: known ? withArt(x, known) : x });
+          if (!x.backdrop && !known && (x.kind === 'vod' || x.kind === 'series')) {
+            artTimer.current = setTimeout(
+              () =>
+                heroArt(x, a => {
+                  if (a && focused.current === x) setInfo({ item: withArt(x, a) });
+                }),
+              350,
+            );
+          }
+        }
+        else if (x.kind === 'platform') setInfo({ item: null, title: x.label, plot: t('Todo el contenido de {x}: películas y series detectadas en tus categorías.', { x: x.label }) });
+        else if (x.kind === 'genre') setInfo({ item: null, title: x.label, plot: t('Películas y series de {x}.', { x: x.label }) });
+        else setInfo({ item: null, title: rows[i]?.title || x.label, plot: t('Ver todo el contenido de esta fila.') });
+      }, 120);
+    },
+    [offsets, rows],
+  );
+
+  // los botones de la portada: vuelve el destacado y las filas bajan
+  const toHero = () => {
+    if (timer.current) clearTimeout(timer.current);
+    setInRows(false);
+    setRowIdx(0);
+    setInfo({ item: hero });
+    list.current?.scrollToOffset({ offset: 0, animated: false });
+  };
+
   if (!ready) return <Spinner label={st.error || t('Cargando el catálogo…')} />;
   if (!rows.length) return <Message text={t('No hay contenido para mostrar.')} />;
 
+  const fav = hero ? isFav(hero.kind, hero.id) : false;
+  // arriba desde la primera fila vuelve a los botones; desde las demás, a la fila de arriba
+  const btnsFocusable = !inRows || rowIdx === 0;
+
   return (
-    <FlatList
-      data={rows}
-      keyExtractor={(r, i) => r.title + i}
-      ListHeaderComponent={base.hero ? <Billboard hero={base.hero} /> : <View style={{ height: px(130) }} />}
-      initialNumToRender={4}
-      windowSize={5}
-      renderItem={({ item }) => (
-        <RowView row={item} onItem={it => openItem(nav, it)} onSpecial={sp => openSpecial(nav, sp)} progressOf={progressOf} />
-      )}
-      contentContainerStyle={{ paddingBottom: px(120) }}
-    />
+    <View style={s.root}>
+      <Billboard info={inRows ? info : { item: hero }} compact={inRows} />
+      {hero ? (
+        <View style={[s.btns, inRows && s.btnsHidden]}>
+          <Button
+            label={t('Reproducir')}
+            icon="▶"
+            primary
+            preferred
+            disabled={!btnsFocusable}
+            onFocus={toHero}
+            onPress={() => (hero.kind === 'vod' ? playMovie(nav, hero, hero.ext) : openItem(nav, hero))}
+          />
+          <Button label={t('Más información')} icon="ⓘ" disabled={!btnsFocusable} onFocus={toHero} onPress={() => openItem(nav, hero)} />
+          <Button
+            label={fav ? t('En mi lista') : t('Mi lista')}
+            icon={fav ? '✓' : '+'}
+            last
+            disabled={!btnsFocusable}
+            onFocus={toHero}
+            onPress={() => toggleFav(hero.kind, hero.id, hero.name, hero.poster, hero.cat)}
+          />
+        </View>
+      ) : null}
+      <View style={[s.rowsBox, { top: px(inRows || !hero ? ROWS_IN : ROWS_HERO) }]}>
+        <FlatList
+          ref={list}
+          data={rows}
+          keyExtractor={(r, i) => r.title + i}
+          getItemLayout={(_, i) => ({ length: rowHeight(rows[i]), offset: offsets[i] || 0, index: i })}
+          initialNumToRender={4}
+          windowSize={5}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => (
+            <RowView row={item} onItem={it => openItem(nav, it)} onSpecial={sp => openSpecial(nav, sp)} onFocusAny={x => onFocusAt(index, x)} progressOf={progressOf} />
+          )}
+          contentContainerStyle={{ paddingBottom: px(600) }}
+        />
+      </View>
+    </View>
   );
 }
 
 const s = themed(() =>
   StyleSheet.create({
-    hero: { height: px(840), marginBottom: px(-120) },
+    root: { flex: 1 },
+    hero: { position: 'absolute', left: 0, top: 0, right: 0, height: px(1080) },
     heroImg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
-    heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(420) },
+    heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(620) },
     heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1400) },
-    heroText: { position: 'absolute', left: SIDE, top: px(220), width: px(980) },
+    side: { position: 'absolute', right: SIDE, top: px(150), width: px(427), height: px(640), borderRadius: px(8) },
+    sideCompact: { top: px(120), width: px(260), height: px(390) },
+    heroText: { position: 'absolute', left: SIDE, top: px(230), width: px(980) },
+    heroTextCompact: { top: px(140), width: px(1100) },
     heroKind: { color: C.sub, fontSize: px(24), fontWeight: '800', marginBottom: px(8) },
     heroMark: { color: C.red, fontSize: px(44), fontWeight: '900' },
     heroTitle: { color: C.text, fontSize: px(76), fontWeight: '900', lineHeight: px(84) },
+    heroTitleCompact: { fontSize: px(58), lineHeight: px(66) },
     heroMeta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },
     heroPlot: { color: C.text, fontSize: px(28), lineHeight: px(38), marginTop: px(16) },
-    heroBtns: { flexDirection: 'row', marginTop: px(30) },
+    btns: { position: 'absolute', left: SIDE, top: px(700), flexDirection: 'row' },
+    // recorriendo las filas los botones no se ven (siguen arriba para volver a ellos desde la primera fila)
+    btnsHidden: { top: px(440), opacity: 0 },
+    rowsBox: { position: 'absolute', left: 0, right: 0, bottom: 0, overflow: 'hidden' },
   }),
 );

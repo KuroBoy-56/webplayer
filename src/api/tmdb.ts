@@ -115,6 +115,24 @@ export async function overviewFor(item: Item, tmdbId: string, year: string): Pro
   return text;
 }
 
+// fondo horizontal y sinopsis de un título buscándolo en TMDB (título + año, la misma regla que el reparto); para la
+// portada de Inicio / Series / Películas cuando el servidor no tiene fondo
+export async function searchArt(item: Item, year: string): Promise<{ backdrop: string; plot: string; rating: string } | null> {
+  const kind = item.kind === 'series' ? 'tv' : 'movie';
+  const k = titleKeys(item.name);
+  const y = catalogYear(item.name, year || item.year);
+  const j = await get('search/' + kind, 'language=es-MX&include_adult=false&query=' + encodeURIComponent(k.base || item.name));
+  if (!j) return null;
+  for (const r of (Array.isArray(j.results) ? j.results : []).slice(0, 8)) {
+    const names = [str(r.title), str(r.name), str(r.original_title), str(r.original_name)].filter(Boolean).map(n => titleKeys(n).exact);
+    const ry = Number(str(r.release_date || r.first_air_date).slice(0, 4)) || null;
+    if ((names.includes(k.exact) || names.includes(k.base)) && yearsOk(y, ry) && r.backdrop_path) {
+      return { backdrop: IMG + 'w1280' + str(r.backdrop_path), plot: str(r.overview), rating: str(r.vote_average) };
+    }
+  }
+  return { backdrop: '', plot: '', rating: '' };
+}
+
 export type Person = { id: number; name: string; bio: string; birthday: string; place: string; photo: string; items: Item[] };
 
 const indexCache = new WeakMap<object, TitleIndex>();

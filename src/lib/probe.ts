@@ -5,38 +5,61 @@
 import { UA } from './http';
 
 export type ProbeTrack = { id: string; lang: string; codec: string; name: string; def: boolean; forced: boolean };
-export type Probe = { ok: boolean; container: '' | 'mp4' | 'mkv'; audio: ProbeTrack[]; subs: ProbeTrack[] };
+// headOk: el archivo contestó (si no es MKV ni MP4 —AVI, TS— no hay pistas que leer y no se vuelve a intentar)
+export type Probe = { ok: boolean; container: '' | 'mp4' | 'mkv'; audio: ProbeTrack[]; subs: ProbeTrack[]; headOk?: boolean };
 
 const CHUNK = 262144;
-const FIRST = 524288;
+// la primera lectura de 256 KB: en un MKV las pistas están al principio y con el video sonando sale más rápido
+const FIRST = 262144;
 // el índice moov de un MP4 (o el final del archivo donde está) se trae entero si no pasa de esto
 const MOOV_MAX = 4194304;
 const MAX_REQ = 14;
 
 type Reader = { url: string; chunks: { start: number; data: Uint8Array }[]; size: number; requests: number; failed: boolean };
 
+// lecturas en curso por video: al abrir el video se cortan (en líneas de una sola conexión el reproductor no
+// podía abrirlo mientras la lectura seguía y caía en «no abre el video directo»)
+const running = new Map<string, Set<AbortController>>();
+
+export function stopProbe(url: string): void {
+  for (const c of running.get(url) || []) c.abort();
+  running.delete(url);
+}
+
 async function fetchRange(r: Reader, off: number, len: number): Promise<Uint8Array | null> {
+  if (r.failed) return null;
   r.requests++;
   const ctrl = new AbortController();
+  let set = running.get(r.url);
+  if (!set) running.set(r.url, (set = new Set()));
+  set.add(ctrl);
   // un servidor lento no detiene la detección: 5 s por pedido (9 s el índice grande de un MP4)
   const timer = setTimeout(() => ctrl.abort(), len > FIRST ? 9000 : 5000);
   try {
     const res = await fetch(r.url, { headers: { 'User-Agent': UA, Range: 'bytes=' + off + '-' + (off + len - 1) }, signal: ctrl.signal });
-    if (res.status !== 206 && !(res.status === 200 && off === 0)) return null;
+    if (res.status !== 206 && !(res.status === 200 && off === 0)) {
+      ctrl.abort(); // la conexión no queda abierta
+      return null;
+    }
     const cr = res.headers.get('content-range') || '';
     const total = Number(cr.slice(cr.indexOf('/') + 1));
     if (cr.includes('/') && Number.isFinite(total) && total > 0) r.size = total;
     // un 200 sin Range traería el archivo entero: solo se acepta si es pequeño
-    if (res.status === 200 && Number(res.headers.get('content-length') || 0) > len * 4) {
+    // (sin content-length tampoco: bajaría el video completo a la memoria y la app se cerraba)
+    const cl = Number(res.headers.get('content-length') || 0);
+    if (res.status === 200 && (!(cl > 0) || cl > len * 4)) {
       ctrl.abort();
       return null;
     }
     const buf = new Uint8Array(await res.arrayBuffer());
     return buf.length ? (buf.length > len * 4 ? buf.slice(0, len) : buf) : null;
   } catch {
+    // cortada (stopProbe o tiempo agotado): no se pide nada más de este video
+    if (ctrl.signal.aborted) r.failed = true;
     return null;
   } finally {
     clearTimeout(timer);
+    set.delete(ctrl);
   }
 }
 
@@ -289,6 +312,7 @@ async function readTracks(url: string): Promise<Probe> {
   try {
     const head = await read(r, 0, 16);
     if (!head || head.length < 8) return out;
+    out.headOk = true;
     let res = { audio: [] as ProbeTrack[], subs: [] as ProbeTrack[] };
     if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) {
       out.container = 'mkv';
