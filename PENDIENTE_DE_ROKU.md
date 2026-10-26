@@ -9,8 +9,13 @@ Vega queda en pausa hasta que Roku funcione bien. Esta lista dice qué se cambi�
 - [x] Nombre exacto de la copia pública del panel (`canonKey` en `src/lib/images.ts`) y una carátula por título con
       el id de TMDB del servidor (`Item.tm`, `&t=`).
 - [x] Plataformas sin títulos repetidos.
-- [x] Continuar viendo: si no arranca en el segundo guardado, se abre desde el principio y salta ahí
-      (`resumeFallback` en `src/player/playback.ts`).
+- [ ] **Continuar viendo por pasos (Roku build 56)**: lo que tiene Vega hoy (`resumeFallback`: desde el principio y
+      saltar) es lo que en Roku quedaba en bucle («Cargando…», «Reconectando…»): en algunos videos o líneas el servidor
+      no deja saltar. Cambiar a: 1) directo en el segundo guardado; 2) si no suena (error o 15 s), 4 s después el motor
+      del panel lo prepara desde ese segundo (`toRemux` con el audio del idioma preferido, `hlsLink(..., t)`), si el
+      distribuidor lo permite; 3) si tampoco, desde el principio con el aviso «No se pudo continuar donde quedó: el
+      video empieza desde el principio.» Nunca volver a intentar el salto. (Roku: `resumeNextStage`, `onResumeWait`,
+      `resumeFromStart`, `resumeAudio` en `components/views/PlayerView.brs`.)
 - [x] La lectura de idiomas se corta a los 6 s (`stopProbe`).
 - [x] Barra de arriba del reproductor: un solo título y se va sola (Roku la tenía pegada; Vega ya estaba bien).
 
