@@ -3,7 +3,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { openItem } from '../actions';
 import { Focusable, Message } from '../components/ui';
-import { POSTER_H, PosterTile } from '../components/Tiles';
+import { posterH, PosterTile } from '../components/Tiles';
 import { catalog, Item } from '../data/catalog';
 import { continueItems, favItems } from '../data/personal';
 import { fold } from '../lib/util';
@@ -17,7 +17,7 @@ export const COLS = 7;
 
 export function ItemGrid({ items, header, channels }: { items: Item[]; header?: React.ReactElement; channels?: boolean }) {
   const nav = useNav();
-  const rowH = POSTER_H + px(40);
+  const rowH = posterH() + px(40);
   return (
     <FlatList
       data={items}

@@ -367,6 +367,8 @@ const fr: Record<Key, string> = {
   "Todo el contenido de {x}: películas y series detectadas en tus categorías.": "Tout le contenu de {x} : films et séries trouvés dans vos catégories.",
   "Top 10 de hoy": "Top 10 du jour",
   "Ver todo el contenido de esta fila.": "Voir tout le contenu de cette rangée.",
+  "¿Salir de {x}?": "Quitter {x} ?",
+  "Puedes volver cuando quieras.": "Vous pouvez revenir quand vous voulez.",
 };
 
 export default fr;

@@ -1,5 +1,6 @@
 // Pantalla principal: menú superior (Inicio, Series, Películas, TV en vivo, Deportes, Mi lista,
-// Buscar, Cuenta) y la sección elegida. Atrás vuelve a Inicio y, en Inicio, pregunta si salir.
+// Buscar, Cuenta, Salir) y la sección elegida. Atrás vuelve a Inicio y, en Inicio, pregunta si salir
+// (igual que Roku: «¿Salir de …?», «Puedes volver cuando quieras.», Salir / Cancelar).
 import { useKeplerBackHandler } from '@amazon-devices/react-native-kepler';
 import React, { useEffect, useState } from 'react';
 import { BackHandler, Modal, StyleSheet, Text, View } from 'react-native';
@@ -76,13 +77,17 @@ export default function Main({ active }: { active: boolean }) {
               )}
             </Focusable>
           ))}
+          <Focusable onPress={() => setExitAsk(true)} style={f => [s.item, f && s.itemF]}>
+            {f => <Text style={[s.itemText, f && s.itemTextF]}>{t('Salir')}</Text>}
+          </Focusable>
         </View>
         {st.loading ? <Text style={s.loading}>{t(st.loading === 'vod' ? 'Cargando películas…' : st.loading === 'series' ? 'Cargando series…' : 'Cargando canales…')}</Text> : null}
       </View>
       <Modal visible={exitAsk} transparent animationType="fade" onRequestClose={() => setExitAsk(false)}>
         <View style={s.dlgBack}>
           <View style={s.dlg}>
-            <Text style={s.dlgTitle}>{t('¿Quieres salir de {x}?', { x: brandName() })}</Text>
+            <Text style={s.dlgTitle}>{t('¿Salir de {x}?', { x: brandName() })}</Text>
+            <Text style={s.dlgText}>{t('Puedes volver cuando quieras.')}</Text>
             <View style={s.dlgBtns}>
               <Button label={t('Salir')} primary onPress={() => back.exitApp()} />
               <Button label={t('Cancelar')} preferred last onPress={() => setExitAsk(false)} />
@@ -109,7 +114,8 @@ const s = themed(() =>
     loading: { color: C.sub, fontSize: px(22) },
     dlgBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },
     dlg: { backgroundColor: C.bg2, borderRadius: px(12), padding: px(50), width: px(760) },
-    dlgTitle: { color: C.text, fontSize: px(38), fontWeight: '800', marginBottom: px(30) },
+    dlgTitle: { color: C.text, fontSize: px(38), fontWeight: '800', marginBottom: px(14) },
+    dlgText: { color: C.sub, fontSize: px(28), marginBottom: px(30) },
     dlgBtns: { flexDirection: 'row' },
   }),
 );

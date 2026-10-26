@@ -73,15 +73,20 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   «Top 10 de hoy» (películas y series juntas), Películas agregadas recientemente, Series nuevas,
   «Lo mejor de…» de las plataformas, Series para ti, géneros (Acción, Suspenso, Aventura, Anime,
   Drama…) y Películas para ti. En Películas el Top 10 es solo de películas y en Series solo de series.
-  Cada fila (también Continuar viendo y Mi lista) termina con «Ver todo». La interfaz se escala al
-  tamaño real de la pantalla (base 1920×1080). En la portada, en lugar de la «N»
+  Cada fila (también Continuar viendo y Mi lista) termina con «Ver todo». Plataformas en mosaicos 16:9
+  como Roku (imagen entera, fondo oscuro y borde fino). La interfaz se escala al tamaño que mide la
+  vista raíz de la app (base 1920×1080; no se dibuja nada hasta medirla): al volver a abrir la app el
+  equipo podía informar mal `Dimensions` y todo se veía enorme. En la portada, en lugar de la «N»
   de Netflix va la inicial de la marca (distribuidor; con *Omitir*, «M» de MPX Player) en su color de
   acento. Con `features.platforms: false` (`tenant_config`) no hay fila ni filas de plataformas. Al
   cambiar de sección o abrir una plataforma/género la última portada queda de fondo (nunca negro).
 - **Cuenta** muestra también cuánto contenido tiene el servidor: canales en vivo, películas y series
   («…» mientras se carga esa lista).
-- **Menú superior**: Inicio, Series, Películas, TV en vivo, Deportes, Mi lista, Buscar, Cuenta.
-  *Atrás* vuelve a Inicio y, en Inicio, pregunta si quieres salir.
+- **Menú superior**: Inicio, Series, Películas, TV en vivo, Deportes, Mi lista, Buscar, Cuenta, Salir.
+  *Atrás* vuelve a Inicio y, en Inicio, pregunta si quieres salir; *Salir* hace la misma pregunta
+  que Roku («¿Salir de …?», «Puedes volver cuando quieras.», Salir / Cancelar).
+- **Inicio de sesión** con la caja centrada en la pantalla y el texto de Usuario / Contraseña centrado
+  a lo alto del campo.
 - **Ficha** con sinopsis, reparto, temporadas, episodios con su avance y "Más títulos como este".
 - **Actores**: en la ficha, el reparto (fotos de TMDB) abre la página del actor con su filmografía, solo los títulos que el servidor tiene (título normalizado y año ±1, como la app de Windows y la web). Clave TMDB del panel o la incorporada.
 - **Reproductor nativo de Vega** (MP4, MKV, AVI, MOV, MPEG-TS) sin límite de resolución ni de
@@ -89,7 +94,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   ▼ o MENÚ para audio y subtítulos, idioma preferido automático y siguiente episodio solo.
 - **Audio y subtítulos como en Roku**: los idiomas (del panel, `api/tracks.php`, o de la cabecera) se buscan **antes de
   abrir el video**, como mucho 6 s (`load` en `src/player/playback.ts`): a la vez que el video fallaban en servidores con
-  una sola conexión por línea y solo quedaba el audio predeterminado. Se lee la cabecera del MKV/MP4 para listar todas las pistas
+  una sola conexión por línea y solo quedaba el audio predeterminado. Si a los 6 s no terminó, la lectura se corta
+  (`stopProbe`) para dejarle la conexión al reproductor, y una respuesta sin tamaño nunca se baja entera (cerraba la
+  app). Un MKV/MP4 cuyo audio el equipo decodifica nunca pasa solo por el panel cuando no abre directo (el video
+  del panel es el mismo y en el simulador eso cerraba la app): se dan los reintentos normales y el aviso. Se lee la cabecera del MKV/MP4 para listar todas las pistas
   con su idioma (Español latino, Inglés…) y su códec. El cambio de audio se comprueba en el
   reproductor; si el equipo no lo toma o no decodifica ese audio (DTS, TrueHD…), lo prepara el
   **motor del panel** (`api/media_vega.php`: video sin cambios + ese audio en AAC, HLS por Media

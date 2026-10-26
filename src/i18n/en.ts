@@ -366,6 +366,8 @@ const en = {
   "Todo el contenido de {x}: películas y series detectadas en tus categorías.": "Everything from {x}: movies and series found in your categories.",
   "Top 10 de hoy": "Today's Top 10",
   "Ver todo el contenido de esta fila.": "See everything in this row.",
+  "¿Salir de {x}?": "Exit {x}?",
+  "Puedes volver cuando quieras.": "You can come back anytime.",
 };
 
 export default en;

@@ -11,7 +11,7 @@ import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia'
 import { Engine, engineDenied, fileTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
-import { Probe } from '../lib/probe';
+import { Probe, stopProbe } from '../lib/probe';
 import { pref, setPref } from '../lib/storage';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
@@ -116,6 +116,7 @@ export class Playback {
     // Los idiomas (del panel o de la cabecera del archivo) se buscan ANTES de abrir el video, como mucho 6 s; onPlaying
     // y onError usan esto mismo. Antes iban a la vez que el video: en servidores con una sola conexión por línea la
     // lectura fallaba y solo quedaba el audio predeterminado.
+    // Si a los 6 s no terminó, la lectura se corta (stopProbe) para que el reproductor tenga la conexión libre.
     const g = this.gen;
     let opened = false;
     const open = () => {
@@ -123,9 +124,14 @@ export class Playback {
       opened = true;
       this.direct(resume);
     };
-    const timer = setTimeout(open, 6000);
-    fileTracks(url).then(() => {
+    const timer = setTimeout(() => {
+      stopProbe(url);
+      open();
+    }, 6000);
+    fileTracks(url).then(p => {
       clearTimeout(timer);
+      // los idiomas quedan listos para el menú desde que empieza a sonar
+      if (g === this.gen && p.ok && !this.probe) this.probe = p;
       open();
     });
   }
@@ -199,7 +205,7 @@ export class Playback {
 
   // primera vez "playing": se aplican los idiomas del archivo (la búsqueda empezó al abrir el video, load)
   onPlaying(): void {
-    if (this.live || this.probe || this.probing) return;
+    if (this.live || this.probing || this.remux) return;
     this.probing = true;
     const g = this.gen;
     fileTracks(this.url).then(p => {
@@ -243,8 +249,11 @@ export class Playback {
 
   // el equipo no abre el archivo (contenedor o códec que no reconoce, AVI, MKV raros…): el motor del panel lo
   // entrega como HLS (video sin cambios, audio en AAC) desde donde iba, antes de dar el error. Una vez por video.
+  // Con un MKV/MP4 cuyo audio el equipo sí decodifica no se intenta: el video del panel es el mismo (copiado) y si
+  // el equipo no lo abre directo tampoco lo abre por el panel (en el simulador eso cerraba la app).
   private async formatFallback(items: AudioItem[]): Promise<boolean> {
     if (this.formatTried || this.live) return false;
+    if (this.probe?.ok && (this.probe.container === 'mkv' || this.probe.container === 'mp4')) return false;
     this.formatTried = true;
     const it = this.preferredAudio(items) || items[this.probeDefault()];
     return this.toRemux(it?.probe ?? 0, it?.label || t('Audio {n}', { n: 1 }), false, t('Este equipo no abre el video directo: se prepara con el panel…'), Math.floor(this.resumeAt || this.realPos()));

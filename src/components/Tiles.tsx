@@ -8,8 +8,9 @@ import { Focusable } from './ui';
 import { ChainImage } from './ChainImage';
 import { posterSources } from '../lib/images';
 
-export const POSTER_W = px(210);
-export const POSTER_H = px(315);
+// funciones: la escala se conoce al medir la pantalla (después de importar este archivo)
+export const posterW = () => px(210);
+export const posterH = () => px(315);
 
 export const PosterTile = memo(function PosterTile({
   item,
@@ -26,8 +27,8 @@ export const PosterTile = memo(function PosterTile({
   rank?: number;
   wide?: boolean;
 }) {
-  const w = wide ? px(300) : POSTER_W;
-  const h = wide ? px(169) : POSTER_H;
+  const w = wide ? px(300) : posterW();
+  const h = wide ? px(169) : posterH();
   // carátula del panel (o la de TMDB por el título si el servidor no tiene) y, si no carga, la original
   const src = useMemo(() => posterSources(item.kind, item.poster, item.name, item.year), [item.kind, item.poster, item.name, item.year]);
   return (
@@ -53,8 +54,9 @@ export const PosterTile = memo(function PosterTile({
 export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: { sp: Special; onPress: () => void; onFocus?: () => void }) {
   if (sp.kind === 'platform') {
     return (
-      <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.plat, { backgroundColor: sp.color }, f && s.tileF]}>
-        {sp.image ? <Image source={sp.image} style={s.img} resizeMode="cover" /> : <Text style={s.platText}>{sp.label}</Text>}
+      // mosaico 16:9 como Roku: la imagen entera (las de plataformas son 16:9), fondo oscuro y borde fino
+      <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.plat, f && s.platF]}>
+        {sp.image ? <Image source={sp.image} style={s.img} resizeMode="cover" /> : <Text style={[s.platText, { color: sp.color }]}>{sp.label}</Text>}
       </Focusable>
     );
   }
@@ -74,7 +76,7 @@ export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: {
 
 // alto de la fila de tarjetas y de la fila completa (título + tarjetas): fijo, así la lista del inicio sabe dónde
 // queda cada fila y deja la enfocada siempre arriba (como Roku y Netflix)
-export const cardsHeight = (row: Row) => (row.type === 'platform' ? px(190) : row.type === 'genre' ? px(130) : POSTER_H + px(30));
+export const cardsHeight = (row: Row) => (row.type === 'platform' ? px(190) : row.type === 'genre' ? px(130) : posterH() + px(30));
 export const rowHeight = (row: Row) => cardsHeight(row) + (row.title ? px(46) : px(4)) + px(18);
 
 export function RowView({
@@ -135,11 +137,12 @@ const s = themed(() =>
     barFill: { height: '100%', backgroundColor: C.red },
     rankWrap: { flexDirection: 'row', alignItems: 'flex-end', marginRight: px(8) },
     rank: { color: C.bg, fontSize: px(220), fontWeight: '900', lineHeight: px(230), marginRight: px(-24), textShadowColor: '#9a9a9a', textShadowRadius: px(3), textShadowOffset: { width: 0, height: 0 } },
-    plat: { width: px(255), height: px(170), borderRadius: px(10), marginRight: px(18), overflow: 'hidden', justifyContent: 'center', alignItems: 'center', borderWidth: px(4), borderColor: 'transparent', marginTop: px(10) },
-    platText: { color: '#fff', fontSize: px(36), fontWeight: '800' },
+    plat: { width: px(272), height: px(153), borderRadius: px(10), marginRight: px(22), overflow: 'hidden', justifyContent: 'center', alignItems: 'center', backgroundColor: '#161616', borderWidth: px(3), borderColor: 'rgba(255,255,255,0.12)', marginTop: px(16) },
+    platF: { borderColor: C.focus, borderWidth: px(4), transform: [{ scale: 1.07 }], zIndex: 10 },
+    platText: { color: '#fff', fontSize: px(34), fontWeight: '800', textAlign: 'center' },
     genre: { width: px(250), height: px(100), borderRadius: px(10), marginRight: px(18), justifyContent: 'center', alignItems: 'center', borderWidth: px(4), borderColor: 'transparent', marginTop: px(10) },
     genreText: { color: '#fff', fontSize: px(30), fontWeight: '800' },
-    more: { width: POSTER_W, height: POSTER_H, justifyContent: 'center', alignItems: 'center', backgroundColor: C.card },
+    more: { width: posterW(), height: posterH(), justifyContent: 'center', alignItems: 'center', backgroundColor: C.card },
     moreText: { color: C.text, fontSize: px(30), fontWeight: '700' },
     row: { marginBottom: px(18) },
     rowTitle: { color: C.text, fontSize: px(34), fontWeight: '700', marginLeft: SIDE, marginBottom: px(4) },
