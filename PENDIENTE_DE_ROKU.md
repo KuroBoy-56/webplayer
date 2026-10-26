@@ -45,6 +45,11 @@ servidor IPTV. El servidor seguía contando la lectura de idiomas cuando se abr�
 
 ## Falta en Vega (Roku build 59)
 
+- [ ] **Roku build 61**: si el reproductor dice que no puede leer el archivo (formato o códec, no red), ir al panel tras
+      el primer intento; con el audio por defecto TrueHD ya sabido, directo al panel; el reporte de «Errores de las
+      apps» con el detalle del reproductor, la extensión y los códecs de audio. (Roku: `decodeError`, `audioUnsupported`,
+      reporte en `onError`.) Vega ya decide por códec con `decodable` / `nativeAudioOk`; revisar que el reporte lleve
+      el detalle.
 - [ ] **Video que el reproductor no abre directo → el panel (VPS / VDS)** tras dos intentos directos, con el aviso
       «Preparando el video en el panel…»; si el panel no puede, siguen los intentos de siempre. Vega ya tiene
       `formatFallback`, pero solo cuando el archivo no es MKV/MP4 conocido: revisar que también cubra los videos de
