@@ -92,6 +92,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Reproductor nativo de Vega** (MP4, MKV, AVI, MOV, MPEG-TS) sin límite de resolución ni de
   bitrate (4K si el equipo y el archivo lo tienen): continuar donde quedó, ◀▶ 10 s, OK pausa,
   ▼ o MENÚ para audio y subtítulos, idioma preferido automático y siguiente episodio solo.
+- **Continuar viendo** abre el video en el segundo guardado; si no arranca (error o 15 s sin empezar) se abre
+  desde el principio y salta solo a ese segundo (`resumeFallback` en `src/player/playback.ts`). Mientras tanto
+  no se guarda avance, así no se pierde dónde quedó.
 - **Audio y subtítulos como en Roku**: los idiomas (del panel, `api/tracks.php`, o de la cabecera) se buscan **antes de
   abrir el video**, como mucho 6 s (`load` en `src/player/playback.ts`): a la vez que el video fallaban en servidores con
   una sola conexión por línea y solo quedaba el audio predeterminado. Si a los 6 s no terminó, la lectura se corta

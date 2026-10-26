@@ -105,7 +105,8 @@ export default function Player({ params }: { params: PlayParams }) {
       const position = Math.floor(c.realPos());
       // el motor del panel no sabe la duración total: la del servidor, para que Continuar viendo tenga su avance
       const duration = Math.floor(c.duration()) || e.dur || 0;
-      if (position < 5 || !Number.isFinite(duration)) return;
+      // abriendo desde el principio para saltar a donde quedó: no se pisa el avance guardado
+      if (position < 5 || !Number.isFinite(duration) || c.seeking()) return;
       saveProgress(
         {
           title: params.kind === 'episode' ? params.saveTitle : e.title,
@@ -236,11 +237,16 @@ export default function Player({ params }: { params: PlayParams }) {
         setTimeout(() => alive && load(indexRef.current), 1500);
         return;
       }
+      // «Continuar viendo»: no arrancó en el segundo guardado; desde el principio y salta ahí
+      if (params.kind !== 'live' && c.resumeFallback()) {
+        setStatus(t('Cargando…'));
+        return;
+      }
       if (!triedOther.current) {
         triedOther.current = true;
         flipped.current = !flipped.current;
         setStatus(t('Reintentando…'));
-        const at = params.kind === 'live' ? 0 : Math.floor(c.realPos());
+        const at = params.kind === 'live' ? 0 : Math.floor(c.resumePos());
         setTimeout(() => alive && load(indexRef.current, at), 500);
         return;
       }
@@ -256,7 +262,7 @@ export default function Player({ params }: { params: PlayParams }) {
             triedDns.current = false;
             fmtAt.current = 0;
             setStatus(t('Reconectando…'));
-            const at = params.kind === 'live' ? 0 : Math.floor(c.realPos());
+            const at = params.kind === 'live' ? 0 : Math.floor(c.resumePos());
             setTimeout(() => alive && load(indexRef.current, at), 3000);
             return;
           }
@@ -268,7 +274,7 @@ export default function Player({ params }: { params: PlayParams }) {
       if (!triedDns.current) {
         triedDns.current = true;
         const i = indexRef.current;
-        const at = params.kind === 'live' ? 0 : Math.floor(c.realPos());
+        const at = params.kind === 'live' ? 0 : Math.floor(c.resumePos());
         viaDns(urlFor(i)).then(url => {
           if (!alive) return;
           if (!url) return giveUp();

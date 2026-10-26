@@ -85,6 +85,13 @@ export class Playback {
   private formatTried = false;
   // el aviso de motor no disponible ya se mostró en este video
   private deniedShown = false;
+  // «Continuar viendo»: segundo pedido, si ya sonó, y si el video no arrancó en ese segundo se abre desde el principio
+  // y salta ahí al empezar (antes se quedaba cargando sin fin y había que empezar de cero)
+  private wantAt = 0;
+  private played = false;
+  private seekAfter = 0;
+  private startThenSeek = false;
+  private resumeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private v: VideoPlayer, private hooks: Hooks) {}
 
@@ -93,6 +100,10 @@ export class Playback {
   load(url: string, resume: number, live: boolean): void {
     this.gen++;
     this.stopHls();
+    if (url !== this.url) this.startThenSeek = false;
+    this.wantAt = live ? 0 : resume;
+    this.played = false;
+    this.seekAfter = 0;
     this.url = url;
     this.live = live;
     this.probe = null;
@@ -139,9 +150,40 @@ export class Playback {
   private direct(at: number): void {
     this.stopHls();
     this.offset = 0;
+    if (this.resumeTimer) clearTimeout(this.resumeTimer);
+    this.resumeTimer = null;
+    if (at > 0 && this.startThenSeek && !this.played) {
+      this.seekAfter = at;
+      at = 0;
+    } else if (at > 0 && !this.live && !this.played) {
+      // a los 15 s sin arrancar en ese segundo: desde el principio y salta ahí
+      const g = this.gen;
+      this.resumeTimer = setTimeout(() => {
+        if (g === this.gen && !this.played && !this.remux) this.resumeFallback();
+      }, 15000);
+    }
     this.resumeAt = at;
     this.v.src = this.url;
     this.v.play();
+  }
+
+  // true = se volvió a abrir desde el principio para saltar al segundo guardado (una vez por video)
+  resumeFallback(): boolean {
+    if (this.live || this.played || this.startThenSeek || this.wantAt <= 0 || this.remux) return false;
+    this.startThenSeek = true;
+    this.direct(this.wantAt);
+    return true;
+  }
+
+  // segundo desde donde reabrir tras un error: el que sonaba o, si aún no arrancó, el de «Continuar viendo»
+  resumePos(): number {
+    const p = this.realPos();
+    return p > 5 ? p : this.seekAfter || this.resumeAt || this.wantAt;
+  }
+
+  // aún no saltó al segundo guardado (lo que suena es el principio: no se guarda como avance)
+  seeking(): boolean {
+    return this.seekAfter > 0 || (!this.played && this.wantAt > 0);
   }
 
   private stopHls(): void {
@@ -155,6 +197,7 @@ export class Playback {
     this.stopHls();
     this.setExt(null);
     if (this.prefsTimer) clearTimeout(this.prefsTimer);
+    if (this.resumeTimer) clearTimeout(this.resumeTimer);
   }
 
   // segundo real del contenido (el HLS del panel empieza en offset)
@@ -205,6 +248,13 @@ export class Playback {
 
   // primera vez "playing": se aplican los idiomas del archivo (la búsqueda empezó al abrir el video, load)
   onPlaying(): void {
+    this.played = true;
+    if (this.resumeTimer) clearTimeout(this.resumeTimer);
+    this.resumeTimer = null;
+    if (this.seekAfter > 0) {
+      this.v.currentTime = this.seekAfter;
+      this.seekAfter = 0;
+    }
     if (this.live || this.probing || this.remux) return;
     this.probing = true;
     const g = this.gen;
