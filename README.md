@@ -101,21 +101,32 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   antes usaba otro nombre y dependía de enlaces del hosting (si no los permite, cada carátula pasaba por `img.php`:
   lento). Si el servidor manda el id de TMDB (`tmdb` / `tmdb_id`, `Item.tm`), una carátula por título para todos los
   servidores IPTV (`&t=`).
-- **Continuar viendo** abre el video en el segundo guardado; si no arranca (error o 15 s sin empezar) se abre
-  desde el principio y salta solo a ese segundo (`resumeFallback` en `src/player/playback.ts`). Mientras tanto
-  no se guarda avance, así no se pierde dónde quedó.
-- **Audio y subtítulos como en Roku**: los idiomas (del panel, `api/tracks.php`, o de la cabecera) se buscan **antes de
-  abrir el video**, como mucho 6 s (`load` en `src/player/playback.ts`): a la vez que el video fallaban en servidores con
-  una sola conexión por línea y solo quedaba el audio predeterminado. Si a los 6 s no terminó, la lectura se corta
-  (`stopProbe`) para dejarle la conexión al reproductor, y una respuesta sin tamaño nunca se baja entera (cerraba la
-  app). Un MKV/MP4 cuyo audio el equipo decodifica nunca pasa solo por el panel cuando no abre directo (el video
-  del panel es el mismo y en el simulador eso cerraba la app): se dan los reintentos normales y el aviso. Se lee la cabecera del MKV/MP4 para listar todas las pistas
-  con su idioma (Español latino, Inglés…) y su códec. El cambio de audio se comprueba en el
-  reproductor; si el equipo no lo toma o no decodifica ese audio (DTS, TrueHD…), lo prepara el
-  **motor del panel** (`api/media_vega.php`: video sin cambios + ese audio en AAC, HLS por Media
-  Source Extensions desde el segundo actual). Los subtítulos de texto del archivo se eligen en el
-  reproductor o, si el equipo no los muestra, el panel los convierte a WebVTT y se dibujan encima del
-  video. *Desactivados* los quita. El panel necesita ffmpeg (Guía EPG).
+- **Continuar viendo por pasos** (como Roku): 1) directo en el segundo guardado; 2) si no suena (error o 15 s), 4 s
+  después el motor del panel lo prepara desde ese segundo (`panelOpen` en `src/player/playback.ts`); 3) si tampoco,
+  otra vez directo 10 s después; si nada funciona, el aviso «No se pudo continuar donde quedó». **Nunca empieza solo
+  desde el principio** (para eso está «Desde el principio»). Mientras no suena no se guarda avance.
+- **Cuando un video no abre** (`src/screens/Player.tsx` + `src/player/streamcheck.ts`): vigilante de 20 s (15 s en
+  Continuar viendo); una vez se le pregunta al servidor qué pasa: código HTTP, cuenta (`user_info`) y si la película
+  sigue (`get_vod_info`). 404 / ya no está → «Video no disponible»; otra extensión → se abre con la de verdad; cuenta
+  no activa → «Línea no activa»; 403 → se esperan 10 s (el servidor suelta la conexión anterior) y se vuelve a
+  probar una vez. Un 403 con la cuenta activa y la película existente es un rechazo del proveedor: la app no lo puede
+  arreglar. Los reintentos esperan 2 s; el reporte al panel lleva cada intento y lo que contestó el servidor.
+- **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
+  si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
+  y con el interruptor del dueño o del distribuidor encendido).
+- **Audio y subtítulos como en Roku**: antes de abrir el video solo se pregunta lo ya sabido (este equipo o el panel,
+  `api/tracks.php`, como mucho 3 s): leer el archivo antes bloqueaba líneas de pocas conexiones. Con el video abierto
+  se lee la cabecera del MKV/MP4 (256 KB) a los 3 s y se reintenta a los 3, 6, 10 s y luego cada 15 s hasta tener los
+  idiomas (se deja de intentar si el archivo no es MKV/MP4). Cuando el archivo trae más idiomas de los que da el
+  reproductor, el menú muestra arriba **Audio predeterminado** (el video directo) y debajo **todos** los idiomas,
+  también el que suena por defecto, preparados por el **motor del panel** (`api/media_vega.php`: video sin cambios +
+  ese audio en AAC, HLS por Media Source Extensions desde el segundo actual): volver al idioma por defecto ya no deja
+  el video sin sonido. Si el equipo no abre el video directo, «Audio predeterminado» es el primer audio del archivo
+  por el panel. Los subtítulos de texto del archivo se eligen en el reproductor o, si el equipo no los muestra, el
+  panel los convierte a WebVTT y se dibujan encima del video. *Desactivados* los quita. El panel necesita ffmpeg (Guía EPG).
+- **Borrado de caché del panel**: `check_mac` trae la orden (`cache_clear`) y cuándo se envió (`cache_clear_at`). Sin
+  número guardado (reinstalada) una orden de los últimos 3 días se aplica igual; la consulta de cada 10 min va con
+  `poll: 1` (no cuenta como otra apertura) y, si se está viendo un video, la orden espera a que se cierre el reproductor.
 - **TV en vivo**: categorías, canales, guía EPG (proveedor y, si no hay, la del panel),
   favoritos, cambio de canal con ▲▼ dentro del reproductor.
 - **Deportes** (igual que Roku; pantallas en `src/screens/Sports*.tsx`, datos en `src/data/sports.ts` y

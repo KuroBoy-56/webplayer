@@ -369,6 +369,13 @@ const en = {
   "¿Salir de {x}?": "Exit {x}?",
   "Puedes volver cuando quieras.": "You can come back anytime.",
   "Versión:": "Version:",
+  "Preparando el video en el panel…": "Preparing the video on the panel…",
+  "Convirtiendo el video en el panel…": "Converting the video on the panel…",
+  "Preparando desde donde quedó…": "Preparing from where you left off…",
+  "No se pudo continuar donde quedó": "Could not resume where you left off",
+  "Video no disponible": "Video not available",
+  "Línea no activa": "Line not active",
+  "Error de comunicación con el servidor": "Server communication error",
 };
 
 export default en;

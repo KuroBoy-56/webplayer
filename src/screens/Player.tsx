@@ -16,6 +16,8 @@ import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { MenuItem, Playback } from '../player/playback';
+import { streamCheck } from '../player/streamcheck';
+import { setPlayerOpen } from '../lib/cacheclear';
 import { getState, isFav, saveProgress, toggleFav } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
@@ -70,6 +72,21 @@ export default function Player({ params }: { params: PlayParams }) {
   // TV en vivo: formato que se está probando (LIVE_FORMATS)
   const fmtAt = useRef(0);
   const dnsUrl = useRef<{ i: number; url: string } | null>(null);
+  // película o episodio que todavía no sonó: ya se le preguntó al servidor (checked), se esperaron 10 s tras un 403
+  // (waited), se corrigió la extensión (extFixed); Continuar viendo: 0 = directo, 1 = el panel, 2 = otra vez directo
+  // (retried); intentos para el reporte. Se reinicia con cada video (vodIdx)
+  const vod = useRef({ idx: -1, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, srv: 0, acct: '', attempts: [] as string[] });
+  // vigilante: si el video no empieza a sonar a tiempo, se prueba otra forma (antes podía quedar cargando para siempre)
+  const startDog = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onErrorRef = useRef<() => void>(() => {});
+  // la orden de borrar la caché del panel espera a que se cierre el reproductor
+  useEffect(() => {
+    setPlayerOpen(true);
+    return () => {
+      setPlayerOpen(false);
+      if (startDog.current) clearTimeout(startDog.current);
+    };
+  }, []);
   const urlFor = useCallback(
     (i: number): string => {
       const s = getState().session!;
@@ -137,7 +154,17 @@ export default function Player({ params }: { params: PlayParams }) {
       setSub('');
       setWork('');
       setStatus(live ? t('Conectando con el canal…') : t('Cargando…'));
+      if (vod.current.idx !== i) vod.current = { idx: i, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, srv: 0, acct: '', attempts: [] };
       c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
+      if (startDog.current) clearTimeout(startDog.current);
+      startDog.current = null;
+      if (!live) {
+        // 20 s para empezar a sonar (15 s en Continuar viendo); con el panel, sus propios plazos
+        startDog.current = setTimeout(() => {
+          startDog.current = null;
+          if (ctl.current && !ctl.current.hasPlayed() && !ctl.current.panelActive()) onErrorRef.current();
+        }, resume > 0 ? 15000 : 20000);
+      }
     },
     [urlFor, live],
   );
@@ -181,6 +208,8 @@ export default function Player({ params }: { params: PlayParams }) {
         setBuffering(false);
         setError(msg);
       },
+      // el panel no pudo preparar el video que el equipo no abrió: siguen los otros pasos
+      panelFailed: () => onErrorRef.current(),
     });
     ctl.current = c;
     let alive = true;
@@ -195,6 +224,8 @@ export default function Player({ params }: { params: PlayParams }) {
       save(false);
     };
     const onPlaying = () => {
+      if (startDog.current) clearTimeout(startDog.current);
+      startDog.current = null;
       setBuffering(false);
       setPaused(false);
       setStatus('');
@@ -222,7 +253,92 @@ export default function Player({ params }: { params: PlayParams }) {
         else nav.pop();
       }
     };
+    // aviso final y reporte al panel (con cada intento y lo que contestó el servidor)
+    const failVod = (text: string) => {
+      const vs = vod.current;
+      setBuffering(false);
+      setStatus('');
+      setError(text);
+      reportError('playback', 'No se pudo reproducir (' + params.kind + ')', 'kind=' + params.kind + ' ext=' + (entry?.ext || '') + ' servidor=' + vs.srv + vs.acct + ' intentos=[' + vs.attempts.join(' | ') + ']', 'Reproductor');
+    };
+    const failText = (): string => {
+      const vs = vod.current;
+      if (vs.gone || vs.srv === 404 || vs.srv === 410) return t('Video no disponible');
+      if (vs.stage >= 2) return t('No se pudo continuar donde quedó');
+      if (vs.srv >= 400) return t('Error de comunicación con el servidor');
+      return t('No se pudo reproducir este contenido.');
+    };
+    // película o episodio que todavía no sonó (Roku: onError → streamCheck, Continuar viendo por pasos)
+    const vodError = (): boolean => {
+      const vs = vod.current;
+      const i = indexRef.current;
+      const e = params.kind === 'live' ? null : params.queue[i];
+      if (!e || c.hasPlayed() || c.panelActive()) return false;
+      const err: any = (v as any).error;
+      if (vs.attempts.length < 12) vs.attempts.push((flipped.current ? 'otro protocolo' : 'directo') + ': ' + (err?.code ?? '') + ' ' + String(err?.message || '').slice(0, 80));
+      const at = c.resumePos();
+      // 1) una vez: qué contesta el servidor (código, cuenta, si la película sigue y con qué extensión)
+      if (!vs.checked) {
+        vs.checked = true;
+        setStatus(t('Cargando…'));
+        streamCheck(urlFor(i), getState().session!, params.kind === 'movie' ? e.id : '').then(r => {
+          if (!alive || indexRef.current !== i) return;
+          vs.srv = r.code;
+          if (r.status !== undefined) vs.acct = ' cuenta=' + r.status + ' conexiones=' + r.active + '/' + r.max;
+          vs.attempts.push('servidor: ' + r.code + vs.acct + (r.exists !== undefined ? ' existe=' + r.exists + ' ext=' + r.ext : ''));
+          if (r.exists === false) {
+            // la película ya no está en el servidor (el catálogo guardado quedó viejo)
+            vs.gone = true;
+            return failVod(failText());
+          }
+          if (r.ext && e.ext && r.ext !== e.ext.toLowerCase() && !vs.extFixed) {
+            // el servidor la tiene con otra extensión: se abre con la de verdad
+            vs.extFixed = true;
+            vs.checked = false;
+            e.ext = r.ext;
+            setTimeout(() => alive && load(i, at), 1000);
+            return;
+          }
+          if (r.code === 404 || r.code === 410) return failVod(failText());
+          if (r.status && r.status !== 'active') return failVod(t('Línea no activa'));
+          if (r.code >= 400 && !vs.waited) {
+            // 403 de una línea de pocas conexiones: el servidor sigue contando el intento anterior unos segundos
+            vs.waited = true;
+            setStatus(t('Reintentando…'));
+            setTimeout(() => alive && load(i, at), 10000);
+            return;
+          }
+          onErrorRef.current();
+        });
+        return true;
+      }
+      // 2) Continuar viendo: nunca empieza solo desde el principio (eso es el botón «Desde el principio»)
+      if (at > 5 && c.seeking()) {
+        if (vs.stage === 0) {
+          vs.stage = 1;
+          setStatus(t('Preparando desde donde quedó…'));
+          setTimeout(() => {
+            if (!alive) return;
+            c.panelOpen(at).then(ok => !ok && alive && onErrorRef.current());
+          }, 4000);
+          return true;
+        }
+        if (vs.stage === 1) {
+          // el panel no pudo (o no está): otra vez directo en el segundo guardado 10 s después
+          vs.stage = 2;
+          setStatus(t('Preparando desde donde quedó…'));
+          setTimeout(() => alive && load(i, at), 10000);
+          return true;
+        }
+        failVod(failText());
+        return true;
+      }
+      return false;
+    };
     const onError = () => {
+      if (startDog.current) clearTimeout(startDog.current);
+      startDog.current = null;
+      if (params.kind !== 'live' && vodError()) return;
       // TV en vivo: el canal se prueba en los otros formatos (m3u8, ts, directo)
       if (params.kind === 'live' && fmtAt.current < LIVE_FORMATS.length - 1) {
         fmtAt.current++;
@@ -237,17 +353,13 @@ export default function Player({ params }: { params: PlayParams }) {
         setTimeout(() => alive && load(indexRef.current), 1500);
         return;
       }
-      // «Continuar viendo»: no arrancó en el segundo guardado; desde el principio y salta ahí
-      if (params.kind !== 'live' && c.resumeFallback()) {
-        setStatus(t('Cargando…'));
-        return;
-      }
       if (!triedOther.current) {
         triedOther.current = true;
         flipped.current = !flipped.current;
         setStatus(t('Reintentando…'));
         const at = params.kind === 'live' ? 0 : Math.floor(c.resumePos());
-        setTimeout(() => alive && load(indexRef.current, at), 500);
+        // 2 s después: el servidor suelta la conexión del intento anterior
+        setTimeout(() => alive && load(indexRef.current, at), params.kind === 'live' ? 500 : 2000);
         return;
       }
       // audio que el equipo no decodifica (DTS…): lo prepara el panel
@@ -266,9 +378,10 @@ export default function Player({ params }: { params: PlayParams }) {
             setTimeout(() => alive && load(indexRef.current, at), 3000);
             return;
           }
+          if (params.kind !== 'live') return failVod(failText());
           setBuffering(false);
           setStatus('');
-          setError(params.kind === 'live' ? t('Este canal no está disponible en este momento.') : t('No se pudo reproducir este contenido.'));
+          setError(t('Este canal no está disponible en este momento.'));
           reportError('playback', 'No se pudo reproducir (' + params.kind + ')', 'kind=' + params.kind + ' index=' + indexRef.current, 'Reproductor');
         });
       if (!triedDns.current) {
@@ -286,6 +399,7 @@ export default function Player({ params }: { params: PlayParams }) {
       }
       giveUp();
     };
+    onErrorRef.current = onError;
     const onTrack = () => {
       c.schedulePrefs();
       if (menuOpen.current) setMenu(c.menu());

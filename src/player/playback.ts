@@ -8,10 +8,10 @@
 // - Sin permiso del motor (Sin permisos / No compatible): el texto del panel una vez por video y el
 //   video sigue directo; nada automático pasa por el motor (estado guardado por línea en media.ts).
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import { Engine, engineDenied, fileTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
+import { Engine, engineDenied, fileTracks, knownTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
-import { Probe, stopProbe } from '../lib/probe';
+import { Probe } from '../lib/probe';
 import { pref, setPref } from '../lib/storage';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
@@ -28,6 +28,8 @@ export type Hooks = {
   subText: (text: string) => void;
   // no se puede seguir (el video directo falló y el panel tampoco pudo)
   fatal: (msg: string) => void;
+  // el panel no pudo preparar el video que el equipo no abrió: el reproductor sigue con sus otros pasos
+  panelFailed?: () => void;
 };
 
 const decodeCache: Record<string, boolean> = {};
@@ -85,13 +87,20 @@ export class Playback {
   private formatTried = false;
   // el aviso de motor no disponible ya se mostró en este video
   private deniedShown = false;
-  // «Continuar viendo»: segundo pedido, si ya sonó, y si el video no arrancó en ese segundo se abre desde el principio
-  // y salta ahí al empezar (antes se quedaba cargando sin fin y había que empezar de cero)
+  // «Continuar viendo»: segundo pedido y si ya sonó (nunca se abre desde el principio para saltar después: en algunos
+  // videos o líneas el servidor no deja saltar y quedaba en bucle)
   private wantAt = 0;
   private played = false;
-  private seekAfter = 0;
-  private startThenSeek = false;
-  private resumeTimer: ReturnType<typeof setTimeout> | null = null;
+  // idiomas: aviso de una vez, lectura con el video abierto (intentos) y su temporizador
+  private langNoticed = false;
+  private langTries = 0;
+  private langBusy = false;
+  private langChecked = false;
+  private langTimer: ReturnType<typeof setTimeout> | null = null;
+  // el panel prepara el video que el equipo no abrió (no un cambio de idioma): por http / con el video convertido
+  private panelFallback = false;
+  private panelPlain = false;
+  private panelVideo = false;
 
   constructor(private v: VideoPlayer, private hooks: Hooks) {}
 
@@ -100,10 +109,20 @@ export class Playback {
   load(url: string, resume: number, live: boolean): void {
     this.gen++;
     this.stopHls();
-    if (url !== this.url) this.startThenSeek = false;
+    const sameFile = url.replace(/^https?:\/\//i, '') === this.url.replace(/^https?:\/\//i, '');
     this.wantAt = live ? 0 : resume;
     this.played = false;
-    this.seekAfter = 0;
+    if (!sameFile) {
+      this.langNoticed = false;
+      this.langTries = 0;
+      this.langChecked = false;
+      this.panelPlain = false;
+      this.panelVideo = false;
+    }
+    if (this.langTimer) clearTimeout(this.langTimer);
+    this.langTimer = null;
+    this.langBusy = false;
+    this.panelFallback = false;
     this.url = url;
     this.live = live;
     this.probe = null;
@@ -124,22 +143,20 @@ export class Playback {
       this.direct(resume);
       return;
     }
-    // Los idiomas (del panel o de la cabecera del archivo) se buscan ANTES de abrir el video, como mucho 6 s; onPlaying
-    // y onError usan esto mismo. Antes iban a la vez que el video: en servidores con una sola conexión por línea la
-    // lectura fallaba y solo quedaba el audio predeterminado.
-    // Si a los 6 s no terminó, la lectura se corta (stopProbe) para que el reproductor tenga la conexión libre.
+    // Antes de abrir el video solo se piden los idiomas que ya se saben SIN tocar el servidor IPTV (lo leído antes en el
+    // equipo o lo que recuerda el panel, como mucho 3 s). Leer el archivo antes de abrirlo hacía que muchos servidores
+    // bloquearan la línea un rato (Continuar viendo y Plataformas quedaban cargando). Si nadie los sabe, se leen con el
+    // video ya abierto, una y otra vez hasta que salgan (langCheck).
     const g = this.gen;
     let opened = false;
     const open = () => {
       if (opened || g !== this.gen) return;
       opened = true;
       this.direct(resume);
+      this.langWatch(3000);
     };
-    const timer = setTimeout(() => {
-      stopProbe(url);
-      open();
-    }, 6000);
-    fileTracks(url).then(p => {
+    const timer = setTimeout(open, 3000);
+    knownTracks(url).then(p => {
       clearTimeout(timer);
       // los idiomas quedan listos para el menú desde que empieza a sonar
       if (g === this.gen && p.ok && !this.probe) this.probe = p;
@@ -150,40 +167,48 @@ export class Playback {
   private direct(at: number): void {
     this.stopHls();
     this.offset = 0;
-    if (this.resumeTimer) clearTimeout(this.resumeTimer);
-    this.resumeTimer = null;
-    if (at > 0 && this.startThenSeek && !this.played) {
-      this.seekAfter = at;
-      at = 0;
-    } else if (at > 0 && !this.live && !this.played) {
-      // a los 15 s sin arrancar en ese segundo: desde el principio y salta ahí
-      const g = this.gen;
-      this.resumeTimer = setTimeout(() => {
-        if (g === this.gen && !this.played && !this.remux) this.resumeFallback();
-      }, 15000);
-    }
     this.resumeAt = at;
     this.v.src = this.url;
     this.v.play();
   }
 
-  // true = se volvió a abrir desde el principio para saltar al segundo guardado (una vez por video)
-  resumeFallback(): boolean {
-    if (this.live || this.played || this.startThenSeek || this.wantAt <= 0 || this.remux) return false;
-    this.startThenSeek = true;
-    this.direct(this.wantAt);
-    return true;
-  }
-
   // segundo desde donde reabrir tras un error: el que sonaba o, si aún no arrancó, el de «Continuar viendo»
   resumePos(): number {
     const p = this.realPos();
-    return p > 5 ? p : this.seekAfter || this.resumeAt || this.wantAt;
+    return p > 5 ? p : this.resumeAt || this.wantAt;
   }
 
-  // aún no saltó al segundo guardado (lo que suena es el principio: no se guarda como avance)
+  // aún no empezó a sonar en el segundo guardado (no se guarda avance: se pisaría dónde quedó)
   seeking(): boolean {
-    return this.seekAfter > 0 || (!this.played && this.wantAt > 0);
+    return !this.played && this.wantAt > 0;
+  }
+
+  // ya empezó a sonar (directo o con el panel)
+  hasPlayed(): boolean {
+    return this.played;
+  }
+
+  // el panel está preparando o ya entrega este video
+  panelActive(): boolean {
+    return !!this.remux;
+  }
+
+  // Continuar viendo o un video que el equipo no abrió: lo prepara el panel desde ese segundo con el audio del idioma
+  // preferido. false = sin panel (sin permiso o sin motor)
+  async panelOpen(at: number): Promise<boolean> {
+    if (this.live || engineDenied()) return false;
+    const g = this.gen;
+    if (!this.probe?.ok) {
+      const k = await knownTracks(this.url);
+      if (k.ok) this.probe = k;
+    }
+    if (g !== this.gen) return false;
+    const items = this.probe?.ok ? this.audioItems() : [];
+    const it = this.preferredAudio(items) || items[this.probeDefault()];
+    this.panelFallback = true;
+    const ok = await this.toRemux(it?.probe ?? 0, it?.label || t('Audio predeterminado'), false, '', at);
+    if (!ok) this.panelFallback = false;
+    return ok;
   }
 
   private stopHls(): void {
@@ -197,7 +222,7 @@ export class Playback {
     this.stopHls();
     this.setExt(null);
     if (this.prefsTimer) clearTimeout(this.prefsTimer);
-    if (this.resumeTimer) clearTimeout(this.resumeTimer);
+    if (this.langTimer) clearTimeout(this.langTimer);
   }
 
   // segundo real del contenido (el HLS del panel empieza en offset)
@@ -246,29 +271,66 @@ export class Playback {
     this.schedulePrefs();
   }
 
-  // primera vez "playing": se aplican los idiomas del archivo (la búsqueda empezó al abrir el video, load)
+  // "playing": se aplican los idiomas ya sabidos y, apenas suena, se mira cuántos audios hay (langCheck)
   onPlaying(): void {
     this.played = true;
-    if (this.resumeTimer) clearTimeout(this.resumeTimer);
-    this.resumeTimer = null;
-    if (this.seekAfter > 0) {
-      this.v.currentTime = this.seekAfter;
-      this.seekAfter = 0;
-    }
-    if (this.live || this.probing || this.remux) return;
+    if (this.live || this.probing) return;
     this.probing = true;
+    if (this.probe?.ok) {
+      if (!this.audioKey) this.audioApplied = false;
+      else this.checkDecodable();
+      if (!this.subKey) this.subApplied = false;
+      this.applyPrefs();
+    }
+    if (!this.langChecked) this.langWatch(500);
+    this.hooks.changed();
+  }
+
+  // ---------- idiomas: aviso y lectura con el video abierto ----------
+
+  private langWatch(ms: number): void {
+    if (this.live || this.langTimer) return;
     const g = this.gen;
-    fileTracks(this.url).then(p => {
+    this.langTimer = setTimeout(() => {
+      this.langTimer = null;
+      if (g === this.gen) this.langCheck();
+    }, ms);
+  }
+
+  // aviso de idiomas: una vez por video, con 2 o más audios (los del reproductor o los ya sabidos)
+  private langNotice(): void {
+    const n = Math.max(this.nativeAudio().length, this.probe?.ok ? this.probe.audio.length : 0);
+    if (n < 2 || this.langNoticed) return;
+    this.langNoticed = true;
+    this.hooks.toast(t('{n} idiomas de audio en este video: pulsa ▼ para cambiar', { n }));
+  }
+
+  // cuántos audios hay; si nadie lo sabe y el reproductor informa uno solo, se lee la cabecera del archivo ya (con el
+  // video abierto, aunque todavía cargue) y se repite a los 3, 6 y 10 s y después cada 15 s hasta que salgan
+  private langCheck(): void {
+    if (this.live || this.langBusy) return;
+    this.langChecked = true;
+    this.langNotice();
+    if (this.langNoticed || this.probe?.ok || this.remux) return;
+    this.langBusy = true;
+    this.langTries++;
+    const g = this.gen;
+    fileTracks(this.url, true).then(p => {
       if (g !== this.gen) return;
-      this.probe = p;
+      this.langBusy = false;
       if (p.ok) {
+        this.probe = p;
         if (!this.audioKey) this.audioApplied = false;
         else this.checkDecodable();
         if (!this.subKey) this.subApplied = false;
         this.applyPrefs();
-        if (p.audio.length > 1) this.hooks.toast(t('{n} idiomas de audio en este video: pulsa ▼ para cambiar', { n: p.audio.length }));
+        this.langNotice();
+        this.hooks.changed();
+        return;
       }
-      this.hooks.changed();
+      // el archivo contestó y no es MKV ni MP4 (AVI, TS): no hay pistas que leer
+      if (p.headOk && !p.container) return;
+      this.langWatch([3000, 6000, 10000][this.langTries - 1] ?? 15000);
     });
   }
 
@@ -301,12 +363,16 @@ export class Playback {
   // entrega como HLS (video sin cambios, audio en AAC) desde donde iba, antes de dar el error. Una vez por video.
   // Con un MKV/MP4 cuyo audio el equipo sí decodifica no se intenta: el video del panel es el mismo (copiado) y si
   // el equipo no lo abre directo tampoco lo abre por el panel (en el simulador eso cerraba la app).
+  // También con MKV / MP4 (Plataformas: videos que el equipo no abre tal cual); si el panel tampoco puede, se pide por
+  // http y después con el video convertido (remuxFailed).
   private async formatFallback(items: AudioItem[]): Promise<boolean> {
     if (this.formatTried || this.live) return false;
-    if (this.probe?.ok && (this.probe.container === 'mkv' || this.probe.container === 'mp4')) return false;
     this.formatTried = true;
+    this.panelFallback = true;
     const it = this.preferredAudio(items) || items[this.probeDefault()];
-    return this.toRemux(it?.probe ?? 0, it?.label || t('Audio {n}', { n: 1 }), false, t('Este equipo no abre el video directo: se prepara con el panel…'), Math.floor(this.resumeAt || this.realPos()));
+    const ok = await this.toRemux(it?.probe ?? 0, it?.label || t('Audio {n}', { n: 1 }), false, t('Preparando el video en el panel…'), Math.floor(this.resumeAt || this.realPos()));
+    if (!ok) this.panelFallback = false;
+    return ok;
   }
 
   // ---------- listas ----------
@@ -402,14 +468,24 @@ export class Playback {
     return it.probe === undefined || nativeAudioOk(it.codec, this.probe?.container || '');
   }
 
+  // El archivo trae más idiomas de los que informa el reproductor (y el panel está): arriba «Audio predeterminado» (el
+  // video directo, tal como lo da el servidor) y debajo todos los idiomas del archivo, que prepara el panel al elegirlos
+  // (también el que suena por defecto: volver a él desde otro preparado por el panel podía dejar el video sin sonido)
+  private panelMenu(): boolean {
+    return !this.live && !!this.probe?.ok && this.probe.audio.length > 1 && this.probe.audio.length > this.nativeAudio().length && !engineDenied();
+  }
+
   // menú de audio y subtítulos
   menu(): MenuItem[] {
     const out: MenuItem[] = [];
     const a = this.audioItems();
-    const on = this.audioOn(a);
-    for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: it === on });
-    // como "Reabrir en modo compatible" de Roku: si el equipo no cambió el idioma, lo hace el panel
-    if (!this.live && !this.remux && this.probe?.ok && a.length > 1 && !engineDenied()) out.push({ kind: 'panel', key: 'panel', label: t('¿No cambia el idioma? Prepararlo con el panel'), on: false });
+    if (this.panelMenu()) {
+      out.push({ kind: 'audio', key: 'def', label: t('Audio predeterminado'), on: !this.remux });
+      for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: this.remux?.a === it.probe });
+    } else {
+      const on = this.audioOn(a);
+      for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: it === on });
+    }
     const subs = this.subItems();
     const showing = this.nativeSubs().find(t => t.showing);
     out.push({ kind: 'text', key: 'off', label: t('Desactivados'), on: this.subKey === 'off' || (!this.ext && !showing) });
@@ -428,7 +504,26 @@ export class Playback {
       return;
     }
     if (m.kind === 'audio') {
+      if (m.key === 'def') {
+        // «Audio predeterminado»: el video directo
+        this.audioKey = '';
+        // el equipo no abre este video directo (sigue por el panel): el primer audio del archivo, preparado por el panel
+        if (this.panelFallback && this.remux) {
+          if (this.remux.a !== 0) this.toRemux(0, t('Audio predeterminado'), true, t('Cambiando a {x}…', { x: t('Audio predeterminado') }));
+          return;
+        }
+        if (this.remux) this.leaveRemux();
+        else this.hooks.toast(t('Audio: {x}', { x: t('Audio predeterminado') }));
+        return;
+      }
       const it = this.audioItems().find(i => i.key === m.key);
+      if (it && it.probe !== undefined && this.panelMenu()) {
+        // un idioma de la lista de abajo: lo prepara el panel (también el de por defecto)
+        if (this.remux?.a === it.probe) return;
+        rememberLang('audio_lang', it.lang);
+        this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
+        return;
+      }
       if (it) this.pickAudio(it, true);
     } else {
       this.pickSub(m.key === 'off' ? null : this.subItems().find(i => i.key === m.key) || null, true);
@@ -596,10 +691,10 @@ export class Playback {
     // mientras se prepara sigue lo que suena (video directo o el HLS anterior hasta donde llegó)
     this.stopHls();
     this.remuxFrom = Math.floor(pos);
-    const h = new PanelHls(this.v, hlsLink(this.engine, this.url, a, pos));
+    const h = new PanelHls(this.v, hlsLink(this.engine, this.url, a, pos, { video: this.panelVideo, plain: this.panelPlain }));
     this.hls = h;
     h.onError = msg => this.hls === h && this.remuxFailed(msg);
-    this.hooks.status(t('Cambiando idioma…'));
+    this.hooks.status(this.panelVideo ? t('Convirtiendo el video en el panel…') : this.panelFallback ? (this.wantAt > 0 && !this.played ? t('Preparando desde donde quedó…') : t('Preparando el video en el panel…')) : t('Cambiando idioma…'));
     const err = await h.start();
     if (this.hls !== h) return;
     if (err) {
@@ -617,6 +712,30 @@ export class Playback {
 
   // el panel no pudo (sin ffmpeg, servidor caído…): se vuelve al video directo
   private remuxFailed(msg: string): void {
+    // el video que el equipo no abrió (o Continuar viendo): por http si no se pudo conectar con la VPS / VDS (su
+    // certificado), después con el video también convertido; si tampoco, el reproductor sigue con sus otros pasos
+    if (this.panelFallback && !this.played && this.remux && !engineDenied()) {
+      const pos = this.remuxFrom;
+      if (!this.panelPlain && msg === t('No se pudo conectar con el panel.')) {
+        this.panelPlain = true;
+        this.startRemux(pos);
+        return;
+      }
+      if (!this.panelVideo) {
+        this.panelVideo = true;
+        this.startRemux(pos);
+        return;
+      }
+      this.remux = null;
+      this.audioKey = '';
+      this.panelFallback = false;
+      this.stopHls();
+      this.hooks.status('');
+      this.hooks.changed();
+      if (this.hooks.panelFailed) this.hooks.panelFailed();
+      else this.hooks.fatal(t('No se pudo reproducir este contenido.'));
+      return;
+    }
     const label = this.remux?.label || '';
     const attached = !!this.hls?.attached;
     const pos = this.remuxLive ? this.realPos() : attached ? this.remuxFrom : this.realPos();

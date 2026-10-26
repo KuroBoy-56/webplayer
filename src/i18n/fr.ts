@@ -370,6 +370,13 @@ const fr: Record<Key, string> = {
   "¿Salir de {x}?": "Quitter {x} ?",
   "Puedes volver cuando quieras.": "Vous pouvez revenir quand vous voulez.",
   "Versión:": "Version :",
+  "Preparando el video en el panel…": "Préparation de la vidéo sur le panneau…",
+  "Convirtiendo el video en el panel…": "Conversion de la vidéo sur le panneau…",
+  "Preparando desde donde quedó…": "Préparation depuis là où vous vous êtes arrêté…",
+  "No se pudo continuar donde quedó": "Impossible de reprendre là où vous vous êtes arrêté",
+  "Video no disponible": "Vidéo non disponible",
+  "Línea no activa": "Ligne inactive",
+  "Error de comunicación con el servidor": "Erreur de communication avec le serveur",
 };
 
 export default fr;

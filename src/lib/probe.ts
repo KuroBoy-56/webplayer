@@ -5,10 +5,12 @@
 import { UA } from './http';
 
 export type ProbeTrack = { id: string; lang: string; codec: string; name: string; def: boolean; forced: boolean };
-export type Probe = { ok: boolean; container: '' | 'mp4' | 'mkv'; audio: ProbeTrack[]; subs: ProbeTrack[] };
+// headOk: el archivo contestó (si no es MKV ni MP4 —AVI, TS— no hay pistas que leer y no se vuelve a intentar)
+export type Probe = { ok: boolean; container: '' | 'mp4' | 'mkv'; audio: ProbeTrack[]; subs: ProbeTrack[]; headOk?: boolean };
 
 const CHUNK = 262144;
-const FIRST = 524288;
+// la primera lectura de 256 KB: en un MKV las pistas están al principio y con el video sonando sale más rápido
+const FIRST = 262144;
 // el índice moov de un MP4 (o el final del archivo donde está) se trae entero si no pasa de esto
 const MOOV_MAX = 4194304;
 const MAX_REQ = 14;
@@ -310,6 +312,7 @@ async function readTracks(url: string): Promise<Probe> {
   try {
     const head = await read(r, 0, 16);
     if (!head || head.length < 8) return out;
+    out.headOk = true;
     let res = { audio: [] as ProbeTrack[], subs: [] as ProbeTrack[] };
     if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) {
       out.container = 'mkv';

@@ -5,7 +5,7 @@ import { AppState, BackHandler, LayoutChangeEvent, StatusBar, StyleSheet, Text, 
 import { fetchAlert, PanelAlert } from './api/alerts';
 import AlertDialog from './components/AlertDialog';
 import { Logo } from './components/ui';
-import { clearStoredCache } from './lib/cacheclear';
+import { clearStoredCache, whenNotPlaying } from './lib/cacheclear';
 import { onLangChange, t } from './lib/i18n';
 import { clearDnsCache } from './lib/securedns';
 import { loadStorage } from './lib/storage';
@@ -70,7 +70,7 @@ function Notice() {
 export default function Root() {
   const [boot, setBoot] = useState(0);
   useEffect(() => {
-    onCacheClear(() => {
+    onCacheClear(() => whenNotPlaying(() => {
       showNotice(t('Tu proveedor actualizó la aplicación. Se borrará la caché y se reiniciará.'));
       setTimeout(() => {
         clearStoredCache();
@@ -89,7 +89,7 @@ export default function Root() {
         setStreamFlip(false);
         setBoot(b => b + 1);
       }, 3000);
-    });
+    }));
   }, []);
   return <App key={boot} />;
 }
@@ -164,7 +164,7 @@ function App() {
     const recheck = () => {
       lastPanel = Date.now();
       const ses = getState().session;
-      panelCheckMac(deviceId()).then(ln => {
+      panelCheckMac(deviceId(), true).then(ln => {
         if (!ln && panelAnswered() && getState().session === ses) {
           logout();
           setStack([{ name: 'login' }]);
