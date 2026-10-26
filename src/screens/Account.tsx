@@ -14,6 +14,7 @@ import { dateText, dateTimeText, demoLength } from '../lib/util';
 import { useNav } from '../nav';
 import { deviceId, loadCatalog, loadCloud, logout, refreshCatalog, resetTenant, useAppState } from '../state';
 import { C, px, SIDE, themed } from '../theme';
+import { APP_VERSION } from '../version';
 
 // los nombres se traducen al mostrarlos
 const AUDIO: [string, Key][] = [
@@ -122,6 +123,7 @@ export default function Account() {
           <Text style={s.row}>{t('Películas:')} <Text style={s.val}>{count('vod')}</Text></Text>
           <Text style={s.row}>{t('Series:')} <Text style={s.val}>{count('series')}</Text></Text>
           <Text style={s.row}>{t('Código del equipo:')} <Text style={s.val}>{deviceId()}</Text></Text>
+          <Text style={s.row}>{t('Versión:')} <Text style={s.val}>{APP_VERSION}</Text></Text>
           {dist ? (
             <Text style={s.row}>
               {t('Distribuidor:')} <Text style={s.val}>{dist.name ? dist.name + ' (' + dist.code + ')' : dist.code}</Text>

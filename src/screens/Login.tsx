@@ -15,6 +15,7 @@ import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
 import { deviceId, resetTenant, setSession } from '../state';
 import { alpha, C, px, themed } from '../theme';
+import { APP_VERSION } from '../version';
 
 // fondo: carátulas de TMDB con la clave del panel (la del distribuidor o la del dueño) por
 // api/tmdb.php (en el idioma de la app); sin clave el panel responde tmdb_key_not_set y no hay carrusel
@@ -264,7 +265,9 @@ export default function Login() {
               <Button label={t('Entrar con la cuenta de este equipo ({x})', { x: assigned[0].demo ? 'DEMO' : assigned[0].user })} small last onPress={() => !busy && enterAssigned()} />
             </View>
           ) : null}
-          <Text style={s.device}>{t('Código del equipo:')} {dev}</Text>
+          <Text style={s.device}>
+            {t('Código del equipo:')} {dev}   ·   {t('Versión:')} {APP_VERSION}
+          </Text>
         </View>
         <View style={s.dist}>
           <Button label={t('Cambiar distribuidor')} small last onPress={changeDist} />

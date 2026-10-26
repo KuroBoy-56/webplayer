@@ -369,6 +369,7 @@ const fr: Record<Key, string> = {
   "Ver todo el contenido de esta fila.": "Voir tout le contenu de cette rangée.",
   "¿Salir de {x}?": "Quitter {x} ?",
   "Puedes volver cuando quieras.": "Vous pouvez revenir quand vous voulez.",
+  "Versión:": "Version :",
 };
 
 export default fr;

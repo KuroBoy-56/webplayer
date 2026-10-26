@@ -369,6 +369,7 @@ const pt: Record<Key, string> = {
   "Ver todo el contenido de esta fila.": "Ver todo o conteúdo desta fileira.",
   "¿Salir de {x}?": "Sair do {x}?",
   "Puedes volver cuando quieras.": "Você pode voltar quando quiser.",
+  "Versión:": "Versão:",
 };
 
 export default pt;

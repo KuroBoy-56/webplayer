@@ -368,6 +368,7 @@ const en = {
   "Ver todo el contenido de esta fila.": "See everything in this row.",
   "¿Salir de {x}?": "Exit {x}?",
   "Puedes volver cuando quieras.": "You can come back anytime.",
+  "Versión:": "Version:",
 };
 
 export default en;

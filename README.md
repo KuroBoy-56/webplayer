@@ -203,7 +203,7 @@ pedido que la lleve (el panel parecía no tener servidores, sin carátulas ni Au
 4. Completa ficha, capturas, icono (`assets/image/app_icon.png`, 512×512) y clasificación, y envía a revisión.
    La firma la pone Amazon al publicar.
 
-Para cambiar el número de versión que ve la tienda, edita `version` en `manifest.toml` y en `package.json`.
+Para cambiar el número de versión que ve la tienda, edita `version` en `manifest.toml`, `package.json` y `src/version.ts` (la que se ve en el inicio de sesión y en Cuenta).
 
 ## Probar sin Fire TV: simulador de Vega en Linux
 
@@ -217,7 +217,9 @@ virtualización activada en la BIOS (Intel VT-x / AMD-V; con KVM va mucho más f
    curl -fsSL https://sdk-installer.vega.labcollab.net/get_vvm.sh | bash
    source ~/vega/env        # o abre una terminal nueva
    ```
-2. Descarga `latmpxvega_x86_64.vpkg` de **Releases › vega-latest** (el x86_64 es el del simulador).
+2. Descarga `latmpxvega_x86_64.vpkg` de **Releases › vega-latest** (el x86_64 es el del simulador). Borra antes el
+   que bajaste la vez anterior: el navegador guarda el nuevo como `latmpxvega_x86_64 (1).vpkg` y el comando de abajo
+   seguiría instalando el viejo. La versión instalada se ve abajo en el inicio de sesión y en Cuenta.
 3. Arranca el simulador y abre la app:
    ```sh
    vega virtual-device start --timeout 120
