@@ -45,6 +45,12 @@ servidor IPTV. El servidor seguía contando la lectura de idiomas cuando se abr�
 
 ## Falta en Vega (Roku build 59)
 
+- [ ] **Roku build 62**: si el intento con el panel falla, con un error de certificado pedir otra vez con `&plain=1`
+      (la VPS / VDS por http) y, si no, con `&v=1` (el panel convierte también el video a H.264 en la VPS / VDS;
+      «Convirtiendo el video en el panel…»; espera de 60 s). El reporte con cada intento. Idiomas: la lectura con el
+      video sonando empieza a los 0,5 s, primero 256 KB y sin volver a preguntar al panel. (Roku: `panelRetry`,
+      `noteAttempt`, `tracksOnContent`.) Vega usa `api/media_vega.php`: `hlsLink` en `src/api/media.ts` debe poder
+      mandar `v=1` y `plain=1`.
 - [ ] **Roku build 61**: si el reproductor dice que no puede leer el archivo (formato o códec, no red), ir al panel tras
       el primer intento; con el audio por defecto TrueHD ya sabido, directo al panel; el reporte de «Errores de las
       apps» con el detalle del reproductor, la extensión y los códecs de audio. (Roku: `decodeError`, `audioUnsupported`,
