@@ -255,8 +255,9 @@ const s = themed(() =>
     macBox: { position: 'absolute', left: px(30), right: px(30), bottom: px(30), height: px(130), borderRadius: px(12), backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
     macLabel: { color: C.dim, fontSize: px(24) },
     mac: { color: C.text, fontSize: px(32), fontWeight: '800', marginTop: px(6) },
-    right: { flex: 1, marginLeft: px(50) },
-    rightIn: { paddingBottom: px(100), paddingRight: SIDE },
+    // margen a la izquierda y arriba: el ajuste enfocado crece un poco y su borde se cortaba contra el borde de la lista
+    right: { flex: 1, marginLeft: px(26) },
+    rightIn: { paddingLeft: px(24), paddingTop: px(6), paddingBottom: px(100), paddingRight: SIDE },
     sub: { color: C.text, fontSize: px(40), fontWeight: '800', marginBottom: px(18) },
     set: { marginBottom: px(12) },
     ver: { color: C.dim, fontSize: px(22), marginTop: px(40) },

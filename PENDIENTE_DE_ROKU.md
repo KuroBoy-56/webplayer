@@ -28,6 +28,8 @@ Las ramas `webOS` y `tizenOS` usan el mismo código de `src/` que Vega (React Na
 - [ ] **TV en vivo**: en webOS el `<video>` abre `.m3u8` solo (LG empieza por `.m3u8`); el lector propio
       (`src/player/livehls.ts`) es solo para Vega (`PalmSystem` lo deja fuera). En Tizen revisar si `<video>` abre
       `.m3u8` (AVPlay/HTML5); si no, usar el lector por MSE. Reporte detallado del canal (`failLive`).
+- [ ] **XUI «Debug Mode»** (200 con página HTML): leer el código (`xuiError`) y no insistir; pocos intentos seguidos.
+- [ ] **Portada que sigue al foco** con el fondo buscado (`src/data/heroart.ts`) y plataformas con fondo liso.
 - [ ] **Errores al panel** con la versión real (`src/api/report.ts` usa `APP_VERSION`), el motivo y cada intento.
 - [ ] **Interfaz**: menú de arriba con lupa y perfil, perfil en dos columnas, Atrás → menú → «¿Salir?» (en webOS el
       Atrás llega por `web/back.ts`; en Tizen la tecla 10009), plataformas e ícono de la app de cada tienda.

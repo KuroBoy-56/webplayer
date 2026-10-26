@@ -388,6 +388,9 @@ const fr: Record<Key, string> = {
   "Cuenta activa": "Compte actif",
   "Desde:": "Depuis :",
   "Código del equipo (MAC)": "Code de l'appareil (MAC)",
+  "Línea vencida": "Ligne expirée",
+  "El servidor bloqueó este equipo ({x})": "Le serveur a bloqué cet appareil ({x})",
+  "El servidor no entregó el video ({x})": "Le serveur n'a pas fourni la vidéo ({x})",
 };
 
 export default fr;

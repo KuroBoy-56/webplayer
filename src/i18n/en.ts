@@ -387,6 +387,9 @@ const en = {
   "Cuenta activa": "Active account",
   "Desde:": "Since:",
   "Código del equipo (MAC)": "Device code (MAC)",
+  "Línea vencida": "Line expired",
+  "El servidor bloqueó este equipo ({x})": "The server blocked this device ({x})",
+  "El servidor no entregó el video ({x})": "The server did not deliver the video ({x})",
 };
 
 export default en;

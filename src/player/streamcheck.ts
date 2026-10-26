@@ -7,17 +7,34 @@ import { Session } from '../api/panel';
 import { http, json, UA } from '../lib/http';
 import { str } from '../lib/util';
 
-export type StreamCheck = { code: number; type?: string; status?: string; active?: number; max?: number; exists?: boolean; ext?: string };
+// xui: el código que da XUI.one en «Debug Mode» (contesta 200 con una página HTML en lugar del video: INVALID_STREAM_ID,
+// STREAM_OFFLINE, BLOCKED_USER_AGENT…) y su texto; html: el servidor devolvió una página en lugar del video
+export type StreamCheck = { code: number; type?: string; html?: boolean; xui?: string; xuiText?: string; status?: string; active?: number; max?: number; exists?: boolean; ext?: string };
 
-async function statusOf(url: string): Promise<{ code: number; type: string }> {
+// código y texto de la página de error de XUI.one («XUI.ONE INVALID_STREAM_ID Stream ID doesn't exist.»)
+export function xuiError(html: string): { code: string; text: string } | null {
+  const text = html
+    .replace(/<(style|script|title)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const at = text.toUpperCase().lastIndexOf('XUI.ONE');
+  const m = (at >= 0 ? text.slice(at + 7) : text).trim().match(/^([A-Z][A-Z0-9_]{2,})\b\s*(.{0,160})/);
+  return m ? { code: m[1], text: m[2].trim() } : null;
+}
+
+async function statusOf(url: string): Promise<{ code: number; type: string; body: string }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
     const r = await fetch(url, { headers: { 'User-Agent': UA, Range: 'bytes=0-1', Connection: 'close' }, signal: ctrl.signal });
+    const type = r.headers.get('content-type') || '';
+    // una página en lugar del video: se lee (es corta) para saber el motivo
+    if (/text\/html/i.test(type)) return { code: r.status, type, body: (await r.text()).slice(0, 20000) };
     ctrl.abort(); // solo el código: nada del video
-    return { code: r.status, type: r.headers.get('content-type') || '' };
+    return { code: r.status, type, body: '' };
   } catch {
-    return { code: 0, type: '' };
+    return { code: 0, type: '', body: '' };
   } finally {
     clearTimeout(timer);
   }
@@ -27,7 +44,15 @@ async function statusOf(url: string): Promise<{ code: number; type: string }> {
 export async function streamCheck(url: string, s: Session, movieId: string, account = false): Promise<StreamCheck> {
   const st = await statusOf(url);
   const out: StreamCheck = { code: st.code, type: st.type };
-  if (out.code < 400 && !account) return out;
+  if (st.body) {
+    out.html = true;
+    const x = xuiError(st.body);
+    if (x) {
+      out.xui = x.code;
+      out.xuiText = x.text;
+    }
+  }
+  if (out.code < 400 && !out.html && !account) return out;
   const acc = json(await http(api(s), { timeout: 10000 }));
   if (acc && typeof acc === 'object' && acc.user_info && typeof acc.user_info === 'object') {
     out.status = str(acc.user_info.status).toLowerCase();

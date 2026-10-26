@@ -9,7 +9,6 @@ import { continueItems, favItems } from '../data/personal';
 import { fold } from '../lib/util';
 import { useNav } from '../nav';
 import { useAppState } from '../state';
-import { bannerUri } from './Browse';
 import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
@@ -58,8 +57,9 @@ export default function Grid({ title, mode, keyName, kind }: { title: string; mo
   const [q, setQ] = useState('');
   const input = useRef<TextInput>(null);
   const needle = fold(q.trim());
-  // de fondo, un destacado de esta plataforma/género o la última portada (nunca negro)
-  const banner = useMemo(() => items.slice(0, 40).find(it => it.backdrop)?.backdrop || bannerUri(), [items]);
+  // de fondo, un destacado de la lista si tiene fondo propio; en plataformas, fondo liso (antes quedaba detrás la última
+  // portada de Inicio, fija, que no tenía nada que ver con la plataforma)
+  const banner = useMemo(() => (mode === 'platform' ? '' : items.slice(0, 40).find(it => it.backdrop)?.backdrop || ''), [items, mode]);
   const shown = useMemo(() => (needle ? items.filter(it => fold(it.name).includes(needle)) : items), [items, needle]);
 
   const toggle = () => {

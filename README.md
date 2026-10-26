@@ -88,6 +88,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   buscador, el ícono del perfil (color del distribuidor) y la hora. *Atrás* dentro de una sección sube al menú (a la
   sección actual); *Atrás* en el menú pregunta si quieres salir («¿Salir de …?», «Puedes volver cuando quieras.»,
   Salir / Cancelar). En el reproductor *Atrás* cierra el menú de audio o pregunta si salir del video.
+  Todo el Atrás pasa por `BackHandler` de React Native: `useKeplerBackHandler` crea un segundo receptor que, sin
+  manejadores propios, cerraba la app con cada Atrás aunque la pantalla ya lo hubiera atendido (no usarlo).
+- **Portada que sigue al foco** (como Roku): en Inicio, Series y Películas la portada muestra el título enfocado; si el
+  servidor no trae fondo se busca tras una pausa breve (`get_vod_info` / `get_series_info` y, si no hay, TMDB por el
+  panel; `src/data/heroart.ts`), se guarda en el equipo 7 días y la próxima vez sale al instante. En las páginas de
+  plataformas el fondo es liso (sin la portada fija de Inicio).
 - **Plataformas** con ancho y alto fijos (Vega dibuja las imágenes del paquete a su tamaño real si solo se estiran)
   e **ícono de la app** con el logo centrado en la franja 16:9 que muestra el Fire TV (512×512).
 - **Inicio de sesión** con la caja centrada en la pantalla y el texto de Usuario / Contraseña centrado
@@ -290,6 +296,12 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
   uso en otro equipo, canal no disponible (404), rechazado (403), servidor con problemas (5xx), sin conexión o el
   equipo no pudo abrir el video; al panel va cada intento con lo que dijo el reproductor. El HLS del motor del panel
   (audio cambiado) se reproduce con su propio lector por MSE (`src/player/hls.ts`).
+- **Servidores XUI.one en «Debug Mode»** contestan **200 con una página HTML** en lugar del video cuando hay un problema
+  (`INVALID_STREAM_ID`, `STREAM_OFFLINE`, `BLOCKED_USER_AGENT`, `EXPIRED`…). Al primer fallo la app hace una sola
+  consulta (`streamCheck`, `xuiError` en `src/player/streamcheck.ts`), muestra el motivo con el código y no insiste:
+  antes tomaba ese 200 como bueno y repetía 13 intentos seguidos, y la protección contra abusos del servidor podía
+  bloquear el equipo un rato (luego tampoco abrían las películas). Canales: ts → m3u8 → directa, el otro protocolo
+  y el DNS elegido; películas: una sola vuelta extra.
 - Autodemo, registrar el equipo y la activación por código MAC usan `login.php` con la llave
   maestra, que no va en el código: se agrega al compilar (ver [config/README.md](config/README.md)).
   Sin llave esos botones no aparecen. `check_mac` y `auto_demo` piden la respuesta cifrada

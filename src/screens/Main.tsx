@@ -1,7 +1,8 @@
 // Pantalla principal: menú superior como Roku (Inicio, Series, Películas, TV en vivo, Deportes, Mi lista; a la derecha
 // la lupa del buscador, el ícono del perfil y la hora) y la sección elegida. Atrás dentro de una sección sube al menú
 // (a la sección actual); Atrás en el menú pregunta si salir («¿Salir de …?», «Puedes volver cuando quieras.»).
-import { useKeplerBackHandler } from '@amazon-devices/react-native-kepler';
+// Solo BackHandler: useKeplerBackHandler crea un segundo receptor del Atrás que, sin manejadores propios, cerraba la
+// app con cada Atrás (aunque la pantalla ya lo hubiera atendido).
 import React, { useEffect, useRef, useState } from 'react';
 import { BackHandler, Image, Modal, StyleSheet, Text, View } from 'react-native';
 import { Button, Focusable, Logo } from '../components/ui';
@@ -41,7 +42,6 @@ const clock = () => {
 
 export default function Main({ active }: { active: boolean }) {
   const st = useAppState();
-  const back = useKeplerBackHandler();
   // tras cambiar el idioma se vuelve a Cuenta
   const [section, setSection] = useState<Section>(() => (langChanged() ? 'account' : 'home'));
   const [exitAsk, setExitAsk] = useState(false);
@@ -127,7 +127,7 @@ export default function Main({ active }: { active: boolean }) {
             <Text style={s.dlgTitle}>{t('¿Salir de {x}?', { x: brandName() })}</Text>
             <Text style={s.dlgText}>{t('Puedes volver cuando quieras.')}</Text>
             <View style={s.dlgBtns}>
-              <Button label={t('Salir')} primary onPress={() => back.exitApp()} />
+              <Button label={t('Salir')} primary onPress={() => BackHandler.exitApp()} />
               <Button label={t('Cancelar')} preferred last onPress={() => setExitAsk(false)} />
             </View>
           </View>

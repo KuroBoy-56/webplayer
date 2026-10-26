@@ -11,6 +11,7 @@ import { ChainImage } from '../components/ChainImage';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, isItem, Item, Row, Special } from '../data/catalog';
 import { continueItems, favItems } from '../data/personal';
+import { Art, heroArt, savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { isFav, toggleFav, useAppState } from '../state';
@@ -27,6 +28,15 @@ const ROWS_HERO = 818;
 const ROWS_IN = 560;
 
 type Info = { item: Item | null; title?: string; plot?: string };
+
+// el título con lo que se encontró para la portada (fondo, sinopsis, año y nota si el servidor no los tenía)
+const withArt = (x: Item, a: Art): Item => ({
+  ...x,
+  backdrop: x.backdrop || a.backdrop,
+  plot: x.plot || a.plot,
+  year: x.year || a.year,
+  rating: x.rating || Number(a.rating) || 0,
+});
 
 function Billboard({ info, compact }: { info: Info; compact: boolean }) {
   const it = info.item;
@@ -121,8 +131,12 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
   useEffect(() => setInfo({ item: hero }), [hero]);
   const list = useRef<FlatList<Row>>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const artTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // título enfocado (la respuesta del fondo solo se usa si sigue enfocado)
+  const focused = useRef<Item | null>(null);
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
+    if (artTimer.current) clearTimeout(artTimer.current);
   }, []);
 
   // offset de cada fila (alto fijo por tipo)
@@ -143,8 +157,24 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
       setRowIdx(i);
       list.current?.scrollToOffset({ offset: offsets[i] || 0, animated: true });
       if (timer.current) clearTimeout(timer.current);
+      if (artTimer.current) clearTimeout(artTimer.current);
+      focused.current = isItem(x) ? x : null;
       timer.current = setTimeout(() => {
-        if (isItem(x)) setInfo({ item: x });
+        if (isItem(x)) {
+          // como Roku: la portada cambia al título enfocado; sin fondo propio se busca (servidor y luego TMDB) tras una
+          // pausa breve, y lo ya encontrado sale al instante
+          const known = x.backdrop ? null : savedArt(x);
+          setInfo({ item: known ? withArt(x, known) : x });
+          if (!x.backdrop && !known && (x.kind === 'vod' || x.kind === 'series')) {
+            artTimer.current = setTimeout(
+              () =>
+                heroArt(x, a => {
+                  if (a && focused.current === x) setInfo({ item: withArt(x, a) });
+                }),
+              350,
+            );
+          }
+        }
         else if (x.kind === 'platform') setInfo({ item: null, title: x.label, plot: t('Todo el contenido de {x}: películas y series detectadas en tus categorías.', { x: x.label }) });
         else if (x.kind === 'genre') setInfo({ item: null, title: x.label, plot: t('Películas y series de {x}.', { x: x.label }) });
         else setInfo({ item: null, title: rows[i]?.title || x.label, plot: t('Ver todo el contenido de esta fila.') });
