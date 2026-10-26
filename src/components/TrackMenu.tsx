@@ -1,12 +1,13 @@
 // Menú del reproductor: audio y subtítulos (y favoritos en TV en vivo). Mismos botones que el resto.
-import React from 'react';
+import React, { memo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MenuItem } from '../player/playback';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
 import { Button } from './ui';
 
-export default function TrackMenu({ items, favLabel, onFav, onPick }: { items: MenuItem[]; favLabel: string; onFav: () => void; onPick: (m: MenuItem) => void }) {
+// memo: el reproductor se redibuja seguido (barra, avisos); el menú solo cuando cambian sus opciones
+export default memo(function TrackMenu({ items, favLabel, onFav, onPick }: { items: MenuItem[]; favLabel: string; onFav: () => void; onPick: (m: MenuItem) => void }) {
   const safe = (items || []).filter(Boolean);
   const audio = safe.filter(m => m.kind !== 'text');
   const subs = safe.filter(m => m.kind === 'text');
@@ -37,7 +38,7 @@ export default function TrackMenu({ items, favLabel, onFav, onPick }: { items: M
       <Text style={s.hint}>{t('Atrás para cerrar')}</Text>
     </View>
   );
-}
+});
 
 const s = themed(() =>
   StyleSheet.create({

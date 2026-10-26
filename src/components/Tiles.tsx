@@ -54,9 +54,11 @@ export const PosterTile = memo(function PosterTile({
 export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: { sp: Special; onPress: () => void; onFocus?: () => void }) {
   if (sp.kind === 'platform') {
     return (
-      // mosaico 16:9 como Roku: la imagen entera (las de plataformas son 16:9), fondo oscuro y borde fino
+      // mosaico 16:9 como Roku: la imagen entera (las de plataformas son 16:9), fondo oscuro y borde fino. Con ancho y
+      // alto fijos: Vega dibuja las imágenes del paquete a su tamaño real si solo se estiran con left/right (se veían
+      // gigantes y cortadas)
       <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.plat, f && s.platF]}>
-        {sp.image ? <Image source={sp.image} style={s.img} resizeMode="cover" /> : <Text style={[s.platText, { color: sp.color }]}>{sp.label}</Text>}
+        {sp.image ? <Image source={sp.image} style={s.platImg} resizeMode="contain" /> : <Text style={[s.platText, { color: sp.color }]}>{sp.label}</Text>}
       </Focusable>
     );
   }
@@ -138,6 +140,7 @@ const s = themed(() =>
     rankWrap: { flexDirection: 'row', alignItems: 'flex-end', marginRight: px(8) },
     rank: { color: C.bg, fontSize: px(220), fontWeight: '900', lineHeight: px(230), marginRight: px(-24), textShadowColor: '#9a9a9a', textShadowRadius: px(3), textShadowOffset: { width: 0, height: 0 } },
     plat: { width: px(272), height: px(153), borderRadius: px(10), marginRight: px(22), overflow: 'hidden', justifyContent: 'center', alignItems: 'center', backgroundColor: '#161616', borderWidth: px(3), borderColor: 'rgba(255,255,255,0.12)', marginTop: px(16) },
+    platImg: { width: px(272) - 2 * px(3), height: px(153) - 2 * px(3) },
     platF: { borderColor: C.focus, borderWidth: px(4), transform: [{ scale: 1.07 }], zIndex: 10 },
     platText: { color: '#fff', fontSize: px(34), fontWeight: '800', textAlign: 'center' },
     genre: { width: px(250), height: px(100), borderRadius: px(10), marginRight: px(18), justifyContent: 'center', alignItems: 'center', borderWidth: px(4), borderColor: 'transparent', marginTop: px(10) },

@@ -39,6 +39,15 @@ export default function Player({ params }: { params: PlayParams }) {
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const menuOpen = useRef(false);
   menuOpen.current = !!menu;
+  // el menú se vuelve a dibujar solo si cambió algo (antes cada aviso del reproductor lo rehacía entero y, con el
+  // video del panel, el control se trababa al moverse por el menú)
+  const menuSig = useRef('');
+  const showMenu = useCallback((items: MenuItem[] | null) => {
+    const sig = items ? items.map(m => m.kind + m.key + (m.on ? '1' : '0') + m.label).join('|') : '';
+    if (items && sig === menuSig.current && menuOpen.current) return;
+    menuSig.current = sig;
+    setMenu(items);
+  }, []);
   const [epg, setEpg] = useState<EpgEntry[]>([]);
   const [status, setStatus] = useState('');
   const [work, setWork] = useState('');
@@ -75,10 +84,12 @@ export default function Player({ params }: { params: PlayParams }) {
   // película o episodio que todavía no sonó: ya se le preguntó al servidor (checked), se esperaron 10 s tras un 403
   // (waited), se corrigió la extensión (extFixed); Continuar viendo: 0 = directo, 1 = el panel, 2 = otra vez directo
   // (retried); intentos para el reporte. Se reinicia con cada video (vodIdx)
-  const vod = useRef({ idx: -1, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, srv: 0, acct: '', attempts: [] as string[] });
+  const vod = useRef({ idx: -1, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, srv: 0, acct: '', attempts: [] as string[] });
   // vigilante: si el video no empieza a sonar a tiempo, se prueba otra forma (antes podía quedar cargando para siempre)
   const startDog = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onErrorRef = useRef<() => void>(() => {});
+  // canal: motivo del último intento que no salió del reproductor (lector HLS, vigilante)
+  const liveNote = useRef('');
   // la orden de borrar la caché del panel espera a que se cierre el reproductor
   useEffect(() => {
     setPlayerOpen(true);
@@ -154,17 +165,17 @@ export default function Player({ params }: { params: PlayParams }) {
       setSub('');
       setWork('');
       setStatus(live ? t('Conectando con el canal…') : t('Cargando…'));
-      if (vod.current.idx !== i) vod.current = { idx: i, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, srv: 0, acct: '', attempts: [] };
+      if (vod.current.idx !== i) vod.current = { idx: i, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, srv: 0, acct: '', attempts: [] };
       c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
-      if (!live) {
-        // 20 s para empezar a sonar (15 s en Continuar viendo); con el panel, sus propios plazos
-        startDog.current = setTimeout(() => {
-          startDog.current = null;
-          if (ctl.current && !ctl.current.hasPlayed() && !ctl.current.panelActive()) onErrorRef.current();
-        }, resume > 0 ? 15000 : 20000);
-      }
+      // 20 s para empezar a sonar (15 s en Continuar viendo y en los canales); con el panel, sus propios plazos
+      startDog.current = setTimeout(() => {
+        startDog.current = null;
+        if (!ctl.current || ctl.current.hasPlayed() || ctl.current.panelActive()) return;
+        if (live) liveNote.current = 'sin imagen en 15 s';
+        onErrorRef.current();
+      }, live || resume > 0 ? 15000 : 20000);
     },
     [urlFor, live],
   );
@@ -202,7 +213,7 @@ export default function Player({ params }: { params: PlayParams }) {
     const c = new Playback(v, {
       toast: showToast,
       status: setWork,
-      changed: () => menuOpen.current && setMenu(c.menu()),
+      changed: () => menuOpen.current && showMenu(c.menu()),
       subText: setSub,
       fatal: msg => {
         setBuffering(false);
@@ -210,6 +221,11 @@ export default function Player({ params }: { params: PlayParams }) {
       },
       // el panel no pudo preparar el video que el equipo no abrió: siguen los otros pasos
       panelFailed: () => onErrorRef.current(),
+      // canal por HLS (lector propio) que no abrió: el siguiente formato
+      liveFailed: why => {
+        liveNote.current = 'HLS: ' + why;
+        onErrorRef.current();
+      },
     });
     ctl.current = c;
     let alive = true;
@@ -219,9 +235,11 @@ export default function Player({ params }: { params: PlayParams }) {
       const now = Date.now();
       if (now - lastUi.current < 500) return;
       lastUi.current = now;
+      save(false);
+      // con el menú abierto la barra no se ve: no se redibuja el reproductor cada medio segundo (el menú se trababa)
+      if (menuOpen.current) return;
       setPos(c.realPos());
       setDur(c.duration());
-      save(false);
     };
     const onPlaying = () => {
       if (startDog.current) clearTimeout(startDog.current);
@@ -264,6 +282,7 @@ export default function Player({ params }: { params: PlayParams }) {
     const failText = (): string => {
       const vs = vod.current;
       if (vs.gone || vs.srv === 404 || vs.srv === 410) return t('Video no disponible');
+      if (vs.inUse) return t('Línea en uso en otro equipo');
       if (vs.stage >= 2) return t('No se pudo continuar donde quedó');
       if (vs.srv >= 400) return t('Error de comunicación con el servidor');
       return t('No se pudo reproducir este contenido.');
@@ -285,6 +304,7 @@ export default function Player({ params }: { params: PlayParams }) {
           if (!alive || indexRef.current !== i) return;
           vs.srv = r.code;
           if (r.status !== undefined) vs.acct = ' cuenta=' + r.status + ' conexiones=' + r.active + '/' + r.max;
+          vs.inUse = r.code >= 400 && !!r.max && (r.active || 0) >= r.max;
           vs.attempts.push('servidor: ' + r.code + vs.acct + (r.exists !== undefined ? ' existe=' + r.exists + ' ext=' + r.ext : ''));
           if (r.exists === false) {
             // la película ya no está en el servidor (el catálogo guardado quedó viejo)
@@ -335,9 +355,49 @@ export default function Player({ params }: { params: PlayParams }) {
       }
       return false;
     };
+    // canal que no abrió de ninguna forma: se le pregunta al servidor qué pasa y el aviso dice el motivo (igual que
+    // Roku); al panel va cada intento (formato, protocolo, lo que dijo el reproductor) y lo que contestó el servidor
+    const failLive = () => {
+      const vs = vod.current;
+      const i = indexRef.current;
+      const ch = params.kind === 'live' ? params.channels[i] || params.channel : null;
+      setStatus(t('Revisando el canal…'));
+      fmtAt.current = 0;
+      streamCheck(urlFor(i), getState().session!, '', true).then(r => {
+        if (!alive || indexRef.current !== i) return;
+        const acct = r.status !== undefined ? ' cuenta=' + r.status + ' conexiones=' + r.active + '/' + r.max : '';
+        let text: string;
+        if (r.status && r.status !== 'active') text = t('Línea no activa');
+        else if (r.code >= 400 && r.max && (r.active || 0) >= r.max) text = t('Línea en uso en otro equipo');
+        else if (r.code === 404 || r.code === 410) text = t('Canal no disponible en el servidor');
+        else if (r.code === 401 || r.code === 403) text = t('El servidor rechazó el canal ({x})', { x: String(r.code) });
+        else if (r.code >= 500) text = t('El servidor del canal tiene problemas ({x})', { x: String(r.code) });
+        else if (r.code === 0) text = t('Sin conexión con el servidor del canal');
+        else if (r.code >= 400) text = t('Error de comunicación con el servidor');
+        else text = t('El equipo no pudo abrir el video de este canal');
+        setBuffering(false);
+        setStatus('');
+        setError(text);
+        reportError(
+          'playback',
+          'No se pudo reproducir (live): ' + text,
+          'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' servidor=' + r.code + ' tipo=' + (r.type || '') + acct +
+            ' formatos=' + LIVE_FORMATS.join(',') + ' dnsElegido=' + (dnsUrl.current?.i === i) + ' intentos=[' + vs.attempts.join(' | ') + ']',
+          'Reproductor',
+        );
+      });
+    };
     const onError = () => {
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
+      if (params.kind === 'live') {
+        // qué pasó en este intento (formato, protocolo, código del reproductor o motivo del lector HLS)
+        const vs = vod.current;
+        const err: any = (v as any).error;
+        const why = liveNote.current || (err ? 'error ' + (err.code ?? '') + ' ' + String(err.message || '').slice(0, 80) : 'error');
+        liveNote.current = '';
+        if (vs.attempts.length < 16) vs.attempts.push(LIVE_FORMATS[fmtAt.current] + (flipped.current ? ' (otro protocolo)' : '') + (dnsUrl.current ? ' (DNS)' : '') + ': ' + why);
+      }
       if (params.kind !== 'live' && vodError()) return;
       // TV en vivo: el canal se prueba en los otros formatos (m3u8, ts, directo)
       if (params.kind === 'live' && fmtAt.current < LIVE_FORMATS.length - 1) {
@@ -366,7 +426,8 @@ export default function Player({ params }: { params: PlayParams }) {
       const giveUp = () =>
         c.onError().then(handled => {
           if (!alive || handled) return;
-          if (rounds.current < 2) {
+          // canales: una sola vuelta (cada intento ya espera hasta 15 s); películas: dos más
+          if (rounds.current < (params.kind === 'live' ? 1 : 2)) {
             // otra vuelta sola tras una pausa (el servidor pudo cortar un momento)
             rounds.current++;
             retried.current = false;
@@ -379,10 +440,7 @@ export default function Player({ params }: { params: PlayParams }) {
             return;
           }
           if (params.kind !== 'live') return failVod(failText());
-          setBuffering(false);
-          setStatus('');
-          setError(t('Este canal no está disponible en este momento.'));
-          reportError('playback', 'No se pudo reproducir (' + params.kind + ')', 'kind=' + params.kind + ' index=' + indexRef.current, 'Reproductor');
+          failLive();
         });
       if (!triedDns.current) {
         triedDns.current = true;
@@ -402,7 +460,7 @@ export default function Player({ params }: { params: PlayParams }) {
     onErrorRef.current = onError;
     const onTrack = () => {
       c.schedulePrefs();
-      if (menuOpen.current) setMenu(c.menu());
+      if (menuOpen.current) showMenu(c.menu());
     };
 
     v.initialize()
@@ -479,21 +537,29 @@ export default function Player({ params }: { params: PlayParams }) {
     showOverlay();
   }, [showOverlay]);
 
-  // Atrás: cierra el menú de pistas o sale del reproductor (una sola vez: los Atrás repetidos no pasan a la pantalla de abajo)
+  // Atrás: cierra el menú de pistas o sale del reproductor (una sola vez: los Atrás repetidos no pasan a la pantalla de abajo).
+  // Se registra una sola vez y lee el estado por referencias: antes se volvía a registrar con cada cambio del menú y un
+  // Atrás que llegaba en ese momento lo tomaba el sistema y cerraba la app
   const leaving = useRef(false);
+  const askRef = useRef(false);
+  askRef.current = askExit;
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (leaving.current) return true;
-      if (menu) {
+      if (menuOpen.current) {
+        menuOpen.current = false;
+        menuSig.current = '';
         setMenu(null);
         return true;
       }
-      if (askExit) {
+      if (askRef.current) {
+        askRef.current = false;
         setAskExit(false);
         return true;
       }
       // película o capítulo: se pregunta antes de salir; en vivo sale directo
       if (!live) {
+        askRef.current = true;
         setAskExit(true);
         return true;
       }
@@ -502,7 +568,7 @@ export default function Player({ params }: { params: PlayParams }) {
     });
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menu, nav, askExit, live]);
+  }, []);
 
   const leave = () => {
     leaving.current = true;
@@ -522,7 +588,21 @@ export default function Player({ params }: { params: PlayParams }) {
       ? Math.ceil(left)
       : 0;
 
-  const openMenu = () => ctl.current && setMenu(ctl.current.menu());
+  const openMenu = () => ctl.current && showMenu(ctl.current.menu());
+
+  const chanRef = useRef(channel);
+  chanRef.current = channel;
+  const onFav = useCallback(() => {
+    const ch = chanRef.current;
+    if (!ch) return;
+    toggleFav('live', ch.id, ch.name, ch.poster, ch.cat);
+    menuSig.current = '';
+    if (ctl.current) setMenu(ctl.current.menu());
+  }, []);
+  const onPick = useCallback((m: MenuItem) => {
+    ctl.current?.select(m);
+    setTimeout(() => menuOpen.current && ctl.current && showMenu(ctl.current.menu()), 300);
+  }, [showMenu]);
 
   const seek = (delta: number) => {
     const c = ctl.current;
@@ -728,15 +808,8 @@ export default function Player({ params }: { params: PlayParams }) {
         <TrackMenu
           items={menu}
           favLabel={live && channel ? (isFav('live', channel.id) ? '★ ' + t('Quitar de favoritos') : '☆ ' + t('Agregar a favoritos')) : ''}
-          onFav={() => {
-            if (!channel) return;
-            toggleFav('live', channel.id, channel.name, channel.poster, channel.cat);
-            openMenu();
-          }}
-          onPick={m => {
-            ctl.current?.select(m);
-            setTimeout(() => menuOpen.current && openMenu(), 300);
-          }}
+          onFav={onFav}
+          onPick={onPick}
         />
       ) : null}
     </View>

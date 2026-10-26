@@ -1,4 +1,5 @@
-// Cuenta y ajustes.
+// Perfil (ícono del menú de arriba), como Roku: a la izquierda la línea (usuario, estado, vencimiento, conexiones,
+// servidor, cuánto contenido tiene y el código del equipo); a la derecha los ajustes.
 import React, { useEffect, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import ChangePinDialog from '../components/ChangePinDialog';
@@ -40,7 +41,7 @@ const langLabel = (k: string) => (k === 'auto' ? t('Automático (idioma del equi
 function Setting({ label, value, onPress, preferred }: { label: string; value: string; onPress: () => void; preferred?: boolean }) {
   return (
     <View style={s.set}>
-      <Button label={label} value={value} width={px(1000)} big last preferred={preferred} onPress={onPress} />
+      <Button label={label} value={value} width={px(1040)} big last preferred={preferred} onPress={onPress} />
     </View>
   );
 }
@@ -101,37 +102,49 @@ export default function Account() {
     if (s0 && missing && !st.loading) loadCatalog();
   }, [s0, missing, st.loading]);
 
+  const user = st.demo ? 'DEMO' : s0?.user || '';
+  const soon = !!s0 && s0.exp > 0 && s0.exp < Date.now() / 1000 + 2 * 86400;
+  const line = (label: Key, value: string) => (
+    <Text style={s.row} numberOfLines={1}>
+      {t(label)} <Text style={s.val}>{value}</Text>
+    </Text>
+  );
   return (
-    <ScrollView contentContainerStyle={s.root}>
-      <Text style={s.title}>{t('Cuenta')}</Text>
+    <View style={s.root}>
       {s0 ? (
         <View style={s.card}>
+          <View style={s.avatar}>
+            <Text style={s.avatarText}>{user.slice(0, 1).toUpperCase()}</Text>
+          </View>
           {/* DEMO: nunca el usuario de la línea */}
-          {st.demo ? <Text style={s.demo}>{t('Cuenta DEMO') + (demoLength(st.demoDuration) ? ' · ' + demoLength(st.demoDuration) : '')}</Text> : null}
-          <Text style={s.row}>{t('Usuario:')} <Text style={s.val}>{st.demo ? 'DEMO' : s0.user}</Text></Text>
-          {/* DEMO: solo el fin que dice el panel (hora exacta); nada de la línea demo del servidor */}
-          {st.demo ? (
-            <Text style={s.row}>{t('Vence:')} <Text style={s.val}>{st.demoExpires > 0 ? dateTimeText(st.demoExpires) : '—'}</Text></Text>
-          ) : (
-            <>
-              <Text style={s.row}>{t('Servidor:')} <Text style={s.val}>{s0.dns}</Text></Text>
-              <Text style={s.row}>{t('Vence:')} <Text style={s.val}>{dateText(s0.exp)}</Text></Text>
-              <Text style={s.row}>{t('Conexiones:')} <Text style={s.val}>{t('{a} de {b}', { a: s0.active || '0', b: s0.max || '1' })}</Text></Text>
-            </>
-          )}
-          <Text style={s.row}>{t('Canales en vivo:')} <Text style={s.val}>{count('live')}</Text></Text>
-          <Text style={s.row}>{t('Películas:')} <Text style={s.val}>{count('vod')}</Text></Text>
-          <Text style={s.row}>{t('Series:')} <Text style={s.val}>{count('series')}</Text></Text>
-          <Text style={s.row}>{t('Código del equipo:')} <Text style={s.val}>{deviceId()}</Text></Text>
-          <Text style={s.row}>{t('Versión:')} <Text style={s.val}>{APP_VERSION}</Text></Text>
-          {dist ? (
-            <Text style={s.row}>
-              {t('Distribuidor:')} <Text style={s.val}>{dist.name ? dist.name + ' (' + dist.code + ')' : dist.code}</Text>
-            </Text>
-          ) : null}
+          <Text style={s.user} numberOfLines={1}>{st.demo ? t('Usuario:') + ' DEMO' : user}</Text>
+          <Text style={[s.plan, soon && !st.demo && s.planSoon]}>
+            {st.demo ? t('Cuenta DEMO') + (demoLength(st.demoDuration) ? ' · ' + demoLength(st.demoDuration) : '') : soon ? t('Vence pronto') : t('Cuenta activa')}
+          </Text>
+          <View style={s.details}>
+            {/* DEMO: solo el fin que dice el panel (hora exacta); nada de la línea demo del servidor */}
+            {st.demo ? (
+              line('Vence:', st.demoExpires > 0 ? dateTimeText(st.demoExpires) : '—')
+            ) : (
+              <>
+                {line('Vence:', dateText(s0.exp))}
+                {line('Conexiones:', t('{a} de {b}', { a: s0.active || '0', b: s0.max || '1' }))}
+                {s0.created > 0 ? line('Desde:', dateText(s0.created)) : null}
+                {line('Servidor:', s0.dns)}
+              </>
+            )}
+            {line('Canales en vivo:', count('live'))}
+            {line('Películas:', count('vod'))}
+            {line('Series:', count('series'))}
+            {dist ? line('Distribuidor:', dist.name ? dist.name + ' (' + dist.code + ')' : dist.code) : null}
+          </View>
+          <View style={s.macBox}>
+            <Text style={s.macLabel}>{t('Código del equipo (MAC)')}</Text>
+            <Text style={s.mac}>{deviceId()}</Text>
+          </View>
         </View>
       ) : null}
-
+      <ScrollView style={s.right} contentContainerStyle={s.rightIn}>
       <Text style={s.sub}>{t('Ajustes')}</Text>
       <Setting label={t('Idioma de la app')} value={langLabel(langChoice())} preferred={langFocus} onPress={() => setLangOpen(true)} />
       <Setting
@@ -202,7 +215,8 @@ export default function Account() {
           nav.reset({ name: 'login' });
         }}
       />
-      <Text style={s.ver}>{t('{x} para {p} · versión {v}', { x: brandName(), p: 'Fire TV (Vega OS)', v: '1.0.0' })}</Text>
+      <Text style={s.ver}>{t('{x} para {p} · versión {v}', { x: brandName(), p: 'Fire TV (Vega OS)', v: APP_VERSION })}</Text>
+      </ScrollView>
       <ChangePinDialog
         visible={changePin}
         onClose={() => setChangePin(false)}
@@ -222,19 +236,28 @@ export default function Account() {
         }}
       />
       {langOpen ? <LangPicker onClose={() => setLangOpen(false)} /> : null}
-    </ScrollView>
+    </View>
   );
 }
 
 const s = themed(() =>
   StyleSheet.create({
-    root: { paddingTop: px(130), paddingHorizontal: SIDE, paddingBottom: px(100) },
-    title: { color: C.text, fontSize: px(48), fontWeight: '800' },
-    card: { backgroundColor: C.bg2, borderRadius: px(12), padding: px(30), marginTop: px(20), width: px(1000) },
-    row: { color: C.sub, fontSize: px(28), marginBottom: px(10) },
+    root: { flex: 1, flexDirection: 'row', paddingTop: px(150), paddingLeft: SIDE, backgroundColor: C.bg },
+    card: { width: px(620), height: px(860), backgroundColor: C.bg2, borderRadius: px(16), paddingHorizontal: px(40), paddingTop: px(40), alignItems: 'center' },
+    avatar: { width: px(160), height: px(160), borderRadius: px(80), backgroundColor: C.red, justifyContent: 'center', alignItems: 'center' },
+    avatarText: { color: C.onAccent, fontSize: px(80), fontWeight: '800' },
+    user: { color: C.text, fontSize: px(38), fontWeight: '800', marginTop: px(22), maxWidth: px(540) },
+    plan: { color: '#46D369', fontSize: px(28), fontWeight: '700', marginTop: px(8) },
+    planSoon: { color: '#F5C518' },
+    details: { alignSelf: 'stretch', marginTop: px(24) },
+    row: { color: C.sub, fontSize: px(26), marginBottom: px(10) },
     val: { color: C.text, fontWeight: '700' },
-    demo: { color: C.text, backgroundColor: C.red, alignSelf: 'flex-start', fontSize: px(26), fontWeight: '800', borderRadius: px(6), paddingHorizontal: px(14), paddingVertical: px(4), marginBottom: px(14) },
-    sub: { color: C.text, fontSize: px(36), fontWeight: '800', marginTop: px(40), marginBottom: px(14) },
+    macBox: { position: 'absolute', left: px(30), right: px(30), bottom: px(30), height: px(130), borderRadius: px(12), backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
+    macLabel: { color: C.dim, fontSize: px(24) },
+    mac: { color: C.text, fontSize: px(32), fontWeight: '800', marginTop: px(6) },
+    right: { flex: 1, marginLeft: px(50) },
+    rightIn: { paddingBottom: px(100), paddingRight: SIDE },
+    sub: { color: C.text, fontSize: px(40), fontWeight: '800', marginBottom: px(18) },
     set: { marginBottom: px(12) },
     ver: { color: C.dim, fontSize: px(22), marginTop: px(40) },
     pickShade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center' },

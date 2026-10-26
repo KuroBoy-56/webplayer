@@ -376,6 +376,17 @@ const en = {
   "Video no disponible": "Video not available",
   "Línea no activa": "Line not active",
   "Error de comunicación con el servidor": "Server communication error",
+  "Revisando el canal…": "Checking the channel…",
+  "Canal no disponible en el servidor": "Channel not available on the server",
+  "El servidor rechazó el canal ({x})": "The server refused the channel ({x})",
+  "El servidor del canal tiene problemas ({x})": "The channel server is having problems ({x})",
+  "Sin conexión con el servidor del canal": "No connection to the channel server",
+  "El equipo no pudo abrir el video de este canal": "This device could not open this channel's video",
+  "Línea en uso en otro equipo": "Line in use on another device",
+  "Vence pronto": "Expires soon",
+  "Cuenta activa": "Active account",
+  "Desde:": "Since:",
+  "Código del equipo (MAC)": "Device code (MAC)",
 };
 
 export default en;

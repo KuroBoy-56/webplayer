@@ -7,25 +7,27 @@ import { Session } from '../api/panel';
 import { http, json, UA } from '../lib/http';
 import { str } from '../lib/util';
 
-export type StreamCheck = { code: number; status?: string; active?: number; max?: number; exists?: boolean; ext?: string };
+export type StreamCheck = { code: number; type?: string; status?: string; active?: number; max?: number; exists?: boolean; ext?: string };
 
-async function statusOf(url: string): Promise<number> {
+async function statusOf(url: string): Promise<{ code: number; type: string }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
     const r = await fetch(url, { headers: { 'User-Agent': UA, Range: 'bytes=0-1', Connection: 'close' }, signal: ctrl.signal });
     ctrl.abort(); // solo el código: nada del video
-    return r.status;
+    return { code: r.status, type: r.headers.get('content-type') || '' };
   } catch {
-    return 0;
+    return { code: 0, type: '' };
   } finally {
     clearTimeout(timer);
   }
 }
 
-export async function streamCheck(url: string, s: Session, movieId: string): Promise<StreamCheck> {
-  const out: StreamCheck = { code: await statusOf(url) };
-  if (out.code < 400) return out;
+// account: la cuenta también cuando el servidor sí entregó (canales: para el reporte)
+export async function streamCheck(url: string, s: Session, movieId: string, account = false): Promise<StreamCheck> {
+  const st = await statusOf(url);
+  const out: StreamCheck = { code: st.code, type: st.type };
+  if (out.code < 400 && !account) return out;
   const acc = json(await http(api(s), { timeout: 10000 }));
   if (acc && typeof acc === 'object' && acc.user_info && typeof acc.user_info === 'object') {
     out.status = str(acc.user_info.status).toLowerCase();

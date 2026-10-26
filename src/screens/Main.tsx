@@ -1,9 +1,9 @@
-// Pantalla principal: menú superior (Inicio, Series, Películas, TV en vivo, Deportes, Mi lista,
-// Buscar, Cuenta, Salir) y la sección elegida. Atrás vuelve a Inicio y, en Inicio, pregunta si salir
-// (igual que Roku: «¿Salir de …?», «Puedes volver cuando quieras.», Salir / Cancelar).
+// Pantalla principal: menú superior como Roku (Inicio, Series, Películas, TV en vivo, Deportes, Mi lista; a la derecha
+// la lupa del buscador, el ícono del perfil y la hora) y la sección elegida. Atrás dentro de una sección sube al menú
+// (a la sección actual); Atrás en el menú pregunta si salir («¿Salir de …?», «Puedes volver cuando quieras.»).
 import { useKeplerBackHandler } from '@amazon-devices/react-native-kepler';
-import React, { useEffect, useState } from 'react';
-import { BackHandler, Modal, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { BackHandler, Image, Modal, StyleSheet, Text, View } from 'react-native';
 import { Button, Focusable, Logo } from '../components/ui';
 import { Key, langChanged, t } from '../lib/i18n';
 import { brandName, features, useBrandRev } from '../lib/tenant';
@@ -26,9 +26,18 @@ const MENU: [Section, Key][] = [
   ['live', 'TV en vivo'],
   ['sports', 'Deportes'],
   ['mylist', 'Mi lista'],
-  ['search', 'Buscar'],
-  ['account', 'Cuenta'],
 ];
+// a la derecha, como íconos (igual que Roku)
+const ICONS: [Section, any][] = [
+  ['search', require('../../assets/image/ic_search.png')],
+  ['account', require('../../assets/image/ic_user.png')],
+];
+
+const pad2 = (n: number) => (n < 10 ? '0' : '') + n;
+const clock = () => {
+  const d = new Date();
+  return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+};
 
 export default function Main({ active }: { active: boolean }) {
   const st = useAppState();
@@ -36,23 +45,45 @@ export default function Main({ active }: { active: boolean }) {
   // tras cambiar el idioma se vuelve a Cuenta
   const [section, setSection] = useState<Section>(() => (langChanged() ? 'account' : 'home'));
   const [exitAsk, setExitAsk] = useState(false);
+  // Atrás dentro de la sección: el menú se vuelve a montar con el foco en la sección actual
+  const [menuRev, setMenuRev] = useState(0);
+  // el foco está en el menú de arriba (se marca al enfocar un botón del menú y se quita al salir de él)
+  const inMenu = useRef(false);
+  const [now, setNow] = useState(clock);
   useBrandRev();
   // el distribuidor puede no tener deportes
   const menu = features().sports ? MENU : MENU.filter(m => m[0] !== 'sports');
 
   useEffect(() => {
+    const id = setInterval(() => setNow(clock()), 20000);
+    return () => clearInterval(id);
+  }, []);
+
+  // estado leído por referencia: el Atrás se registra una sola vez por activación (sin huecos entre registros)
+  const exitRef = useRef(false);
+  exitRef.current = exitAsk;
+  useEffect(() => {
     if (!active) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (exitAsk) {
+      if (exitRef.current) {
+        exitRef.current = false;
         setExitAsk(false);
         return true;
       }
-      if (section !== 'home') setSection('home');
-      else setExitAsk(true);
+      if (inMenu.current) {
+        exitRef.current = true;
+        setExitAsk(true);
+      } else setMenuRev(r => r + 1);
       return true;
     });
     return () => sub.remove();
-  }, [active, section, exitAsk]);
+  }, [active]);
+
+  const focusProps = (key: Section) => ({
+    preferred: menuRev > 0 && key === section,
+    onFocus: () => (inMenu.current = true),
+    onBlur: () => (inMenu.current = false),
+  });
 
   return (
     <View style={s.root}>
@@ -68,7 +99,7 @@ export default function Main({ active }: { active: boolean }) {
         <Logo size={64} />
         <View style={s.items}>
           {menu.map(([key, label]) => (
-            <Focusable key={key} onPress={() => setSection(key)} style={f => [s.item, f && s.itemF]}>
+            <Focusable key={key + ':' + menuRev} {...focusProps(key)} onPress={() => setSection(key)} style={f => [s.item, f && s.itemF]}>
               {f => (
                 <>
                   <Text style={[s.itemText, key === section && s.itemOn, f && s.itemTextF]}>{t(label)}</Text>
@@ -77,11 +108,18 @@ export default function Main({ active }: { active: boolean }) {
               )}
             </Focusable>
           ))}
-          <Focusable onPress={() => setExitAsk(true)} style={f => [s.item, f && s.itemF]}>
-            {f => <Text style={[s.itemText, f && s.itemTextF]}>{t('Salir')}</Text>}
-          </Focusable>
         </View>
         {st.loading ? <Text style={s.loading}>{t(st.loading === 'vod' ? 'Cargando películas…' : st.loading === 'series' ? 'Cargando series…' : 'Cargando canales…')}</Text> : null}
+        {ICONS.map(([key, src]) => (
+          <Focusable
+            key={key + ':' + menuRev}
+            {...focusProps(key)}
+            onPress={() => setSection(key)}
+            style={f => [s.icon, key === 'account' ? s.iconUser : key === section && s.iconOn, f && (key === 'account' ? s.iconUserF : s.iconF)]}>
+            {f => <Image source={src} style={[s.iconImg, { tintColor: f && key !== 'account' ? C.onFocus : key === 'account' ? C.onAccent : '#fff' }]} resizeMode="contain" />}
+          </Focusable>
+        ))}
+        <Text style={s.clock}>{now}</Text>
       </View>
       <Modal visible={exitAsk} transparent animationType="fade" onRequestClose={() => setExitAsk(false)}>
         <View style={s.dlgBack}>
@@ -110,6 +148,13 @@ const s = themed(() =>
     itemText: { color: C.sub, fontSize: px(28) },
     itemOn: { color: C.text, fontWeight: '800' },
     itemTextF: { color: C.onFocus },
+    icon: { width: px(60), height: px(60), borderRadius: px(30), justifyContent: 'center', alignItems: 'center', marginLeft: px(16) },
+    iconOn: { backgroundColor: 'rgba(255,255,255,0.2)' },
+    iconF: { backgroundColor: C.focus },
+    iconUser: { backgroundColor: C.red },
+    iconUserF: { backgroundColor: C.red, transform: [{ scale: 1.15 }], borderWidth: px(3), borderColor: C.focus },
+    iconImg: { width: px(36), height: px(36) },
+    clock: { color: C.text, fontSize: px(28), marginLeft: px(28), minWidth: px(80), textAlign: 'right' },
     itemBar: { position: 'absolute', left: px(20), right: px(20), bottom: px(4), height: px(4), borderRadius: px(2), backgroundColor: C.red },
     loading: { color: C.sub, fontSize: px(22) },
     dlgBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },

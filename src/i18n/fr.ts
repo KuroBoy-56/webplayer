@@ -377,6 +377,17 @@ const fr: Record<Key, string> = {
   "Video no disponible": "Vidéo non disponible",
   "Línea no activa": "Ligne inactive",
   "Error de comunicación con el servidor": "Erreur de communication avec le serveur",
+  "Revisando el canal…": "Vérification de la chaîne…",
+  "Canal no disponible en el servidor": "Chaîne non disponible sur le serveur",
+  "El servidor rechazó el canal ({x})": "Le serveur a refusé la chaîne ({x})",
+  "El servidor del canal tiene problemas ({x})": "Le serveur de la chaîne a des problèmes ({x})",
+  "Sin conexión con el servidor del canal": "Pas de connexion au serveur de la chaîne",
+  "El equipo no pudo abrir el video de este canal": "L'appareil n'a pas pu ouvrir la vidéo de cette chaîne",
+  "Línea en uso en otro equipo": "Ligne utilisée sur un autre appareil",
+  "Vence pronto": "Expire bientôt",
+  "Cuenta activa": "Compte actif",
+  "Desde:": "Depuis :",
+  "Código del equipo (MAC)": "Code de l'appareil (MAC)",
 };
 
 export default fr;

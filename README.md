@@ -80,11 +80,16 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   de Netflix va la inicial de la marca (distribuidor; con *Omitir*, «M» de MPX Player) en su color de
   acento. Con `features.platforms: false` (`tenant_config`) no hay fila ni filas de plataformas. Al
   cambiar de sección o abrir una plataforma/género la última portada queda de fondo (nunca negro).
-- **Cuenta** muestra también cuánto contenido tiene el servidor: canales en vivo, películas y series
-  («…» mientras se carga esa lista).
-- **Menú superior**: Inicio, Series, Películas, TV en vivo, Deportes, Mi lista, Buscar, Cuenta, Salir.
-  *Atrás* vuelve a Inicio y, en Inicio, pregunta si quieres salir; *Salir* hace la misma pregunta
-  que Roku («¿Salir de …?», «Puedes volver cuando quieras.», Salir / Cancelar).
+- **Perfil** (ícono de la derecha del menú), como Roku: a la izquierda la línea (inicial, usuario, cuenta activa /
+  vence pronto / DEMO, vencimiento, conexiones, desde, servidor, canales, películas, series, distribuidor y el
+  código del equipo) y a la derecha los ajustes (idioma de la app, audio, subtítulos, control parental, adultos,
+  registrar el equipo, recargar, distribuidor, cerrar sesión).
+- **Menú superior** como Roku: Inicio, Series, Películas, TV en vivo, Deportes y Mi lista; a la derecha la lupa del
+  buscador, el ícono del perfil (color del distribuidor) y la hora. *Atrás* dentro de una sección sube al menú (a la
+  sección actual); *Atrás* en el menú pregunta si quieres salir («¿Salir de …?», «Puedes volver cuando quieras.»,
+  Salir / Cancelar). En el reproductor *Atrás* cierra el menú de audio o pregunta si salir del video.
+- **Plataformas** con ancho y alto fijos (Vega dibuja las imágenes del paquete a su tamaño real si solo se estiran)
+  e **ícono de la app** con el logo centrado en la franja 16:9 que muestra el Fire TV (512×512).
 - **Inicio de sesión** con la caja centrada en la pantalla y el texto de Usuario / Contraseña centrado
   a lo alto del campo.
 - **Ficha** con sinopsis, reparto, temporadas, episodios con su avance y "Más títulos como este".
@@ -278,9 +283,13 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
 ## Límites conocidos
 
 - La TV en vivo usa MPEG-TS (`.ts`), que el reproductor de Vega abre directo; si un canal falla se prueba
-  `.m3u8` y luego la dirección corta sin `/live/` (`LIVE_FORMATS` en `src/api/xtream.ts`; LG empieza por `.m3u8`). HLS (`.m3u8`) del
-  proveedor necesitaría integrar Shaka Player; no hace falta mientras el proveedor sirva `.ts`. El
-  HLS del motor del panel (audio cambiado) se reproduce con un lector propio por MSE (`src/player/hls.ts`).
+  `.m3u8` con un lector propio por MSE (`src/player/livehls.ts`: sigue la lista en vivo, elige la mejor calidad de una
+  lista maestra y empieza cerca del final) y luego la dirección corta sin `/live/` (`LIVE_FORMATS` en
+  `src/api/xtream.ts`; LG empieza por `.m3u8` y lo abre su propio `<video>`). Cada intento espera hasta 15 s. Si
+  ninguno abre se le pregunta al servidor (código HTTP y cuenta) y el aviso dice el motivo: línea no activa, línea en
+  uso en otro equipo, canal no disponible (404), rechazado (403), servidor con problemas (5xx), sin conexión o el
+  equipo no pudo abrir el video; al panel va cada intento con lo que dijo el reproductor. El HLS del motor del panel
+  (audio cambiado) se reproduce con su propio lector por MSE (`src/player/hls.ts`).
 - Autodemo, registrar el equipo y la activación por código MAC usan `login.php` con la llave
   maestra, que no va en el código: se agrega al compilar (ver [config/README.md](config/README.md)).
   Sin llave esos botones no aparecen. `check_mac` y `auto_demo` piden la respuesta cifrada

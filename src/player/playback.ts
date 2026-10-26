@@ -8,6 +8,7 @@
 // - Sin permiso del motor (Sin permisos / No compatible): el texto del panel una vez por video y el
 //   video sigue directo; nada automático pasa por el motor (estado guardado por línea en media.ts).
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
+import { LiveHls } from './livehls';
 import { Engine, engineDenied, fileTracks, knownTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
@@ -30,6 +31,8 @@ export type Hooks = {
   fatal: (msg: string) => void;
   // el panel no pudo preparar el video que el equipo no abrió: el reproductor sigue con sus otros pasos
   panelFailed?: () => void;
+  // canal en vivo por HLS (lector propio) que no se pudo abrir o se cortó: el motivo, para el siguiente formato
+  liveFailed?: (why: string) => void;
 };
 
 const decodeCache: Record<string, boolean> = {};
@@ -67,6 +70,7 @@ export class Playback {
   private resumeAt = 0;
   private remux: { a: number; label: string } | null = null;
   private hls: PanelHls | null = null;
+  private liveHls: LiveHls | null = null;
   private offset = 0;
   // el HLS del panel ya suena (antes sigue el video directo mientras se prepara)
   private remuxLive = false;
@@ -140,7 +144,9 @@ export class Playback {
     this.formatTried = false;
     this.deniedShown = false;
     if (live) {
-      this.direct(resume);
+      // .m3u8 del canal: el reproductor de Vega no abre HLS solo; lo lee la app y lo entrega por MSE
+      if (/\.m3u8(\?|$)/i.test(url) && !(globalThis as any).PalmSystem && LiveHls.supported()) this.openLive(url);
+      else this.direct(resume);
       return;
     }
     // Antes de abrir el video solo se piden los idiomas que ya se saben SIN tocar el servidor IPTV (lo leído antes en el
@@ -162,6 +168,23 @@ export class Playback {
       if (g === this.gen && p.ok && !this.probe) this.probe = p;
       open();
     });
+  }
+
+  // canal en vivo por HLS con el lector propio
+  private openLive(url: string): void {
+    const g = this.gen;
+    const h = new LiveHls(this.v, url);
+    this.liveHls = h;
+    h.onError = why => g === this.gen && this.liveHls === h && this.hooks.liveFailed?.(why);
+    h.start().then(err => {
+      if (err && g === this.gen && this.liveHls === h) this.hooks.liveFailed?.(err);
+      else if (!err) this.v.play();
+    });
+  }
+
+  // qué pasó con el último canal por HLS (para el reporte)
+  liveProblem(): string {
+    return this.liveHls?.lastProblem || '';
   }
 
   private direct(at: number): void {
@@ -214,6 +237,8 @@ export class Playback {
   private stopHls(): void {
     this.hls?.destroy();
     this.hls = null;
+    this.liveHls?.destroy();
+    this.liveHls = null;
     this.remuxLive = false;
   }
 
