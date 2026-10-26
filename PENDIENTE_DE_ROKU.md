@@ -43,6 +43,18 @@ servidor IPTV. El servidor seguía contando la lectura de idiomas cuando se abr�
       apenas suena; si hay 2 o más, el aviso «N idiomas de audio…» sale una vez. Revisar que en Vega pase siempre
       (con los idiomas del panel, de la cabecera o del propio reproductor).
 
+## Falta en Vega (Roku build 59)
+
+- [ ] **Video que el reproductor no abre directo → el panel (VPS / VDS)** tras dos intentos directos, con el aviso
+      «Preparando el video en el panel…»; si el panel no puede, siguen los intentos de siempre. Vega ya tiene
+      `formatFallback`, pero solo cuando el archivo no es MKV/MP4 conocido: revisar que también cubra los videos de
+      Plataformas que no abren. (Roku: `m.panelTried`, `panelAllowed`, `panelUnavailable` en `PlayerView.brs`.)
+- [ ] **Duración con el video del panel**: usar la del avance guardado; si no se sabe, no mandarla. Con la del pedazo
+      preparado el avance contaba como terminado y el título se borraba de Continuar viendo. (Roku: `knownDuration`,
+      `saveProgress`.) En Vega revisar `duration()` en `src/player/playback.ts` y `save` en `src/screens/Player.tsx`.
+- [ ] **«¿Salir del video?» no se congela**: un reintento no debe quitarle el foco al diálogo, y al cerrarse el
+      reproductor se cierran sus diálogos. (Roku: `focusVideo`, `popView`.)
+
 ## Falta en Vega (Roku build 58): no leer el archivo antes de abrir el video
 
 En Roku, leer la cabecera del archivo en el servidor IPTV antes de abrir el video (varias peticiones seguidas) hacía
