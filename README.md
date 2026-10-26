@@ -67,9 +67,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   el foco del control, borde de 3 px y crece un poco con una animación corta. El foco (bordes y
   realce) es blanco sin distribuidor y su color de acento con distribuidor (aclarado si casi no se ve
   sobre su fondo).
-- **Inicio estilo Netflix**: portada grande, Continuar viendo, Mi lista, Top 10,
-  plataformas (Netflix, Disney+, HBO Max, Prime, Marvel, Navidad, Halloween…) y géneros
-  (Acción, Suspenso, Aventura, Anime, Drama…), igual que la web. En la portada, en lugar de la «N»
+- **Inicio, Películas y Series como Roku y Netflix**: la portada grande queda fija arriba y solo se
+  mueven las filas (arriba/abajo/lados); al enfocar una carátula la portada muestra ese título (fondo,
+  nombre, año y sinopsis). Orden de Inicio igual que Roku: plataformas, Continuar viendo, Mi lista,
+  «Top 10 de hoy» (películas y series juntas), Películas agregadas recientemente, Series nuevas,
+  «Lo mejor de…» de las plataformas, Series para ti, géneros (Acción, Suspenso, Aventura, Anime,
+  Drama…) y Películas para ti. En Películas el Top 10 es solo de películas y en Series solo de series.
+  Cada fila (también Continuar viendo y Mi lista) termina con «Ver todo». La interfaz se escala al
+  tamaño real de la pantalla (base 1920×1080). En la portada, en lugar de la «N»
   de Netflix va la inicial de la marca (distribuidor; con *Omitir*, «M» de MPX Player) en su color de
   acento. Con `features.platforms: false` (`tenant_config`) no hay fila ni filas de plataformas. Al
   cambiar de sección o abrir una plataforma/género la última portada queda de fondo (nunca negro).

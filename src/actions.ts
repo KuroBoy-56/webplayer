@@ -30,6 +30,10 @@ export function openSpecial(nav: Nav, sp: Special) {
     } else if (extra === 'genre') {
       const g = GENRES.find(x => x.key === sp.key);
       nav.push({ name: 'grid', title: g ? label(g) : t('Género'), mode: 'genre', key: sp.key });
+    } else if (extra === 'continue') {
+      nav.push({ name: 'grid', title: t('Continuar viendo'), mode: 'continue', key: 'continue' });
+    } else if (extra === 'mylist') {
+      nav.push({ name: 'grid', title: t('Mi lista'), mode: 'mylist', key: 'mylist' });
     } else if (extra.startsWith('cat:')) {
       nav.push({ name: 'grid', title: t('Categoría'), mode: 'cat', key: sp.key, kind: extra.slice(4) as 'vod' | 'series' });
     } else {

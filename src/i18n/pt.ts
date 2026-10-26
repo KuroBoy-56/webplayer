@@ -359,6 +359,14 @@ const pt: Record<Key, string> = {
   "en la guía": "no guia",
   "por equipos": "por times",
   "{n}.ª División": "{n}ª Divisão",
+  "Lo mejor de {x}": "O melhor de {x}",
+  "Películas para ti": "Filmes para você",
+  "Películas y series de {x}.": "Filmes e séries de {x}.",
+  "Series nuevas": "Séries novas",
+  "Series para ti": "Séries para você",
+  "Todo el contenido de {x}: películas y series detectadas en tus categorías.": "Todo o conteúdo de {x}: filmes e séries encontrados nas suas categorias.",
+  "Top 10 de hoy": "Top 10 de hoje",
+  "Ver todo el contenido de esta fila.": "Ver todo o conteúdo desta fileira.",
 };
 
 export default pt;

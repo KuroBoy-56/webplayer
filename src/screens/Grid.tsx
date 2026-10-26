@@ -5,6 +5,7 @@ import { openItem } from '../actions';
 import { Focusable, Message } from '../components/ui';
 import { POSTER_H, PosterTile } from '../components/Tiles';
 import { catalog, Item } from '../data/catalog';
+import { continueItems, favItems } from '../data/personal';
 import { fold } from '../lib/util';
 import { useNav } from '../nav';
 import { useAppState } from '../state';
@@ -43,9 +44,14 @@ function MagnifierIcon({ color }: { color: string }) {
   );
 }
 
-export default function Grid({ title, mode, keyName, kind }: { title: string; mode: 'cat' | 'platform' | 'genre' | 'recent'; keyName: string; kind?: 'vod' | 'series' }) {
+export default function Grid({ title, mode, keyName, kind }: { title: string; mode: 'cat' | 'platform' | 'genre' | 'recent' | 'continue' | 'mylist'; keyName: string; kind?: 'vod' | 'series' }) {
   const st = useAppState();
-  const items = useMemo(() => catalog.grid(mode, keyName, kind), [mode, keyName, kind, st.catalogRev]);
+  // «Ver todo» de Continuar viendo y de Mi lista: lo guardado en el panel, del más reciente al más antiguo
+  const items = useMemo(
+    () => (mode === 'continue' ? continueItems(st.progress, kind, 3000) : mode === 'mylist' ? favItems(st.favorites, 3000) : catalog.grid(mode, keyName, kind)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mode, keyName, kind, st.catalogRev, mode === 'continue' ? st.progress : mode === 'mylist' ? st.favorites : null],
+  );
   const name = mode === 'cat' && kind ? catalog.k[kind]?.cats.find(c => c.id === keyName)?.name || title : title;
   const canSearch = mode === 'platform';
   const [searching, setSearching] = useState(false);

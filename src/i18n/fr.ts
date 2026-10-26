@@ -359,6 +359,14 @@ const fr: Record<Key, string> = {
   "en la guía": "dans le guide",
   "por equipos": "par équipes",
   "{n}.ª División": "{n}e division",
+  "Lo mejor de {x}": "Le meilleur de {x}",
+  "Películas para ti": "Films pour vous",
+  "Películas y series de {x}.": "Films et séries de {x}.",
+  "Series nuevas": "Nouvelles séries",
+  "Series para ti": "Séries pour vous",
+  "Todo el contenido de {x}: películas y series detectadas en tus categorías.": "Tout le contenu de {x} : films et séries trouvés dans vos catégories.",
+  "Top 10 de hoy": "Top 10 du jour",
+  "Ver todo el contenido de esta fila.": "Voir tout le contenu de cette rangée.",
 };
 
 export default fr;

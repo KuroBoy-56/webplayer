@@ -72,23 +72,31 @@ export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: {
   );
 });
 
+// alto de la fila de tarjetas y de la fila completa (título + tarjetas): fijo, así la lista del inicio sabe dónde
+// queda cada fila y deja la enfocada siempre arriba (como Roku y Netflix)
+export const cardsHeight = (row: Row) => (row.type === 'platform' ? px(190) : row.type === 'genre' ? px(130) : POSTER_H + px(30));
+export const rowHeight = (row: Row) => cardsHeight(row) + (row.title ? px(46) : px(4)) + px(18);
+
 export function RowView({
   row,
   onItem,
   onSpecial,
   onFocusItem,
+  onFocusAny,
   progressOf,
 }: {
   row: Row;
   onItem: (it: Item) => void;
   onSpecial: (sp: Special) => void;
   onFocusItem?: (it: Item) => void;
+  // cualquier tarjeta de la fila (también plataformas, géneros y «Ver todo»)
+  onFocusAny?: (x: Item | Special) => void;
   progressOf?: (it: Item) => number | undefined;
 }) {
-  const height = row.type === 'platform' ? px(190) : row.type === 'genre' ? px(130) : POSTER_H + px(30);
+  const height = cardsHeight(row);
   return (
-    <View style={s.row}>
-      <Text style={s.rowTitle}>{row.title}</Text>
+    <View style={[s.row, { height: rowHeight(row) - px(18) }]}>
+      {row.title ? <Text style={s.rowTitle} numberOfLines={1}>{row.title}</Text> : <View style={{ height: px(4) }} />}
       <FlatList
         horizontal
         data={row.items}
@@ -105,10 +113,10 @@ export function RowView({
               rank={row.type === 'top10' ? index + 1 : undefined}
               progress={progressOf?.(x)}
               onPress={() => onItem(x)}
-              onFocus={onFocusItem ? () => onFocusItem(x) : undefined}
+              onFocus={onFocusItem || onFocusAny ? () => (onFocusItem?.(x), onFocusAny?.(x)) : undefined}
             />
           ) : (
-            <SpecialTile sp={x} onPress={() => onSpecial(x)} />
+            <SpecialTile sp={x} onPress={() => onSpecial(x)} onFocus={onFocusAny ? () => onFocusAny(x) : undefined} />
           )
         }
       />

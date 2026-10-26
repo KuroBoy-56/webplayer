@@ -32,7 +32,7 @@ bindReportContext(() => {
   const s = getState().session;
   return { device: deviceId(), user: s?.user || '', server: s?.base || '' };
 });
-import { alpha, C, px, themed } from './theme';
+import { alpha, C, onScaleChange, px, themed } from './theme';
 
 function Screen({ route, active }: { route: Route; active: boolean }) {
   switch (route.name) {
@@ -104,6 +104,7 @@ function App() {
   // estilos y textos
   const [skin, setSkin] = useState(0);
   useEffect(() => onLangChange(() => setSkin(k => k + 1)), []);
+  useEffect(() => onScaleChange(() => setSkin(k => k + 1)), []);
 
   useEffect(() => {
     const started = Date.now();
