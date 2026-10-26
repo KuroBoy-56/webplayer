@@ -96,6 +96,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   servidor IPTV: los títulos de sus categorías cuyo nombre coincide, cada uno una vez. El póster de TMDB que pone el
   panel cuando el servidor no tiene carátula es solo del mismo título (nombre y año ±1); las direcciones del panel
   llevan `?v=2` para no mostrar las imágenes equivocadas guardadas antes.
+- **Carátulas del panel directo y una por título**: la app calcula el nombre exacto de la copia pública del panel
+  (`canonKey` en `src/lib/images.ts`, igual que `img_key` / `img_idkey` de `api/img.php`) y la pide sin pasar por PHP;
+  antes usaba otro nombre y dependía de enlaces del hosting (si no los permite, cada carátula pasaba por `img.php`:
+  lento). Si el servidor manda el id de TMDB (`tmdb` / `tmdb_id`, `Item.tm`), una carátula por título para todos los
+  servidores IPTV (`&t=`).
 - **Continuar viendo** abre el video en el segundo guardado; si no arranca (error o 15 s sin empezar) se abre
   desde el principio y salta solo a ese segundo (`resumeFallback` en `src/player/playback.ts`). Mientras tanto
   no se guarda avance, así no se pierde dónde quedó.

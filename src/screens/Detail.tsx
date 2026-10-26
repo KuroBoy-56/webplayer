@@ -64,7 +64,7 @@ export default function Detail({ item }: { item: Item }) {
   }, [item, loading]);
   const backdrop = info?.backdrop || item.backdrop || info?.poster || item.poster;
   const bdSrc = useMemo(
-    () => (info?.backdrop || item.backdrop ? backdropSources(info?.backdrop || item.backdrop) : posterSources(item.kind, info?.poster || item.poster, item.name, item.year)),
+    () => (info?.backdrop || item.backdrop ? backdropSources(info?.backdrop || item.backdrop) : posterSources(item.kind, info?.poster || item.poster, item.name, item.year, item.tm)),
     [info, item],
   );
   const fav = isFav(item.kind, item.id);

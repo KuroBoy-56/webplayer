@@ -51,21 +51,37 @@ const isTmdb = (u: string) => u.includes('image.tmdb.org/');
 const isHttp = (u: string) => /^https?:\/\//i.test(u);
 const year4 = (y: string) => (/^(19|20)\d\d$/.test(y) ? y : '');
 
+// Nombre de la copia del panel (igual que img_key / img_idkey de api/img.php): con el id de TMDB "500|tmdbid:<tipo>:<id>";
+// si no, la imagen sin http / https y con el servidor en minúsculas, y las de TMDB por su archivo. Así se pide directo
+// la única copia, sin depender de enlaces en el hosting (si no los permite, todo pasaba por img.php: lento)
+function canonKey(poster: string, k: string, tm: string): string {
+  if (tm) return '500|tmdbid:' + k + ':' + tm;
+  const m = /image\.tmdb\.org\/t\/p\/[^/]+\/([A-Za-z0-9_\-]+\.(?:jpe?g|png|webp))/i.exec(poster);
+  if (m) return '500|tmdb:' + m[1];
+  const u = poster.replace(/^https?:\/\//i, '');
+  const slash = u.indexOf('/');
+  return '500|' + (slash < 0 ? u.toLowerCase() : u.slice(0, slash).toLowerCase() + u.slice(slash));
+}
+
 /** direcciones de la carátula, en orden (la tarjeta pasa a la siguiente si una no carga) */
-export function posterSources(kind: string, poster: string, name: string, year: string): string[] {
+export function posterSources(kind: string, poster: string, name: string, year: string, tm = ''): string[] {
   const out: string[] = [];
   const b = apiBase();
   const media = kind === 'vod' || kind === 'series' || kind === 'movie';
   // logos de canales y carátulas de TMDB: directo (ya son livianos)
   if (b && media && !isTmdb(poster) && (isHttp(poster) || name)) {
     const y = year4(year);
-    const key = poster ? '500|' + poster : '500|n|' + (kind === 'series' ? 'series' : 'vod') + '|' + name.trim() + '|' + y;
+    const k = kind === 'series' ? 'series' : 'vod';
+    const key = poster || tm ? canonKey(poster, k, tm) : '500|n|' + k + '|' + name.trim() + '|' + y;
     // ?v=2: el panel vació la caché (los pósteres de TMDB de antes podían ser de otra película); con la misma
     // dirección el equipo seguiría mostrando la imagen vieja que guardó por 30 días
     out.push(b + 'imgc/' + hex1(key) + '.jpg?v=2');
     let u = b + 'img.php?w=500&v=2&token=' + encodeURIComponent(read(scoped('cloud_token2')));
     if (poster) u += '&u=' + b64u(poster);
-    if (name) u += '&k=' + (kind === 'series' ? 'series' : 'vod') + '&n=' + b64u(name.trim()) + (y ? '&y=' + y : '');
+    if (name || tm) u += '&k=' + k;
+    if (name) u += '&n=' + b64u(name.trim()) + (y ? '&y=' + y : '');
+    // id de TMDB: una sola carátula por título en el panel, venga del servidor IPTV que venga
+    if (tm) u += '&t=' + tm;
     out.push(u);
   }
   if (poster && !out.includes(poster)) out.push(poster);

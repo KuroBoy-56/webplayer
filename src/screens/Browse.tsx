@@ -32,7 +32,7 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
   const it = info.item;
   const art = it?.backdrop || '';
   const artSrc = useMemo(() => (art ? backdropSources(art) : []), [art]);
-  const sideSrc = useMemo(() => (it && !art ? posterSources(it.kind, it.poster, it.name, it.year) : []), [it, art]);
+  const sideSrc = useMemo(() => (it && !art ? posterSources(it.kind, it.poster, it.name, it.year, it.tm) : []), [it, art]);
   // sin fondo propio queda el último (nunca negro) y la carátula va a la derecha
   const [under, setUnder] = useState(lastBanner);
   useEffect(() => {

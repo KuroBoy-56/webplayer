@@ -22,6 +22,8 @@ export type Item = {
   year: string;
   epg: string;
   num: string;
+  // id de TMDB que manda el servidor IPTV (tmdb / tmdb_id): la carátula del panel es una por título
+  tm?: string;
 };
 
 export type Special = { kind: 'platform' | 'genre' | 'more'; key: string; label: string; image?: number; color: string; extra?: string };
@@ -99,7 +101,13 @@ export function toItem(kind: Kind, it: any): Item {
     year: str(it.year) || str(it.releaseDate).slice(0, 4) || str(it.release_date).slice(0, 4),
     epg: str(it.epg_channel_id),
     num: str(it.num),
+    tm: tmdbId(it),
   };
+}
+
+function tmdbId(it: any): string {
+  const v = str(it.tmdb) || str(it.tmdb_id);
+  return /^[1-9]\d{0,8}$/.test(v) ? v : '';
 }
 
 class Catalog {

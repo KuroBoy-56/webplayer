@@ -30,7 +30,7 @@ export const PosterTile = memo(function PosterTile({
   const w = wide ? px(300) : posterW();
   const h = wide ? px(169) : posterH();
   // carátula del panel (o la de TMDB por el título si el servidor no tiene) y, si no carga, la original
-  const src = useMemo(() => posterSources(item.kind, item.poster, item.name, item.year), [item.kind, item.poster, item.name, item.year]);
+  const src = useMemo(() => posterSources(item.kind, item.poster, item.name, item.year, item.tm), [item.kind, item.poster, item.name, item.year, item.tm]);
   return (
     <View style={rank ? s.rankWrap : undefined}>
       {rank ? <Text style={s.rank}>{rank}</Text> : null}
