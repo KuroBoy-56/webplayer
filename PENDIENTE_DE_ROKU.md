@@ -43,6 +43,22 @@ servidor IPTV. El servidor seguía contando la lectura de idiomas cuando se abr�
       apenas suena; si hay 2 o más, el aviso «N idiomas de audio…» sale una vez. Revisar que en Vega pase siempre
       (con los idiomas del panel, de la cabecera o del propio reproductor).
 
+## Falta en Vega (Roku build 58): no leer el archivo antes de abrir el video
+
+En Roku, leer la cabecera del archivo en el servidor IPTV antes de abrir el video (varias peticiones seguidas) hacía
+que muchos servidores bloquearan la línea un rato: Continuar viendo y Plataformas (HBO) quedaban cargando sin fin y el
+aviso de idiomas no salía. Vega hace lo mismo hoy (`load` en `src/player/playback.ts` espera a `fileTracks`). Esto
+reemplaza los puntos de «Abrir el video tras una pausa corta» y «Connection: close» de arriba.
+
+- [ ] **Antes de abrir, solo lo ya sabido sin tocar el servidor IPTV**: lo leído antes en el equipo o `tracks.php` del
+      panel, como mucho 3 s; después se abre el video. (Roku: `nfKnownTracks` en `source/Probe.brs`, `tracksKnown`.)
+- [ ] **Aviso de idiomas siempre**: 4 s después de empezar a sonar, contar los audios (los del reproductor y los ya
+      sabidos); con 2 o más, «N idiomas de audio en este video: ▼ para cambiar», una vez por video. (Roku:
+      `onLangCheck`, `langNotice` en `components/views/PlayerTracks.brs`.)
+- [ ] **Si nadie los sabe y el reproductor informa uno solo**: leer la cabecera con el video ya sonando, con 3 peticiones
+      como mucho, y dejársela al panel; si el video se traba en los 20 s siguientes, no volver a leer en ese servidor
+      (guardar `noprobe_<servidor>`). (Roku: `nfFileTracks(url, 3)`, `m.lateProbeAt`.)
+
 ## Falta en Vega (Roku build 55): borrado de caché del panel
 
 Problema en Roku: el dueño mandó «Borrar caché y reiniciar» y al abrir la app no pasó nada. Si la app no tenía
