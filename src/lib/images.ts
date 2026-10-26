@@ -60,8 +60,10 @@ export function posterSources(kind: string, poster: string, name: string, year: 
   if (b && media && !isTmdb(poster) && (isHttp(poster) || name)) {
     const y = year4(year);
     const key = poster ? '500|' + poster : '500|n|' + (kind === 'series' ? 'series' : 'vod') + '|' + name.trim() + '|' + y;
-    out.push(b + 'imgc/' + hex1(key) + '.jpg');
-    let u = b + 'img.php?w=500&token=' + encodeURIComponent(read(scoped('cloud_token2')));
+    // ?v=2: el panel vació la caché (los pósteres de TMDB de antes podían ser de otra película); con la misma
+    // dirección el equipo seguiría mostrando la imagen vieja que guardó por 30 días
+    out.push(b + 'imgc/' + hex1(key) + '.jpg?v=2');
+    let u = b + 'img.php?w=500&v=2&token=' + encodeURIComponent(read(scoped('cloud_token2')));
     if (poster) u += '&u=' + b64u(poster);
     if (name) u += '&k=' + (kind === 'series' ? 'series' : 'vod') + '&n=' + b64u(name.trim()) + (y ? '&y=' + y : '');
     out.push(u);

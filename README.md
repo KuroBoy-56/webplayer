@@ -92,6 +92,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Reproductor nativo de Vega** (MP4, MKV, AVI, MOV, MPEG-TS) sin límite de resolución ni de
   bitrate (4K si el equipo y el archivo lo tienen): continuar donde quedó, ◀▶ 10 s, OK pausa,
   ▼ o MENÚ para audio y subtítulos, idioma preferido automático y siguiente episodio solo.
+- **Plataformas** (Netflix, Disney+, Prime Video, HBO Max, Marvel, Navidad, Halloween…) muestran solo lo que tiene el
+  servidor IPTV: los títulos de sus categorías cuyo nombre coincide, cada uno una vez. El póster de TMDB que pone el
+  panel cuando el servidor no tiene carátula es solo del mismo título (nombre y año ±1); las direcciones del panel
+  llevan `?v=2` para no mostrar las imágenes equivocadas guardadas antes.
 - **Continuar viendo** abre el video en el segundo guardado; si no arranca (error o 15 s sin empezar) se abre
   desde el principio y salta solo a ese segundo (`resumeFallback` en `src/player/playback.ts`). Mientras tanto
   no se guarda avance, así no se pierde dónde quedó.

@@ -166,9 +166,10 @@ class Catalog {
   idxForKw(kind: Kind, kw: string[]): number[] {
     const d = this.k[kind];
     if (!d) return [];
-    const out: number[] = [];
-    for (const c of this.visibleCats(kind)) if (matchesKw(c.name, kw)) out.push(...(d.byCat.get(c.id) || []));
-    return out;
+    // un título en dos categorías de la misma plataforma sale una sola vez
+    const out = new Set<number>();
+    for (const c of this.visibleCats(kind)) if (matchesKw(c.name, kw)) for (const i of d.byCat.get(c.id) || []) out.add(i);
+    return [...out];
   }
 
   sortKey(kind: Kind, it: any, by: 'added' | 'rating'): number {
