@@ -64,12 +64,13 @@ reemplaza los puntos de «Abrir el video tras una pausa corta» y «Connection: 
 
 - [ ] **Antes de abrir, solo lo ya sabido sin tocar el servidor IPTV**: lo leído antes en el equipo o `tracks.php` del
       panel, como mucho 3 s; después se abre el video. (Roku: `nfKnownTracks` en `source/Probe.brs`, `tracksKnown`.)
-- [ ] **Aviso de idiomas siempre**: 4 s después de empezar a sonar, contar los audios (los del reproductor y los ya
+- [ ] **Aviso de idiomas siempre**: apenas empieza a sonar, contar los audios (los del reproductor y los ya
       sabidos); con 2 o más, «N idiomas de audio en este video: ▼ para cambiar», una vez por video. (Roku:
       `onLangCheck`, `langNotice` en `components/views/PlayerTracks.brs`.)
-- [ ] **Si nadie los sabe y el reproductor informa uno solo**: leer la cabecera con el video ya sonando, con 3 peticiones
-      como mucho, y dejársela al panel; si el video se traba en los 20 s siguientes, no volver a leer en ese servidor
-      (guardar `noprobe_<servidor>`). (Roku: `nfFileTracks(url, 3)`, `m.lateProbeAt`.)
+- [ ] **Si nadie los sabe y el reproductor informa uno solo**: leer la cabecera 1 s después de empezar a sonar y
+      dejársela al panel; si no sale, reintentar a los 5, 15 y 30 s. Nada de marcas que apaguen la lectura en un
+      servidor (en Roku se activaban con una carga normal y los idiomas no salían nunca). (Roku build 60:
+      `onLangCheck`, `lateProbeDone` en `components/views/PlayerTracks.brs`.)
 
 ## Falta en Vega (Roku build 55): borrado de caché del panel
 
