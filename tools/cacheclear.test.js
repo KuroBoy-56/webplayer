@@ -39,3 +39,13 @@ test('la orden se guarda antes de borrar y no se repite; sin el campo no se hace
   assert.strictEqual(cacheSeen(), 6);
   assert.strictEqual(takeCacheOrder(6), false);
 });
+
+test('sin número guardado: una orden de los últimos 3 días se aplica; una más vieja solo se guarda', () => {
+  const now = 1800000000;
+  assert.strictEqual(cacheDecision('', 5, now - 3600, now), 'clear');
+  assert.strictEqual(cacheDecision('', 5, now - 4 * 86400, now), 'save');
+  assert.strictEqual(cacheDecision('', 5, 0, now), 'save');
+  assert.strictEqual(cacheDecision('', 0, now - 60, now), 'save');
+  // con número guardado manda el número, no la fecha
+  assert.strictEqual(cacheDecision('5', 5, now - 60, now), 'none');
+});
