@@ -182,9 +182,9 @@ export class Playback {
     });
   }
 
-  // qué pasó con el último canal por HLS (para el reporte)
-  liveProblem(): string {
-    return this.liveHls?.lastProblem || '';
+  // estado del canal por HLS (para el reporte): lista, segmentos entregados, lo que tiene el reproductor
+  liveDiag(): string {
+    return this.liveHls ? this.liveHls.diag() : '';
   }
 
   private direct(at: number): void {

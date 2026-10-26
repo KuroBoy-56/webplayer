@@ -163,7 +163,9 @@ export function imgPath(u: any, size: string): string {
 
 // formatos de TV en vivo en orden: si uno falla se prueba el siguiente. LG (webOS) reproduce HLS
 // directo en <video>; Vega y Tizen entran mejor por MPEG-TS
-export const LIVE_FORMATS = (globalThis as any).PalmSystem ? ['m3u8', 'ts', 'direct'] : ['ts', 'm3u8', 'direct'];
+// primero .m3u8: en Vega el modo directo no abre MPEG-TS (lo lee la app por MSE, src/player/livehls.ts) y en LG lo abre
+// su propio <video>; después .ts y la dirección corta por si algún equipo sí los abre
+export const LIVE_FORMATS = ['m3u8', 'ts', 'direct'];
 
 export type VodInfo = {
   tmdb: string;

@@ -288,14 +288,15 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
 
 ## Límites conocidos
 
-- La TV en vivo usa MPEG-TS (`.ts`), que el reproductor de Vega abre directo; si un canal falla se prueba
-  `.m3u8` con un lector propio por MSE (`src/player/livehls.ts`: sigue la lista en vivo, elige la mejor calidad de una
-  lista maestra y empieza cerca del final) y luego la dirección corta sin `/live/` (`LIVE_FORMATS` en
-  `src/api/xtream.ts`; LG empieza por `.m3u8` y lo abre su propio `<video>`). Cada intento espera hasta 15 s. Si
-  ninguno abre se le pregunta al servidor (código HTTP y cuenta) y el aviso dice el motivo: línea no activa, línea en
-  uso en otro equipo, canal no disponible (404), rechazado (403), servidor con problemas (5xx), sin conexión o el
-  equipo no pudo abrir el video; al panel va cada intento con lo que dijo el reproductor. El HLS del motor del panel
-  (audio cambiado) se reproduce con su propio lector por MSE (`src/player/hls.ts`).
+- **TV en vivo en Vega**: el modo directo del reproductor (src = dirección) **no abre MPEG-TS** (según Amazon solo MP4,
+  MKV, MP3, FLV, OGG y FLAC; el HLS solo por MSE). Por eso los canales van primero por `.m3u8` con un lector propio por
+  MSE (`src/player/livehls.ts`): sigue las redirecciones a mano (XUI manda la lista a un balanceador con token y los
+  segmentos vienen relativos a esa dirección), elige la mejor calidad de una lista maestra, empieza cerca del final, y
+  como los canales traen marcas de tiempo grandes (p. ej. 86000 s) salta al principio de lo entregado (si no, el video
+  esperaba en el segundo 0 para siempre). Después `.ts` y la dirección corta (`LIVE_FORMATS`), el otro protocolo y el
+  DNS elegido. Cada intento espera hasta 25 s; al panel va el estado del lector (servidor, segmentos entregados, lo que
+  tiene el reproductor y dónde está). Si ninguno abre se le pregunta al servidor y el aviso dice el motivo. El HLS del
+  motor del panel (audio cambiado) se reproduce con su propio lector por MSE (`src/player/hls.ts`).
 - **Servidores XUI.one en «Debug Mode»** contestan **200 con una página HTML** en lugar del video cuando hay un problema
   (`INVALID_STREAM_ID`, `STREAM_OFFLINE`, `BLOCKED_USER_AGENT`, `EXPIRED`…). Al primer fallo la app hace una sola
   consulta (`streamCheck`, `xuiError` en `src/player/streamcheck.ts`), muestra el motivo con el código y no insiste:

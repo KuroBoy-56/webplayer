@@ -180,13 +180,14 @@ export default function Player({ params }: { params: PlayParams }) {
       c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
-      // 20 s para empezar a sonar (15 s en Continuar viendo y en los canales); con el panel, sus propios plazos
+      // 20 s para empezar a sonar (15 s en Continuar viendo; 25 s en los canales: la app baja la lista y los primeros
+      // segmentos); con el panel, sus propios plazos
       startDog.current = setTimeout(() => {
         startDog.current = null;
         if (!ctl.current || ctl.current.hasPlayed() || ctl.current.panelActive()) return;
-        if (live) liveNote.current = 'sin imagen en 15 s';
+        if (live) liveNote.current = 'sin imagen en 25 s';
         onErrorRef.current();
-      }, live || resume > 0 ? 15000 : 20000);
+      }, live ? 25000 : resume > 0 ? 15000 : 20000);
     },
     [urlFor, live],
   );
@@ -448,7 +449,8 @@ export default function Player({ params }: { params: PlayParams }) {
         // qué pasó en este intento (formato, protocolo, código del reproductor o motivo del lector HLS)
         const vs = vod.current;
         const err: any = (v as any).error;
-        const why = liveNote.current || (err ? 'error ' + (err.code ?? '') + ' ' + String(err.message || '').slice(0, 80) : 'error');
+        const diag = c.liveDiag();
+        const why = (liveNote.current || (err ? 'error ' + (err.code ?? '') + ' ' + String(err.message || '').slice(0, 80) : 'error')) + (diag ? ' · ' + diag : '');
         liveNote.current = '';
         if (vs.attempts.length < 16) vs.attempts.push(LIVE_FORMATS[fmtAt.current] + (flipped.current ? ' (otro protocolo)' : '') + (dnsUrl.current ? ' (DNS)' : '') + ': ' + why);
         // al primer fallo se le pregunta una vez al servidor: si contesta con un error (página de XUI, 4xx, cuenta no
