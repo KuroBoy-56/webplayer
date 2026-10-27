@@ -11,6 +11,12 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+## Novedades de la 1.1.1
+
+- La portada del destacado busca su propio fondo; sin fondo usa su carátula (nunca el fondo de otro título).
+- Continuar viendo y Mi lista solo en Inicio. En la ficha, la foto del reparto enfocada ya no se corta arriba.
+- Las películas y capítulos abren al momento (los idiomas llegan a la vez, sin esperar).
+
 ## Novedades de la 1.1.0 (traídas de Vega OS 1.0.10 y de Roku)
 
 - **Continuar viendo por pasos** (como Roku): directo en el segundo guardado; si no suena, el motor del panel lo

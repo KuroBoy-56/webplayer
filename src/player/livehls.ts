@@ -7,7 +7,8 @@
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { UA } from '../lib/http';
 import { xuiError } from '../lib/xui';
-import { parseList, resolveUrl, Seg } from '../lib/hlslist';
+import { cbc } from '@noble/ciphers/aes';
+import { parseList, resolveUrl, Seg, segIv, tsStart } from '../lib/hlslist';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -22,6 +23,10 @@ export class LiveHls {
   private alive = true;
   private appended = 0;
   private bytes = 0;
+  // llaves AES-128 ya bajadas (por dirección) y si el canal viene cifrado (para el reporte)
+  private keys = new Map<string, Uint8Array>();
+  private encrypted = false;
+  private head = '';
   // último problema (para el reporte al panel): código HTTP de la lista o de los segmentos, página de XUI…
   lastProblem = '';
   onError: (msg: string) => void = () => {};
@@ -49,7 +54,7 @@ export class LiveHls {
       // sin datos
     }
     const host = (this.list.match(/^https?:\/\/([^/?#]+)/i) || [])[1] || '';
-    return 'hls host=' + host + ' segs=' + this.segs.length + ' entregados=' + this.appended + ' bytes=' + this.bytes + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+    return 'hls host=' + host + ' segs=' + this.segs.length + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
@@ -122,6 +127,27 @@ export class LiveHls {
     }
   }
 
+  // segmento cifrado con AES-128: llave de la lista (una vez por dirección) e IV del segmento
+  private async decrypt(seg: Seg, data: Uint8Array): Promise<Uint8Array | null> {
+    const k = seg.key!;
+    let key = this.keys.get(k.uri);
+    if (!key) {
+      const r = await this.get(k.uri, 15000, false);
+      if (!r.data || r.data.length !== 16) {
+        this.lastProblem = 'llave HTTP ' + r.code + (r.data ? ' (' + r.data.length + ' bytes)' : '');
+        return null;
+      }
+      key = r.data;
+      this.keys.set(k.uri, key);
+    }
+    try {
+      return cbc(key, segIv(seg)).decrypt(data);
+    } catch (e: any) {
+      this.lastProblem = 'descifrado: ' + String(e?.message || e).slice(0, 60);
+      return null;
+    }
+  }
+
   // motivo de una página en lugar de la lista o del video (XUI «Debug Mode»: INVALID_STREAM_ID…)
   private pageProblem(text: string): string {
     const x = xuiError(text);
@@ -148,6 +174,7 @@ export class LiveHls {
         continue;
       }
       if (p.fmp4) return 'HLS en fMP4 (no compatible)';
+      if (p.sampleAes) return 'HLS con cifrado SAMPLE-AES (no compatible)';
       // se sigue la dirección final (el token del balanceador)
       this.list = r.url;
       this.segs = p.segs;
@@ -246,17 +273,37 @@ export class LiveHls {
         await sleep(1000);
         continue;
       }
-      if (this.appended === 0 && r.data[0] !== 0x47) {
-        // MPEG-TS empieza con 0x47; otra cosa (audio suelto con ID3, fMP4…) este lector no lo entrega
-        this.lastProblem = 'segmento no es MPEG-TS (' + (r.type || r.data[0]) + ')';
-        this.onError('el canal no viene en MPEG-TS');
-        return;
+      let data: Uint8Array = r.data;
+      if (seg.key) {
+        // segmento cifrado (AES-128): se descifra con la llave de la lista
+        this.encrypted = true;
+        const plain = await this.decrypt(seg, data);
+        if (!this.alive) return;
+        if (!plain) {
+          if (++fails > 5) {
+            this.onError('no se pudo descifrar el canal (' + this.lastProblem + ')');
+            return;
+          }
+          await sleep(1000);
+          continue;
+        }
+        data = plain;
       }
+      if (this.appended === 0) this.head = Array.from(data.slice(0, 8), b => (b < 16 ? '0' : '') + b.toString(16)).join('');
+      // el video MPEG-TS (0x47 cada 188 bytes) puede venir después de unos bytes de relleno: se entrega desde ahí
+      const at = tsStart(data);
+      if (at < 0) {
+        this.lastProblem = 'segmento no es MPEG-TS (' + (r.type || '?') + ', ' + data.length + ' bytes)';
+        if (this.appended === 0) {
+          this.onError('el canal no viene en MPEG-TS');
+          return;
+        }
+      } else if (at > 0) data = data.subarray(at);
       fails = 0;
       await this.trim();
       await this.idle();
       try {
-        this.sb.appendBuffer(r.data);
+        this.sb.appendBuffer(data);
       } catch (e: any) {
         this.lastProblem = 'appendBuffer: ' + String(e?.message || e).slice(0, 60);
         this.onError('el reproductor no aceptó el video del canal (códec de audio o video)');
@@ -264,7 +311,7 @@ export class LiveHls {
       }
       await this.idle();
       this.appended++;
-      this.bytes += r.data.length;
+      this.bytes += data.length;
       this.next = seg.seq + 1;
       if (this.appended === 1) {
         this.unstick();
