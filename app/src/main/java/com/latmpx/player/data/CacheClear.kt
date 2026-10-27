@@ -37,6 +37,7 @@ object CacheClear {
         withContext(Dispatchers.IO) {
             CatalogCache.clear()
             Posters.clear()
+            SportsPanel.clear()
             runCatching { app.cacheDir.deleteRecursively() } // imágenes de Coil (image_cache) y demás caché
         }
         app.startActivity(Intent(app, com.latmpx.player.MainActivity::class.java)

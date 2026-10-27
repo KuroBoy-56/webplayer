@@ -27,6 +27,8 @@ data class SportEvent(
     val postponed: Boolean,
     /** canales donde se transmite (panel: "tv"), los de la región primero */
     val tv: List<TvChannel> = emptyList(),
+    /** liga del partido en los JSON de Equipos / Selecciones (api/sports_fixtures.php: "l") */
+    val leagueId: String = "",
 )
 
 data class TvChannel(val name: String, val country: String)
@@ -47,7 +49,14 @@ class MatchRules(
     val singleTokenWeight: Int = 8,
 )
 
-data class SportsData(val events: List<SportEvent>, val sports: Map<String, SportInfo>, val rules: MatchRules)
+/**
+ * tablesOn / fixturesOn / nationsOn: el panel ofrece Tablas, Equipos y Selecciones (api/sports.php "tables" y
+ * "fixtures"); *Rev: versión de esos JSON (si no cambió, lo guardado sirve).
+ */
+data class SportsData(
+    val events: List<SportEvent>, val sports: Map<String, SportInfo>, val rules: MatchRules,
+    val tablesOn: Boolean = false, val tablesRev: Long = 0, val fixturesOn: Boolean = false, val nationsOn: Boolean = false, val fixturesRev: Long = 0,
+)
 
 /** Agenda deportiva del panel y búsqueda del canal en vivo (misma puntuación que la web). */
 object Sports {
@@ -70,16 +79,7 @@ object Sports {
         val tz = j.s("tz")
         // getTimeZone() da GMT con un nombre que no conoce
         zone = if (tz.isNotEmpty()) TimeZone.getTimeZone(tz).takeIf { it.id == tz } ?: TimeZone.getDefault() else TimeZone.getDefault()
-        val events = j.optJSONArray("events").mapObj { e ->
-            val start = parseTs(e.s("ts"))
-            if (start <= 0) null else SportEvent(
-                id = e.s("id"), sport = e.s("sp"), league = e.s("lg"), leagueBadge = e.s("lb"), title = e.s("ev"),
-                home = e.s("h"), away = e.s("a"), homeBadge = e.s("hb"), awayBadge = e.s("ab"),
-                homeScore = e.s("hs"), awayScore = e.s("as"), start = start, venue = e.s("v"), status = e.s("st"),
-                postponed = e.optBoolean("pp", false),
-                tv = e.optJSONArray("tv").mapObj { t -> t.s("n").takeIf { it.isNotBlank() }?.let { TvChannel(it, t.s("c")) } },
-            )
-        }.sortedBy { it.start }
+        val events = j.optJSONArray("events").mapObj { e -> event(e) }.sortedBy { it.start }
         val sports = LinkedHashMap<String, SportInfo>()
         j.optJSONObject("sports")?.let { so ->
             so.keys().forEach { k -> so.optJSONObject(k)?.let { o -> sports[k] = SportInfo(o.s("label").ifEmpty { k }, o.s("icon"), o.i("minutes").takeIf { it > 0 } ?: 120) } }
@@ -96,7 +96,27 @@ object Sports {
             stop, alias, evCat, w("fullName", 2), w("token", 1), w("teamWeight", 10), w("bothTeamsBonus", 15),
             w("leagueBonus", 3), w("eventCategoryBonus", 6), w("singleTokenWeight", 8),
         )
-        return SportsData(events, sports, rules)
+        val tb = j.optJSONObject("tables")
+        val fx = j.optJSONObject("fixtures")
+        return SportsData(
+            events, sports, rules,
+            tablesOn = tb?.optBoolean("on", false) == true, tablesRev = tb?.optLong("t", 0L) ?: 0L,
+            fixturesOn = fx?.optBoolean("on", false) == true, nationsOn = fx?.optBoolean("on", false) == true && fx.optBoolean("nat", true),
+            fixturesRev = fx?.optLong("t", 0L) ?: 0L,
+        )
+    }
+
+    /** un partido de la agenda o de Equipos / Selecciones (mismas claves en los dos JSON del panel) */
+    fun event(e: JSONObject): SportEvent? {
+        val start = e.optLong("s", 0L).takeIf { it > 0 }?.let { it * 1000 } ?: parseTs(e.s("ts"))
+        return if (start <= 0) null else SportEvent(
+            id = e.s("id"), sport = e.s("sp"), league = e.s("lg"), leagueBadge = e.s("lb"), title = e.s("ev"),
+            home = e.s("h"), away = e.s("a"), homeBadge = e.s("hb"), awayBadge = e.s("ab"),
+            homeScore = e.s("hs"), awayScore = e.s("as"), start = start, venue = e.s("v"), status = e.s("st"),
+            postponed = e.optBoolean("pp", false),
+            tv = e.optJSONArray("tv").mapObj { t -> t.s("n").takeIf { it.isNotBlank() }?.let { TvChannel(it, t.s("c")) } },
+            leagueId = e.s("l"),
+        )
     }
 
     /** "2026-10-03T15:00:00Z" / "+00:00" / sin segundos -> epoch ms (compatible con Android 6) */
