@@ -89,7 +89,7 @@ export default function Main({ active }: { active: boolean }) {
     <View style={s.root}>
       <View style={s.content}>
         {section === 'home' || section === 'series' || section === 'movies' ? <Browse key={section} section={section} /> : null}
-        {section === 'live' ? <Live /> : null}
+        {section === 'live' ? <Live active={active} /> : null}
         {section === 'sports' ? <Sports /> : null}
         {section === 'mylist' ? <MyList /> : null}
         {section === 'search' ? <Search /> : null}

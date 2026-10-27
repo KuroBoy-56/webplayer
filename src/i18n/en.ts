@@ -395,6 +395,8 @@ const en = {
   "Listo": "Done",
   "Ocultar": "Hide",
   "Mostrar": "Show",
+  "Canales": "Channels",
+  "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ change channel ({x}/{y}) · OK channel list · MENU audio and subtitles",
 };
 
 export default en;

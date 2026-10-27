@@ -8,10 +8,10 @@ import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon
 import { reportError } from '../api/report';
 import { viaDns } from '../lib/securedns';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Image, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
-import { Button } from '../components/ui';
+import { Button, Focusable } from '../components/ui';
 import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
@@ -32,6 +32,9 @@ function serverText(r: StreamCheck, live: boolean): string {
   if (/BLOCK|BAN|FLOOD|RESTREAM|ASN|COUNTRY|ISP|USER_AGENT|_IP/.test(x)) return t('El servidor bloqueó este equipo ({x})', { x });
   return t('El servidor no entregó el video ({x})', { x: x || 'HTML' });
 }
+
+// alto de cada canal de la lista (fijo: la lista abre ya en el canal que suena)
+const CH_ROW = 76;
 
 export default function Player({ params }: { params: PlayParams }) {
   const nav = useNav();
@@ -202,10 +205,10 @@ export default function Player({ params }: { params: PlayParams }) {
     return true;
   }, [params, load, showOverlay]);
 
-  const zap = useCallback(
-    (delta: number) => {
-      if (params.kind !== 'live' || params.channels.length < 2) return;
-      const n = (indexRef.current + delta + params.channels.length) % params.channels.length;
+  // canal n de la carpeta (▲▼ o la lista de canales)
+  const goTo = useCallback(
+    (n: number) => {
+      if (params.kind !== 'live' || n === indexRef.current || !params.channels[n]) return;
       retried.current = false;
       triedDns.current = false;
       triedOther.current = false;
@@ -218,6 +221,17 @@ export default function Player({ params }: { params: PlayParams }) {
     },
     [params, load, showOverlay],
   );
+  const zap = useCallback(
+    (delta: number) => {
+      if (params.kind !== 'live' || params.channels.length < 2) return;
+      goTo((indexRef.current + delta + params.channels.length) % params.channels.length);
+    },
+    [params, goTo],
+  );
+  // lista de canales de la carpeta a la izquierda (OK en un canal, como Roku)
+  const [chList, setChList] = useState(false);
+  const chListRef = useRef(false);
+  chListRef.current = chList;
 
   useEffect(() => {
     const v = new VideoPlayer();
@@ -603,6 +617,11 @@ export default function Player({ params }: { params: PlayParams }) {
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (leaving.current) return true;
+      if (chListRef.current) {
+        chListRef.current = false;
+        setChList(false);
+        return true;
+      }
       if (menuOpen.current) {
         menuOpen.current = false;
         menuSig.current = '';
@@ -683,14 +702,19 @@ export default function Player({ params }: { params: PlayParams }) {
 
   useTVEventHandler((evt: HWEvent) => {
     if (evt.eventKeyAction !== undefined && evt.eventKeyAction !== 0) return;
-    if (menu || askExit || nextSecs > 0) return; // menú, aviso del siguiente y «¿Salir?» usan el foco normal
+    if (menu || askExit || nextSecs > 0 || chList) return; // menú, lista de canales, aviso del siguiente y «¿Salir?» usan el foco normal
+    // en vivo solo OK (lista de canales), ▲▼ (cambiar de canal) y MENÚ: pausa, ◀▶ y adelantar no hacen nada (pausar un
+    // canal en vivo lo dejaba trabado)
+    if (live && !['select', 'up', 'down', 'channel_up', 'channel_down', 'menu', 'info', 'more', 'context_menu'].includes(evt.eventType)) return;
     switch (evt.eventType) {
       case 'select':
         if (error) {
           retried.current = false;
           load(indexRef.current, Math.floor(pos));
-        } else if (live) showOverlay();
-        else togglePause();
+        } else if (live) {
+          showOverlay();
+          if (params.kind === 'live' && params.channels.length > 1) setChList(true);
+        } else togglePause();
         break;
       case 'playpause':
       case 'play':
@@ -817,7 +841,7 @@ export default function Player({ params }: { params: PlayParams }) {
                   </>
                 ) : null}
                 <Text style={s.hint}>
-                  {t('▲▼ cambiar canal ({x}/{y}) · MENÚ audio y subtítulos', { x: index + 1, y: params.kind === 'live' ? params.channels.length : 1 })}
+                  {t('▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos', { x: index + 1, y: params.kind === 'live' ? params.channels.length : 1 })}
                 </Text>
               </>
             ) : (
@@ -856,6 +880,40 @@ export default function Player({ params }: { params: PlayParams }) {
           onFav={onFav}
           onPick={onPick}
         />
+      ) : null}
+      {chList && params.kind === 'live' ? (
+        <View style={s.chPanel}>
+          <Text style={s.chHead} numberOfLines={1}>
+            {t('Canales')} · {index + 1}/{params.channels.length}
+          </Text>
+          <FlatList
+            data={params.channels}
+            keyExtractor={(c, i) => c.id + ':' + i}
+            initialScrollIndex={Math.max(0, index - 3)}
+            getItemLayout={(_, i) => ({ length: px(CH_ROW), offset: px(CH_ROW) * i, index: i })}
+            initialNumToRender={14}
+            windowSize={7}
+            renderItem={({ item: c, index: i }) => (
+              <Focusable
+                preferred={i === index}
+                onPress={() => {
+                  setChList(false);
+                  goTo(i);
+                }}
+                style={f => [s.chRow, i === index && s.chRowOn, f && s.chRowF]}>
+                {f => (
+                  <>
+                    <Text style={[s.chNum, f && s.chTextF]}>{i + 1}</Text>
+                    {c.poster ? <Image source={{ uri: c.poster }} style={s.chRowLogo} resizeMode="contain" /> : <View style={s.chRowLogo} />}
+                    <Text style={[s.chName, f && s.chTextF]} numberOfLines={1}>
+                      {c.name}
+                    </Text>
+                  </>
+                )}
+              </Focusable>
+            )}
+          />
+        </View>
       ) : null}
       {/* «¿Salir del video?» al frente de todo (aviso de error, barra, menú) con fondo oscuro: antes el aviso de error
           se dibujaba encima y los dos textos se mezclaban */}
@@ -904,6 +962,15 @@ const s = themed(() =>
     toast: { position: 'absolute', bottom: px(200), alignSelf: 'center', maxWidth: px(1300), backgroundColor: alpha(C.bg2, 0.95), borderRadius: px(12), borderLeftWidth: px(6), borderLeftColor: C.red, paddingHorizontal: px(30), paddingVertical: px(16), zIndex: 9 },
     toastText: { color: C.text, fontSize: px(26) },
     nextCard: { position: 'absolute', right: px(80), bottom: px(140), backgroundColor: alpha(C.bg2, 0.95), borderRadius: px(12), padding: px(30), zIndex: 10 },
+    chPanel: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(620), zIndex: 40, backgroundColor: alpha(C.bg, 0.94), paddingTop: px(40), paddingHorizontal: px(20) },
+    chHead: { color: C.text, fontSize: px(32), fontWeight: '800', marginLeft: px(16), marginBottom: px(16) },
+    chRow: { height: px(CH_ROW - 8), marginBottom: px(8), flexDirection: 'row', alignItems: 'center', borderRadius: px(8), paddingHorizontal: px(16), borderWidth: px(3), borderColor: 'transparent' },
+    chRowOn: { backgroundColor: alpha(C.text, 0.1) },
+    chRowF: { backgroundColor: C.focus, borderColor: C.focus },
+    chNum: { color: C.sub, fontSize: px(26), width: px(70) },
+    chRowLogo: { width: px(80), height: px(50), marginRight: px(16) },
+    chName: { color: C.text, fontSize: px(28), flex: 1 },
+    chTextF: { color: C.onFocus },
     exitShade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 50, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' },
     exitBox: { backgroundColor: alpha(C.bg2, 0.97), borderRadius: px(12), padding: px(40), alignItems: 'center' },
     nextTitle: { color: C.text, fontSize: px(34), fontWeight: '800' },

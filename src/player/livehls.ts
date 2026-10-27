@@ -36,6 +36,7 @@ export class LiveHls {
   private next = -1;
   private alive = true;
   private appended = 0;
+  private lastAppend = Date.now();
   private bytes = 0;
   // llaves AES-128 ya bajadas (por dirección) y si el canal viene cifrado (para el reporte)
   private keys = new Map<string, Uint8Array>();
@@ -215,23 +216,46 @@ export class LiveHls {
     }
   }
 
-  // el reproductor quedó antes o entre lo entregado (los canales traen marcas de tiempo grandes, p. ej. 86000 s, y el
-  // video empieza en 0): se salta al principio de lo que tiene, si no esperaba para siempre («nunca reproduce»)
+  // El reproductor quedó antes, entre o al final de un tramo con otro tramo después: se salta al siguiente. Los canales
+  // traen marcas de tiempo grandes (p. ej. 86000 s) y el video empieza en 0; además, entre un segmento y el siguiente
+  // puede quedar un hueco de décimas (audio y video no terminan juntos): el video llegaba al final del primer
+  // segmento (5-6 s) y se quedaba esperando ahí para siempre. Si la imagen no avanza en 8 s con video por delante,
+  // también se empuja.
+  private lastT = -1;
+  private lastMove = Date.now();
   private unstick(): void {
     try {
       const b = this.sb.buffered;
       const t = this.v.currentTime || 0;
+      if (t !== this.lastT) {
+        this.lastT = t;
+        this.lastMove = Date.now();
+      }
+      const stalled = !this.v.paused && Date.now() - this.lastMove > 8000;
       for (let i = 0; i < b.length; i++) {
-        if (t >= b.start(i) - 0.3 && t <= b.end(i)) return;
-        if (t < b.start(i) && b.end(i) - b.start(i) > 0.5) {
-          this.v.currentTime = b.start(i) + 0.1;
-          if (this.v.paused) this.v.play();
+        const st = b.start(i);
+        const en = b.end(i);
+        const next = i + 1 < b.length ? b.start(i + 1) : -1;
+        if (t < st - 0.3) {
+          if (en - st > 0.5) this.jump(st + 0.1);
+          return;
+        }
+        if (t <= en) {
+          // al final de este tramo (o quieto) y hay otro después: al siguiente
+          if (next > 0 && (en - t < 0.5 || stalled)) this.jump(next + 0.1);
+          else if (stalled && en - t > 1) this.jump(t + 0.5);
           return;
         }
       }
     } catch {
       // sin datos todavía
     }
+  }
+
+  private jump(to: number): void {
+    this.v.currentTime = to;
+    this.lastMove = Date.now();
+    if (this.v.paused) this.v.play();
   }
 
   // lo ya visto se borra para no llenar la memoria
@@ -272,7 +296,19 @@ export class LiveHls {
           this.onError(err);
           return;
         }
-        if (!err) listFails = 0;
+        if (!err) {
+          listFails = 0;
+          const last = this.segs.length ? this.segs[this.segs.length - 1].seq : -1;
+          // la lista empezó otra numeración (el servidor abrió otra sesión) o no trae nada nuevo hace rato: cerca del
+          // final otra vez (antes se esperaba un número que no iba a llegar y el canal quedaba quieto para siempre)
+          const late = Date.now() - this.lastAppend > Math.max(20000, this.target * 3000);
+          if (last >= 0 && (this.next > last + 2 || late)) {
+            this.lastProblem = late ? 'lista sin segmentos nuevos' : 'lista reiniciada';
+            if (late) this.list = this.first;
+            this.next = this.segs[Math.max(0, this.segs.length - 2)].seq;
+            this.lastAppend = Date.now();
+          }
+        }
         continue;
       }
       const r = await this.get(seg.url, 20000, 'seg');
@@ -331,6 +367,7 @@ export class LiveHls {
       this.appended++;
       this.bytes += data.length;
       this.next = seg.seq + 1;
+      this.lastAppend = Date.now();
       if (this.appended === 1) {
         this.unstick();
         if (this.v.paused) this.v.play();

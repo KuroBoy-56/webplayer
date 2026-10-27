@@ -162,6 +162,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Borrado de caché del panel**: `check_mac` trae la orden (`cache_clear`) y cuándo se envió (`cache_clear_at`). Sin
   número guardado (reinstalada) una orden de los últimos 3 días se aplica igual; la consulta de cada 10 min va con
   `poll: 1` (no cuenta como otra apertura) y, si se está viendo un video, la orden espera a que se cierre el reproductor.
+- **TV en vivo como Roku**: al quedarse 2,5 s sobre un canal empieza a sonar en el cuadro de la derecha
+  (`src/components/LivePreview.tsx`, donde estaba el logo); OK lo abre a pantalla completa (antes se apaga la vista
+  previa: nunca dos conexiones de la línea a la vez). En el reproductor de un canal solo funcionan OK (lista de canales
+  de la carpeta a la izquierda, con el que suena marcado), ▲▼ (cambiar de canal) y MENÚ; pausa, ◀▶ y adelantar no
+  hacen nada (pausar un canal en vivo lo dejaba trabado). El lector en vivo salta los huecos de décimas entre segmentos
+  (el canal se quedaba quieto al final del primero, a los 5-6 s), empuja la imagen si no avanza en 8 s y vuelve al
+  final de la lista si el servidor reinicia la numeración o no trae segmentos nuevos.
 - **TV en vivo**: categorías, canales, guía EPG (proveedor y, si no hay, la del panel),
   favoritos, cambio de canal con ▲▼ dentro del reproductor.
 - **Deportes** (igual que Roku; pantallas en `src/screens/Sports*.tsx`, datos en `src/data/sports.ts` y
