@@ -483,11 +483,12 @@ function wp_play_sources($kind, $id, array $exts, $allowProxy = true)
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
         $u = wp_stream_url($kind, $id, $x);
         if ($https && wp_via_hosting($u)) {
-            // web en https y video http: el relay https de Cloudflare (includes/https_relay.php) lo entrega con permiso
-            // CORS sin pasar por el hosting. Sin relay: play.php por http (wp_needs_handoff) y, solo si ni eso se puede
-            // ("Forzar HTTPS" encendido), el hosting como último recurso
-            if (wp_https_relay() !== '') {
-                $out[] = ['url' => wp_relay_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'relay' => 1];
+            // web en https y video http: la VPS / VDS de la línea lo entrega por https (servidor IPTV → VPS / VDS →
+            // navegador, con permiso CORS; nunca por el hosting ni por Cloudflare). Si no hay máquina: play.php por http
+            // (wp_needs_handoff) y, solo si ni eso se puede ("Forzar HTTPS" encendido), el hosting como último recurso
+            $vr = wp_vps_relay($u);
+            if ($vr !== '') {
+                $out[] = ['url' => $vr, 'engine' => $engine, 'ext' => $x, 'cors' => true, 'relay' => 1];
                 continue;
             }
             if ($allowProxy) $out[] = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
@@ -513,6 +514,35 @@ function wp_play_sources($kind, $id, array $exts, $allowProxy = true)
         }
     }
     return array_merge($out, $extra);
+}
+
+/**
+ * Enlace https del video por la VPS / VDS de la línea (api/media_web.php?do=link del panel): la VDS propia del
+ * distribuidor si la eligió, si no la del dueño; nunca un hosting ni Cloudflare. '' si no hay máquina (o no tiene
+ * https y la web sí). Caché 5 h por contenido (el enlace firmado vale 6 h); si no hay máquina, 2 min sin preguntar.
+ */
+function wp_vps_relay($url)
+{
+    static $memo = [];
+    $ck = 'vrelay|' . md5($url);
+    if (isset($memo[$ck])) return $memo[$ck];
+    $hit = wp_cache_get($ck, 5 * 3600);
+    if (is_string($hit) && $hit !== '') return $memo[$ck] = $hit;
+    $no = wp_panel_ck('vrelay_no');
+    if (wp_cache_get($no, 120)) return $memo[$ck] = '';
+    if (!wp_panel_ready() || wp_panel_base() === '') return $memo[$ck] = '';
+    $tok = function_exists('wp_panel_tok') ? wp_panel_tok() : wp_panel_token();
+    $link = '';
+    if ($tok !== '') {
+        $res = wp_panel_request('media_web.php?do=link&token=' . rawurlencode($tok) . '&u=' . wp_b64u_enc($url), null, [], 5, $code);
+        $j = is_string($res) ? json_decode($res, true) : null;
+        $link = is_array($j) && is_string($j['url'] ?? null) && preg_match('~^https?://~i', $j['url']) ? $j['url'] : '';
+        // la página es https: un enlace http de la máquina lo bloquearía el navegador
+        if ($link !== '' && wp_is_https() && stripos($link, 'https://') !== 0) $link = '';
+    }
+    if ($link === '') { wp_cache_set($no, 1); return $memo[$ck] = ''; }
+    wp_cache_set($ck, $link);
+    return $memo[$ck] = $link;
 }
 
 /** Código, destino final y cabecera (de la última respuesta) de una petición, sin descargar el cuerpo. */
@@ -672,9 +702,8 @@ function wp_final_is_http($url)
 }
 
 /**
- * Relay HTTPS opcional: un Cloudflare Worker de tu cuenta (cloudflare/relay-worker.js) que entrega
- * por https el video http del servidor IPTV. El video va servidor IPTV → Cloudflare → navegador:
- * nunca pasa por el hosting. Se activa creando includes/https_relay.php (ver https_relay.sample.php).
+ * Relay de Cloudflare de versiones anteriores: ya no se usa para reproducir (el video de la web en https va por la
+ * VPS / VDS de la línea, wp_vps_relay). Solo lo muestra el diagnóstico si quedó includes/https_relay.php.
  */
 function wp_https_relay()
 {

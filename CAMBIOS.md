@@ -7,10 +7,10 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 ## SSL sin cargar el hosting y direcciones con tokens (27 de octubre, tarde)
 
 **SSL (Hostinger)**
-- **Corregido:** con la web en https, todo video de un servidor IPTV http pasaba por `proxy.php` (el hosting reenviaba cada película y cada canal); el relay de Cloudflare solo se usaba en el diagnóstico. Ahora el orden es: https directo del servidor IPTV → **relay https de Cloudflare** (`includes/https_relay.php`, con permiso CORS: también sirve para elegir el idioma en el navegador) → `play.php` por http (solo con "Forzar HTTPS" apagado) → el hosting solo como último recurso.
-- Con el relay configurado se puede activar **SSL y Forzar HTTPS** en hPanel. La conversión (motor del panel) no cambia: la VPS / VDS también necesita https.
+- **Corregido:** con la web en https, todo video de un servidor IPTV http pasaba por `proxy.php` (el hosting reenviaba cada película y cada canal). Ahora el orden es: https directo del servidor IPTV → **la VPS / VDS de la línea** (`api/media_web.php?do=link` del panel firma el enlace; servidor IPTV → VPS / VDS → navegador, con permiso CORS: también sirve para elegir el idioma en el navegador; la VDS propia del distribuidor si la eligió, si no la del dueño) → `play.php` por http (solo con "Forzar HTTPS" apagado) → el hosting solo como último recurso. **El video nunca pasa por Cloudflare**: se quitó el relay de Cloudflare (`cloudflare/relay-worker.js`, `includes/https_relay.sample.php`); Cloudflare queda solo para los dominios.
+- Con la VPS / VDS en https se puede activar **SSL y Forzar HTTPS** en hPanel. Probado: película por rangos y canal en vivo HLS por una VPS local; el navegador solo habló con la web y la VPS.
 - `play.php` vuelve a http bien aunque la dirección sea un token, y el reproductor retoma el segundo con `?t=` en cualquier dirección.
-- Ver GUIA.md: relay, dominio propio del relay, dominios con nube gris y límites de Cloudflare.
+- Ver GUIA.md: SSL con la VPS / VDS y Cloudflare solo para los dominios.
 
 **Direcciones con tokens (como el panel)**
 - Después del login la barra nunca muestra el nombre de una página `.php`: cada enlace es `w-<token>`, **distinto y aleatorio cada vez** (AES-256-GCM con un IV al azar y la llave propia del hosting), con la página, sus parámetros, la hora y la línea de la sesión. Un token alterado, de otra sesión o de más de 7 días lleva al inicio.

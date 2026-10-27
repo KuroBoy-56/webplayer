@@ -125,7 +125,8 @@ function wp_needs_handoff($kind, $id, array $sources)
     if (!wp_is_https()) return false;
     // el video http lo entrega el hosting (proxy.php): nunca hace falta abrir el reproductor por http
     foreach ($sources as $s) if (!empty($s['host'])) return false;
-    if (wp_https_relay() !== '') return false; // el relay https (Cloudflare) entrega el video sin pasar por el hosting
+    // la VPS / VDS de la línea entrega el video por https (sin pasar por el hosting)
+    foreach ($sources as $s) if (!empty($s['relay'])) return false;
     foreach ($sources as $s) {
         if (wp_direct_https_ok($kind, $id, $s['ext'], $s['engine'] !== 'native')) return false;
     }

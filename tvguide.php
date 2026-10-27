@@ -76,7 +76,7 @@ function tv_channel_data($id, $username, $fav_file)
     // Directo del servidor IPTV al navegador (el reproductor pone primero el m3u8 en iPhone/Safari)
     $http = wp_handoff_url(['kind' => 'live', 'id' => (string)$id, 'exts' => $order, 'vlcExt' => $pref, 'slug' => 'live',
         'title' => $name, 'back' => wp_handoff_abs('tvguide.php?id=' . rawurlencode((string)$id) . '&slug=live')]);
-    // web https con canal http: el relay de Cloudflare o "Ver canal" por http; el hosting solo si ninguno se puede
+    // web https con canal http: la VPS / VDS de la línea o "Ver canal" por http; el hosting solo si ninguno se puede
     $sources = wp_play_sources('live', $id, $order, $http === '');
     return [
         'id' => (string)$id,
