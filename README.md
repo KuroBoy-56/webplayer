@@ -95,6 +95,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   panel; `src/data/heroart.ts`), se guarda en el equipo 7 días y la próxima vez sale al instante. El destacado de
   cada sección también busca su fondo; un título sin fondo usa su propia carátula agrandada y oscurecida (nunca el
   fondo de otro título). Continuar viendo y Mi lista salen solo en Inicio.
+- **Degradados de la portada como Roku**: a la izquierda (1500×1080 al 92 %) y abajo (1920×520) con el color de
+  fondo del tema (el del distribuidor o el original), para que los textos se lean sobre cualquier imagen; el fondo
+  sigue siendo el Full HD del panel. Con ancho y alto fijos: Vega dibujaba el degradado a su tamaño real (4 px).
 - **Abrir una película o capítulo es inmediato**: ya no se espera a los idiomas (antes hasta 3 s); llegan a la vez y
   si el audio por defecto es el idioma preferido suena así, sin pasar por el panel. En las páginas de
   plataformas el fondo es liso (sin la portada fija de Inicio).

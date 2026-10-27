@@ -276,8 +276,11 @@ const s = themed(() =>
     hero: { position: 'absolute', left: 0, top: 0, right: 0, height: px(1080) },
     heroImg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
     heroDim: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, opacity: 0.45 },
-    heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(620) },
-    heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1400) },
+    // degradados como Roku (izquierda 1500×1080 al 92 %, abajo 1920×520 desde la fila 560) con el color de fondo del
+    // tema (el del distribuidor o el original). Con ancho y alto fijos: Vega dibuja las imágenes del paquete a su tamaño
+    // real (4 px) si solo se estiran con left/right/top/bottom, y la portada quedaba sin degradado
+    heroGrad: { position: 'absolute', left: 0, top: px(560), width: px(1920), height: px(520) },
+    heroShade: { position: 'absolute', left: 0, top: 0, width: px(1500), height: px(1080), opacity: 0.92 },
     side: { position: 'absolute', right: SIDE, top: px(150), width: px(427), height: px(640), borderRadius: px(8) },
     sideCompact: { top: px(120), width: px(260), height: px(390) },
     heroText: { position: 'absolute', left: SIDE, top: px(230), width: px(980) },
