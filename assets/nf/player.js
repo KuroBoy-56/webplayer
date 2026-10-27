@@ -490,7 +490,7 @@
             // página https y video http: se abre el reproductor directo por http (el video nunca pasa por el hosting)
             if (this.o.fallbackUrl && location.protocol === 'https:') {
                 var t0 = Math.floor(this.lastTime || this.o.resume || 0);
-                location.replace(this.o.fallbackUrl + (t0 > 0 ? '&t=' + t0 : ''));
+                location.replace(this.o.fallbackUrl + (t0 > 0 ? (this.o.fallbackUrl.indexOf('?') < 0 ? '?' : '&') + 't=' + t0 : ''));
                 return;
             }
             this.showError(); return;

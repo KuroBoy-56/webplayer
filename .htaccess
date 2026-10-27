@@ -26,14 +26,18 @@
 
 RewriteEngine on
 
-# La web funciona en http para reproducir el video directo del servidor IPTV sin que el
-# navegador lo bloquee. No se fuerza https aqui; manten "Forzar HTTPS" apagado en el hosting.
+# SSL: se puede activar en el hosting (Hostinger: SSL + "Forzar HTTPS"). Con la web en https el video http del
+# servidor IPTV va por el relay de Cloudflare (includes/https_relay.php, ver GUIA.md), nunca por el hosting. Sin relay
+# y con "Forzar HTTPS" apagado, el video se abre por http en play.php como antes.
 
 # --- Archivos internos que nunca se abren desde el navegador ---
 RewriteRule ^includes/ - [F,L,NC]
 RewriteRule ^bin/ - [F,L,NC]
 RewriteRule ^api/ - [F,L,NC]
 RewriteRule ^cloudflare/ - [F,L,NC]
+
+# --- Páginas por token (includes/route_token.php): w-<token> se abre por dentro con route.php ---
+RewriteRule ^w-([A-Za-z0-9_-]{30,2000})$ route.php?_w=$1 [L,QSA]
 
 # --- Rewrite so that php extentions are not shown ---
 RewriteCond %{REQUEST_FILENAME} !-d

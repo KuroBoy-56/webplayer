@@ -27,4 +27,6 @@ if (!defined('WP_SESSION_LOADED')) {
     $username = $wp_sess['username'];
     $password = $wp_sess['password'];
     $_SESSION = $wp_sess;
+    // direcciones con tokens: ninguna página muestra su nombre de archivo (includes/route_token.php)
+    wp_route_begin();
 }

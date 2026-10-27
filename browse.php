@@ -126,7 +126,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function sync() {
         var p = new URLSearchParams();
         Object.keys(state).forEach(function (k) { if (state[k] && !(k === 'type' && state[k] === 'all') && !(k === 'sort' && state[k] === 'recent')) p.set(k, state[k]); });
-        history.replaceState(null, '', 'browse.php' + (p.toString() ? '?' + p.toString() : ''));
+        // la misma dirección (token) con los filtros; _r=1: solo estos (sin los que traía el enlace)
+        p.set('_r', '1');
+        history.replaceState(null, '', location.pathname + '?' + p.toString());
         window.scrollTo({ top: 0, behavior: 'smooth' });
         grid.reset();
     }

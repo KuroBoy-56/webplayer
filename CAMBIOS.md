@@ -4,6 +4,21 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## SSL sin cargar el hosting y direcciones con tokens (27 de octubre, tarde)
+
+**SSL (Hostinger)**
+- **Corregido:** con la web en https, todo video de un servidor IPTV http pasaba por `proxy.php` (el hosting reenviaba cada película y cada canal); el relay de Cloudflare solo se usaba en el diagnóstico. Ahora el orden es: https directo del servidor IPTV → **relay https de Cloudflare** (`includes/https_relay.php`, con permiso CORS: también sirve para elegir el idioma en el navegador) → `play.php` por http (solo con "Forzar HTTPS" apagado) → el hosting solo como último recurso.
+- Con el relay configurado se puede activar **SSL y Forzar HTTPS** en hPanel. La conversión (motor del panel) no cambia: la VPS / VDS también necesita https.
+- `play.php` vuelve a http bien aunque la dirección sea un token, y el reproductor retoma el segundo con `?t=` en cualquier dirección.
+- Ver GUIA.md: relay, dominio propio del relay, dominios con nube gris y límites de Cloudflare.
+
+**Direcciones con tokens (como el panel)**
+- Después del login la barra nunca muestra el nombre de una página `.php`: cada enlace es `w-<token>`, **distinto y aleatorio cada vez** (AES-256-GCM con un IV al azar y la llave propia del hosting), con la página, sus parámetros, la hora y la línea de la sesión. Un token alterado, de otra sesión o de más de 7 días lleva al inicio.
+- Una página abierta por su nombre (enlace viejo, favorito, `homex`) se cambia sola a un token nuevo. Las redirecciones (`Location`), los enlaces, los formularios y la configuración del reproductor salen con token. Las llamadas internas (`api.php`, `img.php`, `report.php`, `tracks.php`…) no aparecen en la barra y siguen igual (como la API del panel).
+- Filtros de Explorar y canal de TV en vivo: la barra conserva el token y agrega los filtros (`?_r=1&…`).
+- Archivos: `route.php` (nuevo), `includes/route_token.php` (nuevo), `.htaccess` (regla `w-<token>`), `session.php`, `index.php`, `home.php`, `login.php`, `play.php`, `browse.php`, `tvguide.php`, `sportsschedule.php`, `video_player.php`, `includes/core.php`, `includes/handoff.php`, `assets/nf/player.js` (`v=33`), `GUIA.md`.
+- Probado: cada enlace un token distinto; token alterado → inicio; token de otra sesión no sirve; una página abierta por nombre → token; `Location: homex.php` → token; los fetch de JavaScript y las direcciones que arma el JavaScript no se tocan; `&` de la configuración JSON respetado.
+
 ## Conversión por el motor del panel, carátulas del panel, Deportes nuevo, idiomas compartidos y TV en vivo estable (27 de octubre)
 
 **Conversión de audio, subtítulos y video: ya no usa el hosting**

@@ -473,7 +473,7 @@ function wp_client_stream_url($kind, $id, $ext)
  * dominio): con ella el motor MP4 del reproductor puede elegir el idioma. Si falla, sigue lo directo.
  * Página https: un video http sería bloqueado (contenido mixto), así que ese video sí va por el hosting.
  */
-function wp_play_sources($kind, $id, array $exts)
+function wp_play_sources($kind, $id, array $exts, $allowProxy = true)
 {
     $out = [];
     $extra = [];
@@ -483,7 +483,14 @@ function wp_play_sources($kind, $id, array $exts)
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
         $u = wp_stream_url($kind, $id, $x);
         if ($https && wp_via_hosting($u)) {
-            $out[] = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
+            // web en https y video http: el relay https de Cloudflare (includes/https_relay.php) lo entrega con permiso
+            // CORS sin pasar por el hosting. Sin relay: play.php por http (wp_needs_handoff) y, solo si ni eso se puede
+            // ("Forzar HTTPS" encendido), el hosting como último recurso
+            if (wp_https_relay() !== '') {
+                $out[] = ['url' => wp_relay_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'relay' => 1];
+                continue;
+            }
+            if ($allowProxy) $out[] = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
             continue;
         }
         if ($multi === null) $multi = wp_content_multi_audio($kind, $id, $exts, true) === true;
@@ -980,7 +987,8 @@ function wp_card($it, $t = null)
         'r' => $it['rating'] ? round((float)$it['rating'], 1) : '',
         'y' => $it['year'] ?? '',
         'tm' => $it['tm'] ?? '',
-        'u' => $t === 'series' ? 'seriesvideo.php?id=' . rawurlencode($id) : 'Movie_description.php?id=' . rawurlencode($id),
+        // como token (las respuestas JSON no pasan por la reescritura de enlaces de la página)
+        'u' => wp_route_url($t === 'series' ? 'seriesvideo.php?id=' . rawurlencode($id) : 'Movie_description.php?id=' . rawurlencode($id)),
     ];
 }
 
@@ -1331,6 +1339,7 @@ function wp_lang_name($code)
 
 require_once __DIR__ . '/panel.php';
 require_once __DIR__ . '/panel_img.php';
+require_once __DIR__ . '/route_token.php';
 require_once __DIR__ . '/error_report.php';
 require_once __DIR__ . '/fake_screen.php';
 require_once __DIR__ . '/handoff.php';

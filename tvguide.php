@@ -74,9 +74,10 @@ function tv_channel_data($id, $username, $fav_file)
     $pref = (isset($settings["stream_type"]) && $settings["stream_type"] === 'ts') ? 'ts' : 'm3u8';
     $order = $pref === 'ts' ? ['ts', 'm3u8'] : ['m3u8', 'ts'];
     // Directo del servidor IPTV al navegador (el reproductor pone primero el m3u8 en iPhone/Safari)
-    $sources = wp_play_sources('live', $id, $order);
     $http = wp_handoff_url(['kind' => 'live', 'id' => (string)$id, 'exts' => $order, 'vlcExt' => $pref, 'slug' => 'live',
         'title' => $name, 'back' => wp_handoff_abs('tvguide.php?id=' . rawurlencode((string)$id) . '&slug=live')]);
+    // web https con canal http: el relay de Cloudflare o "Ver canal" por http; el hosting solo si ninguno se puede
+    $sources = wp_play_sources('live', $id, $order, $http === '');
     return [
         'id' => (string)$id,
         'name' => $name,
@@ -225,7 +226,7 @@ include "header.php";
 
 <script src="assets/vendor/hls.min.js" defer></script>
 <script src="assets/vendor/mpegts.min.js" defer></script>
-<script src="assets/nf/player.js?v=32" defer></script>
+<script src="assets/nf/player.js?v=33" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [] };
@@ -299,7 +300,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 play(d);
-                if (push) history.replaceState(null, '', 'tvguide.php?id=' + encodeURIComponent(id) + '&slug=live&category_id=' + encodeURIComponent(state.cat));
+                if (push) history.replaceState(null, '', location.pathname + '?_r=1&id=' + encodeURIComponent(id) + '&slug=live&category_id=' + encodeURIComponent(state.cat));
             })
             .catch(function () { NF.toast(<?php echo tj('No se pudo abrir el canal'); ?>); });
     }

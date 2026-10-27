@@ -55,7 +55,9 @@ function wp_handoff_url(array $v)
     ]);
     if ($tok === '') return '';
     $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
-    return 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $dir . '/play.php?d=' . $tok;
+    // como token (sin el nombre del archivo): vale sin sesión, el enlace http no comparte la cookie de la web https
+    $rt = wp_route_token('play.php', 'd=' . $tok, false);
+    return 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $dir . '/' . ($rt !== '' ? $rt : 'play.php?d=' . $tok);
 }
 
 /** Vuelve absoluto un enlace relativo de la web (para usarlo desde play.php en http). */

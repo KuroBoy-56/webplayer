@@ -20,7 +20,8 @@ if (!$d || empty($d['srv']) || empty($d['usr'])) {
 // Safari (iPhone) y Chrome cambian solos http por https cuando la web tiene SSL. Se devuelve a http
 // una sola vez: el navegador ve el ciclo y se queda en http, así el video va directo del servidor IPTV.
 if (wp_is_https() && $_SERVER['REQUEST_METHOD'] === 'GET' && empty($_GET['h'])) {
-    header('Location: http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ($_SERVER['REQUEST_URI'] ?? '/play.php') . '&h=1', true, 302);
+    $ru = (string)($_SERVER['REQUEST_URI'] ?? '/play.php');
+    header('Location: http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $ru . (strpos($ru, '?') === false ? '?' : '&') . 'h=1', true, 302);
     exit;
 }
 $get_dns = rtrim((string)$d['srv'], '/');
@@ -81,7 +82,7 @@ $media_cfg = $live ? null : wp_media_cfg($kind, $id, $exts, (string)($d['vlcExt'
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=2" defer></script>
-    <script src="assets/nf/player.js?v=32" defer></script>
+    <script src="assets/nf/player.js?v=33" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

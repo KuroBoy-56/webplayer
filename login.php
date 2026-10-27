@@ -150,7 +150,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         if (isset($_COOKIE['password'])) {
             wp_setcookie("password", '', time() - 3600);
         }
-        echo json_encode(['success' => true, 'redirect' => 'homex']);
+        // al inicio con un token (la dirección nunca muestra el nombre de la página)
+        echo json_encode(['success' => true, 'redirect' => wp_route_url('homex')]);
         exit;
     }
 
@@ -173,7 +174,7 @@ $dist_view = wp_tenant_login_view();
 wp_session_start();
 if (!empty($_SESSION['username']) && !empty($_SESSION['server']) && !isset($_GET['dist']) && $dist_view['error'] === '') {
     session_write_close();
-    header('Location: homex');
+    header('Location: ' . wp_route_url('homex'));
     exit;
 }
 session_write_close();

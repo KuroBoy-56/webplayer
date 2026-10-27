@@ -79,7 +79,7 @@ function sp_live_index()
 
 function sp_chan_url($c)
 {
-    return 'tvguide.php?id=' . rawurlencode($c['id']) . '&slug=live&category_id=' . rawurlencode($c['cat']);
+    return wp_route_url('tvguide.php?id=' . rawurlencode($c['id']) . '&slug=live&category_id=' . rawurlencode($c['cat']));
 }
 
 /** nombre de un canal sin calidad ni país, con el número pegado ("MX: ESPN 2 HD" → ["espn2"]); igual que las apps */
@@ -177,7 +177,7 @@ function sp_find_channel($h, $a, $lg, $ev, $mode = 'teams', $tvs = [])
     $eventCats = sp_live_index()['eventCats'];
     if ($eventCats) {
         $cid = (string)array_key_first_compat($eventCats);
-        return ['ok' => true, 'partial' => true, 'url' => 'tvguide.php?category_id=' . rawurlencode($cid), 'name' => $eventCats[$cid], 'missing' => $miss];
+        return ['ok' => true, 'partial' => true, 'url' => wp_route_url('tvguide.php?category_id=' . rawurlencode($cid)), 'name' => $eventCats[$cid], 'missing' => $miss];
     }
     return ['ok' => false, 'missing' => $miss];
 }
