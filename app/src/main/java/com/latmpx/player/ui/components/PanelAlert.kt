@@ -1,5 +1,7 @@
 package com.latmpx.player.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -17,9 +19,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -36,6 +42,7 @@ import coil3.compose.AsyncImage
 import com.latmpx.player.data.Alerts
 import com.latmpx.player.ui.theme.NfGray2
 import com.latmpx.player.ui.theme.NfRed
+import kotlinx.coroutines.delay
 
 /**
  * Aviso del panel (bienvenida o vencimiento) con el diseño de la app.
@@ -75,14 +82,38 @@ fun PanelAlertDialog(alert: Alerts.Alert, onClose: () -> Unit) {
                         alert.message, color = NfGray2, fontSize = if (tv) 18.sp else 16.sp, lineHeight = if (tv) 27.sp else 24.sp,
                         textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp),
                     )
-                    if (alert.image.isNotEmpty()) AsyncImage(
-                        model = alert.image, contentDescription = null, contentScale = ContentScale.Fit,
-                        modifier = Modifier.padding(top = 18.dp).fillMaxWidth().heightIn(max = if (tv) 220.dp else 260.dp).clip(RoundedCornerShape(8.dp)),
-                    )
+                    if (alert.images.isNotEmpty()) AlertImages(alert.images, alert.interval, tv)
                     Spacer(Modifier.height(24.dp))
                     AppButton(alert.button.uppercase(), Modifier.fillMaxWidth().focusRequester(ok), primary = true, fontSize = 17.sp, onClick = onClose)
                 }
             }
+        }
+    }
+}
+
+/**
+ * Imágenes del aviso (Alertas del panel): una sola, fija; varias, cambian cada [interval] s en el mismo lugar con un
+ * fundido. Todas se cargan de inicio (encimadas), así el cambio nunca deja el recuadro vacío.
+ */
+@Composable
+private fun AlertImages(images: List<String>, interval: Int, tv: Boolean) {
+    var idx by remember(images) { mutableIntStateOf(0) }
+    if (images.size > 1) LaunchedEffect(images, interval) {
+        while (true) {
+            delay(interval.coerceAtLeast(1) * 1000L)
+            idx = (idx + 1) % images.size
+        }
+    }
+    Box(
+        Modifier.padding(top = 18.dp).fillMaxWidth().heightIn(max = if (tv) 220.dp else 260.dp).clip(RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        images.forEachIndexed { i, u ->
+            val a by animateFloatAsState(if (i == idx) 1f else 0f, tween(400), label = "alertImg")
+            AsyncImage(
+                model = u, contentDescription = null, contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().heightIn(max = if (tv) 220.dp else 260.dp).alpha(a),
+            )
         }
     }
 }
