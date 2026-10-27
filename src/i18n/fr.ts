@@ -391,6 +391,7 @@ const fr: Record<Key, string> = {
   "Línea vencida": "Ligne expirée",
   "El servidor bloqueó este equipo ({x})": "Le serveur a bloqué cet appareil ({x})",
   "El servidor no entregó el video ({x})": "Le serveur n'a pas fourni la vidéo ({x})",
+  "No hay información de este equipo": "Aucune information sur cette équipe",
 };
 
 export default fr;

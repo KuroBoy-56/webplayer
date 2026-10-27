@@ -9,6 +9,7 @@ import { RowView } from '../components/Tiles';
 import { ChainImage } from '../components/ChainImage';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, Item } from '../data/catalog';
+import { savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, progressMovie, progressSeries, toggleFav, useAppState } from '../state';
@@ -62,10 +63,13 @@ export default function Detail({ item }: { item: Item }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, loading]);
-  const backdrop = info?.backdrop || item.backdrop || info?.poster || item.poster;
+  // fondo horizontal: el del servidor, el que ya encontró la portada (servidor o TMDB) o, si no hay, la carátula
+  const wide = info?.backdrop || item.backdrop || savedArt(item)?.backdrop || '';
+  const backdrop = wide || info?.poster || item.poster;
   const bdSrc = useMemo(
-    () => (info?.backdrop || item.backdrop ? backdropSources(info?.backdrop || item.backdrop) : posterSources(item.kind, info?.poster || item.poster, item.name, item.year, item.tm)),
-    [info, item],
+    () => (wide ? backdropSources(wide) : posterSources(item.kind, info?.poster || item.poster, item.name, item.year, item.tm)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [info, item, wide],
   );
   const fav = isFav(item.kind, item.id);
   void st.rev;
@@ -100,8 +104,13 @@ export default function Detail({ item }: { item: Item }) {
 
   return (
     <View style={s.root}>
-      {backdrop || bdSrc.length ? <ChainImage sources={bdSrc} style={s.bg} resizeMode="cover" /> : null}
-      <View style={s.shade} />
+      {/* como Roku: la imagen arriba a la derecha (1440×810), color liso a la izquierda con degradado sobre la imagen,
+          degradado abajo y color liso debajo; los textos se leen sobre cualquier imagen */}
+      {backdrop || bdSrc.length ? <ChainImage sources={bdSrc} style={s.bg} resizeMode="cover" blurRadius={wide ? undefined : 18} /> : null}
+      <Image source={require('../../assets/image/grad_left.png')} style={[s.bgLeft, { tintColor: C.bg }]} resizeMode="stretch" />
+      <View style={s.bgSolidLeft} />
+      <Image source={require('../../assets/image/grad_bottom.png')} style={[s.bgBottom, { tintColor: C.bg }]} resizeMode="stretch" />
+      <View style={s.bgSolidBottom} />
       <ScrollView contentContainerStyle={{ paddingBottom: px(80) }}>
         <View style={s.head}>
           <Text style={s.title} numberOfLines={2}>
@@ -223,8 +232,13 @@ export default function Detail({ item }: { item: Item }) {
 const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg },
-    bg: { position: 'absolute', left: 0, top: 0, right: 0, height: px(1080) },
-    shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha(C.bg, 0.75) },
+    // medidas de Roku (DetailView.xml); ancho y alto fijos: Vega dibuja las imágenes del paquete a su tamaño real si solo
+    // se estiran
+    bg: { position: 'absolute', left: px(480), top: 0, width: px(1440), height: px(810) },
+    bgLeft: { position: 'absolute', left: px(480), top: 0, width: px(900), height: px(810) },
+    bgSolidLeft: { position: 'absolute', left: 0, top: 0, width: px(481), height: px(810), backgroundColor: C.bg },
+    bgBottom: { position: 'absolute', left: 0, top: px(400), width: px(1920), height: px(420) },
+    bgSolidBottom: { position: 'absolute', left: 0, top: px(810), width: px(1920), height: px(1200), backgroundColor: C.bg },
     head: { paddingLeft: SIDE, paddingTop: px(110), width: px(1300) },
     title: { color: C.text, fontSize: px(72), fontWeight: '900' },
     meta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },

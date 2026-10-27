@@ -214,7 +214,7 @@ class Catalog {
   // Plataformas, Top 10 de hoy (películas y series juntas), Películas agregadas recientemente, Series nuevas,
   // «Lo mejor de…» de 5 plataformas, Series para ti, los géneros y Películas para ti; «Ver todo» al final de cada fila.
   // platforms: false = el distribuidor no separa su contenido por plataformas (sin fila ni filas por plataforma)
-  home(platforms = true): { rows: Row[]; hero: Item | null } {
+  home(platforms = true): { rows: Row[]; hero: Item | null; heroes: Item[] } {
     const rows: Row[] = [];
     let hero: Item | null = null;
     const vodIdx = this.allIdx('vod');
@@ -289,14 +289,30 @@ class Catalog {
 
     const moviesForYou = pick('vod', vodIdx, 24);
     if (moviesForYou.length) rows.push({ title: t('Películas para ti'), type: 'poster', items: [...moviesForYou, { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'vod' }] });
-    return { rows, hero };
+    return { rows, hero, heroes: this.heroCandidates(['vod', 'series'], 4) };
+  }
+
+  // destacados que van pasando en la portada (como Roku): de lo más nuevo (150) con carátula, al azar, n por tipo; la
+  // portada se queda con los que tienen fondo horizontal (servidor o TMDB)
+  heroCandidates(kinds: Kind[], n: number): Item[] {
+    const out: Item[] = [];
+    for (const kind of kinds) {
+      const d = this.k[kind];
+      if (!d) continue;
+      const withPic = this.top(kind, this.allIdx(kind), 'added', 150).filter(i => {
+        const it = d.items[i];
+        return str(kind === 'series' ? it?.cover : it?.stream_icon) !== '';
+      });
+      out.push(...this.items(kind, shuffle(withPic).slice(0, n)));
+    }
+    return shuffle(out);
   }
 
   // ---------- películas / series ----------
-  browse(kind: 'vod' | 'series'): { rows: Row[]; hero: Item | null } {
+  browse(kind: 'vod' | 'series'): { rows: Row[]; hero: Item | null; heroes: Item[] } {
     const rows: Row[] = [];
     const d = this.k[kind];
-    if (!d) return { rows, hero: null };
+    if (!d) return { rows, hero: null, heroes: [] };
     const all = this.allIdx(kind);
     const recent = this.top(kind, all, 'added', 30);
     const hero = recent.length ? this.items(kind, [recent[Math.floor(Math.random() * Math.min(10, recent.length))]])[0] : null;
@@ -319,7 +335,7 @@ class Catalog {
       if (idx.length > 25) items.push({ kind: 'more', key: c.id, label: t('Ver todo'), color: '', extra: 'cat:' + kind });
       rows.push({ title: c.name, type: 'poster', items });
     }
-    return { rows, hero };
+    return { rows, hero, heroes: this.heroCandidates([kind], 8) };
   }
 
   // ---------- cuadrícula "Ver todo" ----------

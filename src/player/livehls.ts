@@ -12,6 +12,20 @@ import { parseList, resolveUrl, Seg, segIv, tsStart } from '../lib/hlslist';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
+// llave AES-128: 16 bytes tal cual o, en algunos servidores, escrita en hexadecimal (32 caracteres, con o sin 0x)
+function keyBytes(d: Uint8Array): Uint8Array | null {
+  if (d.length === 16) return d;
+  const txt = String.fromCharCode(...Array.from(d.slice(0, 80))).trim().replace(/^0x/i, '');
+  if (/^[0-9a-f]{32}$/i.test(txt)) {
+    const out = new Uint8Array(16);
+    for (let i = 0; i < 16; i++) out[i] = parseInt(txt.slice(i * 2, i * 2 + 2), 16);
+    return out;
+  }
+  // con un salto de línea o espacio al final
+  if (d.length > 16 && d.length <= 18 && d.slice(16).every(b => b === 10 || b === 13 || b === 32)) return d.slice(0, 16);
+  return null;
+}
+
 export class LiveHls {
   private ms: any = null;
   private sb: any = null;
@@ -101,7 +115,9 @@ export class LiveHls {
 
   // GET siguiendo redirecciones a mano: XUI manda la lista a otro servidor (balanceador) con un token y los segmentos
   // vienen relativos a esa dirección final, no a la pedida
-  private async get(url: string, timeout: number, isList: boolean): Promise<{ code: number; url: string; text?: string; data?: Uint8Array; type?: string }> {
+  // mode: 'list' = texto; 'seg' = bytes salvo que llegue una página (motivo de XUI); 'bin' = siempre bytes (la llave:
+  // XUI la manda desde PHP marcada como text/html y antes se leía como texto y no se podía descifrar)
+  private async get(url: string, timeout: number, mode: 'list' | 'seg' | 'bin'): Promise<{ code: number; url: string; text?: string; data?: Uint8Array; type?: string }> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeout);
     let at = url;
@@ -116,7 +132,7 @@ export class LiveHls {
         const final = (res as any).url || at;
         const type = res.headers.get('content-type') || '';
         if (res.status !== 200) return { code: res.status, url: final, type };
-        if (isList || /mpegurl|text\/html/i.test(type)) return { code: 200, url: final, text: await res.text(), type };
+        if (mode === 'list' || (mode === 'seg' && /mpegurl|text\/html/i.test(type))) return { code: 200, url: final, text: await res.text(), type };
         return { code: 200, url: final, data: new Uint8Array(await res.arrayBuffer()), type };
       }
       return { code: 310, url: at };
@@ -132,12 +148,14 @@ export class LiveHls {
     const k = seg.key!;
     let key = this.keys.get(k.uri);
     if (!key) {
-      const r = await this.get(k.uri, 15000, false);
-      if (!r.data || r.data.length !== 16) {
-        this.lastProblem = 'llave HTTP ' + r.code + (r.data ? ' (' + r.data.length + ' bytes)' : '');
+      const r = await this.get(k.uri, 15000, 'bin');
+      key = r.data ? keyBytes(r.data) || undefined : undefined;
+      if (!key) {
+        const txt = r.data ? String.fromCharCode(...Array.from(r.data.slice(0, 600))) : '';
+        const x = /<html|<!doctype/i.test(txt) ? xuiError(txt) : null;
+        this.lastProblem = 'llave HTTP ' + r.code + ' ' + (r.type || '') + ' (' + (r.data ? r.data.length : 0) + ' bytes' + (x ? ', xui ' + x.code : '') + ')';
         return null;
       }
-      key = r.data;
       this.keys.set(k.uri, key);
     }
     try {
@@ -157,11 +175,11 @@ export class LiveHls {
 
   private async refresh(): Promise<string> {
     for (let hop = 0; hop < 2; hop++) {
-      let r = await this.get(this.list, 15000, true);
+      let r = await this.get(this.list, 15000, 'list');
       // la dirección con token del balanceador pudo vencer: otra vez desde la del canal
       if ((r.code !== 200 || r.text === undefined) && this.list !== this.first) {
         this.list = this.first;
-        r = await this.get(this.list, 15000, true);
+        r = await this.get(this.list, 15000, 'list');
       }
       if (r.code !== 200 || r.text === undefined) {
         this.lastProblem = 'lista HTTP ' + r.code;
@@ -257,7 +275,7 @@ export class LiveHls {
         if (!err) listFails = 0;
         continue;
       }
-      const r = await this.get(seg.url, 20000, false);
+      const r = await this.get(seg.url, 20000, 'seg');
       if (!this.alive) return;
       if (r.text !== undefined && /<html|<!doctype/i.test(r.text)) {
         // una página en lugar del video: el motivo (XUI) y no se insiste

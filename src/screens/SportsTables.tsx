@@ -10,6 +10,7 @@ import { Focusable, Message, Spinner } from '../components/ui';
 import { fetchTeam, League } from '../data/sportsPanel';
 import { t } from '../lib/i18n';
 import { int, str } from '../lib/util';
+import { showNotice } from '../state';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
 const REGIONS = ['intl', 'nat', 'eu', 'am', 'world'];
@@ -93,9 +94,16 @@ export default function SportsTables({ leagues, loading, partial, failed }: { le
     const id = str(r.id);
     if (!id || busy.current) return;
     busy.current = true;
+    // la primera vez el panel la pide a TheSportsDB y tarda unos segundos: se avisa (antes no se veía nada y parecía
+    // que no funcionaba); sin datos, el mismo aviso que Roku
+    showNotice(t('Cargando…'));
     const j = await fetchTeam(id);
     busy.current = false;
-    if (!j) return;
+    if (!j) {
+      showNotice(t('No hay información de este equipo'));
+      return;
+    }
+    showNotice('');
     const facts: string[] = [];
     const place = [str(j.loc), str(j.c)].filter(Boolean).join(', ');
     if (str(j.y)) facts.push(t('Fundado en {x}', { x: str(j.y) }) + (place ? ' · ' + place : ''));
