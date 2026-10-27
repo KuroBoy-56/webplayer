@@ -68,23 +68,37 @@ fun Poster(url: String, title: String, modifier: Modifier = Modifier, contentSca
 }
 
 /**
- * Carátula de una película o serie que nunca queda vacía: si el servidor no trae imagen
- * o el enlace falla, se busca en TMDB (llave del panel). Mientras tanto se ve el título.
+ * Carátula de una película o serie que nunca queda vacía, por la caché del panel como Roku y Vega: la copia del panel
+ * (imgc), img.php (con el título busca en TMDB si el servidor no tiene) y la original; si todo falla (o la caché está
+ * apagada y el servidor no trae imagen), se busca en TMDB desde el equipo. Mientras tanto se ve el título.
  */
 @Composable
 fun ItemPoster(item: Item, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop) {
-    var url by remember(item.key, item.poster) { mutableStateOf(Posters.clean(item.poster).ifBlank { Posters.cached(item).orEmpty() }) }
+    val sources = remember(item.key, item.poster, item.tm, com.latmpx.player.data.PanelImg.on) {
+        com.latmpx.player.data.PanelImg.posterSources(item).ifEmpty { listOfNotNull(Posters.cached(item)) }
+    }
+    var idx by remember(sources) { mutableStateOf(0) }
+    var found by remember(item.key) { mutableStateOf("") }
     var tried by remember(item.key) { mutableStateOf(false) }
+    val url = sources.getOrNull(idx) ?: found
     LaunchedEffect(item.key, url) {
-        if (url.isBlank() && !tried && item.kind != com.latmpx.player.data.Kind.LIVE) { tried = true; url = Posters.resolve(item) }
+        if (url.isBlank() && !tried && item.kind != com.latmpx.player.data.Kind.LIVE) { tried = true; found = Posters.resolve(item) }
     }
     Box(modifier.background(Brush.verticalGradient(listOf(Color(0xFF2B2B2B), Color(0xFF1A1A1A)))), contentAlignment = Alignment.Center) {
         Text(item.name, color = NfGray2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp))
         if (url.isNotBlank()) AsyncImage(
             model = url, contentDescription = item.name, contentScale = contentScale, modifier = Modifier.fillMaxSize(),
-            onError = { if (!tried) url = "" },
+            onError = { if (idx < sources.size) idx++ else found = "" },
         )
     }
+}
+
+/** Imagen con respaldo: si una dirección no carga, la siguiente (fondo Full HD del panel → original). */
+@Composable
+fun ChainImage(sources: List<String>, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop, alpha: Float = 1f) {
+    var idx by remember(sources) { mutableStateOf(0) }
+    val url = sources.getOrNull(idx) ?: return
+    AsyncImage(model = url, contentDescription = null, contentScale = contentScale, alpha = alpha, modifier = modifier, onError = { idx++ })
 }
 
 @Composable

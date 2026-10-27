@@ -19,14 +19,16 @@ object CacheClear {
     var pending by mutableStateOf(false)
 
     /**
-     * Número recibido en check_mac. Sin nada guardado (primera vez / app actualizada): se guarda en silencio.
-     * Mayor que el guardado: se guarda primero (para no repetir en bucle) y se borra. Igual o menor: nada.
+     * Número recibido en check_mac (at = cuándo se envió, cache_clear_at; now = hora corregida con el panel). Sin nada
+     * guardado (instalada de nuevo, datos borrados): una orden de los últimos 3 días se aplica igual (antes se guardaba
+     * en silencio y la orden recién enviada no hacía nada); una más vieja solo se guarda. Mayor que la guardada: se
+     * guarda primero (para no repetir en bucle) y se borra. Igual o menor: nada.
      */
-    fun received(got: Long) {
+    fun received(got: Long, at: Long = 0L, now: Long = 0L) {
         val seen = Store.cacheClearSeen
         if (seen != null && got <= seen) return
         Store.cacheClearSeen = got
-        if (seen != null) pending = true
+        if (seen != null || (got > 0 && at > 0 && now - at < 3 * 86400L)) pending = true
     }
 
     /** borra la caché interna y abre la app desde cero en una tarea nueva */

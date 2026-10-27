@@ -179,16 +179,24 @@ fun AppRoot() {
     }
     // al volver a la app: si el dueño quitó la línea de este equipo en el panel, se vuelve al inicio de sesión
     val lastPanelCheck = remember { mutableLongStateOf(System.currentTimeMillis()) }
-    fun revalidate() {
+    fun revalidate(gap: Long = 15 * 60_000L) {
         val s = state.session ?: return
-        if (System.currentTimeMillis() - lastPanelCheck.longValue < 15 * 60_000L) return
+        if (System.currentTimeMillis() - lastPanelCheck.longValue < gap) return
         lastPanelCheck.longValue = System.currentTimeMillis()
         scope.launch {
-            val c = com.latmpx.player.data.Panel.checkMac(Store.deviceIdOrEmpty())
+            val c = com.latmpx.player.data.Panel.checkMac(Store.deviceIdOrEmpty(), poll = true)
             // sin conexión o error del panel no se cierra la sesión; solo cuando el panel dice que no hay línea
             if (c.error == null && c.value == null && state.session === s) {
                 Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
             }
+        }
+    }
+    // con la app abierta (la tele suele quedar encendida) el panel se consulta cada 10 min: línea quitada, demo
+    // vencida u orden de borrar la caché
+    LaunchedEffect(state.session) {
+        while (state.session != null) {
+            kotlinx.coroutines.delay(60_000L)
+            revalidate(10 * 60_000L)
         }
     }
     // al volver del reproductor se recarga del panel (otro equipo pudo haber cambiado algo)
@@ -230,6 +238,8 @@ fun AppRoot() {
     // el panel mandó una orden nueva de borrado de caché: aviso ~3 s, se borra y la app se reinicia
     LaunchedEffect(CacheClear.pending) {
         if (!CacheClear.pending) return@LaunchedEffect
+        // viendo un video: espera a que se cierre el reproductor (no se corta la película)
+        while (com.latmpx.player.player.PlayerActivity.open > 0) kotlinx.coroutines.delay(2_000)
         kotlinx.coroutines.delay(3_000)
         CacheClear.wipeAndRestart(ctx)
     }

@@ -129,8 +129,10 @@ fun DetailScreen(state: AppState, media: Item) {
     LazyColumn(Modifier.fillMaxSize().background(NfBg)) {
         item {
             Box(Modifier.fillMaxWidth().then(if (tv) Modifier.height(300.dp) else Modifier.aspectRatio(16f / 10f))) {
-                AsyncImage(model = tmdb?.backdrop?.ifEmpty { null } ?: det?.backdrop?.ifEmpty { null } ?: media.backdrop.ifEmpty { media.poster }, contentDescription = null,
-                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                // fondo Full HD del panel (si es de TMDB) y, si no carga, el original; sin fondo, la carátula
+                val bd = tmdb?.backdrop?.ifEmpty { null } ?: det?.backdrop?.ifEmpty { null } ?: media.backdrop
+                if (bd.isNotEmpty()) com.latmpx.player.ui.components.ChainImage(remember(bd) { com.latmpx.player.data.PanelImg.backdropSources(bd) }, Modifier.fillMaxSize())
+                else com.latmpx.player.ui.components.ItemPoster(media, Modifier.fillMaxSize())
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x33000000), Color(0x99141414), NfBg))))
             }
         }

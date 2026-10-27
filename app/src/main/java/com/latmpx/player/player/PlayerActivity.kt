@@ -68,6 +68,11 @@ import com.latmpx.player.data.Xtream
  */
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 class PlayerActivity : ComponentActivity() {
+    companion object {
+        /** reproductores abiertos (también en ventana flotante): una orden de borrar la caché espera a que se cierren */
+        @Volatile @JvmStatic var open = 0
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(com.latmpx.player.Lang.wrap(newBase))
 
     private lateinit var player: ExoPlayer
@@ -101,6 +106,7 @@ class PlayerActivity : ComponentActivity() {
     private var lastUserKey = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        open++
         super.onCreate(savedInstanceState)
         val localFiles = intent.getStringArrayExtra(Play.X_FILES)
         session = Store.session() ?: if (localFiles != null) Session("", "", "", "", "") else run { finish(); return }
@@ -537,6 +543,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        open = (open - 1).coerceAtLeast(0)
         if (::pip.isInitialized) pip.unregister()
         ui.removeCallbacksAndMessages(null)
         if (::player.isInitialized) { saveProgress(force = true); player.release() }
