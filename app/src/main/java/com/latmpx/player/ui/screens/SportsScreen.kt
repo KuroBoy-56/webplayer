@@ -95,6 +95,8 @@ fun SportsScreen(state: AppState) {
     var day by rememberSaveable { mutableIntStateOf(-1) }
     var sport by rememberSaveable { mutableStateOf("") }
     var q by rememberSaveable { mutableStateOf("") }
+    // Agenda, Tablas, Selecciones o Equipos (las tres últimas si el panel las ofrece)
+    var tab by rememberSaveable { mutableStateOf(SpTab.AGENDA) }
 
     val d = data
     if (d == null) { if (loaded) Empty(stringResource(R.string.sports_unavailable)) else Loading(stringResource(R.string.loading_matches)); return }
@@ -165,6 +167,17 @@ fun SportsScreen(state: AppState) {
 
     val pad = sidePad()
     val compact = !tv && !com.latmpx.player.Device.isTablet(ctx)
+    if (tab != SpTab.AGENDA && ((tab == SpTab.TABLES && d.tablesOn) || (tab == SpTab.NATIONS && d.nationsOn) || (tab == SpTab.TEAMS && d.fixturesOn))) {
+        Column(Modifier.fillMaxSize().background(NfBg).padding(start = pad, end = pad, top = 16.dp)) {
+            Text(stringResource(R.string.sports), color = Color.White, fontSize = if (tv) 40.sp else 28.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(bottom = 8.dp))
+            SportsTabs(d, tab) { tab = it }
+            when (tab) {
+                SpTab.TABLES -> SportsTablesView(d)
+                else -> SportsTeamsView(d, tab == SpTab.NATIONS, now, compact) { e -> openTv(e) }
+            }
+        }
+        return
+    }
     LazyVerticalGrid(
         columns = if (compact) GridCells.Fixed(1) else GridCells.Adaptive(330.dp),
         contentPadding = PaddingValues(start = pad, end = pad, top = 16.dp, bottom = 48.dp),
@@ -185,6 +198,7 @@ fun SportsScreen(state: AppState) {
                 }
             }
         }
+        item(span = { GridItemSpan(maxLineSpan) }) { SportsTabs(d, tab) { tab = it } }
         item(span = { GridItemSpan(maxLineSpan) }) {
             FilterBar(curDay, { day = it; sport = "" }, sport, { sport = it }, counts, ofDay.size, d, q, { q = it })
         }

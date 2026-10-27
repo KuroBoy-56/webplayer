@@ -60,6 +60,7 @@ object CacheClear {
             app.getSharedPreferences("posters", Context.MODE_PRIVATE).edit().clear().commit()
             app.cacheDir.listFiles()?.forEach { runCatching { it.deleteRecursively() } }
             app.externalCacheDir?.listFiles()?.forEach { runCatching { it.deleteRecursively() } }
+            app.getSharedPreferences("sports_panel", Context.MODE_PRIVATE).edit().clear().commit()
         }
         // arranque en frío: la actividad de inicio en una tarea nueva y este proceso termina
         app.startActivity(
