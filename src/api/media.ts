@@ -127,19 +127,50 @@ async function savedTracks(url: string): Promise<Probe | null> {
 
 const known = new Map<string, Promise<Probe>>();
 
-// lo ya leído en este equipo (sin el protocolo: el mismo archivo por http o https es el mismo)
+// lo ya leído o recibido mientras la app está abierta (sin el protocolo: el mismo archivo por http o https es el
+// mismo). Como el tmp: de Roku: solo en memoria, se borra al cerrar la app; lo que dura es lo que guarda el panel
+// (api/tracks.php, por distribuidor: de 1 mes a nunca según lo que elija el dueño, hasta 3 meses un distribuidor)
 const done = new Map<string, Probe>();
 const noScheme = (u: string) => u.replace(/^https?:\/\//i, '');
+function remember(url: string, p: Probe): void {
+  done.set(noScheme(url), p);
+  if (done.size > 200) done.delete(done.keys().next().value as string);
+}
+function local(url: string): Probe | null {
+  return done.get(noScheme(url)) || null;
+}
+
+// idiomas ya sabidos en este momento, sin esperar nada (lo leído en el equipo o lo que ya contestó el panel)
+export function knownNow(url: string): Probe | null {
+  return local(url);
+}
+
+// pedidos al panel en curso (la ficha los pide al entrar y el reproductor espera ese mismo pedido)
+const asking = new Map<string, Promise<Probe>>();
 
 // Idiomas que ya se saben SIN tocar el servidor IPTV: lo leído antes en este equipo o lo que recuerda el panel
 // (tracks.php, como mucho 2 s). Es lo único que se pide antes de abrir el video: leer el archivo antes (varias
 // peticiones seguidas) hacía que muchos servidores bloquearan la línea un rato y el video quedaba cargando sin fin.
 export async function knownTracks(url: string): Promise<Probe> {
-  const hit = done.get(noScheme(url));
+  const hit = local(url);
   if (hit) return hit;
-  const saved = await savedTracks(url);
-  if (saved) done.set(noScheme(url), saved);
-  return saved || { ok: false, container: '', audio: [], subs: [] };
+  const k = noScheme(url);
+  let p = asking.get(k);
+  if (!p) {
+    p = savedTracks(url).then(sv => {
+      if (sv) remember(url, sv);
+      return sv || { ok: false, container: '', audio: [], subs: [] };
+    });
+    asking.set(k, p);
+    p.finally(() => asking.delete(k));
+  }
+  return p;
+}
+
+// la ficha de la película o serie pide los idiomas apenas se abre (como Roku): al pulsar Reproducir ya se saben y el
+// video empieza con el idioma elegido
+export function warmTracks(url: string): void {
+  knownTracks(url).catch(() => {});
 }
 
 // idiomas de audio y subtítulos del archivo: primero lo ya sabido; si no, se leen de la cabecera del archivo (con el
@@ -148,10 +179,10 @@ export function fileTracks(url: string, skipKnown = false): Promise<Probe> {
   const hit = known.get(url);
   if (hit) return hit;
   const p = (async () => {
-    const saved = skipKnown ? done.get(noScheme(url)) || null : await knownTracks(url).then(k => (k.ok ? k : null));
-    if (saved) return saved;
+    const have = skipKnown ? local(url) : await knownTracks(url).then(k => (k.ok ? k : null));
+    if (have) return have;
     const read = await probeTracks(url);
-    if (read.ok) done.set(noScheme(url), read);
+    if (read.ok) remember(url, read);
     if (read.ok) cloud('tracks.php', 'POST', { u: b64u(url), probe: { container: read.container, audio: read.audio, subs: read.subs } }).catch(() => {});
     return read;
   })();

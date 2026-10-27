@@ -11,7 +11,7 @@ import { ChainImage } from '../components/ChainImage';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, isItem, Item, Row, Special } from '../data/catalog';
 import { continueItems, favItems } from '../data/personal';
-import { Art, heroArt, savedArt } from '../data/heroart';
+import { Art, heroArt, heroArtList, savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { isFav, toggleFav, useAppState } from '../state';
@@ -99,7 +99,7 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
 
   // las filas del catálogo solo se rehacen cuando llega una lista nueva
   const base = useMemo(() => {
-    if (!ready) return { rows: [] as Row[], hero: null as Item | null };
+    if (!ready) return { rows: [] as Row[], hero: null as Item | null, heroes: [] as Item[] };
     return section === 'home' ? catalog.home(platforms) : catalog.browse(section === 'series' ? 'series' : 'vod');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, section, st.catalogRev, platforms, brandRev]);
@@ -143,11 +143,40 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
       live = false;
     };
   }, [base.hero]);
-  const hero = useMemo(() => {
+  const firstHero = useMemo(() => {
     const h = base.hero;
     return h && heroArtOf && heroArtOf.id === h.kind + h.id ? withArt(h, heroArtOf.art) : h;
   }, [base.hero, heroArtOf]);
+  // destacados que van pasando cada 8 s (como Roku): hasta 6 de los candidatos que tienen fondo horizontal, buscados
+  // uno tras otro; mientras llega el primero queda el destacado de siempre
+  const [heroes, setHeroes] = useState<Item[]>([]);
+  const [heroIdx, setHeroIdx] = useState(0);
+  useEffect(() => {
+    setHeroes([]);
+    setHeroIdx(0);
+    let live = true;
+    const found: Item[] = [];
+    heroArtList(
+      base.heroes || [],
+      (it, a) => {
+        if (found.length >= 6 || !(it.backdrop || a?.backdrop)) return;
+        found.push(a ? withArt(it, a) : it);
+        setHeroes(found.slice());
+      },
+      () => live && found.length < 6,
+    );
+    return () => {
+      live = false;
+    };
+  }, [base.heroes]);
+  const hero = heroes.length ? heroes[heroIdx % heroes.length] : firstHero;
   const [inRows, setInRows] = useState(false);
+  // cambia de destacado cada 8 s solo con la portada a la vista (no recorriendo las filas)
+  useEffect(() => {
+    if (inRows || heroes.length < 2) return;
+    const id = setInterval(() => setHeroIdx(i => (i + 1) % heroes.length), 8000);
+    return () => clearInterval(id);
+  }, [inRows, heroes.length]);
   const [rowIdx, setRowIdx] = useState(0);
   const [info, setInfo] = useState<Info>({ item: hero });
   // el fondo del destacado puede llegar con el foco ya en las filas: ahí la portada sigue mostrando lo enfocado
@@ -229,6 +258,13 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
   return (
     <View style={s.root}>
       <Billboard info={inRows ? info : { item: hero }} compact={inRows} />
+      {!inRows && heroes.length > 1 ? (
+        <View style={s.dots} pointerEvents="none">
+          {heroes.map((h, i) => (
+            <View key={h.kind + h.id} style={[s.dot, i === heroIdx % heroes.length && s.dotOn]} />
+          ))}
+        </View>
+      ) : null}
       {hero ? (
         <View style={[s.btns, inRows && s.btnsHidden]}>
           <Button
@@ -275,9 +311,15 @@ const s = themed(() =>
     root: { flex: 1 },
     hero: { position: 'absolute', left: 0, top: 0, right: 0, height: px(1080) },
     heroImg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
+    dots: { position: 'absolute', right: SIDE, top: px(738), flexDirection: 'row' },
+    dot: { width: px(14), height: px(14), borderRadius: px(7), marginLeft: px(10), backgroundColor: 'rgba(255,255,255,0.35)' },
+    dotOn: { backgroundColor: '#fff', width: px(30) },
     heroDim: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, opacity: 0.45 },
-    heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(620) },
-    heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1400) },
+    // degradados como Roku (izquierda 1500×1080 al 92 %, abajo 1920×520 desde la fila 560) con el color de fondo del
+    // tema (el del distribuidor o el original). Con ancho y alto fijos: Vega dibuja las imágenes del paquete a su tamaño
+    // real (4 px) si solo se estiran con left/right/top/bottom, y la portada quedaba sin degradado
+    heroGrad: { position: 'absolute', left: 0, top: px(560), width: px(1920), height: px(520) },
+    heroShade: { position: 'absolute', left: 0, top: 0, width: px(1500), height: px(1080), opacity: 0.92 },
     side: { position: 'absolute', right: SIDE, top: px(150), width: px(427), height: px(640), borderRadius: px(8) },
     sideCompact: { top: px(120), width: px(260), height: px(390) },
     heroText: { position: 'absolute', left: SIDE, top: px(230), width: px(980) },

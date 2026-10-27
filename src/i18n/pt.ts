@@ -391,6 +391,13 @@ const pt: Record<Key, string> = {
   "Línea vencida": "Linha vencida",
   "El servidor bloqueó este equipo ({x})": "O servidor bloqueou este aparelho ({x})",
   "El servidor no entregó el video ({x})": "O servidor não entregou o vídeo ({x})",
+  "No hay información de este equipo": "Não há informações sobre este time",
+  "Espacio": "Espaço",
+  "Listo": "Pronto",
+  "Ocultar": "Ocultar",
+  "Mostrar": "Mostrar",
+  "Canales": "Canais",
+  "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ mudar de canal ({x}/{y}) · OK lista de canais · MENU áudio e legendas",
 };
 
 export default pt;

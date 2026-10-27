@@ -4,13 +4,40 @@
 // empezando cerca del final (en vivo). Las listas maestras (varias calidades) usan la de más calidad.
 // En Vega el modo directo (src = dirección) no abre MPEG-TS (solo MP4, MKV, MP3, FLV, OGG y FLAC; el HLS solo por MSE),
 // así que en Fire TV este es el camino principal de la TV en vivo.
+// Estabilidad: cada segmento se pone justo a continuación del anterior en la línea de tiempo (sus marcas de tiempo
+// PTS + timestampOffset; antes, en modo 'sequence', el equipo dejaba un hueco en cada unión y saltarlo era un corte
+// de 1-1,5 s cada segmento); los 2 segmentos siguientes se bajan mientras se entrega el actual; el descifrado va por
+// partes sin trabar la app; un vigilante cada 300 ms salta los huecos que queden y, si se acaba lo bajado, pausa hasta
+// tener unos segundos de margen en lugar de detenerse y seguir; un segmento que no llega se reintenta y, a la tercera,
+// se salta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { UA } from '../lib/http';
 import { xuiError } from '../lib/xui';
 import { cbc } from '@noble/ciphers/aes';
-import { parseList, resolveUrl, Seg, segIv, tsStart } from '../lib/hlslist';
+import { parseList, resolveUrl, Seg, segIv, tsFirstPts, tsStart } from '../lib/hlslist';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+type Got = { code: number; url: string; text?: string; data?: Uint8Array; type?: string };
+
+// segmentos que se bajan por adelantado mientras se entrega el actual
+const PREFETCH = 2;
+// el descifrado AES-128 va por partes de este tamaño (múltiplo de 16)
+const DEC_CHUNK = 65536;
+
+// llave AES-128: 16 bytes tal cual o, en algunos servidores, escrita en hexadecimal (32 caracteres, con o sin 0x)
+function keyBytes(d: Uint8Array): Uint8Array | null {
+  if (d.length === 16) return d;
+  const txt = String.fromCharCode(...Array.from(d.slice(0, 80))).trim().replace(/^0x/i, '');
+  if (/^[0-9a-f]{32}$/i.test(txt)) {
+    const out = new Uint8Array(16);
+    for (let i = 0; i < 16; i++) out[i] = parseInt(txt.slice(i * 2, i * 2 + 2), 16);
+    return out;
+  }
+  // con un salto de línea o espacio al final
+  if (d.length > 16 && d.length <= 18 && d.slice(16).every(b => b === 10 || b === 13 || b === 32)) return d.slice(0, 16);
+  return null;
+}
 
 export class LiveHls {
   private ms: any = null;
@@ -22,6 +49,34 @@ export class LiveHls {
   private next = -1;
   private alive = true;
   private appended = 0;
+  // el reproductor se quedó sin datos (después de empezar) y cuánto tardan bajar y descifrar cada segmento: para el reporte
+  private stalls = 0;
+  private fetchMs = 0;
+  private decMs = 0;
+  // los segmentos siguientes ya se bajan mientras se entrega el actual (por número de segmento)
+  private inflight = new Map<number, Promise<Got>>();
+  // avisa una vez si el canal se detiene seguido (Player lo manda al panel con diag())
+  onStalls: () => void = () => {};
+  private lastStall = 0;
+  private onWaiting = () => this.stalled();
+  // vigilante cada 300 ms: salta los huecos entre tramos y, si se acaba lo bajado, espera con margen (holding)
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private started = false;
+  // en pausa a propósito hasta tener margen: Player muestra «cargando», no «en pausa»
+  holding = false;
+  private holdAt = 0;
+  private holds: number[] = [];
+  private skipped = 0;
+  // veces que se pidió la lista otra vez desde la dirección del canal (token vencido) y páginas seguidas en lugar de
+  // un segmento
+  private renews = 0;
+  private pageRetries = 0;
+  // desplazamiento de las marcas de tiempo del canal (null = aún no puesto), cuántas veces se reacomodó (cambio de
+  // numeración del servidor, segmento saltado) y huecos que hubo que saltar (deberían ser 0)
+  private tsOff: number | null = null;
+  private resyncs = 0;
+  private gapJumps = 0;
+  private lastAppend = Date.now();
   private bytes = 0;
   // llaves AES-128 ya bajadas (por dirección) y si el canal viene cifrado (para el reporte)
   private keys = new Map<string, Uint8Array>();
@@ -54,7 +109,10 @@ export class LiveHls {
       // sin datos
     }
     const host = (this.list.match(/^https?:\/\/([^/?#]+)/i) || [])[1] || '';
-    return 'hls host=' + host + ' segs=' + this.segs.length + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+    const n = Math.max(1, this.appended);
+    return 'hls host=' + host + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
+      ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
+      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
@@ -63,11 +121,23 @@ export class LiveHls {
     if (err) return err;
     if (!this.segs.length) return 'lista sin segmentos';
     if (!this.alive) return '';
-    // en vivo: los últimos 3 segmentos (arranca rápido y cerca del momento actual)
-    this.next = this.segs[Math.max(0, this.segs.length - 3)].seq;
+    // en vivo: 5 segmentos antes del final (unos 25-30 s de margen): con los últimos 3 cualquier demora del servidor o
+    // del descifrado dejaba el canal sin datos y se detenía y seguía una y otra vez
+    this.next = this.segs[Math.max(0, this.segs.length - 5)].seq;
+    this.v.addEventListener('waiting', this.onWaiting);
     const ms: any = new MediaSource();
     this.ms = ms;
     const opened = new Promise<void>(res => ms.addEventListener('sourceopen', () => res()));
+    try {
+      // el reproductor cerró el video (error del decodificador): Player vuelve a conectar el canal
+      ms.addEventListener('sourceclose', () => {
+        if (!this.alive || !this.started) return;
+        this.lastProblem = 'MediaSource cerrado';
+        this.onError('el reproductor cerró el video del canal');
+      });
+    } catch {
+      // sin el evento
+    }
     try {
       this.v.src = (URL as any).createObjectURL(ms);
     } catch {
@@ -81,17 +151,27 @@ export class LiveHls {
       return 'el equipo no acepta MPEG-TS por MSE';
     }
     try {
-      // en orden desde 0 (si el equipo no lo admite, se salta al principio de lo entregado: ver unstick)
-      this.sb.mode = 'sequence';
+      // por marcas de tiempo: el lector pone cada segmento a continuación del anterior (place)
+      this.sb.mode = 'segments';
     } catch {
       // modo por defecto
     }
+    this.timer = setInterval(this.tick, 300);
     this.pump();
     return '';
   }
 
   destroy(): void {
     this.alive = false;
+    this.holding = false;
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    this.inflight.clear();
+    try {
+      this.v.removeEventListener('waiting', this.onWaiting);
+    } catch {
+      // ya cerrado
+    }
     try {
       if (this.sb?.updating) this.sb.abort();
     } catch {
@@ -101,7 +181,9 @@ export class LiveHls {
 
   // GET siguiendo redirecciones a mano: XUI manda la lista a otro servidor (balanceador) con un token y los segmentos
   // vienen relativos a esa dirección final, no a la pedida
-  private async get(url: string, timeout: number, isList: boolean): Promise<{ code: number; url: string; text?: string; data?: Uint8Array; type?: string }> {
+  // mode: 'list' = texto; 'seg' = bytes salvo que llegue una página (motivo de XUI); 'bin' = siempre bytes (la llave:
+  // XUI la manda desde PHP marcada como text/html y antes se leía como texto y no se podía descifrar)
+  private async get(url: string, timeout: number, mode: 'list' | 'seg' | 'bin'): Promise<{ code: number; url: string; text?: string; data?: Uint8Array; type?: string }> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeout);
     let at = url;
@@ -116,7 +198,7 @@ export class LiveHls {
         const final = (res as any).url || at;
         const type = res.headers.get('content-type') || '';
         if (res.status !== 200) return { code: res.status, url: final, type };
-        if (isList || /mpegurl|text\/html/i.test(type)) return { code: 200, url: final, text: await res.text(), type };
+        if (mode === 'list' || (mode === 'seg' && /mpegurl|text\/html/i.test(type))) return { code: 200, url: final, text: await res.text(), type };
         return { code: 200, url: final, data: new Uint8Array(await res.arrayBuffer()), type };
       }
       return { code: 310, url: at };
@@ -132,16 +214,35 @@ export class LiveHls {
     const k = seg.key!;
     let key = this.keys.get(k.uri);
     if (!key) {
-      const r = await this.get(k.uri, 15000, false);
-      if (!r.data || r.data.length !== 16) {
-        this.lastProblem = 'llave HTTP ' + r.code + (r.data ? ' (' + r.data.length + ' bytes)' : '');
+      const r = await this.get(k.uri, 15000, 'bin');
+      key = r.data ? keyBytes(r.data) || undefined : undefined;
+      if (!key) {
+        const txt = r.data ? String.fromCharCode(...Array.from(r.data.slice(0, 600))) : '';
+        const x = /<html|<!doctype/i.test(txt) ? xuiError(txt) : null;
+        this.lastProblem = 'llave HTTP ' + r.code + ' ' + (r.type || '') + ' (' + (r.data ? r.data.length : 0) + ' bytes' + (x ? ', xui ' + x.code : '') + ')';
         return null;
       }
-      key = r.data;
       this.keys.set(k.uri, key);
     }
+    // por partes de 64 KB cediendo el turno entre una y otra: un segmento de varios MB descifrado de una vez trababa
+    // la app (y su vigilante) más de un segundo
     try {
-      return cbc(key, segIv(seg)).decrypt(data);
+      if (data.length % 16) throw new Error('largo ' + data.length);
+      const out = new Uint8Array(data.length);
+      let iv = segIv(seg);
+      let o = 0;
+      for (let i = 0; i < data.length; i += DEC_CHUNK) {
+        const end = Math.min(data.length, i + DEC_CHUNK);
+        const lastPart = end === data.length;
+        const dec = cbc(key, iv, { disablePadding: !lastPart }).decrypt(data.subarray(i, end));
+        out.set(dec, o);
+        o += dec.length;
+        if (lastPart) break;
+        iv = data.slice(end - 16, end);
+        await sleep(0);
+        if (!this.alive) return null;
+      }
+      return out.subarray(0, o);
     } catch (e: any) {
       this.lastProblem = 'descifrado: ' + String(e?.message || e).slice(0, 60);
       return null;
@@ -157,11 +258,11 @@ export class LiveHls {
 
   private async refresh(): Promise<string> {
     for (let hop = 0; hop < 2; hop++) {
-      let r = await this.get(this.list, 15000, true);
-      // la dirección con token del balanceador pudo vencer: otra vez desde la del canal
-      if ((r.code !== 200 || r.text === undefined) && this.list !== this.first) {
+      let r = await this.get(this.list, 15000, 'list');
+      // la dirección con token del balanceador pudo vencer (error o una página de XUI): otra vez desde la del canal
+      if ((r.code !== 200 || r.text === undefined || !r.text.trim().startsWith('#EXTM3U')) && this.list !== this.first) {
         this.list = this.first;
-        r = await this.get(this.list, 15000, true);
+        r = await this.get(this.list, 15000, 'list');
       }
       if (r.code !== 200 || r.text === undefined) {
         this.lastProblem = 'lista HTTP ' + r.code;
@@ -197,17 +298,35 @@ export class LiveHls {
     }
   }
 
-  // el reproductor quedó antes o entre lo entregado (los canales traen marcas de tiempo grandes, p. ej. 86000 s, y el
-  // video empieza en 0): se salta al principio de lo que tiene, si no esperaba para siempre («nunca reproduce»)
+  // El reproductor quedó antes, entre o al final de un tramo con otro tramo después: se salta al siguiente. Los canales
+  // traen marcas de tiempo grandes (p. ej. 86000 s) y el video empieza en 0; además, entre un segmento y el siguiente
+  // puede quedar un hueco de décimas (audio y video no terminan juntos): el video llegaba al final del primer
+  // segmento (5-6 s) y se quedaba esperando ahí para siempre. Si la imagen no avanza en 8 s con video por delante,
+  // también se empuja.
+  private lastT = -1;
+  private lastMove = Date.now();
   private unstick(): void {
     try {
       const b = this.sb.buffered;
       const t = this.v.currentTime || 0;
+      if (t !== this.lastT) {
+        this.lastT = t;
+        this.lastMove = Date.now();
+      }
+      // quieto 3 s con video por delante: se empuja (antes 8 s: el canal se veía congelado)
+      const stalled = !this.v.paused && Date.now() - this.lastMove > 3000;
       for (let i = 0; i < b.length; i++) {
-        if (t >= b.start(i) - 0.3 && t <= b.end(i)) return;
-        if (t < b.start(i) && b.end(i) - b.start(i) > 0.5) {
-          this.v.currentTime = b.start(i) + 0.1;
-          if (this.v.paused) this.v.play();
+        const st = b.start(i);
+        const en = b.end(i);
+        const next = i + 1 < b.length ? b.start(i + 1) : -1;
+        if (t < st - 0.3) {
+          if (en - st > 0.5) this.jump(st + 0.1);
+          return;
+        }
+        if (t <= en) {
+          // al final de este tramo (o quieto) y hay otro después: al siguiente
+          if (next > 0 && (en - t < 0.5 || stalled)) this.jump(next + 0.1);
+          else if (stalled && en - t > 1) this.jump(t + 0.5);
           return;
         }
       }
@@ -216,13 +335,81 @@ export class LiveHls {
     }
   }
 
-  // lo ya visto se borra para no llenar la memoria
-  private async trim(): Promise<void> {
+  private lastJump = 0;
+  private jump(to: number): void {
+    if (this.started) this.gapJumps++;
+    this.v.currentTime = to;
+    this.lastMove = Date.now();
+    this.lastJump = this.lastMove;
+    if (this.v.paused && !this.holding) this.v.play();
+  }
+
+  // segundos ya bajados por delante de la imagen (en el tramo donde está)
+  private aheadSec(): number {
     try {
       const b = this.sb.buffered;
       const t = this.v.currentTime || 0;
-      if (b.length && b.start(0) < t - 30) {
-        this.sb.remove(b.start(0), t - 15);
+      for (let i = 0; i < b.length; i++) if (t >= b.start(i) - 0.3 && t <= b.end(i)) return b.end(i) - t;
+    } catch {
+      // sin datos
+    }
+    return 0;
+  }
+
+  // margen con el que se sigue después de quedarse sin datos: más si ya pasó varias veces hace poco (red o
+  // servidor lentos), así se para una vez y sigue de corrido en lugar de detenerse y seguir cada pocos segundos
+  private margin(): number {
+    const now = Date.now();
+    const recent = this.holds.filter(h => now - h < 180000).length;
+    return Math.min(10, Math.max(3, Math.min(this.target, 6)) + Math.max(0, recent - 1) * 2);
+  }
+
+  // una detención (del reproductor o del vigilante), contada una vez cada 2 s: a la tercera se avisa al panel
+  private stalled(): void {
+    if (!this.appended || !this.alive || Date.now() - this.lastStall < 2000) return;
+    this.lastStall = Date.now();
+    this.stalls++;
+    if (this.stalls === 3) this.onStalls();
+  }
+
+  private tick = (): void => {
+    if (!this.alive || !this.sb || !this.started) return;
+    // 45 s sin que llegue nada nuevo (ni renovando la lista): Player vuelve a conectar el canal desde cero
+    if (Date.now() - this.lastAppend > 45000) {
+      this.alive = false;
+      this.lastProblem = this.lastProblem || 'sin video nuevo en 45 s';
+      this.onError('el canal dejó de mandar video');
+      return;
+    }
+    this.unstick();
+    const ahead = this.aheadSec();
+    if (this.holding) {
+      // con margen (o con algo después de 8 s esperando) sigue
+      if (ahead >= this.margin() || (ahead >= 1.5 && Date.now() - this.holdAt > 8000)) {
+        this.holding = false;
+        this.lastMove = Date.now();
+        this.v.play();
+      }
+      return;
+    }
+    // se acaba lo bajado: pausa hasta tener margen (no justo después de saltar un hueco: el salto tarda un instante)
+    if (!this.v.paused && ahead < 0.25 && Date.now() - this.lastJump > 1500) {
+      this.holding = true;
+      this.holdAt = Date.now();
+      this.holds.push(this.holdAt);
+      if (this.holds.length > 20) this.holds.shift();
+      this.stalled();
+      this.v.pause();
+    }
+  };
+
+  // lo ya visto se borra para no llenar la memoria (keep: segundos que se dejan detrás de la imagen)
+  private async trim(keep = 15): Promise<void> {
+    try {
+      const b = this.sb.buffered;
+      const t = this.v.currentTime || 0;
+      if (b.length && b.start(0) < t - keep - (keep > 5 ? 15 : 0)) {
+        this.sb.remove(b.start(0), t - keep);
         await this.idle();
       }
     } catch {
@@ -230,11 +417,35 @@ export class LiveHls {
     }
   }
 
+  private segTimeout(): number {
+    return Math.max(10000, this.target * 2500);
+  }
+
+  // el segmento (el que ya se estaba bajando o uno nuevo)
+  private fetchSeg(seg: Seg): Promise<Got> {
+    let p = this.inflight.get(seg.seq);
+    if (!p) {
+      p = this.get(seg.url, this.segTimeout(), 'seg');
+      this.inflight.set(seg.seq, p);
+    }
+    return p;
+  }
+
+  // los PREFETCH siguientes ya se empiezan a bajar (con el canal al día, la lista todavía no los tiene)
+  private prefetch(from: number): void {
+    for (const k of Array.from(this.inflight.keys())) if (k <= from) this.inflight.delete(k);
+    if (this.bufEnd() - (this.v.currentTime || 0) > 30) return;
+    for (const sg of this.segs) {
+      if (sg.seq > from && sg.seq <= from + PREFETCH && !this.inflight.has(sg.seq)) this.inflight.set(sg.seq, this.get(sg.url, this.segTimeout(), 'seg'));
+    }
+  }
+
   private async pump(): Promise<void> {
+    // fails: fallos seguidos (cualquier segmento); segFails: del segmento actual (al tercero se salta al siguiente)
     let fails = 0;
+    let segFails = 0;
     let listFails = 0;
     while (this.alive) {
-      this.unstick();
       // en vivo no hace falta más de ~30 s por delante
       if (this.bufEnd() - (this.v.currentTime || 0) > 30) {
         await sleep(1000);
@@ -247,44 +458,71 @@ export class LiveHls {
         seg = this.segs[0];
       }
       if (!seg) {
-        await sleep(Math.max(1000, (this.target * 1000) / 2));
+        // al día con el canal: la lista se vuelve a pedir pronto (un tercio de segmento) para tener el nuevo apenas sale
+        await sleep(Math.max(1000, (this.target * 1000) / 3));
         if (!this.alive) return;
         const err = await this.refresh();
-        if (err && ++listFails > 4) {
+        if (err && ++listFails > 6) {
           this.onError(err);
           return;
         }
-        if (!err) listFails = 0;
+        if (!err) {
+          listFails = 0;
+          const last = this.segs.length ? this.segs[this.segs.length - 1].seq : -1;
+          // la lista empezó otra numeración (el servidor abrió otra sesión) o no trae nada nuevo hace rato: cerca del
+          // final otra vez (antes se esperaba un número que no iba a llegar y el canal quedaba quieto para siempre)
+          const late = Date.now() - this.lastAppend > Math.max(20000, this.target * 3000);
+          if (last >= 0 && (this.next > last + 2 || late)) {
+            this.lastProblem = late ? 'lista sin segmentos nuevos' : 'lista reiniciada';
+            if (late) this.list = this.first;
+            this.inflight.clear();
+            this.next = this.segs[Math.max(0, this.segs.length - 2)].seq;
+            this.lastAppend = Date.now();
+          }
+        }
         continue;
       }
-      const r = await this.get(seg.url, 20000, false);
+      const t0 = Date.now();
+      const r = await this.fetchSeg(seg);
+      this.inflight.delete(seg.seq);
       if (!this.alive) return;
+      this.fetchMs += Date.now() - t0;
       if (r.text !== undefined && /<html|<!doctype/i.test(r.text)) {
-        // una página en lugar del video: el motivo (XUI) y no se insiste
-        this.onError(this.pageProblem(r.text));
+        // una página en lugar del video: con el canal ya sonando suele ser el token vencido (la lista se pide otra vez
+        // desde la dirección del canal); al empezar, o si sigue igual, el motivo (XUI) y no se insiste
+        const why = this.pageProblem(r.text);
+        if (this.appended > 0 && ++this.pageRetries <= 2) {
+          await this.renew();
+          continue;
+        }
+        this.onError(why);
         return;
       }
       if (!r.data || !r.data.length) {
         this.lastProblem = 'segmento HTTP ' + r.code;
-        if (++fails > 5) {
+        if (!(await this.failed(seg, ++fails, ++segFails))) {
           this.onError(r.code ? 'el servidor contestó ' + r.code + ' a los segmentos' : 'se cortó la conexión con el canal');
           return;
         }
-        await sleep(1000);
+        if (this.next !== seg.seq) segFails = 0;
         continue;
       }
+      // mientras este se descifra y se entrega, los siguientes ya se bajan
+      this.prefetch(seg.seq);
       let data: Uint8Array = r.data;
       if (seg.key) {
         // segmento cifrado (AES-128): se descifra con la llave de la lista
         this.encrypted = true;
+        const t1 = Date.now();
         const plain = await this.decrypt(seg, data);
+        this.decMs += Date.now() - t1;
         if (!this.alive) return;
         if (!plain) {
-          if (++fails > 5) {
+          if (!(await this.failed(seg, ++fails, ++segFails))) {
             this.onError('no se pudo descifrar el canal (' + this.lastProblem + ')');
             return;
           }
-          await sleep(1000);
+          if (this.next !== seg.seq) segFails = 0;
           continue;
         }
         data = plain;
@@ -300,23 +538,92 @@ export class LiveHls {
         }
       } else if (at > 0) data = data.subarray(at);
       fails = 0;
+      segFails = 0;
+      this.pageRetries = 0;
       await this.trim();
-      await this.idle();
-      try {
-        this.sb.appendBuffer(data);
-      } catch (e: any) {
-        this.lastProblem = 'appendBuffer: ' + String(e?.message || e).slice(0, 60);
-        this.onError('el reproductor no aceptó el video del canal (códec de audio o video)');
-        return;
-      }
-      await this.idle();
+      await this.place(data);
+      if (!(await this.append(data))) return;
       this.appended++;
       this.bytes += data.length;
       this.next = seg.seq + 1;
-      if (this.appended === 1) {
+      this.lastAppend = Date.now();
+      // empieza a sonar con 2 segmentos entregados (o con 1 si la lista no tiene más): arranca con margen
+      const more = this.segs.some(sg => sg.seq === this.next);
+      if (!this.started && (this.appended >= 2 || !more)) {
+        this.started = true;
         this.unstick();
         if (this.v.paused) this.v.play();
       }
     }
+  }
+
+  // segmento que no llegó o no se pudo descifrar: se reintenta dos veces y, a la tercera, se salta al siguiente (el
+  // canal sigue en vez de cortarse por un segmento perdido). false = demasiados fallos seguidos: se deja
+  // Al segundo fallo seguido la lista se pide otra vez desde la dirección del canal: el token del balanceador de XUI
+  // vence a los pocos minutos y todos los segmentos de la lista vieja fallan (antes el canal se cortaba a los ~5 min).
+  // Se deja solo con muchos fallos seguidos y más de 30 s sin entregar nada.
+  private async failed(seg: Seg, fails: number, segFails: number): Promise<boolean> {
+    if (fails > 9 && Date.now() - this.lastAppend > 30000) return false;
+    this.inflight.delete(seg.seq);
+    if (segFails === 2 || fails % 4 === 0) await this.renew();
+    if (segFails >= 3 && this.segs.some(sg => sg.seq === seg.seq + 1)) {
+      this.next = seg.seq + 1;
+      this.skipped++;
+    }
+    await sleep(700);
+    return this.alive;
+  }
+
+  // Lugar del segmento en la línea de tiempo: el primero empieza en 0 y los siguientes van donde dicen sus marcas de
+  // tiempo (segmentos seguidos del mismo canal quedan pegados: sin huecos). Si no calza con lo entregado (el servidor
+  // reinició la numeración, se saltó un segmento, la lista se reacomodó) se pone justo al final de lo entregado.
+  private async place(data: Uint8Array): Promise<void> {
+    const pts = tsFirstPts(data);
+    if (pts === null) return;
+    let off = this.tsOff;
+    if (off === null) off = -pts;
+    else {
+      const end = this.bufEnd();
+      if (end > 0 && Math.abs(pts + off - end) > 1.5) {
+        off = end - pts;
+        this.resyncs++;
+      }
+    }
+    if (off === this.tsOff) return;
+    await this.idle();
+    try {
+      this.sb.timestampOffset = off;
+      this.tsOff = off;
+    } catch (e: any) {
+      this.lastProblem = 'timestampOffset: ' + String(e?.message || e).slice(0, 40);
+    }
+  }
+
+  // la lista otra vez desde la dirección del canal (token nuevo del balanceador)
+  private async renew(): Promise<void> {
+    this.renews++;
+    this.list = this.first;
+    this.inflight.clear();
+    await this.refresh();
+  }
+
+  // entrega al reproductor; con la memoria llena (QuotaExceeded) borra lo ya visto y prueba otra vez
+  private async append(data: Uint8Array): Promise<boolean> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await this.idle();
+      try {
+        this.sb.appendBuffer(data);
+        await this.idle();
+        return true;
+      } catch (e: any) {
+        const msg = String(e?.name || '') + ' ' + String(e?.message || e);
+        this.lastProblem = 'appendBuffer: ' + msg.trim().slice(0, 60);
+        if (!/quota/i.test(msg) || !this.alive) break;
+        await this.trim(attempt ? 2 : 5);
+        await sleep(500);
+      }
+    }
+    if (this.alive) this.onError('el reproductor no aceptó el video del canal (códec de audio o video)');
+    return false;
   }
 }

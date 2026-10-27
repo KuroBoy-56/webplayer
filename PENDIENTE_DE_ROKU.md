@@ -15,7 +15,30 @@ app con Atrás, canales en vivo también por HLS (lector propio por MSE) y error
 
 - Nada por ahora. Lo nuevo que se corrija en Roku se anota aquí.
 
-## Siguiente: LG (webOS) y después Samsung (Tizen)
+## Cómo lo hace Roku (igual en todas las apps)
+
+- **Idiomas de audio y subtítulos** (`source/Probe.brs` de Roku, `src/api/media.ts` aquí): se piden al panel
+  (`api/tracks.php`, lo que ya leyó cualquier equipo del distribuidor); al abrir el video se espera como mucho 2 s. En
+  el equipo solo se recuerdan mientras la app está abierta (Roku: `tmp:`; Vega: memoria), **nunca guardados en el
+  equipo**: lo que dura lo guarda el panel por distribuidor (de 1 mes a nunca el dueño en Monitor VPS / VDS; un
+  distribuidor hasta 3 meses). Si nadie los sabe se leen de la cabecera del archivo con el video abierto, se reintenta
+  hasta tenerlos y se le dejan al panel (POST) para los demás equipos. Vega 1.0.18/1.0.19 además los pide apenas se
+  abre la ficha (y el episodio enfocado, y el siguiente mientras suena el actual) para que el video empiece con el
+  idioma elegido.
+- **Carátulas y fondos**: copia del panel (`api/imgc/<sha1>.jpg?v=2`) → `api/img.php` (con el título busca en TMDB si
+  el servidor IPTV no tiene) → la original; fondos de TMDB en Full HD por `img.php?w=1920`; con `"img": false` de
+  `progress.php ?v=2` todo va directo (`src/lib/images.ts`).
+- **La conversión del panel no se comparte** entre líneas ni equipos (cada una dura lo que dice Monitor VPS, para no
+  saturar la VPS); no tocar.
+- **Canales en vivo con lector propio** (Vega 1.0.18, `src/player/livehls.ts`): 2 segmentos por adelantado, vigilante
+  cada 300 ms que salta huecos, pausa con margen en vez de detenerse y seguir, segmento perdido se salta a la tercera.
+  Si LG o Samsung terminan usando el lector propio, va igual.
+
+## LG (webOS): al día en la 1.2.0
+
+La rama `webOS` trae todo `vega-os` hasta Vega 1.0.21 (merge del 27/10). Lo de abajo sigue de guía para Samsung.
+
+## Siguiente: Samsung (Tizen)
 
 Las ramas `webOS` y `tizenOS` usan el mismo código de `src/` que Vega (React Native para la web: `web/`, `webos/`,
 `tizen/`), pero se quedaron en lo del 24/10 (les faltan 27 cambios de `vega-os`). Plan: unir `vega-os` en cada rama
@@ -34,6 +57,8 @@ Las ramas `webOS` y `tizenOS` usan el mismo código de `src/` que Vega (React Na
 - [ ] **Interfaz**: menú de arriba con lupa y perfil, perfil en dos columnas, Atrás → menú → «¿Salir?» (en webOS el
       Atrás llega por `web/back.ts`; en Tizen la tecla 10009), plataformas e ícono de la app de cada tienda.
 - [ ] **Borrado de caché** (`cache_clear_at`, `poll: 1`, espera a salir del reproductor).
+- [ ] **Idiomas como Roku** (ver arriba): pedidos desde la ficha, solo en memoria, 2 s al abrir.
+- [ ] **Canales**: lo nuevo del lector de Vega 1.0.18 si esa tele lo usa.
 - [ ] Subir la versión de cada rama, compilar en GitHub (`.ipk` / `.wgt`) y probar en la tele.
 
 Después: Android, Android TV, iOS, Windows y Mac (ya reproducen bien; solo revisar que tengan lo mismo).

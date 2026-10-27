@@ -121,7 +121,8 @@ const s = themed(() =>
     root: { flex: 1, backgroundColor: C.bg, paddingTop: px(60) },
     banner: { position: 'absolute', left: 0, top: 0, right: 0, height: px(620), opacity: 0.45 },
     bannerImg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
-    bannerGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(420) },
+    // ancho y alto fijos (Vega dibuja las imágenes del paquete a su tamaño real si solo se estiran)
+    bannerGrad: { position: 'absolute', left: 0, top: px(200), width: px(1920), height: px(420) },
     head: { flexDirection: 'row', alignItems: 'center', marginHorizontal: SIDE, marginBottom: px(10), minHeight: px(80) },
     title: { flex: 1, color: C.text, fontSize: px(52), fontWeight: '800' },
     searchBox: { flexDirection: 'row', alignItems: 'center', marginLeft: px(20) },

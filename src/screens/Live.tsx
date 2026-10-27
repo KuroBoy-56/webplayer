@@ -4,6 +4,7 @@ import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem } from '../actions';
 import { channelEpg, EpgEntry } from '../api/xtream';
 import PinDialog from '../components/PinDialog';
+import LivePreview, { stopLivePreview } from '../components/LivePreview';
 import { Button, Focusable, Message, Spinner } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
 import { clock, digits, nowSec } from '../lib/util';
@@ -12,7 +13,8 @@ import { getState, isFav, toggleFav, useAppState } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
 
-export default function Live() {
+// active: la pantalla está a la vista (con el reproductor encima, la vista previa se apaga)
+export default function Live({ active = true }: { active?: boolean }) {
   const nav = useNav();
   const st = useAppState();
   const [cat, setCat] = useState('all');
@@ -53,7 +55,7 @@ export default function Live() {
   const favSet = useMemo(() => new Set(favIds), [favIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
   const renderCh = useCallback(
     ({ item: c, index }: { item: Item; index: number }) => (
-      <Focusable onPress={() => openItem(nav, c, channels)} onFocus={() => setFocused(c)} style={f => [s.ch, f && s.chF]}>
+      <Focusable onPress={() => (stopLivePreview(), openItem(nav, c, channels))} onFocus={() => setFocused(c)} style={f => [s.ch, f && s.chF]}>
         {f => (
           <>
             <Text style={[s.chNum, f && { color: C.onFocus }]}>{c.num || index + 1}</Text>
@@ -113,7 +115,8 @@ export default function Live() {
       <View style={s.guide}>
         {focused ? (
           <>
-            <View style={s.guideLogo}>{focused.poster ? <Image source={{ uri: focused.poster }} style={s.logo} resizeMode="contain" /> : null}</View>
+            {/* vista previa del canal (como Roku): empieza a sonar si el foco se queda 2,5 s en el canal */}
+            <LivePreview channel={focused} active={active} />
             <Text style={s.guideName}>{focused.name}</Text>
             {cur ? (
               <>

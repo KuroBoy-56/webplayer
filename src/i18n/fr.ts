@@ -391,6 +391,13 @@ const fr: Record<Key, string> = {
   "Línea vencida": "Ligne expirée",
   "El servidor bloqueó este equipo ({x})": "Le serveur a bloqué cet appareil ({x})",
   "El servidor no entregó el video ({x})": "Le serveur n'a pas fourni la vidéo ({x})",
+  "No hay información de este equipo": "Aucune information sur cette équipe",
+  "Espacio": "Espace",
+  "Listo": "OK",
+  "Ocultar": "Masquer",
+  "Mostrar": "Afficher",
+  "Canales": "Chaînes",
+  "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ changer de chaîne ({x}/{y}) · OK liste des chaînes · MENU audio et sous-titres",
 };
 
 export default fr;

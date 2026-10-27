@@ -1,14 +1,16 @@
 // Ficha de película o serie: sinopsis, reparto, temporadas, episodios y "Más títulos como este".
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem, playEpisodes, playMovie } from '../actions';
 import { CastMember, castFor, overviewFor } from '../api/tmdb';
-import { SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
+import { episodeUrl, movieUrl, SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
+import { warmTracks } from '../api/media';
 import { Button, Focusable } from '../components/ui';
 import { RowView } from '../components/Tiles';
 import { ChainImage } from '../components/ChainImage';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, Item } from '../data/catalog';
+import { savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
 import { getState, isFav, progressMovie, progressSeries, toggleFav, useAppState } from '../state';
@@ -49,6 +51,34 @@ export default function Detail({ item }: { item: Item }) {
 
   const info = item.kind === 'series' ? ser : vod;
 
+  // idiomas del video que se va a ver, pedidos apenas se abre la ficha (como Roku): al pulsar Reproducir ya se saben y
+  // empieza con el idioma elegido. Película: la de la ficha; serie: el episodio de Continuar o el primero
+  useEffect(() => {
+    const s = getState().session;
+    if (!s || loading) return;
+    if (item.kind !== 'series') {
+      warmTracks(movieUrl(s, item.id, vod?.ext || item.ext));
+      return;
+    }
+    if (!ser || !ser.seasons.length) return;
+    const want = resumeEp ? digits(resumeEp.id) : '';
+    const ep = (want && ser.seasons.flatMap(x => x.episodes).find(e => e.id === want)) || ser.seasons[0].episodes[0];
+    if (ep) warmTracks(episodeUrl(s, ep.id, ep.ext));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, loading, ser, vod]);
+  // el episodio que se queda enfocado un momento también
+  const warmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (warmTimer.current) clearTimeout(warmTimer.current);
+  }, []);
+  const warmEp = (id: string, ext: string) => {
+    if (warmTimer.current) clearTimeout(warmTimer.current);
+    warmTimer.current = setTimeout(() => {
+      const s = getState().session;
+      if (s) warmTracks(episodeUrl(s, id, ext));
+    }, 600);
+  };
+
   // reparto con foto (TMDB): al elegir a alguien se abre su filmografía en el servidor
   useEffect(() => {
     if (loading) return;
@@ -62,10 +92,13 @@ export default function Detail({ item }: { item: Item }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, loading]);
-  const backdrop = info?.backdrop || item.backdrop || info?.poster || item.poster;
+  // fondo horizontal: el del servidor, el que ya encontró la portada (servidor o TMDB) o, si no hay, la carátula
+  const wide = info?.backdrop || item.backdrop || savedArt(item)?.backdrop || '';
+  const backdrop = wide || info?.poster || item.poster;
   const bdSrc = useMemo(
-    () => (info?.backdrop || item.backdrop ? backdropSources(info?.backdrop || item.backdrop) : posterSources(item.kind, info?.poster || item.poster, item.name, item.year, item.tm)),
-    [info, item],
+    () => (wide ? backdropSources(wide) : posterSources(item.kind, info?.poster || item.poster, item.name, item.year, item.tm)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [info, item, wide],
   );
   const fav = isFav(item.kind, item.id);
   void st.rev;
@@ -100,8 +133,13 @@ export default function Detail({ item }: { item: Item }) {
 
   return (
     <View style={s.root}>
-      {backdrop || bdSrc.length ? <ChainImage sources={bdSrc} style={s.bg} resizeMode="cover" /> : null}
-      <View style={s.shade} />
+      {/* como Roku: la imagen arriba a la derecha (1440×810), color liso a la izquierda con degradado sobre la imagen,
+          degradado abajo y color liso debajo; los textos se leen sobre cualquier imagen */}
+      {backdrop || bdSrc.length ? <ChainImage sources={bdSrc} style={s.bg} resizeMode="cover" blurRadius={wide ? undefined : 18} /> : null}
+      <Image source={require('../../assets/image/grad_left.png')} style={[s.bgLeft, { tintColor: C.bg }]} resizeMode="stretch" />
+      <View style={s.bgSolidLeft} />
+      <Image source={require('../../assets/image/grad_bottom.png')} style={[s.bgBottom, { tintColor: C.bg }]} resizeMode="stretch" />
+      <View style={s.bgSolidBottom} />
       <ScrollView contentContainerStyle={{ paddingBottom: px(80) }}>
         <View style={s.head}>
           <Text style={s.title} numberOfLines={2}>
@@ -154,7 +192,7 @@ export default function Detail({ item }: { item: Item }) {
               renderItem={({ item: e, index }) => {
                 const p = st.progress.find(x => x.type === 'episode' && digits(x.id) === e.id);
                 return (
-                  <Focusable onPress={() => playEpisodes(nav, item, eps, index, p ? Math.floor(p.position) : 0)} style={f => [s.ep, f && s.epF]}>
+                  <Focusable onFocus={() => warmEp(e.id, e.ext)} onPress={() => playEpisodes(nav, item, eps, index, p ? Math.floor(p.position) : 0)} style={f => [s.ep, f && s.epF]}>
                     <View style={s.epImgBox}>
                       {e.image || item.poster ? <Image source={{ uri: e.image || item.poster }} style={s.epImg} resizeMode="cover" /> : null}
                       {p && p.duration > 0 ? (
@@ -223,8 +261,13 @@ export default function Detail({ item }: { item: Item }) {
 const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg },
-    bg: { position: 'absolute', left: 0, top: 0, right: 0, height: px(1080) },
-    shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha(C.bg, 0.75) },
+    // medidas de Roku (DetailView.xml); ancho y alto fijos: Vega dibuja las imágenes del paquete a su tamaño real si solo
+    // se estiran
+    bg: { position: 'absolute', left: px(480), top: 0, width: px(1440), height: px(810) },
+    bgLeft: { position: 'absolute', left: px(480), top: 0, width: px(900), height: px(810) },
+    bgSolidLeft: { position: 'absolute', left: 0, top: 0, width: px(481), height: px(810), backgroundColor: C.bg },
+    bgBottom: { position: 'absolute', left: 0, top: px(400), width: px(1920), height: px(420) },
+    bgSolidBottom: { position: 'absolute', left: 0, top: px(810), width: px(1920), height: px(1200), backgroundColor: C.bg },
     head: { paddingLeft: SIDE, paddingTop: px(110), width: px(1300) },
     title: { color: C.text, fontSize: px(72), fontWeight: '900' },
     meta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },

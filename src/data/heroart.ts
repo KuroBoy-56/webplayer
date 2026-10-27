@@ -79,3 +79,17 @@ export function heroArt(it: Item, done: (a: Art | null) => void): void {
     busy = false;
   })();
 }
+
+// fondos de varios destacados: uno tras otro (sin llenar de pedidos al servidor IPTV); each recibe cada uno al llegar
+export async function heroArtList(items: Item[], each: (it: Item, a: Art | null) => void, alive: () => boolean): Promise<void> {
+  for (const it of items) {
+    if (!alive()) return;
+    const hit = savedArt(it);
+    if (hit) {
+      each(it, hit);
+      continue;
+    }
+    const a = await ask(it).catch(() => null);
+    if (alive()) each(it, a);
+  }
+}

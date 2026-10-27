@@ -390,6 +390,13 @@ const en = {
   "Línea vencida": "Line expired",
   "El servidor bloqueó este equipo ({x})": "The server blocked this device ({x})",
   "El servidor no entregó el video ({x})": "The server did not deliver the video ({x})",
+  "No hay información de este equipo": "No information about this team",
+  "Espacio": "Space",
+  "Listo": "Done",
+  "Ocultar": "Hide",
+  "Mostrar": "Show",
+  "Canales": "Channels",
+  "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ change channel ({x}/{y}) · OK channel list · MENU audio and subtitles",
 };
 
 export default en;

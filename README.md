@@ -11,6 +11,27 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+## Novedades de la 1.2.0 (traídas de Vega OS 1.0.12 a 1.0.21)
+
+- **Portada como Roku**: degradados a la izquierda y abajo con el color del tema; los destacados van pasando solos
+  cada 8 s (con puntos); la ficha con el fondo a la derecha y el degradado como Roku; carátulas que siempre cargan
+  (si una no responde en 6 s, la siguiente).
+- **Usuario y contraseña con el teclado de la app** (como Roku), con el ojo para ver la contraseña.
+- **TV en vivo**: al quedarse 2,5 s sobre un canal se ve su **vista previa** en el cuadro de la derecha; en el
+  reproductor solo OK, ▲ y ▼ (OK abre la lista de canales de la carpeta a la izquierda). Un canal que ya se estaba
+  viendo y se corta (token vencido del servidor, red) **se vuelve a conectar solo**, igual que estaba, hasta 5 veces
+  seguidas («Reconectando…», un aviso al panel), sin pasar por los otros formatos como un canal que no abre.
+- **Idiomas como Roku**: se piden al panel (`api/tracks.php`) apenas se abre la ficha de la película o serie (y el
+  episodio enfocado, y el siguiente mientras suena el actual); al pulsar Reproducir el video empieza con el idioma
+  elegido (si no llegaron, se espera como mucho 2 s). En la tele solo se recuerdan mientras la app está abierta; lo
+  que dura lo guarda el panel por distribuidor.
+- **Películas**: un formato que la tele no abre va directo al panel sin vueltas extra, y la tele recuerda los
+  archivos que solo pudo ver por el panel (la próxima vez abren por ahí); el cambio de idioma por el panel sigue
+  sonando con el actual hasta que el otro está listo.
+- **«¿Salir del video?»** se ve al frente del aviso de error, con el foco en sus botones.
+- El lector propio de canales (descifrado AES, segmentos pegados) es solo de Vega: en LG el `<video>` del televisor
+  abre el `.m3u8` solo.
+
 ## Novedades de la 1.1.1
 
 - La portada del destacado busca su propio fondo; sin fondo usa su carátula (nunca el fondo de otro título).
