@@ -9,7 +9,6 @@ import { cloud, cloudToken, lineKey, panel, panelApiBase, panelScheme } from './
 import { Probe, probeTracks } from '../lib/probe';
 import { features } from '../lib/tenant';
 import { lang, t } from '../lib/i18n';
-import { readJson, writeJson } from '../lib/storage';
 
 const FILE = 'media_vega.php';
 
@@ -128,39 +127,17 @@ async function savedTracks(url: string): Promise<Probe | null> {
 
 const known = new Map<string, Promise<Probe>>();
 
-// lo ya leído en este equipo (sin el protocolo: el mismo archivo por http o https es el mismo); se guarda también en
-// el equipo (como el tmp: de Roku, pero sobrevive al cerrar la app): los 300 más recientes, 30 días
+// lo ya leído o recibido mientras la app está abierta (sin el protocolo: el mismo archivo por http o https es el
+// mismo). Como el tmp: de Roku: solo en memoria, se borra al cerrar la app; lo que dura es lo que guarda el panel
+// (api/tracks.php, por distribuidor: de 1 mes a nunca según lo que elija el dueño, hasta 3 meses un distribuidor)
 const done = new Map<string, Probe>();
 const noScheme = (u: string) => u.replace(/^https?:\/\//i, '');
-const SAVED_KEY = 'tracks_known';
-type Saved = { p: Probe; t: number };
-let savedAll: Record<string, Saved> | null = null;
-function saved(): Record<string, Saved> {
-  if (!savedAll) savedAll = readJson<Record<string, Saved>>(SAVED_KEY) || {};
-  return savedAll;
-}
 function remember(url: string, p: Probe): void {
-  const k = noScheme(url);
-  done.set(k, p);
-  const all = saved();
-  all[k] = { p, t: Date.now() };
-  const ks = Object.keys(all);
-  if (ks.length > 300) {
-    ks.sort((a, b) => all[a].t - all[b].t);
-    for (const x of ks.slice(0, ks.length - 300)) delete all[x];
-  }
-  writeJson(SAVED_KEY, all);
+  done.set(noScheme(url), p);
+  if (done.size > 200) done.delete(done.keys().next().value as string);
 }
 function local(url: string): Probe | null {
-  const k = noScheme(url);
-  const hit = done.get(k);
-  if (hit) return hit;
-  const e = saved()[k];
-  if (e && e.p?.ok && Date.now() - e.t < 30 * 86400000) {
-    done.set(k, e.p);
-    return e.p;
-  }
-  return null;
+  return done.get(noScheme(url)) || null;
 }
 
 // idiomas ya sabidos en este momento, sin esperar nada (lo leído en el equipo o lo que ya contestó el panel)

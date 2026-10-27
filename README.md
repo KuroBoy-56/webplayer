@@ -151,10 +151,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   y con el interruptor del dueño o del distribuidor encendido).
 - **Audio y subtítulos como en Roku**: los idiomas se piden al panel (`api/tracks.php`, lo que ya leyó cualquier equipo
   de ese distribuidor) apenas se abre la ficha de la película o la serie (el episodio de Continuar o el primero, y el
-  episodio que queda enfocado) y el siguiente episodio mientras suena el actual (`warmTracks`); lo sabido se guarda en
-  el equipo (300 videos, 30 días). Al pulsar Reproducir, si ya llegaron el video empieza con el idioma elegido; si no,
-  se espera ese pedido como mucho 1,5 s. Antes de abrir el video solo se pregunta lo ya sabido: leer el archivo antes
-  bloqueaba líneas de pocas conexiones. Con el video abierto
+  episodio que queda enfocado) y el siguiente episodio mientras suena el actual (`warmTracks`). En el equipo solo se
+  recuerdan en memoria mientras la app está abierta (como el `tmp:` de Roku); lo que dura lo guarda el panel por
+  distribuidor (de 1 mes a nunca el dueño, hasta 3 meses un distribuidor). Al pulsar Reproducir, si ya llegaron el
+  video empieza con el idioma elegido; si no, se espera ese pedido como mucho 2 s (como Roku). Antes de abrir el video
+  solo se pregunta lo ya sabido: leer el archivo antes bloqueaba líneas de pocas conexiones. Con el video abierto
   se lee la cabecera del MKV/MP4 (256 KB) a los 3 s y se reintenta a los 3, 6, 10 s y luego cada 15 s hasta tener los
   idiomas (se deja de intentar si el archivo no es MKV/MP4). Cuando el archivo trae más idiomas de los que da el
   reproductor, el menú muestra arriba **Audio predeterminado** (el video directo) y debajo **todos** los idiomas,

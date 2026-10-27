@@ -217,7 +217,7 @@ export class Playback {
       return;
     }
     // Como Roku: los idiomas se piden al entrar a la ficha (warmTracks); si ya llegaron, el video empieza con el idioma
-    // elegido. Si todavía no, se espera ese pedido como mucho 1,5 s y se abre; lo que llegue después se aplica al
+    // elegido. Si todavía no, se espera ese pedido como mucho 2 s (como Roku) y se abre; lo que llegue después se aplica al
     // momento y, si nadie los sabe, se siguen pidiendo con el video abierto hasta tenerlos (langCheck).
     const now = knownNow(url);
     if (now) {
@@ -233,7 +233,7 @@ export class Playback {
       this.direct(resume);
       this.langWatch(3000);
     };
-    const wait = setTimeout(open, 1500);
+    const wait = setTimeout(open, 2000);
     knownTracks(url).then(p => {
       clearTimeout(wait);
       if (g !== this.gen) return;
