@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -151,7 +153,7 @@ fun SportsTablesView(d: SportsData) {
         if (league == null) { Empty(stringResource(R.string.sp_no_tables)); return@Column }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
             if (league.badge.isNotEmpty()) AsyncImage(model = tiny(league.badge), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(30.dp).padding(end = 6.dp))
-            Text(league.name + (if (league.season.isNotEmpty()) " · " + league.season else ""), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(league.name + (if (league.season.isNotEmpty()) " · " + league.season else ""), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
             league.groups.forEachIndexed { gi, g ->
@@ -212,11 +214,13 @@ private fun StandingLine(r: StandingRow, onClick: () -> Unit) {
     }
 }
 
+// en un celular en vertical no entran las cuatro zonas en una línea: pasan a la siguiente (antes se cortaban)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ZoneLegend(lg: League) {
     val used = lg.groups.flatMap { g -> g.rows.map { it.zone } }.toSet()
     val names = mapOf("p" to R.string.sp_zone_p, "s" to R.string.sp_zone_s, "o" to R.string.sp_zone_o, "r" to R.string.sp_zone_r)
-    Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    FlowRow(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         names.filterKeys { it in used }.forEach { (k, res) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(10.dp).background(ZONES[k] ?: Color.Gray, CircleShape))
@@ -248,7 +252,7 @@ private fun TeamCardDialog(id: String, name: String, badge: String, onClose: () 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val b = t?.s("b")?.ifEmpty { null } ?: badge
                 if (b.isNotEmpty()) AsyncImage(model = tiny(b), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(40.dp).padding(end = 10.dp))
-                Text(t?.s("n")?.ifEmpty { null } ?: name, color = Color.White, fontWeight = FontWeight.Bold)
+                Text(t?.s("n")?.ifEmpty { null } ?: name, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         },
         text = {
