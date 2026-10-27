@@ -98,7 +98,7 @@ export default function Player({ params }: { params: PlayParams }) {
   // película o episodio que todavía no sonó: ya se le preguntó al servidor (checked), se esperaron 10 s tras un 403
   // (waited), se corrigió la extensión (extFixed); Continuar viendo: 0 = directo, 1 = el panel, 2 = otra vez directo
   // (retried); intentos para el reporte. Se reinicia con cada video (vodIdx)
-  const vod = useRef({ idx: -1, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, srv: 0, acct: '', attempts: [] as string[], live: null as StreamCheck | null, xui: null as StreamCheck | null });
+  const vod = useRef({ idx: -1, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, format: false, srv: 0, acct: '', attempts: [] as string[], live: null as StreamCheck | null, xui: null as StreamCheck | null });
   // vigilante: si el video no empieza a sonar a tiempo, se prueba otra forma (antes podía quedar cargando para siempre)
   const startDog = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onErrorRef = useRef<() => void>(() => {});
@@ -179,7 +179,7 @@ export default function Player({ params }: { params: PlayParams }) {
       setSub('');
       setWork('');
       setStatus(live ? t('Conectando con el canal…') : t('Cargando…'));
-      if (vod.current.idx !== i) vod.current = { idx: i, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, srv: 0, acct: '', attempts: [], live: null, xui: null };
+      if (vod.current.idx !== i) vod.current = { idx: i, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, format: false, srv: 0, acct: '', attempts: [], live: null, xui: null };
       c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
@@ -247,6 +247,11 @@ export default function Player({ params }: { params: PlayParams }) {
       },
       // el panel no pudo preparar el video que el equipo no abrió: siguen los otros pasos
       panelFailed: () => onErrorRef.current(),
+      // el canal se detiene seguido: al panel una vez por canal con el estado del lector (bajada, descifrado, cortes)
+      liveStalls: diag => {
+        const ch = params.kind === 'live' ? params.channels[indexRef.current] || params.channel : null;
+        reportError('warning', 'Canal en vivo se detiene seguido', 'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' ' + diag, 'Reproductor');
+      },
       // canal por HLS (lector propio) que no abrió: el siguiente formato
       liveFailed: why => {
         liveNote.current = 'HLS: ' + why;
@@ -332,6 +337,9 @@ export default function Player({ params }: { params: PlayParams }) {
           vs.srv = r.code;
           if (r.status !== undefined) vs.acct = ' cuenta=' + r.status + ' conexiones=' + r.active + '/' + r.max;
           vs.inUse = r.code >= 400 && !!r.max && (r.active || 0) >= r.max;
+          // el servidor sí entrega el video y el equipo no lo abre: es el formato; directo al panel (sin el otro
+          // protocolo, el DNS ni otra vuelta: antes el panel lo preparaba hasta 3 veces y tardaba mucho)
+          vs.format = r.code >= 200 && r.code < 300 && !r.html && /video|octet|matroska|mp4|msvideo|mpeg/i.test(r.type || '');
           vs.attempts.push('servidor: ' + r.code + (r.xui ? ' xui=' + r.xui + ' (' + (r.xuiText || '') + ')' : r.html ? ' html=«' + (r.page || '') + '»' : '') + vs.acct + (r.exists !== undefined ? ' existe=' + r.exists + ' ext=' + r.ext : ''));
           if (r.xui) {
             // el servidor contestó con la página de error de XUI («Debug Mode»): el motivo exacto, sin insistir
@@ -486,6 +494,10 @@ export default function Player({ params }: { params: PlayParams }) {
         return;
       }
       if (vodError()) return;
+      if (vod.current.format) {
+        triedOther.current = true;
+        triedDns.current = true;
+      }
       if (!triedOther.current) {
         triedOther.current = true;
         flipped.current = !flipped.current;
@@ -500,7 +512,7 @@ export default function Player({ params }: { params: PlayParams }) {
         c.onError().then(handled => {
           if (!alive || handled) return;
           // una vuelta más tras una pausa (no más: muchos intentos seguidos y el servidor bloquea el equipo)
-          if (rounds.current < 1) {
+          if (rounds.current < 1 && !vod.current.format) {
             // otra vuelta sola tras una pausa (el servidor pudo cortar un momento)
             rounds.current++;
             retried.current = false;
@@ -700,6 +712,20 @@ export default function Player({ params }: { params: PlayParams }) {
     showOverlay();
   };
 
+  // OK: reintentar tras un error; en vivo, la barra del canal (nombre y guía) y la lista de canales a la izquierda;
+  // en películas y capítulos, pausa
+  const onSelect = () => {
+    if (error) {
+      retried.current = false;
+      load(indexRef.current, Math.floor(pos));
+    } else if (live) {
+      showOverlay();
+      if (params.kind === 'live' && params.channels.length > 1) setChList(true);
+    } else togglePause();
+  };
+  // ancla de foco: un botón invisible a pantalla completa que tiene el foco mientras no hay menú ni aviso. Sin él, al
+  // abrir un canal desde la lista el foco se quedaba en la lista de abajo (oculta) y OK, ▲ y ▼ no llegaban al reproductor
+  const anchorOn = !menu && !askExit && !chList && !(nextSecs > 0);
   useTVEventHandler((evt: HWEvent) => {
     if (evt.eventKeyAction !== undefined && evt.eventKeyAction !== 0) return;
     if (menu || askExit || nextSecs > 0 || chList) return; // menú, lista de canales, aviso del siguiente y «¿Salir?» usan el foco normal
@@ -708,13 +734,8 @@ export default function Player({ params }: { params: PlayParams }) {
     if (live && !['select', 'up', 'down', 'channel_up', 'channel_down', 'menu', 'info', 'more', 'context_menu'].includes(evt.eventType)) return;
     switch (evt.eventType) {
       case 'select':
-        if (error) {
-          retried.current = false;
-          load(indexRef.current, Math.floor(pos));
-        } else if (live) {
-          showOverlay();
-          if (params.kind === 'live' && params.channels.length > 1) setChList(true);
-        } else togglePause();
+        // OK lo atiende el ancla de foco (onSelect); aquí solo si no está (no se hace dos veces)
+        if (!anchorOn) onSelect();
         break;
       case 'playpause':
       case 'play':
@@ -815,6 +836,7 @@ export default function Player({ params }: { params: PlayParams }) {
         </View>
       ) : null}
 
+      {anchorOn ? <Focusable preferred onPress={onSelect} style={s.anchor}>{null}</Focusable> : null}
       {overlay || paused ? (
         <View style={s.overlay}>
           <View style={s.topBar}>
@@ -971,6 +993,7 @@ const s = themed(() =>
     chRowLogo: { width: px(80), height: px(50), marginRight: px(16) },
     chName: { color: C.text, fontSize: px(28), flex: 1 },
     chTextF: { color: C.onFocus },
+    anchor: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 1 },
     exitShade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 50, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' },
     exitBox: { backgroundColor: alpha(C.bg2, 0.97), borderRadius: px(12), padding: px(40), alignItems: 'center' },
     nextTitle: { color: C.text, fontSize: px(34), fontWeight: '800' },

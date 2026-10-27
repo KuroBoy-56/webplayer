@@ -36,6 +36,19 @@ export class LiveHls {
   private next = -1;
   private alive = true;
   private appended = 0;
+  // el reproductor se quedó sin datos (después de empezar) y cuánto tardan bajar y descifrar cada segmento: para el reporte
+  private stalls = 0;
+  private fetchMs = 0;
+  private decMs = 0;
+  // el segmento siguiente se baja mientras se entrega el actual
+  private ahead: { seq: number; p: Promise<{ code: number; url: string; text?: string; data?: Uint8Array; type?: string }> } | null = null;
+  // avisa una vez si el canal se detiene seguido (Player lo manda al panel con diag())
+  onStalls: () => void = () => {};
+  private onWaiting = () => {
+    if (!this.appended || !this.alive) return;
+    this.stalls++;
+    if (this.stalls === 3) this.onStalls();
+  };
   private lastAppend = Date.now();
   private bytes = 0;
   // llaves AES-128 ya bajadas (por dirección) y si el canal viene cifrado (para el reporte)
@@ -69,7 +82,9 @@ export class LiveHls {
       // sin datos
     }
     const host = (this.list.match(/^https?:\/\/([^/?#]+)/i) || [])[1] || '';
-    return 'hls host=' + host + ' segs=' + this.segs.length + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+    const n = Math.max(1, this.appended);
+    return 'hls host=' + host + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
+      ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
@@ -78,8 +93,10 @@ export class LiveHls {
     if (err) return err;
     if (!this.segs.length) return 'lista sin segmentos';
     if (!this.alive) return '';
-    // en vivo: los últimos 3 segmentos (arranca rápido y cerca del momento actual)
-    this.next = this.segs[Math.max(0, this.segs.length - 3)].seq;
+    // en vivo: 5 segmentos antes del final (unos 25-30 s de margen): con los últimos 3 cualquier demora del servidor o
+    // del descifrado dejaba el canal sin datos y se detenía y seguía una y otra vez
+    this.next = this.segs[Math.max(0, this.segs.length - 5)].seq;
+    this.v.addEventListener('waiting', this.onWaiting);
     const ms: any = new MediaSource();
     this.ms = ms;
     const opened = new Promise<void>(res => ms.addEventListener('sourceopen', () => res()));
@@ -107,6 +124,11 @@ export class LiveHls {
 
   destroy(): void {
     this.alive = false;
+    try {
+      this.v.removeEventListener('waiting', this.onWaiting);
+    } catch {
+      // ya cerrado
+    }
     try {
       if (this.sb?.updating) this.sb.abort();
     } catch {
@@ -311,8 +333,14 @@ export class LiveHls {
         }
         continue;
       }
-      const r = await this.get(seg.url, 20000, 'seg');
+      const t0 = Date.now();
+      const r = await (this.ahead && this.ahead.seq === seg.seq ? this.ahead.p : this.get(seg.url, 20000, 'seg'));
+      this.ahead = null;
       if (!this.alive) return;
+      this.fetchMs += Date.now() - t0;
+      // el siguiente ya se empieza a bajar mientras este se descifra y se entrega
+      const nx = this.segs.find(sg => sg.seq === seg!.seq + 1);
+      if (nx && r.data) this.ahead = { seq: nx.seq, p: this.get(nx.url, 20000, 'seg') };
       if (r.text !== undefined && /<html|<!doctype/i.test(r.text)) {
         // una página en lugar del video: el motivo (XUI) y no se insiste
         this.onError(this.pageProblem(r.text));
@@ -331,7 +359,9 @@ export class LiveHls {
       if (seg.key) {
         // segmento cifrado (AES-128): se descifra con la llave de la lista
         this.encrypted = true;
+        const t1 = Date.now();
         const plain = await this.decrypt(seg, data);
+        this.decMs += Date.now() - t1;
         if (!this.alive) return;
         if (!plain) {
           if (++fails > 5) {
@@ -368,7 +398,9 @@ export class LiveHls {
       this.bytes += data.length;
       this.next = seg.seq + 1;
       this.lastAppend = Date.now();
-      if (this.appended === 1) {
+      // empieza a sonar con 2 segmentos entregados (o con 1 si la lista no tiene más): arranca con margen
+      const more = this.segs.some(sg => sg.seq === this.next);
+      if (this.appended === 2 || (this.appended === 1 && !more)) {
         this.unstick();
         if (this.v.paused) this.v.play();
       }

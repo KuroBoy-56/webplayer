@@ -162,6 +162,16 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Borrado de caché del panel**: `check_mac` trae la orden (`cache_clear`) y cuándo se envió (`cache_clear_at`). Sin
   número guardado (reinstalada) una orden de los últimos 3 días se aplica igual; la consulta de cada 10 min va con
   `poll: 1` (no cuenta como otra apertura) y, si se está viendo un video, la orden espera a que se cierre el reproductor.
+- **Canales estables**: el lector en vivo empieza 5 segmentos antes del final (unos 25-30 s de margen; con 3 cualquier
+  demora dejaba el canal sin datos), arranca con 2 segmentos entregados y baja el siguiente mientras entrega el actual.
+  Si el canal se detiene 3 veces, va un aviso al panel con lo que tarda bajar y descifrar cada segmento.
+- **Foco en el reproductor**: un botón invisible a pantalla completa tiene el foco mientras no hay menú ni aviso; al
+  abrir un canal desde la lista el foco se quedaba en la lista oculta y OK / ▲▼ no llegaban al reproductor.
+- **Películas más rápidas**: si el servidor entrega el video y el equipo no lo abre (formato), va directo al panel
+  (sin el otro protocolo, el DNS ni otra vuelta; antes el panel lo preparaba hasta 3 veces). El equipo recuerda qué
+  archivos solo pudo ver por el panel (copia o video convertido, 7 días) y la próxima vez los abre de una por ahí.
+- **Cambiar de idioma con el video por el panel**: lo que suena sigue sonando mientras el panel prepara el otro idioma
+  y se cambia cuando está listo; si no se puede, se queda el de ahora (antes se cortaba y no pasaba nada).
 - **TV en vivo como Roku**: al quedarse 2,5 s sobre un canal empieza a sonar en el cuadro de la derecha
   (`src/components/LivePreview.tsx`, donde estaba el logo); OK lo abre a pantalla completa (antes se apaga la vista
   previa: nunca dos conexiones de la línea a la vez). En el reproductor de un canal solo funcionan OK (lista de canales
