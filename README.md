@@ -149,8 +149,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
   si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
   y con el interruptor del dueño o del distribuidor encendido).
-- **Audio y subtítulos como en Roku**: antes de abrir el video solo se pregunta lo ya sabido (este equipo o el panel,
-  `api/tracks.php`, como mucho 3 s): leer el archivo antes bloqueaba líneas de pocas conexiones. Con el video abierto
+- **Audio y subtítulos como en Roku**: los idiomas se piden al panel (`api/tracks.php`, lo que ya leyó cualquier equipo
+  de ese distribuidor) apenas se abre la ficha de la película o la serie (el episodio de Continuar o el primero, y el
+  episodio que queda enfocado) y el siguiente episodio mientras suena el actual (`warmTracks`); lo sabido se guarda en
+  el equipo (300 videos, 30 días). Al pulsar Reproducir, si ya llegaron el video empieza con el idioma elegido; si no,
+  se espera ese pedido como mucho 1,5 s. Antes de abrir el video solo se pregunta lo ya sabido: leer el archivo antes
+  bloqueaba líneas de pocas conexiones. Con el video abierto
   se lee la cabecera del MKV/MP4 (256 KB) a los 3 s y se reintenta a los 3, 6, 10 s y luego cada 15 s hasta tener los
   idiomas (se deja de intentar si el archivo no es MKV/MP4). Cuando el archivo trae más idiomas de los que da el
   reproductor, el menú muestra arriba **Audio predeterminado** (el video directo) y debajo **todos** los idiomas,
@@ -339,7 +343,13 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
   AES-128 (`#EXT-X-KEY`, comunes en XUI) se descifran en la app con la llave de la lista; el MPEG-TS se busca dentro
   del segmento (0x47 cada 188 bytes) por si trae relleno al principio. La llave se lee siempre como bytes (XUI la
   manda desde PHP marcada como `text/html`), y también si viene escrita en hexadecimal. Cada intento espera hasta 25 s; al panel va el estado del lector (servidor, segmentos entregados, lo que
-  tiene el reproductor y dónde está). Si ninguno abre se le pregunta al servidor y el aviso dice el motivo. El HLS del
+  tiene el reproductor y dónde está). Si ninguno abre se le pregunta al servidor y el aviso dice el motivo.
+  Estabilidad: los 2 segmentos siguientes se bajan mientras se entrega el actual; la lista se vuelve a pedir cada tercio
+  de segmento cuando el canal está al día; un vigilante cada 300 ms salta los huecos entre tramos y empuja la imagen
+  quieta a los 3 s; si se acaba lo bajado, pausa (se ve «cargando») hasta tener 3-6 s de margen (hasta 10 s si pasa
+  seguido) en lugar de detenerse y seguir cada pocos segundos; un segmento que no llega se reintenta y a la tercera se
+  salta; con la memoria llena borra lo ya visto y vuelve a intentar. En los canales el reproductor no se redibuja con
+  el avance (no hay barra), así la app queda libre para bajar y descifrar. El HLS del
   motor del panel (audio cambiado) se reproduce con su propio lector por MSE (`src/player/hls.ts`).
 - **Servidores XUI.one en «Debug Mode»** contestan **200 con una página HTML** en lugar del video cuando hay un problema
   (`INVALID_STREAM_ID`, `STREAM_OFFLINE`, `BLOCKED_USER_AGENT`, `EXPIRED`…). Al primer fallo la app hace una sola

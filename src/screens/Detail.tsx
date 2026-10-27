@@ -1,9 +1,10 @@
 // Ficha de película o serie: sinopsis, reparto, temporadas, episodios y "Más títulos como este".
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem, playEpisodes, playMovie } from '../actions';
 import { CastMember, castFor, overviewFor } from '../api/tmdb';
-import { SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
+import { episodeUrl, movieUrl, SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
+import { warmTracks } from '../api/media';
 import { Button, Focusable } from '../components/ui';
 import { RowView } from '../components/Tiles';
 import { ChainImage } from '../components/ChainImage';
@@ -49,6 +50,34 @@ export default function Detail({ item }: { item: Item }) {
   }, [ser]);
 
   const info = item.kind === 'series' ? ser : vod;
+
+  // idiomas del video que se va a ver, pedidos apenas se abre la ficha (como Roku): al pulsar Reproducir ya se saben y
+  // empieza con el idioma elegido. Película: la de la ficha; serie: el episodio de Continuar o el primero
+  useEffect(() => {
+    const s = getState().session;
+    if (!s || loading) return;
+    if (item.kind !== 'series') {
+      warmTracks(movieUrl(s, item.id, vod?.ext || item.ext));
+      return;
+    }
+    if (!ser || !ser.seasons.length) return;
+    const want = resumeEp ? digits(resumeEp.id) : '';
+    const ep = (want && ser.seasons.flatMap(x => x.episodes).find(e => e.id === want)) || ser.seasons[0].episodes[0];
+    if (ep) warmTracks(episodeUrl(s, ep.id, ep.ext));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, loading, ser, vod]);
+  // el episodio que se queda enfocado un momento también
+  const warmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (warmTimer.current) clearTimeout(warmTimer.current);
+  }, []);
+  const warmEp = (id: string, ext: string) => {
+    if (warmTimer.current) clearTimeout(warmTimer.current);
+    warmTimer.current = setTimeout(() => {
+      const s = getState().session;
+      if (s) warmTracks(episodeUrl(s, id, ext));
+    }, 600);
+  };
 
   // reparto con foto (TMDB): al elegir a alguien se abre su filmografía en el servidor
   useEffect(() => {
@@ -163,7 +192,7 @@ export default function Detail({ item }: { item: Item }) {
               renderItem={({ item: e, index }) => {
                 const p = st.progress.find(x => x.type === 'episode' && digits(x.id) === e.id);
                 return (
-                  <Focusable onPress={() => playEpisodes(nav, item, eps, index, p ? Math.floor(p.position) : 0)} style={f => [s.ep, f && s.epF]}>
+                  <Focusable onFocus={() => warmEp(e.id, e.ext)} onPress={() => playEpisodes(nav, item, eps, index, p ? Math.floor(p.position) : 0)} style={f => [s.ep, f && s.epF]}>
                     <View style={s.epImgBox}>
                       {e.image || item.poster ? <Image source={{ uri: e.image || item.poster }} style={s.epImg} resizeMode="cover" /> : null}
                       {p && p.duration > 0 ? (

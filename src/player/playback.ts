@@ -9,7 +9,7 @@
 //   video sigue directo; nada automático pasa por el motor (estado guardado por línea en media.ts).
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { LiveHls } from './livehls';
-import { Engine, engineDenied, fileTracks, knownTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
+import { Engine, engineDenied, fileTracks, knownNow, knownTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
 import { Probe } from '../lib/probe';
@@ -181,12 +181,10 @@ export class Playback {
       else this.direct(resume);
       return;
     }
-    // El video se abre al momento, con el audio que trae por defecto (si es el idioma preferido, ya suena en ese idioma
-    // sin pasar por el panel). A la vez se piden los idiomas que ya se saben SIN tocar el servidor IPTV (lo leído antes
-    // en el equipo o lo que recuerda el panel): llegan para el menú y el idioma preferido. Antes se esperaba hasta 3 s
-    // por ellos antes de abrir y el video tardaba en empezar. Si nadie los sabe, se leen con el video ya abierto, una y
-    // otra vez hasta que salgan (langCheck). Nada de leer el archivo antes de abrirlo: muchos servidores bloqueaban la
-    // línea un rato.
+    // Idiomas que ya se saben SIN tocar el servidor IPTV (lo leído antes en el equipo o lo que recuerda el panel, que
+    // la ficha ya pidió al entrar): llegan para el menú y el idioma preferido. Si nadie los sabe, se leen con el video
+    // ya abierto, una y otra vez hasta que salgan (langCheck). Nada de leer el archivo antes de abrirlo: muchos
+    // servidores bloqueaban la línea un rato.
     const g = this.gen;
     const route = engineDenied() ? '' : panelRoute(url);
     if (route) {
@@ -218,20 +216,40 @@ export class Playback {
       });
       return;
     }
-    this.direct(resume);
-    this.langWatch(3000);
+    // Como Roku: los idiomas se piden al entrar a la ficha (warmTracks); si ya llegaron, el video empieza con el idioma
+    // elegido. Si todavía no, se espera ese pedido como mucho 1,5 s y se abre; lo que llegue después se aplica al
+    // momento y, si nadie los sabe, se siguen pidiendo con el video abierto hasta tenerlos (langCheck).
+    const now = knownNow(url);
+    if (now) {
+      this.probe = now;
+      this.direct(resume);
+      this.langWatch(3000);
+      return;
+    }
+    let opened = false;
+    const open = () => {
+      if (opened || g !== this.gen) return;
+      opened = true;
+      this.direct(resume);
+      this.langWatch(3000);
+    };
+    const wait = setTimeout(open, 1500);
     knownTracks(url).then(p => {
-      if (g !== this.gen || !p.ok || this.probe) return;
-      this.probe = p;
-      // ya sonando: el idioma preferido y el aviso de idiomas con lo que se acaba de saber
-      if (this.played) {
-        if (!this.audioKey) this.audioApplied = false;
-        else this.checkDecodable();
-        if (!this.subKey) this.subApplied = false;
-        this.applyPrefs();
-        this.langNotice();
+      clearTimeout(wait);
+      if (g !== this.gen) return;
+      if (p.ok && !this.probe) {
+        this.probe = p;
+        // ya sonando: el idioma preferido y el aviso de idiomas con lo que se acaba de saber
+        if (this.played) {
+          if (!this.audioKey) this.audioApplied = false;
+          else this.checkDecodable();
+          if (!this.subKey) this.subApplied = false;
+          this.applyPrefs();
+          this.langNotice();
+        }
+        this.hooks.changed();
       }
-      this.hooks.changed();
+      open();
     });
   }
 
@@ -246,6 +264,11 @@ export class Playback {
     h.start().then(err => {
       if (err && g === this.gen && this.liveHls === h) this.hooks.liveFailed?.(err);
     });
+  }
+
+  // el lector del canal pausó a propósito para juntar margen (Player muestra «cargando», no «en pausa»)
+  liveHolding(): boolean {
+    return !!this.liveHls?.holding;
   }
 
   // estado del canal por HLS (para el reporte): lista, segmentos entregados, lo que tiene el reproductor

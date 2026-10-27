@@ -6,6 +6,7 @@
 import { HWEvent, useTVEventHandler } from '@amazon-devices/react-native-kepler';
 import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { reportError } from '../api/report';
+import { warmTracks } from '../api/media';
 import { viaDns } from '../lib/securedns';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
@@ -267,8 +268,9 @@ export default function Player({ params }: { params: PlayParams }) {
       if (now - lastUi.current < 500) return;
       lastUi.current = now;
       save(false);
-      // con el menú abierto la barra no se ve: no se redibuja el reproductor cada medio segundo (el menú se trababa)
-      if (menuOpen.current) return;
+      // con el menú abierto la barra no se ve: no se redibuja el reproductor cada medio segundo (el menú se trababa);
+      // en los canales no hay barra: sin redibujar, la app queda libre para bajar y descifrar el canal
+      if (menuOpen.current || live) return;
       setPos(c.realPos());
       setDur(c.duration());
     };
@@ -282,9 +284,16 @@ export default function Player({ params }: { params: PlayParams }) {
       c.onPlaying();
       // por este protocolo entrega el video el servidor: los siguientes videos van primero por él
       setStreamFlip(flipped.current);
+      // los idiomas del episodio siguiente, para que también empiece con el idioma elegido
+      if (params.kind === 'episode' && indexRef.current + 1 < params.queue.length) warmTracks(urlFor(indexRef.current + 1));
     };
     const onWaiting = () => setBuffering(true);
     const onPause = () => {
+      // el lector del canal juntando margen: se ve «cargando», no la pausa
+      if (c.liveHolding()) {
+        setBuffering(true);
+        return;
+      }
       setPaused(true);
       save(true);
     };

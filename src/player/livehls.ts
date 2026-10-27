@@ -4,6 +4,9 @@
 // empezando cerca del final (en vivo). Las listas maestras (varias calidades) usan la de más calidad.
 // En Vega el modo directo (src = dirección) no abre MPEG-TS (solo MP4, MKV, MP3, FLV, OGG y FLAC; el HLS solo por MSE),
 // así que en Fire TV este es el camino principal de la TV en vivo.
+// Estabilidad: los 2 segmentos siguientes se bajan mientras se entrega el actual; un vigilante cada 300 ms salta los
+// huecos entre tramos y, si se acaba lo bajado, pausa hasta tener unos segundos de margen (más si pasa seguido) en
+// lugar de detenerse y seguir una y otra vez; un segmento que no llega se reintenta y, a la tercera, se salta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { UA } from '../lib/http';
 import { xuiError } from '../lib/xui';
@@ -11,6 +14,11 @@ import { cbc } from '@noble/ciphers/aes';
 import { parseList, resolveUrl, Seg, segIv, tsStart } from '../lib/hlslist';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+type Got = { code: number; url: string; text?: string; data?: Uint8Array; type?: string };
+
+// segmentos que se bajan por adelantado mientras se entrega el actual
+const PREFETCH = 2;
 
 // llave AES-128: 16 bytes tal cual o, en algunos servidores, escrita en hexadecimal (32 caracteres, con o sin 0x)
 function keyBytes(d: Uint8Array): Uint8Array | null {
@@ -40,15 +48,20 @@ export class LiveHls {
   private stalls = 0;
   private fetchMs = 0;
   private decMs = 0;
-  // el segmento siguiente se baja mientras se entrega el actual
-  private ahead: { seq: number; p: Promise<{ code: number; url: string; text?: string; data?: Uint8Array; type?: string }> } | null = null;
+  // los segmentos siguientes ya se bajan mientras se entrega el actual (por número de segmento)
+  private inflight = new Map<number, Promise<Got>>();
   // avisa una vez si el canal se detiene seguido (Player lo manda al panel con diag())
   onStalls: () => void = () => {};
-  private onWaiting = () => {
-    if (!this.appended || !this.alive) return;
-    this.stalls++;
-    if (this.stalls === 3) this.onStalls();
-  };
+  private lastStall = 0;
+  private onWaiting = () => this.stalled();
+  // vigilante cada 300 ms: salta los huecos entre tramos y, si se acaba lo bajado, espera con margen (holding)
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private started = false;
+  // en pausa a propósito hasta tener margen: Player muestra «cargando», no «en pausa»
+  holding = false;
+  private holdAt = 0;
+  private holds: number[] = [];
+  private skipped = 0;
   private lastAppend = Date.now();
   private bytes = 0;
   // llaves AES-128 ya bajadas (por dirección) y si el canal viene cifrado (para el reporte)
@@ -84,7 +97,8 @@ export class LiveHls {
     const host = (this.list.match(/^https?:\/\/([^/?#]+)/i) || [])[1] || '';
     const n = Math.max(1, this.appended);
     return 'hls host=' + host + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
-      ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+      ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
+      's saltados=' + this.skipped + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
@@ -118,12 +132,17 @@ export class LiveHls {
     } catch {
       // modo por defecto
     }
+    this.timer = setInterval(this.tick, 300);
     this.pump();
     return '';
   }
 
   destroy(): void {
     this.alive = false;
+    this.holding = false;
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    this.inflight.clear();
     try {
       this.v.removeEventListener('waiting', this.onWaiting);
     } catch {
@@ -253,7 +272,8 @@ export class LiveHls {
         this.lastT = t;
         this.lastMove = Date.now();
       }
-      const stalled = !this.v.paused && Date.now() - this.lastMove > 8000;
+      // quieto 3 s con video por delante: se empuja (antes 8 s: el canal se veía congelado)
+      const stalled = !this.v.paused && Date.now() - this.lastMove > 3000;
       for (let i = 0; i < b.length; i++) {
         const st = b.start(i);
         const en = b.end(i);
@@ -274,19 +294,73 @@ export class LiveHls {
     }
   }
 
+  private lastJump = 0;
   private jump(to: number): void {
     this.v.currentTime = to;
     this.lastMove = Date.now();
-    if (this.v.paused) this.v.play();
+    this.lastJump = this.lastMove;
+    if (this.v.paused && !this.holding) this.v.play();
   }
 
-  // lo ya visto se borra para no llenar la memoria
-  private async trim(): Promise<void> {
+  // segundos ya bajados por delante de la imagen (en el tramo donde está)
+  private aheadSec(): number {
     try {
       const b = this.sb.buffered;
       const t = this.v.currentTime || 0;
-      if (b.length && b.start(0) < t - 30) {
-        this.sb.remove(b.start(0), t - 15);
+      for (let i = 0; i < b.length; i++) if (t >= b.start(i) - 0.3 && t <= b.end(i)) return b.end(i) - t;
+    } catch {
+      // sin datos
+    }
+    return 0;
+  }
+
+  // margen con el que se sigue después de quedarse sin datos: más si ya pasó varias veces hace poco (red o
+  // servidor lentos), así se para una vez y sigue de corrido en lugar de detenerse y seguir cada pocos segundos
+  private margin(): number {
+    const now = Date.now();
+    const recent = this.holds.filter(h => now - h < 180000).length;
+    return Math.min(10, Math.max(3, Math.min(this.target, 6)) + Math.max(0, recent - 1) * 2);
+  }
+
+  // una detención (del reproductor o del vigilante), contada una vez cada 2 s: a la tercera se avisa al panel
+  private stalled(): void {
+    if (!this.appended || !this.alive || Date.now() - this.lastStall < 2000) return;
+    this.lastStall = Date.now();
+    this.stalls++;
+    if (this.stalls === 3) this.onStalls();
+  }
+
+  private tick = (): void => {
+    if (!this.alive || !this.sb || !this.started) return;
+    this.unstick();
+    const ahead = this.aheadSec();
+    if (this.holding) {
+      // con margen (o con algo después de 8 s esperando) sigue
+      if (ahead >= this.margin() || (ahead >= 1.5 && Date.now() - this.holdAt > 8000)) {
+        this.holding = false;
+        this.lastMove = Date.now();
+        this.v.play();
+      }
+      return;
+    }
+    // se acaba lo bajado: pausa hasta tener margen (no justo después de saltar un hueco: el salto tarda un instante)
+    if (!this.v.paused && ahead < 0.25 && Date.now() - this.lastJump > 1500) {
+      this.holding = true;
+      this.holdAt = Date.now();
+      this.holds.push(this.holdAt);
+      if (this.holds.length > 20) this.holds.shift();
+      this.stalled();
+      this.v.pause();
+    }
+  };
+
+  // lo ya visto se borra para no llenar la memoria (keep: segundos que se dejan detrás de la imagen)
+  private async trim(keep = 15): Promise<void> {
+    try {
+      const b = this.sb.buffered;
+      const t = this.v.currentTime || 0;
+      if (b.length && b.start(0) < t - keep - (keep > 5 ? 15 : 0)) {
+        this.sb.remove(b.start(0), t - keep);
         await this.idle();
       }
     } catch {
@@ -294,11 +368,35 @@ export class LiveHls {
     }
   }
 
+  private segTimeout(): number {
+    return Math.max(10000, this.target * 2500);
+  }
+
+  // el segmento (el que ya se estaba bajando o uno nuevo)
+  private fetchSeg(seg: Seg): Promise<Got> {
+    let p = this.inflight.get(seg.seq);
+    if (!p) {
+      p = this.get(seg.url, this.segTimeout(), 'seg');
+      this.inflight.set(seg.seq, p);
+    }
+    return p;
+  }
+
+  // los PREFETCH siguientes ya se empiezan a bajar (con el canal al día, la lista todavía no los tiene)
+  private prefetch(from: number): void {
+    for (const k of Array.from(this.inflight.keys())) if (k <= from) this.inflight.delete(k);
+    if (this.bufEnd() - (this.v.currentTime || 0) > 30) return;
+    for (const sg of this.segs) {
+      if (sg.seq > from && sg.seq <= from + PREFETCH && !this.inflight.has(sg.seq)) this.inflight.set(sg.seq, this.get(sg.url, this.segTimeout(), 'seg'));
+    }
+  }
+
   private async pump(): Promise<void> {
+    // fails: fallos seguidos (cualquier segmento); segFails: del segmento actual (al tercero se salta al siguiente)
     let fails = 0;
+    let segFails = 0;
     let listFails = 0;
     while (this.alive) {
-      this.unstick();
       // en vivo no hace falta más de ~30 s por delante
       if (this.bufEnd() - (this.v.currentTime || 0) > 30) {
         await sleep(1000);
@@ -311,10 +409,11 @@ export class LiveHls {
         seg = this.segs[0];
       }
       if (!seg) {
-        await sleep(Math.max(1000, (this.target * 1000) / 2));
+        // al día con el canal: la lista se vuelve a pedir pronto (un tercio de segmento) para tener el nuevo apenas sale
+        await sleep(Math.max(1000, (this.target * 1000) / 3));
         if (!this.alive) return;
         const err = await this.refresh();
-        if (err && ++listFails > 4) {
+        if (err && ++listFails > 6) {
           this.onError(err);
           return;
         }
@@ -327,6 +426,7 @@ export class LiveHls {
           if (last >= 0 && (this.next > last + 2 || late)) {
             this.lastProblem = late ? 'lista sin segmentos nuevos' : 'lista reiniciada';
             if (late) this.list = this.first;
+            this.inflight.clear();
             this.next = this.segs[Math.max(0, this.segs.length - 2)].seq;
             this.lastAppend = Date.now();
           }
@@ -334,13 +434,10 @@ export class LiveHls {
         continue;
       }
       const t0 = Date.now();
-      const r = await (this.ahead && this.ahead.seq === seg.seq ? this.ahead.p : this.get(seg.url, 20000, 'seg'));
-      this.ahead = null;
+      const r = await this.fetchSeg(seg);
+      this.inflight.delete(seg.seq);
       if (!this.alive) return;
       this.fetchMs += Date.now() - t0;
-      // el siguiente ya se empieza a bajar mientras este se descifra y se entrega
-      const nx = this.segs.find(sg => sg.seq === seg!.seq + 1);
-      if (nx && r.data) this.ahead = { seq: nx.seq, p: this.get(nx.url, 20000, 'seg') };
       if (r.text !== undefined && /<html|<!doctype/i.test(r.text)) {
         // una página en lugar del video: el motivo (XUI) y no se insiste
         this.onError(this.pageProblem(r.text));
@@ -348,13 +445,15 @@ export class LiveHls {
       }
       if (!r.data || !r.data.length) {
         this.lastProblem = 'segmento HTTP ' + r.code;
-        if (++fails > 5) {
+        if (!(await this.failed(seg, ++fails, ++segFails))) {
           this.onError(r.code ? 'el servidor contestó ' + r.code + ' a los segmentos' : 'se cortó la conexión con el canal');
           return;
         }
-        await sleep(1000);
+        if (this.next !== seg.seq) segFails = 0;
         continue;
       }
+      // mientras este se descifra y se entrega, los siguientes ya se bajan
+      this.prefetch(seg.seq);
       let data: Uint8Array = r.data;
       if (seg.key) {
         // segmento cifrado (AES-128): se descifra con la llave de la lista
@@ -364,11 +463,11 @@ export class LiveHls {
         this.decMs += Date.now() - t1;
         if (!this.alive) return;
         if (!plain) {
-          if (++fails > 5) {
+          if (!(await this.failed(seg, ++fails, ++segFails))) {
             this.onError('no se pudo descifrar el canal (' + this.lastProblem + ')');
             return;
           }
-          await sleep(1000);
+          if (this.next !== seg.seq) segFails = 0;
           continue;
         }
         data = plain;
@@ -384,26 +483,53 @@ export class LiveHls {
         }
       } else if (at > 0) data = data.subarray(at);
       fails = 0;
+      segFails = 0;
       await this.trim();
-      await this.idle();
-      try {
-        this.sb.appendBuffer(data);
-      } catch (e: any) {
-        this.lastProblem = 'appendBuffer: ' + String(e?.message || e).slice(0, 60);
-        this.onError('el reproductor no aceptó el video del canal (códec de audio o video)');
-        return;
-      }
-      await this.idle();
+      if (!(await this.append(data))) return;
       this.appended++;
       this.bytes += data.length;
       this.next = seg.seq + 1;
       this.lastAppend = Date.now();
       // empieza a sonar con 2 segmentos entregados (o con 1 si la lista no tiene más): arranca con margen
       const more = this.segs.some(sg => sg.seq === this.next);
-      if (this.appended === 2 || (this.appended === 1 && !more)) {
+      if (!this.started && (this.appended >= 2 || !more)) {
+        this.started = true;
         this.unstick();
         if (this.v.paused) this.v.play();
       }
     }
+  }
+
+  // segmento que no llegó o no se pudo descifrar: se reintenta dos veces y, a la tercera, se salta al siguiente (el
+  // canal sigue en vez de cortarse por un segmento perdido). false = demasiados fallos seguidos: se deja
+  private async failed(seg: Seg, fails: number, segFails: number): Promise<boolean> {
+    if (fails > 9) return false;
+    this.inflight.delete(seg.seq);
+    if (segFails >= 3 && this.segs.some(sg => sg.seq === seg.seq + 1)) {
+      this.next = seg.seq + 1;
+      this.skipped++;
+    }
+    await sleep(700);
+    return this.alive;
+  }
+
+  // entrega al reproductor; con la memoria llena (QuotaExceeded) borra lo ya visto y prueba otra vez
+  private async append(data: Uint8Array): Promise<boolean> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await this.idle();
+      try {
+        this.sb.appendBuffer(data);
+        await this.idle();
+        return true;
+      } catch (e: any) {
+        const msg = String(e?.name || '') + ' ' + String(e?.message || e);
+        this.lastProblem = 'appendBuffer: ' + msg.trim().slice(0, 60);
+        if (!/quota/i.test(msg) || !this.alive) break;
+        await this.trim(attempt ? 2 : 5);
+        await sleep(500);
+      }
+    }
+    if (this.alive) this.onError('el reproductor no aceptó el video del canal (códec de audio o video)');
+    return false;
   }
 }
