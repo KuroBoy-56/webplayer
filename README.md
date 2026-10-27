@@ -92,7 +92,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   manejadores propios, cerraba la app con cada Atrás aunque la pantalla ya lo hubiera atendido (no usarlo).
 - **Portada que sigue al foco** (como Roku): en Inicio, Series y Películas la portada muestra el título enfocado; si el
   servidor no trae fondo se busca tras una pausa breve (`get_vod_info` / `get_series_info` y, si no hay, TMDB por el
-  panel; `src/data/heroart.ts`), se guarda en el equipo 7 días y la próxima vez sale al instante. En las páginas de
+  panel; `src/data/heroart.ts`), se guarda en el equipo 7 días y la próxima vez sale al instante. El destacado de
+  cada sección también busca su fondo; un título sin fondo usa su propia carátula agrandada y oscurecida (nunca el
+  fondo de otro título). Continuar viendo y Mi lista salen solo en Inicio.
+- **Abrir una película o capítulo es inmediato**: ya no se espera a los idiomas (antes hasta 3 s); llegan a la vez y
+  si el audio por defecto es el idioma preferido suena así, sin pasar por el panel. En las páginas de
   plataformas el fondo es liso (sin la portada fija de Inicio).
 - **Plataformas** con ancho y alto fijos (Vega dibuja las imágenes del paquete a su tamaño real si solo se estiran)
   e **ícono de la app** con el logo centrado en la franja 16:9 que muestra el Fire TV (512×512).
@@ -294,7 +298,9 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
   segmentos vienen relativos a esa dirección), elige la mejor calidad de una lista maestra, empieza cerca del final, y
   como los canales traen marcas de tiempo grandes (p. ej. 86000 s) salta al principio de lo entregado (si no, el video
   esperaba en el segundo 0 para siempre). Después `.ts` y la dirección corta (`LIVE_FORMATS`), el otro protocolo y el
-  DNS elegido. Cada intento espera hasta 25 s; al panel va el estado del lector (servidor, segmentos entregados, lo que
+  DNS elegido (en Vega solo `.m3u8`: el `.ts` y la dirección corta siempre fallan ahí). Los segmentos cifrados con
+  AES-128 (`#EXT-X-KEY`, comunes en XUI) se descifran en la app con la llave de la lista; el MPEG-TS se busca dentro
+  del segmento (0x47 cada 188 bytes) por si trae relleno al principio. Cada intento espera hasta 25 s; al panel va el estado del lector (servidor, segmentos entregados, lo que
   tiene el reproductor y dónde está). Si ninguno abre se le pregunta al servidor y el aviso dice el motivo. El HLS del
   motor del panel (audio cambiado) se reproduce con su propio lector por MSE (`src/player/hls.ts`).
 - **Servidores XUI.one en «Debug Mode»** contestan **200 con una página HTML** en lugar del video cuando hay un problema

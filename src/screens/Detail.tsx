@@ -185,7 +185,8 @@ export default function Detail({ item }: { item: Item }) {
               horizontal
               data={cast}
               keyExtractor={a => String(a.id)}
-              contentContainerStyle={{ paddingHorizontal: SIDE, paddingRight: px(200) }}
+              // aire arriba y abajo: la foto enfocada crece y su borde se cortaba contra el borde de la fila
+              contentContainerStyle={{ paddingHorizontal: SIDE, paddingRight: px(200), paddingTop: px(16), paddingBottom: px(8) }}
               renderItem={({ item: a }) => (
                 <Focusable onPress={() => nav.push({ name: 'actor', personId: a.id, actorName: a.name })} style={s.actor}>
                   {f => (

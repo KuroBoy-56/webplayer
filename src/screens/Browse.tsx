@@ -55,7 +55,14 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
   const plot = info.plot ?? it?.plot ?? '';
   return (
     <View style={s.hero} pointerEvents="none">
-      {under && under !== art ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
+      {/* sin fondo propio: la carátula del mismo título agrandada y oscurecida (antes quedaba el fondo del último título
+          enfocado, que no tenía nada que ver); el último fondo solo para plataformas, géneros y «Ver todo» */}
+      {under && under !== art && !it ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
+      {!art && sideSrc.length ? (
+        <View style={s.heroDim}>
+          <ChainImage sources={sideSrc} style={s.heroImg} resizeMode="cover" blurRadius={18} />
+        </View>
+      ) : null}
       {art ? <ChainImage sources={artSrc} style={s.heroImg} resizeMode="cover" /> : null}
       <Image source={require('../../assets/image/grad_bottom.png')} style={[s.heroGrad, { tintColor: C.bg }]} resizeMode="stretch" />
       <Image source={require('../../assets/image/grad_left.png')} style={[s.heroShade, { tintColor: C.bg }]} resizeMode="stretch" />
@@ -97,13 +104,12 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, section, st.catalogRev, platforms, brandRev]);
 
-  // Continuar viendo y Mi lista (del panel), después de las plataformas, con «Ver todo» al final
+  // Continuar viendo y Mi lista (del panel) solo en Inicio, después de las plataformas, con «Ver todo» al final
   const rows = useMemo(() => {
     const extra: Row[] = [];
-    const only = section === 'series' ? 'series' : section === 'movies' ? 'vod' : undefined;
-    const cont = continueItems(st.progress, only);
-    if (cont.length) extra.push({ title: t('Continuar viendo'), type: 'poster', items: [...cont, { kind: 'more', key: 'continue', label: t('Ver todo'), color: '', extra: 'continue' }] });
     if (section === 'home') {
+      const cont = continueItems(st.progress);
+      if (cont.length) extra.push({ title: t('Continuar viendo'), type: 'poster', items: [...cont, { kind: 'more', key: 'continue', label: t('Ver todo'), color: '', extra: 'continue' }] });
       const f = favItems(st.favorites);
       if (f.length) extra.push({ title: t('Mi lista'), type: 'poster', items: [...f, { kind: 'more', key: 'mylist', label: t('Ver todo'), color: '', extra: 'mylist' }] });
     }
@@ -124,11 +130,32 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
     return (it: Item) => map.get(it.kind + it.id);
   }, [st.progress]);
 
-  const hero = base.hero;
+  // el destacado también busca su fondo (servidor y luego TMDB), como los títulos enfocados
+  const [heroArtOf, setHeroArtOf] = useState<{ id: string; art: Art } | null>(null);
+  useEffect(() => {
+    const h = base.hero;
+    if (!h || h.backdrop || (h.kind !== 'vod' && h.kind !== 'series')) return;
+    const known = savedArt(h);
+    if (known) return setHeroArtOf({ id: h.kind + h.id, art: known });
+    let live = true;
+    heroArt(h, a => live && a && setHeroArtOf({ id: h.kind + h.id, art: a }));
+    return () => {
+      live = false;
+    };
+  }, [base.hero]);
+  const hero = useMemo(() => {
+    const h = base.hero;
+    return h && heroArtOf && heroArtOf.id === h.kind + h.id ? withArt(h, heroArtOf.art) : h;
+  }, [base.hero, heroArtOf]);
   const [inRows, setInRows] = useState(false);
   const [rowIdx, setRowIdx] = useState(0);
   const [info, setInfo] = useState<Info>({ item: hero });
-  useEffect(() => setInfo({ item: hero }), [hero]);
+  // el fondo del destacado puede llegar con el foco ya en las filas: ahí la portada sigue mostrando lo enfocado
+  const inRowsRef = useRef(false);
+  inRowsRef.current = inRows;
+  useEffect(() => {
+    if (!inRowsRef.current) setInfo({ item: hero });
+  }, [hero]);
   const list = useRef<FlatList<Row>>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const artTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -248,6 +275,7 @@ const s = themed(() =>
     root: { flex: 1 },
     hero: { position: 'absolute', left: 0, top: 0, right: 0, height: px(1080) },
     heroImg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
+    heroDim: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, opacity: 0.45 },
     heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(620) },
     heroShade: { position: 'absolute', left: 0, top: 0, bottom: 0, width: px(1400) },
     side: { position: 'absolute', right: SIDE, top: px(150), width: px(427), height: px(640), borderRadius: px(8) },

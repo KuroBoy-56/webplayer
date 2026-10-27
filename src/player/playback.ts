@@ -149,24 +149,27 @@ export class Playback {
       else this.direct(resume);
       return;
     }
-    // Antes de abrir el video solo se piden los idiomas que ya se saben SIN tocar el servidor IPTV (lo leído antes en el
-    // equipo o lo que recuerda el panel, como mucho 3 s). Leer el archivo antes de abrirlo hacía que muchos servidores
-    // bloquearan la línea un rato (Continuar viendo y Plataformas quedaban cargando). Si nadie los sabe, se leen con el
-    // video ya abierto, una y otra vez hasta que salgan (langCheck).
+    // El video se abre al momento, con el audio que trae por defecto (si es el idioma preferido, ya suena en ese idioma
+    // sin pasar por el panel). A la vez se piden los idiomas que ya se saben SIN tocar el servidor IPTV (lo leído antes
+    // en el equipo o lo que recuerda el panel): llegan para el menú y el idioma preferido. Antes se esperaba hasta 3 s
+    // por ellos antes de abrir y el video tardaba en empezar. Si nadie los sabe, se leen con el video ya abierto, una y
+    // otra vez hasta que salgan (langCheck). Nada de leer el archivo antes de abrirlo: muchos servidores bloqueaban la
+    // línea un rato.
     const g = this.gen;
-    let opened = false;
-    const open = () => {
-      if (opened || g !== this.gen) return;
-      opened = true;
-      this.direct(resume);
-      this.langWatch(3000);
-    };
-    const timer = setTimeout(open, 3000);
+    this.direct(resume);
+    this.langWatch(3000);
     knownTracks(url).then(p => {
-      clearTimeout(timer);
-      // los idiomas quedan listos para el menú desde que empieza a sonar
-      if (g === this.gen && p.ok && !this.probe) this.probe = p;
-      open();
+      if (g !== this.gen || !p.ok || this.probe) return;
+      this.probe = p;
+      // ya sonando: el idioma preferido y el aviso de idiomas con lo que se acaba de saber
+      if (this.played) {
+        if (!this.audioKey) this.audioApplied = false;
+        else this.checkDecodable();
+        if (!this.subKey) this.subApplied = false;
+        this.applyPrefs();
+        this.langNotice();
+      }
+      this.hooks.changed();
     });
   }
 
