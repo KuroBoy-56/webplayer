@@ -67,6 +67,10 @@ export class LiveHls {
   private holdAt = 0;
   private holds: number[] = [];
   private skipped = 0;
+  // veces que se pidió la lista otra vez desde la dirección del canal (token vencido) y páginas seguidas en lugar de
+  // un segmento
+  private renews = 0;
+  private pageRetries = 0;
   // desplazamiento de las marcas de tiempo del canal (null = aún no puesto), cuántas veces se reacomodó (cambio de
   // numeración del servidor, segmento saltado) y huecos que hubo que saltar (deberían ser 0)
   private tsOff: number | null = null;
@@ -108,7 +112,7 @@ export class LiveHls {
     const n = Math.max(1, this.appended);
     return 'hls host=' + host + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
-      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' huecos=' + this.gapJumps + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
@@ -124,6 +128,16 @@ export class LiveHls {
     const ms: any = new MediaSource();
     this.ms = ms;
     const opened = new Promise<void>(res => ms.addEventListener('sourceopen', () => res()));
+    try {
+      // el reproductor cerró el video (error del decodificador): Player vuelve a conectar el canal
+      ms.addEventListener('sourceclose', () => {
+        if (!this.alive || !this.started) return;
+        this.lastProblem = 'MediaSource cerrado';
+        this.onError('el reproductor cerró el video del canal');
+      });
+    } catch {
+      // sin el evento
+    }
     try {
       this.v.src = (URL as any).createObjectURL(ms);
     } catch {
@@ -245,8 +259,8 @@ export class LiveHls {
   private async refresh(): Promise<string> {
     for (let hop = 0; hop < 2; hop++) {
       let r = await this.get(this.list, 15000, 'list');
-      // la dirección con token del balanceador pudo vencer: otra vez desde la del canal
-      if ((r.code !== 200 || r.text === undefined) && this.list !== this.first) {
+      // la dirección con token del balanceador pudo vencer (error o una página de XUI): otra vez desde la del canal
+      if ((r.code !== 200 || r.text === undefined || !r.text.trim().startsWith('#EXTM3U')) && this.list !== this.first) {
         this.list = this.first;
         r = await this.get(this.list, 15000, 'list');
       }
@@ -360,6 +374,13 @@ export class LiveHls {
 
   private tick = (): void => {
     if (!this.alive || !this.sb || !this.started) return;
+    // 45 s sin que llegue nada nuevo (ni renovando la lista): Player vuelve a conectar el canal desde cero
+    if (Date.now() - this.lastAppend > 45000) {
+      this.alive = false;
+      this.lastProblem = this.lastProblem || 'sin video nuevo en 45 s';
+      this.onError('el canal dejó de mandar video');
+      return;
+    }
     this.unstick();
     const ahead = this.aheadSec();
     if (this.holding) {
@@ -467,8 +488,14 @@ export class LiveHls {
       if (!this.alive) return;
       this.fetchMs += Date.now() - t0;
       if (r.text !== undefined && /<html|<!doctype/i.test(r.text)) {
-        // una página en lugar del video: el motivo (XUI) y no se insiste
-        this.onError(this.pageProblem(r.text));
+        // una página en lugar del video: con el canal ya sonando suele ser el token vencido (la lista se pide otra vez
+        // desde la dirección del canal); al empezar, o si sigue igual, el motivo (XUI) y no se insiste
+        const why = this.pageProblem(r.text);
+        if (this.appended > 0 && ++this.pageRetries <= 2) {
+          await this.renew();
+          continue;
+        }
+        this.onError(why);
         return;
       }
       if (!r.data || !r.data.length) {
@@ -512,6 +539,7 @@ export class LiveHls {
       } else if (at > 0) data = data.subarray(at);
       fails = 0;
       segFails = 0;
+      this.pageRetries = 0;
       await this.trim();
       await this.place(data);
       if (!(await this.append(data))) return;
@@ -531,9 +559,13 @@ export class LiveHls {
 
   // segmento que no llegó o no se pudo descifrar: se reintenta dos veces y, a la tercera, se salta al siguiente (el
   // canal sigue en vez de cortarse por un segmento perdido). false = demasiados fallos seguidos: se deja
+  // Al segundo fallo seguido la lista se pide otra vez desde la dirección del canal: el token del balanceador de XUI
+  // vence a los pocos minutos y todos los segmentos de la lista vieja fallan (antes el canal se cortaba a los ~5 min).
+  // Se deja solo con muchos fallos seguidos y más de 30 s sin entregar nada.
   private async failed(seg: Seg, fails: number, segFails: number): Promise<boolean> {
-    if (fails > 9) return false;
+    if (fails > 9 && Date.now() - this.lastAppend > 30000) return false;
     this.inflight.delete(seg.seq);
+    if (segFails === 2 || fails % 4 === 0) await this.renew();
     if (segFails >= 3 && this.segs.some(sg => sg.seq === seg.seq + 1)) {
       this.next = seg.seq + 1;
       this.skipped++;
@@ -565,6 +597,14 @@ export class LiveHls {
     } catch (e: any) {
       this.lastProblem = 'timestampOffset: ' + String(e?.message || e).slice(0, 40);
     }
+  }
+
+  // la lista otra vez desde la dirección del canal (token nuevo del balanceador)
+  private async renew(): Promise<void> {
+    this.renews++;
+    this.list = this.first;
+    this.inflight.clear();
+    await this.refresh();
   }
 
   // entrega al reproductor; con la memoria llena (QuotaExceeded) borra lo ya visto y prueba otra vez

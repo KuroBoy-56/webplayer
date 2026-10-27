@@ -105,6 +105,9 @@ export default function Player({ params }: { params: PlayParams }) {
   const onErrorRef = useRef<() => void>(() => {});
   // canal: motivo del último intento que no salió del reproductor (lector HLS, vigilante)
   const liveNote = useRef('');
+  // canal que ya se estaba viendo y se cortó: reconexiones seguidas (n), cuándo sonó la última vez (ok) y desde cuándo
+  // se ve el canal (since, para el reporte)
+  const liveRecon = useRef({ n: 0, ok: 0, since: 0 });
   // la orden de borrar la caché del panel espera a que se cierre el reproductor
   useEffect(() => {
     setPlayerOpen(true);
@@ -215,6 +218,7 @@ export default function Player({ params }: { params: PlayParams }) {
       triedOther.current = false;
       fmtAt.current = 0;
       rounds.current = 0;
+      liveRecon.current = { n: 0, ok: 0, since: 0 };
       setIndex(n);
       setEpg([]);
       load(n);
@@ -281,6 +285,8 @@ export default function Player({ params }: { params: PlayParams }) {
       setPaused(false);
       setStatus('');
       rounds.current = 0;
+      liveRecon.current.ok = Date.now();
+      if (!liveRecon.current.since) liveRecon.current.since = Date.now();
       c.onPlaying();
       // por este protocolo entrega el video el servidor: los siguientes videos van primero por él
       setStreamFlip(flipped.current);
@@ -483,6 +489,24 @@ export default function Player({ params }: { params: PlayParams }) {
         const diag = c.liveDiag();
         const why = (liveNote.current || (err ? 'error ' + (err.code ?? '') + ' ' + String(err.message || '').slice(0, 80) : 'error')) + (diag ? ' · ' + diag : '');
         liveNote.current = '';
+        // El canal ya se estaba viendo y se cortó (servidor, token vencido, red): se vuelve a conectar igual (mismo
+        // formato y protocolo, que funcionaban), sin aviso, como cualquier app IPTV. Hasta 5 veces seguidas; si volvió
+        // a sonar más de 90 s, la cuenta empieza de nuevo. Antes se trataba como un canal que no abre: probaba otras
+        // formas y terminaba en «El equipo no pudo abrir el video de este canal».
+        const rc = liveRecon.current;
+        if (c.hasPlayed() && Date.now() - rc.ok > 90000) rc.n = 0;
+        if ((c.hasPlayed() || rc.n > 0) && rc.n < 5) {
+          rc.n++;
+          if (rc.n === 1) {
+            const ch = params.channels[indexRef.current] || params.channel;
+            reportError('warning', 'Canal cortado mientras se veía (se reconecta solo)', 'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' minutos=' + Math.round((Date.now() - (rc.since || Date.now())) / 60000) + ' motivo=' + why, 'Reproductor');
+          }
+          setStatus(t('Reconectando…'));
+          setBuffering(true);
+          const i = indexRef.current;
+          setTimeout(() => alive && indexRef.current === i && load(i), [300, 1000, 2000, 4000, 8000][rc.n - 1]);
+          return;
+        }
         if (vs.attempts.length < 16) vs.attempts.push(LIVE_FORMATS[fmtAt.current] + (flipped.current ? ' (otro protocolo)' : '') + (dnsUrl.current ? ' (DNS)' : '') + ': ' + why);
         // al primer fallo se le pregunta una vez al servidor: si contesta con un error (página de XUI, 4xx, cuenta no
         // activa) no se insiste, se dice el motivo

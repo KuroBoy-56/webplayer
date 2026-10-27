@@ -349,7 +349,12 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
   `tsFirstPts`, + `timestampOffset`, en modo `segments`; el primero empieza en 0 y si uno no calza —el servidor
   reinició la numeración o se saltó un segmento— se pone al final de lo entregado): en modo `sequence` el equipo dejaba
   un hueco en cada unión y saltarlo era un corte de 1-1,5 s cada segmento. El descifrado AES-128 va por partes de 64 KB
-  sin trabar la app. Los 2 segmentos siguientes se bajan mientras se entrega el actual; la lista se vuelve a pedir cada tercio
+  sin trabar la app. El token del balanceador de XUI vence a los pocos minutos: si los segmentos (o la lista) fallan
+  o devuelven una página, la lista se pide otra vez desde la dirección del canal y se sigue (antes el canal se cortaba
+  a los ~5 min con «El equipo no pudo abrir el video de este canal»). Un canal que ya se estaba viendo y se corta
+  (error del reproductor, 45 s sin video nuevo) se vuelve a conectar solo, igual que estaba, hasta 5 veces seguidas
+  («Reconectando…», un aviso al panel), sin pasar por los otros formatos. Los 2 segmentos siguientes se bajan
+  mientras se entrega el actual; la lista se vuelve a pedir cada tercio
   de segmento cuando el canal está al día; un vigilante cada 300 ms salta los huecos entre tramos y empuja la imagen
   quieta a los 3 s; si se acaba lo bajado, pausa (se ve «cargando») hasta tener 3-6 s de margen (hasta 10 s si pasa
   seguido) en lugar de detenerse y seguir cada pocos segundos; un segmento que no llega se reintenta y a la tercera se
