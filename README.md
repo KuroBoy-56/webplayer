@@ -98,6 +98,15 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Degradados de la portada como Roku**: a la izquierda (1500×1080 al 92 %) y abajo (1920×520) con el color de
   fondo del tema (el del distribuidor o el original), para que los textos se lean sobre cualquier imagen; el fondo
   sigue siendo el Full HD del panel. Con ancho y alto fijos: Vega dibujaba el degradado a su tamaño real (4 px).
+- **Destacados que van pasando** (como Roku): Inicio toma 4 películas y 4 series nuevas al azar (Películas / Series, 8
+  de ese tipo), busca su fondo uno tras otro y se queda con hasta 6 que lo tengan; cambian cada 8 s mientras la portada
+  está a la vista, con puntos a la derecha.
+- **Ficha como Roku**: la imagen arriba a la derecha (1440×810), color liso a la izquierda con degradado sobre la
+  imagen, degradado abajo y color liso debajo; usa el fondo ya encontrado por la portada si el servidor no trae.
+- **Carátulas que siempre cargan**: si una dirección no carga en 6 s se pasa a la siguiente (copia del panel →
+  `img.php` → original); en Vega una imagen que no existe a veces no avisa el error y la tarjeta quedaba en blanco.
+- **Tablas › equipo**: mientras el panel trae la ficha sale «Cargando…» y, sin datos, «No hay información de este
+  equipo» (antes no se veía nada).
 - **Abrir una película o capítulo es inmediato**: ya no se espera a los idiomas (antes hasta 3 s); llegan a la vez y
   si el audio por defecto es el idioma preferido suena así, sin pasar por el panel. En las páginas de
   plataformas el fondo es liso (sin la portada fija de Inicio).
@@ -303,7 +312,8 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
   esperaba en el segundo 0 para siempre). Después `.ts` y la dirección corta (`LIVE_FORMATS`), el otro protocolo y el
   DNS elegido (en Vega solo `.m3u8`: el `.ts` y la dirección corta siempre fallan ahí). Los segmentos cifrados con
   AES-128 (`#EXT-X-KEY`, comunes en XUI) se descifran en la app con la llave de la lista; el MPEG-TS se busca dentro
-  del segmento (0x47 cada 188 bytes) por si trae relleno al principio. Cada intento espera hasta 25 s; al panel va el estado del lector (servidor, segmentos entregados, lo que
+  del segmento (0x47 cada 188 bytes) por si trae relleno al principio. La llave se lee siempre como bytes (XUI la
+  manda desde PHP marcada como `text/html`), y también si viene escrita en hexadecimal. Cada intento espera hasta 25 s; al panel va el estado del lector (servidor, segmentos entregados, lo que
   tiene el reproductor y dónde está). Si ninguno abre se le pregunta al servidor y el aviso dice el motivo. El HLS del
   motor del panel (audio cambiado) se reproduce con su propio lector por MSE (`src/player/hls.ts`).
 - **Servidores XUI.one en «Debug Mode»** contestan **200 con una página HTML** en lugar del video cuando hay un problema
