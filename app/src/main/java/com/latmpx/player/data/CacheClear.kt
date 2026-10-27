@@ -35,12 +35,17 @@ object CacheClear {
     /** ya hubo una respuesta de check_mac en este arranque */
     @Volatile var asked = false
 
-    fun onReply(received: Long) {
+    /**
+     * at = cuándo se envió la orden (cache_clear_at), now = hora corregida con el panel. Sin nada guardado (instalada de
+     * nuevo, datos borrados): una orden de los últimos 3 días se aplica igual (antes se guardaba en silencio y la orden
+     * recién enviada no hacía nada); una más vieja solo se guarda.
+     */
+    fun onReply(received: Long, at: Long = 0L, now: Long = 0L) {
         val p = prefs ?: return
         val saved = if (p.contains(KEY)) p.getLong(KEY, 0L) else null
         // se guarda antes de borrar: tras el reinicio la misma orden ya no se vuelve a aplicar
         if (saved == null || received > saved) p.edit().putLong(KEY, received).commit()
-        if (shouldClear(saved, received)) pending = true
+        if (shouldClear(saved, received) || (saved == null && received > 0 && at > 0 && now - at < 3 * 86400L)) pending = true
     }
 
     /**

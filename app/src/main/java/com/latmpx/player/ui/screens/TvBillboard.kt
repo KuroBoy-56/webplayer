@@ -251,9 +251,10 @@ private fun HeroBackdrop(h: TvHero) {
             ?: runCatching { Tmdb.getDetails(if (h.item.kind == Kind.SERIES) "tv" else "movie", h.item.name, h.item.year)?.backdrop }.getOrNull().orEmpty()
         if (alt.isNotBlank() && alt != url) { url = alt; failed = false }
     }
-    AsyncImage(
-        model = url, contentDescription = null, contentScale = ContentScale.Crop, alignment = BiasAlignment(0f, -0.6f),
-        modifier = Modifier.fillMaxSize(), onError = { failed = true },
+    // fondo Full HD del panel (si es de TMDB) y, si no carga, el original; si tampoco, el de TMDB por el título
+    com.latmpx.player.ui.components.ChainImage(
+        remember(url) { com.latmpx.player.data.PanelImg.backdropSources(url) }, Modifier.fillMaxSize(),
+        alignment = BiasAlignment(0f, -0.6f), onAllFailed = { failed = true },
     )
 }
 

@@ -97,9 +97,10 @@ object Panel {
         private set
 
     /** ¿El equipo ya tiene una línea activa en el panel? */
-    suspend fun checkMac(deviceId: String): Answer<Line> {
+    // poll: la app ya abierta vuelve a preguntar (cada 10 min): el panel no lo cuenta como otra apertura
+    suspend fun checkMac(deviceId: String, poll: Boolean = false): Answer<Line> {
         // cc: última orden de borrado de caché que esta app ya aplicó (0 = ninguna)
-        val a = login("check_mac", device(deviceId).put("cc", CacheClear.seen))
+        val a = login("check_mac", device(deviceId).put("cc", CacheClear.seen).apply { if (poll) put("poll", 1) })
         val r = a.value ?: return Answer(null, a.error)
         // con distribuidor: un error del panel (vencido, suspendido…) se muestra en vez de "no hay línea"
         if (Tenant.active && r.code in 400..499) return Answer(null, errorOf(r, tr(R.string.err_panel_rejected)))
@@ -107,7 +108,7 @@ object Panel {
         fakeScreen = FakeScreen.parse(j)
         // orden de borrado de caché del panel (viene con línea o sin ella; un panel viejo no la manda)
         CacheClear.asked = true
-        if (j.has("cache_clear")) CacheClear.onReply(j.optLong("cache_clear", 0L))
+        if (j.has("cache_clear")) CacheClear.onReply(j.optLong("cache_clear", 0L), j.optLong("cache_clear_at", 0L), System.currentTimeMillis() / 1000 + clockSkew)
         if (!j.optBoolean("exists", false)) return Answer(null)
         // PIN parental del panel: es el que usa la app
         j.s("pin").takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { Store.parentalPin = it }

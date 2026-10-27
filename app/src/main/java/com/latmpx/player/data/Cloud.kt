@@ -94,6 +94,8 @@ object Cloud {
         if (Store.demo) { withContext(Dispatchers.Main) { synchronized(lock) { progress.clear(); favs.clear() }; rev++ }; return }
         val r = call { t -> Net.get(api() + "?v=2&token=" + enc(t)) } ?: return
         val j = r.json() ?: return
+        // caché de carátulas del panel (el dueño la puede apagar): apagada, imágenes directo a los servidores
+        if (j.has("img")) PanelImg.on = j.optBoolean("img", true)
         if (j.optBoolean("demo", false)) { withContext(Dispatchers.Main) { Store.demo = true; synchronized(lock) { progress.clear(); favs.clear() }; rev++ }; return }
         val pm = LinkedHashMap<String, Progress>()
         j.optJSONObject("progress")?.let { po ->

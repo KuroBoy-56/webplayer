@@ -83,10 +83,9 @@ fun HeroCards(state: AppState, items: List<Item>, topPad: Dp = 0.dp) {
     Box(Modifier.fillMaxWidth()) {
         // fondo: la carátula actual muy difuminada (Android 12+) o oscurecida
         Box(Modifier.matchParentSize()) {
-            val bg = cur.poster.ifBlank { Posters.cached(cur).orEmpty() }
-            if (bg.isNotBlank()) AsyncImage(
-                model = bg, contentDescription = null, contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().then(if (Build.VERSION.SDK_INT >= 31) Modifier.blur(70.dp) else Modifier.graphicsLayer { alpha = 0.45f }),
+            com.latmpx.player.ui.components.ItemPoster(
+                cur,
+                Modifier.fillMaxSize().then(if (Build.VERSION.SDK_INT >= 31) Modifier.blur(70.dp) else Modifier.graphicsLayer { alpha = 0.45f }),
             )
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x99000000), Color(0x66141414), NfBg))))
         }

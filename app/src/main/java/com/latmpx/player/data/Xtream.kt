@@ -188,6 +188,7 @@ object Xtream {
             epgId = o.s("epg_channel_id"),
             backdrop = Posters.clean(o.optJSONArray("backdrop_path")?.optString(0).orEmpty()),
             cast = if (kind == Kind.LIVE) "" else o.s("cast").ifEmpty { o.s("actors") },
+            tm = if (kind == Kind.LIVE) "" else o.s("tmdb").ifEmpty { o.s("tmdb_id") }.filter(Char::isDigit).takeIf { it.isNotEmpty() && it != "0" }.orEmpty(),
         )
     }
 

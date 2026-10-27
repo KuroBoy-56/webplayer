@@ -145,9 +145,10 @@ fun TvDetailScreen(state: AppState, media: Item) {
     LazyColumn(Modifier.fillMaxSize().background(NfBg), state = list, contentPadding = PaddingValues(bottom = 48.dp)) {
         item(key = "hero") {
             Box(Modifier.fillMaxWidth().heightIn(min = heroH).background(Color.Black)) {
-                if (backdrop.isNotBlank()) AsyncImage(
-                    model = backdrop, contentDescription = null, contentScale = ContentScale.Crop, alignment = BiasAlignment(0f, -0.64f),
-                    modifier = Modifier.matchParentSize(),
+                // fondo Full HD del panel (si es de TMDB) y, si no carga, el original
+                if (backdrop.isNotBlank()) com.latmpx.player.ui.components.ChainImage(
+                    remember(backdrop) { com.latmpx.player.data.PanelImg.backdropSources(backdrop) }, Modifier.matchParentSize(),
+                    alignment = BiasAlignment(0f, -0.64f),
                 ) else Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(Color(0xFF3A0A0D), Color.Black), radius = 1600f)))
                 // .nf-detail-hero::before / ::after
                 Box(Modifier.matchParentSize().background(Brush.horizontalGradient(0f to Color(0xF2141414), 0.35f to Color(0xB3141414), 0.75f to Color(0x1A141414))))

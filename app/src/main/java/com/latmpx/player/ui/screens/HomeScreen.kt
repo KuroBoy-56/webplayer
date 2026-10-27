@@ -260,10 +260,9 @@ fun Hero(state: AppState, item: Item, tv: Boolean) {
     val first = remember { FocusRequester() }
     if (tv) LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Box(Modifier.fillMaxWidth().height(if (tv) 360.dp else 470.dp)) {
-        AsyncImage(
-            model = item.backdrop.ifEmpty { item.poster }, contentDescription = item.name, contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
+        // fondo Full HD del panel y, si no hay fondo, la carátula por la caché del panel
+        if (item.backdrop.isNotEmpty()) com.latmpx.player.ui.components.ChainImage(remember(item.backdrop) { com.latmpx.player.data.PanelImg.backdropSources(item.backdrop) }, Modifier.fillMaxSize())
+        else com.latmpx.player.ui.components.ItemPoster(item, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x66000000), Color.Transparent, Color(0xCC141414), NfBg))))
         if (tv) Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xEE141414), Color.Transparent))))
         if (!tv) LogoHeader(Modifier.padding(14.dp), height = 30.dp)
