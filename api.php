@@ -68,8 +68,16 @@ switch ($action) {
         if (!is_array($aj) || !in_array($aj['type'] ?? '', ['welcome', 'expiry'], true)) out(['show' => false]);
         $ip = (string)($aj['image_path'] ?? '');
         $img = '';
+        $vid = '';
         if ($aj['type'] === 'welcome' && preg_match('~^img/alertas/[A-Za-z0-9._-]+$~', $ip)) {
             $img = wp_img(preg_replace('~api/$~', '', wp_panel_base()) . $ip, '');
+        } elseif ($aj['type'] === 'welcome' && preg_match('~^https://[^\s"\'<>?#]+\.(png|jpe?g|webp|gif)$~i', (string)($aj['image'] ?? ''))) {
+            // imagen por enlace (Alertas del panel): el navegador la carga directo desde el enlace
+            $img = (string)$aj['image'];
+        }
+        // video corto por enlace (https .mp4 / .webm / .m4v): se reproduce sin sonido y en bucle, con la imagen de portada
+        if ($aj['type'] === 'welcome' && preg_match('~^https://[^\s"\'<>?#]+\.(mp4|webm|m4v)$~i', (string)($aj['video'] ?? ''))) {
+            $vid = (string)$aj['video'];
         }
         out([
             'show' => true,
@@ -79,6 +87,7 @@ switch ($action) {
             'title' => wp_demo_mask($aj['title'] ?? ''),
             'message' => wp_demo_mask($aj['message'] ?? ''),
             'image' => $img,
+            'video' => $vid,
             'button' => (string)($aj['button'] ?? t('ENTENDIDO')),
             'logo' => wp_brand_logo(),
         ]);

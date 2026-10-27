@@ -25,7 +25,9 @@
             '<img class="nf-alert-logo" src="' + esc(a.logo || 'assets/img/Logo.png') + '" alt="" onerror="this.onerror=null;this.src=\'assets/img/Logo.png\'">' +
             '<h2 class="nf-alert-title" id="nfAlertTitle">' + esc(a.title) + '</h2>' +
             (a.message ? '<p class="nf-alert-msg">' + esc(a.message) + '</p>' : '') +
-            (a.image ? '<img class="nf-alert-img" src="' + esc(a.image) + '" alt="" onerror="this.remove()">' : '') +
+            // video corto del aviso (sin sonido y en bucle, con la imagen de portada); si no carga, queda la imagen
+            (a.video ? '<video class="nf-alert-img" src="' + esc(a.video) + '"' + (a.image ? ' poster="' + esc(a.image) + '"' : '') + ' autoplay muted loop playsinline preload="auto"></video>'
+                : (a.image ? '<img class="nf-alert-img" src="' + esc(a.image) + '" alt="" onerror="this.remove()">' : '')) +
             '<button type="button" class="nf-btn nf-btn-white nf-alert-btn">' + esc(a.button || tr('Entendido')) + '</button>' +
             '</div>';
         var prev = d.activeElement;
@@ -40,6 +42,13 @@
             else if (e.key === 'Tab') { e.preventDefault(); btn.focus(); }
         }
         d.body.appendChild(box);
+        var vid = box.querySelector('video.nf-alert-img');
+        if (vid) {
+            vid.addEventListener('error', function () {
+                if (a.image) { var im = d.createElement('img'); im.className = 'nf-alert-img'; im.alt = ''; im.src = a.image; vid.replaceWith(im); } else vid.remove();
+            });
+            var pv = vid.play(); if (pv && pv.catch) pv.catch(function () { });
+        }
         d.documentElement.classList.add('nf-alert-open');
         var btn = box.querySelector('.nf-alert-btn');
         btn.addEventListener('click', close);

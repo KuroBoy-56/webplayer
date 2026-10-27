@@ -4,6 +4,9 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Aviso de bienvenida con video corto (27 de octubre, noche)
+- El aviso del panel (Alertas) muestra la imagen por enlace y, si el panel tiene uno, un **video corto** (sin sonido, en bucle, con la imagen de portada; si el video no carga, queda la imagen). Archivos: `api.php`, `assets/nf/alert.js` (`v=4`), `header.php`.
+
 ## SSL sin cargar el hosting y direcciones con tokens (27 de octubre, tarde)
 
 **SSL (Hostinger)**
