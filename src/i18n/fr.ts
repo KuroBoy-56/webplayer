@@ -392,6 +392,10 @@ const fr: Record<Key, string> = {
   "El servidor bloqueó este equipo ({x})": "Le serveur a bloqué cet appareil ({x})",
   "El servidor no entregó el video ({x})": "Le serveur n'a pas fourni la vidéo ({x})",
   "No hay información de este equipo": "Aucune information sur cette équipe",
+  "Espacio": "Espace",
+  "Listo": "OK",
+  "Ocultar": "Masquer",
+  "Mostrar": "Afficher",
 };
 
 export default fr;

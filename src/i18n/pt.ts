@@ -392,6 +392,10 @@ const pt: Record<Key, string> = {
   "El servidor bloqueó este equipo ({x})": "O servidor bloqueou este aparelho ({x})",
   "El servidor no entregó el video ({x})": "O servidor não entregou o vídeo ({x})",
   "No hay información de este equipo": "Não há informações sobre este time",
+  "Espacio": "Espaço",
+  "Listo": "Pronto",
+  "Ocultar": "Ocultar",
+  "Mostrar": "Mostrar",
 };
 
 export default pt;

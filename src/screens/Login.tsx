@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, BackHandler, Easing, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
+import KeyboardModal from '../components/KeyboardModal';
 import { loginAll, sessionFrom } from '../api/xtream';
 import { Button, Focusable, Logo } from '../components/ui';
 import { json } from '../lib/http';
@@ -38,6 +39,8 @@ export default function Login() {
   const [pass, setPass] = useState('');
   // ojito: ver la contraseña en texto o volver a ocultarla
   const [showPass, setShowPass] = useState(false);
+  // campo que se está escribiendo con el teclado de la app
+  const [typing, setTyping] = useState<'user' | 'pass' | null>(null);
   const [dnsOpen, setDnsOpen] = useState(false);
   const [busy, setBusy] = useState(() => t('Comprobando el equipo en el panel…'));
   const [error, setError] = useState('');
@@ -222,32 +225,19 @@ export default function Login() {
       <View style={s.center}>
         <View style={s.box}>
           <Text style={s.title}>{t('Iniciar sesión')}</Text>
-          <TextInput
-            style={s.input}
-            value={user}
-            onChangeText={setUser}
-            placeholder={t('Usuario')}
-            placeholderTextColor={C.dim}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="next"
-            onSubmitEditing={() => passRef.current?.focus()}
-            hasTVPreferredFocus
-          />
+          {/* usuario y contraseña con el teclado de la app (como Roku): un TextInput enfocado se quedaba con las flechas
+              en algunos Fire TV y el foco no llegaba a Ingresar, DNS ni Cambiar distribuidor */}
+          <Focusable preferred onPress={() => setTyping('user')} style={f => [s.input, s.field, f && s.fieldF]}>
+            <Text style={[s.fieldText, !user && s.fieldPh]} numberOfLines={1}>
+              {user || t('Usuario')}
+            </Text>
+          </Focusable>
           <View style={s.passRow}>
-            <TextInput
-              ref={passRef}
-              style={[s.input, s.passInput]}
-              value={pass}
-              onChangeText={setPass}
-              placeholder={t('Contraseña')}
-              placeholderTextColor={C.dim}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry={!showPass}
-              returnKeyType="go"
-              onSubmitEditing={() => enter(user, pass)}
-            />
+            <Focusable onPress={() => setTyping('pass')} style={f => [s.input, s.passInput, s.field, f && s.fieldF]}>
+              <Text style={[s.fieldText, !pass && s.fieldPh]} numberOfLines={1}>
+                {pass ? (showPass ? pass : '•'.repeat(pass.length)) : t('Contraseña')}
+              </Text>
+            </Focusable>
             <Focusable onPress={() => setShowPass(v => !v)} style={f => [s.eye, f && s.eyeF]}>
               <Eye open={showPass} />
             </Focusable>
@@ -274,6 +264,19 @@ export default function Login() {
         </View>
       </View>
       {dnsOpen ? <DnsPicker onClose={() => setDnsOpen(false)} /> : null}
+      {typing ? (
+        <KeyboardModal
+          title={typing === 'user' ? t('Usuario') : t('Contraseña')}
+          value={typing === 'user' ? user : pass}
+          secret={typing === 'pass' && !showPass}
+          onClose={() => setTyping(null)}
+          onDone={v => {
+            if (typing === 'user') setUser(v.trim());
+            else setPass(v);
+            setTyping(null);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -347,9 +350,14 @@ const s = themed(() =>
     title: { color: C.text, fontSize: px(52), fontWeight: '800', marginBottom: px(30) },
     // texto y ayuda («Usuario», «Contraseña») centrados a lo alto del campo
     input: { height: px(84), backgroundColor: C.card, borderRadius: px(8), color: C.text, fontSize: px(32), paddingHorizontal: px(24), paddingVertical: 0, textAlignVertical: 'center', marginBottom: px(22) },
-    passRow: { position: 'relative' },
-    passInput: { paddingRight: px(120) },
-    eye: { position: 'absolute', right: px(10), top: px(8), width: px(96), height: px(68), borderRadius: px(8), alignItems: 'center', justifyContent: 'center' },
+    // el ojito al lado del campo (no encima): el foco del control llega a los dos sin confundirse
+    passRow: { flexDirection: 'row', alignItems: 'flex-start' },
+    passInput: { flex: 1 },
+    field: { justifyContent: 'center', borderWidth: px(3), borderColor: 'transparent' },
+    fieldF: { borderColor: C.text, backgroundColor: alpha(C.text, 0.12) },
+    fieldText: { color: C.text, fontSize: px(32) },
+    fieldPh: { color: C.dim },
+    eye: { width: px(96), height: px(84), marginLeft: px(12), borderRadius: px(8), alignItems: 'center', justifyContent: 'center', backgroundColor: C.card, borderWidth: px(3), borderColor: 'transparent' },
     eyeF: { backgroundColor: alpha(C.text, 0.2), borderWidth: px(3), borderColor: C.text },
     eyeIcon: { width: px(52), height: px(34), alignItems: 'center', justifyContent: 'center' },
     eyeLid: { width: px(48), height: px(30), borderRadius: px(24), borderWidth: px(4), borderColor: C.text, alignItems: 'center', justifyContent: 'center' },

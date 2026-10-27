@@ -115,6 +115,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   plataformas el fondo es liso (sin la portada fija de Inicio).
 - **Plataformas** con ancho y alto fijos (Vega dibuja las imágenes del paquete a su tamaño real si solo se estiran)
   e **ícono de la app** con el logo centrado en la franja 16:9 que muestra el Fire TV (512×512).
+- **Usuario y contraseña con el teclado de la app** (como Roku, `src/components/KeyboardModal.tsx`): los campos son
+  botones y al pulsarlos sale un teclado en pantalla (letras, números, símbolos, mayúsculas, espacio, ⌫, Borrar,
+  Mostrar/Ocultar y Listo). En algunos Fire TV y en el simulador un TextInput enfocado se quedaba con las flechas: el
+  foco no llegaba al ojito, Ingresar, DNS ni Cambiar distribuidor, y al salir del campo sonaba el teclado del sistema.
+  El ojito va al lado del campo de la contraseña (no encima).
 - **Inicio de sesión** con la caja centrada en la pantalla y el texto de Usuario / Contraseña centrado
   a lo alto del campo.
 - **Ficha** con sinopsis, reparto, temporadas, episodios con su avance y "Más títulos como este".
