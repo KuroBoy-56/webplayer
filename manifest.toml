@@ -3,7 +3,7 @@ schema-version = 1
 [package]
 id = "com.latmpx.player.vega"
 title = "MPX Player"
-version = "1.0.13"
+version = "1.0.14"
 icon = "@image/app_icon.png"
 
 [os.version]

@@ -318,9 +318,9 @@ export default function Player({ params }: { params: PlayParams }) {
           vs.srv = r.code;
           if (r.status !== undefined) vs.acct = ' cuenta=' + r.status + ' conexiones=' + r.active + '/' + r.max;
           vs.inUse = r.code >= 400 && !!r.max && (r.active || 0) >= r.max;
-          vs.attempts.push('servidor: ' + r.code + (r.xui ? ' xui=' + r.xui + ' (' + (r.xuiText || '') + ')' : r.html ? ' html' : '') + vs.acct + (r.exists !== undefined ? ' existe=' + r.exists + ' ext=' + r.ext : ''));
-          if (r.xui || r.html) {
-            // el servidor contestó con una página (XUI «Debug Mode»): el motivo exacto, sin insistir
+          vs.attempts.push('servidor: ' + r.code + (r.xui ? ' xui=' + r.xui + ' (' + (r.xuiText || '') + ')' : r.html ? ' html=«' + (r.page || '') + '»' : '') + vs.acct + (r.exists !== undefined ? ' existe=' + r.exists + ' ext=' + r.ext : ''));
+          if (r.xui) {
+            // el servidor contestó con la página de error de XUI («Debug Mode»): el motivo exacto, sin insistir
             vs.xui = r;
             return failVod(failText());
           }
@@ -383,7 +383,7 @@ export default function Player({ params }: { params: PlayParams }) {
       const ch = params.kind === 'live' ? params.channels[i] || params.channel : null;
       const acct = r.status !== undefined ? ' cuenta=' + r.status + ' conexiones=' + r.active + '/' + r.max : '';
       let text: string;
-      if (r.xui || r.html) text = serverText(r, true);
+      if (r.xui) text = serverText(r, true);
       else if (r.status && r.status !== 'active') text = t('Línea no activa');
       else if (r.code >= 400 && r.max && (r.active || 0) >= r.max) text = t('Línea en uso en otro equipo');
       else if (r.code === 404 || r.code === 410) text = t('Canal no disponible en el servidor');
@@ -398,7 +398,7 @@ export default function Player({ params }: { params: PlayParams }) {
       reportError(
         'playback',
         'No se pudo reproducir (live): ' + text,
-        'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' servidor=' + r.code + ' tipo=' + (r.type || '') + (r.xui ? ' xui=' + r.xui + ' (' + (r.xuiText || '') + ')' : '') + acct +
+        'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' servidor=' + r.code + ' tipo=' + (r.type || '') + (r.xui ? ' xui=' + r.xui + ' (' + (r.xuiText || '') + ')' : r.html ? ' html=«' + (r.page || '') + '»' : '') + acct +
           ' formatos=' + LIVE_FORMATS.join(',') + ' dnsElegido=' + (dnsUrl.current?.i === i) + ' intentos=[' + vs.attempts.join(' | ') + ']',
         'Reproductor',
       );
@@ -462,7 +462,8 @@ export default function Player({ params }: { params: PlayParams }) {
           streamCheck(urlFor(i), getState().session!, '', true).then(r => {
             if (!alive || indexRef.current !== i) return;
             vs.live = r;
-            if (r.xui || r.html || r.code >= 400 || (r.status && r.status !== 'active')) return showLive(r);
+            // una página sin código de XUI no dice el motivo: se siguen probando las otras formas
+            if (r.xui || r.code >= 400 || (r.status && r.status !== 'active')) return showLive(r);
             nextLive();
           });
           return;
@@ -783,19 +784,7 @@ export default function Player({ params }: { params: PlayParams }) {
         </View>
       ) : null}
 
-      {askExit ? (
-        <View style={s.center}>
-          <View style={s.exitBox}>
-            <Text style={s.nextTitle}>{t('¿Salir del video?')}</Text>
-            <View style={s.nextRow}>
-              <Button label={t('Salir')} onPress={leave} />
-              <Button label={t('Seguir viendo')} primary preferred onPress={() => setAskExit(false)} />
-            </View>
-          </View>
-        </View>
-      ) : null}
-
-      {error ? (
+      {error && !askExit ? (
         <View style={s.center}>
           <Text style={s.error}>{error}</Text>
           <Text style={s.hint}>{t('Atrás para salir')}</Text>
@@ -868,6 +857,19 @@ export default function Player({ params }: { params: PlayParams }) {
           onPick={onPick}
         />
       ) : null}
+      {/* «¿Salir del video?» al frente de todo (aviso de error, barra, menú) con fondo oscuro: antes el aviso de error
+          se dibujaba encima y los dos textos se mezclaban */}
+      {askExit ? (
+        <View style={s.exitShade}>
+          <View style={s.exitBox}>
+            <Text style={s.nextTitle}>{t('¿Salir del video?')}</Text>
+            <View style={s.nextRow}>
+              <Button label={t('Salir')} onPress={leave} />
+              <Button label={t('Seguir viendo')} primary preferred onPress={() => setAskExit(false)} />
+            </View>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -902,6 +904,7 @@ const s = themed(() =>
     toast: { position: 'absolute', bottom: px(200), alignSelf: 'center', maxWidth: px(1300), backgroundColor: alpha(C.bg2, 0.95), borderRadius: px(12), borderLeftWidth: px(6), borderLeftColor: C.red, paddingHorizontal: px(30), paddingVertical: px(16), zIndex: 9 },
     toastText: { color: C.text, fontSize: px(26) },
     nextCard: { position: 'absolute', right: px(80), bottom: px(140), backgroundColor: alpha(C.bg2, 0.95), borderRadius: px(12), padding: px(30), zIndex: 10 },
+    exitShade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 50, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' },
     exitBox: { backgroundColor: alpha(C.bg2, 0.97), borderRadius: px(12), padding: px(40), alignItems: 'center' },
     nextTitle: { color: C.text, fontSize: px(34), fontWeight: '800' },
     nextRow: { flexDirection: 'row', gap: px(20), marginTop: px(24) },

@@ -107,6 +107,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   `img.php` → original); en Vega una imagen que no existe a veces no avisa el error y la tarjeta quedaba en blanco.
 - **Tablas › equipo**: mientras el panel trae la ficha sale «Cargando…» y, sin datos, «No hay información de este
   equipo» (antes no se veía nada).
+- **«¿Salir del video?» siempre al frente** con fondo oscuro y el foco en sus botones (antes el aviso de error se
+  dibujaba encima y los textos se mezclaban). Una página del servidor sin código de XUI ya no corta: se siguen
+  probando las otras formas y su texto va en el reporte.
 - **Abrir una película o capítulo es inmediato**: ya no se espera a los idiomas (antes hasta 3 s); llegan a la vez y
   si el audio por defecto es el idioma preferido suena así, sin pasar por el panel. En las páginas de
   plataformas el fondo es liso (sin la portada fija de Inicio).

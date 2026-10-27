@@ -10,7 +10,7 @@ import { xuiError } from '../lib/xui';
 
 // xui: el código que da XUI.one en «Debug Mode» (contesta 200 con una página HTML en lugar del video: INVALID_STREAM_ID,
 // STREAM_OFFLINE, BLOCKED_USER_AGENT…) y su texto; html: el servidor devolvió una página en lugar del video
-export type StreamCheck = { code: number; type?: string; html?: boolean; xui?: string; xuiText?: string; status?: string; active?: number; max?: number; exists?: boolean; ext?: string };
+export type StreamCheck = { code: number; type?: string; html?: boolean; page?: string; xui?: string; xuiText?: string; status?: string; active?: number; max?: number; exists?: boolean; ext?: string };
 
 export { xuiError };
 
@@ -37,6 +37,8 @@ export async function streamCheck(url: string, s: Session, movieId: string, acco
   const out: StreamCheck = { code: st.code, type: st.type };
   if (st.body) {
     out.html = true;
+    // el texto de la página (sin etiquetas), para el reporte
+    out.page = st.body.replace(/<(style|script)[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
     const x = xuiError(st.body);
     if (x) {
       out.xui = x.code;
