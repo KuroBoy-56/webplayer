@@ -65,6 +65,8 @@ struct RemoteImage: View {
     let url: String
     var mode: ContentMode = .fill
     var maxPixel: CGFloat = 600
+    /** no se pudo cargar (la carátula pasa a la siguiente dirección) */
+    var onFail: (() -> Void)? = nil
     @State private var img: UIImage?
     @State private var failed = false
 
@@ -81,26 +83,52 @@ struct RemoteImage: View {
             if let c = ImageLoader.shared.cached(url) { img = c; return }
             img = await ImageLoader.shared.load(url, maxPixel: maxPixel)
             failed = img == nil
+            if failed && !Task.isCancelled { onFail?() }
         }
     }
 }
 
-/** póster del servidor o, si no trae, el de TMDB */
+/** Imagen con respaldo: si una dirección no carga, la siguiente (caché del panel → img.php → original). */
+struct ChainImage: View {
+    let sources: [String]
+    var mode: ContentMode = .fill
+    var maxPixel: CGFloat = 600
+    /** ninguna cargó */
+    var onAllFailed: (() -> Void)? = nil
+    @State private var idx = 0
+
+    var body: some View {
+        RemoteImage(url: idx < sources.count ? sources[idx] : "", mode: mode, maxPixel: maxPixel) {
+            if idx + 1 < sources.count { idx += 1 } else { onAllFailed?() }
+        }
+        .onChange(of: sources) { _ in idx = 0 }
+    }
+}
+
+/**
+ * Carátula por la caché del panel como Roku, Vega y Android: la copia del panel (imgc), img.php (con el título busca en
+ * TMDB si el servidor no tiene) y la original; si todo falla (o la caché está apagada y el servidor no trae imagen), se
+ * busca en TMDB desde el equipo. Mientras tanto se ve el título.
+ */
 struct ItemPoster: View {
     let item: Item
     @State private var resolved = ""
+    @State private var chainFailed = false
 
     var body: some View {
+        let sources = PanelImg.posterSources(item)
         ZStack {
             Color(hex: 0x2A2A2A)
-            if item.poster.isEmpty && resolved.isEmpty {
-                Text(item.name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white).multilineTextAlignment(.center).padding(8)
-            } else {
-                RemoteImage(url: item.poster.isEmpty ? resolved : item.poster)
+            Text(item.name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white).multilineTextAlignment(.center).padding(8)
+            if !sources.isEmpty && !chainFailed {
+                ChainImage(sources: sources) { chainFailed = true }
+            } else if !resolved.isEmpty {
+                RemoteImage(url: resolved)
             }
         }
-        .task(id: item.key) {
-            if item.poster.isEmpty && item.kind != .live { resolved = await Posters.resolve(item) }
+        .task(id: "\(item.key)|\(chainFailed)") {
+            if (sources.isEmpty || chainFailed) && resolved.isEmpty && item.kind != .live { resolved = await Posters.resolve(item) }
         }
+        .onChange(of: item.key) { _ in chainFailed = false; resolved = "" }
     }
 }

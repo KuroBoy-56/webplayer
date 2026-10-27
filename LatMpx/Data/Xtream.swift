@@ -185,12 +185,14 @@ enum Xtream {
         if year.isEmpty { year = String(o.s("release_date").prefix(4)) }
         let r = o.d("rating")
         let bd = (o.a("backdrop_path")?.first as? String) ?? ""
+        let tm = o.s("tmdb").ifEmpty(o.s("tmdb_id")).filter(\.isNumber)
         return Item(
             id: id, name: o.s("name"), poster: poster, kind: kind, categoryId: o.s("category_id"),
             ext: o.s("container_extension"), rating: r > 10 ? r / 10 : r, year: year,
             added: Int64(kind == .series ? o.s("last_modified") : o.s("added")) ?? 0,
             plot: o.s("plot"), epgId: o.s("epg_channel_id"), backdrop: Posters.clean(bd),
-            cast: kind == .live ? "" : o.s("cast").ifEmpty(o.s("actors"))
+            cast: kind == .live ? "" : o.s("cast").ifEmpty(o.s("actors")),
+            tmdb: tm.isEmpty || tm == "0" ? nil : tm
         )
     }
 

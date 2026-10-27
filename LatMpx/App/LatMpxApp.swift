@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         Store.boot()
         #if DEBUG
         CacheClear.selfCheck()
+        PanelImg.selfCheck()
         #endif
         ErrorReport.boot()
         Integrity.check()

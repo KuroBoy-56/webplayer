@@ -136,6 +136,8 @@ final class Cloud: ObservableObject {
         // demo: no hay "Continuar viendo" ni "Mi lista"
         if demo { clearLists(); return }
         guard let r = await call({ t in await Net.get(self.api + "?v=2&token=" + urlEnc(t)) }), let j = r.json() else { return }
+        // caché de imágenes del panel encendida o apagada por el dueño (vale desde las próximas carátulas)
+        if j["img"] != nil { PanelImg.on = j.b("img", true) }
         if j.b("demo") { return } // rememberDemo ya vació las listas
         var pm: [String: Progress] = [:]
         if let po = j.o("progress") {

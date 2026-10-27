@@ -23,6 +23,9 @@ struct Item: Codable, Hashable, Identifiable {
     var epgId: String = ""
     var backdrop: String = ""
     var cast: String = ""
+    /** id de TMDB que manda el servidor (tmdb / tmdb_id): una sola carátula por título en el panel (PanelImg).
+     *  Opcional: el catálogo guardado de antes no lo trae y se sigue leyendo igual. */
+    var tmdb: String? = nil
 
     /** clave única para progreso y favoritos */
     var key: String { "\(kind.rawValue):\(id)" }

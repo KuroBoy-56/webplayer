@@ -10,6 +10,8 @@ struct SportEvent: Hashable, Identifiable {
     let postponed: Bool
     /** canales donde se transmite (panel: "tv"), los de la región primero */
     let tv: [TvChannel]
+    /** liga del JSON de partidos (api/sports_fixtures.php "l"): Equipos y Selecciones */
+    var leagueId: String = ""
 }
 
 struct SportInfo: Hashable { let label: String; let icon: String; let minutes: Int }
@@ -22,7 +24,18 @@ struct MatchRules {
     var fullName = 2, token = 1, teamWeight = 10, bothTeamsBonus = 15, leagueBonus = 3, eventCategoryBonus = 6, singleTokenWeight = 8
 }
 
-struct SportsData { let events: [SportEvent]; let sports: [String: SportInfo]; let rules: MatchRules }
+struct SportsData {
+    let events: [SportEvent]
+    let sports: [String: SportInfo]
+    let rules: MatchRules
+    /** pestaña Tablas (api/sports.php "tables": on y versión del JSON del panel) */
+    var tablesOn = false
+    var tablesRev = 0
+    /** pestañas Equipos y Selecciones (api/sports.php "fixtures": on, versión y si hay selecciones elegidas) */
+    var fixturesOn = false
+    var nationsOn = false
+    var fixturesRev = 0
+}
 
 enum SpStatus { case soon, live, fin, postponed }
 
@@ -44,6 +57,18 @@ enum Sports {
         return f.string(from: Date(timeIntervalSince1970: t))
     }
 
+    /** "sáb 2 nov · 20:00" en la zona del panel; hoy, solo la hora (Equipos / Selecciones: 21 días) */
+    static func dayTime(_ t: Double, _ now: Double) -> String {
+        var cal = Calendar.current
+        cal.timeZone = zone
+        if cal.isDate(Date(timeIntervalSince1970: t), inSameDayAs: Date(timeIntervalSince1970: now)) { return time(t) }
+        let f = DateFormatter()
+        f.locale = L10n.locale
+        f.timeZone = zone
+        f.setLocalizedDateFormatFromTemplate("EEEdMMM")
+        return f.string(from: Date(timeIntervalSince1970: t)) + " · " + time(t)
+    }
+
     static func load() async -> SportsData? {
         guard let r = await Cloud.shared.call({ t in await Net.get(PanelUrl.api("sports.php") + "?token=" + urlEnc(t)) }), let j = r.json() else { return nil }
         return parse(j)
@@ -51,14 +76,7 @@ enum Sports {
 
     static func parse(_ j: JObj) -> SportsData {
         zone = TimeZone(identifier: j.s("tz")) ?? .current
-        let events = j.objs("events").compactMap { e -> SportEvent? in
-            let st = parseTs(e.s("ts"))
-            if st <= 0 { return nil }
-            let tv = e.objs("tv").compactMap { t -> TvChannel? in t.s("n").isEmpty ? nil : TvChannel(name: t.s("n"), country: t.s("c")) }
-            return SportEvent(id: e.s("id"), sport: e.s("sp"), league: e.s("lg"), leagueBadge: e.s("lb"), title: e.s("ev"), home: e.s("h"), away: e.s("a"),
-                              homeBadge: e.s("hb"), awayBadge: e.s("ab"), homeScore: e.s("hs"), awayScore: e.s("as"), start: st, venue: e.s("v"),
-                              status: e.s("st"), postponed: e.b("pp"), tv: tv)
-        }.sorted { $0.start < $1.start }
+        let events = j.objs("events").compactMap(event).sorted { $0.start < $1.start }
         var sports: [String: SportInfo] = [:]
         if let so = j.o("sports") {
             for (k, v) in so { if let o = v as? JObj { sports[k] = SportInfo(label: o.s("label").ifEmpty(k), icon: o.s("icon"), minutes: o.i("minutes") > 0 ? o.i("minutes") : 120) } }
@@ -74,7 +92,20 @@ enum Sports {
         let rules = MatchRules(stop: stopArr.isEmpty ? defaultStop : Set(stopArr), alias: alias, eventCategory: ev,
                                fullName: w("fullName", 2), token: w("token", 1), teamWeight: w("teamWeight", 10), bothTeamsBonus: w("bothTeamsBonus", 15),
                                leagueBonus: w("leagueBonus", 3), eventCategoryBonus: w("eventCategoryBonus", 6), singleTokenWeight: w("singleTokenWeight", 8))
-        return SportsData(events: events, sports: sports, rules: rules)
+        let tb = j.o("tables"), fx = j.o("fixtures")
+        return SportsData(events: events, sports: sports, rules: rules,
+                          tablesOn: tb?.b("on") ?? false, tablesRev: tb?.i("t") ?? 0,
+                          fixturesOn: fx?.b("on") ?? false, nationsOn: (fx?.b("on") ?? false) && (fx?.b("nat") ?? false), fixturesRev: fx?.i("t") ?? 0)
+    }
+
+    /** un partido de la agenda o del JSON de 21 días (mismos campos; "l" = liga de Equipos / Selecciones) */
+    static func event(_ e: JObj) -> SportEvent? {
+        let st = parseTs(e.s("ts"))
+        if st <= 0 { return nil }
+        let tv = e.objs("tv").compactMap { t -> TvChannel? in t.s("n").isEmpty ? nil : TvChannel(name: t.s("n"), country: t.s("c")) }
+        return SportEvent(id: e.s("id"), sport: e.s("sp"), league: e.s("lg"), leagueBadge: e.s("lb"), title: e.s("ev"), home: e.s("h"), away: e.s("a"),
+                          homeBadge: e.s("hb"), awayBadge: e.s("ab"), homeScore: e.s("hs"), awayScore: e.s("as"), start: st, venue: e.s("v"),
+                          status: e.s("st"), postponed: e.b("pp"), tv: tv, leagueId: e.s("l"))
     }
 
     /** "2026-10-03T15:00:00Z" / "+00:00" / sin segundos / sin zona -> segundos (UTC si no trae zona) */

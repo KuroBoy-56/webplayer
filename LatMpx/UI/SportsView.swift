@@ -12,12 +12,16 @@ struct SportsView: View {
     @State private var now = Date().timeIntervalSince1970
     @State private var pick: SportEvent?
     @State private var busy = false
+    /** Agenda / Tablas / Selecciones / Equipos (las tres últimas si el panel las ofrece) */
+    @State private var tab: SpTab = .agenda
 
     private let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
         GeometryReader { g in
-            if let d = data { content(d, g.size) }
+            if let d = data, tab != .agenda, (tab == .tables && d.tablesOn) || (tab == .nations && d.nationsOn) || (tab == .teams && d.fixturesOn) {
+                extra(d, g.size)
+            } else if let d = data { content(d, g.size) }
             else if loaded { EmptyMessage(text: tr("La agenda deportiva no está disponible.\nVuelve a intentarlo en unos minutos.")) }
             else { LoadingView(text: tr("Cargando partidos…")) }
         }
@@ -40,6 +44,23 @@ struct SportsView: View {
             Text(e.tv.count == 1 ? tr("Se transmite por 1 canal. Elige uno o deja que lo busquemos.") : tr("Se transmite por %d canales. Elige uno o deja que lo busquemos.", e.tv.count))
         }
     }
+
+    /** Tablas, Selecciones o Equipos (Deportes en el teléfono en vertical: una tarjeta por fila y la tabla corta) */
+    private func extra(_ d: SportsData, _ size: CGSize) -> some View {
+        let cols = size.width >= 700 ? [GridItem(.adaptive(minimum: 330), spacing: 10)] : [GridItem(.flexible())]
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(tr("Deportes")).font(.system(size: 28, weight: .heavy)).foregroundColor(.white)
+                SportsTabs(data: d, tab: $tab)
+                if tab == .tables { SportsTablesView(data: d, wide: size.width >= 700) }
+                else { SportsTeamsView(data: d, nationsMode: tab == .nations, now: now, columns: cols) { e in openEvent(e) } }
+            }
+            .padding(.horizontal, sidePad(size)).padding(.vertical, 16)
+        }
+        .overlay { if busy { ProgressView().tint(Theme.accent).scaleEffect(1.4).padding(30).background(Color.black.opacity(0.7)).clipShape(RoundedRectangle(cornerRadius: 12)) } }
+    }
+
+    private func openEvent(_ e: SportEvent) { e.tv.isEmpty ? watch(e, nil, false, fromMenu: false) : (pick = e) }
 
     private func title(_ e: SportEvent) -> String { !e.home.isEmpty && !e.away.isEmpty ? "\(e.home) vs \(e.away)" : e.title.ifEmpty(tr("Evento")) }
 
@@ -82,6 +103,7 @@ struct SportsView: View {
                             .padding(.horizontal, 12).padding(.vertical, 7).background(Color(hex: 0xE50914, alpha: 0.15)).clipShape(Capsule())
                     }
                 }
+                SportsTabs(data: d, tab: $tab)
                 HStack(spacing: 8) {
                     Chip(text: tr("Hoy"), selected: cur == 0) { day = 0; sport = "" }
                     Chip(text: tr("Mañana"), selected: cur == 1) { day = 1; sport = "" }
@@ -124,7 +146,7 @@ struct SportsView: View {
     }
 
     private func card(_ e: SportEvent, _ d: SportsData) -> some View {
-        SportCard(event: e, info: d.sports[e.sport], now: now) { e.tv.isEmpty ? watch(e, nil, false, fromMenu: false) : (pick = e) }
+        SportCard(event: e, info: d.sports[e.sport], now: now) { openEvent(e) }
     }
 
     /** channel = canal elegido del menú; byEvent = buscar solo por equipos / nombre del evento */
@@ -186,6 +208,8 @@ struct SportCard: View {
     let event: SportEvent
     let info: SportInfo?
     let now: Double
+    /** Equipos / Selecciones (21 días): también el día del partido */
+    var withDate = false
     let onWatch: () -> Void
 
     var body: some View {
@@ -241,7 +265,7 @@ struct SportCard: View {
         case .live: HStack(spacing: 4) { LiveDot(); Text(tr("En vivo")) }.font(.system(size: 11, weight: .bold)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Color(hex: 0xE50914)).clipShape(Capsule())
         case .fin: Text(tr("Final")).font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
         case .postponed: Text(tr("Aplazado")).font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
-        case .soon: Text(Sports.time(event.start)).font(.system(size: 12, weight: .bold)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Color.white.opacity(0.12)).clipShape(Capsule())
+        case .soon: Text(withDate ? Sports.dayTime(event.start, now) : Sports.time(event.start)).font(.system(size: 12, weight: .bold)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Color.white.opacity(0.12)).clipShape(Capsule())
         }
     }
 }

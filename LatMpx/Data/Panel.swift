@@ -93,17 +93,21 @@ enum Panel {
     private(set) static var fakeScreen: FakeScreen?
 
     /** ¿El equipo ya tiene una línea activa en el panel? value nil + error nil = no la tiene. */
-    static func checkMac() async -> Answer<Line> {
+    /** poll: la app ya abierta vuelve a preguntar (cada 10 min o al volver a ella): el panel no lo cuenta como otra apertura */
+    static func checkMac(poll: Bool = false) async -> Answer<Line> {
         var p = device()
         // última orden de borrado de caché que esta app ya aplicó (0 = ninguna)
         p["cc"] = Store.cacheClearSeen ?? 0
+        if poll { p["poll"] = 1 }
         let a = await login("check_mac", p)
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
         if Tenant.active && (400..<500).contains(r.code) { return Answer(value: nil, error: errorOf(r, tr("El panel rechazó la solicitud"))) }
         guard let j = r.json() else { return Answer(value: nil, error: errorOf(r, tr("Respuesta no válida del panel"))) }
         fakeScreen = FakeScreen.parse(j)
         // orden de borrado de caché del panel (con línea o sin ella); un panel viejo no la manda
-        if j["cache_clear"] != nil { CacheClear.received(j.i("cache_clear")) }
+        if j["cache_clear"] != nil {
+            CacheClear.received(j.i("cache_clear"), at: j.i("cache_clear_at"), now: Int(Date().timeIntervalSince1970) + clockSkew)
+        }
         if !j.b("exists") { return Answer(value: nil, error: nil) }
         // PIN parental del panel: es el que usa la app
         let pin = j.s("pin")

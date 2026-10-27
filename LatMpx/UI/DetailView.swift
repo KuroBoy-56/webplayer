@@ -27,7 +27,8 @@ struct DetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ZStack(alignment: .bottom) {
-                        RemoteImage(url: backdrop, maxPixel: 2560)
+                        // fondo Full HD del panel (si es de TMDB) y, si no carga, el original
+                        ChainImage(sources: PanelImg.backdropSources(backdrop), maxPixel: 2560)
                             .frame(width: g.size.width, height: min(g.size.width / 1.6, 460)).clipped()
                         // empieza transparente: antes empezaba en negro al 20 % y dejaba una línea marcada sobre el póster
                         LinearGradient(colors: [.clear, Theme.bg.opacity(0.35), Theme.bg.opacity(0.8), Theme.bg], startPoint: .top, endPoint: .bottom).frame(height: 170)

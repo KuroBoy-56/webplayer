@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /** puerta del distribuidor antes del inicio de sesión */
 private enum Gate { case choose, retry, open }
@@ -63,6 +64,12 @@ struct RootView: View {
             Task { await Cloud.shared.load() }
             Task { let a = await Alerts.forLaunch(s); await MainActor.run { alert = a } }
             await state.loadCatalog(s)
+            // con la app abierta el panel se vuelve a consultar cada 10 min (poll: no cuenta como otra apertura):
+            // así llegan a tiempo la orden de borrar la caché y una línea dada de baja
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                if UIApplication.shared.applicationState == .active { recheck(after: 10 * 60, iptv: false) }
+            }
         }
         .onAppear { PlayerPresenter.bind(state, tenant) }
     }
@@ -100,9 +107,10 @@ struct RootView: View {
      * La sesión del panel (token), el distribuidor y los ajustes se quedan: la app vuelve a entrar sola.
      */
     private func clearCacheAndRestart() {
-        state.play = nil // el aviso no queda detrás del reproductor
-        NativePlayer.shared.close()
         Task { @MainActor in
+            // viendo un video, la orden espera a que se cierre el reproductor (antes lo cortaba a la mitad)
+            while state.play != nil { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+            NativePlayer.shared.close()
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             Alerts.reset(); alert = nil; Cloud.shared.clear()
             await PanelEpg.shared.clear()
@@ -153,13 +161,19 @@ struct RootView: View {
         state.refresh += 1
         if state.session != nil { Task { await Cloud.shared.load() } }
         if Tenant.active && (tenant.due() || tenant.brand?.expired() == true) { guardTenant() }
-        guard let s = state.session, Date().timeIntervalSince(lastPanelCheck) >= 15 * 60 else { return }
+        recheck(after: 15 * 60)
+    }
+
+    /** consulta del panel con la app abierta (poll), si pasó el tiempo desde la última; iptv: también se prueba el
+     *  usuario en el servidor IPTV (al volver a la app; la consulta de cada 10 min no le pide nada al servidor) */
+    private func recheck(after gap: TimeInterval, iptv: Bool = true) {
+        guard let s = state.session, Date().timeIntervalSince(lastPanelCheck) >= gap else { return }
         lastPanelCheck = Date()
         Task { @MainActor in
-            let c = await Panel.checkMac()
+            let c = await Panel.checkMac(poll: true)
             guard state.session == s else { return }
             if c.error == nil && c.value == nil { clearAll(); return }
-            guard let line = c.value else { return }
+            guard iptv, let line = c.value else { return }
             if case .fail(let m) = await Xtream.login([(line.name, line.base)], user: line.user, pass: line.pass), m != Xtream.noServer {
                 if state.session == s { clearAll() }
             }
