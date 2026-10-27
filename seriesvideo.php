@@ -29,6 +29,7 @@ $year = substr((string)($series_info['releaseDate'] ?? ($series_info['release_da
 $backdrop = $series_info['backdrop_path'] ?? '';
 if (is_array($backdrop)) $backdrop = $backdrop[0] ?? '';
 $poster = $series_info['cover'] ?? '';
+$server_img = $poster; // la del servidor IPTV (la caché del panel la guarda una sola vez para todas las apps)
 $youtube_trailer = $series_info['youtube_trailer'] ?? '';
 if ($genre) wp_genre_index_put('series', (string)$id, $genre);
 
@@ -64,6 +65,7 @@ $eps_js = [];
 $resume_season = null;
 $resume_label = '';
 $first_ep = null;
+$warm_ep = null; // episodio que se va a reproducir (el que se retoma o el primero): sus idiomas se piden al abrir la ficha
 foreach ($seasons as $sn => $eps) {
     if (!is_array($eps)) continue;
     foreach ($eps as $ep) {
@@ -80,12 +82,13 @@ foreach ($seasons as $sn => $eps) {
             'url' => 'video_player.php?id=' . rawurlencode($epid) . '&slug=series&ext=' . rawurlencode($ext) . '&series_id=' . $id,
             'pct' => 0,
         ];
-        if ($first_ep === null) $first_ep = $row;
+        if ($first_ep === null) { $first_ep = $row; $warm_ep = [$epid, $ext]; }
         if ((int)$epid === $resume_episode_id && $resume_episode_id) {
             $resume_season = (string)$sn;
             $resume_label = t('T{s}:E{e}', ['s' => $sn, 'e' => $row['num']]);
             $row['pct'] = $resume_total > 0 ? round($resume_time / $resume_total * 100) : 5;
             $row['current'] = true;
+            $warm_ep = [$epid, $ext];
         }
         $eps_js[(string)$sn][] = $row;
     }
@@ -108,14 +111,19 @@ if ($self) {
     $similar = array_slice($similar, 0, 24);
 }
 
-$bg_url = $backdrop ? wp_img($backdrop, '') : wp_img($poster);
+// carátula: caché del panel (copia → img.php) → la del servidor → la de TMDB; fondo: Full HD del panel → original → carátula
+$tm_id = is_scalar($series_info['tmdb_id'] ?? ($series_info['tmdb'] ?? '')) ? (string)($series_info['tmdb_id'] ?? ($series_info['tmdb'] ?? '')) : '';
+$poster_srcs = wp_poster_sources('series', $server_img, $title, $year, $tm_id);
+$tmdb_img = wp_img($poster);
+if ($tmdb_img !== WP_NOIMG && !in_array($tmdb_img, $poster_srcs, true)) $poster_srcs[] = $tmdb_img;
+$bg_srcs = array_values(array_unique(array_merge(wp_backdrop_sources($backdrop), $poster_srcs)));
 $page_title = $title;
 include "header.php";
 ?>
 <section class="nf-detail-hero">
-    <div class="nf-detail-bg" style="background-image:url('<?php echo e($bg_url); ?>')"></div>
+    <div class="nf-detail-bg" data-bgs="<?php echo e(json_encode($bg_srcs, JSON_UNESCAPED_SLASHES)); ?>"></div>
     <div class="nf-detail-inner">
-        <div class="nf-detail-poster"><img src="<?php echo e(wp_img($poster)); ?>" alt="" onerror="NF.imgErr(this)"></div>
+        <div class="nf-detail-poster"><img <?php echo wp_img_attrs($poster_srcs); ?> alt="" onerror="NF.imgErr(this)"></div>
         <div class="nf-detail-info">
             <h1><?php echo e($title); ?></h1>
             <div class="nf-detail-meta">
@@ -215,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var fav = document.getElementById('toggleFavorite');
     if (fav) fav.addEventListener('click', function () {
-        NF.fav(fav, { id: <?php echo json_encode((string)$id); ?>, type: 'series', title: <?php echo json_encode($title); ?>, poster: <?php echo json_encode($poster); ?> });
+        NF.fav(fav, { id: <?php echo json_encode((string)$id); ?>, type: 'series', title: <?php echo json_encode($title); ?>, poster: <?php echo json_encode($server_img ?: $poster); ?> });
     });
     var tb = document.getElementById('btnTrailer'), modal = document.getElementById('trailerModal'), box = document.getElementById('trailerBox');
     function close() { modal.classList.remove('open'); box.innerHTML = ''; }
@@ -227,4 +235,5 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
 });
 </script>
+<?php echo $warm_ep ? wp_tracks_warm_script(wp_tracks_warm_url('series', $warm_ep[0], $warm_ep[1])) : ''; ?>
 <?php include "footer.php"; ?>

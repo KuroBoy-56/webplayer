@@ -390,6 +390,8 @@ function wp_panel_userdata($refresh = false)
     }
     // línea DEMO (el panel la marca también aquí): se recuerda en la sesión
     if (is_array($j) && !empty($j['demo'])) wp_panel_set_demo(true);
+    // caché de imágenes del panel encendida o apagada por el dueño (carátulas y fondos, includes/panel_img.php)
+    if (function_exists('wp_panel_img_remember')) wp_panel_img_remember($j);
     // DEMO: sin "Continuar viendo" ni "Mi lista"
     $demo = wp_is_demo();
     $memo = [

@@ -580,7 +580,7 @@ function wp_content_multi_audio($kind, $id, array $exts, $cacheOnly = false)
 {
     $u = wp_tracks_target($kind, $id, $exts);
     if ($u === '') return false;
-    $n = wp_audio_track_count($u, $cacheOnly);
+    $n = wp_audio_track_count($u, $cacheOnly, false, wp_tracks_panel_url($kind, $id, $exts));
     if ($n <= 0) return $cacheOnly ? null : false; // 0 = no se pudo leer: sigue siendo desconocido
     return $n > 1;
 }
@@ -593,6 +593,34 @@ function wp_tracks_target($kind, $id, array $exts)
         if (!in_array($x, ['m3u8', 'ts'], true)) return wp_stream_url($kind, $id, $x);
     }
     return '';
+}
+
+/**
+ * La ficha pide los idiomas apenas se abre (como Roku, Vega y LG): solo se le pregunta al panel (tracks.php&warm=1,
+ * sin tocar el servidor IPTV), así al pulsar Reproducir el reproductor ya sabe los idiomas y arranca con el elegido.
+ */
+function wp_tracks_warm_url($kind, $id, $ext)
+{
+    $ext = strtolower(preg_replace('/[^a-z0-9]/i', '', (string)$ext)) ?: 'mp4';
+    $read = in_array($ext, ['mkv', 'avi', 'mov', 'wmv', 'flv', 'mpg', 'mpeg', 'm4v', 'divx', 'xvid', '3gp'], true) ? 'mp4' : $ext;
+    return wp_proxy_url(wp_stream_url($kind, $id, $read), 'tracks.php') . '&x=' . rawurlencode($ext) . '&warm=1';
+}
+
+/** <script> que pide los idiomas en segundo plano al abrir la ficha */
+function wp_tracks_warm_script($url)
+{
+    if ($url === '') return '';
+    return '<script>(window.requestIdleCallback||setTimeout)(function(){try{fetch(' . json_encode($url, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP)
+        . ',{credentials:"same-origin"}).catch(function(){})}catch(e){}});</script>';
+}
+
+/** Enlace del contenido con su extensión real (la última que no es m3u8/ts): así lo identifican el panel y las apps. */
+function wp_tracks_panel_url($kind, $id, array $exts)
+{
+    if ($kind === 'live') return '';
+    $real = '';
+    foreach ($exts as $x) if (!in_array($x, ['m3u8', 'ts'], true)) $real = $x;
+    return $real === '' ? '' : wp_stream_url($kind, $id, $real);
 }
 
 /**
@@ -941,11 +969,14 @@ function wp_card($it, $t = null)
 {
     $t = $t ?: ($it['t'] ?? 'movie');
     $id = $it['id'];
+    // carátula por la caché del panel (copia pública → img.php → original); 'f' = las siguientes si una no carga
+    $src = wp_poster_sources($t, $it['icon'], $it['name'], $it['year'] ?? '', $it['tm'] ?? '');
     return [
         't' => $t,
         'id' => $id,
         'n' => $it['name'],
-        'i' => wp_img($it['icon']),
+        'i' => $src ? array_shift($src) : WP_NOIMG,
+        'f' => $src,
         'r' => $it['rating'] ? round((float)$it['rating'], 1) : '',
         'y' => $it['year'] ?? '',
         'tm' => $it['tm'] ?? '',
@@ -1299,6 +1330,7 @@ function wp_lang_name($code)
 }
 
 require_once __DIR__ . '/panel.php';
+require_once __DIR__ . '/panel_img.php';
 require_once __DIR__ . '/error_report.php';
 require_once __DIR__ . '/fake_screen.php';
 require_once __DIR__ . '/handoff.php';

@@ -2,7 +2,51 @@
 
 Desde la actualización del 4 de octubre **todo se administra desde el panel** (ver la última sección). Las secciones de abajo describen la historia de cambios. Donde mencionan el administrador, `setup.php`, `dns.json`, `admin.json`, `progress.json`, `userdata.sqlite`, el proxy de video (`proxy.php`), la conversión con ffmpeg (`media.php`, `bin/`) o el botón DNS, eso ya no existe: el video va directo del servidor IPTV al navegador.
 
-**Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
+**Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
+
+## Conversión por el motor del panel, carátulas del panel, Deportes nuevo, idiomas compartidos y TV en vivo estable (27 de octubre)
+
+**Conversión de audio, subtítulos y video: ya no usa el hosting**
+- La web ya no ejecuta ffmpeg ni ffprobe en el hosting: `media.php` quedó apagado (responde "motor no disponible") y `tracks.php` ya no usa ffprobe. La conversión la hace el **motor del panel** (`api/media_web.php`), igual que las apps, y **solo en una VPS / VDS**:
+  - distribuidor con **su propia VDS** elegida en Distribuidores → convierte **solo en su VDS** (si no responde, el video sigue directo; nunca usa la VPS del dueño);
+  - distribuidor en «Por defecto» u Omitir → la máquina del dueño (Guía EPG: VPS o VDS). Con Guía EPG en «Hosting», la web no convierte.
+  - El permiso sigue siendo el del dueño (Distribuidores › motores › Web player) y el interruptor «Web player» de Guía EPG.
+- **Más rápido y fluido:** el panel entrega HLS en fMP4 (hls.js en Chrome/Edge/Firefox/Android, HLS nativo en iPhone/Safari) y responde con el primer segmento (antes esperaba dos). Si el contenido tiene audio Dolby/DTS y los idiomas ya se saben, la conversión arranca **sin abrir antes el video directo** (en la prueba: ~1,7 s desde el punto guardado, con el idioma del navegador). Adelantar o retroceder **dentro de lo ya convertido es instantáneo** (no vuelve a convertir).
+- **Audio siempre sincronizado:** al empezar en un punto que no es fotograma clave, audio y video arrancan juntos en el fotograma clave (`-noaccurate_seek`) y el motor anota el segundo exacto (`#EXT-X-MPX-START`), así el reloj, la barra y los subtítulos cuadran. (Antes el navegador dejaba el audio hasta ~2 s adelantado.)
+- **Subtítulos del archivo** desde el motor del panel: se muestran mientras el panel todavía los está leyendo y se completan solos.
+- **Solucionar** pregunta al motor del panel (no al hosting) y, si el formato no abre en el navegador, pide también el video convertido (`v=1`, solo VPS / VDS).
+- Para que funcione hay que actualizar el panel y **copiar 3 archivos a la VPS y a cada VDS** (ver abajo). Mientras tanto la web sigue con el video directo, como si el motor estuviera apagado. Con la web en https, la VPS / VDS también necesita https.
+
+**Idiomas compartidos con el panel (como Roku)**
+- Orden: lo que el hosting ya sabe (30 días) → lo que el panel recuerda de ese video (`api/tracks.php`, ≤ 2 s, sin tocar el servidor IPTV) → la cabecera del archivo (unos KB por rangos, sin ffmpeg). Lo leído **se le deja al panel** para los demás equipos (mismo formato que Roku, Vega y LG).
+- La ficha de la película (o el episodio que se va a ver) **pide los idiomas apenas se abre** (solo al panel): al pulsar Reproducir ya se saben.
+- Lectura de cabecera más liviana: pocos pedidos grandes (MKV en 1 pedido, MP4 con el índice al final en 2).
+- Menú de audio y subtítulos solo con el idioma ("Español latino", "Inglés"; si se repite, "Inglés 2"), como las apps.
+
+**Carátulas y fondos por la caché del panel (como Roku, Vega, Android, Windows e iPhone)**
+- Carátula: copia pública del panel (`api/imgc/<sha1>.jpg`) → `api/img.php` (la achica y, si el servidor no tiene, busca el póster en TMDB por título) → la original → TMDB por el hosting solo si todo falla. Mismos nombres que las apps: una sola copia por título para todos.
+- Fondos de TMDB en Full HD hechos por el panel (`img.php?w=1920`) en la cartelera y las fichas; si no cargan, el de siempre.
+- Si el dueño apaga la caché (`"img": false` de `progress.php ?v=2`) todo va directo, como antes.
+- "Mi lista" guarda la carátula del servidor (la misma que usan las apps para la caché del panel).
+
+**Deportes: Tablas, Selecciones y Equipos**
+- Pestañas **Agenda / Tablas / Selecciones / Equipos** cuando el panel las ofrece (`tables.on`, `fixtures.on`, `fixtures.nat` de `api/sports.php`).
+- **Tablas:** región (Copas, Selecciones, Europa, América, Resto del mundo), división (1.ª, 2.ª… y Liga femenina) y liga; tabla con PJ, G, E, P, GF, GC, DG, PTS, últimos resultados y zonas (clasificación, otra copa o ascenso, repechaje, descenso). Al tocar un equipo: su ficha (fundación, estadio, liga, títulos, descripción) con «Entendido» y «Más detalles». En celular: PJ, DG y PTS.
+- **Selecciones:** partidos de selecciones por empezar o en vivo, por competición y «Selección femenina».
+- **Equipos:** buscador por equipo (también en español: «Alemania» = «Germany») o por país, próximos 21 días, con los últimos 5 buscados. El botón de TV en vivo funciona igual que en la agenda.
+- El hosting guarda **una sola copia por distribuidor e idioma** para todos (tablas hasta 7 días, partidos 12 h o hasta que el panel anuncie otra versión). Si el panel todavía está armando, se vuelve a preguntar solo.
+
+**TV en vivo estable**
+- Si el canal se corta mientras se mira (token XUI que vence, servidor que cierra o deja de mandar 15 s), se **reconecta solo y sin aviso** desde el enlace original (con token nuevo), con espera creciente.
+- hls.js y mpegts.js con un margen de seguridad y puesta al día acelerando un poco (sin saltos que cortan el audio).
+
+**Borrado de caché remoto:** no aplica a la web (el panel nunca le manda órdenes; la web no guarda datos en el equipo).
+
+**Archivos de la web:** `media.php`, `tracks.php`, `video_player.php`, `play.php`, `tvguide.php`, `sportsschedule.php`, `Movie_description.php`, `seriesvideo.php`, `homex.php`, `api.php`, `header.php` (`app.js?v=8`), `includes/core.php`, `includes/panel.php`, `includes/panel_img.php` (nuevo), `includes/sports_panel.php` (nuevo), `includes/file_tracks.php` (nuevo), `includes/audio_probe.php`, `includes/media_core.php`, `includes/media_admin.php`, `includes/ui.php`, `includes/lang/{en,pt,fr}.php`, `assets/nf/player.js` (`v=32`), `assets/nf/app.js`, `assets/nf/sports.js` y `assets/nf/sports.css` (nuevos). Se pueden borrar del hosting `bin/` (ffmpeg) e `instalar_ffmpeg.php`.
+
+**Archivos del panel:** `api/media_web.php` (nuevo), `api/media.php`, `api/media_worker.php`, `includes/media_engine.php`, `includes/media_convert.php`, `epg_manager.php`, `tools/vps/README.md`. **En la VPS y en cada VDS** (carpeta del motor, `/var/www/motor`): `api/media_worker.php`, `includes/media_engine.php`, `includes/media_convert.php`.
+
+**Pruebas:** reproductor con el motor del panel nuevo (ffmpeg 6.1) y un "servidor IPTV" local: MKV con audio AC3 + AAC, desde el segundo 30 → arranca en ~1,7 s con el audio en inglés convertido, reloj exacto (fotograma clave 28), retroceso dentro de lo convertido sin reconvertir. Canal en vivo con token que vence a los 20 s → se reconecta solo y sigue. Lectura de idiomas de MKV y MP4 (índice al final). Carátulas con los mismos nombres que las apps. Deportes: pestañas, divisiones, ficha, selecciones, búsqueda en español y vista de celular.
 
 ## Login: fondo de pósters solo con clave TMDB (18 de octubre)
 - **Fondo de pósters:** se ve solo si el panel lo entrega (`api/tmdb.php` con `t` = distribuidor, o sin él con Omitir). Con `tmdb_key_not_set` o un error del panel el fondo queda negro: ya no se muestran pósters viejos guardados (se quitó la copia de respaldo de 6 h) y la caché es de 10 min por distribuidor e idioma, así quitar o poner la clave en el panel se nota pronto. El carrusel sigue infinito y ahora vuelve al inicio sin el pequeño salto (filas completas).

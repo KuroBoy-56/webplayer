@@ -26,6 +26,7 @@ $container_extension = strtolower($movie_data["container_extension"] ?? 'mp4') ?
 $backdrop = $info["backdrop_path"] ?? '';
 if (is_array($backdrop)) $backdrop = $backdrop[0] ?? '';
 $img = !empty($info["movie_image"]) ? $info["movie_image"] : ($info['cover_big'] ?? '');
+$server_img = $img; // la del servidor IPTV (la caché del panel la guarda una sola vez para todas las apps)
 if ($movie_genre) wp_genre_index_put('movie', $id, $movie_genre);
 
 /* ---------- TMDB (carátula en alta calidad, fondo, elenco y tráiler; caché 7 días) ---------- */
@@ -36,7 +37,12 @@ if (empty($youtube_trailer)) $youtube_trailer = $tmdb['trailer'];
 $description = wp_tmdb_plot($tmdb, $description); // sinopsis en el idioma de la app (en español, como siempre)
 $youtube_trailer = preg_replace('/[^A-Za-z0-9_\-]/', '', (string)$youtube_trailer);
 $img_url = wp_img($img);
-$bg_url = $backdrop ? wp_img($backdrop, '') : $img_url;
+// carátula: caché del panel (copia → img.php) → la del servidor → la de TMDB; fondo: Full HD del panel → original → carátula
+$tm_id = is_scalar($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) ? (string)($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) : '';
+$poster_srcs = wp_poster_sources('movie', $server_img, $title, substr((string)$releasedate, 0, 4), $tm_id);
+if ($img_url !== WP_NOIMG && !in_array($img_url, $poster_srcs, true)) $poster_srcs[] = $img_url;
+$bg_srcs = array_values(array_unique(array_merge(wp_backdrop_sources($backdrop), $poster_srcs)));
+$bg_url = $bg_srcs[0] ?? $img_url;
 
 /* ---------- Favorito / progreso ---------- */
 $is_favorite = wp_is_favorite('movie', $id);
@@ -46,6 +52,7 @@ $total_time = (int)($prog['movie_' . $id]['total_time'] ?? 0);
 $pct = $total_time > 0 ? min(100, $resume_time / $total_time * 100) : 0;
 
 $play = "video_player.php?id={$id}&slug=movie&ext=" . rawurlencode($container_extension);
+$warm_url = wp_tracks_warm_url('movie', $id, $container_extension); // idiomas desde la ficha (solo el panel)
 
 /* ---------- Similares (misma categoría) ---------- */
 $similar = [];
@@ -69,9 +76,9 @@ $body_class = 'nf-detail';
 include "header.php";
 ?>
 <section class="nf-detail-hero">
-    <div class="nf-detail-bg" style="background-image:url('<?php echo e($bg_url); ?>')"></div>
+    <div class="nf-detail-bg" data-bgs="<?php echo e(json_encode($bg_srcs, JSON_UNESCAPED_SLASHES)); ?>"></div>
     <div class="nf-detail-inner">
-        <div class="nf-detail-poster"><img src="<?php echo e($img_url); ?>" alt="" onerror="NF.imgErr(this)"></div>
+        <div class="nf-detail-poster"><img <?php echo wp_img_attrs($poster_srcs); ?> alt="" onerror="NF.imgErr(this)"></div>
         <div class="nf-detail-info">
             <h1><?php echo e($title); ?></h1>
             <div class="nf-detail-meta">
@@ -149,7 +156,7 @@ include "header.php";
 document.addEventListener('DOMContentLoaded', function () {
     var fav = document.getElementById('toggleFavorite');
     if (fav) fav.addEventListener('click', function () {
-        NF.fav(fav, { id: <?php echo json_encode($id); ?>, type: 'movie', title: <?php echo json_encode($title); ?>, poster: <?php echo json_encode($img); ?> });
+        NF.fav(fav, { id: <?php echo json_encode($id); ?>, type: 'movie', title: <?php echo json_encode($title); ?>, poster: <?php echo json_encode($server_img ?: $img); ?> });
     });
     var tb = document.getElementById('btnTrailer'), modal = document.getElementById('trailerModal'), box = document.getElementById('trailerBox');
     function close() { modal.classList.remove('open'); box.innerHTML = ''; }
@@ -161,4 +168,5 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
 });
 </script>
+<?php echo wp_tracks_warm_script($warm_url); ?>
 <?php include "footer.php"; ?>

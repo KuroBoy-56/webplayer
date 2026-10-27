@@ -1,8 +1,7 @@
 <?php
 /*
- * ¿Cuántas pistas de audio trae un video? Sin ffmpeg: el hosting lee solo la cabecera del archivo
- * (unos pocos KB con peticiones Range) y cuenta las pistas de sonido del MP4 (moov/trak/hdlr)
- * o del MKV (Tracks/TrackEntry/TrackType). El resultado queda en caché 30 días por contenido.
+ * ¿Cuántas pistas de audio trae un video? Sin ffmpeg: lo que el panel ya sabe o la cabecera del archivo
+ * (unos pocos KB con peticiones Range, includes/file_tracks.php). El resultado queda en caché 30 días por contenido.
  *
  * Se usa para decidir si el video pasa por el hosting (más de un audio: hay que poder elegir el idioma)
  * o va directo del servidor IPTV al navegador (un solo audio: el hosting no trabaja).
@@ -31,11 +30,23 @@ final class WpRangeReader
             if ($off >= $start && $off + $len <= $start + strlen($data)) return substr($data, $off - $start, $len);
         }
         if ($this->requests >= 14 || microtime(true) > $this->deadline) { $this->failed = true; return ''; }
-        $want = max($len, 65536);
+        // pocos pedidos grandes (como Roku): cada uno es una conexión al servidor IPTV
+        $want = max($len, 262144);
         $data = $this->fetch($off, $want);
         if ($data === '') { $this->failed = true; return ''; }
         $this->chunks[$off] = $data;
         return substr($data, 0, $len);
+    }
+
+    /** trae [off, off + len) en un solo pedido si no está ya leído (el índice moov de un MP4) */
+    public function prefetch($off, $len)
+    {
+        foreach ($this->chunks as $start => $data) {
+            if ($off >= $start && $off + $len <= $start + strlen($data)) return;
+        }
+        if ($this->requests >= 14 || microtime(true) > $this->deadline) return;
+        $data = $this->fetch($off, (int)$len);
+        if ($data !== '') $this->chunks[$off] = $data;
     }
 
     private function fetch($off, $len)
@@ -77,33 +88,28 @@ final class WpRangeReader
     }
 }
 
-/** Número de pistas de audio (0 = no se pudo saber). Caché 30 días; si falla, se reintenta en 1 hora. */
-function wp_audio_track_count($url, $cacheOnly = false, $useProbe = false)
+/**
+ * Número de pistas de audio (0 = no se pudo saber). Primero lo que ya se sabe (hosting o panel, includes/file_tracks.php)
+ * y si no, la cabecera del archivo (sin ffmpeg: el hosting nunca convierte ni lee con ffprobe). Caché 30 días; si falla,
+ * se reintenta en 2 min. $panelUrl: la dirección con la extensión real (la que identifica el video en el panel).
+ */
+function wp_audio_track_count($url, $cacheOnly = false, $useProbe = false, $panelUrl = '')
 {
     static $memo = [];
     $ck = 'atracks2|' . md5((string)$url);
     if (isset($memo[$ck])) return $memo[$ck];
     $hit = wp_cache_get($ck, 2592000);
     if (is_array($hit) && $hit['n'] > 0) return $memo[$ck] = (int)$hit['n'];
-    // no se pudo leer hace poco: no se insiste en cada visita (2 min)
-    if (is_array($hit) && ($cacheOnly || (!$useProbe && time() - (int)$hit['t'] < 120))) return $cacheOnly ? 0 : $memo[$ck] = 0;
-    if ($cacheOnly) return -1; // aún no se sabe (se averigua en segundo plano con tracks.php)
-    $r = new WpRangeReader($url, 10);
-    $head = $r->read(0, 16);
-    $n = 0;
-    if (strlen($head) >= 8) {
-        if (substr($head, 0, 4) === "\x1A\x45\xDF\xA3") $n = wp_mkv_audio_count($r);
-        elseif (in_array(substr($head, 4, 4), ['ftyp', 'moov', 'free', 'mdat', 'skip', 'wide', 'pdin', 'styp'], true)) $n = wp_mp4_audio_count($r);
+    // lo que sabe el panel (al momento, sin tocar el servidor IPTV); con $cacheOnly no se lee el archivo
+    $t = wp_file_tracks($panelUrl !== '' ? $panelUrl : (string)$url, (string)$url, !$cacheOnly && !(is_array($hit) && time() - (int)$hit['t'] < 120), $cacheOnly ? 1.5 : 2);
+    if ($t) {
+        $n = count($t['audio']);
+        wp_cache_set($ck, ['n' => $n, 't' => time()]);
+        return $memo[$ck] = $n;
     }
-    // si alguna lectura falló, el conteo puede estar incompleto (p. ej. 1 de 2 audios): se toma como desconocido
-    if ($r->failed) $n = 0;
-    // respaldo: ffprobe (si está instalado) lee el archivo completo por su cuenta; solo se pregunta, no convierte nada
-    if ($n === 0 && $useProbe && function_exists('wp_bin') && wp_bin('ffprobe')) {
-        $p = wp_probe($url);
-        if (is_array($p) && !empty($p['audio'])) $n = count($p['audio']);
-    }
-    wp_cache_set($ck, ['n' => $n, 't' => time()]);
-    return $memo[$ck] = $n;
+    if ($cacheOnly) return is_array($hit) ? 0 : -1; // aún no se sabe (se averigua en segundo plano con tracks.php)
+    wp_cache_set($ck, ['n' => 0, 't' => time()]);
+    return $memo[$ck] = 0;
 }
 
 /* ---------- MP4 ---------- */
@@ -126,57 +132,6 @@ function wp_mp4_box(WpRangeReader $r, $off, $end)
     }
     if ($size < $hl) return null;
     return [$size, $type, $hl];
-}
-
-function wp_mp4_audio_count(WpRangeReader $r)
-{
-    $off = 0;
-    $end = PHP_INT_MAX;
-    for ($i = 0; $i < 20; $i++) {
-        $b = wp_mp4_box($r, $off, $r->size ?: $end);
-        if (!$b) return 0;
-        if ($b[1] === 'moov') return wp_mp4_moov_audio($r, $off + $b[2], $off + $b[0]);
-        $off += $b[0]; // salta mdat, free… (moov puede estar al final del archivo)
-        if ($r->size && $off >= $r->size) return 0;
-    }
-    return 0;
-}
-
-function wp_mp4_moov_audio(WpRangeReader $r, $off, $end)
-{
-    $n = 0;
-    $tracks = 0;
-    while ($off < $end && $tracks < 32) {
-        $b = wp_mp4_box($r, $off, $end);
-        if (!$b) break;
-        if ($b[1] === 'trak') {
-            $tracks++;
-            if (wp_mp4_trak_handler($r, $off + $b[2], $off + $b[0]) === 'soun') $n++;
-        }
-        $off += $b[0];
-    }
-    return $n;
-}
-
-/** Tipo de pista (soun, vide, text…) leyendo trak → mdia → hdlr. */
-function wp_mp4_trak_handler(WpRangeReader $r, $off, $end)
-{
-    for ($depth = 0, $guard = 0; $off < $end && $guard < 40; $guard++) {
-        $b = wp_mp4_box($r, $off, $end);
-        if (!$b) return '';
-        if ($b[1] === 'mdia' && $depth === 0) {
-            $depth = 1;
-            $end = $off + $b[0];
-            $off += $b[2];
-            continue;
-        }
-        if ($b[1] === 'hdlr' && $depth === 1) {
-            $h = $r->read($off + $b[2], 12); // versión/flags (4) + pre_defined (4) + handler_type (4)
-            return strlen($h) === 12 ? substr($h, 8, 4) : '';
-        }
-        $off += $b[0];
-    }
-    return '';
 }
 
 /* ---------- MKV / WebM ---------- */
@@ -210,47 +165,4 @@ function wp_ebml_el(WpRangeReader $r, $off)
     return [$id[0], $off + $id[1] + $sz[1], $sz[0]];
 }
 
-function wp_mkv_audio_count(WpRangeReader $r)
-{
-    $e = wp_ebml_el($r, 0); // cabecera EBML
-    if (!$e || $e[2] < 0) return 0;
-    $seg = wp_ebml_el($r, $e[1] + $e[2]);
-    if (!$seg || $seg[0] !== 0x18538067) return 0;
-    $off = $seg[1];
-    $end = $seg[2] < 0 ? PHP_INT_MAX : $seg[1] + $seg[2];
-    for ($i = 0; $i < 40 && $off < $end; $i++) {
-        $el = wp_ebml_el($r, $off);
-        if (!$el || $el[2] < 0) return 0;
-        if ($el[0] === 0x1654AE6B) return wp_mkv_tracks_audio($r, $el[1], $el[1] + $el[2]);
-        if ($el[0] === 0x1F43B675) return 0; // ya empezó el video (Cluster) sin pistas antes
-        $off = $el[1] + $el[2];
-    }
-    return 0;
-}
-
-function wp_mkv_tracks_audio(WpRangeReader $r, $off, $end)
-{
-    $n = 0;
-    for ($i = 0; $i < 64 && $off < $end; $i++) {
-        $el = wp_ebml_el($r, $off);
-        if (!$el || $el[2] < 0) break;
-        if ($el[0] === 0xAE) { // TrackEntry
-            $o = $el[1];
-            $e = $el[1] + $el[2];
-            for ($j = 0; $j < 40 && $o < $e; $j++) {
-                $c = wp_ebml_el($r, $o);
-                if (!$c || $c[2] < 0) break;
-                if ($c[0] === 0x83) { // TrackType: 2 = audio
-                    $v = $r->read($c[1], $c[2]);
-                    $t = 0;
-                    for ($k = 0; $k < strlen($v); $k++) $t = $t * 256 + ord($v[$k]);
-                    if ($t === 2) $n++;
-                    break;
-                }
-                $o = $c[1] + $c[2];
-            }
-        }
-        $off = $el[1] + $el[2];
-    }
-    return $n;
-}
+require_once __DIR__ . '/file_tracks.php';

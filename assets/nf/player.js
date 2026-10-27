@@ -113,12 +113,12 @@
         };
         // con el motor MP4 (elige el idioma en el navegador) no se espera a ffmpeg: el video arranca ya
         var mp4First = this.o.sources && this.o.sources[0] && this.o.sources[0].engine === 'mp4';
-        var tm = setTimeout(function () { go(null); }, m.info || mp4First ? 0 : 7000);
+        var tm = setTimeout(function () { go(null); }, m.info || mp4First ? 0 : 4000);
         if (m.info) { go(m.info); return; }
         this.root.classList.add('buffering');
         this._probing = true;
         var once = function (j) { self._probing = false; go(j, true); };
-        fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return self.mres(r); }).then(once).catch(function () { once(null); });
+        self.tracksFetch(m).then(once).catch(function () { once(null); });
     };
 
     NFPlayer.prototype.build = function () {
@@ -206,7 +206,8 @@
         v.addEventListener('pause', function () { self.state(); self.emit('pause'); });
         v.addEventListener('waiting', function () { r.classList.add('buffering'); });
         v.addEventListener('stalled', function () { r.classList.add('buffering'); });
-        v.addEventListener('playing', function () { r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.status(); self.watchAudio(); self.askTracks(); });
+        v.addEventListener('playing', function () { if (self.live) { self.liveWatch(); if (!self._liveOkAt) self._liveOkAt = Date.now(); }
+            r.classList.remove('buffering', 'needtap'); self.ok = true; clearTimeout(self.loadTimer); self.hideMsg(); self.status(); self.watchAudio(); self.askTracks(); });
         v.addEventListener('canplay', function () { r.classList.remove('buffering'); });
         v.addEventListener('loadedmetadata', function () {
             self.log('metadata: audioTracks=' + (v.audioTracks ? v.audioTracks.length : 'n/a') + ' mp4=' + !!self.mp4 + ' tc=' + !!self.tc);
@@ -244,21 +245,10 @@
         v.addEventListener('timeupdate', function () { if (self.tc && !self.tc.played && v.currentTime > 2) self.tc.played = true; });
         v.addEventListener('error', function () {
             if (self.mp4) { if (self.ok) self.lastTime = self.T(); self.fail('mp4 media ' + (v.error ? v.error.code : '')); return; }
+            if (self.tc) { if (!self.tcHls) self.tcFailed(); return; } // con hls.js lo maneja su propio aviso de error
             if (self.hls || self.ts || !v.getAttribute('src')) return;
-            if (self.tc) {
-                if (self._tcRecovering) return; // el vigilante ya está rescatando esta conversión
-                // la conversión se cortó a mitad de la película (límite del hosting o del servidor IPTV): se retoma donde iba
-                if (self.tc.played && (self.tc.retries || 0) < 6) { self.tc.retries = (self.tc.retries || 0) + 1; var r = self.tc.retries; self.startTc(self.T(), self.tc.a, self.tc.vt); self.tc.retries = r; return; }
-                // no llegó nada y el servidor tardó en responder el error: esperó el primer fragmento y se rindió (servidor
-                // IPTV u hosting sin responder). Otro modo de conversión tampoco llegaría: se vuelve al video original en
-                // vez de seguir "Cargando". Un error rápido (ffmpeg no pudo con el formato) sí prueba los otros modos.
-                if (!self.tc.played && v.readyState < 1 && Date.now() - (self.tc.at || 0) > 12000) { self.tcGiveUp('sin respuesta'); return; }
-                // el navegador no pudo con el video copiado (HEVC/10 bits en equipos sin soporte): se intenta convertir también el video
-                if (!self.tc.vt && !self._fullTried) { self._fullTried = true; self.toastMsg(tr('Adaptando el video para este navegador…')); self.startTc(self.T(), self.tc.a, true); return; }
-                // archivo dañado o con marcas de tiempo rotas: modo seguro (480p, audio resincronizado)
-                if (self.tc.vt !== 2 && !self._safeTried) { self._safeTried = true; self.toastMsg(tr('Probando un modo de reproducción más compatible…')); self.startTc(self.T(), self.tc.a, 2); return; }
-                self.tc = null; self.o.media = null; self.toastMsg(tr('No se pudo convertir este contenido')); self.idx--; self.next(); return;
-            }
+            // en vivo, viendo (HLS nativo del iPhone): se reconecta desde el enlace original
+            if (self.live && self.ok && self.liveReconnect('native ' + (v.error ? v.error.code : ''))) return;
             // el navegador no abre el archivo (MKV/AVI, audio Dolby, HEVC...): se intenta la conversión del servidor antes de cambiar de formato
             if (self.o.media && !self.live && !self._rescued) { self._rescued = true; self.rescueTc(); return; }
             self.fail('native ' + (v.error ? v.error.code : ''));
@@ -389,7 +379,13 @@
     };
     NFPlayer.prototype.D = function () { return this.tc ? this.tc.dur : this.v.duration; };
     NFPlayer.prototype.seekAbs = function (t) {
-        if (this.tc) { this.startTc(Math.max(0, t), this.tc.a, this.tc.vt); return; }
+        if (this.tc) {
+            // dentro de lo que ya convirtió el motor: se salta ahí mismo (sin volver a convertir)
+            var rel = t - this.tc.off, d = this.v.duration;
+            if (rel >= 0 && isFinite(d) && rel < d - 3) { try { this.v.currentTime = rel; return; } catch (e) {} }
+            this.startTc(Math.max(0, t), this.tc.a, this.tc.vt);
+            return;
+        }
         try { this.v.currentTime = t; } catch (e) {}
     };
     NFPlayer.prototype.seekBy = function (s) {
@@ -427,12 +423,15 @@
         this.dead = true;
         clearTimeout(this.idleT);
         clearTimeout(this.endT);
+        clearTimeout(this._liveRetryT);
+        clearInterval(this._lw);
         this.cleanup();
     };
 
     /* ---------- fuentes ---------- */
     NFPlayer.prototype.cleanup = function () {
         if (this.hls) { try { this.hls.destroy(); } catch (e) {} this.hls = null; }
+        if (this.tcHls) { try { this.tcHls.destroy(); } catch (e) {} this.tcHls = null; }
         if (this.ts) { try { this.ts.pause(); this.ts.unload(); this.ts.detachMediaElement(); this.ts.destroy(); } catch (e) {} this.ts = null; }
         if (this.mp4) { try { this.mp4.destroy(); } catch (e) {} this.mp4 = null; }
         clearTimeout(this.loadTimer);
@@ -486,11 +485,6 @@
             if (this.o.media && !this.live && !this._fullTried) {
                 this._fullTried = true;
                 this.engine(function () { self.idx = list.length - 1; self.startTc(self.lastTime || self.o.resume || 0, self.info ? self.prefAudioIndex() : 0, true); }, function () { self.next(); });
-                return;
-            }
-            if (this.o.media && !this.live && !this._safeTried) {
-                this._safeTried = true;
-                this.engine(function () { self.idx = list.length - 1; self.startTc(self.lastTime || self.o.resume || 0, self.info ? self.prefAudioIndex() : 0, 2); }, function () { self.next(); });
                 return;
             }
             // página https y video http: se abre el reproductor directo por http (el video nunca pasa por el hosting)
@@ -615,6 +609,8 @@
         this._tracksAsked = true;
         fetch(u, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
             self.log('hosting contó audios: ' + (j ? j.n : 'error'));
+            // las pistas ya llegan con su idioma (del panel o de la cabecera): el menú las muestra al momento
+            if (j && j.info && j.info.audio && j.info.audio.length && !self.info) self.info = j.info;
             if (!j || !(j.n > 1)) return;
             self._multi = true;
             if (self.mp4 || self.tc) return;
@@ -689,24 +685,29 @@
             var hls = this.hls = new Hls({
                 enableWorker: true,
                 lowLatencyMode: false,
-                backBufferLength: 60,
+                backBufferLength: this.live ? 30 : 60,
                 maxBufferLength: this.live ? 30 : 60,
                 maxMaxBufferLength: 120,
+                // en vivo: un margen de 4 segmentos (estable aunque el servidor tarde) y sin saltos bruscos si se atrasa
                 liveSyncDurationCount: 4,
                 liveMaxLatencyDurationCount: 12,
+                maxLiveSyncPlaybackRate: this.live ? 1.08 : 1,
                 startFragPrefetch: true,
                 fragLoadingTimeOut: 30000,
                 manifestLoadingTimeOut: 20000,
                 levelLoadingTimeOut: 20000,
                 fragLoadingMaxRetry: 6,
                 manifestLoadingMaxRetry: 3,
-                levelLoadingMaxRetry: 4
+                // en vivo la lista vencida (token XUI) no se reintenta tanto: se reconecta desde el enlace original
+                levelLoadingMaxRetry: this.live ? 2 : 4
             });
             var fatalCount = 0;
             hls.on(Hls.Events.MANIFEST_PARSED, function () { self.autoplay(); });
             hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, function () { self.applyAudioPref(); });
             hls.on(Hls.Events.ERROR, function (ev, data) {
                 if (!data.fatal) return;
+                // en vivo, viendo: el enlace con token del servidor (XUI) vence o el servidor cortó: reconexión silenciosa
+                if (self.live && self.ok && self.liveReconnect('hls ' + data.details)) return;
                 if (self.ok && fatalCount < 2) {
                     fatalCount++;
                     if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { hls.startLoad(); return; }
@@ -726,13 +727,60 @@
         var self = this;
         if (CAPS.mms) this.v.disableRemotePlayback = true; // ManagedMediaSource lo exige en iPhone
         var p = this.ts = mpegts.createPlayer({ type: 'mpegts', isLive: this.live, url: url }, {
-            enableWorker: true, lazyLoad: !this.live, liveBufferLatencyChasing: this.live, autoCleanupSourceBuffer: true
+            enableWorker: true, lazyLoad: !this.live, autoCleanupSourceBuffer: true, autoCleanupMaxBackwardDuration: 30,
+            // en vivo: un colchón para que un servidor lento no corte y, si se atrasa, se pone al día acelerando un poco
+            // (sin saltos que cortan el audio)
+            enableStashBuffer: true, stashInitialSize: 384 * 1024,
+            liveBufferLatencyChasing: false, liveSync: this.live, liveSyncMaxLatency: 12, liveSyncTargetLatency: 6, liveSyncPlaybackRate: 1.08
         });
-        p.on(mpegts.Events.ERROR, function (type, detail) { self.fail('ts ' + type + ' ' + detail); });
+        p.on(mpegts.Events.ERROR, function (type, detail) {
+            // viendo en vivo: el servidor cortó la conexión o venció el token: reconexión silenciosa
+            if (self.live && self.ok && self.liveReconnect('ts ' + type + ' ' + detail)) return;
+            self.fail('ts ' + type + ' ' + detail);
+        });
         p.attachMediaElement(this.v);
         p.load();
         var pr = p.play();
         if (pr && pr.catch) pr.catch(function () {});
+    };
+
+    /* TV en vivo que se corta mientras se mira (como Vega 1.0.21): el token del servidor IPTV (XUI) vence a los pocos
+       minutos o el servidor cierra la conexión. Se vuelve a abrir el mismo canal desde su enlace original (que trae un
+       token nuevo), sin aviso, con espera creciente (1 s, 2 s, 4 s… hasta 15 s). Tras 45 s viendo bien se reinicia la
+       cuenta. Devuelve false si ya se reintentó demasiado (entonces sigue la siguiente fuente o el aviso). */
+    NFPlayer.prototype.liveReconnect = function (why) {
+        var self = this, now = Date.now();
+        if (this.dead || this._liveRetryT) return true;
+        // se vio bien más de 45 s desde la última reconexión: la cuenta vuelve a empezar (un token que vence cada pocos
+        // minutos se renueva siempre, sin límite)
+        if (!this._liveOkAt || now - this._liveOkAt > 45000) this._liveTries = 0;
+        if ((this._liveTries || 0) >= 8) return false;
+        var n = this._liveTries = (this._liveTries || 0) + 1;
+        this.log('en vivo: reconexión ' + n + ' (' + why + ')');
+        this.root.classList.add('buffering');
+        this._liveRetryT = setTimeout(function () {
+            self._liveRetryT = 0;
+            if (self.dead) return;
+            self._liveOkAt = Date.now();
+            self.idx--; // la misma fuente, desde su enlace original
+            self.next();
+        }, Math.min(15000, 1000 * Math.pow(2, n - 1)));
+        return true;
+    };
+
+    /* vigilante de TV en vivo: si la imagen deja de avanzar 15 s sin estar en pausa (servidor que deja de mandar sin
+       cerrar la conexión), se reconecta */
+    NFPlayer.prototype.liveWatch = function () {
+        var self = this, v = this.v;
+        if (!this.live || this._lw) return;
+        var last = -1, still = 0;
+        this._lw = setInterval(function () {
+            if (self.dead) { clearInterval(self._lw); return; }
+            if (!self.ok || v.paused || self._liveRetryT) { still = 0; last = v.currentTime; return; }
+            if (Math.abs(v.currentTime - last) < 0.05) still += 3; else { still = 0; if (!self._liveOkAt) self._liveOkAt = Date.now(); }
+            last = v.currentTime;
+            if (still >= 15) { still = 0; self.liveReconnect('sin avanzar 15 s'); }
+        }, 3000);
     };
 
     NFPlayer.prototype.fail = function (why) {
@@ -780,54 +828,48 @@
         if (vb) vb.addEventListener('click', function () { NFPlayer.openVlc(o); });
     };
 
-    /* Solucionar: comprueba en el servidor si el contenido se puede adaptar y, si se puede, lo reproduce convertido */
+    /* Solucionar: pregunta al motor del panel (VPS / VDS de la línea) si responde y, si responde, reproduce el contenido
+       convertido (audio a AAC con el idioma elegido; si el navegador tampoco abre el video, también el video) */
     NFPlayer.prototype.fix = function (auto) {
         var self = this, m = this._media0;
-        if (!m || !m.check) return;
+        if (!m) return;
         this.closePop && this.closePop();
         try { this.v.pause(); } catch (e) {}
         var t = this.T() > 5 ? this.T() : (this.lastTime || this.o.resume || 0);
         this.msg.innerHTML = '<div class="nfp-spin"></div><h3>' + NF_esc(tr('Buscando una solución…')) + '</h3><p>' + NF_esc(tr('Estamos adaptando el audio y el formato de este contenido. Puede tardar unos segundos.')) + '</p>';
         this.msg.classList.add('show');
-        fetch(m.check, { credentials: 'same-origin' }).then(function (r) {
-            if (r.status !== 503) return r.json();
-            // sin permiso del motor: se quita el aviso y el video sigue directo donde iba
-            self.hideMsg(); self.mres(r); self.autoplay();
-            return 'off';
-        }).then(function (j) {
-            if (j === 'off') return;
-            if (!j || !j.ok) throw 0;
-            var mode = j.mode === 'safe' ? 2 : (j.mode === 'video' ? 1 : 0);
-            self.msg.innerHTML = '<h3>' + NF_esc(tr('Posible solución a la reproducción o el audio')) + '</h3><p>' + (mode ? tr('Se adaptó el video y el audio de este contenido para tu navegador.') : tr('Se adaptó el audio de este contenido para tu navegador.'))
-                + (j.speed && j.speed < 1.2 ? ' ' + tr('Tu servidor convierte lento, puede que tenga pausas.') : '') + '</p><div class="acts"><button type="button" class="nf-btn nf-btn-white" data-act="play">&#9654; ' + NF_esc(tr('Volver a reproducir')) + '</button></div>'
-                + (auto ? '<p class="nfp-count">' + NF_esc(tr('Reproduciendo en {n}…')).replace('{n}', '<b>4</b>') + '</p>' : '');
-            var played = false, cd = 4, b = self.msg.querySelector('.nfp-count b');
-            var play = function () {
-                if (played) return;
-                played = true;
-                clearInterval(tk);
-                self.hideMsg();
-                self._fixTried = true;
-                self._rescued = true;
-                self._fullTried = mode >= 1;
-                self._safeTried = mode === 2;
-                self.o.media = m;
-                self.idx = Math.max(0, self.idx);
-                self.startTc(t, self.info ? self.prefAudioIndex() : 0, mode);
-                self.autoplay();
-            };
-            var tk = auto ? setInterval(function () { if (--cd <= 0) play(); else if (b) b.textContent = cd; }, 1000) : 0;
-            self.msg.querySelector('[data-act=play]').addEventListener('click', play);
-        }).catch(function () {
+        var failed = function () {
             store(self.fixKey, '1');
             self._fixTried = true;
-            self.msg.innerHTML = '<h3>' + NF_esc(tr('No fue posible adaptar este contenido')) + '</h3><p>' + NF_esc(tr('Es posible que el archivo esté dañado o que el servidor no lo entregue completo. Prueba abrirlo en VLC.')) + '</p><div class="acts">'
+            self.msg.innerHTML = '<h3>' + NF_esc(tr('No fue posible adaptar este contenido')) + '</h3><p>' + NF_esc(self.o.mediaOff || tr('Es posible que el archivo esté dañado o que el servidor no lo entregue completo. Prueba abrirlo en VLC.')) + '</p><div class="acts">'
                 + '<button type="button" class="nf-btn nf-btn-white" data-act="retry">' + NF_esc(tr('Reintentar')) + '</button>'
                 + (NFPlayer.canVlc(self.o) ? '<button type="button" class="nf-btn nf-btn-gray" data-act="vlc">' + NF_esc(tr('Abrir en VLC')) + '</button>' : '') + '</div>';
             self.msg.querySelector('[data-act=retry]').addEventListener('click', function () { self.hideMsg(); self._whys = []; self.idx = -1; self.next(); });
             var vb = self.msg.querySelector('[data-act=vlc]');
             if (vb) vb.addEventListener('click', function () { NFPlayer.openVlc(self.o); });
-        });
+        };
+        this._engineOk = false; // se vuelve a preguntar: la VPS / VDS pudo volver
+        this.engine(function () {
+            var play = function () {
+                self.hideMsg();
+                self._fixTried = true;
+                self._rescued = true;
+                self.o.media = m;
+                self.idx = Math.max(0, self.idx);
+                // un formato que el navegador no abre (MKV, HEVC…) va con el video convertido
+                var needV = !!(self.info && self.info.video && !videoOk(self.info.video)) || /^(avi|wmv|flv|divx|xvid|mpg|mpeg)$/i.test(self.o.ext || '');
+                if (needV) self._fullTried = true;
+                self.startTc(t, self.info ? self.prefAudioIndex() : 0, needV);
+                self.autoplay();
+            };
+            if (!auto) { play(); return; }
+            self.msg.innerHTML = '<h3>' + NF_esc(tr('Posible solución a la reproducción o el audio')) + '</h3><p>' + NF_esc(tr('Se adaptó el audio de este contenido para tu navegador.')) + '</p><div class="acts"><button type="button" class="nf-btn nf-btn-white" data-act="play">&#9654; '
+                + NF_esc(tr('Volver a reproducir')) + '</button></div><p class="nfp-count">' + NF_esc(tr('Reproduciendo en {n}…')).replace('{n}', '<b>4</b>') + '</p>';
+            var cd = 4, b = self.msg.querySelector('.nfp-count b'), done = false;
+            var go = function () { if (done) return; done = true; clearInterval(tk); play(); };
+            var tk = setInterval(function () { if (--cd <= 0) go(); else if (b) b.textContent = cd; }, 1000);
+            self.msg.querySelector('[data-act=play]').addEventListener('click', go);
+        }, failed);
     };
     NFPlayer.prototype.hideMsg = function () { this.msg.classList.remove('show'); };
 
@@ -1069,7 +1111,7 @@
         if (m.lazy && !this._needProbe) return; // un solo audio: el hosting no trabaja
         this._probing = true;
         this._probeTries = (this._probeTries || 0) + 1;
-        fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return self.mres(r); }).then(function (j) {
+        self.tracksFetch(m).then(function (j) {
             self.log('ffprobe: ' + (j && j.ok ? (j.audio || []).map(function (a) { return a.codec; }).join(',') + ' video ' + j.video : 'falló'));
             if (!j || !j.ok) return;
             self.info = j;
@@ -1109,7 +1151,7 @@
             if (self.pop && self.pop.classList.contains('open') && self.pop._kind === 'tracks') { self.pop.classList.remove('open'); self.menu('tracks'); }
         };
         setTimeout(function () {
-            fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return self.mres(r); }).then(done).catch(function () { done(null); });
+            self.tracksFetch(m).then(done).catch(function () { done(null); });
         }, direct ? 1200 : 0);
     };
 
@@ -1151,10 +1193,16 @@
             self.startTc(t, self.prefAudioIndex(), j.video && !videoOk(j.video));
         };
         if (this.info) { go(this.info); return; }
-        fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return self.mres(r); }).then(go).catch(function () { go(null); });
+        self.tracksFetch(m).then(go).catch(function () { go(null); });
     };
 
-    /* Motor del hosting no disponible (sin permiso del distribuidor, apagado o sin ffmpeg): se deja de usar en esta
+    /* pistas del contenido (tracks.php del hosting: lo que sabe el panel o la cabecera del archivo, sin ffmpeg) */
+    NFPlayer.prototype.tracksFetch = function (m) {
+        return fetch(m.probe, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) { return j && j.info && j.info.audio && j.info.audio.length ? j.info : null; });
+    };
+
+    /* Motor no disponible (sin permiso del distribuidor, apagado, VPS / VDS caída o sin ffmpeg): se deja de usar en esta
        página, se muestra el texto UNA vez y el video sigue tal cual, directo del servidor IPTV */
     NFPlayer.prototype.engineOff = function (msg) {
         this.o.media = this._media0 = null;
@@ -1180,7 +1228,7 @@
         var self = this, m = this.o.media || this._media0;
         if (!m) { if (off) off(); return; }
         if (this._engineOk) { fn(); return; }
-        fetch(m.probe.replace('do=probe', 'do=status'), { credentials: 'same-origin' }).then(function (r) {
+        fetch(m.status, { credentials: 'omit' }).then(function (r) {
             return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: false, j: null }; });
         }).then(function (x) {
             if (x.ok && x.j && x.j.ffmpeg) { self._engineOk = true; fn(); return; }
@@ -1249,39 +1297,93 @@
             this._stSlow = setTimeout(function () { if (!self.ok || self.root.classList.contains('buffering')) self.status(tr('Ya casi: la conversión puede tardar unos segundos, no cierres el video')); }, 15000);
         }
         this._stFailed = false;
-        var dur = (this.tc && this.tc.dur) || (this.info && this.info.dur) || (isFinite(v.duration) ? v.duration : 0);
+        var dur = (this.tc && this.tc.dur) || (this.info && this.info.dur) || m.dur || (isFinite(v.duration) ? v.duration : 0);
         var wasPaused = v.paused && this.ok;
         if (this.hls) { try { this.hls.destroy(); } catch (e) {} this.hls = null; }
         if (this.ts) { try { this.ts.destroy(); } catch (e) {} this.ts = null; }
+        if (this.tcHls) { try { this.tcHls.destroy(); } catch (e) {} this.tcHls = null; }
         clearTimeout(this.loadTimer);
-        var hadDirect = !this.tc && v.getAttribute('src') && v.getAttribute('src').indexOf('media.php') < 0;
-        this.tc = { off: t, dur: dur, a: a || 0, vt: vt === 2 ? 2 : (vt ? 1 : 0), at: Date.now() };
+        var hadDirect = !this.tc && v.getAttribute('src') && v.getAttribute('src').indexOf('media_web.php') < 0;
+        // el motor del panel no tiene "modo seguro": la conversión de video (v=1) es el último recurso
+        if (vt === 2) { vt = 1; this._safeTried = true; }
+        t = Math.max(0, Math.floor(t || 0));
+        this.tc = { off: t, t0: t, dur: dur, a: a || 0, vt: vt ? 1 : 0, at: Date.now() };
         this.root.classList.add('buffering');
-        // iPhone/Safari: la conversión llega en HLS (Safari no abre un MP4 en flujo); el resto, MP4 en flujo
-        var src = (CAPS.hlsTc && m.hls ? m.hls : m.tc) + '&t=' + Math.floor(t) + '&a=' + (a || 0) + (this.tc.vt ? '&v=' + this.tc.vt : ''), tc0 = this.tc;
+        // motor del panel en la VPS / VDS de la línea: HLS con el audio elegido (y el video convertido con v=1) desde t
+        var src = m.hls + '&t=' + t + '&a=' + (a || 0) + (this.tc.vt ? '&v=1' : ''), tc0 = this.tc;
         // se cierra primero la conexión directa: muchas cuentas IPTV permiten una sola conexión a la vez
         try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
         setTimeout(function () {
             if (self.tc !== tc0) return;
-            v.src = src;
-            if (!wasPaused) self.autoplay();
+            // primero la lista (el panel espera el primer segmento): así se sabe por qué no se pudo (permiso, VDS caída…)
+            fetch(src, { credentials: 'omit' }).then(function (r) {
+                if (self.tc !== tc0) return;
+                if (r.ok) {
+                    return r.text().then(function (txt) {
+                        if (self.tc !== tc0) return;
+                        // el video copiado empieza en el fotograma clave anterior al segundo pedido: el motor dice en qué
+                        // segundo del contenido empieza la lista (así el reloj, la barra y los subtítulos cuadran exacto)
+                        var m2 = /#EXT-X-MPX-START:([\d.]+)/.exec(txt || ''), st = m2 ? parseFloat(m2[1]) : -1;
+                        if (st >= 0 && st <= tc0.t0 + 1 && st > tc0.t0 - 15) tc0.off = st;
+                        self.playTc(src, tc0, wasPaused);
+                    });
+                }
+                return r.json().catch(function () { return null; }).then(function (j) {
+                    if (self.tc !== tc0) return;
+                    var msg = j && j.error;
+                    if (r.status === 503 && !tc0.vt) { self.engineOff(msg); self.tcGiveUp('motor no disponible', true); return; }
+                    if (msg) self.toastMsg(msg);
+                    self.tcGiveUp('HTTP ' + r.status, !!msg);
+                });
+            }).catch(function () { if (self.tc === tc0) self.tcGiveUp('sin respuesta del motor'); });
         }, hadDirect ? 1200 : 50);
-        // el video copiado arranca en el fotograma clave anterior: se ajusta el tiempo real. El servidor lo calcula
-        // antes de convertir; se lee de su caché cuando ya llegan datos (c=1: sin abrir otra conexión al servidor IPTV)
-        if (t >= 1) {
-            var tc = this.tc;
-            var askKf = function () {
-                v.removeEventListener('loadeddata', askKf);
-                if (self.tc !== tc) return;
-                fetch(m.tc.replace('do=tc', 'do=kf') + '&t=' + Math.floor(t) + (vt ? '&v=1' : '') + '&c=1', { credentials: 'same-origin' })
-                    .then(function (r) { return r.json(); })
-                    .then(function (j) { if (self.tc === tc && j && isFinite(j.k)) { tc.off = +j.k; self.applySub(); self.updTime && self.updTime(); } })
-                    .catch(function () {});
-            };
-            v.addEventListener('loadeddata', askKf);
-        }
         // sin primeros datos a tiempo: lo resuelve el vigilante (vuelve al video original)
         this.tcWatch();
+    };
+
+    /* reproduce la lista del motor: Safari / iPhone con su HLS nativo; el resto con hls.js (fMP4) */
+    NFPlayer.prototype.playTc = function (src, tc0, wasPaused) {
+        var self = this, v = this.v;
+        if ((APPLE && CAPS.nativeHls) || !(window.Hls && Hls.isSupported())) {
+            v.src = src;
+            if (!wasPaused) this.autoplay();
+            return;
+        }
+        if (CAPS.mms) v.disableRemotePlayback = true;
+        var h = this.tcHls = new Hls({
+            enableWorker: true, startPosition: 0, backBufferLength: 30, maxBufferLength: 60, maxMaxBufferLength: 180,
+            // la lista crece mientras se convierte: se vuelve a leer seguido y se espera más a cada segmento
+            manifestLoadingTimeOut: 60000, levelLoadingTimeOut: 60000, fragLoadingTimeOut: 60000,
+            manifestLoadingMaxRetry: 2, levelLoadingMaxRetry: 6, fragLoadingMaxRetry: 8, startFragPrefetch: true
+        });
+        var errs = 0;
+        h.on(Hls.Events.MANIFEST_PARSED, function () { if (!wasPaused) self.autoplay(); });
+        h.on(Hls.Events.ERROR, function (ev, d) {
+            if (!d.fatal || self.tc !== tc0 || self.tcHls !== h) return;
+            if (d.type === Hls.ErrorTypes.NETWORK_ERROR && errs < 3) { errs++; h.startLoad(); return; }
+            if (d.type === Hls.ErrorTypes.MEDIA_ERROR && errs < 3) { errs++; h.recoverMediaError(); return; }
+            self.log('conversión hls.js: ' + d.details);
+            self.tcFailed(d.details);
+        });
+        h.loadSource(src);
+        h.attachMedia(v);
+    };
+
+    /* la conversión falló en el navegador: se retoma, se convierte también el video o se vuelve al original */
+    NFPlayer.prototype.tcFailed = function (why) {
+        var self = this, v = this.v;
+        if (!this.tc || this._tcRecovering) return; // el vigilante ya está rescatando esta conversión
+        // se cortó a mitad de la película (servidor IPTV o VPS): se retoma donde iba
+        if (this.tc.played && (this.tc.retries || 0) < 6) { var r = (this.tc.retries || 0) + 1; this.startTc(this.T(), this.tc.a, this.tc.vt); this.tc.retries = r; return; }
+        // no llegó nada en mucho tiempo: otro modo tampoco llegaría, se vuelve al video original
+        if (!this.tc.played && v.readyState < 1 && Date.now() - (this.tc.at || 0) > 45000) { this.tcGiveUp('sin respuesta'); return; }
+        // el navegador no pudo con el video copiado (HEVC/10 bits en equipos sin soporte): se convierte también el video
+        if (!this.tc.vt && !this._fullTried) { this._fullTried = true; this.toastMsg(tr('Adaptando el video para este navegador…')); this.startTc(this.T(), this.tc.a, true); return; }
+        this.tc = null; this.o.media = null;
+        if (this.tcHls) { try { this.tcHls.destroy(); } catch (e) {} this.tcHls = null; }
+        this.toastMsg(tr('No se pudo convertir este contenido'));
+        this.idx--; this.next();
+        if (why) self.log('conversión: ' + why);
     };
 
     /* Vigilante de la conversión: si una conversión que ya arrancó deja de avanzar (ni el tiempo ni lo
@@ -1300,7 +1402,7 @@
         // lo apagaba con los primeros cuadros y el vigilante no actuaba mientras el video no hubiera avanzado nunca:
         // si después no llegaba más, quedaba "Cargando" para siempre. El servidor se rinde a los 25 s de arrancar
         // ffmpeg (error 502); esto es el respaldo si ni eso responde.
-        var FIRST = 40000;
+        var FIRST = 50000; // el motor del panel espera hasta 40 s el primer segmento
         var tick = function () {
             if (self.dead || !self.tc || self.tc !== tc) return;
             var m = self._tcMark, now = Date.now(), cur = v.currentTime || 0, b = bufEnd();
@@ -1328,14 +1430,15 @@
 
     /* La conversión nunca entregó video: se deja de esperar y se reproduce el original (audio original) desde
        el mismo punto. Si el original tampoco se puede, next() sigue con las otras fuentes o el aviso de error. */
-    NFPlayer.prototype.tcGiveUp = function (why) {
+    NFPlayer.prototype.tcGiveUp = function (why, quiet) {
         if (!this.tc) return;
+        if (this.tcHls) { try { this.tcHls.destroy(); } catch (e) {} this.tcHls = null; }
         clearTimeout(this._tcW);
         clearTimeout(this.loadTimer);
         this.log('conversión ' + why + ': se vuelve al video original');
         if (this.T() > 5) this.lastTime = this.T();
         this.tc = null; this.o.media = null;
-        this.toastMsg(tr('La conversión no respondió: se reproduce con el audio original'));
+        if (!quiet) this.toastMsg(tr('La conversión no respondió: se reproduce con el audio original'));
         this.idx--; this.next();
     };
 
@@ -1358,13 +1461,15 @@
             if (this.tc) this.tc.retries = r;
             return;
         }
-        if (tc.vt !== 2 && !this._safeTried) {
-            this._safeTried = true;
+        // el video copiado no avanza: se convierte también el video (solo en la VPS / VDS, si el panel lo permite)
+        if (!tc.vt && !this._fullTried) {
+            this._fullTried = true;
             this.toastMsg(tr('Probando un modo de reproducción más compatible…'));
-            this.startTc(this.T(), tc.a, 2);
+            this.startTc(this.T(), tc.a, true);
             return;
         }
         // no se pudo convertir: se pasa a otra fuente (http directo / VLC) o al aviso de error
+        if (this.tcHls) { try { this.tcHls.destroy(); } catch (e) {} this.tcHls = null; }
         this.tc = null; this.o.media = null;
         this.toastMsg(tr('No se pudo convertir este contenido'));
         this.idx--; this.next();
@@ -1409,24 +1514,30 @@
         if (i < 0) { this.clearSub(); return; }
         this.subCache = this.subCache || {};
         if (this.subCache[i]) { this.applySub(); return; }
-        var tries = 0;
+        var tries = 0, shown = false, url = m.sub + '&s=' + i;
         this.toastMsg(tr('Preparando subtítulos…'));
+        // el motor del panel lee el subtítulo del archivo completo en la VPS / VDS; mientras lee entrega lo que ya tiene
+        // ("partial"): se muestra y se vuelve a pedir hasta que esté completo
+        var text = function (ready) {
+            return fetch(url, { credentials: 'omit' }).then(function (r) { return r.ok ? r.text() : null; }).then(function (txt) {
+                if (txt) {
+                    self.subCache[i] = parseVtt(txt);
+                    if (self.subSel === i) { self.applySub(); if (!shown) { shown = true; self.toastMsg(tr('Subtítulos activados')); } }
+                }
+                if (!ready && self.subSel === i && ++tries < 400) setTimeout(ask, 15000);
+            });
+        };
         var ask = function () {
             if (self.subSel !== i) return;
-            fetch(m.sub + '&i=' + i, { credentials: 'same-origin' }).then(function (r) {
-                if (r.status === 503) { self.subSel = -1; self.mres(r); return null; } // sin permiso: solo el aviso
-                if (r.status === 202) {
-                    // el servidor todavía está extrayendo el subtítulo del archivo completo
-                    if (++tries < 200) { if (tries % 10 === 0) self.toastMsg(tr('Preparando subtítulos… (la primera vez tarda un poco)')); setTimeout(ask, 3000); }
-                    else self.toastMsg(tr('Los subtítulos están tardando demasiado'));
-                    return null;
-                }
-                if (!r.ok) throw 0;
-                return r.text();
-            }).then(function (txt) {
-                if (txt == null) return;
-                self.subCache[i] = parseVtt(txt);
-                if (self.subSel === i) { self.applySub(); self.toastMsg(tr('Subtítulos activados')); }
+            fetch(url + '&check=1', { credentials: 'omit' }).then(function (r) {
+                if (r.status === 503) { self.subSel = -1; self.mres(r); return 'off'; } // sin permiso: solo el aviso
+                return r.ok ? r.json() : null;
+            }).then(function (j) {
+                if (j === 'off') return;
+                if (!j || j.failed) { self.toastMsg(tr('No se pudieron cargar los subtítulos')); return; }
+                if (j.ready || j.partial) return text(!!j.ready);
+                if (++tries < 200) { if (tries % 10 === 0) self.toastMsg(tr('Preparando subtítulos… (la primera vez tarda un poco)')); setTimeout(ask, 3000); }
+                else self.toastMsg(tr('Los subtítulos están tardando demasiado'));
             }).catch(function () { self.toastMsg(tr('No se pudieron cargar los subtítulos')); });
         };
         ask();

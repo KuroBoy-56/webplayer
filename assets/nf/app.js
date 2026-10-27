@@ -16,12 +16,39 @@
     }
     NF.esc = esc;
 
+    /* carátula que no carga: la siguiente dirección (caché del panel → img.php del panel → original); al final,
+       el póster de TMDB por el hosting y, si tampoco, la imagen vacía con el título encima */
     NF.imgErr = function (img) {
+        var fb = [];
+        try { fb = JSON.parse(img.getAttribute('data-fb') || '[]'); } catch (e) {}
+        if (fb.length) {
+            var nx = fb.shift();
+            if (fb.length) img.setAttribute('data-fb', JSON.stringify(fb)); else img.removeAttribute('data-fb');
+            img.src = nx;
+            return;
+        }
+        var card = img.closest && img.closest('.nf-card');
+        if (card && card.getAttribute('data-pk') && !card.getAttribute('data-tq')) {
+            card.setAttribute('data-tq', '1');
+            NF.posterOne(card, img);
+            return;
+        }
         img.onerror = null;
         img.src = NOIMG;
         img.classList.add('ok');
-        var card = img.closest && img.closest('.nf-card');
         if (card) card.classList.add('noimg');
+    };
+
+    /* la primera dirección que carga de la lista (fondos de la cartelera y de la ficha); cb(null) si ninguna */
+    NF.firstImage = function (urls, cb) {
+        var list = (urls || []).filter(Boolean), i = 0;
+        (function next() {
+            if (i >= list.length) { cb(null); return; }
+            var u = list[i++], im = new Image();
+            im.onload = function () { cb(u); };
+            im.onerror = next;
+            im.src = u;
+        })();
     };
 
     NF.api = function (params) {
@@ -35,17 +62,47 @@
 
     NF.card = function (c, progress) {
         var pk = c.t && c.id ? ' data-pk="' + esc(c.t + '|' + c.id) + '" data-tm="' + esc(c.tm || '') + '" data-y="' + esc(c.y || '') + '"' : '';
+        var fb = c.f && c.f.length ? ' data-fb="' + esc(JSON.stringify(c.f)) + '"' : '';
         var h = '<a class="nf-card' + (progress != null ? ' has-pb' : '') + '" href="' + esc(c.u) + '" title="' + esc(c.n) + '"' + pk + '>' +
-            '<img src="' + esc(c.i || NOIMG) + '" alt="" loading="lazy" decoding="async" onload="this.classList.add(\'ok\')" onerror="NF.imgErr(this)">';
+            '<img src="' + esc(c.i || NOIMG) + '"' + fb + ' alt="" loading="lazy" decoding="async" onload="this.classList.add(\'ok\')" onerror="NF.imgErr(this)">';
         if (c.r && parseFloat(c.r) > 0) h += '<span class="rt">★ ' + esc(c.r) + '</span>';
         h += '<span class="nm">' + esc(c.n) + '</span>';
         if (progress != null) h += '<span class="pb"><i style="width:' + Math.max(2, Math.min(100, progress)) + '%"></i></span>';
         return h + '</a>';
     };
 
-    /* ---------------- Carátulas TMDB en alta calidad ---------------- */
+    /* póster de TMDB por el hosting para una tarjeta cuyas direcciones fallaron todas */
+    NF.posterOne = function (a, img) {
+        var k = a.getAttribute('data-pk'), done = false;
+        var empty = function () {
+            if (done) return;
+            done = true;
+            img.onerror = null;
+            img.src = NOIMG;
+            img.classList.add('ok');
+            a.classList.add('noimg');
+        };
+        fetch('api.php?action=posters', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ items: [{ k: k, t: k.split('|')[0], tm: a.getAttribute('data-tm') || '', y: a.getAttribute('data-y') || '', n: a.getAttribute('title') || '' }] }) })
+            .then(function (r) { return r.ok ? r.json() : { p: {} }; })
+            .then(function (res) {
+                var u = (res.p || {})[k];
+                if (!u) { empty(); return; }
+                img.onerror = empty;
+                img.src = u;
+            })
+            .catch(empty);
+    };
+
+    /* ---------------- Carátulas TMDB en alta calidad ----------------
+       Solo para las tarjetas sin la caché de imágenes del panel (el dueño la apagó): con ella, el panel ya entrega el
+       póster de TMDB cuando el servidor IPTV no tiene, y NF.imgErr pide TMDB solo si todo falla. */
     NF.posters = function (root) {
-        var cards = $$('.nf-card[data-pk]:not([data-pd])', root || d);
+        var cards = $$('.nf-card[data-pk]:not([data-pd])', root || d).filter(function (a) {
+            var im = a.querySelector('img');
+            if (im && (im.hasAttribute('data-fb') || /\/api\/(imgc\/|img\.php)/.test(im.getAttribute('src') || ''))) { a.setAttribute('data-pd', '1'); return false; }
+            return true;
+        });
         if (!cards.length) return;
         var map = {};
         cards.forEach(function (a) { a.setAttribute('data-pd', '1'); (map[a.getAttribute('data-pk')] = map[a.getAttribute('data-pk')] || []).push(a); });
@@ -245,25 +302,24 @@
             $$('[data-h=info]', root).forEach(function (e) { e.href = it.info_link || it.play_link; });
             $$('[data-h=kicker]', root).forEach(function (e) { e.innerHTML = '<span class="n">' + esc(letter) + '</span>' + esc(it.kind || tr('Destacado')); });
             var p = $('.nf-hero-poster', root);
-            if (p) p.style.backgroundImage = "url('" + (it.poster || it.background_image) + "')";
+            if (p) NF.firstImage([it.poster].concat(it.poster_fb || [], [it.background_image]), function (u) { if (u) p.style.backgroundImage = "url('" + u + "')"; });
         }
         function show(i) {
             var it = items[i];
             var next = bgs[(cur + 1) % bgs.length];
-            var img = new Image();
-            img.onload = img.onerror = function (ev) {
+            // fondo Full HD del panel y, si no carga, el original
+            NF.firstImage([it.background_image].concat(it.background_fb || []), function (u) {
                 // imagen que no carga: se queda el banner anterior de fondo (nunca negro)
-                if (ev.type === 'load' || !bgs.some(function (b) { return b.classList.contains('on'); })) {
-                    next.style.backgroundImage = "url('" + it.background_image + "')";
+                if (u || !bgs.some(function (b) { return b.classList.contains('on'); })) {
+                    next.style.backgroundImage = "url('" + (u || it.background_image) + "')";
                     bgs.forEach(function (b) { b.classList.remove('on'); });
                     next.classList.add('on');
                     cur = (cur + 1) % bgs.length;
-                    if (ev.type === 'load') try { sessionStorage.setItem('nf_hero_bg', it.background_image); } catch (e) {}
+                    if (u) try { sessionStorage.setItem('nf_hero_bg', u); } catch (e) {}
                 }
                 fill(it);
                 if (dots) $$('button', dots).forEach(function (b, j) { b.classList.toggle('on', j === i); });
-            };
-            img.src = it.background_image;
+            });
             idx = i;
         }
         if (dots) {
@@ -415,8 +471,19 @@
         if (b && u && !$('#nfHero .nf-hero-bg.on')) { b.style.backgroundImage = "url('" + u + "')"; b.classList.add('on'); }
     }
 
+    /* fondos con varias direcciones (data-bgs: Full HD del panel → original → carátula) */
+    function initBgs() {
+        $$('[data-bgs]').forEach(function (el) {
+            var list = [];
+            try { list = JSON.parse(el.getAttribute('data-bgs') || '[]'); } catch (e) {}
+            el.removeAttribute('data-bgs');
+            NF.firstImage(list, function (u) { if (u) el.style.backgroundImage = "url('" + u + "')"; });
+        });
+    }
+
     function boot() {
         heroLast();
+        initBgs();
         initHeader();
         NF.initRows(d);
         NF.posters(d);

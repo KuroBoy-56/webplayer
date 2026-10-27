@@ -43,15 +43,18 @@ foreach ($continuar_viendo as $item) {
         ? "video_player.php?id=" . rawurlencode($stream_id) . "&slug=series&series_id=" . rawurlencode($series_id)
         : "video_player.php?id=" . rawurlencode($stream_id) . "&slug=movie";
     $pct = (!empty($item["total_time"]) && $item["total_time"] > 0) ? ($item["current_time"] / $item["total_time"]) * 100 : 5;
-    $cont_html .= wp_card_html(['u' => $medialink, 'n' => $item['title'] ?? '', 'i' => wp_img($item['poster_url'] ?? ''), 'r' => ''], $pct);
+    // carátula por la caché del panel; en series el título guardado puede traer el episodio: solo la imagen
+    $src = wp_poster_sources($type, $item['poster_url'] ?? '', $type == 'series' ? '' : ($item['title'] ?? ''));
+    $cont_html .= wp_card_html(['u' => $medialink, 'n' => $item['title'] ?? '', 'i' => $src ? array_shift($src) : WP_NOIMG, 'f' => $src, 'r' => ''], $pct);
 }
 
 $fav_html = '';
 foreach ($favoritos as $fav) {
     $isS = $fav['type'] === 'series';
+    $src = wp_poster_sources($isS ? 'series' : 'movie', $fav['poster_url'], $fav['title']);
     $fav_html .= wp_card_html([
         'u' => $isS ? 'seriesvideo.php?id=' . rawurlencode($fav['stream_id']) : 'Movie_description.php?id=' . rawurlencode($fav['stream_id']),
-        'n' => $fav['title'], 'i' => wp_img($fav['poster_url']), 'r' => '',
+        'n' => $fav['title'], 'i' => $src ? array_shift($src) : WP_NOIMG, 'f' => $src, 'r' => '',
     ]);
 }
 

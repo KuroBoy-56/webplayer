@@ -26,6 +26,7 @@ if ($slug == "movie") {
     $movie_info = xt_get('get_vod_info', ['vod_id' => $id], 21600);
     $content_name = $movie_info['info']['name'] ?? ($movie_info['movie_data']['name'] ?? '');
     $poster = $movie_info['info']['movie_image'] ?? '';
+    $dur_secs = (int)($movie_info['info']['duration_secs'] ?? 0);
     if ($ext === '') $ext = strtolower($movie_info['movie_data']['container_extension'] ?? 'mp4') ?: 'mp4';
     $kind = 'movie';
 } else {
@@ -41,6 +42,7 @@ if ($slug == "movie") {
             foreach ($episodes as $ep) {
                 $episodes_list[] = [
                     'id' => (string)$ep['id'],
+                    'dur' => (int)($ep['info']['duration_secs'] ?? 0),
                     'ext' => strtolower($ep['container_extension'] ?? 'mp4') ?: 'mp4',
                     'label' => t('T{s}:E{e}', ['s' => $season, 'e' => $ep['episode_num'] ?? '']) . (!empty($ep['title']) ? ' · ' . $ep['title'] : ''),
                 ];
@@ -53,6 +55,7 @@ if ($slug == "movie") {
     }
     if ($current_index !== -1) {
         $episode_label = $episodes_list[$current_index]['label'];
+        $dur_secs = $episodes_list[$current_index]['dur'];
         if ($ext === '') $ext = $episodes_list[$current_index]['ext'];
         if ($current_index > 0) {
             $has_prev = true;
@@ -103,31 +106,26 @@ if (wp_content_direct($kind, $id, $exts) && preg_match('/iPhone|iPad|iPod|Macint
 }
 $sources = wp_play_sources($kind, $id, $exts);
 
-/* Motor multimedia del hosting (ffmpeg): solo si el contenido trae más de una pista de audio
-   (para poder elegir el idioma cuando el motor MP4 no alcanza). Con un solo audio el hosting no convierte nada. */
+/* Motor de conversión: el del panel (api/media_web.php), SOLO en la VPS / VDS de la línea — la VDS propia del
+   distribuidor si la eligió (nunca la del dueño), si no la del dueño. El hosting de la web nunca convierte.
+   Se usa para elegir el idioma cuando el navegador no puede (varios audios), audio Dolby/DTS y formatos que el
+   navegador no abre; con un solo audio compatible no se usa. */
 $media_cfg = null;
+$panel_tok = wp_panel_tok(); // el token de la línea (las apps usan el mismo): el navegador habla con el motor del panel
 $multi_audio = wp_content_multi_audio($kind, $id, $exts, true);
+$tracks_base = wp_proxy_url(wp_tracks_target($kind, $id, $exts), 'tracks.php') . '&x=' . rawurlencode($ext) . '&dur=' . (int)($dur_secs ?? 0);
 // pistas aún desconocidas: el reproductor las pide en segundo plano (tracks.php) sin retrasar la página
-$tracks_url = ($multi_audio === null && wp_content_direct($kind, $id, $exts)) ? wp_proxy_url(wp_tracks_target($kind, $id, $exts), 'tracks.php') : '';
+$tracks_url = ($multi_audio === null && wp_content_direct($kind, $id, $exts)) ? $tracks_base : '';
 $multi_audio = $multi_audio === true;
 require_once __DIR__ . '/includes/media_admin.php';
-// el dueño puede apagar el motor desde el panel (Guía EPG) o quitárselo al distribuidor: entonces el video va directo
+// el dueño puede apagar el motor de la web (Guía EPG) o quitárselo al distribuidor: entonces el video va directo
 // y el reproductor solo muestra este texto si se elige algo que lo necesita
-$media_off = wp_media_off_text();
-if ($media_off === '') {
-    $mb = wp_proxy_url($raw_url, 'media.php');
-    $media_cfg = ['probe' => $mb . '&do=probe', 'tc' => $mb . '&do=tc', 'hls' => $mb . '&do=hls', 'sub' => $mb . '&do=sub', 'check' => $mb . '&do=check'];
-    // sin varios audios conocidos: ffmpeg no se usa salvo que el iPhone descubra varios audios y el motor MP4 no pueda con ellos
-    if (!$multi_audio) $media_cfg['lazy'] = 1;
-    // pistas ya conocidas (caché): el reproductor decide al instante si necesita convertir el audio
-    $pc = wp_cache_get('probe|' . md5($raw_url), 604800);
-    if (is_array($pc)) $media_cfg['info'] = wp_probe_labels($pc);
-}
+$media_cfg = wp_media_cfg($kind, $id, $exts, $ext, (int)($dur_secs ?? 0), $multi_audio, $media_off);
 
 /* ---------- Página https y video http: reproductor directo por http (play.php) ---------- */
 $http_url = wp_handoff_url([
     'kind' => $kind, 'id' => $id, 'exts' => $exts, 'vlcExt' => $ext, 'slug' => $slug, 'sid' => $series_id_get,
-    'title' => $content_name, 'sub' => $episode_label, 'resume' => $resume_time,
+    'title' => $content_name, 'sub' => $episode_label, 'resume' => $resume_time, 'dur' => (int)($dur_secs ?? 0), 'multi' => $multi_audio ? 1 : 0,
     'back' => wp_handoff_abs($slug == 'movie' ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get),
     'next' => $has_next ? wp_handoff_abs($next_url) : '',
 ]);
@@ -176,7 +174,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=2" defer></script>
-    <script src="assets/nf/player.js?v=31" defer></script>
+    <script src="assets/nf/player.js?v=32" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

@@ -27,6 +27,16 @@ function wp_hero_kind(array $items)
     $deadline = microtime(true) + 8;
     foreach ($items as &$it) {
         $it['kind'] = t((string)($it['kind'] ?? ''));
+        // fondo en Full HD hecho por el panel (con el token de quien mira: nunca se guarda en la caché compartida)
+        if (!empty($it['bd'])) {
+            $bs = wp_backdrop_sources($it['bd']);
+            if ($bs) { $it['background_image'] = array_shift($bs); $it['background_fb'] = $bs; }
+        }
+        if (isset($it['icon'])) {
+            $ps = wp_poster_sources(strpos((string)($it['play_link'] ?? ''), 'seriesvideo') === 0 ? 'series' : 'movie', $it['icon'], (string)($it['title'] ?? ''), (string)($it['year'] ?? ''), (string)($it['tm'] ?? ''));
+            if ($ps) { $it['poster'] = array_shift($ps); $it['poster_fb'] = $ps; }
+        }
+        unset($it['bd'], $it['icon']);
         if (wp_lang() === 'es' || !wp_tmdb_key() || microtime(true) > $deadline) continue;
         $isS = strpos((string)($it['play_link'] ?? ''), 'seriesvideo') === 0;
         $tm = wp_tmdb_details($isS ? 'tv' : 'movie', $it['tm'] ?? '', (string)($it['title'] ?? ''), (string)($it['year'] ?? ''));
@@ -180,6 +190,8 @@ switch ($action) {
                 'genre' => implode(', ', array_slice(array_map('trim', explode(',', (string)($info['genre'] ?? ''))), 0, 2)),
                 'background_image' => wp_img($bd, ''),
                 'poster' => wp_img($it['icon'], ''),
+                'bd' => $bd,
+                'icon' => $it['icon'],
                 'play_link' => $link,
                 'info_link' => $link,
                 'kind' => $isS ? 'Serie' : 'Película',

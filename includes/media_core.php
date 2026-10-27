@@ -65,19 +65,24 @@ function wp_probe($url)
     return $res;
 }
 
-/** Agrega nombres legibles a las pistas ("Español (E-AC3 5.1)") y marca ok. */
+/**
+ * Nombre de cada pista solo con su idioma, como en las apps ("Español latino", "Inglés"; si se repite, "Inglés 2"),
+ * nunca el códec ni el título técnico del proveedor. Sin idioma: su nombre o "Audio N".
+ */
 function wp_probe_labels(array $p)
 {
-    foreach ($p['audio'] as &$a) {
-        $ln = wp_lang_name($a['lang']);
-        $a['label'] = trim(($ln ?: t('Audio {n}', ['n' => $a['i'] + 1])) . ($a['title'] !== '' && ($ln === '' || stripos($a['title'], $ln) === false) ? ' · ' . $a['title'] : '')
-            . ' (' . strtoupper(str_replace(['eac3', 'truehd'], ['E-AC3', 'TrueHD'], $a['codec'])) . ($a['ch'] >= 6 ? ' 5.1' : '') . ')');
+    foreach (['audio', 'subs'] as $kind) {
+        $seen = [];
+        foreach ($p[$kind] as &$a) {
+            $ln = wp_lang_name($a['lang'] ?? '');
+            // "Latino" en el nombre de una pista en español (o sin idioma): Español latino, como en las apps
+            if (($ln === '' || $ln === t('Español')) && preg_match('/latino|latam|\blat\b/i', (string)($a['title'] ?? ''))) $ln = t('Español latino');
+            $base = $ln !== '' ? $ln : (trim((string)($a['title'] ?? '')) !== '' ? trim((string)$a['title']) : t($kind === 'audio' ? 'Audio {n}' : 'Subtítulo {n}', ['n' => $a['i'] + 1]));
+            $seen[$base] = ($seen[$base] ?? 0) + 1;
+            $a['label'] = $base . ($seen[$base] > 1 ? ' ' . $seen[$base] : '') . ($kind === 'subs' && !empty($a['forced']) ? ' (' . t('forzado') . ')' : '');
+        }
+        unset($a);
     }
-    unset($a);
-    foreach ($p['subs'] as &$s) {
-        $s['label'] = trim((wp_lang_name($s['lang']) ?: t('Subtítulo {n}', ['n' => $s['i'] + 1])) . ($s['title'] !== '' ? ' · ' . $s['title'] : '') . ($s['forced'] ? ' (' . t('forzado') . ')' : ''));
-    }
-    unset($s);
     $p['ok'] = true;
     return $p;
 }

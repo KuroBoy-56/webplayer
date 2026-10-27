@@ -1,9 +1,8 @@
 <?php
 /**
- * Control del motor multimedia (media.php) desde el panel: activado/desactivado, conversiones en
- * curso y detenerlas. Lo usa media_admin.php (peticiones firmadas por el panel con la llave maestra).
- * Desactivado: la página del video no ofrece el motor y media.php responde 503, así que el
- * reproductor usa el video directo del servidor IPTV, como sin ffmpeg.
+ * Motor multimedia de la web: desde esta versión es el del panel (api/media_web.php, solo en una VPS / VDS; el
+ * hosting de la web nunca convierte). Lo de abajo (media_admin.php: estado y detener conversiones del hosting) queda
+ * por compatibilidad con paneles anteriores.
  */
 
 function wp_media_flag()
@@ -16,11 +15,15 @@ function wp_media_enabled()
     return !is_file(wp_media_flag());
 }
 
-/** Por qué no se puede usar el motor (mismo texto que el motor del panel) o '' si se puede. */
+/**
+ * Por qué no se puede usar el motor (mismo texto que el motor del panel) o '' si se puede. El motor es el del panel
+ * (api/media_web.php, en la VPS / VDS de la línea): él decide al final (do=status); aquí solo el permiso del
+ * distribuidor y que haya token del panel.
+ */
 function wp_media_off_text()
 {
-    if (!wp_media_enabled() || !wp_tenant_feature('ffmpeg')) return t('Sin permisos');
-    if (!wp_bin('ffprobe') || !wp_bin('ffmpeg')) return t('No compatible con el dispositivo');
+    if (!wp_tenant_feature('ffmpeg')) return t('Sin permisos');
+    if (wp_panel_base() === '' || wp_panel_token() === '') return t('No compatible con el dispositivo');
     return '';
 }
 
@@ -86,3 +89,29 @@ function wp_media_admin_key()
     $k = wp_panel_key();
     return $k === null ? null : hash_hmac('sha256', 'media-admin-v1', $k, true);
 }
+
+/**
+ * Configuración del motor para el reproductor (video_player.php y play.php): el motor del panel (api/media_web.php),
+ * SOLO en la VPS / VDS de la línea — la VDS propia del distribuidor si la eligió (nunca la del dueño), si no la del
+ * dueño. El hosting de la web nunca convierte. null si no se puede (y $off dice por qué).
+ */
+function wp_media_cfg($kind, $id, array $exts, $ext, $dur, $multi, &$off = '')
+{
+    $off = wp_media_off_text();
+    // web https con el panel en http: el navegador bloquearía la conversión
+    if ($off === '' && wp_is_https() && stripos(wp_panel_base(), 'https://') !== 0) $off = t('No compatible con el dispositivo');
+    if ($off !== '' || $kind === 'live') return null;
+    $tok = wp_panel_token();
+    $raw = wp_stream_url($kind, $id, $ext);
+    $pe = wp_panel_base() . 'media_web.php?';
+    $pq = 'token=' . rawurlencode($tok) . '&u=' . wp_b64u_enc($raw);
+    $cfg = ['status' => $pe . 'do=status&token=' . rawurlencode($tok), 'hls' => $pe . 'do=hls&' . $pq, 'sub' => $pe . 'do=sub&' . $pq,
+        'probe' => wp_proxy_url(wp_tracks_target($kind, $id, $exts), 'tracks.php') . '&x=' . rawurlencode($ext) . '&dur=' . (int)$dur, 'dur' => (int)$dur];
+    // sin varios audios conocidos: la conversión no se usa salvo que el navegador no pueda con el audio o el formato
+    if (!$multi) $cfg['lazy'] = 1;
+    // pistas ya conocidas (hosting o panel): el reproductor decide al instante si necesita convertir el audio
+    $ft = wp_file_tracks($raw, '', false, 1);
+    if ($ft) $cfg['info'] = wp_probe_labels(wp_tracks_probe($ft, (int)$dur));
+    return $cfg;
+}
+

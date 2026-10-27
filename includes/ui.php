@@ -41,7 +41,8 @@ function wp_card_html(array $c, $progress = null, $extraClass = '')
     $cls = 'nf-card' . ($progress !== null ? ' has-pb' : '') . ($extraClass ? ' ' . $extraClass : '');
     $pk = !empty($c['t']) && isset($c['id']) ? ' data-pk="' . e($c['t'] . '|' . $c['id']) . '" data-tm="' . e($c['tm'] ?? '') . '" data-y="' . e($c['y'] ?? '') . '"' : '';
     $h = '<a class="' . $cls . '" href="' . e($c['u']) . '" title="' . e($c['n']) . '"' . $pk . '>';
-    $h .= '<img src="' . e($c['i']) . '" alt="" loading="lazy" decoding="async" onload="this.classList.add(\'ok\')" onerror="NF.imgErr(this)">';
+    $fb = !empty($c['f']) ? ' data-fb="' . e(json_encode(array_values($c['f']), JSON_UNESCAPED_SLASHES)) . '"' : '';
+    $h .= '<img src="' . e($c['i']) . '"' . $fb . ' alt="" loading="lazy" decoding="async" onload="this.classList.add(\'ok\')" onerror="NF.imgErr(this)">';
     if ($c['r'] !== '' && (float)$c['r'] > 0) $h .= '<span class="rt">★ ' . e($c['r']) . '</span>';
     $h .= '<span class="nm">' . e($c['n']) . '</span>';
     if ($progress !== null) $h .= '<span class="pb"><i style="width:' . max(2, min(100, (int)$progress)) . '%"></i></span>';

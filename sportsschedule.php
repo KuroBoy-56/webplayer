@@ -204,6 +204,22 @@ if (($_GET['ajax'] ?? '') === 'channel') {
     exit;
 }
 
+/* Tablas, partidos de Equipos / Selecciones y ficha del equipo: del panel por el hosting (includes/sports_panel.php) */
+if (in_array($_GET['ajax'] ?? '', ['tables', 'fixtures', 'team'], true)) {
+    require_once __DIR__ . '/includes/sports_panel.php';
+    wp_session_read_close();
+    @set_time_limit(60);
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: private, no-store');
+    $sx = wp_sports_extra(wp_panel_sports());
+    $aj = $_GET['ajax'];
+    if ($aj === 'tables') $res = wp_sports_tables($sx['trev']);
+    elseif ($aj === 'fixtures') $res = wp_sports_fixtures($sx['frev']);
+    else $res = wp_sports_team($_GET['id'] ?? '') ?: ['ok' => false];
+    echo json_encode($res, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 /* Respaldo: extrae tablas limpias de la web de TheSportsDB */
 function fetchAndProcessContent($target_url) {
     $content = wp_http_get($target_url, 12);
@@ -306,6 +322,10 @@ if (!$events) {
 
 $sp_meta = [];
 foreach ($sp_sports as $k => $m) $sp_meta[$k] = ['n' => $m[0], 'i' => $m[1], 'd' => $m[2]];
+// pestañas Tablas / Selecciones / Equipos (cuando el panel las ofrece) y los nombres en español de los equipos
+require_once __DIR__ . '/includes/sports_panel.php';
+$sp_extra = wp_sports_extra($sp_panel);
+$sp_alias = is_array($sp_panel['match']['alias'] ?? null) ? $sp_panel['match']['alias'] : [];
 
 $page_title = t('Deportes');
 $nav_active = 'sports';
@@ -416,6 +436,7 @@ include "header.php";
 @media (prefers-reduced-motion: reduce) { .sp-dot { animation: none; } .sp-card { transition: none; } }
 </style>
 
+<link rel="stylesheet" href="assets/nf/sports.css?v=1">
 <main class="sp" id="sp">
     <div class="sp-head">
         <div>
@@ -424,7 +445,11 @@ include "header.php";
         </div>
         <span class="sp-livecount" id="spLiveCount" hidden><span class="sp-dot"></span><span></span></span>
     </div>
+    <nav class="sp-tabs" id="spTabs" role="tablist" aria-label="<?php echo e(t('Deportes')); ?>" hidden></nav>
+    <div class="sp-pane" id="spTables" hidden></div>
+    <div class="sp-pane" id="spFx" hidden></div>
 
+<div class="sp-pane" id="spAgenda">
 <?php if ($events): ?>
     <div class="sp-bar">
         <div class="sp-days" role="tablist" aria-label="<?php echo e(t('Día')); ?>">
@@ -448,8 +473,10 @@ include "header.php";
         <div class="sp-empty"><b><?php echo t('La agenda deportiva no está disponible'); ?></b><?php echo t('Vuelve a intentarlo en unos minutos.'); ?></div>
     <?php endif; ?>
 <?php endif; ?>
+</div>
 </main>
 
+<script src="assets/nf/sports.js?v=1"></script>
 <script>
 (function () {
     var q2 = document.getElementById('spQ2');
@@ -466,7 +493,6 @@ include "header.php";
     // zona horaria del panel (la del distribuidor o del dueño): la hora y Hoy / Mañana van en ella, no en la del equipo
     var TZ = <?php echo json_encode(is_string($sp_panel['tz'] ?? null) ? $sp_panel['tz'] : ''); ?>;
     try { new Intl.DateTimeFormat('en', { timeZone: TZ || undefined }); } catch (x) { TZ = ''; }
-    if (!EV.length) return;
 
     var FIN = /^(FT|AET|AOT|PEN|Match Finished|Finished|After Over Time|Final)$/i;
     var state = { day: 0, sport: '', q: '' };
@@ -475,11 +501,14 @@ include "header.php";
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var dayKey = function (d) { return fmtD ? fmtD.format(d) : d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); };
 
-    EV.forEach(function (e) {
+    var fmtW = new Intl.DateTimeFormat(window.NF_LOCALE, { weekday: 'short', day: 'numeric', month: 'short', timeZone: TZ || undefined });
+    function prep(e) {
         e.t = new Date(e.ts);
-        if (isNaN(e.t)) e.t = new Date(e.ts.replace(' ', 'T'));
+        if (isNaN(e.t)) e.t = new Date(String(e.ts).replace(' ', 'T'));
         e.dk = dayKey(e.t);
-    });
+        return e;
+    }
+    EV.forEach(prep);
     function status(e) {
         var now = Date.now(), dur = ((META[e.sp] || {}).d || 120) * 60000;
         if (e.pp) return 'pp';
@@ -511,8 +540,8 @@ include "header.php";
         if (st === 'live') pill = '<span class="sp-pill live"><span class="sp-dot"></span>' + <?php echo tj('En vivo'); ?> + '</span>';
         else if (st === 'fin') pill = '<span class="sp-pill fin">' + <?php echo tj('Final'); ?> + '</span>';
         else if (st === 'pp') pill = '<span class="sp-pill fin">' + <?php echo tj('Aplazado'); ?> + '</span>';
-        else pill = '<span class="sp-pill time">' + esc(fmtT.format(e.t)) + '</span>';
-        var hasScore = e.hs !== null && e.hs !== '' && e.as !== null && e.as !== '' && st !== 'soon';
+        else pill = '<span class="sp-pill time">' + esc(e.fx ? when(e) : fmtT.format(e.t)) + '</span>';
+        var hasScore = e.hs != null && e.hs !== '' && e.as != null && e.as !== '' && st !== 'soon';
         var mid;
         if (e.h && e.a) {
             mid = '<div class="sp-teams"><div class="sp-team home">' + badge(e.hb, e.h) + '<b>' + esc(e.h) + '</b></div>' +
@@ -531,6 +560,16 @@ include "header.php";
 
     var today = new Date(), tomorrow = new Date(Date.now() + 86400000);
     var keys = [dayKey(today), dayKey(tomorrow)];
+    // partidos de Equipos / Selecciones (21 días): Hoy / Mañana / el día, y la hora
+    function when(e) {
+        var d = e.dk === keys[0] ? <?php echo tj('Hoy'); ?> : e.dk === keys[1] ? <?php echo tj('Mañana'); ?> : fmtW.format(e.t);
+        return d + ' · ' + fmtT.format(e.t);
+    }
+    // las tarjetas de Equipos / Selecciones usan el mismo botón de TV en vivo (data-i = su lugar en EV)
+    function fxCard(e) {
+        if (EV.indexOf(e) < 0) EV.push(e);
+        return card(e);
+    }
 
     // sin acentos ni signos: "américa" = "america", "ESPN-2" = "espn 2"
     var fold = function (s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); };
@@ -540,7 +579,7 @@ include "header.php";
     // equipos, evento, liga, deporte y canales que lo transmiten, con todas las palabras ("america espn")
     function visible() {
         var words = fold(state.q).split(' ').filter(Boolean);
-        return EV.filter(function (e) {
+        return agendaEv.filter(function (e) {
             if (e.dk !== keys[state.day]) return false;
             if (state.sport && e.sp !== state.sport) return false;
             return words.every(function (w) { return e.hay.indexOf(w) > -1; });
@@ -548,7 +587,7 @@ include "header.php";
     }
     function renderChips() {
         var count = {}, total = 0;
-        EV.forEach(function (e) { if (e.dk === keys[state.day]) { count[e.sp] = (count[e.sp] || 0) + 1; total++; } });
+        agendaEv.forEach(function (e) { if (e.dk === keys[state.day]) { count[e.sp] = (count[e.sp] || 0) + 1; total++; } });
         var h = '<button type="button" class="nf-chip' + (state.sport ? '' : ' active') + '" data-sp="">' + <?php echo tj('Todos'); ?> + '<b>' + total + '</b></button>';
         Object.keys(META).forEach(function (k) {
             if (!count[k]) return;
@@ -559,7 +598,7 @@ include "header.php";
     function render() {
         var list = visible();
         // en vivo (siempre de hoy)
-        var live = EV.filter(function (e) { return status(e) === 'live' && (!state.sport || e.sp === state.sport); });
+        var live = agendaEv.filter(function (e) { return status(e) === 'live' && (!state.sport || e.sp === state.sport); });
         var lc = document.getElementById('spLiveCount');
         lc.hidden = !live.length;
         lc.lastChild.textContent = (live.length === 1 ? <?php echo tj('{n} partido en vivo'); ?> : <?php echo tj('{n} partidos en vivo'); ?>).replace('{n}', live.length);
@@ -583,18 +622,21 @@ include "header.php";
         document.getElementById('spList').innerHTML = h;
     }
 
-    document.querySelector('.sp-days').addEventListener('click', function (ev) {
-        var b = ev.target.closest('button'); if (!b) return;
-        this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
-        state.day = +b.getAttribute('data-day'); state.sport = '';
-        renderChips(); render();
-    });
-    document.getElementById('spChips').addEventListener('click', function (ev) {
-        var b = ev.target.closest('.nf-chip'); if (!b) return;
-        state.sport = b.getAttribute('data-sp'); renderChips(); render();
-    });
-    var qi = document.getElementById('spQ'), qt;
-    qi.addEventListener('input', function () { clearTimeout(qt); qt = setTimeout(function () { state.q = qi.value.trim(); render(); }, 150); });
+    var agendaEv = EV.slice(); // la agenda (Equipos / Selecciones agregan sus partidos a EV para el botón de TV)
+    if (agendaEv.length) {
+        document.querySelector('.sp-days').addEventListener('click', function (ev) {
+            var b = ev.target.closest('button'); if (!b) return;
+            this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+            state.day = +b.getAttribute('data-day'); state.sport = '';
+            renderChips(); render();
+        });
+        document.getElementById('spChips').addEventListener('click', function (ev) {
+            var b = ev.target.closest('.nf-chip'); if (!b) return;
+            state.sport = b.getAttribute('data-sp'); renderChips(); render();
+        });
+        var qi = document.getElementById('spQ'), qt;
+        qi.addEventListener('input', function () { clearTimeout(qt); qt = setTimeout(function () { state.q = qi.value.trim(); render(); }, 150); });
+    }
 
 
     // TV en vivo: abre el canal del cliente que transmite el partido.
@@ -655,10 +697,16 @@ include "header.php";
         else watch(e, b, 'teams', null);
     });
 
-    // si hoy no queda nada, se abre mañana
-    if (!EV.some(function (e) { return e.dk === keys[0]; })) document.querySelector('.sp-days [data-day="1"]').click();
-    else { renderChips(); render(); }
-    setInterval(render, 60000);
+    if (agendaEv.length) {
+        // si hoy no queda nada, se abre mañana
+        if (!agendaEv.some(function (e) { return e.dk === keys[0]; })) document.querySelector('.sp-days [data-day="1"]').click();
+        else { renderChips(); render(); }
+        setInterval(render, 60000);
+    }
+
+    // Tablas / Selecciones / Equipos (assets/nf/sports.js)
+    if (window.NFSports) NFSports({ extra: <?php echo json_encode(['tables' => $sp_extra['tables'], 'fixtures' => $sp_extra['fixtures'], 'nat' => $sp_extra['nat']]); ?>,
+        alias: <?php echo json_encode((object)$sp_alias, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>, meta: META, prep: prep, card: fxCard });
 })();
 </script>
 <?php include "footer.php"; ?>

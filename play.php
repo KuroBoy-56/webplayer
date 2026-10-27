@@ -54,6 +54,10 @@ foreach ($exts as $x) {
 if (wp_is_https()) $sources = wp_play_sources($kind, $id, $exts);
 $raw_url = wp_stream_url($kind, $id, (string)($d['vlcExt'] ?? $ext));
 $title = (string)($d['title'] ?? '');
+// conversión con el motor del panel (VPS / VDS de la línea), como en la página normal
+require_once __DIR__ . '/includes/media_admin.php';
+$media_off = '';
+$media_cfg = $live ? null : wp_media_cfg($kind, $id, $exts, (string)($d['vlcExt'] ?? $ext), (int)($d['dur'] ?? 0), !empty($d['multi']), $media_off);
 ?>
 <!DOCTYPE html>
 <html lang="<?php echo wp_lang(); ?>">
@@ -77,7 +81,7 @@ $title = (string)($d['title'] ?? '');
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=2" defer></script>
-    <script src="assets/nf/player.js?v=31" defer></script>
+    <script src="assets/nf/player.js?v=32" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -92,7 +96,8 @@ $title = (string)($d['title'] ?? '');
             'vlcUrl' => $demo ? '' : 'vlc://' . $raw_url,
             'streamUrl' => $demo ? '' : $raw_url,
             'demo' => $demo,
-            'media' => null,
+            'media' => $media_cfg,
+            'mediaOff' => $media_cfg ? '' : $media_off,
             'ext' => $ext,
             'extraMenu' => [],
             'id' => $id,
