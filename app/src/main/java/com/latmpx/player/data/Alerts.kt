@@ -12,7 +12,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  * Se muestra una vez cada vez que se abre la app (y otra vez tras iniciar sesión).
  */
 object Alerts {
-    data class Alert(val expiry: Boolean, val title: String, val message: String, val image: String, val button: String)
+    /** [images]: todas las imágenes de Alertas del panel, en orden (la primera es [image]); cambian cada [interval] s */
+    data class Alert(
+        val expiry: Boolean, val title: String, val message: String, val image: String, val button: String,
+        val images: List<String> = listOfNotNull(image.takeIf { it.isNotEmpty() }), val interval: Int = 3,
+    )
 
     /** línea a la que ya se le mostró el aviso en este arranque de la app */
     private var shownFor: String? = null
@@ -44,6 +48,11 @@ object Alerts {
             path.matches(Regex("img/alertas/[A-Za-z0-9._-]+")) -> PanelUrl.apiBase.removeSuffix("api/") + path
             else -> j.s("image").takeIf { it.startsWith("http") }.orEmpty()
         }
-        return Alert(type == "expiry", j.s("title"), j.s("message"), image, j.s("button").ifEmpty { tr(R.string.got_it) })
+        // todas las imágenes del registro del panel (Alertas), en orden; sin la lista (panel anterior), la de siempre
+        val list = if (type != "welcome") emptyList() else j.optJSONArray("images")
+            ?.let { a -> (0 until a.length()).map { a.optString(it).trim() }.filter { it.startsWith("http") } }.orEmpty()
+        val images = list.ifEmpty { listOfNotNull(image.takeIf { it.isNotEmpty() }) }
+        val interval = j.optInt("interval", 3).takeIf { it >= 1 } ?: 3
+        return Alert(type == "expiry", j.s("title"), j.s("message"), images.firstOrNull().orEmpty(), j.s("button").ifEmpty { tr(R.string.got_it) }, images, interval)
     }
 }
