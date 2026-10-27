@@ -345,7 +345,11 @@ incluye Autodemo y registro del equipo. Los `.vpkg` quedan en `build/`.
   del segmento (0x47 cada 188 bytes) por si trae relleno al principio. La llave se lee siempre como bytes (XUI la
   manda desde PHP marcada como `text/html`), y también si viene escrita en hexadecimal. Cada intento espera hasta 25 s; al panel va el estado del lector (servidor, segmentos entregados, lo que
   tiene el reproductor y dónde está). Si ninguno abre se le pregunta al servidor y el aviso dice el motivo.
-  Estabilidad: los 2 segmentos siguientes se bajan mientras se entrega el actual; la lista se vuelve a pedir cada tercio
+  Estabilidad: cada segmento va justo a continuación del anterior en la línea de tiempo (su primer PTS,
+  `tsFirstPts`, + `timestampOffset`, en modo `segments`; el primero empieza en 0 y si uno no calza —el servidor
+  reinició la numeración o se saltó un segmento— se pone al final de lo entregado): en modo `sequence` el equipo dejaba
+  un hueco en cada unión y saltarlo era un corte de 1-1,5 s cada segmento. El descifrado AES-128 va por partes de 64 KB
+  sin trabar la app. Los 2 segmentos siguientes se bajan mientras se entrega el actual; la lista se vuelve a pedir cada tercio
   de segmento cuando el canal está al día; un vigilante cada 300 ms salta los huecos entre tramos y empuja la imagen
   quieta a los 3 s; si se acaba lo bajado, pausa (se ve «cargando») hasta tener 3-6 s de margen (hasta 10 s si pasa
   seguido) en lugar de detenerse y seguir cada pocos segundos; un segmento que no llega se reintenta y a la tercera se

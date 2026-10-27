@@ -85,3 +85,30 @@ export function tsStart(d: Uint8Array): number {
   }
   return -1;
 }
+
+// Primer PTS del segmento MPEG-TS en segundos (el menor entre el primer audio y el primer video), o null si no se
+// encuentra. Con él el lector pone cada segmento a continuación del anterior en la línea de tiempo del reproductor
+// (timestampOffset): segmentos seguidos de un mismo canal quedan pegados, sin huecos que saltar.
+export function tsFirstPts(d: Uint8Array): number | null {
+  const seen = new Set<number>();
+  let min = Infinity;
+  const last = Math.min(d.length - 188, 188 * 600);
+  for (let i = 0; i <= last; i += 188) {
+    if (d[i] !== 0x47 || !(d[i + 1] & 0x40)) continue;
+    const pid = ((d[i + 1] & 0x1f) << 8) | d[i + 2];
+    if (seen.has(pid)) continue;
+    const afc = (d[i + 3] >> 4) & 3;
+    if (afc === 0 || afc === 2) continue;
+    const p = i + 4 + (afc === 3 ? 1 + d[i + 4] : 0);
+    if (p + 14 > i + 188 || d[p] !== 0 || d[p + 1] !== 0 || d[p + 2] !== 1) continue;
+    const sid = d[p + 3];
+    // audio (0xC0-0xDF), video (0xE0-0xEF) o privado (AC-3 / E-AC-3)
+    if (!((sid >= 0xc0 && sid <= 0xef) || sid === 0xbd) || !(d[p + 7] & 0x80)) continue;
+    seen.add(pid);
+    const b = p + 9;
+    const pts = (d[b] & 0x0e) * 536870912 + d[b + 1] * 4194304 + (d[b + 2] & 0xfe) * 16384 + d[b + 3] * 128 + (d[b + 4] >> 1);
+    if (pts < min) min = pts;
+    if (seen.size >= 2) break;
+  }
+  return min === Infinity ? null : min / 90000;
+}

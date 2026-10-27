@@ -4,14 +4,17 @@
 // empezando cerca del final (en vivo). Las listas maestras (varias calidades) usan la de más calidad.
 // En Vega el modo directo (src = dirección) no abre MPEG-TS (solo MP4, MKV, MP3, FLV, OGG y FLAC; el HLS solo por MSE),
 // así que en Fire TV este es el camino principal de la TV en vivo.
-// Estabilidad: los 2 segmentos siguientes se bajan mientras se entrega el actual; un vigilante cada 300 ms salta los
-// huecos entre tramos y, si se acaba lo bajado, pausa hasta tener unos segundos de margen (más si pasa seguido) en
-// lugar de detenerse y seguir una y otra vez; un segmento que no llega se reintenta y, a la tercera, se salta.
+// Estabilidad: cada segmento se pone justo a continuación del anterior en la línea de tiempo (sus marcas de tiempo
+// PTS + timestampOffset; antes, en modo 'sequence', el equipo dejaba un hueco en cada unión y saltarlo era un corte
+// de 1-1,5 s cada segmento); los 2 segmentos siguientes se bajan mientras se entrega el actual; el descifrado va por
+// partes sin trabar la app; un vigilante cada 300 ms salta los huecos que queden y, si se acaba lo bajado, pausa hasta
+// tener unos segundos de margen en lugar de detenerse y seguir; un segmento que no llega se reintenta y, a la tercera,
+// se salta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { UA } from '../lib/http';
 import { xuiError } from '../lib/xui';
 import { cbc } from '@noble/ciphers/aes';
-import { parseList, resolveUrl, Seg, segIv, tsStart } from '../lib/hlslist';
+import { parseList, resolveUrl, Seg, segIv, tsFirstPts, tsStart } from '../lib/hlslist';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -19,6 +22,8 @@ type Got = { code: number; url: string; text?: string; data?: Uint8Array; type?:
 
 // segmentos que se bajan por adelantado mientras se entrega el actual
 const PREFETCH = 2;
+// el descifrado AES-128 va por partes de este tamaño (múltiplo de 16)
+const DEC_CHUNK = 65536;
 
 // llave AES-128: 16 bytes tal cual o, en algunos servidores, escrita en hexadecimal (32 caracteres, con o sin 0x)
 function keyBytes(d: Uint8Array): Uint8Array | null {
@@ -62,6 +67,11 @@ export class LiveHls {
   private holdAt = 0;
   private holds: number[] = [];
   private skipped = 0;
+  // desplazamiento de las marcas de tiempo del canal (null = aún no puesto), cuántas veces se reacomodó (cambio de
+  // numeración del servidor, segmento saltado) y huecos que hubo que saltar (deberían ser 0)
+  private tsOff: number | null = null;
+  private resyncs = 0;
+  private gapJumps = 0;
   private lastAppend = Date.now();
   private bytes = 0;
   // llaves AES-128 ya bajadas (por dirección) y si el canal viene cifrado (para el reporte)
@@ -98,7 +108,7 @@ export class LiveHls {
     const n = Math.max(1, this.appended);
     return 'hls host=' + host + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
-      's saltados=' + this.skipped + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' huecos=' + this.gapJumps + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
@@ -127,8 +137,8 @@ export class LiveHls {
       return 'el equipo no acepta MPEG-TS por MSE';
     }
     try {
-      // en orden desde 0 (si el equipo no lo admite, se salta al principio de lo entregado: ver unstick)
-      this.sb.mode = 'sequence';
+      // por marcas de tiempo: el lector pone cada segmento a continuación del anterior (place)
+      this.sb.mode = 'segments';
     } catch {
       // modo por defecto
     }
@@ -200,8 +210,25 @@ export class LiveHls {
       }
       this.keys.set(k.uri, key);
     }
+    // por partes de 64 KB cediendo el turno entre una y otra: un segmento de varios MB descifrado de una vez trababa
+    // la app (y su vigilante) más de un segundo
     try {
-      return cbc(key, segIv(seg)).decrypt(data);
+      if (data.length % 16) throw new Error('largo ' + data.length);
+      const out = new Uint8Array(data.length);
+      let iv = segIv(seg);
+      let o = 0;
+      for (let i = 0; i < data.length; i += DEC_CHUNK) {
+        const end = Math.min(data.length, i + DEC_CHUNK);
+        const lastPart = end === data.length;
+        const dec = cbc(key, iv, { disablePadding: !lastPart }).decrypt(data.subarray(i, end));
+        out.set(dec, o);
+        o += dec.length;
+        if (lastPart) break;
+        iv = data.slice(end - 16, end);
+        await sleep(0);
+        if (!this.alive) return null;
+      }
+      return out.subarray(0, o);
     } catch (e: any) {
       this.lastProblem = 'descifrado: ' + String(e?.message || e).slice(0, 60);
       return null;
@@ -296,6 +323,7 @@ export class LiveHls {
 
   private lastJump = 0;
   private jump(to: number): void {
+    if (this.started) this.gapJumps++;
     this.v.currentTime = to;
     this.lastMove = Date.now();
     this.lastJump = this.lastMove;
@@ -485,6 +513,7 @@ export class LiveHls {
       fails = 0;
       segFails = 0;
       await this.trim();
+      await this.place(data);
       if (!(await this.append(data))) return;
       this.appended++;
       this.bytes += data.length;
@@ -511,6 +540,31 @@ export class LiveHls {
     }
     await sleep(700);
     return this.alive;
+  }
+
+  // Lugar del segmento en la línea de tiempo: el primero empieza en 0 y los siguientes van donde dicen sus marcas de
+  // tiempo (segmentos seguidos del mismo canal quedan pegados: sin huecos). Si no calza con lo entregado (el servidor
+  // reinició la numeración, se saltó un segmento, la lista se reacomodó) se pone justo al final de lo entregado.
+  private async place(data: Uint8Array): Promise<void> {
+    const pts = tsFirstPts(data);
+    if (pts === null) return;
+    let off = this.tsOff;
+    if (off === null) off = -pts;
+    else {
+      const end = this.bufEnd();
+      if (end > 0 && Math.abs(pts + off - end) > 1.5) {
+        off = end - pts;
+        this.resyncs++;
+      }
+    }
+    if (off === this.tsOff) return;
+    await this.idle();
+    try {
+      this.sb.timestampOffset = off;
+      this.tsOff = off;
+    } catch (e: any) {
+      this.lastProblem = 'timestampOffset: ' + String(e?.message || e).slice(0, 40);
+    }
   }
 
   // entrega al reproductor; con la memoria llena (QuotaExceeded) borra lo ya visto y prueba otra vez
