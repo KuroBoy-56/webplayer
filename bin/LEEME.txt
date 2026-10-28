@@ -1,1 +1,0 @@
-Sube aqui un ffmpeg y ffprobe estaticos para Linux, o abre instalar_ffmpeg.php en tu web y el hosting los descarga solo.

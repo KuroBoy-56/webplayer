@@ -4,7 +4,7 @@
 /* FFmpeg opcional: audio Dolby (AC3/E-AC3/DTS), pistas y subtítulos   */
 /* ------------------------------------------------------------------ */
 
-/** Ruta de un binario (ffmpeg|ffprobe) o null. Se puede subir un ffmpeg estático a la carpeta bin/. */
+/** Ruta de un binario (ffmpeg|ffprobe) o null. El hosting ya no usa ffmpeg (la conversión es del panel en la VPS / VDS). */
 function wp_bin($name)
 {
     static $memo = [];

@@ -17,8 +17,4 @@ includes/notifications/
 *.log
 includes/https_relay.php
 
-# ffmpeg descargado en el hosting
-bin/ffmpeg
-bin/ffprobe
-bin/*.part
 movies_cache.json

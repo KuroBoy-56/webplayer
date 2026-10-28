@@ -83,7 +83,7 @@ include "header.php";
         <?php endforeach; ?>
     </table></div>
     <?php endif; ?>
-    <p style="color:#aaa;margin-top:16px">ffmpeg: <b><?php echo wp_bin('ffmpeg') ? 'instalado' : 'NO instalado'; ?></b> · ffprobe: <b><?php echo wp_bin('ffprobe') ? 'instalado' : 'NO instalado'; ?></b> · ejecutar programas: <b><?php echo e(wp_exec_mode() ?: 'bloqueado'); ?></b></p>
+    <p style="color:#aaa;margin-top:16px">Conversión de audio, subtítulos y video: en la VPS / VDS del panel (el hosting no usa ffmpeg).</p>
     <p style="color:#aaa">PHP <?php echo e(PHP_VERSION); ?> · página en <?php echo wp_is_https() ? 'https' : 'http'; ?></p>
 </section>
 <?php include "footer.php"; ?>
