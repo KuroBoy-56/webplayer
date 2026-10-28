@@ -5,7 +5,12 @@ import Foundation
  * Se muestra una vez cada vez que se abre la app (y otra vez tras iniciar sesión).
  */
 enum Alerts {
-    struct Alert: Identifiable, Equatable { let id = UUID(); let expiry: Bool; let title, message, image, button: String }
+    /// images: todas las imágenes de Alertas del panel, en orden (la primera es image); cambian cada interval s
+    struct Alert: Identifiable, Equatable {
+        let id = UUID(); let expiry: Bool; let title, message, image, button: String
+        var images: [String] = []
+        var interval: Int = 3
+    }
 
     private static var shownFor: String?
     static func reset() { shownFor = nil }
@@ -28,6 +33,11 @@ enum Alerts {
                 image = base + path
             } else if j.s("image").hasPrefix("http") { image = j.s("image") }
         }
-        return Alert(expiry: type == "expiry", title: j.s("title"), message: j.s("message"), image: image, button: j.s("button").ifEmpty(tr("Entendido")))
+        // todas las imágenes del registro del panel (Alertas), en orden; sin la lista (panel anterior), la de siempre
+        var images = type == "welcome" ? (j.a("images") ?? []).compactMap { ($0 as? String)?.trimmingCharacters(in: .whitespaces) }.filter { $0.hasPrefix("http") } : []
+        if images.isEmpty && !image.isEmpty { images = [image] }
+        let interval = j.i("interval") >= 1 ? j.i("interval") : 3
+        return Alert(expiry: type == "expiry", title: j.s("title"), message: j.s("message"), image: images.first ?? "",
+                     button: j.s("button").ifEmpty(tr("Entendido")), images: images, interval: interval)
     }
 }

@@ -63,8 +63,8 @@ struct PanelAlertView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
             }
-            if !alert.image.isEmpty {
-                RemoteImage(url: alert.image, mode: .fit, maxPixel: 1400)
+            if !alert.images.isEmpty {
+                AlertImages(images: alert.images, interval: alert.interval)
                     .frame(maxWidth: .infinity)
                     .frame(height: 220)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -75,6 +75,32 @@ struct PanelAlertView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// Imágenes del aviso (Alertas del panel): una sola, fija; varias, cambian cada interval s en el mismo lugar con un
+/// fundido. Todas se cargan de inicio (encimadas), así el cambio nunca deja el recuadro vacío.
+private struct AlertImages: View {
+    let images: [String]
+    let interval: Int
+    @State private var idx = 0
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(images.enumerated()), id: \.offset) { i, u in
+                RemoteImage(url: u, mode: .fit, maxPixel: 1400)
+                    .opacity(i == idx ? 1 : 0)
+            }
+        }
+        .animation(.easeInOut(duration: 0.4), value: idx)
+        .task(id: images) {
+            guard images.count > 1 else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(max(1, interval)) * 1_000_000_000)
+                if Task.isCancelled { break }
+                idx = (idx + 1) % images.count
+            }
+        }
     }
 }
 
