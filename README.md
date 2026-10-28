@@ -233,6 +233,8 @@ compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con 
 - **Barra de avance** del reproductor pintada en píxeles (desde 1.2.2). El arreglo de los canales de Vega 1.0.25 (huecos
   entre segmentos) está en `src/player/livehls.ts`, que en LG no se usa: webOS abre el HLS de los canales con su propio
   reproductor.
+- **1.2.3**: trae de Vega 1.0.26 el lector de canales que convierte cada segmento a MP4 de corrido (`src/lib/tsmux.ts`);
+  como `livehls.ts`, en LG no se usa (los canales los abre el reproductor de webOS).
 
 ## Cómo está hecha
 

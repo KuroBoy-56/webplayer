@@ -483,6 +483,16 @@ export default function Player({ params }: { params: PlayParams }) {
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
       if (params.kind === 'live') {
+        // el reproductor rechazó el video convertido por el lector (MP4): el mismo canal otra vez en MPEG-TS
+        const before = c.liveDiag();
+        if (c.liveRetryTs()) {
+          const ch = params.channels[indexRef.current] || params.channel;
+          reportError('warning', 'Canal en vivo: el equipo no aceptó el MP4 del lector (sigue en MPEG-TS)', 'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' motivo=' + (liveNote.current || 'error del reproductor') + ' · ' + before, 'Reproductor');
+          liveNote.current = '';
+          setStatus(t('Reconectando…'));
+          setBuffering(true);
+          return;
+        }
         // qué pasó en este intento (formato, protocolo, código del reproductor o motivo del lector HLS)
         const vs = vod.current;
         const err: any = (v as any).error;
