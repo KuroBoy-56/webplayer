@@ -133,6 +133,8 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   («Continuar viendo» sigue en ese idioma). «Audio predeterminado» la borra. Un título nuevo siempre empieza con el
   predeterminado. Ajustes ya no tiene «Idioma de audio preferido». El panel solo convierte solo cuando el equipo no
   puede decodificar el audio que suena (DTS…, quedaría sin sonido) o no abre el archivo.
+- **Barra de avance del reproductor (desde 1.0.24)**: el relleno rojo se pinta en píxeles con el ancho medido de la
+  barra; con un ancho en porcentaje, sobre el video de Vega la barra se veía vacía aunque el tiempo avanzara.
 - **Plataformas** (Netflix, Disney+, Prime Video, HBO Max, Marvel, Navidad, Halloween…) muestran solo lo que tiene el
   servidor IPTV: los títulos de sus categorías cuyo nombre coincide, cada uno una vez. El póster de TMDB que pone el
   panel cuando el servidor no tiene carátula es solo del mismo título (nombre y año ±1); las direcciones del panel
