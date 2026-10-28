@@ -58,6 +58,8 @@ function wp_tenant_is_hard($code)
 /** '' (sin elegir), 'skip' u 'NNNNNN'. */
 function wp_dist_choice()
 {
+    // dominio propio de un distribuidor (Worker con su secreto): siempre su número, sin la pantalla del distribuidor
+    if (function_exists('wp_edge_dist') && wp_edge_dist() !== null) return wp_edge_dist();
     $ok = function ($v) { return $v === 'skip' || preg_match('/^\d{6}$/', $v); };
     $v = isset($_COOKIE[WP_DIST_COOKIE]) && is_string($_COOKIE[WP_DIST_COOKIE]) ? trim($_COOKIE[WP_DIST_COOKIE]) : '';
     if ($ok($v)) return $v;

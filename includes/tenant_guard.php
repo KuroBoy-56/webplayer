@@ -80,7 +80,7 @@ function wp_tenant_retry_page()
         . '<body class="nf-login-page"><main class="nf-login-main"><div class="nf-login-box">'
         . '<h1>' . e(t('Sin conexión')) . '</h1><p class="nf-login-hint" style="color:#ccc;font-size:15px">' . e(wp_tenant_message('offline')) . '</p>'
         . '<p><a class="nf-btn-red nf-btn-block" style="display:block;text-align:center;padding:14px;border-radius:4px;font-weight:700" href="javascript:location.reload()">' . e(t('Reintentar')) . '</a></p>'
-        . '<p class="nf-login-hint"><a href="logout.php?dist=1" style="color:#fff">' . e(t('Cambiar distribuidor')) . '</a></p>'
+        . (wp_edge_dist() === null ? '<p class="nf-login-hint"><a href="logout.php?dist=1" style="color:#fff">' . e(t('Cambiar distribuidor')) . '</a></p>' : '')
         . '</div></main></body></html>';
     exit;
 }

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/edge.php'; // dominio propio por Worker: sin el secreto, 403
 /**
  * El hosting de la web ya no convierte nada (ni ffmpeg ni ffprobe): la conversión de audio, subtítulos y video la hace
  * el motor del panel en la VPS / VDS de la línea (api/media_web.php del panel: la VDS propia del distribuidor si la

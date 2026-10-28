@@ -4,6 +4,9 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Dominio propio con un Worker de Cloudflare (28 de octubre)
+- **Opcional:** el cliente entra por un dominio nuevo y el dominio original da **403 Forbidden**. El Worker (`cloudflare/edge-worker.js`) manda un secreto; la web (`includes/edge.php`, cargado por `includes/core.php`) solo atiende con él y usa el dominio que ve el cliente y su IP real (login, cookies, redirecciones y el freno de intentos funcionan igual). Varios dominios, uno por distribuidor, cada uno con su secreto y, si quieres, fijo en su número (sin «Número de distribuidor» ni «Cambiar distribuidor»). Se activa con `'edge_keys'` en `includes/panel_secret.php` (`'edge_block' => false` para probar sin cerrar el original); sin eso nada cambia. El panel sigue llegando a `media_admin.php` (firmado). Guía: `docs/GUIA-WORKER.html`. Archivos: `includes/edge.php` (nuevo), `includes/core.php`, `includes/tenant.php`, `includes/tenant_login.php`, `includes/tenant_guard.php`, `login.php`, `media.php`, `oops.php`, `.htaccess`, `includes/panel_secret.sample.php`, `cloudflare/edge-worker.js` y `docs/GUIA-WORKER.html` (nuevos).
+
 ## Aviso de bienvenida con varias imágenes (28 de octubre)
 - Con varias imágenes en **Alertas** del panel, el aviso las muestra todas en el mismo lugar y cambian cada 3 segundos (con un fundido; todas cargan de inicio). El encabezado no cambia; con una sola imagen o con el video, igual que antes. Archivos: `api.php`, `assets/nf/alert.js` (`v=5`), `assets/nf/app.css` (`v=11`), `header.php`, `login.php`, `play.php`, `video_player.php`, `includes/tenant_guard.php`.
 

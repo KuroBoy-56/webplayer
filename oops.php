@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/edge.php'; // dominio propio por Worker: sin el secreto, 403
 ?>
 <!DOCTYPE html>
 <html lang="en">

@@ -92,6 +92,7 @@ function wp_tenant_login_view()
     } elseif ($err !== '') {
         $v['error'] = wp_tenant_message($err, $cfgErr);
     }
-    if ($v['choice'] === '' || isset($_GET['dist'])) $v['step'] = 'dist';
+    // en el dominio propio de un distribuidor (Worker) nunca se pide ni se cambia el número
+    if (($v['choice'] === '' || isset($_GET['dist'])) && wp_edge_dist() === null) $v['step'] = 'dist';
     return $v;
 }

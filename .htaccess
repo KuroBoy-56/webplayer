@@ -34,6 +34,7 @@ RewriteEngine on
 RewriteRule ^includes/ - [F,L,NC]
 RewriteRule ^bin/ - [F,L,NC]
 RewriteRule ^api/ - [F,L,NC]
+RewriteRule ^(cloudflare|docs)/ - [F,L,NC]
 
 # --- Páginas por token (includes/route_token.php): w-<token> se abre por dentro con route.php ---
 RewriteRule ^w-([A-Za-z0-9_-]{30,2000})$ route.php?_w=$1 [L,QSA]

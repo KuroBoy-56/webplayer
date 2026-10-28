@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dominio propio con Worker</title>
+<style>
+:root{--bg:#0b0f17;--card:#141b27;--card2:#1b2433;--line:#2a3547;--text:#e8edf5;--mute:#9aa7ba;--red:#e50914;--gold:#ffd23f;--green:#2eb85c;--blue:#4aa3ff;--orange:#f38020}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:940px;margin:0 auto;padding:24px 16px 80px}
+h1{font-size:30px;margin:8px 0 4px}
+h2{font-size:22px;margin:40px 0 12px;padding-top:12px;border-top:1px solid var(--line)}
+h3{font-size:18px;margin:22px 0 8px}
+p,li{color:var(--text)}
+.mute{color:var(--mute)}
+.lead{font-size:18px;color:var(--mute)}
+.ph{display:inline-block;background:var(--gold);color:#000;font-weight:900;font-size:1.25em;padding:2px 10px;border-radius:6px;letter-spacing:.5px}
+.ph.o{background:var(--blue);color:#000}
+.box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+.ok{border-left:5px solid var(--green)}
+.warn{border-left:5px solid var(--gold)}
+.bad{border-left:5px solid var(--red)}
+.step{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:18px 0;position:relative}
+.step>.n{position:absolute;top:-14px;left:16px;background:var(--red);color:#fff;font-weight:800;border-radius:20px;padding:2px 12px;font-size:14px}
+.step h3{margin-top:6px}
+.code{position:relative;margin:10px 0}
+.code pre{margin:0;background:#05080d;border:1px solid var(--line);border-radius:8px;padding:12px 90px 12px 14px;overflow-x:auto;font:14px/1.5 Consolas,"Courier New",monospace;color:#d6f5d6;white-space:pre}
+.code button{position:absolute;top:8px;right:8px;background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px}
+.code button.done{background:var(--green);color:#000}
+.where{font-size:13px;color:var(--mute);margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:15px;display:block;overflow-x:auto}
+.ph{word-break:break-all}
+@media (max-width:600px){.ph{font-size:1.05em}h1{font-size:24px}.step{padding:16px 12px}}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--card2)}
+.toc a{color:var(--blue);text-decoration:none}
+.toc li{margin:2px 0}
+svg text{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.diagram{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin:14px 0;overflow-x:auto}
+kbd{background:var(--card2);border:1px solid var(--line);border-radius:4px;padding:0 6px;font-size:14px}
+.tag{display:inline-block;border-radius:4px;padding:0 8px;font-size:13px;font-weight:700}
+.t-orange{background:var(--orange);color:#000}.t-grey{background:#8a94a6;color:#000}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>🌐 Dominio propio para la web player con un Worker de Cloudflare</h1>
+<p class="lead">Tus clientes entran por un dominio nuevo (el tuyo o el de un distribuidor). El dominio original de la
+web player responde <b>403 Forbidden</b> y nunca se ve. El video no pasa por Cloudflare.</p>
+
+<div class="box warn">
+<b>Dónde va cada dominio</b> (en toda la guía están en amarillo y azul, en grande):
+<ul>
+<li><span class="ph">TUDOMINIO.COM</span> = el dominio <b>nuevo</b> que compras (por ejemplo <code>webplayer-mpx.com</code>). Va <b>solo en Cloudflare</b> (paso 1 y paso 5). <b>No va en el código del Worker.</b></li>
+<li><span class="ph o">WEB-ORIGINAL.COM</span> = la dirección <b>actual</b> de tu web player en Hostinger (hoy <code>webplayer.mpx.work</code>). Va en la variable <b>ORIGIN</b> del Worker (paso 4).</li>
+</ul>
+</div>
+
+<div class="toc box">
+<b>Contenido</b>
+<ol>
+<li><a href="#como">Cómo funciona</a></li>
+<li><a href="#antes">Antes de empezar</a></li>
+<li><a href="#p1">Paso 1 · Comprar el dominio y pasarlo a Cloudflare</a></li>
+<li><a href="#p2">Paso 2 · Crear el secreto</a></li>
+<li><a href="#p3">Paso 3 · Crear el Worker y pegar el código</a></li>
+<li><a href="#p4">Paso 4 · Variables del Worker (ORIGIN y EDGE_KEY)</a></li>
+<li><a href="#p5">Paso 5 · Conectar <b>TUDOMINIO.COM</b> al Worker</a></li>
+<li><a href="#p6">Paso 6 · Poner el secreto en la web player (modo prueba)</a></li>
+<li><a href="#p7">Paso 7 · Probar</a></li>
+<li><a href="#p8">Paso 8 · Cerrar el dominio original (403)</a></li>
+<li><a href="#dist">Dominios de los distribuidores (todos los que quieras)</a></li>
+<li><a href="#htaccess">¿Hace falta un .htaccess?</a></li>
+<li><a href="#atras">Volver atrás / si te quedas sin acceso</a></li>
+<li><a href="#errores">Errores comunes</a></li>
+</ol>
+</div>
+
+<h2 id="como">1. Cómo funciona</h2>
+<div class="diagram">
+<svg viewBox="0 0 900 360" width="100%" role="img" aria-label="Esquema">
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9aa7ba"/></marker>
+  <marker id="g" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2eb85c"/></marker>
+  <marker id="r" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e50914"/></marker></defs>
+  <rect x="10" y="40" width="150" height="80" rx="12" fill="#1b2433" stroke="#4aa3ff"/>
+  <text x="85" y="72" fill="#e8edf5" font-size="16" text-anchor="middle">👤 Cliente</text>
+  <text x="85" y="96" fill="#9aa7ba" font-size="13" text-anchor="middle">navegador</text>
+  <rect x="230" y="30" width="220" height="100" rx="12" fill="#1b2433" stroke="#f38020"/>
+  <text x="340" y="62" fill="#f38020" font-size="15" text-anchor="middle">☁ Cloudflare (nube naranja)</text>
+  <text x="340" y="86" fill="#ffd23f" font-size="17" font-weight="bold" text-anchor="middle">TUDOMINIO.COM</text>
+  <text x="340" y="110" fill="#e8edf5" font-size="14" text-anchor="middle">Worker + secreto</text>
+  <rect x="520" y="30" width="230" height="100" rx="12" fill="#1b2433" stroke="#2eb85c"/>
+  <text x="635" y="62" fill="#e8edf5" font-size="15" text-anchor="middle">🖥 Web player (Hostinger)</text>
+  <text x="635" y="86" fill="#4aa3ff" font-size="16" font-weight="bold" text-anchor="middle">WEB-ORIGINAL.COM</text>
+  <text x="635" y="110" fill="#9aa7ba" font-size="13" text-anchor="middle">solo abre con el secreto</text>
+  <line x1="160" y1="80" x2="226" y2="80" stroke="#9aa7ba" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="450" y1="80" x2="516" y2="80" stroke="#9aa7ba" stroke-width="2" marker-end="url(#a)"/>
+  <text x="483" y="70" fill="#9aa7ba" font-size="12" text-anchor="middle">páginas</text>
+  <rect x="520" y="200" width="230" height="80" rx="12" fill="#1b2433" stroke="#8a94a6"/>
+  <text x="635" y="232" fill="#e8edf5" font-size="15" text-anchor="middle">⚙ VPS / VDS (motor)</text>
+  <text x="635" y="256" fill="#9aa7ba" font-size="13" text-anchor="middle">nube GRIS (solo DNS)</text>
+  <path d="M520,240 C300,240 120,230 90,124" fill="none" stroke="#2eb85c" stroke-width="3" marker-end="url(#g)"/>
+  <text x="300" y="228" fill="#2eb85c" font-size="14">🎬 el video va directo de la VPS / VDS al cliente</text>
+  <line x1="85" y1="330" x2="600" y2="140" stroke="#e50914" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#r)"/>
+  <text x="120" y="345" fill="#e50914" font-size="14">✖ entrar directo a WEB-ORIGINAL.COM → 403 Forbidden</text>
+</svg>
+</div>
+<ul>
+<li>El cliente escribe <span class="ph">TUDOMINIO.COM</span>. Cloudflare ejecuta tu <b>Worker</b>, que abre por dentro la web player original y le manda el <b>secreto</b>.</li>
+<li>La web player solo atiende si el secreto es correcto. Toma el dominio que ve el cliente y su IP real, así el login, las cookies y el freno de intentos funcionan igual que hoy.</li>
+<li>Quien entre directo a <span class="ph o">WEB-ORIGINAL.COM</span> recibe <b>403 Forbidden</b>.</li>
+<li>El <b>video</b> no pasa por Cloudflare: va de la VPS / VDS al navegador, como ahora.</li>
+</ul>
+
+<h2 id="antes">2. Antes de empezar</h2>
+<div class="box ok">
+<ul>
+<li>✅ La web player del hosting actualizada con el último <code>webplayer.zip</code> (trae <code>includes/edge.php</code>).</li>
+<li>✅ La web player original abre bien hoy por <b>https</b> (SSL activo en Hostinger).</li>
+<li>✅ Tu VPS / VDS con el motor actualizado y su certificado (el video de la web en https va por ella).</li>
+<li>✅ Una cuenta gratis en <b>cloudflare.com</b>. El plan gratis alcanza (100.000 visitas de páginas por día).</li>
+</ul>
+</div>
+<p class="mute">Mientras no hagas el paso 6, nada cambia: la web funciona exactamente igual que hoy.</p>
+
+<div class="step" id="p1"><span class="n">PASO 1</span>
+<h3>Comprar el dominio y pasarlo a Cloudflare</h3>
+<ol>
+<li>Compra <span class="ph">TUDOMINIO.COM</span> donde quieras (Hostinger, Namecheap, Cloudflare…).</li>
+<li>En <b>Cloudflare</b> › <b>Add a domain</b> (Agregar un dominio) › escribe <span class="ph">TUDOMINIO.COM</span> › plan <b>Free</b>.</li>
+<li>Cloudflare te da <b>2 nameservers</b> (por ejemplo <code>ana.ns.cloudflare.com</code>). En la página donde compraste el dominio, cambia los nameservers por esos dos.</li>
+<li>Espera el correo «Your domain is now active» (de minutos a unas horas).</li>
+<li>En Cloudflare › <span class="ph">TUDOMINIO.COM</span> › <b>SSL/TLS</b> › <b>Edge Certificates</b>: activa <b>Always Use HTTPS</b>.</li>
+</ol>
+<p class="mute">No hace falta crear registros DNS para la web: el paso 5 los crea solo.</p>
+</div>
+
+<div class="step" id="p2"><span class="n">PASO 2</span>
+<h3>Crear el secreto</h3>
+<p>Es una contraseña larga que solo conocen el Worker y tu web player. En tu PC abre <b>PowerShell</b> y pega esta línea:</p>
+<div class="where">PowerShell (tu PC)</div>
+<div class="code"><pre>-join ((48..57)+(65..90)+(97..122) | Get-Random -Count 48 | % {[char]$_})</pre><button>Copiar</button></div>
+<p>Te sale algo como <code>k3J9xQ2…</code> (48 letras y números). <b>Guárdalo</b> en un bloc de notas: lo vas a pegar en el paso 4 y en el paso 6.</p>
+<div class="box warn">El secreto debe tener <b>mínimo 32</b> letras y números (sin espacios). Uno distinto por cada dominio.</div>
+</div>
+
+<div class="step" id="p3"><span class="n">PASO 3</span>
+<h3>Crear el Worker y pegar el código</h3>
+<ol>
+<li>Cloudflare › menú izquierdo <b>Workers &amp; Pages</b> (Compute › Workers) › <b>Create</b> › <b>Create Worker</b> (o «Start with Hello World!»).</li>
+<li>Nombre: <code>mpx-web</code> (para un distribuidor: <code>mpx-web-distA</code>…). Pulsa <b>Deploy</b>.</li>
+<li>Pulsa <b>Edit code</b>. Borra todo lo que hay y pega este código completo (es el archivo <code>cloudflare/edge-worker.js</code> de la web player):</li>
+</ol>
+<div class="where">Cloudflare › Worker › Edit code (no cambies nada del código: el dominio NO va aquí)</div>
+<div class="code"><pre>// MPX Player · Worker de Cloudflare para un dominio propio de la web player.
+// Variables (Settings › Variables and Secrets): ORIGIN (Text) y EDGE_KEY (Secret).
+export default {
+  async fetch(request, env) {
+    const origin = String(env.ORIGIN || '').trim().replace(/\/+$/, '');
+    const key = String(env.EDGE_KEY || '').trim();
+    if (!/^https?:\/\/[^/]+$/i.test(origin) || key.length &lt; 32) {
+      return new Response('Worker sin configurar: falta ORIGIN o EDGE_KEY (ver GUIA-WORKER.html)', { status: 500 });
+    }
+    const seen = new URL(request.url);
+    const to = new URL(seen.pathname + seen.search, origin + '/');
+    const headers = new Headers(request.headers);
+    headers.set('X-MPX-Edge', key);
+    headers.set('X-Forwarded-Host', seen.host);
+    headers.set('X-Forwarded-Proto', seen.protocol.replace(':', ''));
+    headers.set('X-MPX-Client-IP', request.headers.get('CF-Connecting-IP') || '');
+    const init = { method: request.method, headers, redirect: 'manual' };
+    if (request.method !== 'GET' &amp;&amp; request.method !== 'HEAD') init.body = request.body;
+    let res;
+    try {
+      res = await fetch(to.toString(), init);
+    } catch (e) {
+      return new Response('No se pudo abrir la web player original (' + origin + ')', { status: 502 });
+    }
+    const loc = res.headers.get('Location');
+    if (loc) {
+      try {
+        const l = new URL(loc, to);
+        if (l.host === new URL(origin).host) {
+          l.protocol = seen.protocol;
+          l.host = seen.host;
+          res = new Response(res.body, res);
+          res.headers.set('Location', l.toString());
+        }
+      } catch (e) { }
+    }
+    return res;
+  },
+};</pre><button>Copiar</button></div>
+<ol start="4"><li>Pulsa <b>Deploy</b> (arriba a la derecha).</li></ol>
+</div>
+
+<div class="step" id="p4"><span class="n">PASO 4</span>
+<h3>Variables del Worker: ORIGIN y EDGE_KEY</h3>
+<p>Worker <code>mpx-web</code> › <b>Settings</b> › <b>Variables and Secrets</b> › <b>Add</b>:</p>
+<table>
+<tr><th>Type</th><th>Variable name</th><th>Value</th></tr>
+<tr><td><b>Text</b></td><td><code>ORIGIN</code></td><td><code>https://</code><span class="ph o">WEB-ORIGINAL.COM</span><br><span class="mute">la web player de Hostinger, con https://, sin barra al final. Hoy: <code>https://webplayer.mpx.work</code></span></td></tr>
+<tr><td><b>Secret</b></td><td><code>EDGE_KEY</code></td><td>el secreto del paso 2</td></tr>
+</table>
+<p>Pulsa <b>Deploy</b> / <b>Save</b>.</p>
+<div class="box warn">Escribe <code>ORIGIN</code> y <code>EDGE_KEY</code> exactamente así, en mayúsculas.</div>
+</div>
+
+<div class="step" id="p5"><span class="n">PASO 5</span>
+<h3>Conectar <span class="ph">TUDOMINIO.COM</span> al Worker</h3>
+<ol>
+<li>Worker <code>mpx-web</code> › <b>Settings</b> › <b>Domains &amp; Routes</b> › <b>Add</b> › <b>Custom domain</b>.</li>
+<li>Escribe <span class="ph">TUDOMINIO.COM</span> › <b>Add domain</b>. Cloudflare crea el registro DNS y el certificado solo (unos minutos).</li>
+<li>Si también quieres <code>www.</code><span class="ph">TUDOMINIO.COM</span>, repite con ese nombre.</li>
+</ol>
+<p class="mute">Para una carpeta o un subdominio (por ejemplo <code>tv.</code>TUDOMINIO.COM) es igual: escribe ese nombre.</p>
+</div>
+
+<div class="step" id="p6"><span class="n">PASO 6</span>
+<h3>Poner el secreto en la web player (primero en modo prueba)</h3>
+<ol>
+<li>Hostinger › <b>Administrador de archivos</b> › carpeta de la web player › <code>includes/panel_secret.php</code> › <b>Editar</b>.</li>
+<li>Ya tiene la línea <code>'master_key_hex' =&gt; '…',</code>. Debajo de ella, <b>antes del <code>];</code> final</b>, pega:</li>
+</ol>
+<div class="where">Hostinger › web player › includes/panel_secret.php</div>
+<div class="code"><pre>    'edge_keys' => [
+        'PEGA_AQUI_EL_SECRETO_DEL_PASO_2' => '',
+    ],
+    'edge_block' => false,</pre><button>Copiar</button></div>
+<p>Cambia <code>PEGA_AQUI_EL_SECRETO_DEL_PASO_2</code> por tu secreto (dentro de las comillas). Guarda. El archivo queda así:</p>
+<div class="code"><pre>&lt;?php
+return [
+    'master_key_hex' => '…(la que ya tenías, no la toques)…',
+    'edge_keys' => [
+        'k3J9xQ2…tu secreto…' => '',
+    ],
+    'edge_block' => false,
+];</pre><button>Copiar</button></div>
+<ul>
+<li><code>''</code> a la derecha del secreto = en ese dominio el cliente escribe su número de distribuidor o pulsa Omitir, como hoy.</li>
+<li><code>'edge_block' =&gt; false</code> = <b>modo prueba</b>: el dominio original todavía abre. Así pruebas sin riesgo.</li>
+</ul>
+</div>
+
+<div class="step" id="p7"><span class="n">PASO 7</span>
+<h3>Probar</h3>
+<ol>
+<li>Abre <code>https://</code><span class="ph">TUDOMINIO.COM</span>: debe salir el inicio de sesión de la web player, con candado 🔒.</li>
+<li>Inicia sesión, abre una película, un capítulo y un canal en vivo: deben reproducir igual que en el dominio original.</li>
+<li>Cierra sesión y vuelve a entrar. Prueba también desde el celular.</li>
+</ol>
+<p>Si algo falla, mira <a href="#errores">Errores comunes</a>. Mientras estés en modo prueba, tus clientes siguen entrando por el dominio original sin problema.</p>
+</div>
+
+<div class="step" id="p8"><span class="n">PASO 8</span>
+<h3>Cerrar el dominio original (403 Forbidden)</h3>
+<p>Cuando todo funcione por <span class="ph">TUDOMINIO.COM</span>, en <code>includes/panel_secret.php</code> cambia:</p>
+<div class="code"><pre>    'edge_block' => true,</pre><button>Copiar</button></div>
+<p>(o borra esa línea: sin ella también bloquea). Guarda y abre <code>https://</code><span class="ph o">WEB-ORIGINAL.COM</span>: debe salir <b>403 Forbidden</b>. Por <span class="ph">TUDOMINIO.COM</span> todo sigue funcionando.</p>
+<div class="box warn">Avisa a tus clientes de la dirección nueva <b>antes</b> de este paso: los que guardaron el dominio original verán 403.</div>
+<p class="mute">El panel puede seguir hablando con la web player (botones del motor de la web en Guía EPG): esa conexión va firmada con la llave maestra y no se bloquea.</p>
+</div>
+
+<h2 id="dist">Dominios de los distribuidores (todos los que quieras)</h2>
+<p>Sí: puedes hacer lo mismo con <b>cada distribuidor</b> que compre su dominio, sin límite. Cada dominio lleva <b>su propio Worker y su propio secreto</b>. En <code>panel_secret.php</code>, a la derecha de su secreto va <b>el número de 6 dígitos de ese distribuidor</b>. Así su web queda fija en él: sus clientes no ven la pantalla «Número de distribuidor» ni el enlace «Cambiar distribuidor». Ven su marca (nombre, logo y colores) como siempre.</p>
+<div class="diagram">
+<svg viewBox="0 0 900 230" width="100%" role="img" aria-label="Varios dominios">
+  <defs><marker id="b" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9aa7ba"/></marker></defs>
+  <rect x="10" y="10" width="270" height="56" rx="10" fill="#1b2433" stroke="#f38020"/><text x="145" y="36" fill="#ffd23f" font-size="15" font-weight="bold" text-anchor="middle">TUDOMINIO.COM</text><text x="145" y="56" fill="#9aa7ba" font-size="12" text-anchor="middle">Worker mpx-web · secreto 1 → ''</text>
+  <rect x="10" y="86" width="270" height="56" rx="10" fill="#1b2433" stroke="#f38020"/><text x="145" y="112" fill="#ffd23f" font-size="15" font-weight="bold" text-anchor="middle">DOMINIO-DISTRIBUIDOR-A.COM</text><text x="145" y="132" fill="#9aa7ba" font-size="12" text-anchor="middle">Worker mpx-web-a · secreto 2 → 123456</text>
+  <rect x="10" y="162" width="270" height="56" rx="10" fill="#1b2433" stroke="#f38020"/><text x="145" y="188" fill="#ffd23f" font-size="15" font-weight="bold" text-anchor="middle">DOMINIO-DISTRIBUIDOR-B.COM</text><text x="145" y="208" fill="#9aa7ba" font-size="12" text-anchor="middle">Worker mpx-web-b · secreto 3 → 654321</text>
+  <rect x="560" y="70" width="320" height="90" rx="12" fill="#1b2433" stroke="#2eb85c"/><text x="720" y="104" fill="#4aa3ff" font-size="16" font-weight="bold" text-anchor="middle">WEB-ORIGINAL.COM</text><text x="720" y="128" fill="#e8edf5" font-size="13" text-anchor="middle">una sola web player (Hostinger)</text><text x="720" y="148" fill="#9aa7ba" font-size="12" text-anchor="middle">directo: 403 Forbidden</text>
+  <line x1="280" y1="38" x2="556" y2="100" stroke="#9aa7ba" stroke-width="2" marker-end="url(#b)"/>
+  <line x1="280" y1="114" x2="556" y2="114" stroke="#9aa7ba" stroke-width="2" marker-end="url(#b)"/>
+  <line x1="280" y1="190" x2="556" y2="130" stroke="#9aa7ba" stroke-width="2" marker-end="url(#b)"/>
+</svg>
+</div>
+<h3>Opción A · El dominio del distribuidor en TU Cloudflare (recomendada)</h3>
+<ol>
+<li>El distribuidor compra su dominio y cambia sus nameservers a los de <b>tu</b> cuenta de Cloudflare (paso 1 con su dominio).</li>
+<li>Creas un secreto nuevo (paso 2).</li>
+<li>Creas un Worker nuevo, por ejemplo <code>mpx-web-a</code> (paso 3), con el <b>mismo código</b>.</li>
+<li>Variables (paso 4): <code>ORIGIN</code> = <code>https://</code><span class="ph o">WEB-ORIGINAL.COM</span> (la misma de siempre) y <code>EDGE_KEY</code> = su secreto nuevo.</li>
+<li>Custom domain (paso 5): <span class="ph">DOMINIO-DEL-DISTRIBUIDOR.COM</span>.</li>
+<li>En <code>panel_secret.php</code> agrega <b>una línea más</b> dentro de <code>'edge_keys'</code>, con su número:</li>
+</ol>
+<div class="code"><pre>    'edge_keys' => [
+        'secreto-de-tu-dominio…' => '',
+        'secreto-del-distribuidor-A…' => '123456',
+        'secreto-del-distribuidor-B…' => '654321',
+    ],</pre><button>Copiar</button></div>
+<h3>Opción B · El distribuidor con su propia cuenta de Cloudflare</h3>
+<p>Él hace los pasos 1, 3, 4 y 5 en su cuenta. Tú le das <b>solo</b> su secreto (paso 2) y la dirección <code>ORIGIN</code>, y agregas su línea en <code>panel_secret.php</code>. <b>Nunca</b> le des la llave maestra ni otro secreto. Para quitarle el acceso, borra su línea: su dominio da 403 al instante.</p>
+<div class="box ok">No hay límite de dominios. El plan gratis de Cloudflare permite hasta 100 Workers por cuenta y 100.000 visitas de páginas por día sumando todos (el video no cuenta porque no pasa por Cloudflare). Si se te queda corto, el plan Workers Paid cuesta 5 USD al mes.</div>
+
+<h2 id="htaccess">¿Hace falta un .htaccess?</h2>
+<p><b>No.</b> Basta con <code>panel_secret.php</code>: todas las páginas de la web player (login, inicio, fichas, reproductor, <code>api.php</code>, carátulas…) pasan por PHP y responden 403 sin el secreto. Solo los archivos fijos públicos (estilos, scripts, el logo) se pueden seguir abriendo sueltos por el dominio original, pero no sirven para nada sin las páginas. El <code>.htaccess</code> que ya trae la web no se toca.</p>
+
+<h2 id="atras">Volver atrás / si te quedas sin acceso</h2>
+<ul>
+<li><b>Quitarlo todo:</b> borra las líneas <code>'edge_keys'</code> y <code>'edge_block'</code> de <code>panel_secret.php</code>: la web vuelve a funcionar exactamente como antes por el dominio original.</li>
+<li><b>Abrir otra vez el original sin quitar los Workers:</b> pon <code>'edge_block' =&gt; false,</code>.</li>
+<li>Siempre se edita desde el <b>Administrador de archivos de Hostinger</b>, que no depende de la web player.</li>
+</ul>
+
+<h2 id="errores">Errores comunes</h2>
+<table>
+<tr><th>Lo que ves</th><th>Causa</th><th>Solución</th></tr>
+<tr><td>«Worker sin configurar: falta ORIGIN o EDGE_KEY»</td><td>Falta una variable, está mal escrita o el secreto tiene menos de 32 caracteres.</td><td>Paso 4: nombres exactos <code>ORIGIN</code> y <code>EDGE_KEY</code>. ORIGIN con <code>https://</code> y sin barra al final.</td></tr>
+<tr><td><b>403 Forbidden</b> en TUDOMINIO.COM</td><td>El secreto del Worker y el de <code>panel_secret.php</code> no son iguales.</td><td>Copia y pega el mismo en los dos lados (sin espacios). Si cambias el secreto del Worker, pulsa <b>Deploy</b>.</td></tr>
+<tr><td>«No se pudo abrir la web player original»</td><td>ORIGIN apunta mal o el SSL de Hostinger no está activo.</td><td>Abre <code>https://</code>WEB-ORIGINAL.COM en el navegador (en modo prueba): debe abrir con candado.</td></tr>
+<tr><td>Error 1000-1016 de Cloudflare</td><td>El dominio aún no está activo o el Custom domain no terminó.</td><td>Espera el correo de «domain active» y revisa el paso 5.</td></tr>
+<tr><td>Las páginas abren pero el video no</td><td>El registro de la VPS / VDS está con nube naranja, o le falta el certificado.</td><td>En Cloudflare, el registro del motor (ej. <code>motor</code>) con <b>nube gris</b>; certificado con certbot (guía de la VPS).</td></tr>
+<tr><td>El dominio de un distribuidor pide «Número de distribuidor»</td><td>Su línea en <code>edge_keys</code> tiene <code>''</code>.</td><td>Pon su número de 6 dígitos a la derecha de su secreto.</td></tr>
+<tr><td>Todo da 403, incluso tu dominio</td><td><code>edge_block</code> activo y ningún secreto coincide.</td><td>Pon <code>'edge_block' =&gt; false,</code> en el Administrador de archivos de Hostinger y revisa los secretos.</td></tr>
+</table>
+<p class="mute">Cualquier error que no esté aquí: manda una foto de lo que sale y de la pantalla de Variables del Worker (tapando el secreto).</p>
+
+</div>
+<script>
+document.querySelectorAll('.code button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var t = b.previousElementSibling.innerText;
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () {
+      b.textContent = 'Copiado'; b.classList.add('done'); setTimeout(function () { b.textContent = 'Copiar'; b.classList.remove('done'); }, 1500);
+    }).catch(function () { var r = document.createRange(); r.selectNodeContents(b.previousElementSibling); var s = getSelection(); s.removeAllRanges(); s.addRange(r); });
+  });
+});
+</script>
+</body>
+</html>

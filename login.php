@@ -285,7 +285,7 @@ $dist_step = $dist_view['step'];
                 <input type="checkbox" id="remember" <?php echo $remember !== '' ? 'checked' : ''; ?>> <?php echo t('Recordarme'); ?>
             </label>
             <p class="nf-login-hint"><?php echo t('Ingresa con el usuario y la contraseña de tu suscripción.'); ?>
-                <button type="button" class="nf-link-btn" id="dist-change"><?php echo t('Cambiar distribuidor'); ?></button></p>
+                <?php if (wp_edge_dist() === null): ?><button type="button" class="nf-link-btn" id="dist-change"><?php echo t('Cambiar distribuidor'); ?></button><?php endif; ?></p>
         </form>
     </main>
 
@@ -368,7 +368,9 @@ $dist_step = $dist_view['step'];
         var v = dcode.value.replace(/\D/g, '').slice(0, 6);
         if (v !== dcode.value) dcode.value = v;
     });
-    document.getElementById('dist-change').addEventListener('click', function () {
+    // sin el botón en el dominio propio de un distribuidor (número fijo)
+    var distChange = document.getElementById('dist-change');
+    if (distChange) distChange.addEventListener('click', function () {
         derr.hidden = true;
         showStep('dist');
     });
