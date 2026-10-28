@@ -1,6 +1,6 @@
 # MPX Player para Fire TV con Vega OS
 
-**Marca:** la app se llama **MPX Player** (`title` en `manifest.toml` y `APP_NAME` en `src/lib/tenant.ts`; el id sigue siendo `com.latmpx.player.vega`). Logo, icono (`app_icon.png`) e imágenes de las plataformas (Netflix, Disney+, HBO Max, Prime Video, Marvel, Apple TV+, Paramount+, DC, Navidad, Halloween) están en `assets/image/`.
+**Marca:** la app se llama **MPX Player** (`title` en `manifest.toml` y `APP_NAME` en `src/lib/tenant.ts`; el id sigue siendo `com.latmpx.player.tv`). Logo, icono (`app_icon.png`) e imágenes de las plataformas (Netflix, Disney+, HBO Max, Prime Video, Marvel, Apple TV+, Paramount+, DC, Navidad, Halloween) están en `assets/image/`.
 
 App de la webplayer para los Fire TV nuevos con **Vega OS** (Fire TV Stick 4K Select y
 siguientes). Está hecha en React Native para Vega y usa el mismo panel y el mismo diseño
@@ -303,7 +303,7 @@ pedido que la lleve (el panel parecía no tener servidores, sin carátulas ni Au
 2. En la [Amazon Developer Console](https://developer.amazon.com/apps-and-games/console/apps/list.html)
    crea una app nueva para **Fire TV (Vega OS)**.
 3. En *Archivos de la app* sube los `.vpkg`. El identificador del paquete es
-   `com.latmpx.player.vega` (en `manifest.toml`).
+   `com.latmpx.player.tv` (en `manifest.toml`).
 4. Completa ficha, capturas, icono (`assets/image/app_icon.png`, 512×512) y clasificación, y envía a revisión.
    La firma la pone Amazon al publicar.
 
@@ -327,7 +327,7 @@ virtualización activada en la BIOS (Intel VT-x / AMD-V; con KVM va mucho más f
 3. Arranca el simulador y abre la app:
    ```sh
    vega virtual-device start --timeout 120
-   vega run-app latmpxvega_x86_64.vpkg com.latmpx.player.vega.main -d VirtualDevice
+   vega run-app latmpxvega_x86_64.vpkg com.latmpx.player.tv.main -d VirtualDevice
    ```
    Con el teclado: flechas = cruceta, Enter = OK, Esc/Retroceso = Atrás.
    Si la imagen falla, prueba `vega virtual-device start --no-gl-accel`.
@@ -342,7 +342,7 @@ vega devmode login
 vega devmode enable-device --code <código de 6 dígitos que muestra la TV>
 vega device list
 vega device install-app --packagePath latmpxvega_armv7.vpkg
-vega device launch-app --appName com.latmpx.player.vega
+vega device launch-app --appName com.latmpx.player.tv
 ```
 
 ## Compilar en tu PC

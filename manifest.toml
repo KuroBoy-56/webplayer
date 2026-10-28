@@ -1,7 +1,7 @@
 schema-version = 1
 
 [package]
-id = "com.latmpx.player.vega"
+id = "com.latmpx.player.tv"
 title = "MPX Player"
 version = "1.0.26"
 icon = "@image/app_icon.png"
@@ -12,7 +12,7 @@ target = "1.2"
 
 [components]
 [[components.interactive]]
-id = "com.latmpx.player.vega.main"
+id = "com.latmpx.player.tv.main"
 runtime-module = "/com.amazon.kepler.runtime.react_native_kepler_4@IReactNativeKepler_0"
 categories = ["com.amazon.category.main"]
 launch-type = "singleton"
@@ -20,7 +20,7 @@ launch-type = "singleton"
 [processes]
 [[processes.group]]
 id = "main"
-component-ids = ["com.latmpx.player.vega.main"]
+component-ids = ["com.latmpx.player.tv.main"]
 
 [wants]
 [[wants.service]]
@@ -65,10 +65,10 @@ id = "/com.amazon.vega.os@IVega_1_2"
 id = "com.amazon.gipc.uuid.*"
 
 [[offers.module]]
-id = "/com.latmpx.player.vega.main@IMod1"
-includes-messages = ["pkg://com.latmpx.player.vega.main"]
+id = "/com.latmpx.player.tv.main@IMod1"
+includes-messages = ["pkg://com.latmpx.player.tv.main"]
 
 [[message]]
-uri = "pkg://com.latmpx.player.vega.main"
+uri = "pkg://com.latmpx.player.tv.main"
 sender-privileges = ["*"]
 receiver-privileges = ["self"]
