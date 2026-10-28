@@ -64,7 +64,7 @@ object Xtream {
             val created = c.toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: c.takeIf { it.isNotBlank() } ?: tr(R.string.unknown)
             val active = ui.s("active_cons").takeIf { it.isNotBlank() } ?: "0"
             val max = ui.s("max_connections").takeIf { it.isNotBlank() } ?: "0"
-            return LoginResult.Ok(probe.copy(expires = exp, createdAt = created, activeCons = active, maxCons = max))
+            return LoginResult.Ok(probe.copy(expires = exp, createdAt = created, activeCons = active, maxCons = max, expTs = ui.s("exp_date").toLongOrNull() ?: 0L))
         }
         return LoginResult.Fail(lastMsg)
     }

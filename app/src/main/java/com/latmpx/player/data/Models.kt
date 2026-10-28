@@ -53,7 +53,7 @@ data class Details(
 
 data class EpgEntry(val title: String, val desc: String, val start: Long, val end: Long)
 
-data class Session(val dnsName: String, val base: String, val user: String, val pass: String, val expires: String, val activeCons: String = "0", val maxCons: String = "0", val createdAt: String = "2024")
+data class Session(val dnsName: String, val base: String, val user: String, val pass: String, val expires: String, val activeCons: String = "0", val maxCons: String = "0", val createdAt: String = "2024", val expTs: Long = 0L)
 
 /**
  * Entrada de "Continuar viendo" (panel progress.php).
