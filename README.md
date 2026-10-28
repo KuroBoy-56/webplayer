@@ -60,7 +60,7 @@ Se envía siempre en el campo `mac_address`.
    - `check_mac`: respaldo para saber si el equipo ya está activado.
    - `check_mac` y `auto_demo` mandan `"enc": 1`: el panel responde la línea (usuario y contraseña) cifrada como `fetch_dns` y la app la descifra; un panel viejo sigue respondiendo JSON.
    - `fetch_dns`: lista de servidores (respuesta cifrada) para el selector "Servidor 1, 2…".
-   - `submit_url`: activa el equipo con usuario + contraseña + servidor.
+   - `submit_url`: activa el equipo con usuario + contraseña + servidor. La app valida antes la línea **desde el equipo** (el DNS elegido y después los demás, http y https, como Roku y Samsung) y la manda con `validated: 1` y `exp_date`: así el panel la registra aunque su hosting no reciba respuesta del servidor IPTV (antes salía «No se pudo validar la línea con el servidor IPTV» y no se registraba). Un `503` de un panel viejo no deja fuera: se entra con la línea ya validada.
    - `auto_demo`: botón **Autodemo** (la duración la decide el panel: `demo_duration`). Una sola demo por equipo para siempre: `403` muestra el mensaje y desactiva el botón; `429` (más de 3 demos por conexión al día) y `400` muestran el mensaje del panel.
      **Autodemo con código de revendedor:** si en **Contraseña** hay un código de 6 letras y números (con al menos una letra, p. ej. `RV7K2M`), va en mayúsculas como `reseller` y la demo queda a nombre de ese revendedor en el panel. Solo números nunca se envía (es un número de distribuidor). Un código que no existe responde `404`: se muestra el aviso y la demo sigue disponible.
 3. Con la línea elegida la app usa el `player_api.php` del servidor IPTV (Xtream Codes).

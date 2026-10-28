@@ -286,11 +286,21 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                             if (dns.isEmpty()) Panel.fetchDns().let { d -> d.value?.let { dns = it }; if (d.value == null) err = d.error }
                             val server = dns.getOrNull(dnsIdx) ?: dns.firstOrNull()
                             if (server == null) { if (err == null) err = tr(R.string.login_no_servers); return@act }
-                            status = tr(R.string.login_activating)
                             fromAutodemo = false
-                            val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), server)
-                            if (r.value == null) { err = r.error; return@act }
-                            if (!resolve() && err == null) connect(Panel.Line(tr(R.string.server_n, dnsIdx + 1), Xtream.normalize(server), user.trim(), pass.trim()))
+                            // la línea se valida desde este equipo (el DNS elegido primero y después los demás, como Roku y
+                            // Samsung): el hosting del panel puede no llegar al servidor IPTV (lo bloquea o tarda) y antes eso
+                            // dejaba fuera con «No se pudo validar la línea con el servidor IPTV»
+                            status = tr(R.string.login_connecting_to, tr(R.string.server_n, dnsIdx + 1))
+                            val order = (listOf(server) + dns).map(Xtream::normalize).distinct()
+                            val v = Xtream.login(order.map { s -> tr(R.string.server_n, dns.map(Xtream::normalize).indexOf(s).coerceAtLeast(0) + 1) to s }, user.trim(), pass.trim())
+                            if (v is Xtream.LoginResult.Fail) { err = v.message; return@act }
+                            val ses = (v as Xtream.LoginResult.Ok).session
+                            status = tr(R.string.login_activating)
+                            // validated: el panel la registra aunque él no reciba respuesta del servidor IPTV; 503 = no la
+                            // registró por eso (panel viejo), se entra igual con la línea que este equipo ya validó
+                            val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), ses.base, validated = true, expTs = ses.expTs)
+                            if (r.value == null && r.code != 503) { err = r.error; return@act }
+                            if (!resolve() && err == null) connect(Panel.Line(ses.dnsName, ses.base, user.trim(), pass.trim()))
                         }
                     }
                     
