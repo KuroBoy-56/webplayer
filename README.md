@@ -84,7 +84,9 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 - **Actores**: en la ficha, el reparto (fotos de TMDB) abre la página del actor con su filmografía, solo los títulos que el servidor tiene (título normalizado y año ±1, como la app de Windows y la web). Clave TMDB del panel o la incorporada.
 - **Reproductor del televisor (AVPlay de Samsung)**: MP4, MKV, AVI, MOV, MPEG-TS y HLS sin límite de
   resolución ni de bitrate (4K si el televisor y el archivo lo tienen): continuar donde quedó, ◀▶ 10 s, OK pausa,
-  ▼ o MENÚ para audio y subtítulos, idioma preferido automático y siguiente episodio solo.
+  ▼ o MENÚ para audio y subtítulos, siguiente episodio solo. Audio como Roku: todo título empieza con su audio predeterminado, directo
+  del servidor IPTV; el panel prepara otro idioma solo cuando el usuario lo elige, y esa elección se recuerda
+  para ese título (Continuar viendo). La barra de avance se pinta en píxeles.
 - **Audio y subtítulos como en Roku**: se lee la cabecera del MKV/MP4 para listar todas las pistas
   con su idioma (Español latino, Inglés…) y su códec. El cambio de audio se comprueba en el
   reproductor; si el equipo no lo toma o no decodifica ese audio (DTS, TrueHD…), lo prepara el
@@ -101,7 +103,7 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
   `MX: ESPN 2 HD`, nunca `ESPN` ni `ESPN 3`) y, si no lo tienes, se busca el evento por equipos o nombre en
   las carpetas de eventos. Un índice de palabras de los canales evita comparar todos contra todos.
 - **Progreso y Mi lista sincronizados** con `api/progress.php`: lo que ves en la TV sigue en la web y el móvil, aunque cada app haya entrado por otra DNS del mismo servicio (el panel los une). Se vuelven a leer al regresar a la app.
-- **Aviso del panel al abrir la app** (`api/alerta.php?format=json`, página **Alertas** del panel): bienvenida con el texto general y la imagen, o aviso de vencimiento con el texto de 3, 2, 1 o 0 días. Una vez por arranque y otra vez tras iniciar sesión; botón **Entendido** enfocado, *Atrás* también lo cierra.
+- **Aviso del panel al abrir la app** (`api/alerta.php?format=json`, página **Alertas** del panel): bienvenida con el texto general y las imágenes del registro de Alertas (varias cambian cada `interval` s, 3, en el mismo lugar), o aviso de vencimiento con el texto de 3, 2, 1 o 0 días. Una vez por arranque y otra vez tras iniciar sesión; botón **Entendido** enfocado, *Atrás* también lo cierra.
 - **Número de distribuidor** (primera vez, sin pantalla de inicio antes: el logo de inicio es el del distribuidor elegido, o el de la app con *Omitir*): 6 dígitos con teclado en pantalla. Con número, la
   app usa el logo, el nombre y los colores de ese distribuidor (`login.php` acción
   `tenant_config`, app `tizen`) y todas las llamadas al panel llevan `tenant` + `app` (DNS,
