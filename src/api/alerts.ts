@@ -7,7 +7,16 @@ import { APP_ID, tenantCode } from '../lib/tenant';
 import { panel, panelApiBase, Session } from './panel';
 import { t } from '../lib/i18n';
 
-export type PanelAlert = { expiry: boolean; title: string; message: string; image: string; button: string };
+// images: todas las imágenes de Alertas del panel, en orden (la primera es image); cambian cada interval s
+export type PanelAlert = {
+  expiry: boolean;
+  title: string;
+  message: string;
+  image: string;
+  images: string[];
+  interval: number;
+  button: string;
+};
 
 export async function fetchAlert(s: Session): Promise<PanelAlert | null> {
   const q = [
@@ -30,11 +39,20 @@ export async function fetchAlert(s: Session): Promise<PanelAlert | null> {
     if (/^img\/alertas\/[A-Za-z0-9._-]+$/.test(path)) image = panelApiBase().replace(/api\/$/, '') + path;
     else if (/^https?:\/\//i.test(String(j.image || ''))) image = String(j.image);
   }
+  // todas las imágenes del registro del panel (Alertas), en orden; sin la lista (panel anterior), la de siempre
+  let images: string[] =
+    j.type === 'welcome' && Array.isArray(j.images)
+      ? j.images.map((u: any) => String(u || '').trim()).filter((u: string) => /^https?:\/\//i.test(u))
+      : [];
+  if (!images.length && image) images = [image];
+  const interval = Number(j.interval) >= 1 ? Math.floor(Number(j.interval)) : 3;
   return {
     expiry: j.type === 'expiry',
     title: String(j.title || ''),
     message: String(j.message || ''),
-    image,
+    image: images[0] || '',
+    images,
+    interval,
     button: String(j.button || t('ENTENDIDO')),
   };
 }
