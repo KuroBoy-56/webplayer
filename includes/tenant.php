@@ -146,7 +146,7 @@ function wp_panel_ck($key, $code = null)
 /** Cuerpo cifrado de la acción tenant_config. */
 function wp_panel_tenant_payload($code)
 {
-    return json_encode(['code' => (string)$code, 'tenant' => (string)$code, 'app' => WP_APP_ID, 'device' => 'web', 't' => time()]);
+    return ['code' => (string)$code, 'tenant' => (string)$code, 'app' => WP_APP_ID, 'device' => 'web', 't' => time()];
 }
 
 /**
@@ -245,8 +245,7 @@ function wp_tenant_status($code, $force = false)
             // ya hubo muchos números no válidos: no se pregunta (protege la IP del hosting)
             $res = ['ok' => false, 'error' => 'too_many_attempts', 'soft' => true];
         } else {
-            $payload = wp_panel_encrypt(wp_panel_tenant_payload($code));
-            $body = $payload ? wp_panel_request('login.php', http_build_query(['action' => 'tenant_config', 'data' => $payload]), [], 8, $http) : null;
+            $body = wp_panel_login('tenant_config', wp_panel_tenant_payload($code), 8, $http);
             $res = wp_panel_tenant_parse($body, isset($http) ? (int)$http : 0);
             if (is_array($res) && !$res['ok'] && $res['error'] === 'tenant_invalid') wp_tenant_fail_guard(true);
         }

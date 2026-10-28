@@ -4,6 +4,9 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Verificador antihack del panel en los pedidos a login.php (28 de octubre, noche)
+- Los tres pedidos que la web hace a `login.php` del panel (lista de DNS, número de distribuidor y pantalla falsa) llevan `"ts"` (la hora) dentro del JSON cifrado, como las apps. Si el reloj del hosting está corrido, el panel responde con su hora y se reintenta una vez con la diferencia (se recuerda un día). Así la web sigue funcionando cuando el panel exija `ts` (`login_require_ts`). Nada cambia para el cliente. Archivos: `includes/panel.php` (`wp_panel_login`), `includes/tenant.php`, `includes/fake_screen.php`.
+
 ## Sin la carpeta bin/ (28 de octubre)
 - Se quitaron `bin/` (ffmpeg y ffprobe) e `instalar_ffmpeg.php`: el hosting ya no convierte ni analiza nada (lo hace el motor del panel en la VPS / VDS). Puedes borrarlos del hosting. `estado.php` ya no muestra «ffmpeg: NO instalado». La regla de `.htaccess` que bloquea `bin/` se queda por si quedó algo.
 

@@ -48,8 +48,7 @@ function wp_fake_screen_cfg()
     $key = 'fake|' . wp_panel_tenant();
     $cached = wp_cache_get($key, 60, $stale);
     if (!is_array($cached)) {
-        $payload = wp_panel_encrypt(json_encode(['platform' => WP_APP_ID] + wp_panel_tenant_fields()));
-        $body = $payload ? wp_panel_request('login.php', http_build_query(['action' => 'fake_screen', 'data' => $payload]), [], 5, $code) : null;
+        $body = wp_panel_login('fake_screen', ['platform' => WP_APP_ID] + wp_panel_tenant_fields(), 5, $code);
         $plain = ($body !== null && $code === 200) ? wp_panel_decrypt($body) : null;
         $j = $plain !== null ? json_decode($plain, true) : null;
         if (is_array($j) && array_key_exists('fake_screen', $j)) {

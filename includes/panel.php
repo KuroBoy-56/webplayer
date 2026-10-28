@@ -189,7 +189,29 @@ function wp_panel_last_dns_file($code = null)
 function wp_panel_dns_payload($code = null)
 {
     $f = wp_panel_tenant_fields($code);
-    return json_encode($f ? $f + ['t' => time()] : ['app' => 'webplayer', 't' => time()]);
+    return $f ? $f + ['t' => time()] : ['app' => 'webplayer', 't' => time()];
+}
+
+/**
+ * Pedido a login.php del panel: el JSON cifrado lleva "ts" (hora unix, el verificador antihack del panel,
+ * como las apps). Si el reloj de este servidor está corrido, el panel responde 401 ts_* con su hora y se
+ * reintenta una vez con la diferencia, que se recuerda un día.
+ */
+function wp_panel_login($action, array $fields, $timeout = 8, &$code = null)
+{
+    $code = 0;
+    $body = null;
+    $skew = (int)wp_cache_get('panel|skew', 86400);
+    for ($i = 0; $i < 2; $i++) {
+        $payload = wp_panel_encrypt(json_encode($fields + ['ts' => time() + $skew]));
+        if (!$payload) return null;
+        $body = wp_panel_request('login.php', http_build_query(['action' => $action, 'data' => $payload]), [], $timeout, $code);
+        $j = ($i === 0 && $code === 401 && $body !== null) ? json_decode($body, true) : null;
+        if (!is_array($j) || strpos((string)($j['code'] ?? ''), 'ts_') !== 0 || (int)($j['server_time'] ?? 0) <= 0) break;
+        $skew = (int)$j['server_time'] - time();
+        wp_cache_set('panel|skew', $skew);
+    }
+    return $body;
 }
 
 /** Lista de URLs de DNS tal como las entrega el panel. */
@@ -204,8 +226,7 @@ function wp_panel_dns_urls()
 
     $fresh = null;
     if (wp_panel_ready()) {
-        $payload = wp_panel_encrypt(wp_panel_dns_payload($tc));
-        $body = $payload ? wp_panel_request('login.php', http_build_query(['action' => 'fetch_dns', 'data' => $payload]), [], 8, $code) : null;
+        $body = wp_panel_login('fetch_dns', wp_panel_dns_payload($tc), 8, $code);
         $err = ($body !== null && $tc !== '' && $code >= 400) ? json_decode($body, true) : null;
         if (is_array($err) && wp_tenant_is_hard((string)($err['code'] ?? ''))) {
             // distribuidor vencido/suspendido: no se usa la copia vieja
