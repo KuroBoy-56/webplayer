@@ -8,7 +8,7 @@
 // - Sin permiso del motor (Sin permisos / No compatible): el texto del panel una vez por video y el
 //   video sigue directo; nada automático pasa por el motor (estado guardado por línea en media.ts).
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import { LiveHls } from './livehls';
+import { disableMp4, LiveHls } from './livehls';
 import { Engine, engineDenied, fileTracks, knownNow, knownTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
@@ -123,6 +123,8 @@ export class Playback {
   private remux: { a: number; label: string } | null = null;
   private hls: PanelHls | null = null;
   private liveHls: LiveHls | null = null;
+  // audio del canal elegido en el menú (canales con varios idiomas)
+  private liveAudio = 0;
   // el HLS del panel que sigue sonando mientras se prepara otro idioma
   private prevHls: PanelHls | null = null;
   private offset = 0;
@@ -183,6 +185,7 @@ export class Playback {
     this.panelFallback = false;
     this.url = url;
     this.live = live;
+    this.liveAudio = 0;
     this.probe = null;
     this.probing = false;
     this.remux = null;
@@ -278,7 +281,7 @@ export class Playback {
   // canal en vivo por HLS con el lector propio
   private openLive(url: string): void {
     const g = this.gen;
-    const h = new LiveHls(this.v, url);
+    const h = new LiveHls(this.v, url, this.liveAudio);
     this.liveHls = h;
     h.onError = why => g === this.gen && this.liveHls === h && this.hooks.liveFailed?.(why);
     h.onStalls = () => g === this.gen && this.liveHls === h && this.hooks.liveStalls?.(h.diag());
@@ -294,6 +297,17 @@ export class Playback {
   }
 
   // estado del canal por HLS (para el reporte): lista, segmentos entregados, lo que tiene el reproductor
+  // El canal iba en MP4 propio y el reproductor lo rechazó: otra vez el mismo canal entregando el MPEG-TS (el resto
+  // de la sesión), sin pasar por otro formato ni protocolo. false = no era eso
+  liveRetryTs(): boolean {
+    const h = this.liveHls;
+    if (!this.live || !h || !h.isMp4() || !(h.mediaFailed() || (this.v as any).error)) return false;
+    disableMp4();
+    h.destroy();
+    this.openLive(this.url);
+    return true;
+  }
+
   liveDiag(): string {
     return this.liveHls ? this.liveHls.diag() : '';
   }
@@ -547,6 +561,9 @@ export class Playback {
   }
 
   private audioItems(): AudioItem[] {
+    // canal con varios idiomas (lector propio): uno por audio del canal
+    const hl = this.live && this.liveHls ? this.liveHls.audioLangs() : [];
+    if (hl.length > 1) return numbered(hl.map((l, i) => ({ key: 'h:' + i, label: langName(l, '') || t('Audio {n}', { n: i + 1 }), lang: trackLang(l, ''), codec: '' })));
     const nat = this.nativeAudio();
     const pr = this.probe?.ok ? this.probe.audio : [];
     if (pr.length && pr.length >= nat.length) {
@@ -590,6 +607,7 @@ export class Playback {
   }
 
   private audioOn(items: AudioItem[]): AudioItem | undefined {
+    if (this.liveHls && items[0]?.key.startsWith('h:')) return items.find(i => i.key === 'h:' + this.liveHls!.audioIdx);
     if (this.remux) return items.find(i => i.probe === this.remux!.a);
     const n = this.enabledNative();
     if (n >= 0) {
@@ -749,6 +767,17 @@ export class Playback {
 
   // saved = el idioma que el usuario eligió antes para este título: puede usar el panel como si lo eligiera ahora
   private pickAudio(it: AudioItem, user: boolean, saved = false): void {
+    if (it.key.startsWith('h:')) {
+      // otro idioma del canal: el lector vuelve a abrir el canal con ese audio
+      const i = Number(it.key.slice(2));
+      if (!user || !this.liveHls || this.liveHls.audioIdx === i) return;
+      this.liveAudio = i;
+      this.liveHls.destroy();
+      this.openLive(this.url);
+      this.hooks.toast(t('Audio: {x}', { x: it.label }));
+      this.hooks.changed();
+      return;
+    }
     this.audioKey = it.key;
     if (user) setTitleLang(this.url, it.probe === this.probeDefault() && !this.panelMenu() ? null : it);
     const ok = this.decodable(it);

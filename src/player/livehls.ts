@@ -4,10 +4,11 @@
 // empezando cerca del final (en vivo). Las listas maestras (varias calidades) usan la de más calidad.
 // En Vega el modo directo (src = dirección) no abre MPEG-TS (solo MP4, MKV, MP3, FLV, OGG y FLAC; el HLS solo por MSE),
 // así que en Fire TV este es el camino principal de la TV en vivo.
-// Estabilidad: cada segmento se pone justo a continuación del anterior en la línea de tiempo (sus marcas de tiempo
-// PTS + timestampOffset; antes, en modo 'sequence', el equipo dejaba un hueco en cada unión y saltarlo era un corte
-// de 1-1,5 s cada segmento) y, si aun así quedaría un hueco de décimas (audio y video no terminan juntos), se pega al
-// final de lo entregado (place); los 2 segmentos siguientes se bajan mientras se entrega el actual; el descifrado va por
+// Estabilidad: el lector MPEG-TS de Vega dejaba huecos de décimas entre segmentos (audio y video no terminan juntos)
+// y saltarlos era un corte cada pocos segundos. Por eso cada segmento H.264 + AAC se convierte aquí a MP4 fragmentado
+// (tsmux.ts) con la duración exacta de cada cuadro: lo entregado queda de corrido, sin huecos. Con otro códec (H.265,
+// AC-3…) o si el equipo no lo acepta, se entrega el MPEG-TS como antes, cada segmento a continuación del anterior
+// (place); los 2 segmentos siguientes se bajan mientras se entrega el actual; el descifrado va por
 // partes sin trabar la app; un vigilante cada 300 ms salta los huecos que queden y, si se acaba lo bajado, pausa hasta
 // tener unos segundos de margen en lugar de detenerse y seguir; un segmento que no llega se reintenta y, a la tercera,
 // se salta.
@@ -16,6 +17,7 @@ import { UA } from '../lib/http';
 import { xuiError } from '../lib/xui';
 import { cbc } from '@noble/ciphers/aes';
 import { parseList, resolveUrl, Seg, segIv, tsStart, tsStartPts } from '../lib/hlslist';
+import { TsMux } from '../lib/tsmux';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -38,6 +40,12 @@ function keyBytes(d: Uint8Array): Uint8Array | null {
   // con un salto de línea o espacio al final
   if (d.length > 16 && d.length <= 18 && d.slice(16).every(b => b === 10 || b === 13 || b === 32)) return d.slice(0, 16);
   return null;
+}
+
+// el reproductor falló con el MP4 propio: el resto de la sesión, MPEG-TS
+let mp4Off = false;
+export function disableMp4(): void {
+  mp4Off = true;
 }
 
 export class LiveHls {
@@ -85,13 +93,32 @@ export class LiveHls {
   private keys = new Map<string, Uint8Array>();
   private encrypted = false;
   private head = '';
+  // 'mp4' = segmentos convertidos aquí (tsmux); 'ts' = MPEG-TS al reproductor; '' = aún sin el primer segmento
+  private mode: '' | 'mp4' | 'ts' = '';
+  private mux: TsMux | null = null;
+  private muxWhy = '';
+  // el reproductor rechazó el video entregado (no la red): con MP4, se vuelve a abrir el canal en MPEG-TS
+  private mediaFail = false;
   // último problema (para el reporte al panel): código HTTP de la lista o de los segmentos, página de XUI…
   lastProblem = '';
   onError: (msg: string) => void = () => {};
 
-  constructor(private v: VideoPlayer, url: string) {
+  constructor(private v: VideoPlayer, url: string, readonly audioIdx = 0) {
     this.first = url;
     this.list = url;
+  }
+
+  isMp4(): boolean {
+    return this.mode === 'mp4';
+  }
+
+  mediaFailed(): boolean {
+    return this.mediaFail;
+  }
+
+  // idiomas de los audios del canal (MP4 propio; el que suena es audioIdx)
+  audioLangs(): string[] {
+    return this.mode === 'mp4' && this.mux ? this.mux.langs : [];
   }
 
   static supported(): boolean {
@@ -113,7 +140,9 @@ export class LiveHls {
     }
     const host = (this.list.match(/^https?:\/\/([^/?#]+)/i) || [])[1] || '';
     const n = Math.max(1, this.appended);
-    return 'hls host=' + host + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
+    const m = this.mux;
+    const how = ' modo=' + (this.mode || '?') + (this.mode === 'mp4' && m ? ' silencio=' + m.filled + ' descartados=' + m.dropped + ' cosidos=' + m.joins : this.muxWhy ? ' (' + this.muxWhy + ')' : '');
+    return 'hls host=' + host + how + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
       's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
@@ -135,6 +164,7 @@ export class LiveHls {
       // el reproductor cerró el video (error del decodificador): Player vuelve a conectar el canal
       ms.addEventListener('sourceclose', () => {
         if (!this.alive || !this.started) return;
+        if (this.mode === 'mp4') this.mediaFail = true;
         this.lastProblem = 'MediaSource cerrado';
         this.onError('el reproductor cerró el video del canal');
       });
@@ -148,17 +178,7 @@ export class LiveHls {
     }
     await Promise.race([opened, sleep(10000)]);
     if (ms.readyState !== 'open') return 'el reproductor no abrió MediaSource';
-    try {
-      this.sb = ms.addSourceBuffer('video/mp2t');
-    } catch {
-      return 'el equipo no acepta MPEG-TS por MSE';
-    }
-    try {
-      // por marcas de tiempo: el lector pone cada segmento a continuación del anterior (place)
-      this.sb.mode = 'segments';
-    } catch {
-      // modo por defecto
-    }
+    // el SourceBuffer (MP4 o MPEG-TS) se crea con el primer segmento (deliver)
     this.timer = setInterval(this.tick, 300);
     this.pump();
     return '';
@@ -544,11 +564,13 @@ export class LiveHls {
       segFails = 0;
       this.pageRetries = 0;
       await this.trim();
-      await this.place(data);
-      if (!(await this.append(data))) return;
+      const got = await this.deliver(data);
+      if (!got) return;
+      this.next = seg.seq + 1;
+      // nada entregado todavía (el MP4 espera el primer cuadro clave)
+      if (got === 2) continue;
       this.appended++;
       this.bytes += data.length;
-      this.next = seg.seq + 1;
       this.lastAppend = Date.now();
       // empieza a sonar con 2 segmentos entregados (o con 1 si la lista no tiene más): arranca con margen
       const more = this.segs.some(sg => sg.seq === this.next);
@@ -613,6 +635,65 @@ export class LiveHls {
     }
   }
 
+  // Entrega un segmento: convertido a MP4 (de corrido) o, si no se puede, el MPEG-TS tal cual. 0 = error (ya avisado),
+  // 1 = entregado, 2 = nada que entregar todavía
+  private async deliver(data: Uint8Array): Promise<0 | 1 | 2> {
+    if (this.mode !== 'ts' && !mp4Off) {
+      if (!this.mux) this.mux = new TsMux(this.audioIdx);
+      await sleep(0);
+      let r;
+      try {
+        r = this.mux.push(data);
+      } catch (e: any) {
+        r = { ok: false as const, why: 'mux: ' + String(e?.message || e).slice(0, 40) };
+      }
+      if (r.ok) {
+        if (!r.data) return 2;
+        if (!this.sb) {
+          let okType = false;
+          try {
+            okType = MediaSource.isTypeSupported(r.mime);
+          } catch {
+            okType = false;
+          }
+          if (okType) {
+            try {
+              this.sb = this.ms.addSourceBuffer(r.mime);
+              this.mode = 'mp4';
+            } catch (e: any) {
+              this.muxWhy = 'addSourceBuffer mp4: ' + String(e?.message || e).slice(0, 40);
+            }
+          } else this.muxWhy = 'no acepta ' + r.mime;
+        }
+        if (this.mode === 'mp4') return (await this.append(r.data)) ? 1 : 0;
+      } else if (this.mode === 'mp4') {
+        // el canal cambió a algo que no se convierte: se vuelve a abrir en MPEG-TS
+        this.lastProblem = 'mp4: ' + r.why;
+        this.mediaFail = true;
+        this.onError('el canal cambió de formato');
+        return 0;
+      } else this.muxWhy = r.why;
+      if (!this.sb) this.mode = 'ts';
+    }
+    if (!this.sb) {
+      this.mode = 'ts';
+      try {
+        this.sb = this.ms.addSourceBuffer('video/mp2t');
+      } catch {
+        this.onError('el equipo no acepta MPEG-TS por MSE');
+        return 0;
+      }
+      try {
+        // por marcas de tiempo: el lector pone cada segmento a continuación del anterior (place)
+        this.sb.mode = 'segments';
+      } catch {
+        // modo por defecto
+      }
+    }
+    await this.place(data);
+    return (await this.append(data)) ? 1 : 0;
+  }
+
   // la lista otra vez desde la dirección del canal (token nuevo del balanceador)
   private async renew(): Promise<void> {
     this.renews++;
@@ -632,7 +713,10 @@ export class LiveHls {
       } catch (e: any) {
         const msg = String(e?.name || '') + ' ' + String(e?.message || e);
         this.lastProblem = 'appendBuffer: ' + msg.trim().slice(0, 60);
-        if (!/quota/i.test(msg) || !this.alive) break;
+        if (!/quota/i.test(msg) || !this.alive) {
+          if (this.mode === 'mp4') this.mediaFail = true;
+          break;
+        }
         await this.trim(attempt ? 2 : 5);
         await sleep(500);
       }

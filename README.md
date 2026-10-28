@@ -140,6 +140,16 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   se frenaba en cada unión y saltar ese hueco era un corte de ~1 s cada ~10 s. Ahora, si el segmento nuevo dejaría un
   hueco de hasta medio segundo, se pega al final de lo entregado (`src/player/livehls.ts`, `place`). El reporte del canal
   cuenta esas uniones (`pegados=`); `huecos=` debería quedar en 0.
+- **Canales de corrido: MP4 propio (desde 1.0.26)**: aun pegando los segmentos, el lector MPEG-TS de Vega dejaba
+  micro-huecos en algunas uniones (`buf=[42.0-59.0,59.0-89.6]`) y saltarlos era un corte. Ahora cada segmento H.264 +
+  AAC se convierte en la app a MP4 fragmentado (`src/lib/tsdemux.ts`, `tsmux.ts`, `mp4box.ts`): cada cuadro de video
+  dura hasta el siguiente (aunque esté en el segmento que viene) y el audio va cuadro tras cuadro; si al canal le falta
+  audio se rellena con silencio y si le sobra se descarta, sin desincronizar; un salto de marcas (servidor reiniciado,
+  segmento saltado, vuelta de las marcas de 33 bits) se cose. Lo entregado queda en un solo tramo, sin huecos que saltar.
+  Con H.265, AC-3 u otro códec, o si el equipo no acepta el MP4, se entrega el MPEG-TS como antes; si el reproductor
+  rechaza el MP4, el canal se vuelve a abrir solo en MPEG-TS el resto de la sesión (y se avisa al panel). Canales con
+  varios idiomas: el menú de audio los lista y al elegir uno el canal se vuelve a abrir con ese audio. El reporte dice
+  `modo=mp4|ts`, `silencio=`, `descartados=` y `cosidos=`.
 - **Plataformas** (Netflix, Disney+, Prime Video, HBO Max, Marvel, Navidad, Halloween…) muestran solo lo que tiene el
   servidor IPTV: los títulos de sus categorías cuyo nombre coincide, cada uno una vez. El póster de TMDB que pone el
   panel cuando el servidor no tiene carátula es solo del mismo título (nombre y año ±1); las direcciones del panel
