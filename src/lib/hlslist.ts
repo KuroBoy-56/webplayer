@@ -86,12 +86,12 @@ export function tsStart(d: Uint8Array): number {
   return -1;
 }
 
-// Primer PTS del segmento MPEG-TS en segundos (el menor entre el primer audio y el primer video), o null si no se
-// encuentra. Con él el lector pone cada segmento a continuación del anterior en la línea de tiempo del reproductor
-// (timestampOffset): segmentos seguidos de un mismo canal quedan pegados, sin huecos que saltar.
-export function tsFirstPts(d: Uint8Array): number | null {
+// Primeros PTS del segmento MPEG-TS en segundos: el menor y el mayor entre el primer audio y el primer video (en la unión
+// de dos segmentos, la pista que empieza más tarde es la que deja el hueco), o null si no se encuentran.
+export function tsStartPts(d: Uint8Array): { min: number; max: number } | null {
   const seen = new Set<number>();
   let min = Infinity;
+  let max = -Infinity;
   const last = Math.min(d.length - 188, 188 * 600);
   for (let i = 0; i <= last; i += 188) {
     if (d[i] !== 0x47 || !(d[i + 1] & 0x40)) continue;
@@ -108,7 +108,16 @@ export function tsFirstPts(d: Uint8Array): number | null {
     const b = p + 9;
     const pts = (d[b] & 0x0e) * 536870912 + d[b + 1] * 4194304 + (d[b + 2] & 0xfe) * 16384 + d[b + 3] * 128 + (d[b + 4] >> 1);
     if (pts < min) min = pts;
+    if (pts > max) max = pts;
     if (seen.size >= 2) break;
   }
-  return min === Infinity ? null : min / 90000;
+  return min === Infinity ? null : { min: min / 90000, max: max / 90000 };
+}
+
+// Primer PTS del segmento MPEG-TS en segundos (el menor entre el primer audio y el primer video), o null si no se
+// encuentra. Con él el lector pone cada segmento a continuación del anterior en la línea de tiempo del reproductor
+// (timestampOffset).
+export function tsFirstPts(d: Uint8Array): number | null {
+  const r = tsStartPts(d);
+  return r ? r.min : null;
 }

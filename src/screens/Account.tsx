@@ -18,11 +18,6 @@ import { C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
 
 // los nombres se traducen al mostrarlos
-const AUDIO: [string, Key][] = [
-  ['es', 'Español'],
-  ['en', 'Inglés'],
-  ['', 'Original del archivo'],
-];
 const SUBS: [string, Key][] = [
   ['off', 'Desactivados'],
   ['es', 'Español'],
@@ -91,7 +86,6 @@ export default function Account() {
   // recién cambiado el idioma: el foco vuelve a esa fila
   const [langFocus] = useState(takeLangChanged);
   const s0 = st.session;
-  const audio = pref('audio_lang', 'es');
   const subs = pref('subs_lang', 'off');
   const hideAdult = pref('hide_adult', '1') === '1';
   const dist = brand();
@@ -147,14 +141,6 @@ export default function Account() {
       <ScrollView style={s.right} contentContainerStyle={s.rightIn}>
       <Text style={s.sub}>{t('Ajustes')}</Text>
       <Setting label={t('Idioma de la app')} value={langLabel(langChoice())} preferred={langFocus} onPress={() => setLangOpen(true)} />
-      <Setting
-        label={t('Idioma de audio preferido')}
-        value={t(AUDIO.find(a => a[0] === audio)?.[1] || 'Español')}
-        onPress={() => {
-          setPref('audio_lang', cycle(AUDIO, audio));
-          force(x => x + 1);
-        }}
-      />
       <Setting
         label={t('Subtítulos')}
         value={t(SUBS.find(a => a[0] === subs)?.[1] || 'Desactivados')}

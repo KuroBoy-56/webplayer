@@ -890,9 +890,7 @@ export default function Player({ params }: { params: PlayParams }) {
                     <Text style={s.prog} numberOfLines={1}>
                       {cur.t}
                     </Text>
-                    <View style={s.bar}>
-                      <View style={[s.barFill, { width: `${Math.min(100, ((now - cur.s) / Math.max(1, cur.e - cur.s)) * 100)}%` }]} />
-                    </View>
+                    <ProgressBar pct={Math.min(100, ((now - cur.s) / Math.max(1, cur.e - cur.s)) * 100)} />
                   </>
                 ) : null}
                 <Text style={s.hint}>
@@ -901,9 +899,7 @@ export default function Player({ params }: { params: PlayParams }) {
               </>
             ) : (
               <>
-                <View style={s.bar}>
-                  <View style={[s.barFill, { width: `${pct}%` }]} />
-                </View>
+                <ProgressBar pct={pct} />
                 <View style={s.times}>
                   <Text style={s.time}>{hms(pos)}</Text>
                   <Text style={s.time}>{paused ? '❚❚ ' + t('En pausa') : ''}</Text>
@@ -987,6 +983,18 @@ export default function Player({ params }: { params: PlayParams }) {
   );
 }
 
+// Barra de avance: el relleno se pinta en píxeles con el ancho medido de la barra (sobre el video de Vega un ancho en
+// porcentaje no se aplicaba y la barra quedaba vacía aunque el tiempo avanzara)
+function ProgressBar({ pct }: { pct: number }) {
+  const [w, setW] = useState(0);
+  const fill = w > 0 && pct > 0 ? Math.max(px(8), Math.round((w * Math.min(100, pct)) / 100)) : 0;
+  return (
+    <View style={s.bar} onLayout={e => setW(e.nativeEvent.layout.width)}>
+      {fill > 0 ? <View style={[s.barFill, { width: fill }]} /> : null}
+    </View>
+  );
+}
+
 const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: '#000' },
@@ -1006,7 +1014,7 @@ const s = themed(() =>
     star: { color: '#f5c518', fontSize: px(40) },
     bottom: { paddingHorizontal: px(80), paddingBottom: px(60), paddingTop: px(40), backgroundColor: alpha(C.bg, 0.65) },
     bar: { height: px(8), backgroundColor: alpha(C.text, 0.3), borderRadius: px(4), marginTop: px(12) },
-    barFill: { height: '100%', backgroundColor: C.red, borderRadius: px(4) },
+    barFill: { position: 'absolute', left: 0, top: 0, height: px(8), backgroundColor: C.red, borderRadius: px(4) },
     times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: px(10) },
     time: { color: C.text, fontSize: px(28) },
     now: { color: C.red, fontSize: px(26), fontWeight: '800' },

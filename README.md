@@ -227,6 +227,12 @@ compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con 
 - **Aviso del panel** (`src/api/alerts.ts`, `src/components/AlertDialog.tsx` → `api/alerta.php`): con varias imágenes
   en **Alertas** (`images`, en orden) cambian cada `interval` segundos (3) en el mismo lugar, todas cargadas de
   inicio; con una sola o con paneles anteriores (`image` / `image_path`), como antes. El encabezado no cambia (desde 1.2.1).
+- **Audio como Roku (desde 1.2.2)**: todo título empieza con su audio predeterminado, directo del servidor IPTV; el panel
+  (VPS / VDS) prepara otro idioma solo cuando el usuario lo elige, y esa elección se recuerda para ese título
+  («Continuar viendo» sigue en ese idioma). Ajustes ya no tiene «Idioma de audio preferido».
+- **Barra de avance** del reproductor pintada en píxeles (desde 1.2.2). El arreglo de los canales de Vega 1.0.25 (huecos
+  entre segmentos) está en `src/player/livehls.ts`, que en LG no se usa: webOS abre el HLS de los canales con su propio
+  reproductor.
 
 ## Cómo está hecha
 
