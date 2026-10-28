@@ -14,6 +14,8 @@
 
     function show(a) {
         if (d.getElementById('nfAlert')) return;
+        var imgs = (Array.isArray(a.images) ? a.images : []).filter(function (u) { return /^https?:\/\//i.test(u || ''); });
+        var timer = 0;
         var box = d.createElement('div');
         box.id = 'nfAlert';
         box.className = 'nf-alert ' + (a.type === 'expiry' ? 'is-expiry' : 'is-welcome');
@@ -27,11 +29,17 @@
             (a.message ? '<p class="nf-alert-msg">' + esc(a.message) + '</p>' : '') +
             // video corto del aviso (sin sonido y en bucle, con la imagen de portada); si no carga, queda la imagen
             (a.video ? '<video class="nf-alert-img" src="' + esc(a.video) + '"' + (a.image ? ' poster="' + esc(a.image) + '"' : '') + ' autoplay muted loop playsinline preload="auto"></video>'
-                : (a.image ? '<img class="nf-alert-img" src="' + esc(a.image) + '" alt="" onerror="this.remove()">' : '')) +
+                : (imgs.length > 1
+                    // varias imágenes del registro: todas cargadas de inicio (encimadas) y cambian cada interval s
+                    ? '<div class="nf-alert-imgs">' + imgs.map(function (u, i) {
+                        return '<img class="nf-alert-img' + (i === 0 ? ' is-on' : '') + '" src="' + esc(u) + '" alt="">';
+                    }).join('') + '</div>'
+                    : (a.image ? '<img class="nf-alert-img" src="' + esc(a.image) + '" alt="" onerror="this.remove()">' : ''))) +
             '<button type="button" class="nf-btn nf-btn-white nf-alert-btn">' + esc(a.button || tr('Entendido')) + '</button>' +
             '</div>';
         var prev = d.activeElement;
         function close() {
+            if (timer) clearInterval(timer);
             d.removeEventListener('keydown', onKey, true);
             box.remove();
             d.documentElement.classList.remove('nf-alert-open');
@@ -48,6 +56,15 @@
                 if (a.image) { var im = d.createElement('img'); im.className = 'nf-alert-img'; im.alt = ''; im.src = a.image; vid.replaceWith(im); } else vid.remove();
             });
             var pv = vid.play(); if (pv && pv.catch) pv.catch(function () { });
+        }
+        var layers = box.querySelectorAll('.nf-alert-imgs .nf-alert-img');
+        if (layers.length > 1) {
+            var on = 0;
+            timer = setInterval(function () {
+                layers[on].classList.remove('is-on');
+                on = (on + 1) % layers.length;
+                layers[on].classList.add('is-on');
+            }, Math.max(1, parseInt(a.interval, 10) || 3) * 1000);
         }
         d.documentElement.classList.add('nf-alert-open');
         var btn = box.querySelector('.nf-alert-btn');

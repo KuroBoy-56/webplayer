@@ -69,7 +69,7 @@ $media_cfg = $live ? null : wp_media_cfg($kind, $id, $exts, (string)($d['vlcExt'
     <meta name="referrer" content="no-referrer">
     <title><?php echo e($title ?: t('Reproductor')); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=10">
+    <link rel="stylesheet" href="assets/nf/app.css?v=11">
     <link rel="stylesheet" href="assets/nf/player.css?v=9">
     <?php echo wp_i18n_script(); ?>
     <style>

@@ -617,6 +617,10 @@ html.nf-alert-open { overflow: hidden; }
 .nf-alert.is-expiry .nf-alert-title { color: var(--nf-red-h); }
 .nf-alert-msg { margin: 0; color: var(--nf-gray2); font-size: 1.05rem; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
 .nf-alert-img { display: block; max-width: 100%; max-height: 260px; margin: 20px auto 0; border-radius: 8px; object-fit: contain; }
+/* varias imágenes del aviso: encimadas en el mismo lugar; cambian con un fundido */
+.nf-alert-imgs { display: grid; margin: 20px auto 0; }
+.nf-alert-imgs .nf-alert-img { grid-area: 1 / 1; margin: 0 auto; opacity: 0; transition: opacity .4s ease; }
+.nf-alert-imgs .nf-alert-img.is-on { opacity: 1; }
 .nf-alert-btn { width: 100%; justify-content: center; margin-top: 24px; text-transform: uppercase; }
 .nf-alert-btn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 @media (max-width: 600px) { .nf-alert-card { padding: 26px 20px 22px; } .nf-alert-title { font-size: 1.3rem; } }

@@ -202,7 +202,7 @@ $dist_step = $dist_view['step'];
     <title><?php echo $brand_name !== '' ? e($brand_name) : 'LatMpx - WebPlayer'; ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="preconnect" href="https://image.tmdb.org">
-    <link rel="stylesheet" href="assets/nf/app.css?v=10">
+    <link rel="stylesheet" href="assets/nf/app.css?v=11">
     <?php echo wp_i18n_script(); ?>
     <?php echo wp_tenant_css($dist_cfg); ?>
     <style>

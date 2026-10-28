@@ -156,7 +156,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
     <meta name="referrer" content="no-referrer">
     <title><?php echo e($content_name ?: t('Reproductor')); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=10">
+    <link rel="stylesheet" href="assets/nf/app.css?v=11">
     <link rel="stylesheet" href="assets/nf/player.css?v=9">
     <?php echo wp_i18n_script(); ?>
     <style>

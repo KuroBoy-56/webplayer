@@ -75,6 +75,20 @@ switch ($action) {
             // imagen por enlace (Alertas del panel): el navegador la carga directo desde el enlace
             $img = (string)$aj['image'];
         }
+        // todas las imágenes del registro de Alertas (images, en orden): cambian cada "interval" s; sin la lista
+        // (panel anterior), la de siempre
+        $imgs = [];
+        if ($aj['type'] === 'welcome' && is_array($aj['images'] ?? null)) {
+            foreach ($aj['images'] as $u) {
+                $u = trim((string)$u);
+                if (preg_match('~^https://[^\s"\'<>?#]+\.(png|jpe?g|webp|gif)$~i', $u)) $imgs[] = $u;
+                elseif (preg_match('~^https?://~i', $u)) $imgs[] = wp_img($u, ''); // imagen vieja del panel (http)
+            }
+            $imgs = array_values(array_filter($imgs));
+        }
+        if (!$imgs && $img !== '') $imgs = [$img];
+        if ($imgs) $img = $imgs[0];
+        $secs = (int)($aj['interval'] ?? 3);
         // video corto por enlace (https .mp4 / .webm / .m4v): se reproduce sin sonido y en bucle, con la imagen de portada
         if ($aj['type'] === 'welcome' && preg_match('~^https://[^\s"\'<>?#]+\.(mp4|webm|m4v)$~i', (string)($aj['video'] ?? ''))) {
             $vid = (string)$aj['video'];
@@ -87,6 +101,8 @@ switch ($action) {
             'title' => wp_demo_mask($aj['title'] ?? ''),
             'message' => wp_demo_mask($aj['message'] ?? ''),
             'image' => $img,
+            'images' => $imgs,
+            'interval' => $secs >= 1 ? $secs : 3,
             'video' => $vid,
             'button' => (string)($aj['button'] ?? t('ENTENDIDO')),
             'logo' => wp_brand_logo(),

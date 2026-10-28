@@ -47,13 +47,13 @@ if (!function_exists('wp_nav_cls')) {
     <title><?php echo e($page_title); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
-    <link rel="stylesheet" href="assets/nf/app.css?v=10">
+    <link rel="stylesheet" href="assets/nf/app.css?v=11">
     <?php echo wp_tenant_css($wp_dist_cfg); ?>
     <?php if (wp_panel_tenant() !== '' || wp_dist_choice() === 'skip') echo wp_brand_store_script($wp_dist_cfg); ?>
     <script>window.NF={demo:<?php echo $wp_demo ? 'true' : 'false'; ?>,imgErr:function(i){i.onerror=null;i.src='assets/nf/noposter.svg';i.classList.add('ok');var c=i.closest&&i.closest('.nf-card');if(c)c.classList.add('noimg');}};</script>
     <?php echo wp_i18n_script(); ?>
     <script src="assets/nf/app.js?v=8" defer></script>
-    <script src="assets/nf/alert.js?v=4" defer></script>
+    <script src="assets/nf/alert.js?v=5" defer></script>
     <?php if (!empty($wp_head_extra)) echo $wp_head_extra; ?>
 </head>
 <body class="nf-app <?php echo e($body_class ?? ''); ?>" data-tz="<?php echo e(date_default_timezone_get()); ?>">
