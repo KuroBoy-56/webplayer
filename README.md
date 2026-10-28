@@ -135,6 +135,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   puede decodificar el audio que suena (DTS…, quedaría sin sonido) o no abre el archivo.
 - **Barra de avance del reproductor (desde 1.0.24)**: el relleno rojo se pinta en píxeles con el ancho medido de la
   barra; con un ancho en porcentaje, sobre el video de Vega la barra se veía vacía aunque el tiempo avanzara.
+- **Canales sin el corte de cada segmento (desde 1.0.25)**: en Vega el audio y el video de cada segmento no terminan
+  juntos y lo entregado acababa unas décimas antes del segmento siguiente (`buf=[0.0-9.6,9.7-19.2,…]`): el reproductor
+  se frenaba en cada unión y saltar ese hueco era un corte de ~1 s cada ~10 s. Ahora, si el segmento nuevo dejaría un
+  hueco de hasta medio segundo, se pega al final de lo entregado (`src/player/livehls.ts`, `place`). El reporte del canal
+  cuenta esas uniones (`pegados=`); `huecos=` debería quedar en 0.
 - **Plataformas** (Netflix, Disney+, Prime Video, HBO Max, Marvel, Navidad, Halloween…) muestran solo lo que tiene el
   servidor IPTV: los títulos de sus categorías cuyo nombre coincide, cada uno una vez. El póster de TMDB que pone el
   panel cuando el servidor no tiene carátula es solo del mismo título (nombre y año ±1); las direcciones del panel

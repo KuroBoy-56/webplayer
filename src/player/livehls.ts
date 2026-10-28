@@ -6,7 +6,8 @@
 // así que en Fire TV este es el camino principal de la TV en vivo.
 // Estabilidad: cada segmento se pone justo a continuación del anterior en la línea de tiempo (sus marcas de tiempo
 // PTS + timestampOffset; antes, en modo 'sequence', el equipo dejaba un hueco en cada unión y saltarlo era un corte
-// de 1-1,5 s cada segmento); los 2 segmentos siguientes se bajan mientras se entrega el actual; el descifrado va por
+// de 1-1,5 s cada segmento) y, si aun así quedaría un hueco de décimas (audio y video no terminan juntos), se pega al
+// final de lo entregado (place); los 2 segmentos siguientes se bajan mientras se entrega el actual; el descifrado va por
 // partes sin trabar la app; un vigilante cada 300 ms salta los huecos que queden y, si se acaba lo bajado, pausa hasta
 // tener unos segundos de margen en lugar de detenerse y seguir; un segmento que no llega se reintenta y, a la tercera,
 // se salta.
@@ -14,7 +15,7 @@ import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia'
 import { UA } from '../lib/http';
 import { xuiError } from '../lib/xui';
 import { cbc } from '@noble/ciphers/aes';
-import { parseList, resolveUrl, Seg, segIv, tsFirstPts, tsStart } from '../lib/hlslist';
+import { parseList, resolveUrl, Seg, segIv, tsStart, tsStartPts } from '../lib/hlslist';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -76,6 +77,8 @@ export class LiveHls {
   private tsOff: number | null = null;
   private resyncs = 0;
   private gapJumps = 0;
+  // uniones en las que el segmento nuevo dejaba un hueco de décimas y se pegó al final de lo entregado
+  private joins = 0;
   private lastAppend = Date.now();
   private bytes = 0;
   // llaves AES-128 ya bajadas (por dirección) y si el canal viene cifrado (para el reporte)
@@ -112,7 +115,7 @@ export class LiveHls {
     const n = Math.max(1, this.appended);
     return 'hls host=' + host + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
-      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
@@ -575,18 +578,29 @@ export class LiveHls {
   }
 
   // Lugar del segmento en la línea de tiempo: el primero empieza en 0 y los siguientes van donde dicen sus marcas de
-  // tiempo (segmentos seguidos del mismo canal quedan pegados: sin huecos). Si no calza con lo entregado (el servidor
-  // reinició la numeración, se saltó un segmento, la lista se reacomodó) se pone justo al final de lo entregado.
+  // tiempo. En Vega el audio y el video de cada segmento no terminan juntos y lo entregado acaba unas décimas antes de
+  // donde empieza el segmento siguiente (buf=[0-9.6, 9.7-19.2…]): el reproductor se frenaba en cada unión y saltar el
+  // hueco era un corte de ~1 s cada segmento. Por eso, si el segmento nuevo dejaría un hueco de hasta medio segundo,
+  // se pega justo al final de lo entregado (la pista que empieza más tarde arranca ahí; la otra se monta unas décimas
+  // sobre el final del segmento anterior). Si no calza en absoluto (el servidor reinició la numeración, se saltó un
+  // segmento, la lista se reacomodó) también se pone al final de lo entregado.
   private async place(data: Uint8Array): Promise<void> {
-    const pts = tsFirstPts(data);
-    if (pts === null) return;
+    const pts = tsStartPts(data);
+    if (!pts) return;
     let off = this.tsOff;
-    if (off === null) off = -pts;
+    if (off === null) off = -pts.min;
     else {
       const end = this.bufEnd();
-      if (end > 0 && Math.abs(pts + off - end) > 1.5) {
-        off = end - pts;
-        this.resyncs++;
+      if (end > 0) {
+        const at = pts.max + off;
+        if (Math.abs(pts.min + off - end) > 1.5) {
+          off = end - pts.max;
+          this.resyncs++;
+        } else if (at > end + 0.005 && at - end <= 0.5) {
+          // 20 ms antes del final: se monta un poco y el reproductor lo toma como un solo tramo
+          off = end - 0.02 - pts.max;
+          this.joins++;
+        }
       }
     }
     if (off === this.tsOff) return;
