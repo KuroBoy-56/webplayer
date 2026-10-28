@@ -224,6 +224,9 @@ compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con 
 - **Pantalla falsa** (`src/components/FakeScreen.tsx`): calculadora (funciona de verdad), carrusel, imagen,
   **video** (en bucle, sin sonido) y **web**.
 - **Errores al panel** (`api/report.php`, cifrado) con el modelo del televisor (`modelName`) y la versión de webOS.
+- **Aviso del panel** (`src/api/alerts.ts`, `src/components/AlertDialog.tsx` → `api/alerta.php`): con varias imágenes
+  en **Alertas** (`images`, en orden) cambian cada `interval` segundos (3) en el mismo lugar, todas cargadas de
+  inicio; con una sola o con paneles anteriores (`image` / `image_path`), como antes. El encabezado no cambia (desde 1.2.1).
 
 ## Cómo está hecha
 
