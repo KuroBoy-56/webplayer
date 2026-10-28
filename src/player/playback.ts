@@ -73,6 +73,28 @@ function panelRoute(url: string): 'p' | 'v' | '' {
   const e = (readJson<Record<string, Route>>(ROUTE_KEY) || {})[routeKey(url)];
   return e && Date.now() - e.t < 7 * 86400000 ? e.r : '';
 }
+
+// Idioma que el usuario eligió para ESTE título (menú de audio): se usa al volver a abrirlo (también «Continuar viendo»).
+// Un título nuevo (o sin elegir nada) empieza siempre con su audio predeterminado, directo del servidor IPTV; el panel
+// prepara otro idioma solo cuando el usuario lo elige. 180 días, los 400 más recientes. a = pista del archivo.
+type TitleLang = { l: string; a: number; t: number };
+const TLANG_KEY = 'title_audio';
+function titleLang(url: string): TitleLang | null {
+  const e = (readJson<Record<string, TitleLang>>(TLANG_KEY) || {})[routeKey(url)];
+  return e && Date.now() - e.t < 180 * 86400000 ? e : null;
+}
+function setTitleLang(url: string, it: { lang: string; probe?: number } | null): void {
+  const all = readJson<Record<string, TitleLang>>(TLANG_KEY) || {};
+  const k = routeKey(url);
+  if (!it) {
+    if (!all[k]) return;
+    delete all[k];
+  } else {
+    all[k] = { l: it.lang, a: it.probe ?? -1, t: Date.now() };
+  }
+  const keep = Object.entries(all).sort((x, y) => y[1].t - x[1].t).slice(0, 400);
+  writeJson(TLANG_KEY, Object.fromEntries(keep));
+}
 function setPanelRoute(url: string, r: 'p' | 'v' | ''): void {
   const all = readJson<Record<string, Route>>(ROUTE_KEY) || {};
   const k = routeKey(url);
@@ -188,7 +210,7 @@ export class Playback {
     const g = this.gen;
     const route = engineDenied() ? '' : panelRoute(url);
     if (route) {
-      // ya se sabe que en este equipo solo se ve por el panel: de una por ahí (con el idioma preferido)
+      // ya se sabe que en este equipo solo se ve por el panel: de una por ahí (con el idioma elegido para este título o el predeterminado)
       this.formatTried = true;
       this.panelFallback = true;
       if (route === 'v') this.panelVideo = true;
@@ -305,8 +327,8 @@ export class Playback {
     return !!this.remux;
   }
 
-  // Continuar viendo o un video que el equipo no abrió: lo prepara el panel desde ese segundo con el audio del idioma
-  // preferido. false = sin panel (sin permiso o sin motor)
+  // Continuar viendo o un video que el equipo no abrió: lo prepara el panel desde ese segundo con el idioma elegido para
+  // este título (o el predeterminado). false = sin panel (sin permiso o sin motor)
   async panelOpen(at: number): Promise<boolean> {
     if (this.live || engineDenied()) return false;
     const g = this.gen;
@@ -469,7 +491,7 @@ export class Playback {
     const items = this.probe.ok ? this.audioItems() : [];
     const def = items[this.probeDefault()];
     if (def && def.probe !== undefined && !this.decodable(def)) {
-      // el panel lo convierte a AAC: de una vez el idioma preferido
+      // el panel lo convierte a AAC: de una vez el idioma elegido para este título (o el predeterminado)
       const want = this.preferredAudio(items) || def;
       const label = want.label;
       return this.toRemux(want.probe ?? def.probe, label, false, t('Cambiando a {x}…', { x: label }), Math.floor(this.resumeAt || this.realPos()));
@@ -577,9 +599,11 @@ export class Playback {
     return items.find(i => i.key === this.audioKey) || (this.probe?.ok ? items[this.probeDefault()] : items[0]);
   }
 
+  // el idioma que el usuario eligió para este título; sin elegir, ninguno (suena el predeterminado del archivo)
   private preferredAudio(items: AudioItem[]): AudioItem | undefined {
-    const p = pref('audio_lang', 'es');
-    return p ? items.find(i => sameLang(i.lang, p)) : undefined;
+    const s = titleLang(this.url);
+    if (!s) return undefined;
+    return items.find(i => i.probe === s.a && sameLang(i.lang, s.l)) || items.find(i => sameLang(i.lang, s.l));
   }
 
   private decodable(it: AudioItem): boolean {
@@ -623,8 +647,9 @@ export class Playback {
     }
     if (m.kind === 'audio') {
       if (m.key === 'def') {
-        // «Audio predeterminado»: el video directo
+        // «Audio predeterminado»: el video directo (este título vuelve a empezar así)
         this.audioKey = '';
+        setTitleLang(this.url, null);
         // el equipo no abre este video directo (sigue por el panel): el primer audio del archivo, preparado por el panel
         if (this.panelFallback && this.remux) {
           if (this.remux.a !== 0) this.toRemux(0, t('Audio predeterminado'), true, t('Cambiando a {x}…', { x: t('Audio predeterminado') }));
@@ -638,7 +663,7 @@ export class Playback {
       if (it && it.probe !== undefined && this.panelMenu()) {
         // un idioma de la lista de abajo: lo prepara el panel (también el de por defecto)
         if (this.remux?.a === it.probe) return;
-        rememberLang('audio_lang', it.lang);
+        setTitleLang(this.url, it);
         this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
         return;
       }
@@ -663,6 +688,9 @@ export class Playback {
     this.hooks.changed();
   }
 
+  // Un título nuevo suena tal como viene del servidor IPTV (su audio predeterminado). Solo se cambia solo a: el idioma
+  // que el usuario eligió antes para este mismo título (Continuar viendo), o, si el equipo no puede decodificar el
+  // audio que suena (DTS…, quedaría sin sonido), el mismo idioma en un audio que sí decodifica o el panel.
   private autoAudio(): void {
     if (this.audioApplied || this.audioKey || this.remux) return;
     const items = this.audioItems();
@@ -671,10 +699,11 @@ export class Playback {
     const want = this.preferredAudio(items);
     // el audio que suena el equipo no lo puede decodificar (DTS…): hace falta el panel
     const stuck = cur && !this.decodable(cur);
+    if (!want && !stuck) return;
     if (items.length < 2 && !stuck) return;
     this.audioApplied = true;
     const pick = want && this.decodable(want) ? want : stuck ? items.find(i => this.decodable(i) && sameLang(i.lang, cur!.lang)) || want || cur : want;
-    if (pick && pick !== cur) this.pickAudio(pick, false);
+    if (pick && pick !== cur) this.pickAudio(pick, false, pick === want);
     else if (stuck && cur) this.pickAudio(cur, false);
   }
 
@@ -718,9 +747,10 @@ export class Playback {
     }
   }
 
-  private pickAudio(it: AudioItem, user: boolean): void {
+  // saved = el idioma que el usuario eligió antes para este título: puede usar el panel como si lo eligiera ahora
+  private pickAudio(it: AudioItem, user: boolean, saved = false): void {
     this.audioKey = it.key;
-    if (user) rememberLang('audio_lang', it.lang);
+    if (user) setTitleLang(this.url, it.probe === this.probeDefault() && !this.panelMenu() ? null : it);
     const ok = this.decodable(it);
     if (it.native !== undefined && ok) {
       if (this.remux) {
@@ -741,7 +771,7 @@ export class Playback {
         if (g !== this.gen || this.remux) return;
         if (this.enabledNative() === n) {
           if (user) this.hooks.toast(t('Audio: {x}', { x: it.label }));
-        } else if (it.probe !== undefined && !this.live && user) {
+        } else if (it.probe !== undefined && !this.live && (user || saved)) {
           // el equipo no tomó la pista: la prepara el panel
           this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
         } else {
@@ -760,11 +790,11 @@ export class Playback {
       return;
     }
     // el panel trabaja cuando el usuario elige o cuando el equipo no puede decodificar el audio
-    if (!user && ok) {
+    if (!user && !saved && ok) {
       this.audioKey = '';
       return;
     }
-    this.toRemux(it.probe, it.label, user, user ? t('Cambiando a {x}…', { x: it.label }) : t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: codecName(it.codec) }));
+    this.toRemux(it.probe, it.label, user, user || saved ? t('Cambiando a {x}…', { x: it.label }) : t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: codecName(it.codec) }));
   }
 
   // motor del panel; sin él, el texto del panel una sola vez por video y solo si lo pidió el usuario

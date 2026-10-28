@@ -111,7 +111,7 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   dibujaba encima y los textos se mezclaban). Una página del servidor sin código de XUI ya no corta: se siguen
   probando las otras formas y su texto va en el reporte.
 - **Abrir una película o capítulo es inmediato**: ya no se espera a los idiomas (antes hasta 3 s); llegan a la vez y
-  si el audio por defecto es el idioma preferido suena así, sin pasar por el panel. En las páginas de
+  el video suena con su audio predeterminado, directo del servidor IPTV, sin pasar por el panel. En las páginas de
   plataformas el fondo es liso (sin la portada fija de Inicio).
 - **Plataformas** con ancho y alto fijos (Vega dibuja las imágenes del paquete a su tamaño real si solo se estiran)
   e **ícono de la app** con el logo centrado en la franja 16:9 que muestra el Fire TV (512×512).
@@ -126,7 +126,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Actores**: en la ficha, el reparto (fotos de TMDB) abre la página del actor con su filmografía, solo los títulos que el servidor tiene (título normalizado y año ±1, como la app de Windows y la web). Clave TMDB del panel o la incorporada.
 - **Reproductor nativo de Vega** (MP4, MKV, AVI, MOV, MPEG-TS) sin límite de resolución ni de
   bitrate (4K si el equipo y el archivo lo tienen): continuar donde quedó, ◀▶ 10 s, OK pausa,
-  ▼ o MENÚ para audio y subtítulos, idioma preferido automático y siguiente episodio solo.
+  ▼ o MENÚ para audio y subtítulos y siguiente episodio solo.
+- **Audio como Roku (desde 1.0.23)**: todo título empieza directo del servidor IPTV con su audio predeterminado (nunca
+  se convierte solo por un idioma preferido). Con dos o más idiomas, el panel (VPS / VDS) prepara otro idioma solo
+  cuando el usuario lo elige en el menú; esa elección se recuerda para ese título y se usa al volver a abrirlo
+  («Continuar viendo» sigue en ese idioma). «Audio predeterminado» la borra. Un título nuevo siempre empieza con el
+  predeterminado. Ajustes ya no tiene «Idioma de audio preferido». El panel solo convierte solo cuando el equipo no
+  puede decodificar el audio que suena (DTS…, quedaría sin sonido) o no abre el archivo.
 - **Plataformas** (Netflix, Disney+, Prime Video, HBO Max, Marvel, Navidad, Halloween…) muestran solo lo que tiene el
   servidor IPTV: los títulos de sus categorías cuyo nombre coincide, cada uno una vez. El póster de TMDB que pone el
   panel cuando el servidor no tiene carátula es solo del mismo título (nombre y año ±1); las direcciones del panel
