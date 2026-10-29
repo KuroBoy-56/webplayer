@@ -163,6 +163,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   después el motor del panel lo prepara desde ese segundo (`panelOpen` en `src/player/playback.ts`); 3) si tampoco,
   otra vez directo 10 s después; si nada funciona, el aviso «No se pudo continuar donde quedó». **Nunca empieza solo
   desde el principio** (para eso está «Desde el principio»). Mientras no suena no se guarda avance.
+  **El salto, cuando ya suena (1.0.27):** el reproductor de Vega se queda cargando si se le pide el segundo guardado
+  antes de que el video empiece (en `loadedmetadata`): el paso 1 abría directo, no sonaba y el panel quedaba en
+  «Preparando desde donde quedó…» sin fin. Ahora se abre el video y apenas suena se salta una sola vez al segundo
+  guardado (`seekAfter` / `seekTo`, `onPlaying` y `onTime` en `src/player/playback.ts`); lo que suena antes del salto
+  no cuenta como «ya sonó» ni se guarda. Si en 15 s no llegó a ese segundo, se pausa y siguen los pasos
+  (`resumeFailed`: el panel desde ese segundo). El panel tiene ahora 60 s para empezar a sonar; si no, se deja
+  (`panelStop`) y sigue el último paso (otra vez directo y, si no, el aviso), nunca queda pegado.
 - **Cuando un video no abre** (`src/screens/Player.tsx` + `src/player/streamcheck.ts`): vigilante de 20 s (15 s en
   Continuar viendo); una vez se le pregunta al servidor qué pasa: código HTTP, cuenta (`user_info`) y si la película
   sigue (`get_vod_info`). 404 / ya no está → «Video no disponible»; otra extensión → se abre con la de verdad; cuenta

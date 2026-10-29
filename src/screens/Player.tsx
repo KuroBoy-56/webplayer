@@ -252,6 +252,8 @@ export default function Player({ params }: { params: PlayParams }) {
       },
       // el panel no pudo preparar el video que el equipo no abrió: siguen los otros pasos
       panelFailed: () => onErrorRef.current(),
+      // Continuar viendo: el salto al segundo guardado no llegó en 15 s; siguen los pasos (el panel desde ese segundo)
+      resumeFailed: () => onErrorRef.current(),
       // el canal se detiene seguido: al panel una vez por canal con el estado del lector (bajada, descifrado, cortes)
       liveStalls: diag => {
         const ch = params.kind === 'live' ? params.channels[indexRef.current] || params.channel : null;
@@ -268,6 +270,7 @@ export default function Player({ params }: { params: PlayParams }) {
 
     const onMeta = () => c.onMeta();
     const onTime = () => {
+      c.onTime();
       const now = Date.now();
       if (now - lastUi.current < 500) return;
       lastUi.current = now;
@@ -395,6 +398,13 @@ export default function Player({ params }: { params: PlayParams }) {
           setTimeout(() => {
             if (!alive) return;
             c.panelOpen(at).then(ok => !ok && alive && onErrorRef.current());
+            // el panel tampoco empieza a sonar en 60 s (antes quedaba en «Preparando desde donde quedó…» sin fin): se
+            // deja y sigue el último paso (otra vez directo en el segundo guardado; si no, el aviso)
+            setTimeout(() => {
+              if (!alive || indexRef.current !== i || vod.current.stage !== 1 || c.hasPlayed()) return;
+              c.panelStop();
+              onErrorRef.current();
+            }, 60000);
           }, 4000);
           return true;
         }
