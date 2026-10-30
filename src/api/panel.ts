@@ -358,11 +358,26 @@ export function onCacheClear(fn: () => void): void {
 // funciones que el panel tiene para esta app (login.php features, respuesta sin cifrar). demo: hay
 // una línea en «Configurar Demo» del distribuidor (o del dueño con Omitir). null = sin respuesta o
 // panel viejo ("Invalid action")
-export async function panelFeatures(): Promise<{ demo: boolean } | null> {
+// review: el panel ofrece el tema de prueba (Pantalla Falsa; solo con Omitir)
+export async function panelFeatures(): Promise<{ demo: boolean; review: boolean } | null> {
   if (!hasMasterKey()) return null;
   const j = json<any>(await panelLogin('features', {}));
   const f = j && str(j.status) === 'ok' && j.features && typeof j.features === 'object' ? j.features : null;
-  return f && typeof f.demo === 'boolean' ? { demo: f.demo } : null;
+  return f && typeof f.demo === 'boolean' ? { demo: f.demo, review: f.review === true && !tenantCode() } : null;
+}
+
+export type ReviewVideo = { name: string; url: string };
+export type Review = { movies: ReviewVideo[]; series: ReviewVideo[] };
+
+// Tema de prueba (login.php review_login): Auto-Demo (demo) o una cuenta del tema. No registra nada ni vence.
+// code 401 = no es una cuenta del tema (sigue el inicio de sesión de siempre)
+export async function panelReview(user: string, pass: string, demo: boolean): Promise<{ ok: true; review: Review } | { ok: false; error: string; code: number }> {
+  const r = await panelLogin('review_login', demo ? { demo: 1 } : { username: user, password: pass });
+  const j = json<any>(r);
+  if (!r.ok || !j || str(j.status) !== 'ok') return { ok: false, error: panelError(r, t('No se pudo conectar con el panel.')), code: r.code };
+  const list = (a: any): ReviewVideo[] =>
+    (Array.isArray(a) ? a : []).map((v: any) => ({ name: str(v?.name), url: str(v?.url) })).filter((v: ReviewVideo) => !!v.url);
+  return { ok: true, review: { movies: list(j.movies), series: list(j.series) } };
 }
 export function panelAnswered(): boolean {
   return lastCheckAnswered;

@@ -398,6 +398,7 @@ const pt: Record<Key, string> = {
   "Mostrar": "Mostrar",
   "Canales": "Canais",
   "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ mudar de canal ({x}/{y}) · OK lista de canais · MENU áudio e legendas",
+  "Todavía no hay videos de prueba.": "Ainda não há vídeos de teste.",
 };
 
 export default pt;

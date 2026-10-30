@@ -159,6 +159,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   antes usaba otro nombre y dependía de enlaces del hosting (si no los permite, cada carátula pasaba por `img.php`:
   lento). Si el servidor manda el id de TMDB (`tmdb` / `tmdb_id`, `Item.tm`), una carátula por título para todos los
   servidores IPTV (`&t=`).
+- **Tema de prueba (estilo IBO Player, 1.0.28)**: si el panel lo ofrece (Pantalla Falsa › «Tema de prueba», solo con
+  **Omitir**: `features.review`, `panelFeatures` en `src/api/panel.ts`), el inicio de sesión queda sencillo (usuario,
+  contraseña, Ingresar y Autodemo; sin DNS ni código del equipo). **Autodemo** o una cuenta del tema
+  (`panelReview`, `login.php review_login`) abren `src/screens/Review.tsx`: Películas a la izquierda, Series al lado y
+  Ajustes (solo «Cerrar sesión»), con los videos de la carpeta player del panel en un reproductor sencillo (sin sesión,
+  progreso ni caché). No registra nada en el panel ni vence. Un usuario y contraseña que no son del tema entran como
+  siempre (línea IPTV).
 - **Continuar viendo por pasos** (como Roku): 1) directo en el segundo guardado; 2) si no suena (error o 15 s), 4 s
   después el motor del panel lo prepara desde ese segundo (`panelOpen` en `src/player/playback.ts`); 3) si tampoco,
   otra vez directo 10 s después; si nada funciona, el aviso «No se pudo continuar donde quedó». **Nunca empieza solo
