@@ -42,6 +42,15 @@ Solo hace falta uno: **`PANEL_MASTER_KEY`** = la llave maestra AES del panel (64
 
 La dirección del panel ya viene dentro de la app (ver más abajo), así que no hay ningún secreto para la URL.
 
+### Tema de prueba (estilo IBO Player)
+
+Si el panel lo ofrece (Pantalla Falsa › «Tema de prueba», solo con **Omitir**: `features.review`), la caja de inicio de
+sesión queda sencilla (usuario, contraseña, Entrar y Auto-Demo). **Auto-Demo** o una cuenta del tema (`review_login`
+en `Panel.kt`) abren `ReviewScreen.kt`: Películas, Series y Ajustes (solo «Cerrar sesión»), siempre en horizontal, con
+los videos de la carpeta player del panel (`Play.link`, el mismo camino del reproductor que las descargas: sin sesión,
+sin progreso ni caché). No registra nada en el panel ni vence. Un usuario y contraseña que no son del tema entran como
+siempre (línea IPTV).
+
 ### Amazon Appstore (Fire TV): la firma de Amazon
 
 La app comprueba al abrir que su firma sea la tuya (`checkSignature` en `MainActivity.kt`) y, si no, se cierra. **Amazon
