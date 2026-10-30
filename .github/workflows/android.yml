@@ -25,11 +25,9 @@ jobs:
       - name: Configurar panel
         env:
           PANEL_MASTER_KEY: ${{ secrets.PANEL_MASTER_KEY }}
-          AMAZON_CERT_SHA256: ${{ secrets.AMAZON_CERT_SHA256 }}
         run: |
           : > local.properties
           if [ -n "$PANEL_MASTER_KEY" ]; then echo "panel.master_key=$PANEL_MASTER_KEY" >> local.properties; else echo "::warning::Falta el secreto PANEL_MASTER_KEY: la activación no funcionará"; fi
-          if [ -n "$AMAZON_CERT_SHA256" ]; then echo "amazon.cert_sha256=$AMAZON_CERT_SHA256" >> local.properties; fi
 
       - name: Compilar APK
         run: |
