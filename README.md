@@ -58,21 +58,13 @@ los videos de la carpeta player del panel (`Play.link`, el mismo camino del repr
 sin progreso ni caché). No registra nada en el panel ni vence. Un usuario y contraseña que no son del tema entran como
 siempre (línea IPTV).
 
-### Amazon Appstore (Fire TV): la firma de Amazon
+### Firma de la app y tiendas
 
-La app comprueba al abrir que su firma sea la tuya (`checkSignature` en `MainActivity.kt`) y, si no, se cierra. **Amazon
-vuelve a firmar cada app con un certificado de tu cuenta de desarrollador**, así que la versión de la tienda se cerraba
-al abrir en Fire TV (rechazo «Launch — App exits to device home screen on launch», 1.2.0). Desde la 1.2.1 se acepta
-también ese certificado:
-
-1. En la Amazon Developer Console abre tu app › **APK files** (o *Binary files*) › **Appstore Certificate Hashes** y copia
-   el **SHA-256** (con o sin los dos puntos).
-2. Ponlo en `local.properties` como `amazon.cert_sha256=…` (en GitHub: secreto **`AMAZON_CERT_SHA256`**).
-3. Compila y sube esa versión a Amazon. Sin el valor, la app sigue aceptando solo tu firma (la versión de la tienda se
-   seguiría cerrando).
-
-Es el mismo certificado para todas tus apps de esa cuenta (Android TV y celular). No es un secreto, pero no hace falta
-subirlo al repositorio.
+La app comprueba al abrir que su firma sea la tuya (`checkSignature` en `MainActivity.kt`) y, si no, se cierra. Las
+tiendas (Amazon Appstore, Google Play) vuelven a firmar la app, así que **para publicar en tiendas se usan las ramas
+`android-tv-sin-certificado` y `android-sin-certificado`** (no comprueban la firma); estas ramas, con la comprobación,
+son para compilar con Android Studio e instalar el APK directo. (La 1.2.0 de la tienda se cerraba al abrir en Fire TV
+por esto: «App exits to device home screen on launch».)
 
 ## Abrir en Android Studio → Run
 
