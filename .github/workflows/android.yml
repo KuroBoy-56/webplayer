@@ -1,8 +1,8 @@
-name: APK Android
+name: APK Android (tiendas)
 
 on:
   push:
-    branches: [android]
+    branches: [android-sin-certificado]
   workflow_dispatch:
 
 permissions:
@@ -51,10 +51,10 @@ jobs:
           name: LatMpx-apk
           path: LatMpx.apk
 
-      # publica siempre la última versión en la misma dirección de descarga (Releases > apk-latest)
+      # publica siempre la última versión en la misma dirección de descarga (Releases > apk-tienda-latest)
       - name: Publicar descarga
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete apk-latest --yes --cleanup-tag || true
-          gh release create apk-latest LatMpx.apk --target "$GITHUB_SHA" --title "LatMpx APK (última versión)" --notes "Compilado automáticamente desde la rama android ($GITHUB_SHA)." --prerelease
+          gh release delete apk-tienda-latest --yes --cleanup-tag || true
+          gh release create apk-tienda-latest LatMpx.apk --target "$GITHUB_SHA" --title "LatMpx APK para tiendas (última versión)" --notes "Para publicar en tiendas (sin comprobar la firma). Compilado automáticamente desde la rama android-sin-certificado ($GITHUB_SHA)." --prerelease
