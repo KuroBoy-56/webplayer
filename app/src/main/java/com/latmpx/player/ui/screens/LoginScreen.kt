@@ -84,7 +84,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = {}, onLogged: (Session) -> Unit) {
+fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = {}, onReview: (Panel.Review) -> Unit = {}, onLogged: (Session) -> Unit) {
     val ctx = LocalContext.current
     val tv = LocalIsTv.current
     val deviceId = remember { Device.id(ctx) }
@@ -177,7 +177,9 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
     }
 
     LaunchedEffect(Tenant.code) { posters = Tmdb.nowPlaying() }
-    LaunchedEffect(Tenant.code) { demoConfigured = Panel.demoConfigured(deviceId) }
+    // tema de prueba del panel (Pantalla Falsa, solo con Omitir): caja sencilla con usuario, contraseña, Entrar y Auto-Demo
+    var review by remember { mutableStateOf(false) }
+    LaunchedEffect(Tenant.code) { demoConfigured = Panel.demoConfigured(deviceId); review = Panel.reviewOffered }
     LaunchedEffect(Unit) {
         resolve()
         if (lines.isEmpty() && !Store.fakeUnlocked) fake = Panel.fakeScreen
@@ -242,7 +244,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                     err?.let { ErrorBanner(it) }
                     // celular sin internet (o el panel no responde): lo descargado se puede ver igual
                     val online = com.latmpx.player.data.rememberOnline()
-                    if (!tv && (!online || err.let { it == tr(R.string.err_panel_offline) || it == tr(R.string.err_panel_offline_short) || it == tr(R.string.err_server_offline) })) {
+                    if (!review && !tv && (!online || err.let { it == tr(R.string.err_panel_offline) || it == tr(R.string.err_panel_offline_short) || it == tr(R.string.err_server_offline) })) {
                         if (!online) Text(stringResource(R.string.no_internet), color = NfGray2, fontSize = 13.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
                         com.latmpx.player.ui.components.AppButton(stringResource(R.string.my_downloads), Modifier.fillMaxWidth(), primary = !online,
                             icon = Icons.Filled.Download, onClick = onDownloads)
@@ -275,7 +277,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                             .then(Modifier.tvTextInput()),
                     )
                     
-                    Column(Modifier.fillMaxWidth().background(Color(0x33FFFFFF), RoundedCornerShape(4.dp)).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (!review) Column(Modifier.fillMaxWidth().background(Color(0x33FFFFFF), RoundedCornerShape(4.dp)).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(stringResource(R.string.mac_code_remote), color = NfGray2, fontSize = 12.sp)
                         Text(deviceId, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                     }
@@ -283,6 +285,11 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                     RedButton(stringResource(R.string.sign_in), Modifier.fillMaxWidth().focusRequester(firstFocus)) {
                         act {
                             if (user.isBlank() || pass.isBlank()) { err = tr(R.string.login_enter_credentials); return@act }
+                            if (review) {
+                                // una cuenta del tema de prueba entra al tema; cualquier otra sigue como siempre (línea IPTV)
+                                status = tr(R.string.login_activating)
+                                Panel.reviewLogin(user.trim(), pass.trim(), false).value?.let { onReview(it); return@act }
+                            }
                             if (dns.isEmpty()) Panel.fetchDns().let { d -> d.value?.let { dns = it }; if (d.value == null) err = d.error }
                             val server = dns.getOrNull(dnsIdx) ?: dns.firstOrNull()
                             if (server == null) { if (err == null) err = tr(R.string.login_no_servers); return@act }
@@ -307,7 +314,15 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // solo si hay demo configurada en el panel (features); si el panel no respondió: con distribuidor
                         // lo de tenant_config, con Omitir como siempre. Sin la llave del panel no hay botón.
-                        if (PanelCrypto.hasKey() && (demoConfigured ?: Tenant.demoEnabled)) HeroButton(stringResource(R.string.autodemo), Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
+                        // tema de prueba: Auto-Demo entra al tema (no crea ni registra ninguna demo)
+                        if (review && PanelCrypto.hasKey()) HeroButton(stringResource(R.string.autodemo), Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
+                            act {
+                                status = tr(R.string.login_creating_demo)
+                                val r = Panel.reviewLogin("", "", true)
+                                r.value?.let { onReview(it) } ?: run { err = r.error }
+                            }
+                        }
+                        else if (PanelCrypto.hasKey() && (demoConfigured ?: Tenant.demoEnabled)) HeroButton(stringResource(R.string.autodemo), Icons.Filled.CardGiftcard, false, Modifier.weight(1f).height(48.dp)) {
                             // el panel decide (si el dueño borró el registro, el equipo puede pedir otra demo)
                             act {
                                 status = tr(R.string.login_creating_demo)
@@ -334,7 +349,8 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                             }
                         }
                         
-                        if (dns.size > 1 || true) {
+                        if (review) Spacer(Modifier.weight(1f))
+                        else if (dns.size > 1 || true) {
                             Box(Modifier.weight(1f)) {
                                 DnsButton()
                             }

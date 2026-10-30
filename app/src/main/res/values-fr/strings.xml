@@ -412,4 +412,5 @@
     <string name="sp_understood">COMPRIS</string>
     <string name="sp_more_details">PLUS DE DÉTAILS</string>
     <string name="sp_no_team_info">Aucune information sur cette équipe</string>
+    <string name="review_no_videos">Aucune vidéo de test pour l\'instant.</string>
 </resources>

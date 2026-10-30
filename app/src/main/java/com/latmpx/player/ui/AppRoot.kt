@@ -98,6 +98,8 @@ fun AppRoot() {
     val checking = remember { mutableStateOf(false) }
     /** Mis descargas desde el inicio de sesión (sin internet) */
     val offlineDownloads = remember { mutableStateOf(false) }
+    /** tema de prueba del panel (Auto-Demo o una cuenta del tema): sin sesión, sin registro y sin caché */
+    val review = remember { mutableStateOf<com.latmpx.player.data.Panel.Review?>(null) }
 
     // "Cambiar distribuidor" o número cortado por el panel: se borra el número, su marca, la sesión y el token
     fun wipe(msg: String?) {
@@ -219,8 +221,9 @@ fun AppRoot() {
                 state.session = Store.session()
             }
             gate.value == Gate.RETRY -> TenantRetryScreen(retryMsg.value, checking.value, onRetry = { guard() }, onChange = { wipe(null) })
+            state.session == null && review.value != null -> com.latmpx.player.ui.screens.ReviewScreen(review.value!!) { review.value = null }
             state.session == null && offlineDownloads.value -> com.latmpx.player.ui.screens.DownloadsScreen { offlineDownloads.value = false }
-            state.session == null -> LoginScreen(onDownloads = { offlineDownloads.value = true }, onChangeDistributor = { wipe(null) }) { s ->
+            state.session == null -> LoginScreen(onDownloads = { offlineDownloads.value = true }, onChangeDistributor = { wipe(null) }, onReview = { review.value = it }) { s ->
                 lastPanelCheck.longValue = System.currentTimeMillis()
                 Store.saveSession(s)
                 Xtream.clearCache()

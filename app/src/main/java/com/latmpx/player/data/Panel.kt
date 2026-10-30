@@ -183,7 +183,33 @@ object Panel {
     suspend fun demoConfigured(deviceId: String): Boolean? {
         val r = login("features", device(deviceId)).value ?: return null
         val f = r.json()?.takeIf { r.ok && it.s("status") == "ok" }?.optJSONObject("features") ?: return null
+        // tema de prueba (Pantalla Falsa del panel): solo con Omitir
+        reviewOffered = f.optBoolean("review", false) && !Tenant.active
         return if (f.has("demo")) f.optBoolean("demo") else null
+    }
+
+    /** el panel ofrece el tema de prueba (lo dice features; con Omitir) */
+    @Volatile var reviewOffered = false
+
+    /** Tema de prueba: videos de Películas y Series (carpeta player del panel). */
+    data class ReviewVideo(val name: String, val url: String)
+    data class Review(val movies: List<ReviewVideo>, val series: List<ReviewVideo>)
+
+    /**
+     * login.php action review_login: Auto-Demo (demo) o una cuenta del tema de prueba. No registra nada en el panel ni
+     * vence. code 401 = no es una cuenta del tema (sigue el inicio de sesión de siempre); 403 = el tema no está.
+     */
+    suspend fun reviewLogin(user: String, pass: String, demo: Boolean): Answer<Review> {
+        val p = JSONObject()
+        if (demo) p.put("demo", 1) else p.put("username", user).put("password", pass)
+        val a = login("review_login", p)
+        val r = a.value ?: return Answer(null, a.error)
+        val j = r.json()
+        if (!r.ok || j?.s("status") != "ok") return Answer(null, errorOf(r, tr(R.string.err_panel_rejected)), r.code)
+        fun list(k: String) = j.optJSONArray(k)?.let { arr ->
+            (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { ReviewVideo(it.s("name"), it.s("url")) } }.filter { it.url.isNotBlank() }
+        }.orEmpty()
+        return Answer(Review(list("movies"), list("series")))
     }
 
     /** Respuesta de tenant_config: la configuración descifrada o el código de error (tenant_invalid, offline, no_key…). */

@@ -47,6 +47,22 @@ object Play {
         })
     }
 
+    /** tema de prueba: un video del panel (carpeta player) por su dirección, sin sesión ni progreso (como las descargas) */
+    fun link(ctx: Context, name: String, url: String) {
+        if (url.isBlank()) return
+        ctx.startActivity(Intent(ctx, PlayerActivity::class.java).apply {
+            putExtra(X_KIND, Kind.MOVIE.name)
+            putExtra(X_INDEX, 0)
+            putExtra(X_IDS, intArrayOf(0))
+            putExtra(X_TITLES, arrayOf(name))
+            putExtra(X_KEYS, arrayOf("review:$url"))
+            putExtra(X_POSTERS, arrayOf(""))
+            putExtra(X_EXTS, arrayOf(url.substringBefore('?').substringAfterLast('.', "mp4")))
+            putExtra(X_FILES, arrayOf(url))
+            putExtra(X_SAVE_TITLE, name)
+        })
+    }
+
     fun movie(ctx: Context, item: Item, ext: String) =
         start(ctx, Kind.MOVIE, listOf(QueueEntry(item.id, item.name, item.key, item.poster, ext.ifEmpty { item.ext })), 0, "", item.name, item.poster, item.categoryId)
 

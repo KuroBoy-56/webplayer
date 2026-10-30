@@ -412,4 +412,5 @@
     <string name="sp_understood">ENTENDI</string>
     <string name="sp_more_details">MAIS DETALHES</string>
     <string name="sp_no_team_info">Não há informações sobre este time</string>
+    <string name="review_no_videos">Ainda não há vídeos de teste.</string>
 </resources>

@@ -329,7 +329,8 @@ class PlayerActivity : ComponentActivity() {
 
     private fun mediaItem(q: QueueEntry): MediaItem {
         val local = files[q.key]
-        val url = if (local != null) Uri.fromFile(java.io.File(local)).toString() else when (kind) {
+        // descarga del equipo o, en el tema de prueba, la dirección del video del panel
+        val url = if (local != null) (if (local.startsWith("http", true)) local else Uri.fromFile(java.io.File(local)).toString()) else when (kind) {
             Kind.MOVIE -> Xtream.movieUrl(session, q.id, q.ext)
             Kind.SERIES -> Xtream.episodeUrl(session, q.id, q.ext)
             Kind.LIVE -> Xtream.liveUrls(session, q.id)[liveAlt[q.id] ?: 0]

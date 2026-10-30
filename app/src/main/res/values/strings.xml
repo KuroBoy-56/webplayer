@@ -413,4 +413,5 @@
     <string name="sp_understood">ENTENDIDO</string>
     <string name="sp_more_details">MÁS DETALLES</string>
     <string name="sp_no_team_info">No hay información de este equipo</string>
+    <string name="review_no_videos">Todavía no hay videos de prueba.</string>
 </resources>

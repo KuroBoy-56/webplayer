@@ -25,8 +25,8 @@ android {
         applicationId = "com.latmpx.player"
         minSdk = 23
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.2.1"
+        versionCode = 5
+        versionName = "1.3.0"
         buildConfigField("String", "PANEL_MASTER_KEY", "\"$panelMasterKey\"")
         buildConfigField("String", "AMAZON_CERT_SHA256", "\"$amazonCertSha256\"")
     }
