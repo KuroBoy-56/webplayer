@@ -13,9 +13,6 @@ val localProps: Properties = Properties().apply {
 }
 // llave maestra AES de login.php (hex de 64 caracteres). Única fuente: local.properties (nunca en el repositorio).
 val panelMasterKey: String = localProps.getProperty("panel.master_key") ?: ""
-// SHA-256 del certificado con el que Amazon Appstore vuelve a firmar la app (Developer Console › APK › «Appstore
-// Certificate Hashes»); vacío = solo la firma propia. No es secreto, pero va igual en local.properties.
-val amazonCertSha256: String = (localProps.getProperty("amazon.cert_sha256") ?: "").replace("\"", "")
 
 android {
     namespace = "com.latmpx.player"
@@ -25,10 +22,9 @@ android {
         applicationId = "com.latmpx.player"
         minSdk = 23
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.3.0"
+        versionCode = 6
+        versionName = "1.3.1"
         buildConfigField("String", "PANEL_MASTER_KEY", "\"$panelMasterKey\"")
-        buildConfigField("String", "AMAZON_CERT_SHA256", "\"$amazonCertSha256\"")
     }
 
     buildTypes {
