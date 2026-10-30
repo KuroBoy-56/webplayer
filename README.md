@@ -1,5 +1,12 @@
 # MPX Player para Android TV y Google TV (rama `android-tv`)
 
+> **Rama `android-tv-sin-certificado`: para publicar en tiendas (Amazon Appstore, Google Play).** Es igual que la rama
+> `android-tv`, salvo que la app **no comprueba su propia firma** al abrir (`STORE_BUILD` en
+> `MainActivity.kt`): las tiendas vuelven a firmar la app con su certificado y con la comprobación se cerraba al abrir.
+> La rama `android-tv` (con la comprobación) es para compilar con Android Studio e instalar
+> el APK directo. El APK de esta rama queda en Releases › `apk-tv-tienda-latest`. Al cambiar la otra rama, trae aquí los cambios
+> (`git merge android-tv`) sin tocar `STORE_BUILD`.
+
 **Marca:** la app se llama **MPX Player** (`app_name`; el paquete sigue siendo `com.latmpx.player` para que se actualice sobre la instalada). Logo, icono, banner de TV e imágenes de las plataformas (Netflix, Disney+, HBO Max, Prime Video, Marvel, Apple TV+, Paramount+, DC, Navidad, Halloween) están en `res/drawable-nodpi`, `res/mipmap-xxxhdpi` y `res/drawable-*`.
 
 App nativa en Kotlin exclusiva para televisor, con la misma lógica y el mismo diseño que el reproductor web (rama `main`).

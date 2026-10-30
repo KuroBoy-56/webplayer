@@ -9,11 +9,15 @@ import com.latmpx.player.ui.AppRoot
 import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.theme.LatMpxTheme
 
+private const val STORE_BUILD = true
+
 class MainActivity : ComponentActivity() {
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(Lang.wrap(newBase))
 
     private fun checkSignature() {
-        if (com.latmpx.player.BuildConfig.DEBUG) return
+        // rama «sin certificado» (para publicar en tiendas): Amazon Appstore y Google Play vuelven a firmar la app con su
+        // propio certificado, así que aquí no se comprueba la firma (en las ramas de siempre sí)
+        if (STORE_BUILD || com.latmpx.player.BuildConfig.DEBUG) return
         try {
             // GET_SIGNING_CERTIFICATES solo existe desde Android 9; los TV Box y celulares más viejos usan GET_SIGNATURES
             val signatures = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {

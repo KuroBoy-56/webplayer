@@ -1,8 +1,8 @@
-name: APK Android TV
+name: APK Android TV (tiendas)
 
 on:
   push:
-    branches: [android-tv]
+    branches: [android-tv-sin-certificado]
   workflow_dispatch:
 
 permissions:
@@ -51,10 +51,10 @@ jobs:
           name: LatMpx-TV-apk
           path: LatMpx-TV.apk
 
-      # publica siempre la última versión en la misma dirección de descarga (Releases > apk-tv-latest)
+      # publica siempre la última versión en la misma dirección de descarga (Releases > apk-tv-tienda-latest)
       - name: Publicar descarga
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete apk-tv-latest --yes --cleanup-tag || true
-          gh release create apk-tv-latest LatMpx-TV.apk --target "$GITHUB_SHA" --title "LatMpx TV APK (última versión)" --notes "Compilado automáticamente desde la rama android-tv ($GITHUB_SHA). Solo para Android TV / Google TV / TV Box." --prerelease
+          gh release delete apk-tv-tienda-latest --yes --cleanup-tag || true
+          gh release create apk-tv-tienda-latest LatMpx-TV.apk --target "$GITHUB_SHA" --title "LatMpx TV APK para tiendas (última versión)" --notes "Para publicar en tiendas (sin comprobar la firma). Compilado automáticamente desde la rama android-tv-sin-certificado ($GITHUB_SHA). Solo para Android TV / Google TV / TV Box." --prerelease
