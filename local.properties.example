@@ -5,3 +5,7 @@
 # Es la única fuente de la llave: no está en el código ni en el repositorio, en ninguna forma.
 # local.properties está en .gitignore, así que nunca se sube.
 panel.master_key=
+
+# Solo para publicar en Amazon Appstore: Amazon vuelve a firmar la app y, sin esto, se cierra al abrir en Fire TV.
+# Copia el SHA-256 de Developer Console › tu app › APK › «Appstore Certificate Hashes» (con o sin los dos puntos).
+amazon.cert_sha256=
