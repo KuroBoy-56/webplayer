@@ -119,7 +119,7 @@ export class PanelHls {
     this.next = k;
     this.tsOff = this.segs[k].start;
     // MP4 convertido: otra línea de tiempo desde 0, puesta en el segundo del segmento
-    if (this.mp4) this.mux = new TsMux();
+    if (this.mp4) this.mux = new TsMux(0, true);
     this.v.currentTime = t;
     if (!this.running) this.pump();
     return true;
@@ -247,7 +247,7 @@ export class PanelHls {
     if (!mp4Off && (!this.sb || this.mp4)) {
       let r: MuxResult;
       try {
-        r = (this.mux = this.mux || new TsMux()).push(data);
+        r = (this.mux = this.mux || new TsMux(0, true)).push(data);
       } catch {
         r = { ok: false, why: 'mux' };
       }

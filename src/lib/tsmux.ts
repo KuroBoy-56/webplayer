@@ -56,7 +56,10 @@ export class TsMux {
   mime = '';
   // idiomas de los audios AAC del canal (en orden) y el que suena
   langs: string[] = [];
-  constructor(readonly audioIdx = 0) {}
+  // padStart (video del panel, hls.ts): el panel corta el video en el cuadro clave anterior al segundo pedido y el audio
+  // empieza justo en ese segundo (0,5-1 s después); el reproductor de Vega no respeta ese hueco inicial y el audio quedaba
+  // atrasado. Con padStart el audio empieza con el video, con silencio hasta su primer cuadro
+  constructor(readonly audioIdx = 0, readonly padStart = false) {}
 
   private fix(v: number): number {
     if (this.ref === null) return v;
@@ -226,7 +229,7 @@ export class TsMux {
       const at = src >= 0 ? src + this.off! : -1;
       if (this.aNext === null) {
         if (at < 0) continue;
-        this.aNext = Math.max(0, Math.round((at * au.rate) / HZ));
+        this.aNext = this.padStart && this.vPid >= 0 && silent ? 0 : Math.max(0, Math.round((at * au.rate) / HZ));
       }
       if (at >= 0) {
         const drift = at - (this.aNext * HZ) / au.rate;
@@ -239,7 +242,8 @@ export class TsMux {
           flush();
           this.aNext = Math.max(0, Math.round((at * au.rate) / HZ));
         } else if (drift > 1.5 * step) {
-          if (drift < 2 * HZ) {
+          // el hueco del principio (padStart) se rellena aunque sea largo (un grupo de cuadros, hasta 15 s)
+          if (drift < (this.padStart && !this.aLast && silent ? 15 : 2) * HZ) {
             for (let k = Math.round(drift / step); k > 0; k--) {
               put(silent || this.aLast || f.data);
               this.filled++;

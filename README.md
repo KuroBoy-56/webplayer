@@ -253,6 +253,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   1 s quieto (el tiempo del reproductor avanza a saltos).
   **1.0.44:** la lista de edición también con **tramos vacíos** al principio (`media_time = -1`: la pista empieza N s
   después, en la escala de `mvhd`): antes se ignoraban y ese audio sonaba N s adelantado al video.
+- **Audio convertido por el panel en sincronía (1.0.45, `tsmux.ts` `padStart`, solo el lector del panel `hls.ts`):** el
+  panel corta el video en el cuadro clave anterior al segundo pedido y el audio empieza justo en ese segundo (0,5-1 s
+  después: el MPEG-TS lo dice bien, medido 0,96 s). El reproductor de Vega no respetaba ese hueco inicial y el audio
+  quedaba atrasado; ahora el audio empieza con el video, con silencio AAC hasta su primer cuadro (probado: el sonido real
+  sigue en su lugar exacto). Los canales en vivo no cambian.
 - **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
   si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
   y con el interruptor del dueño o del distribuidor encendido).
