@@ -161,6 +161,8 @@ Como Roku y Vega (`ui/screens/AccountTv.kt`): a la izquierda la tarjeta de la l�
 
 **1.3.5:** la tarjeta va debajo del menú, con los datos en dos columnas (nombre a la izquierda, valor a la derecha) y la MAC al pie sin taparlos; en Ajustes el nombre de cada opción se ve completo («Idioma de la app», «Control parental») y su valor va pegado a la derecha. Un canal o video que no se puede reproducir solo dice el error y **Cerrar** (que vuelve a la pantalla de antes, en Deportes con el foco en el partido que se abrió); **Abrir en VLC** solo aparece con el reproductor externo elegido en Ajustes.
 
+**1.3.6:** en los canales el reproductor ya no muestra «Audio y subtítulos» (solo películas y series); queda el ajuste de pantalla. Deportes: la hora y Hoy / Mañana van en la zona del panel; si el equipo no reconoce el nombre de la zona (`tz`), se usa el desfase que manda el panel (`tzo`, como Vega) y no la zona del equipo. «En vivo» = desde la hora de inicio hasta la duración del deporte que manda el panel (fútbol 120 min, combate / ciclismo / cricket 240, golf 300…), igual que Roku y Vega.
+
 ## DNS
 
 Botón **DNS** en el inicio de sesión y en **Cuenta**: Automático (por defecto), Cloudflare, Google, Quad9, AdGuard (sin rastreo ni anuncios), NextDNS (anti-bloqueo geográfico) y OpenDNS.
