@@ -77,8 +77,12 @@ object Sports {
 
     private fun parse(j: JSONObject): SportsData {
         val tz = j.s("tz")
-        // getTimeZone() da GMT con un nombre que no conoce
-        zone = if (tz.isNotEmpty()) TimeZone.getTimeZone(tz).takeIf { it.id == tz } ?: TimeZone.getDefault() else TimeZone.getDefault()
+        // getTimeZone() da GMT con un nombre que no conoce: entonces el desfase del panel ("tzo", segundos sobre UTC, como
+        // Vega) y solo si tampoco viene, la del equipo (un teléfono mal configurado mostraba otra hora)
+        val tzo = if (j.has("tzo")) j.optInt("tzo", 0) else null
+        zone = TimeZone.getTimeZone(tz).takeIf { tz.isNotEmpty() && it.id == tz }
+            ?: tzo?.let { java.util.SimpleTimeZone(it * 1000, "panel") }
+            ?: TimeZone.getDefault()
         val events = j.optJSONArray("events").mapObj { e -> event(e) }.sortedBy { it.start }
         val sports = LinkedHashMap<String, SportInfo>()
         j.optJSONObject("sports")?.let { so ->
@@ -148,9 +152,12 @@ object Sports {
         return words.all { hay.contains(it) }
     }
 
+    // compiladas una sola vez (antes se compilaban en cada llamada: decenas de miles por búsqueda de canal)
+    private val MARKS = Regex("\\p{M}+")
+    private val NON_ALNUM = Regex("[^a-z0-9]+")
+
     fun norm(s: String): String =
-        Normalizer.normalize(s.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace("\\p{M}+".toRegex(), "")
-            .replace("[^a-z0-9]+".toRegex(), " ").trim()
+        Normalizer.normalize(s.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(MARKS, "").replace(NON_ALNUM, " ").trim()
 
     private fun hasWord(chan: String, w: String): Boolean = w.isNotEmpty() && " $chan ".contains(" $w ")
 
@@ -161,20 +168,63 @@ object Sports {
         return r.alias[n]?.let { listOf(n, it) } ?: listOf(n)
     }
 
+    /** un equipo ya normalizado (con su alias) y sus palabras distintivas: se arma una vez por partido */
+    private class Team(val names: List<String>, val toks: List<List<String>>)
+
+    private fun team(name: String, r: MatchRules): Team? {
+        if (name.isBlank()) return null
+        val names = aliases(name, r)
+        return Team(names, names.map { n -> tokens(n, r).filter { it.length >= 4 } })
+    }
+
     /** 0 = no aparece, token = una palabra distintiva, fullName = nombre completo */
-    private fun teamScore(chan: String, team: String, r: MatchRules): Int {
-        if (team.isBlank()) return 0
+    private fun teamScore(chan: String, t: Team?, r: MatchRules): Int {
+        if (t == null) return 0
         var best = 0
-        for (n in aliases(team, r)) {
+        for ((i, n) in t.names.withIndex()) {
             if (n.length >= 3 && hasWord(chan, n)) return r.fullName
-            if (tokens(n, r).any { it.length >= 4 && hasWord(chan, it) }) best = r.token
+            if (t.toks[i].any { hasWord(chan, it) }) best = r.token
         }
         return best
     }
 
     /** Canal ya normalizado con su categoría, para no repetir el trabajo en cada partido. */
     class Chan(val item: Item, val norm: String, val isEvent: Boolean) {
-        val key: List<String> by lazy { channelKey(item.name) }
+        val key: List<String> = channelKey(item.name)
+    }
+
+    /**
+     * Índice de los canales (como Vega / Roku): se arma una sola vez por catálogo y reglas, y cada partido compara
+     * solo los canales que comparten alguna palabra con sus equipos o su canal de TV (no todos contra todos).
+     * Antes cada toque normalizaba de nuevo todos los canales y los comparaba uno por uno: con catálogos grandes
+     * la búsqueda tardaba muchísimo y el equipo mostraba «la aplicación no responde».
+     */
+    class Index(val chans: List<Chan>) {
+        val words = HashMap<String, MutableList<Int>>()
+        val keys = HashMap<String, MutableList<Int>>()
+        val memo = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+        init {
+            fun add(m: HashMap<String, MutableList<Int>>, k: String, i: Int) {
+                val l = m.getOrPut(k) { ArrayList(2) }
+                if (l.isEmpty() || l[l.size - 1] != i) l.add(i)
+            }
+            chans.forEachIndexed { i, c ->
+                for (w in c.norm.split(' ')) if (w.length >= 3) add(words, w, i)
+                for (w in c.key) if (w.length >= 2 && !w.all(Char::isDigit)) add(words, w, i)
+                val compact = c.key.joinToString("")
+                if (compact.isNotEmpty()) add(keys, compact, i)
+            }
+        }
+    }
+
+    private var ixCache: Triple<List<Item>, MatchRules, Index>? = null
+
+    /** el índice de este catálogo (el mismo mientras no cambien los canales ni las reglas) */
+    @Synchronized
+    fun index(channels: List<Item>, cats: List<Category>, r: MatchRules): Index {
+        ixCache?.let { (ch, rr, ix) -> if (ch === channels && rr === r) return ix }
+        return Index(prepare(channels, cats, r)).also { ixCache = Triple(channels, r, it) }
     }
 
     /* ---------- búsqueda por el canal que transmite ("ESPN 2" -> los canales ESPN 2 del cliente) ---------- */
@@ -202,12 +252,19 @@ object Sports {
      * Canales del cliente que son el canal que transmite: primero los que se llaman igual (sin calidad
      * ni país), después los que contienen todas sus palabras. "ESPN 2" nunca da "ESPN" ni "ESPN 3".
      */
-    fun findByChannel(tvName: String, chans: List<Chan>): List<Item> {
+    fun findByChannel(tvName: String, ix: Index): Item? {
+        val hit = ix.memo[tvName]
+        if (hit != null) return if (hit >= 0) ix.chans[hit].item else null
         val q = channelKey(tvName)
-        if (q.isEmpty() || q.joinToString("").length < 2) return emptyList()
+        if (q.isEmpty() || q.joinToString("").length < 2) { ix.memo[tvName] = -1; return null }
         val qs = q.toSet()
-        val scored = ArrayList<Pair<Int, Chan>>()
-        for (c in chans) {
+        // solo los canales que tienen la palabra (o el nombre pegado) del canal buscado
+        val cand = LinkedHashSet<Int>()
+        ix.keys[q.joinToString("")]?.let { cand.addAll(it) }
+        ix.words[q[0]]?.let { cand.addAll(it) }
+        val scored = ArrayList<Pair<Int, Int>>()
+        for (ci in cand) {
+            val c = ix.chans[ci]
             val k = c.key
             if (k.isEmpty()) continue
             val score = when {
@@ -216,15 +273,17 @@ object Sports {
                 k.containsAll(qs) -> 500 - 10 * (k.size - q.size)
                 else -> continue
             }
-            scored.add(score to c)
+            scored.add(score to ci)
         }
-        return scored.sortedWith(compareByDescending<Pair<Int, Chan>> { it.first }.thenBy { it.second.item.name.length }).map { it.second.item }
+        val best = scored.sortedWith(compareByDescending<Pair<Int, Int>> { it.first }.thenBy { ix.chans[it.second].item.name.length }).firstOrNull()?.second ?: -1
+        ix.memo[tvName] = best
+        return if (best >= 0) ix.chans[best].item else null
     }
 
     /** El canal del partido: el primero de sus canales de TV que tiene el cliente; si no, por equipos o nombre del evento. */
-    fun best(ev: SportEvent, chans: List<Chan>, r: MatchRules): Item? {
-        for (t in ev.tv) findByChannel(t.name, chans).firstOrNull()?.let { return it }
-        return find(ev, chans, r)
+    fun best(ev: SportEvent, ix: Index, r: MatchRules): Item? {
+        for (t in ev.tv) findByChannel(t.name, ix)?.let { return it }
+        return find(ev, ix, r)
     }
 
     fun prepare(channels: List<Item>, cats: List<Category>, r: MatchRules): List<Chan> {
@@ -234,19 +293,31 @@ object Sports {
 
     private val VS = Regex(" (vs|v|x) ")
 
-    fun find(ev: SportEvent, chans: List<Chan>, r: MatchRules): Item? {
+    fun find(ev: SportEvent, ix: Index, r: MatchRules): Item? {
         val h = ev.home.trim()
         val a = ev.away.trim()
         val leagueToks = tokens(ev.league, r)
         val single = if (h.isEmpty() && a.isEmpty()) tokens(ev.title, r) else emptyList()
+        val ht = team(h, r)
+        val at = team(a, r)
+        // canales candidatos: los que tienen alguna palabra de los equipos (o del evento), como Vega
+        val want = HashSet<String>()
+        for (t in listOfNotNull(ht, at)) t.names.forEach { n ->
+            val tk = tokens(n, r)
+            if (tk.isNotEmpty()) want.addAll(tk) else n.split(' ').filter { it.length >= 3 }.forEach { want.add(it) }
+        }
+        want.addAll(single)
+        val cand = java.util.TreeSet<Int>()
+        for (w in want) ix.words[w]?.let { cand.addAll(it) }
         var best: Chan? = null
         var bestScore = Int.MIN_VALUE
-        for (c in chans) {
+        for (ci in cand) {
+            val c = ix.chans[ci]
             val chan = c.norm
             var score: Int
             if (h.isNotEmpty() || a.isNotEmpty()) {
-                val hs = teamScore(chan, h, r)
-                val aw = teamScore(chan, a, r)
+                val hs = teamScore(chan, ht, r)
+                val aw = teamScore(chan, at, r)
                 if (hs == 0 && aw == 0) continue
                 val both = hs > 0 && aw > 0
                 // fuera de las carpetas de eventos solo cuenta si aparecen los dos equipos
