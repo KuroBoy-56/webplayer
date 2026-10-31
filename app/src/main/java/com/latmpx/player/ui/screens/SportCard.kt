@@ -107,9 +107,15 @@ private fun TeamCol(badge: String, name: String, compact: Boolean, away: Boolean
     }
 }
 
-/** Tarjeta .sp-card: liga + estado, equipos con escudos y marcador, sede y botón "TV en vivo". */
+/**
+ * Tarjeta .sp-card: liga + estado, equipos con escudos y marcador, sede y botón "TV en vivo". chan: el canal encontrado
+ * en la lista del cliente (en verde) o "Sin canal" / "Buscando…"; tvLine: "En TV: …" (como Roku y Vega)
+ */
 @Composable
-fun SportCardView(e: SportEvent, info: SportInfo?, now: Long, compact: Boolean, modifier: Modifier = Modifier, onTv: () -> Unit) {
+fun SportCardView(
+    e: SportEvent, info: SportInfo?, now: Long, compact: Boolean, modifier: Modifier = Modifier,
+    chan: String? = null, chanFound: Boolean = false, tvLine: String? = null, onTv: () -> Unit,
+) {
     val st = spStatus(e, info, now)
     val live = st == SpStatus.LIVE
     val shape = RoundedCornerShape(8.dp)
@@ -139,12 +145,15 @@ fun SportCardView(e: SportEvent, info: SportInfo?, now: Long, compact: Boolean, 
                 Text(e.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
             // dónde se transmite (los de la región primero)
-            if (e.tv.isNotEmpty()) {
-                val shown = e.tv.take(3).joinToString(" · ") { it.name }
+            val line = tvLine ?: if (e.tv.isNotEmpty()) {
                 val more = e.tv.size - 3
-                Text("📺 $shown" + if (more > 0) "  +$more" else "", color = Color(0xFFDDDDDD), fontSize = 12.5.sp, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
-            }
+                "📺 " + e.tv.take(3).joinToString(" · ") { it.name } + if (more > 0) "  +$more" else ""
+            } else null
+            if (!line.isNullOrBlank()) Text(line, color = Color(0xFFDDDDDD), fontSize = 12.5.sp, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
+            // el canal que se abre con OK (el de la lista del cliente)
+            if (chan != null) Text("▶ $chan", color = if (chanFound) Color(0xFF46D369) else SpMute, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(e.venue.ifEmpty { if (st == SpStatus.SOON) spTime(e.start) else "" }, color = SpMute, fontSize = 12.5.sp, maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))

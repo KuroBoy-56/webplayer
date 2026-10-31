@@ -83,7 +83,7 @@ import kotlinx.coroutines.delay
 data class TvHero(val item: Item, val backdrop: String, val tmdbBackdrop: String, val plot: String, val genre: String)
 
 /** destacados ya resueltos por sección (al volver de una ficha no se vuelven a pedir ni cambian) */
-private object HeroCache {
+internal object HeroCache {
     val map = java.util.concurrent.ConcurrentHashMap<String, List<TvHero>>()
     /** último destacado mostrado: queda de fondo mientras la sección nueva busca los suyos (nunca pantalla negra) */
     var last: TvHero? = null
@@ -94,7 +94,7 @@ private object HeroCache {
  * se pide su ficha (get_vod_info / get_series_info) y solo quedan las que tienen fondo horizontal.
  * Si el servidor no trae fondo se usa el de TMDB (llave del panel con la de respaldo).
  */
-private suspend fun resolveHero(s: Session, it: Item): TvHero? {
+internal suspend fun resolveHero(s: Session, it: Item): TvHero? {
     val d = runCatching { if (it.kind == Kind.SERIES) Xtream.seriesDetails(s, it) else Xtream.movieDetails(s, it) }.getOrNull()
     val own = it.backdrop.ifBlank { d?.backdrop.orEmpty() }
     var plot = d?.plot?.ifBlank { null } ?: it.plot
@@ -242,7 +242,7 @@ fun TvBillboard(state: AppState, pool: List<Item>, cacheKey: String = state.tab.
 
 /** fondo del destacado: recortado como background-position: center 20%; si el enlace no carga, el de TMDB */
 @Composable
-private fun HeroBackdrop(h: TvHero) {
+internal fun HeroBackdrop(h: TvHero) {
     var url by remember(h.item.key) { mutableStateOf(h.backdrop) }
     var failed by remember(h.item.key) { mutableStateOf(false) }
     LaunchedEffect(h.item.key, failed) {

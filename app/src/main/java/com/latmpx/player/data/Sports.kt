@@ -56,7 +56,16 @@ class MatchRules(
 data class SportsData(
     val events: List<SportEvent>, val sports: Map<String, SportInfo>, val rules: MatchRules,
     val tablesOn: Boolean = false, val tablesRev: Long = 0, val fixturesOn: Boolean = false, val nationsOn: Boolean = false, val fixturesRev: Long = 0,
+    /** «Solo los canales del servidor IPTV» del panel ("chan": "iptv"): en cada partido solo se nombran los que el cliente tiene */
+    val iptvOnly: Boolean = false,
 )
+
+/** canales de un partido en la lista del cliente: el automático, cada canal que lo transmite (ch = el del cliente),
+ *  los de la guía del panel y el de los equipos (como Roku y Vega) */
+data class SportMatch(val best: Item?, val teams: Item?, val tv: List<Pair<TvChannel, Item?>>, val epg: List<Item> = emptyList()) {
+    /** todos los del cliente, sin repetir: el automático primero */
+    fun owned(): List<Item> = (listOf(best) + tv.map { it.second } + epg + listOf(teams)).filterNotNull().distinctBy { it.id }
+}
 
 /** Agenda deportiva del panel y búsqueda del canal en vivo (misma puntuación que la web). */
 object Sports {
@@ -102,7 +111,7 @@ object Sports {
             events, sports, rules,
             tablesOn = tb?.optBoolean("on", false) == true, tablesRev = tb?.optLong("t", 0L) ?: 0L,
             fixturesOn = fx?.optBoolean("on", false) == true, nationsOn = fx?.optBoolean("on", false) == true && fx.optBoolean("nat", true),
-            fixturesRev = fx?.optLong("t", 0L) ?: 0L,
+            fixturesRev = fx?.optLong("t", 0L) ?: 0L, iptvOnly = j.s("chan") == "iptv",
         )
     }
 
@@ -186,12 +195,14 @@ object Sports {
         "ve", "venezuela", "uy", "uruguay", "py", "paraguay", "bo", "bolivia", "cr", "pa", "panama", "gt", "hn", "sv", "ni", "do", "pr",
         "latam", "latin", "latino", "latina", "lat", "america", "es", "esp", "spain", "espana", "uk", "gb", "int", "intl", "international",
         "br", "bra", "brasil", "brazil", "pt", "portugal", "ca", "can", "canada", "fr", "france", "it", "italy", "de", "germany",
-        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland")
+        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland", "en", "network", "net")
 
     /** palabras que identifican el canal; un número va pegado a la palabra anterior ("espn 2" -> "espn2") */
     fun channelKey(name: String): List<String> {
         val out = ArrayList<String>()
-        for (t in norm(name).split(' ')) {
+        for (raw in norm(name).split(' ')) {
+            // "M+ LaLiga" (Movistar Plus) llega como "m laliga"
+            val t = if (raw == "m") "movistar" else raw
             if (t.isEmpty() || t in NOISE) continue
             if (t.all(Char::isDigit) && out.isNotEmpty() && !out.last().all(Char::isDigit)) out[out.size - 1] = out.last() + t else out.add(t)
         }
@@ -218,7 +229,50 @@ object Sports {
             }
             scored.add(score to c)
         }
+        if (scored.isEmpty()) return findLoose(q, chans)
         return scored.sortedWith(compareByDescending<Pair<Int, Chan>> { it.first }.thenBy { it.second.item.name.length }).map { it.second.item }
+    }
+
+    /** último intento: las palabras del canal pegadas contienen cada palabra buscada sin que la siga un número
+     *  ("Fox Sports" da "FOXSPORTS PREMIUM", nunca "FoxSports2") */
+    private fun findLoose(q: List<String>, chans: List<Chan>): List<Item> {
+        if (q.first().length < 3) return emptyList()
+        val want = q.joinToString("").length
+        val scored = ArrayList<Pair<Int, Chan>>()
+        for (c in chans) {
+            val compact = c.key.joinToString("")
+            if (compact.isEmpty()) continue
+            val ok = q.all { t -> val p = compact.indexOf(t); p >= 0 && compact.getOrNull(p + t.length)?.isDigit() != true }
+            if (ok) scored.add((300 - (compact.length - want) - c.item.name.length) to c)
+        }
+        return scored.sortedByDescending { it.first }.map { it.second.item }
+    }
+
+    /**
+     * Canales de un partido como Roku y Vega: cada canal que lo transmite (el que tiene el cliente) y el de los equipos o
+     * el nombre del evento; el automático es el primero de los que lo transmiten y, si no, el de los equipos.
+     */
+    fun match(ev: SportEvent, chans: List<Chan>, r: MatchRules): SportMatch {
+        val tv = ev.tv.map { t -> t to findByChannel(t.name, chans).firstOrNull() }
+        val teams = find(ev, chans, r)
+        return SportMatch(tv.firstOrNull { it.second != null }?.second ?: teams, teams, tv)
+    }
+
+    // canales deportivos para buscar el partido en la guía del panel (api/sports_epg.php): por el nombre del canal o de su
+    // carpeta, sin las carpetas de eventos; primero los que tienen guía propia (como Vega)
+    private val SPORT_RE = Regex("sport|deport|espn|fox|tnt|tudn|dazn|bein|sky|movistar|futbol|soccer|nba|nfl|mlb|nhl|ufc|liga|win |directv|dsports|claro|vix|paramount|peacock|tyc|gol|telemundo|univision|azteca|canal 5|caracol|rcn|tsn|eurosport|teledeporte|cbs|nbc|usa network|f1|golf|tenis|tennis|box|universo|sportsnet|telefe|tv publica|teletica|tigo|max|apple tv", RegexOption.IGNORE_CASE)
+
+    fun epgChannels(chans: List<Chan>, cats: List<Category>, maxN: Int = 600): List<Item> {
+        val sportCat = cats.filter { SPORT_RE.containsMatchIn(Platforms.fold(it.name)) }.map { it.id }.toSet()
+        val withEpg = ArrayList<Item>()
+        val noEpg = ArrayList<Item>()
+        for (c in chans) {
+            if (c.isEvent) continue
+            if (c.item.categoryId !in sportCat && !SPORT_RE.containsMatchIn(c.norm)) continue
+            if (c.item.epgId.isNotBlank()) withEpg += c.item else noEpg += c.item
+            if (withEpg.size >= maxN) break
+        }
+        return (withEpg + noEpg).take(maxN)
     }
 
     /** El canal del partido: el primero de sus canales de TV que tiene el cliente; si no, por equipos o nombre del evento. */
@@ -227,9 +281,11 @@ object Sports {
         return find(ev, chans, r)
     }
 
+    /** solo los canales de las carpetas que el cliente ve (las ocultas con el PIN no cuentan), como Roku y Vega */
     fun prepare(channels: List<Item>, cats: List<Category>, r: MatchRules): List<Chan> {
         val eventCats = cats.filter { r.eventCategory.containsMatchIn(Platforms.fold(it.name)) }.map { it.id }.toSet()
-        return channels.map { Chan(it, norm(it.name), it.categoryId in eventCats) }
+        val hidden = Store.blockedCats
+        return channels.filter { it.categoryId !in hidden }.map { Chan(it, norm(it.name), it.categoryId in eventCats) }
     }
 
     private val VS = Regex(" (vs|v|x) ")

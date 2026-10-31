@@ -67,17 +67,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Pestañas de Deportes (como Roku y Vega): la agenda y, si el panel las ofrece, Tablas, Selecciones y Equipos */
-enum class SpTab { AGENDA, TABLES, NATIONS, TEAMS }
+/** pestañas de Deportes como Roku y Vega: Hoy, Mañana y, si el panel las ofrece, Tablas, Selecciones y Equipos */
+enum class SpTab { TODAY, TOMORROW, TABLES, NATIONS, TEAMS }
 
 @Composable
 fun SportsTabs(d: SportsData, tab: SpTab, onTab: (SpTab) -> Unit) {
     val tabs = buildList {
-        add(SpTab.AGENDA to stringResource(R.string.sp_tab_schedule))
+        add(SpTab.TODAY to stringResource(R.string.today))
+        add(SpTab.TOMORROW to stringResource(R.string.tomorrow))
         if (d.tablesOn) add(SpTab.TABLES to stringResource(R.string.sp_tab_tables))
         if (d.nationsOn) add(SpTab.NATIONS to stringResource(R.string.sp_tab_nations))
         if (d.fixturesOn) add(SpTab.TEAMS to stringResource(R.string.sp_tab_teams))
     }
-    if (tabs.size < 2) return
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
         items(tabs, key = { it.first.name }) { (k, label) -> Chip(label, tab == k) { onTab(k) } }
     }
@@ -298,7 +299,10 @@ private var lastComp = ""
  * Selecciones: «Todas», cada competición y «Selección femenina». Del JSON de 21 días del panel guardado en el equipo.
  */
 @Composable
-fun SportsTeamsView(d: SportsData, nationsMode: Boolean, now: Long, compact: Boolean, onOpen: (SportEvent) -> Unit) {
+fun SportsTeamsView(
+    d: SportsData, nationsMode: Boolean, now: Long, compact: Boolean,
+    chanOf: ((SportEvent) -> Pair<String, Boolean>?)? = null, onOpen: (SportEvent) -> Unit,
+) {
     var fx by remember { mutableStateOf<Fixtures?>(null) }
     var loading by remember { mutableStateOf(true) }
     LaunchedEffect(d.fixturesRev) {
@@ -341,7 +345,10 @@ fun SportsTeamsView(d: SportsData, nationsMode: Boolean, now: Long, compact: Boo
         when {
             f == null && loading -> Loading(stringResource(R.string.loading_matches))
             list.isNotEmpty() -> LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 40.dp)) {
-                items(list, key = { "f" + it.id + it.start }) { e -> SportCardView(e, d.sports[e.sport], now, compact) { onOpen(e) } }
+                items(list, key = { "f" + it.id + it.start }) { e ->
+                    val c = chanOf?.invoke(e)
+                    SportCardView(e, d.sports[e.sport], now, compact, chan = c?.first, chanFound = c?.second == true) { onOpen(e) }
+                }
             }
             f == null -> Empty(stringResource(R.string.sp_fx_failed))
             nationsMode -> Empty(stringResource(R.string.sp_no_nat_matches))
