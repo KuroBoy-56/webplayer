@@ -182,6 +182,15 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   solo cuenta cuando el video **avanza** pasado ese segundo (`onTime` → `arrived`); si en 15 s no avanza, siguen los
   pasos. Lo que suena antes del salto va sin sonido. Un archivo que se abre directo por el panel (porque así se vio
   antes) tiene 60 s para empezar (`startDog` en `Player.tsx`); si no, se deja, se olvida esa ruta y siguen los pasos.
+  **1.0.30 (Continuar viendo no cargaba nada):** el reporte decía `directo: 4` (el reproductor de Vega no salta dentro
+  del archivo de ese servidor: «formato no compatible») y el paso del panel tampoco sonaba: el panel entrega MPEG-TS y
+  el lector MPEG-TS de Vega no lo toma bien (lo mismo que con los canales hasta la 1.0.26). Ahora el HLS del panel
+  (`src/player/hls.ts`) convierte cada segmento a MP4 fragmentado con el mismo convertidor de los canales
+  (`src/lib/tsmux.ts`) y el SourceBuffer es MP4; sin H.264 + AAC (HEVC copiado) sigue el MPEG-TS como antes, y si el
+  reproductor rechazara el MP4 el resto de la sesión va en MPEG-TS. Un salto dentro de lo convertido rehace la conversión
+  con el segmento puesto en su segundo. Además, en un servidor donde Continuar viendo solo salió por el panel, la
+  próxima vez va directo por el panel (`resume_panel`, 7 días): sin el intento directo que falla, la consulta ni la
+  espera. Un video desde el principio sigue directo.
 - **Cuando un video no abre** (`src/screens/Player.tsx` + `src/player/streamcheck.ts`): vigilante de 20 s (15 s en
   Continuar viendo); una vez se le pregunta al servidor qué pasa: código HTTP, cuenta (`user_info`) y si la película
   sigue (`get_vod_info`). 404 / ya no está → «Video no disponible»; otra extensión → se abre con la de verdad; cuenta
