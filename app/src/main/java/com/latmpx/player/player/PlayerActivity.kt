@@ -435,11 +435,15 @@ class PlayerActivity : ComponentActivity() {
         com.latmpx.player.data.ErrorReport.report(
             "playback",
             "No se pudo reproducir (${e.errorCodeName}): ${q.title}".take(300),
-            "tipo=${kind.name} id=${q.id} ext=${q.ext}\n" + (e.cause?.toString().orEmpty()) + "\n" + e.stackTraceToString(),
+            "tipo=${kind.name} id=${q.id} ext=${q.ext}" + (if (kind == Kind.LIVE) " intentos=m3u8,ts,sin extensión (último: ${e.errorCodeName})" else "") + "\n" +
+                (e.cause?.toString().orEmpty()) + "\n" + e.stackTraceToString(),
             "Reproductor",
         )
         if (isFinishing) return
         val decoding = e.errorCode in 4000..4999
+        // canal: ya se probó .m3u8, .ts y sin extensión y en ninguna llegó video (el servidor manda una página o un aviso:
+        // canal de evento fuera de su hora, caído): se dice eso, no «el archivo está dañado»
+        val offAir = kind == Kind.LIVE && e.errorCode in 3000..3999
         // «Abrir en VLC» solo con el reproductor externo elegido en Ajustes; con el interno (ExoPlayer, el de siempre)
         // solo el aviso y «Cerrar»: se vuelve a la pantalla de antes (Deportes, TV en vivo…) con el foco donde estaba
         val ext = com.latmpx.player.data.Store.externalPlayer
@@ -447,7 +451,8 @@ class PlayerActivity : ComponentActivity() {
             .setTitle(R.string.play_failed)
             .setMessage(
                 getString(
-                    if (decoding) (if (ext) R.string.play_failed_decoder else R.string.play_failed_decoder_plain)
+                    if (offAir) R.string.live_not_streaming
+                    else if (decoding) (if (ext) R.string.play_failed_decoder else R.string.play_failed_decoder_plain)
                     else (if (ext) R.string.play_failed_server else R.string.play_failed_server_plain),
                 ),
             )

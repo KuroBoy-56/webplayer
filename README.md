@@ -170,6 +170,8 @@ Como Roku y Vega (`ui/screens/AccountTv.kt`): a la izquierda la tarjeta de la l�
 
 **1.3.6:** en los canales el reproductor ya no muestra «Audio y subtítulos» (solo películas y series); queda el ajuste de pantalla. Deportes: la hora y Hoy / Mañana van en la zona del panel; si el equipo no reconoce el nombre de la zona (`tz`), se usa el desfase que manda el panel (`tzo`, como Vega) y no la zona del equipo. «En vivo» = desde la hora de inicio hasta la duración del deporte que manda el panel (fútbol 120 min, combate / ciclismo / cricket 240, golf 300…), igual que Roku y Vega.
 
+**1.3.7:** un canal que no llega en ninguna de las tres formas (`.m3u8`, `.ts` y sin extensión) y en la última el servidor manda algo que no es video (error 3000, «ningún lector pudo leer el stream»: canal de evento fuera de su hora o caído) dice «Este canal no está transmitiendo en este momento…» en lugar de «archivo dañado»; el reporte anota los tres intentos.
+
 ## DNS
 
 Botón **DNS** en el inicio de sesión y en **Cuenta**: Automático (por defecto), Cloudflare, Google, Quad9, AdGuard (sin rastreo ni anuncios), NextDNS (anti-bloqueo geográfico) y OpenDNS.

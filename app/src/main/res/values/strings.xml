@@ -304,6 +304,7 @@
     <string name="play_failed_server">El servidor no respondió o el archivo está dañado. Puedes intentarlo de nuevo o abrirlo en VLC.</string>
     <string name="play_failed_decoder_plain">Este equipo no puede decodificar el formato de este contenido.</string>
     <string name="play_failed_server_plain">El servidor no respondió o el archivo está dañado.</string>
+    <string name="live_not_streaming">Este canal no está transmitiendo en este momento: el servidor IPTV no envía video. Prueba más tarde u otro canal.</string>
     <string name="open_in_vlc">Abrir en VLC</string>
     <string name="no_external_player">No hay reproductor externo instalado</string>
     <string name="exit_question">¿Quieres salir?</string>
