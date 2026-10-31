@@ -74,3 +74,14 @@ open LatMpx.xcworkspace
 - `LatMpx/UI/` — pantallas (inicio, películas, series, TV en vivo, deportes, cuenta, inicio de sesión, distribuidor, pantalla falsa).
 - `LatMpx/Player/` — reproductor de iOS (`NativePlayer`), reproductor VLCKit (`PlayerPresenter` lo presenta en horizontal) y la miniatura de TV en vivo (`LivePreview`).
 - `project.yml` (XcodeGen) y `Podfile` (MobileVLCKit).
+
+## Tema de prueba (estilo IBO Player, 1.0.2)
+
+Si el panel lo ofrece (Pantalla Falsa › «Tema de prueba», solo con **Omitir**: `features.review`, leído en
+`Panel.demoConfigured()`), el inicio de sesión queda sencillo (usuario, contraseña, Iniciar sesión y Autodemo; sin
+DNS, código MAC ni «Mis descargas»). **Autodemo** o una cuenta del tema (`Panel.reviewLogin`, `login.php
+review_login`) abren `UI/ReviewView.swift` (`AppState.review`): Películas a la izquierda, Series al lado y Ajustes
+(solo «Cerrar sesión»), **en horizontal también en el iPhone** (`AppDelegate.reviewOpen`), con los videos de la carpeta
+player del panel en el reproductor de la app como una descarga (`PlayRequest` con `directUrls` y `offline`: sin sesión
+ni progreso). No registra nada en el panel ni vence. Un usuario y contraseña que no son del tema entran como siempre.
+

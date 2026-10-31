@@ -68,6 +68,8 @@ final class AppState: ObservableObject {
     @Published var live: [Item] = []
     @Published var loading = false
     @Published var play: PlayRequest?
+    /** tema de prueba del panel (Auto-Demo o una cuenta del tema): sin sesión, sin registro y sin caché */
+    @Published var review: Panel.Review?
     @Published var toast: String?
     /** cambia cada vez que se vuelve del reproductor o cambian las carpetas bloqueadas */
     @Published var refresh = 0

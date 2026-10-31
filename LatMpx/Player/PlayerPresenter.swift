@@ -109,7 +109,8 @@ enum PlayerPresenter {
         guard UIDevice.current.userInterfaceIdiom == .phone else { return }
         guard let scene = UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene }) as? UIWindowScene else { return }
         scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { _ in }
+        // en el tema de prueba se vuelve a horizontal
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: AppDelegate.reviewOpen ? .landscape : .portrait)) { _ in }
     }
 
     private static func topController() -> UIViewController? {

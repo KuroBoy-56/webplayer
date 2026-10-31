@@ -33,6 +33,8 @@ struct LoginView: View {
     @State private var checking = true
     /** features del panel: ¿hay demo configurada? nil = sin respuesta o panel viejo (se usa tenant_config) */
     @State private var demoConfigured: Bool?
+    /** tema de prueba del panel (Pantalla Falsa, solo con Omitir): caja sencilla con usuario, contraseña, Iniciar sesión y Autodemo */
+    @State private var review = false
 
     var body: some View {
         // ZStack (una sola vista): la primera consulta no se cancela al cambiar lo que se muestra
@@ -58,7 +60,7 @@ struct LoginView: View {
             guard !started else { return }
             started = true
             Task { posters = await Tmdb.nowPlaying() }
-            Task { demoConfigured = await Panel.demoConfigured() }
+            Task { demoConfigured = await Panel.demoConfigured(); review = Panel.reviewOffered }
             _ = await resolve()
             if lines.isEmpty && !Store.fakeUnlocked { fake = Panel.fakeScreen }
             checking = false
@@ -109,25 +111,30 @@ struct LoginView: View {
                 Text(tr("Iniciar sesión")).font(.system(size: 28, weight: .bold)).foregroundColor(.white).frame(maxWidth: .infinity, alignment: .leading)
                 if let e = err { ErrorBanner(text: e) }
                 // sin internet (o el panel no responde): lo descargado se puede ver igual
-                if !online.connected || err == Xtream.noServer || err == Panel.noPanel {
+                if !review && (!online.connected || err == Xtream.noServer || err == Panel.noPanel) {
                     if !online.connected { Text(tr("Sin conexión a internet")).font(.system(size: 13)).foregroundColor(Theme.muted).frame(maxWidth: .infinity, alignment: .leading) }
                     AppButton(text: tr("Mis descargas"), icon: "arrow.down.circle", primary: !online.connected) { showDownloads = true }
                 }
                 field(tr("Usuario"), text: $user, secure: false)
                 field(tr("Contraseña"), text: $pass, secure: true)
-                VStack(spacing: 2) {
+                if !review { VStack(spacing: 2) {
                     Text(tr("Código MAC (Activación remota)")).font(.system(size: 12)).foregroundColor(Theme.muted)
                     Text(Device.id).font(.system(size: 18, weight: .bold, design: .monospaced)).foregroundColor(.white).textSelection(.enabled)
                 }
-                .frame(maxWidth: .infinity).padding(12).background(Color.white.opacity(0.2)).clipShape(RoundedRectangle(cornerRadius: 4))
+                .frame(maxWidth: .infinity).padding(12).background(Color.white.opacity(0.2)).clipShape(RoundedRectangle(cornerRadius: 4)) }
                 AppButton(text: tr("Iniciar sesión")) { act { await submit() } }
                 // Autodemo y DNS en la misma fila, como Android
                 HStack(spacing: 8) {
-                    // solo si el panel tiene una demo configurada (features); sin respuesta, lo de tenant_config
-                    if PanelCrypto.hasKey && (demoConfigured ?? tenant.demoEnabled) {
-                        AppButton(text: tr("Autodemo"), icon: "gift.fill", primary: false) { act { await demo() } }
+                    if review {
+                        // tema de prueba: Autodemo entra al tema (no crea ni registra ninguna demo)
+                        AppButton(text: tr("Autodemo"), icon: "gift.fill", primary: false) { act { await reviewDemo() } }
+                    } else {
+                        // solo si el panel tiene una demo configurada (features); sin respuesta, lo de tenant_config
+                        if PanelCrypto.hasKey && (demoConfigured ?? tenant.demoEnabled) {
+                            AppButton(text: tr("Autodemo"), icon: "gift.fill", primary: false) { act { await demo() } }
+                        }
+                        DnsButton(fill: true)
                     }
-                    DnsButton(fill: true)
                 }
             }
             if busy {
@@ -214,6 +221,11 @@ struct LoginView: View {
     @MainActor private func submit() async {
         let u = user.trimmed, p = pass.trimmed
         if u.isEmpty || p.isEmpty { err = tr("Escribe tu usuario y contraseña"); return }
+        if review {
+            // una cuenta del tema de prueba entra al tema; cualquier otra sigue como siempre (línea IPTV)
+            status = tr("Activando…")
+            if let rv = await Panel.reviewLogin(user: u, pass: p, demo: false).value { state.review = rv; return }
+        }
         if dns.isEmpty {
             let d = await Panel.fetchDns()
             if let v = d.value { dns = v } else { err = d.error }
@@ -227,6 +239,13 @@ struct LoginView: View {
     }
 
     /** el panel decide (si el dueño borró el registro, el equipo puede pedir otra demo); un código de revendedor en Contraseña deja la demo a su nombre */
+    /** tema de prueba: entra al tema sin crear ni registrar ninguna demo */
+    @MainActor private func reviewDemo() async {
+        status = tr("Creando demo…")
+        let r = await Panel.reviewLogin(user: "", pass: "", demo: true)
+        if let rv = r.value { state.review = rv } else { err = r.error }
+    }
+
     @MainActor private func demo() async {
         status = tr("Creando demo…")
         let r = await Panel.autoDemo(reseller: pass)

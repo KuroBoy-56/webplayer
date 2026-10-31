@@ -34,6 +34,8 @@ struct RootView: View {
                 }
             } else if gate == .retry {
                 TenantRetryView(message: retryMsg, busy: checking, onRetry: guardTenant, onChange: { wipe(nil) })
+            } else if state.session == nil, let rv = state.review {
+                ReviewView(review: rv) { NativePlayer.shared.close(); state.play = nil; state.review = nil }
             } else if state.session == nil {
                 LoginView(onLogged: { s in
                     lastPanelCheck = Date()

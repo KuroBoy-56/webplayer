@@ -350,6 +350,7 @@ extension L10n {
         "¿Eliminar %@ de este equipo?": "Delete %@ from this device?",
         "¿Eliminar \"%@\" de este equipo?": "Delete \"%@\" from this device?",
         "¿Eliminar todos los episodios descargados de %@?": "Delete all downloaded episodes of %@?",
+        "Todavía no hay videos de prueba.": "No test videos yet.",
     ]
 
     static let pt: [String: String] = [
@@ -666,6 +667,7 @@ extension L10n {
         "¿Eliminar %@ de este equipo?": "Excluir %@ deste aparelho?",
         "¿Eliminar \"%@\" de este equipo?": "Excluir \"%@\" deste aparelho?",
         "¿Eliminar todos los episodios descargados de %@?": "Excluir todos os episódios baixados de %@?",
+        "Todavía no hay videos de prueba.": "Ainda não há vídeos de teste.",
     ]
 
     static let fr: [String: String] = [
@@ -1016,5 +1018,6 @@ extension L10n {
         "¿Eliminar %@ de este equipo?": "Supprimer %@ de cet appareil ?",
         "¿Eliminar \"%@\" de este equipo?": "Supprimer \"%@\" de cet appareil ?",
         "¿Eliminar todos los episodios descargados de %@?": "Supprimer tous les épisodes téléchargés de %@ ?",
+        "Todavía no hay videos de prueba.": "Aucune vidéo de test pour l'instant.",
     ]
 }

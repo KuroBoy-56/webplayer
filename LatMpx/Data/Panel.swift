@@ -184,7 +184,31 @@ enum Panel {
      */
     static func demoConfigured() async -> Bool? {
         guard let r = await login("features", [:]).value, r.ok, let j = r.json(), j.s("status") == "ok", let f = j.o("features") else { return nil }
+        // tema de prueba (Pantalla Falsa del panel): solo con Omitir
+        reviewOffered = f.b("review") && !Tenant.active
         return f.b("demo")
+    }
+
+    /** el panel ofrece el tema de prueba (lo dice features; con Omitir) */
+    static var reviewOffered = false
+
+    /** Tema de prueba: videos de Películas y Series (carpeta player del panel). */
+    struct ReviewVideo: Hashable { let name: String; let url: String }
+    struct Review: Equatable { let movies: [ReviewVideo]; let series: [ReviewVideo] }
+
+    /**
+     * review_login: Auto-Demo (demo) o una cuenta del tema de prueba. No registra nada en el panel ni vence.
+     * code 401 = no es una cuenta del tema (sigue el inicio de sesión de siempre); 403 = el tema no está.
+     */
+    static func reviewLogin(user: String, pass: String, demo: Bool) async -> Answer<Review> {
+        let p: JObj = demo ? ["demo": 1] : ["username": user, "password": pass]
+        let a = await login("review_login", p)
+        guard let r = a.value else { return Answer(value: nil, error: a.error) }
+        guard r.ok, let j = r.json(), j.s("status") == "ok" else { return Answer(value: nil, error: errorOf(r, tr("No se pudo conectar con el panel")), code: r.code) }
+        func list(_ k: String) -> [ReviewVideo] {
+            (j.a(k) ?? []).compactMap { $0 as? JObj }.map { ReviewVideo(name: $0.s("name"), url: $0.s("url")) }.filter { !$0.url.isEmpty }
+        }
+        return Answer(value: Review(movies: list("movies"), series: list("series")))
     }
 
     struct TenantAnswer { var value: JObj?; var error: String?; var errorCode: String = "" }

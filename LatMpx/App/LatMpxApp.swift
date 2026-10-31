@@ -4,9 +4,12 @@ import AVFoundation
 final class AppDelegate: NSObject, UIApplicationDelegate {
     /** iPhone en vertical (como Android); mientras se ve el reproductor también horizontal. iPad gira libre. */
     static var playerOpen = false
+    /** tema de prueba del panel: en el iPhone siempre en horizontal */
+    static var reviewOpen = false
 
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         guard UIDevice.current.userInterfaceIdiom == .phone else { return .all }
+        if AppDelegate.reviewOpen { return .landscape }
         return AppDelegate.playerOpen ? .allButUpsideDown : .portrait
     }
 
