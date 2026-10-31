@@ -216,6 +216,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   no activa → «Línea no activa»; 403 → se esperan 10 s (el servidor suelta la conexión anterior) y se vuelve a
   probar una vez. Un 403 con la cuenta activa y la película existente es un rechazo del proveedor: la app no lo puede
   arreglar. Los reintentos esperan 2 s; el reporte al panel lleva cada intento y lo que contestó el servidor.
+  **1.0.36:** el reporte también dice qué trae el archivo (`archivo=mp4 video=… audio=… moov=inicio|final`, leído
+  después del error) y del servidor el tipo, tamaño, `Accept-Ranges`, si redirige a otro servidor y las conexiones de la
+  cuenta: para saber por qué el reproductor de Vega no abre un video directo (error 4) sin el panel.
 - **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
   si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
   y con el interruptor del dueño o del distribuidor encendido).

@@ -19,6 +19,7 @@ import { PlayParams, useNav } from '../nav';
 import { MenuItem, Playback } from '../player/playback';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
+import { probeTracks } from '../lib/probe';
 import { getState, isFav, saveProgress, toggleFav } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
@@ -338,7 +339,19 @@ export default function Player({ params }: { params: PlayParams }) {
       setBuffering(false);
       setStatus('');
       setError(text);
-      reportError('playback', 'No se pudo reproducir (' + params.kind + ')', 'kind=' + params.kind + ' ext=' + (entry?.ext || '') + ' servidor=' + vs.srv + vs.acct + ' intentos=[' + vs.attempts.join(' | ') + ']', 'Reproductor');
+      const base = 'kind=' + params.kind + ' ext=' + (entry?.ext || '') + ' servidor=' + vs.srv + vs.acct + ' intentos=[' + vs.attempts.join(' | ') + ']';
+      if (params.kind === 'live') {
+        reportError('playback', 'No se pudo reproducir (' + params.kind + ')', base, 'Reproductor');
+        return;
+      }
+      // ya sin reproductor: qué trae el archivo (códec del video y de los audios, índice del MP4 al final) para saber por
+      // qué el equipo no lo abre directo
+      probeTracks(urlFor(indexRef.current))
+        .catch(() => null)
+        .then(p => {
+          const file = p && p.headOk ? ' archivo=' + (p.container || '?') + ' video=' + (p.video || '?') + ' audio=' + (p.audio.map(a => a.codec + (a.lang ? '(' + a.lang + ')' : '')).join(',') || '?') + (p.container === 'mp4' ? ' moov=' + (p.moovEnd ? 'final' : 'inicio') : '') : ' archivo=sin leer';
+          reportError('playback', 'No se pudo reproducir (' + params.kind + ')', base + file, 'Reproductor');
+        });
     };
     const failText = (): string => {
       const vs = vod.current;
@@ -362,7 +375,7 @@ export default function Player({ params }: { params: PlayParams }) {
       if (!vs.checked) {
         vs.checked = true;
         setStatus(t('Cargando…'));
-        streamCheck(urlFor(i), getState().session!, params.kind === 'movie' ? e.id : '').then(r => {
+        streamCheck(urlFor(i), getState().session!, params.kind === 'movie' ? e.id : '', true).then(r => {
           if (!alive || indexRef.current !== i) return;
           vs.srv = r.code;
           if (r.status !== undefined) vs.acct = ' cuenta=' + r.status + ' conexiones=' + r.active + '/' + r.max;
@@ -370,7 +383,7 @@ export default function Player({ params }: { params: PlayParams }) {
           // el servidor sí entrega el video y el equipo no lo abre: es el formato; directo al panel (sin el otro
           // protocolo, el DNS ni otra vuelta: antes el panel lo preparaba hasta 3 veces y tardaba mucho)
           vs.format = r.code >= 200 && r.code < 300 && !r.html && /video|octet|matroska|mp4|msvideo|mpeg/i.test(r.type || '');
-          vs.attempts.push('servidor: ' + r.code + (r.xui ? ' xui=' + r.xui + ' (' + (r.xuiText || '') + ')' : r.html ? ' html=«' + (r.page || '') + '»' : '') + vs.acct + (r.exists !== undefined ? ' existe=' + r.exists + ' ext=' + r.ext : ''));
+          vs.attempts.push('servidor: ' + r.code + ' tipo=' + (r.type || '?') + (r.size ? ' tamaño=' + Math.round(r.size / 1048576) + 'MB' : '') + (r.ranges ? ' rangos=' + r.ranges : '') + (r.moved ? ' redirige=' + r.moved : '') + (r.xui ? ' xui=' + r.xui + ' (' + (r.xuiText || '') + ')' : r.html ? ' html=«' + (r.page || '') + '»' : '') + vs.acct + (r.exists !== undefined ? ' existe=' + r.exists + ' ext=' + r.ext : ''));
           if (r.xui) {
             // el servidor contestó con la página de error de XUI («Debug Mode»): el motivo exacto, sin insistir
             vs.xui = r;
