@@ -16,6 +16,7 @@ import { Probe } from '../lib/probe';
 import { pref, readJson, setPref, writeJson } from '../lib/storage';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
+import { Mp4Mse } from './mp4mse';
 import { reportError } from '../api/report';
 
 export type MenuItem = { kind: 'audio' | 'text' | 'panel'; key: string; label: string; on: boolean };
@@ -129,6 +130,9 @@ export class Playback {
   private resumeAt = 0;
   private remux: { a: number; label: string } | null = null;
   private hls: PanelHls | null = null;
+  // MP4 leído por la app del servidor IPTV (mp4mse.ts); mp4Url: no se pudo, este video va con el modo directo de siempre
+  private mse: Mp4Mse | null = null;
+  private mp4Url = false;
   private liveHls: LiveHls | null = null;
   // audio del canal elegido en el menú (canales con varios idiomas)
   private liveAudio = 0;
@@ -220,6 +224,7 @@ export class Playback {
     this.subWait = null;
     this.formatTried = false;
     this.resumePanel = false;
+    this.mp4Url = false;
     this.deniedShown = false;
     if (live) {
       // .m3u8 del canal: el reproductor de Vega no abre HLS solo; lo lee la app y lo entrega por MSE
@@ -336,6 +341,17 @@ export class Playback {
     this.stopHls();
     this.offset = 0;
     this.clearSeek();
+    // MP4: la app lo lee del servidor IPTV y lo entrega al reproductor (el modo directo de Vega da error 4 con los MP4
+    // de índice al final, los de casi todos los servidores IPTV). Empieza ya en el segundo pedido (sin el salto)
+    if (!this.live && !this.mp4Url && /\.(mp4|m4v|mov)(\?|$)/i.test(this.url)) {
+      this.resumeAt = 0;
+      const g = this.gen;
+      const m = new Mp4Mse(this.v, this.url);
+      this.mse = m;
+      m.onError = () => g === this.gen && this.mse === m && this.mp4Failed(at);
+      m.start(at).then(err => err && g === this.gen && this.mse === m && this.mp4Failed(at));
+      return;
+    }
     if (at > 5 && !this.live && !this.played) {
       // Continuar viendo: se abre y se salta apenas suena (onPlaying)
       this.resumeAt = 0;
@@ -343,6 +359,20 @@ export class Playback {
     } else this.resumeAt = at;
     this.v.src = this.url;
     this.v.play();
+  }
+
+  // la lectura propia del MP4 no pudo (códec raro, el servidor cortó): el modo directo de siempre desde donde iba
+  private mp4Failed(at: number): void {
+    const pos = this.played ? this.realPos() : at;
+    this.mp4Url = true;
+    this.direct(pos);
+  }
+
+  // error del reproductor con el MP4 leído por la app: true = se sigue con el modo directo de siempre
+  mp4Fallback(): boolean {
+    if (!this.mse || this.mp4Url) return false;
+    this.mp4Failed(this.played ? this.realPos() : this.wantAt);
+    return true;
   }
 
   private clearSeek(): void {
@@ -413,6 +443,8 @@ export class Playback {
   }
 
   private stopHls(): void {
+    this.mse?.destroy();
+    this.mse = null;
     this.hls?.destroy();
     this.hls = null;
     this.prevHls?.destroy();
@@ -470,6 +502,10 @@ export class Playback {
       if (rel >= 0 && (await this.hls.seekTo(rel))) return;
       // aún no convertido: el panel lo prepara desde ese segundo
       this.startRemux(target);
+      return;
+    }
+    if (this.mse) {
+      this.mse.seekTo(target);
       return;
     }
     this.v.currentTime = target;

@@ -219,6 +219,15 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   **1.0.36:** el reporte también dice qué trae el archivo (`archivo=mp4 video=… audio=… moov=inicio|final`, leído
   después del error) y del servidor el tipo, tamaño, `Accept-Ranges`, si redirige a otro servidor y las conexiones de la
   cuenta: para saber por qué el reproductor de Vega no abre un video directo (error 4) sin el panel.
+- **MP4 leído por la app, sin la VPS (1.0.37, `src/player/mp4mse.ts`)**: el modo directo de Vega (src = dirección) da
+  error 4 con los MP4 que traen el índice (`moov`) al final, lo normal en los servidores IPTV (reporte: `archivo=mp4
+  video=avc1 audio=mp4a moov=final`, servidor 206). Ahora todo `.mp4/.m4v/.mov` se lee con pedidos Range al mismo
+  servidor IPTV: el índice (al final o al principio), luego de a ~4 s las muestras del video y del audio predeterminado
+  (pista activa del archivo), entregadas como MP4 fragmentado por MSE (`mp4box.ts`, igual que los canales), 40 s por
+  adelantado. Respeta la lista de edición (video y audio igual de sincronizados que en el archivo). Continuar viendo
+  y ◀▶ empiezan desde el cuadro clave anterior, sin el salto que fallaba. Solo H.264 + AAC: con otro códec (AC-3, HEVC…)
+  o si el reproductor rechaza lo entregado, ese video sigue con el modo directo de siempre y después el panel. La VPS
+  solo se usa al elegir otro idioma (o para lo que el equipo no abre).
 - **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
   si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
   y con el interruptor del dueño o del distribuidor encendido).

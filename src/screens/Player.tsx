@@ -571,6 +571,8 @@ export default function Player({ params }: { params: PlayParams }) {
         nextLive();
         return;
       }
+      // el MP4 que lee la app no le gustó al reproductor: el modo directo de siempre (y sus pasos) con este video
+      if (c.mp4Fallback()) return;
       if (vodError()) return;
       if (vod.current.format) {
         triedOther.current = true;
