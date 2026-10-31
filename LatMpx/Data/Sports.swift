@@ -75,7 +75,9 @@ enum Sports {
     }
 
     static func parse(_ j: JObj) -> SportsData {
-        zone = TimeZone(identifier: j.s("tz")) ?? .current
+        // un nombre de zona que el iPhone no conoce: el desfase del panel ("tzo", segundos sobre UTC, como Vega) y solo si
+        // tampoco viene, la del iPhone (uno mal configurado mostraba otra hora)
+        zone = TimeZone(identifier: j.s("tz")) ?? (j["tzo"] != nil ? TimeZone(secondsFromGMT: j.i("tzo")) : nil) ?? .current
         let events = j.objs("events").compactMap(event).sorted { $0.start < $1.start }
         var sports: [String: SportInfo] = [:]
         if let so = j.o("sports") {
@@ -153,15 +155,67 @@ enum Sports {
         norm(s).split(separator: " ").map(String.init).filter { $0.count >= 3 && !r.stop.contains($0) }
     }
 
-    private static func teamScore(_ chan: String, _ team: String, _ r: MatchRules) -> Int {
-        if team.trimmed.isEmpty { return 0 }
-        let n = norm(team)
+    /** un equipo ya normalizado (con su alias) y sus palabras distintivas: se arma una vez por partido, no por canal */
+    private struct Team { let names: [String]; let toks: [[String]] }
+
+    private static func team(_ name: String, _ r: MatchRules) -> Team? {
+        if name.trimmed.isEmpty { return nil }
+        let n = norm(name)
+        let names = [n] + (r.alias[n].map { [$0] } ?? [])
+        return Team(names: names, toks: names.map { a in tokens(a, r).filter { $0.count >= 4 } })
+    }
+
+    private static func teamScore(_ chan: String, _ t: Team?, _ r: MatchRules) -> Int {
+        guard let t = t else { return 0 }
         var best = 0
-        for a in [n] + (r.alias[n].map { [$0] } ?? []) {
+        for (i, a) in t.names.enumerated() {
             if a.count >= 3 && hasWord(chan, a) { return r.fullName }
-            if tokens(a, r).contains(where: { $0.count >= 4 && hasWord(chan, $0) }) { best = r.token }
+            if t.toks[i].contains(where: { hasWord(chan, $0) }) { best = r.token }
         }
         return best
+    }
+
+    /**
+     * Índice de los canales (como Android, Vega y Roku): se arma una sola vez por catálogo y cada partido compara solo
+     * los canales que comparten alguna palabra con sus equipos o con su canal de TV (no todos contra todos). Antes cada
+     * toque normalizaba de nuevo todos los canales y los comparaba uno por uno: con catálogos grandes tardaba mucho.
+     */
+    final class Index {
+        let chans: [Chan]
+        private(set) var words: [String: [Int]] = [:]
+        private(set) var keys: [String: [Int]] = [:]
+        private var memo: [String: [Item]] = [:]
+        private let lock = NSLock()
+
+        init(_ chans: [Chan]) {
+            self.chans = chans
+            func add(_ m: inout [String: [Int]], _ k: String, _ i: Int) {
+                if m[k]?.last != i { m[k, default: []].append(i) }
+            }
+            for (i, c) in chans.enumerated() {
+                for w in c.norm.split(separator: " ") where w.count >= 3 { add(&words, String(w), i) }
+                for w in c.key where w.count >= 2 && !w.isDigits { add(&words, w, i) }
+                let compact = c.key.joined()
+                if !compact.isEmpty { add(&keys, compact, i) }
+            }
+        }
+
+        func remembered(_ k: String) -> [Item]? { lock.lock(); defer { lock.unlock() }; return memo[k] }
+        func remember(_ k: String, _ v: [Item]) { lock.lock(); memo[k] = v; lock.unlock() }
+    }
+
+    private static var ixCache: (sig: String, ix: Index)?
+    private static let ixLock = NSLock()
+
+    /** el índice de esta lista de canales (el mismo mientras no cambien los canales, las carpetas ni las reglas) */
+    static func index(_ channels: [Item], _ cats: [Category], _ r: MatchRules) -> Index {
+        let sig = "\(channels.count)|\(channels.first?.id ?? 0)|\(channels.last?.id ?? 0)|\(cats.count)|\(r.eventCategory)"
+        ixLock.lock()
+        if let c = ixCache, c.sig == sig { ixLock.unlock(); return c.ix }
+        ixLock.unlock()
+        let ix = Index(prepare(channels, cats, r))
+        ixLock.lock(); ixCache = (sig, ix); ixLock.unlock()
+        return ix
     }
 
     /** Canal ya normalizado con su categoría, para no repetir el trabajo en cada partido. */
@@ -199,13 +253,22 @@ enum Sports {
      * Canales del cliente que son el canal que transmite: primero los que se llaman igual (sin calidad
      * ni país), después los que contienen todas sus palabras. "ESPN 2" nunca da "ESPN" ni "ESPN 3".
      */
-    static func findByChannel(_ tvName: String, _ chans: [Chan]) -> [Item] {
+    static func findByChannel(_ tvName: String, _ ix: Index) -> [Item] {
+        if let hit = ix.remembered(tvName) { return hit }
+        let out = findByChannelOnce(tvName, ix)
+        ix.remember(tvName, out)
+        return out
+    }
+
+    private static func findByChannelOnce(_ tvName: String, _ ix: Index) -> [Item] {
         let q = channelKey(tvName)
         let qc = q.joined()
         if q.isEmpty || qc.count < 2 { return [] }
         let qs = Set(q)
+        // solo los canales que tienen la primera palabra (o el nombre pegado) del canal buscado
+        let cand = Set((ix.keys[qc] ?? []) + (ix.words[q[0]] ?? [])).sorted()
         var scored = [(Int, Chan)]()
-        for c in chans where !c.key.isEmpty {
+        for c in cand.map({ ix.chans[$0] }) where !c.key.isEmpty {
             let score: Int
             if c.key == q { score = 1000 - c.key.count }
             else if c.key.joined() == qc { score = 900 - c.key.count }
@@ -217,22 +280,33 @@ enum Sports {
     }
 
     /** El canal del partido: el primero de sus canales de TV que tiene el cliente; si no, por equipos o nombre del evento. */
-    static func best(_ ev: SportEvent, _ chans: [Chan], _ r: MatchRules) -> Item? {
-        for t in ev.tv { if let f = findByChannel(t.name, chans).first { return f } }
-        return find(ev, chans, r)
+    static func best(_ ev: SportEvent, _ ix: Index, _ r: MatchRules) -> Item? {
+        for t in ev.tv { if let f = findByChannel(t.name, ix).first { return f } }
+        return find(ev, ix, r)
     }
 
-    static func find(_ ev: SportEvent, _ chans: [Chan], _ r: MatchRules) -> Item? {
+    static func find(_ ev: SportEvent, _ ix: Index, _ r: MatchRules) -> Item? {
         let h = ev.home.trimmed, a = ev.away.trimmed
         let leagueToks = tokens(ev.league, r)
         let single = h.isEmpty && a.isEmpty ? tokens(ev.title, r) : []
+        let ht = team(h, r), at = team(a, r)
+        // canales candidatos: los que tienen alguna palabra de los equipos (o del evento), como Vega
+        var want = Set(single)
+        for t in [ht, at].compactMap({ $0 }) {
+            for n in t.names {
+                let tk = tokens(n, r)
+                if tk.isEmpty { n.split(separator: " ").filter { $0.count >= 3 }.forEach { want.insert(String($0)) } } else { tk.forEach { want.insert($0) } }
+            }
+        }
+        var cand = Set<Int>()
+        for w in want { ix.words[w]?.forEach { cand.insert($0) } }
         var best: Chan?
         var bestScore = Int.min
-        for c in chans {
+        for c in cand.sorted().map({ ix.chans[$0] }) {
             let chan = c.norm
             var score: Int
             if !h.isEmpty || !a.isEmpty {
-                let hs = teamScore(chan, h, r), aw = teamScore(chan, a, r)
+                let hs = teamScore(chan, ht, r), aw = teamScore(chan, at, r)
                 if hs == 0 && aw == 0 { continue }
                 let both = hs > 0 && aw > 0
                 // fuera de las carpetas de eventos solo cuenta si aparecen los dos equipos

@@ -170,17 +170,18 @@ struct SportsView: View {
             let usable = channels.filter { !blocked.contains($0.categoryId) }
             let rules = d.rules
             let (match, viaTv, firstEvent) = await Task.detached { () -> (Item?, Bool, Item?) in
-                let prepared = Sports.prepare(usable, cats, rules)
+                // índice de canales: una vez por catálogo (como Android, Vega y Roku), no en cada toque
+                let ix = Sports.index(usable, cats, rules)
                 if let c = channel {
-                    if let m = Sports.findByChannel(c.name, prepared).first { return (m, true, nil) }
+                    if let m = Sports.findByChannel(c.name, ix).first { return (m, true, nil) }
                     // el canal elegido no está en la lista del cliente: el evento (equipos / nombre) en las carpetas de eventos
-                    if let m = Sports.find(e, prepared, rules) { return (m, false, nil) }
+                    if let m = Sports.find(e, ix, rules) { return (m, false, nil) }
                 } else if byEvent {
-                    if let m = Sports.find(e, prepared, rules) { return (m, false, nil) }
-                } else if let m = Sports.best(e, prepared, rules) {
+                    if let m = Sports.find(e, ix, rules) { return (m, false, nil) }
+                } else if let m = Sports.best(e, ix, rules) {
                     return (m, true, nil)
                 }
-                return (nil, false, prepared.first { $0.isEvent }?.item)
+                return (nil, false, ix.chans.first { $0.isEvent }?.item)
             }.value
             if let m = match {
                 if let c = channel, !viaTv { state.toast = tr("No tienes %@; te mostramos %@", c.name, m.name) }
