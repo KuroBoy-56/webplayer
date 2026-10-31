@@ -162,7 +162,8 @@ private fun TimelineBody(guide: List<EpgEntry>, now: Long, entry: FocusRequester
 /** estado, horario, título y sinopsis del programa elegido en la línea de tiempo */
 @Composable
 private fun ProgramInfo(p: EpgEntry?, now: Long, modifier: Modifier) {
-    Column(modifier.fillMaxWidth().height(86.dp)) {
+    // alto para estado, título, horario con su barra y dos líneas de sinopsis (con 86 dp la sinopsis quedaba cortada)
+    Column(modifier.fillMaxWidth().height(108.dp)) {
         if (p == null) return@Column
         val live = p.start <= now && p.end > now
         Row(verticalAlignment = Alignment.CenterVertically) {
