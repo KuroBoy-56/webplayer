@@ -177,6 +177,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   no cuenta como «ya sonó» ni se guarda. Si en 15 s no llegó a ese segundo, se pausa y siguen los pasos
   (`resumeFailed`: el panel desde ese segundo). El panel tiene ahora 60 s para empezar a sonar; si no, se deja
   (`panelStop`) y sigue el último paso (otra vez directo y, si no, el aviso), nunca queda pegado.
+  **1.0.29 (cargando sin fin):** al saltar, el reproductor avisa `timeupdate` al instante con el segundo pedido aunque
+  se quede cargando; la 1.0.27 lo tomaba como «ya suena», apagaba el vigilante y quedaba cargando para siempre. Ahora
+  solo cuenta cuando el video **avanza** pasado ese segundo (`onTime` → `arrived`); si en 15 s no avanza, siguen los
+  pasos. Lo que suena antes del salto va sin sonido. Un archivo que se abre directo por el panel (porque así se vio
+  antes) tiene 60 s para empezar (`startDog` en `Player.tsx`); si no, se deja, se olvida esa ruta y siguen los pasos.
 - **Cuando un video no abre** (`src/screens/Player.tsx` + `src/player/streamcheck.ts`): vigilante de 20 s (15 s en
   Continuar viendo); una vez se le pregunta al servidor qué pasa: código HTTP, cuenta (`user_info`) y si la película
   sigue (`get_vod_info`). 404 / ya no está → «Video no disponible»; otra extensión → se abre con la de verdad; cuenta

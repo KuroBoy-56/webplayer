@@ -160,6 +160,8 @@ export class Playback {
   private seekAfter = 0;
   private seekTo = 0;
   private seekTimer: ReturnType<typeof setTimeout> | null = null;
+  // lo que suena antes del salto (el principio) va sin sonido
+  private seekMuted = false;
   // idiomas: aviso de una vez, lectura con el video abierto (intentos) y su temporizador
   private langNoticed = false;
   private langTries = 0;
@@ -342,9 +344,24 @@ export class Playback {
     this.seekTimer = null;
   }
 
-  // timeupdate: el salto de Continuar viendo ya llegó (el reproductor no siempre avisa "playing" después de saltar)
+  // timeupdate: el salto de Continuar viendo ya llegó. Cuenta solo cuando el video AVANZA pasado el segundo pedido: al
+  // saltar, el reproductor avisa timeupdate al instante con ese segundo aunque se quede cargando (1.0.27 lo tomaba como
+  // «ya suena», apagaba el vigilante y quedaba cargando sin fin)
   onTime(): void {
-    if (this.seekTo > 0 && !this.v.paused && (this.v.currentTime || 0) >= this.seekTo - 10) this.onPlaying();
+    if (this.seekTo > 0 && !this.remux && !this.v.paused && (this.v.currentTime || 0) >= this.seekTo + 1.5) this.arrived();
+  }
+
+  private arrived(): void {
+    if (this.seekMuted) {
+      this.seekMuted = false;
+      try {
+        (this.v as any).muted = false;
+      } catch {
+        // sin control de silencio
+      }
+    }
+    this.clearSeek();
+    this.onPlaying();
   }
 
   // segundo desde donde reabrir tras un error: el que sonaba o, si aún no arrancó, el de «Continuar viendo»
@@ -400,6 +417,8 @@ export class Playback {
   // Continuar viendo: el panel no arrancó a tiempo; se deja para que el reproductor siga con sus pasos
   panelStop(): void {
     if (!this.remux || this.played) return;
+    // si se abrió por el panel porque así se vio antes y ahora no arrancó, la próxima vez se prueba directo
+    setPanelRoute(this.url, '');
     this.remux = null;
     this.audioKey = '';
     this.panelFallback = false;
@@ -470,19 +489,32 @@ export class Playback {
       const g = this.gen;
       this.seekAfter = 0;
       this.seekTo = at;
+      try {
+        (this.v as any).muted = true;
+        this.seekMuted = true;
+      } catch {
+        // sin control de silencio: se oye un instante el principio
+      }
       this.v.currentTime = at;
       this.seekTimer = setTimeout(() => {
         this.seekTimer = null;
         if (g !== this.gen || this.played || !this.seekTo) return;
         // no llegó al segundo guardado: el reproductor sigue con sus pasos (el panel desde ese segundo)
         this.v.pause();
+        if (this.seekMuted) {
+          this.seekMuted = false;
+          try {
+            (this.v as any).muted = false;
+          } catch {
+            // sin control de silencio
+          }
+        }
         this.hooks.resumeFailed?.();
       }, 15000);
       return;
     }
-    if (this.seekTo > 0 && !this.remux) {
-      if ((this.v.currentTime || 0) < this.seekTo - 10) return;
-    }
+    // saltando al segundo guardado: "playing" no basta (puede llegar antes de que el video avance); manda onTime
+    if (this.seekTo > 0 && !this.remux) return;
     this.clearSeek();
     this.played = true;
     // cómo se pudo ver este archivo: por el panel (se recuerda) o directo (se olvida lo anterior)

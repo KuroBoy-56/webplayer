@@ -191,7 +191,19 @@ export default function Player({ params }: { params: PlayParams }) {
       // segmentos); con el panel, sus propios plazos
       startDog.current = setTimeout(() => {
         startDog.current = null;
-        if (!ctl.current || ctl.current.hasPlayed() || ctl.current.panelActive()) return;
+        if (!ctl.current || ctl.current.hasPlayed()) return;
+        if (ctl.current.panelActive()) {
+          // abierto por el panel (así se vio antes este archivo): 45 s más para empezar; si no, se deja y siguen los
+          // pasos (antes no había plazo y quedaba cargando sin fin)
+          startDog.current = setTimeout(() => {
+            startDog.current = null;
+            const c2 = ctl.current;
+            if (!c2 || c2.hasPlayed() || !c2.panelActive() || indexRef.current !== i) return;
+            c2.panelStop();
+            onErrorRef.current();
+          }, 45000);
+          return;
+        }
         if (live) liveNote.current = 'sin imagen en 25 s';
         onErrorRef.current();
       }, live ? 25000 : resume > 0 ? 15000 : 20000);
