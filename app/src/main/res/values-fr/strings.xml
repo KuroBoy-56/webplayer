@@ -303,6 +303,7 @@
     <string name="play_failed_server">Le serveur n\'a pas répondu ou le fichier est endommagé. Réessayez ou ouvrez-le dans VLC.</string>
     <string name="play_failed_decoder_plain">Cet appareil ne peut pas décoder le format de ce contenu.</string>
     <string name="play_failed_server_plain">Le serveur n\'a pas répondu ou le fichier est endommagé.</string>
+    <string name="live_not_streaming">Cette chaîne ne diffuse pas en ce moment : le serveur IPTV n\'envoie pas de vidéo. Réessayez plus tard ou une autre chaîne.</string>
     <string name="open_in_vlc">Ouvrir dans VLC</string>
     <string name="no_external_player">Aucun lecteur externe installé</string>
     <string name="exit_question">Voulez-vous quitter ?</string>
