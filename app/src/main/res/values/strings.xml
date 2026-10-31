@@ -193,6 +193,9 @@
     <string name="login_creating_demo">Creando demo…</string>
     <string name="resume">Continuar</string>
     <string name="resume_ep">Continuar T%1$d E%2$d</string>
+    <string name="from_start">Desde el inicio</string>
+    <string name="read_bio">Leer biografía</string>
+    <string name="epg_now_line">AHORA · %1$s - %2$s · %3$s</string>
     <string name="time_left">Quedan %1$s</string>
     <string name="watch_trailer">Ver tráiler</string>
     <string name="trailer">Tráiler</string>
