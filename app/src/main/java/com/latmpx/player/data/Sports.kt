@@ -86,8 +86,12 @@ object Sports {
 
     private fun parse(j: JSONObject): SportsData {
         val tz = j.s("tz")
-        // getTimeZone() da GMT con un nombre que no conoce
-        zone = if (tz.isNotEmpty()) TimeZone.getTimeZone(tz).takeIf { it.id == tz } ?: TimeZone.getDefault() else TimeZone.getDefault()
+        // getTimeZone() da GMT con un nombre que no conoce: entonces el desfase del panel ("tzo", segundos sobre UTC, como
+        // Vega) y solo si tampoco viene, la del equipo (un emulador o una TV mal configurada mostraba otra hora)
+        val tzo = if (j.has("tzo")) j.optInt("tzo", 0) else null
+        zone = TimeZone.getTimeZone(tz).takeIf { tz.isNotEmpty() && it.id == tz }
+            ?: tzo?.let { java.util.SimpleTimeZone(it * 1000, "panel") }
+            ?: TimeZone.getDefault()
         val events = j.optJSONArray("events").mapObj { e -> event(e) }.sortedBy { it.start }
         val sports = LinkedHashMap<String, SportInfo>()
         j.optJSONObject("sports")?.let { so ->

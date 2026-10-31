@@ -332,7 +332,8 @@ private fun Controls(m: PlayerUiModel, a: PlayerActions) {
                 if (!m.live) Pill(Icons.Filled.Speed, stringResource(R.string.speed_x, speedLabel(m.speed))) { m.panel = PlayerPanel.SPEED }
                 if (!m.tv) Pill(Icons.Filled.LockOpen, stringResource(R.string.lock)) { m.locked = true; m.poke() }
                 if (m.episodes.size > 1 && !m.live) Pill(Icons.Filled.VideoLibrary, stringResource(R.string.episodes)) { m.panel = PlayerPanel.EPISODES }
-                Pill(Icons.Filled.Subtitles, stringResource(R.string.audio_subs)) { m.panel = PlayerPanel.TRACKS }
+                // audio y subtítulos solo en películas y series; en los canales queda el ajuste de pantalla
+                if (!m.live) Pill(Icons.Filled.Subtitles, stringResource(R.string.audio_subs)) { m.panel = PlayerPanel.TRACKS }
                 Pill(Icons.Filled.AspectRatio, resizeLabel(m.resize)) {
                     val next = when (m.resize) {
                         AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
