@@ -191,6 +191,7 @@ const en = {
   "No se pudo cargar la agenda deportiva. Inténtalo más tarde.": "Couldn't load the sports schedule. Try again later.",
   "No se pudo comprobar tu distribuidor. Revisa tu conexión a internet.": "Couldn't check your distributor. Check your internet connection.",
   "No se pudo conectar con el panel.": "Couldn't connect to the panel.",
+  "Convirtiendo el video en el panel…": "Converting the video on the panel…",
   "No se pudo conectar con el panel. Revisa tu conexión a internet.": "Couldn't connect to the panel. Check your internet connection.",
   "No se pudo conectar con ningún servidor": "Couldn't connect to any server",
   "No se pudo crear la demo": "Couldn't create the demo",

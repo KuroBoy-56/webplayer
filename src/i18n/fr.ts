@@ -192,6 +192,7 @@ const fr: Record<Key, string> = {
   "No se pudo cargar la agenda deportiva. Inténtalo más tarde.": "Impossible de charger le programme sportif. Réessayez plus tard.",
   "No se pudo comprobar tu distribuidor. Revisa tu conexión a internet.": "Impossible de vérifier votre distributeur. Vérifiez votre connexion Internet.",
   "No se pudo conectar con el panel.": "Impossible de se connecter au panneau.",
+  "Convirtiendo el video en el panel…": "Conversion de la vidéo sur le panneau…",
   "No se pudo conectar con el panel. Revisa tu conexión a internet.": "Impossible de se connecter au panneau. Vérifiez votre connexion Internet.",
   "No se pudo conectar con ningún servidor": "Impossible de se connecter à un serveur",
   "No se pudo crear la demo": "Impossible de créer la démo",

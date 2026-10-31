@@ -70,8 +70,11 @@ function b64u(s: string): string {
 }
 
 // HLS con el audio a (orden en el archivo) desde el segundo t
-export function hlsLink(e: Engine, url: string, a: number, t: number): string {
-  return e.base + FILE + '?do=hls&token=' + encodeURIComponent(e.token) + '&u=' + b64u(url) + '&a=' + a + '&t=' + Math.max(0, Math.floor(t)) + '&lang=' + lang();
+// video: el video también convertido (último paso para un archivo que el equipo no abre); plain: por http (el
+// certificado de la VPS / VDS falló)
+export function hlsLink(e: Engine, url: string, a: number, t: number, opts: { video?: boolean; plain?: boolean } = {}): string {
+  return e.base + FILE + '?do=hls&token=' + encodeURIComponent(e.token) + '&u=' + b64u(url) + '&a=' + a + '&t=' + Math.max(0, Math.floor(t)) + '&lang=' + lang()
+    + (opts.video ? '&v=1' : '') + (opts.plain ? '&plain=1' : '');
 }
 
 // subtítulo s del archivo en WebVTT (o = segundos que se adelanta)

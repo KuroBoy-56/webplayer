@@ -23,6 +23,9 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 - **Cualquier formato:** si el televisor no abre el archivo (contenedor o códec que no reconoce), el **motor del
   panel** lo convierte (video sin cambios, audio en AAC) desde donde iba antes de dar el error (solo si la línea
   tiene permiso del motor; sin permiso, el error normal).
+- **Último recurso para un video que no abre (1.0.3, como webOS / Vega / Roku):** si la copia del panel (video sin
+  cambios) tampoco abre, se pide por http cuando el certificado de la VPS / VDS falló y después con el video convertido
+  a H.264 (`&v=1`, solo en la VPS / VDS con el interruptor del dueño o del distribuidor); si tampoco, el error.
 - **El progreso se guarda siempre** con su duración: con el motor del panel (que no la sabe) se usa la del servidor.
 - **Televisores 2018–2020** (Tizen 4.0–5.5): `web/polyfills.ts` les da `globalThis`, `padStart`, `Promise.finally`
   y un `AbortController` que sí corta las peticiones (sin eso la app no abría en esos modelos).

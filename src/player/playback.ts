@@ -106,6 +106,13 @@ export class Playback {
   private lastSub = '';
   // el equipo no abrió el archivo y ya se le pidió al panel que lo convierta (una vez por video)
   private formatTried = false;
+  // el panel abrió el video porque el equipo no pudo (no un cambio de idioma): si su copia tampoco abre, por http y
+  // después con el video convertido a H.264 (último recurso, como webOS / Vega / Roku)
+  private panelFallback = false;
+  private panelPlain = false;
+  private panelVideo = false;
+  // ya sonó (el video directo o el del panel)
+  private played = false;
   // el aviso de motor no disponible ya se mostró en este video
   private deniedShown = false;
 
@@ -131,6 +138,10 @@ export class Playback {
     this.setExt(null);
     this.subWait = null;
     this.formatTried = false;
+    this.panelFallback = false;
+    this.panelPlain = false;
+    this.panelVideo = false;
+    this.played = false;
     this.deniedShown = false;
     // los idiomas se buscan mientras el video carga (en el panel o en la cabecera); onPlaying y onError usan esto mismo
     if (!live) void fileTracks(url);
@@ -206,6 +217,7 @@ export class Playback {
 
   // primera vez "playing": se aplican los idiomas del archivo (la búsqueda empezó al abrir el video, load)
   onPlaying(): void {
+    this.played = true;
     if (this.live || this.probe || this.probing) return;
     this.probing = true;
     const g = this.gen;
@@ -253,6 +265,7 @@ export class Playback {
   private async formatFallback(items: AudioItem[]): Promise<boolean> {
     if (this.formatTried || this.live) return false;
     this.formatTried = true;
+    this.panelFallback = true;
     const it = this.preferredAudio(items) || items[this.probeDefault()];
     return this.toRemux(it?.probe ?? 0, it?.label || t('Audio {n}', { n: 1 }), false, t('Este equipo no abre el video directo: se prepara con el panel…'), Math.floor(this.resumeAt || this.realPos()));
   }
@@ -555,10 +568,10 @@ export class Playback {
     // mientras se prepara sigue lo que suena (video directo o el HLS anterior hasta donde llegó)
     this.stopHls();
     this.remuxFrom = Math.floor(pos);
-    const h = new PanelHls(this.v, hlsLink(this.engine, this.url, a, pos));
+    const h = new PanelHls(this.v, hlsLink(this.engine, this.url, a, pos, { video: this.panelVideo, plain: this.panelPlain }));
     this.hls = h;
     h.onError = msg => this.hls === h && this.remuxFailed(msg);
-    this.hooks.status(t('Cambiando idioma…'));
+    this.hooks.status(this.panelVideo ? t('Convirtiendo el video en el panel…') : t('Cambiando idioma…'));
     const err = await h.start();
     if (this.hls !== h) return;
     if (err) {
@@ -576,6 +589,21 @@ export class Playback {
 
   // el panel no pudo (sin ffmpeg, servidor caído…): se vuelve al video directo
   private remuxFailed(msg: string): void {
+    // un video que el equipo no abrió y la copia del panel tampoco: por http si no se pudo conectar con la VPS / VDS,
+    // después con el video también convertido (último recurso); si tampoco, el error de siempre
+    if (this.panelFallback && this.remux && !this.played && !engineDenied()) {
+      const pos = this.remuxFrom;
+      if (!this.panelPlain && msg === t('No se pudo conectar con el panel.')) {
+        this.panelPlain = true;
+        this.startRemux(pos);
+        return;
+      }
+      if (!this.panelVideo) {
+        this.panelVideo = true;
+        this.startRemux(pos);
+        return;
+      }
+    }
     const label = this.remux?.label || '';
     const attached = !!this.hls?.attached;
     const pos = this.remuxLive ? this.realPos() : attached ? this.remuxFrom : this.realPos();
