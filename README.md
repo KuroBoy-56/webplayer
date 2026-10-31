@@ -239,6 +239,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   encendido y en Continuar viendo: ya no se vuelve a pedir al panel el idioma elegido la vez anterior. El panel solo
   convierte cuando se elige un idioma en el menú (p. ej. si el predeterminado no se escucha). Se olvidan los títulos
   recordados como «solo por el panel» (`panel_route_3`): los MP4 ahora los lee la app.
+  **1.0.41:** el reproductor de Vega no acepta E-AC-3 por MSE (`addSourceBuffer type is not supported`): esos MP4 se
+  reproducen **solo con el video** (sin sonido) y un aviso; los idiomas quedan en el menú (con FFmpeg el panel los
+  convierte; sin él, «No compatible…»).
 - **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
   si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
   y con el interruptor del dueño o del distribuidor encendido).

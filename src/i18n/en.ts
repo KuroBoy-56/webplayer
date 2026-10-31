@@ -133,6 +133,7 @@ const en = {
   "Este equipo no pudo cambiar a {x}.": "This device couldn't switch to {x}.",
   "Este equipo no puede reproducir el audio que prepara el panel.": "This device can't play the audio prepared by the panel.",
   "Este equipo no reproduce el audio {x}: se prepara con el panel…": "This device can't play {x} audio: the panel is preparing it…",
+  "El audio de este video no es compatible con este equipo: elige un idioma con ▼.": "This video's audio isn't supported on this device: pick a language with ▼.",
   "Este evento ya terminó": "This event has ended",
   "Este número de distribuidor no está habilitado para esta aplicación.": "This distributor number isn't enabled for this app.",
   "Este servidor no tiene películas ni series de {x}.": "This server has no movies or series with {x}.",

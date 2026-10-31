@@ -134,6 +134,7 @@ const fr: Record<Key, string> = {
   "Este equipo no pudo cambiar a {x}.": "Cet appareil n'a pas pu passer à {x}.",
   "Este equipo no puede reproducir el audio que prepara el panel.": "Cet appareil ne peut pas lire l'audio préparé par le panneau.",
   "Este equipo no reproduce el audio {x}: se prepara con el panel…": "Cet appareil ne lit pas l'audio {x} : le panneau le prépare…",
+  "El audio de este video no es compatible con este equipo: elige un idioma con ▼.": "L'audio de cette vidéo n'est pas compatible avec cet appareil : choisissez une langue avec ▼.",
   "Este evento ya terminó": "Cet événement est terminé",
   "Este número de distribuidor no está habilitado para esta aplicación.": "Ce numéro de distributeur n'est pas activé pour cette application.",
   "Este servidor no tiene películas ni series de {x}.": "Ce serveur n'a ni films ni séries avec {x}.",

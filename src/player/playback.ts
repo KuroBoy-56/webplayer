@@ -354,7 +354,12 @@ export class Playback {
       m.onError = () => g === this.gen && this.mse === m && this.mp4Failed(at, m.why);
       m.start(at)
         .catch((e: any) => 'excepción: ' + String(e?.message || e).slice(0, 80))
-        .then(err => err && g === this.gen && this.mse === m && this.mp4Failed(at, err));
+        .then(err => {
+          if (g !== this.gen || this.mse !== m) return;
+          if (err) this.mp4Failed(at, err);
+          // sin sonido: se dice una vez y los idiomas quedan en el menú (con FFmpeg, el panel los convierte)
+          else if (m.noAudio) this.hooks.toast(t('El audio de este video no es compatible con este equipo: elige un idioma con ▼.'));
+        });
       return;
     }
     if (at > 5 && !this.live && !this.played) {

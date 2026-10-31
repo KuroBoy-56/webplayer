@@ -197,6 +197,8 @@ export class Mp4Mse {
   private lastMove = Date.now();
   // por qué no siguió (para el reporte del panel)
   why = '';
+  // el reproductor no acepta el audio del archivo (Dolby en Vega): suena solo el video; los idiomas quedan en el menú
+  noAudio = false;
   onError: () => void = () => {};
 
   constructor(private v: VideoPlayer, private url: string) {}
@@ -239,10 +241,22 @@ export class Mp4Mse {
     }
     await Promise.race([opened, sleep(10000)]);
     if (ms.readyState !== 'open') return 'MSE sin abrir';
+    let init: Uint8Array;
     try {
       this.sb = ms.addSourceBuffer(mime);
+      init = initSegment(vc, ac, dolby ? at0!.entry! : undefined);
     } catch (e: any) {
-      return 'MSE ' + mime + (typeOk ? '' : ' (no soportado)') + ': ' + String(e?.message || e).slice(0, 60);
+      // el audio no lo acepta (Vega no trae E-AC-3 por MSE): solo el video, sin sonido
+      const vOnly = mp4Mime(vc, null);
+      try {
+        if (!this.at) throw e;
+        this.sb = ms.addSourceBuffer(vOnly);
+        init = initSegment(vc, null);
+        this.at = null;
+        this.noAudio = true;
+      } catch {
+        return 'MSE ' + mime + (typeOk ? '' : ' (no soportado)') + ': ' + String(e?.message || e).slice(0, 60);
+      }
     }
     // la duración total (para la barra); si el equipo no deja ponerla, se sigue igual
     try {
@@ -250,7 +264,7 @@ export class Mp4Mse {
     } catch {
       // sin duración
     }
-    if (!(await this.append(initSegment(vc, ac, dolby ? at0!.entry! : undefined)))) return 'inicio no aceptado: ' + this.why;
+    if (!(await this.append(init))) return 'inicio no aceptado: ' + this.why;
     this.place(at);
     if (at > 0) this.v.currentTime = at;
     this.pump();
