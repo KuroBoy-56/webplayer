@@ -117,6 +117,16 @@ fun SportsScreen(state: AppState) {
 
     // menú del evento: ver (búsqueda automática), cada canal que lo transmite o buscar por equipos
     var pick by remember { mutableStateOf<SportEvent?>(null) }
+    // el índice de canales se arma apenas abre Deportes, en segundo plano (como Vega / Roku): al elegir un partido ya
+    // está listo y la búsqueda es inmediata. Mientras busca, otro toque no lanza otra búsqueda
+    LaunchedEffect(d.rules) {
+        runCatching {
+            val channels = Xtream.items(s, Kind.LIVE)
+            val cats = state.liveCats.ifEmpty { Xtream.categories(s, Kind.LIVE) }
+            withContext(Dispatchers.Default) { Sports.index(channels, cats, d.rules) }
+        }
+    }
+    var busy by remember { mutableStateOf(false) }
 
     /** channel = canal elegido del menú; byEvent = buscar solo por equipos / nombre del evento */
     fun watch(e: SportEvent, channel: TvChannel? = null, byEvent: Boolean = false) {
@@ -125,18 +135,21 @@ fun SportsScreen(state: AppState) {
             Toast.makeText(ctx, tr(if (st == SpStatus.FIN && dayKey(e.start) == keys[0]) R.string.event_over else R.string.event_offline), Toast.LENGTH_SHORT).show()
             return
         }
+        if (busy) return
+        busy = true
         Toast.makeText(ctx, if (channel != null) tr(R.string.searching_x, channel.name) else tr(R.string.searching_channel), Toast.LENGTH_SHORT).show()
         scope.launch {
+          try {
             val channels = Xtream.items(s, Kind.LIVE)
             val cats = state.liveCats.ifEmpty { Xtream.categories(s, Kind.LIVE) }
-            val (match, chans) = withContext(Dispatchers.Default) {
-                val prepared = Sports.prepare(channels, cats, d.rules)
+            val (match, ix) = withContext(Dispatchers.Default) {
+                val ix = Sports.index(channels, cats, d.rules)
                 val m = when {
-                    channel != null -> Sports.findByChannel(channel.name, prepared).firstOrNull()
-                    byEvent -> Sports.find(e, prepared, d.rules)
-                    else -> Sports.best(e, prepared, d.rules)
+                    channel != null -> Sports.findByChannel(channel.name, ix)
+                    byEvent -> Sports.find(e, ix, d.rules)
+                    else -> Sports.best(e, ix, d.rules)
                 }
-                m to prepared
+                m to ix
             }
             if (match != null) {
                 playInCategory(ctx, channels, match)
@@ -144,7 +157,7 @@ fun SportsScreen(state: AppState) {
             }
             // el canal elegido no está en la lista del cliente: se busca el evento (equipos / nombre) en las carpetas de eventos
             if (channel != null) {
-                val ev = withContext(Dispatchers.Default) { Sports.find(e, chans, d.rules) }
+                val ev = withContext(Dispatchers.Default) { Sports.find(e, ix, d.rules) }
                 if (ev != null) {
                     Toast.makeText(ctx, tr(R.string.channel_missing_showing, channel.name, ev.name), Toast.LENGTH_LONG).show()
                     playInCategory(ctx, channels, ev)
@@ -152,7 +165,7 @@ fun SportsScreen(state: AppState) {
                 }
             }
             // sin canal exacto: se abre la primera carpeta de eventos, como la web
-            val firstEvent = chans.firstOrNull { it.isEvent }?.item
+            val firstEvent = ix.chans.firstOrNull { it.isEvent }?.item
             if (firstEvent != null) {
                 val name = cats.firstOrNull { it.id == firstEvent.categoryId }?.name ?: tr(R.string.events)
                 Toast.makeText(ctx, tr(R.string.channel_not_yet_showing, name), Toast.LENGTH_LONG).show()
@@ -160,6 +173,9 @@ fun SportsScreen(state: AppState) {
             } else {
                 Toast.makeText(ctx, if (channel != null) tr(R.string.channel_not_found_x, channel.name) else tr(R.string.channel_not_found_event), Toast.LENGTH_SHORT).show()
             }
+          } finally {
+            busy = false
+          }
         }
     }
     fun openTv(e: SportEvent) { if (e.tv.isEmpty()) watch(e) else pick = e }
