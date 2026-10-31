@@ -149,6 +149,7 @@ class PlayerActivity : ComponentActivity() {
         pip = PlayerPip(this, player, tv).also { it.register() }
         ui2 = PlayerUiModel(player, kind == Kind.LIVE, tv).apply {
             episodes = if (kind == Kind.SERIES) queue.map { q -> q.title.removePrefix(saveTitle).trim().trimStart('·').trim().ifEmpty { q.title } } else emptyList()
+            channels = if (kind == Kind.LIVE) queue.map { it.title } else emptyList()
             resize = Store.resizeMode
         }
         buildUi()
@@ -234,6 +235,7 @@ class PlayerActivity : ComponentActivity() {
     private fun loadEpg(i: Int) {
         if (kind != Kind.LIVE) return
         val q = queue.getOrNull(i) ?: return
+        ui2.epg = emptyList()
         epgJob?.cancel()
         epgJob = lifecycleScope.launch {
             var list = runCatching { Xtream.shortEpg(session, q.id, 4) }.getOrDefault(emptyList())
@@ -242,6 +244,7 @@ class PlayerActivity : ComponentActivity() {
                 list = runCatching { com.latmpx.player.data.PanelEpg.guide(items[i], items.subList(i, minOf(items.size, i + 400))) }.getOrDefault(emptyList())
             }
             val now = System.currentTimeMillis()
+            if (::player.isInitialized && player.currentMediaItemIndex == i) ui2.epg = list
             val cur = list.firstOrNull { it.start <= now && it.end > now } ?: return@launch
             val hm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
             if (::player.isInitialized && player.currentMediaItemIndex == i) ui2.subtitle = getString(R.string.epg_now_line, hm.format(cur.start), hm.format(cur.end), cur.title)
@@ -520,6 +523,21 @@ class PlayerActivity : ComponentActivity() {
         if (!::ui2.isInitialized) return super.dispatchKeyEvent(event)
         val k = event.keyCode
         if (event.action == KeyEvent.ACTION_DOWN && k != KeyEvent.KEYCODE_BACK) lastUserKey = System.currentTimeMillis()
+        // canal en la TV (como Roku y Vega): sin pausa; con el panel cerrado arriba / abajo cambian de canal, izquierda /
+        // derecha no hacen nada y OK abre el panel (canales de la carpeta, canal, hora y guía)
+        if (tv && kind == Kind.LIVE && event.action == KeyEvent.ACTION_DOWN) {
+            when (k) {
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> return true
+            }
+            if (!ui2.visible && ui2.panel == null) {
+                when (k) {
+                    KeyEvent.KEYCODE_DPAD_UP -> { zap(-1); return true }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> { zap(1); return true }
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> return true
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> { ui2.poke(); ui2.focusTick++; return true }
+                }
+            }
+        }
         if (event.action == KeyEvent.ACTION_DOWN) {
             // teclas multimedia del control: siempre
             when (k) {
@@ -556,6 +574,8 @@ class PlayerActivity : ComponentActivity() {
         player.seekTo(next, C.TIME_UNSET)
         player.prepare()
         player.play()
+        // TV: el canal nuevo un momento arriba (número y nombre), sin abrir el panel
+        if (tv) queue.getOrNull(next)?.let { showToast("${next + 1}  ${it.title}") }
     }
 
     /* ---------------- ciclo de vida ---------------- */

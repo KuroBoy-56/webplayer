@@ -119,6 +119,9 @@ class PlayerUiModel(val player: ExoPlayer, val live: Boolean, val tv: Boolean) {
     /** «¿Salir del video?» abierto */
     var askExit by mutableStateOf(false)
     var episodes by mutableStateOf<List<String>>(emptyList())
+    /** canal en vivo: los canales de la carpeta y la guía del que suena (panel de la TV, PlayerLiveTv.kt) */
+    var channels by mutableStateOf<List<String>>(emptyList())
+    var epg by mutableStateOf<List<com.latmpx.player.data.EpgEntry>>(emptyList())
     var index by mutableIntStateOf(0)
     var seekHint by mutableStateOf<String?>(null)
     var quality by mutableStateOf("")
@@ -252,7 +255,9 @@ fun PlayerOverlay(m: PlayerUiModel, a: PlayerActions) {
     }
     // se esconden solos a los 4 s mientras reproduce (no si hay un panel abierto)
     LaunchedEffect(m.visible, m.lastTouch, m.playing, m.panel) {
-        if (m.visible && m.playing && m.panel == null) { delay(4000); if (System.currentTimeMillis() - m.lastTouch >= 3900) m.visible = false }
+        // canal en la TV: 8 s (se recorre la lista de canales)
+        val wait = if (m.live && m.tv) 8000L else 4000L
+        if (m.visible && m.playing && m.panel == null) { delay(wait); if (System.currentTimeMillis() - m.lastTouch >= wait - 100) m.visible = false }
     }
     LaunchedEffect(m.toast) { if (m.toast != null) { delay(2600); m.toast = null } }
     LaunchedEffect(m.seekHint) { if (m.seekHint != null) { delay(700); m.seekHint = null } }
@@ -274,7 +279,7 @@ fun PlayerOverlay(m: PlayerUiModel, a: PlayerActions) {
         m.seekHint?.let { Text(it, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center).background(Color(0x99000000), RoundedCornerShape(30.dp)).padding(horizontal = 20.dp, vertical = 10.dp)) }
 
         AnimatedVisibility(m.visible && m.panel == null, enter = fadeIn(), exit = fadeOut()) {
-            if (m.locked) LockedLayer(m) else Controls(m, a)
+            if (m.locked) LockedLayer(m) else if (m.live && m.tv) LiveTvOverlay(m, a) else Controls(m, a)
         }
         NextEpisodeCard(m, a, Modifier.align(Alignment.BottomEnd).padding(end = 32.dp, bottom = 96.dp))
         ExitVideoDialog(m, a)
