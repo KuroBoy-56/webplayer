@@ -206,6 +206,16 @@ export default function Player({ params }: { params: PlayParams }) {
           return;
         }
         if (live) liveNote.current = 'sin imagen en 25 s';
+        // el MP4 que lee la app (índice al final del archivo) puede tardar más en empezar: 25 s más
+        if (!live && ctl.current.mp4Starting()) {
+          startDog.current = setTimeout(() => {
+            startDog.current = null;
+            const c2 = ctl.current;
+            if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
+            if (!c2.mp4Fallback('sin empezar en 45 s')) onErrorRef.current();
+          }, 25000);
+          return;
+        }
         onErrorRef.current();
       }, live ? 25000 : resume > 0 ? 15000 : 20000);
     },
@@ -369,7 +379,7 @@ export default function Player({ params }: { params: PlayParams }) {
       const e = params.kind === 'live' ? null : params.queue[i];
       if (!e || c.hasPlayed() || c.panelActive()) return false;
       const err: any = (v as any).error;
-      if (vs.attempts.length < 12) vs.attempts.push((flipped.current ? 'otro protocolo' : 'directo') + ': ' + (err?.code ?? '') + ' ' + String(err?.message || '').slice(0, 80));
+      if (vs.attempts.length < 12) vs.attempts.push((flipped.current ? 'otro protocolo' : 'directo') + ': ' + (err?.code ?? '') + ' ' + String(err?.message || '').slice(0, 80) + (c.mp4Note() ? ' (lector MP4: ' + c.mp4Note() + ')' : ''));
       const at = c.resumePos();
       // 1) una vez: qué contesta el servidor (código, cuenta, si la película sigue y con qué extensión)
       if (!vs.checked) {

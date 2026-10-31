@@ -228,6 +228,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   y ◀▶ empiezan desde el cuadro clave anterior, sin el salto que fallaba. Solo H.264 + AAC: con otro códec (AC-3, HEVC…)
   o si el reproductor rechaza lo entregado, ese video sigue con el modo directo de siempre y después el panel. La VPS
   solo se usa al elegir otro idioma (o para lo que el equipo no abre).
+  **1.0.38:** la consulta `isTypeSupported` ya no descarta (manda `addSourceBuffer`), la duración total ya no es
+  obligatoria, el primer tramo empieza al momento aunque arranque unas décimas después, 45 s para empezar (no 20) y,
+  si no sigue, el reporte dice por qué (`(lector MP4: …)` en el intento).
 - **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
   si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
   y con el interruptor del dueño o del distribuidor encendido).

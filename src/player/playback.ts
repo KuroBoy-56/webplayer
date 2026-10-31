@@ -133,6 +133,8 @@ export class Playback {
   // MP4 leído por la app del servidor IPTV (mp4mse.ts); mp4Url: no se pudo, este video va con el modo directo de siempre
   private mse: Mp4Mse | null = null;
   private mp4Url = false;
+  // por qué la lectura propia del MP4 no siguió (va al reporte)
+  private mp4Why = '';
   private liveHls: LiveHls | null = null;
   // audio del canal elegido en el menú (canales con varios idiomas)
   private liveAudio = 0;
@@ -225,6 +227,7 @@ export class Playback {
     this.formatTried = false;
     this.resumePanel = false;
     this.mp4Url = false;
+    this.mp4Why = '';
     this.deniedShown = false;
     if (live) {
       // .m3u8 del canal: el reproductor de Vega no abre HLS solo; lo lee la app y lo entrega por MSE
@@ -348,8 +351,10 @@ export class Playback {
       const g = this.gen;
       const m = new Mp4Mse(this.v, this.url);
       this.mse = m;
-      m.onError = () => g === this.gen && this.mse === m && this.mp4Failed(at);
-      m.start(at).then(err => err && g === this.gen && this.mse === m && this.mp4Failed(at));
+      m.onError = () => g === this.gen && this.mse === m && this.mp4Failed(at, m.why);
+      m.start(at)
+        .catch((e: any) => 'excepción: ' + String(e?.message || e).slice(0, 80))
+        .then(err => err && g === this.gen && this.mse === m && this.mp4Failed(at, err));
       return;
     }
     if (at > 5 && !this.live && !this.played) {
@@ -362,17 +367,28 @@ export class Playback {
   }
 
   // la lectura propia del MP4 no pudo (códec raro, el servidor cortó): el modo directo de siempre desde donde iba
-  private mp4Failed(at: number): void {
+  private mp4Failed(at: number, why: string): void {
     const pos = this.played ? this.realPos() : at;
+    this.mp4Why = why;
     this.mp4Url = true;
     this.direct(pos);
   }
 
   // error del reproductor con el MP4 leído por la app: true = se sigue con el modo directo de siempre
-  mp4Fallback(): boolean {
+  mp4Fallback(why = 'error del reproductor'): boolean {
     if (!this.mse || this.mp4Url) return false;
-    this.mp4Failed(this.played ? this.realPos() : this.wantAt);
+    const e: any = (this.v as any).error;
+    this.mp4Failed(this.played ? this.realPos() : this.wantAt, why + (e?.code ? ' ' + e.code : '') + (this.mse.why ? ' · ' + this.mse.why : ''));
     return true;
+  }
+
+  // la app todavía arma el MP4 (el reproductor espera más antes de darlo por perdido)
+  mp4Starting(): boolean {
+    return !!this.mse && !this.mp4Url && !this.played;
+  }
+
+  mp4Note(): string {
+    return this.mp4Why;
   }
 
   private clearSeek(): void {

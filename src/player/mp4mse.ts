@@ -188,6 +188,8 @@ export class Mp4Mse {
   private watch: ReturnType<typeof setInterval> | null = null;
   private lastT = -1;
   private lastMove = Date.now();
+  // por qué no siguió (para el reporte del panel)
+  why = '';
   onError: () => void = () => {};
 
   constructor(private v: VideoPlayer, private url: string) {}
@@ -195,19 +197,21 @@ export class Mp4Mse {
   // '' = empezó en el segundo pedido; si no, el motivo (el que llama sigue con el modo directo de siempre)
   async start(at: number): Promise<string> {
     const moov = await this.readMoov();
-    if (!moov) return 'sin índice';
+    if (!moov) return 'índice: ' + (this.why || 'no encontrado');
     const traks = kids(moov, 0, moov.length).filter(k => k.t === 'trak').map(k => parseTrak(moov, k.s, k.e)).filter((x): x is Trk => !!x);
     const vt = traks.find(x => x.kind === 'vide') || null;
     const auds = traks.filter(x => x.kind === 'soun');
     const at0 = auds.find(x => x.enabled) || auds[0] || null;
     const vc = vt ? videoCfg(vt) : null;
     const ac = at0 ? audioCfg(at0) : null;
-    if (!vt || !vc || (at0 && !ac)) return 'códec';
+    if (!vt || !vc || (at0 && !ac)) return 'códec v=' + (vt?.entry ? typ(vt.entry, 4) : '-') + ' a=' + (at0?.entry ? typ(at0.entry, 4) : '-');
     const mime = mp4Mime(vc, ac);
+    // la consulta no manda: algunos equipos dicen que no y lo aceptan; manda addSourceBuffer
+    let typeOk = true;
     try {
-      if (!MediaSource.isTypeSupported(mime)) return 'no soportado';
+      typeOk = MediaSource.isTypeSupported(mime);
     } catch {
-      return 'no soportado';
+      typeOk = false;
     }
     this.vt = vt;
     this.at = ac ? at0 : null;
@@ -225,14 +229,19 @@ export class Mp4Mse {
       (this.v as any).srcObject = ms;
     }
     await Promise.race([opened, sleep(10000)]);
-    if (ms.readyState !== 'open') return 'MSE';
+    if (ms.readyState !== 'open') return 'MSE sin abrir';
     try {
       this.sb = ms.addSourceBuffer(mime);
+    } catch (e: any) {
+      return 'MSE ' + mime + (typeOk ? '' : ' (no soportado)') + ': ' + String(e?.message || e).slice(0, 60);
+    }
+    // la duración total (para la barra); si el equipo no deja ponerla, se sigue igual
+    try {
       ms.duration = this.secs(vt, vt.dts[vt.dts.length - 1]);
     } catch {
-      return 'MSE';
+      // sin duración
     }
-    if (!(await this.append(initSegment(vc, ac)))) return 'MSE';
+    if (!(await this.append(initSegment(vc, ac)))) return 'inicio no aceptado: ' + this.why;
     this.place(at);
     if (at > 0) this.v.currentTime = at;
     this.pump();
@@ -328,13 +337,15 @@ export class Mp4Mse {
       try {
         const r = await fetch(this.url, { headers: { 'User-Agent': UA, Range: 'bytes=' + off + '-' + (off + len - 1) }, signal: ctrl.signal });
         if (r.status !== 206) {
+          this.why = 'pedido ' + r.status;
           ctrl.abort();
           return null;
         }
         const tot = Number((r.headers.get('content-range') || '').split('/')[1]);
         if (tot > 0) this.size = tot;
         return new Uint8Array(await r.arrayBuffer());
-      } catch {
+      } catch (e: any) {
+        this.why = 'red: ' + String(e?.message || e).slice(0, 60);
         await sleep(1000);
       } finally {
         clearTimeout(timer);
@@ -351,7 +362,8 @@ export class Mp4Mse {
     await this.idle();
     try {
       this.sb.appendBuffer(data);
-    } catch {
+    } catch (e: any) {
+      this.why = 'append: ' + String(e?.message || e).slice(0, 60);
       return false;
     }
     await this.idle();
@@ -453,6 +465,7 @@ export class Mp4Mse {
         }
         if (!this.alive || g !== this.gen) continue;
         if ((vs && (!vb || vb.length < vs[1] - vbase)) || (as && (!ab || ab.length < as[1] - abase))) {
+          this.why = 'bajada: ' + (this.why || 'incompleta');
           this.onError();
           return;
         }
@@ -502,7 +515,7 @@ export class Mp4Mse {
         const st = b.start(i);
         const en = b.end(i);
         const next = i + 1 < b.length ? b.start(i + 1) : -1;
-        if (t < st - 0.3) {
+        if (t < st - 0.05) {
           if (en - st > 0.5) this.jump(st + 0.1);
           return;
         }
