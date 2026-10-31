@@ -34,9 +34,11 @@ export type EvRow = {
   e: any;
 };
 
-export const EventRow = memo(function EventRow({ r, onPress }: { r: EvRow; onPress: () => void }) {
+// preferred / onFocusKey: Deportes vuelve a poner el foco en el evento que se abrió (al volver del canal o al bajar
+// desde el menú de arriba)
+export const EventRow = memo(function EventRow({ r, onPress, preferred, onFocusKey }: { r: EvRow; onPress: () => void; preferred?: boolean; onFocusKey?: (k: string) => void }) {
   return (
-    <Focusable onPress={onPress} style={f => [s.ev, f && s.evF]}>
+    <Focusable onPress={onPress} preferred={preferred} onFocus={onFocusKey ? () => onFocusKey(r.key) : undefined} style={f => [s.ev, f && s.evF]}>
       {f => (
         <>
           <Text style={[s.time, r.live && s.timeLive, f && !r.live && { color: C.onFocus }]} numberOfLines={2}>

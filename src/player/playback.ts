@@ -738,11 +738,12 @@ export class Playback {
     return it.probe === undefined || nativeAudioOk(it.codec, this.probe?.container || '');
   }
 
-  // El archivo trae más idiomas de los que informa el reproductor (y el panel está): arriba «Audio predeterminado» (el
-  // video directo, tal como lo da el servidor) y debajo todos los idiomas del archivo, que prepara el panel al elegirlos
-  // (también el que suena por defecto: volver a él desde otro preparado por el panel podía dejar el video sin sonido)
+  // El archivo trae varios idiomas (y el panel está): arriba «Audio predeterminado» (el video directo, tal como lo da el
+  // servidor IPTV, sin la VPS) y debajo todos los idiomas del archivo (también el predeterminado), que prepara el panel
+  // al elegirlos. Antes solo si el reproductor no informaba todos: con todos, cambiaba la pista en el reproductor de Vega
+  // y ese cambio salta dentro del archivo (en algunos servidores falla: error 4)
   private panelMenu(): boolean {
-    return !this.live && !!this.probe?.ok && this.probe.audio.length > 1 && this.probe.audio.length > this.nativeAudio().length && !engineDenied();
+    return !this.live && !!this.probe?.ok && this.probe.audio.length > 1 && !engineDenied();
   }
 
   // menú de audio y subtítulos
@@ -799,8 +800,13 @@ export class Playback {
       const it = this.audioItems().find(i => i.key === m.key);
       if (it && it.probe !== undefined && this.panelMenu()) {
         // un idioma de la lista de abajo: lo prepara el panel (también el de por defecto)
-        if (this.remux?.a === it.probe) return;
         setTitleLang(this.url, it);
+        if (this.remux?.a === it.probe) {
+          // el panel ya da esa pista (como «Audio predeterminado»): solo cambia lo marcado
+          this.remux = { a: it.probe, label: it.label };
+          this.hooks.changed();
+          return;
+        }
         this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
         return;
       }
@@ -840,7 +846,8 @@ export class Playback {
     if (items.length < 2 && !stuck) return;
     this.audioApplied = true;
     const pick = want && this.decodable(want) ? want : stuck ? items.find(i => this.decodable(i) && sameLang(i.lang, cur!.lang)) || want || cur : want;
-    if (pick && pick !== cur) this.pickAudio(pick, false, pick === want);
+    // el idioma elegido para este título va por el panel aunque sea el que suena por defecto (así quedó elegido)
+    if (pick && (pick !== cur || (pick === want && this.panelMenu()))) this.pickAudio(pick, false, pick === want);
     else if (stuck && cur) this.pickAudio(cur, false);
   }
 
@@ -899,6 +906,11 @@ export class Playback {
     }
     this.audioKey = it.key;
     if (user) setTitleLang(this.url, it.probe === this.probeDefault() && !this.panelMenu() ? null : it);
+    // el idioma elegido antes para este título (Continuar viendo): lo prepara el panel, como al elegirlo en el menú
+    if ((user || saved) && it.probe !== undefined && this.panelMenu()) {
+      this.toRemux(it.probe, it.label, user, t('Cambiando a {x}…', { x: it.label }));
+      return;
+    }
     const ok = this.decodable(it);
     if (it.native !== undefined && ok) {
       if (this.remux) {

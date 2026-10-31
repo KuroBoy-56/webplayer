@@ -216,11 +216,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   video empieza con el idioma elegido; si no, se espera ese pedido como mucho 2 s (como Roku). Antes de abrir el video
   solo se pregunta lo ya sabido: leer el archivo antes bloqueaba líneas de pocas conexiones. Con el video abierto
   se lee la cabecera del MKV/MP4 (256 KB) a los 3 s y se reintenta a los 3, 6, 10 s y luego cada 15 s hasta tener los
-  idiomas (se deja de intentar si el archivo no es MKV/MP4). Cuando el archivo trae más idiomas de los que da el
-  reproductor, el menú muestra arriba **Audio predeterminado** (el video directo) y debajo **todos** los idiomas,
+  idiomas (se deja de intentar si el archivo no es MKV/MP4). Cuando el archivo trae dos o más idiomas (desde 1.0.32
+  siempre; antes solo si el reproductor no los informaba todos y si no el idioma se cambiaba dentro del reproductor,
+  que salta dentro del archivo: error 4 en algunos servidores), el menú muestra arriba **Audio predeterminado** (el
+  video directo del servidor IPTV, sin la VPS) y debajo **todos** los idiomas,
   también el que suena por defecto, preparados por el **motor del panel** (`api/media_vega.php`: video sin cambios +
   ese audio en AAC, HLS por Media Source Extensions desde el segundo actual): volver al idioma por defecto ya no deja
-  el video sin sonido. Si el equipo no abre el video directo, «Audio predeterminado» es el primer audio del archivo
+  el video sin sonido. El idioma elegido (aunque sea el que suena por defecto) se recuerda para ese título y
+  «Continuar viendo» lo vuelve a pedir al panel; «Audio predeterminado» lo borra y el título vuelve a ir directo. Si el equipo no abre el video directo, «Audio predeterminado» es el primer audio del archivo
   por el panel. Los subtítulos de texto del archivo se eligen en el reproductor o, si el equipo no los muestra, el
   panel los convierte a WebVTT y se dibujan encima del video. *Desactivados* los quita. El panel necesita ffmpeg (Guía EPG).
 - **Borrado de caché del panel**: `check_mac` trae la orden (`cache_clear`) y cuándo se envió (`cache_clear_at`). Sin
@@ -255,7 +258,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   arma una vez por catálogo. Con «Solo los canales del servidor IPTV» (`chan: iptv`) solo se nombran los que el
   cliente tiene. El menú del partido pinta en **verde** los canales de su lista y trae «Buscar canales: «Equipo»»
   por cada equipo y «Buscar canal, equipo o evento…» (teclado; todas las palabras primero, si no, alguna de 4
-  letras o más; categorías de deportes primero).
+  letras o más; categorías de deportes primero). **Foco (1.0.32):** al cerrar el canal el foco vuelve al mismo
+  evento; si Atrás llevó al menú de arriba, al bajar otra vez se llega a ese evento (no a las fichas). Otro día u otra
+  disciplina lo olvidan, y otra sección del menú (TV en vivo, Películas…) vuelve a empezar Deportes de cero.
 - **Deportes › Tablas** (`tables.on`): región (Todas, Copas, Selecciones, Europa, **América** —Latinoamérica,
   Norteamérica y Suramérica juntas— y Resto del mundo), división (1.ª por defecto, las que habilitó el panel y al
   final **Liga femenina**, ligas con `w`), ligas a la izquierda y la tabla a la derecha con PJ G E P GF GC DG PTS,

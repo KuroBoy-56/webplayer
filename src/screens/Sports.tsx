@@ -38,8 +38,37 @@ const isFinal = (st: string) => {
 // 0 Hoy, 1 Mañana, 2 Tablas, 3 Equipos, 4 Selecciones
 type Tab = 0 | 1 | 2 | 3 | 4;
 
-export default function Sports() {
+// active: la pantalla vuelve a verse (se cerró el canal); back: Atrás llevó el foco al menú de arriba
+export default function Sports({ active = true, back = 0 }: { active?: boolean; back?: number }) {
   const nav = useNav();
+  // el último evento con el foco: al volver del canal (o al bajar desde el menú de arriba) el foco vuelve a él. Se
+  // olvida al cambiar de día o disciplina; al cambiar de sección (TV en vivo, Películas…) Deportes empieza de cero
+  const lastKey = useRef('');
+  // el evento al que se devuelve el foco: se vuelve a montar (clave nueva) con «preferred», solo en ese momento
+  const [target, setTarget] = useState({ key: '', n: 0 });
+  const refocus = () => lastKey.current && setTarget(x => ({ key: lastKey.current, n: x.n + 1 }));
+  const forget = () => {
+    lastKey.current = '';
+    setTarget(x => ({ key: '', n: x.n }));
+  };
+  const toRow = useRef(false);
+  const focusKey = useCallback((k: string) => {
+    lastKey.current = k;
+    toRow.current = false;
+  }, []);
+  useEffect(() => {
+    if (active) refocus();
+  }, [active]);
+  useEffect(() => {
+    if (back && lastKey.current) toRow.current = true;
+  }, [back]);
+  // bajando desde el menú de arriba el foco cae en las fichas: sigue hasta el evento donde se quedó
+  const chipFocus = () => {
+    if (toRow.current) {
+      toRow.current = false;
+      refocus();
+    }
+  };
   const st = useAppState();
   const [data, setData] = useState<SportsData | null>(cache?.data || null);
   const [err, setErr] = useState('');
@@ -365,7 +394,7 @@ export default function Sports() {
     <View style={s.root}>
       <View style={s.chips}>
         {tabs.map((x, i) => (
-          <Chip key={x.id} label={x.label} on={tab === x.id} preferred={i === 0} onPress={() => (setTab(x.id), setSport(''))} />
+          <Chip key={x.id} label={x.label} on={tab === x.id} preferred={i === 0} onFocus={chipFocus} onPress={() => (forget(), setTab(x.id), setSport(''))} />
         ))}
       </View>
       {toast ? <Text style={s.toast}>{toast}</Text> : null}
@@ -392,18 +421,20 @@ export default function Sports() {
             data={['', ...sportKeys]}
             keyExtractor={k => k || 'all'}
             contentContainerStyle={{ paddingHorizontal: SIDE, paddingVertical: px(6), alignItems: 'center' }}
-            renderItem={({ item: k }) => <Chip label={k ? label(k) : t('Todos')} on={sport === k} onPress={() => setSport(k)} />}
+            renderItem={({ item: k }) => <Chip label={k ? label(k) : t('Todos')} on={sport === k} onFocus={chipFocus} onPress={() => (forget(), setSport(k))} />}
           />
           {rows.length ? (
             <FlatList
               // otro día u otra disciplina: la lista empieza arriba; si solo se actualizó, queda donde estaba
               key={tab + '|' + sport}
               data={rows}
-              keyExtractor={r => r.key}
+              // el evento al que vuelve el foco se monta otra vez con «preferred» (así el foco llega a él)
+              keyExtractor={r => (r.key === target.key ? r.key + ':' + target.n : r.key)}
               initialNumToRender={8}
               windowSize={7}
               contentContainerStyle={{ paddingHorizontal: SIDE, paddingBottom: px(100) }}
-              renderItem={({ item: r }) => <EventRow r={r} onPress={() => open(r.e)} />}
+              extraData={target}
+              renderItem={({ item: r }) => <EventRow r={r} preferred={r.key === target.key} onFocusKey={focusKey} onPress={() => open(r.e)} />}
             />
           ) : (
             <Message text={t('No hay partidos para mostrar.')} />
