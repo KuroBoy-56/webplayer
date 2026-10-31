@@ -189,6 +189,16 @@ compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con 
   oficiales); si el panel los rechaza (línea demo de otro equipo, vencida…) no entra. La línea de Autodemo
   no se vuelve a registrar (el panel ya la tiene en el historial de demos).
 
+## Tema de prueba (estilo IBO Player, 1.2.4)
+
+Si el panel lo ofrece (Pantalla Falsa › «Tema de prueba», solo con **Omitir**: `features.review`, `panelFeatures` en
+`src/api/panel.ts`), el inicio de sesión queda sencillo (usuario, contraseña, Ingresar y Autodemo; sin DNS ni código
+del equipo). **Autodemo** o una cuenta del tema (`panelReview`, `login.php review_login`) abren `src/screens/Review.tsx`:
+Películas a la izquierda, Series al lado y Ajustes (solo «Cerrar sesión»), con los videos de la carpeta player del
+panel en un reproductor sencillo (sin sesión, progreso ni caché). No registra nada en el panel ni vence. Un usuario y
+contraseña que no son del tema entran como siempre (línea IPTV). Viene de Vega 1.0.28 (merge de `vega-os`, que trae
+también el arreglo de Continuar viendo de la 1.0.27).
+
 ## Idiomas
 
 - La app está en **español, inglés, portugués (Brasil) y francés**. La primera vez (y con *Automático*)

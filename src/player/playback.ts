@@ -32,6 +32,8 @@ export type Hooks = {
   fatal: (msg: string) => void;
   // el panel no pudo preparar el video que el equipo no abrió: el reproductor sigue con sus otros pasos
   panelFailed?: () => void;
+  // Continuar viendo directo: no llegó al segundo guardado en 15 s (siguen los pasos: el panel desde ese segundo)
+  resumeFailed?: () => void;
   // canal en vivo por HLS (lector propio) que no se pudo abrir o se cortó: el motivo, para el siguiente formato
   liveFailed?: (why: string) => void;
   // el canal se detuvo varias veces (sin datos a tiempo): el estado del lector para el reporte
@@ -151,6 +153,13 @@ export class Playback {
   // videos o líneas el servidor no deja saltar y quedaba en bucle)
   private wantAt = 0;
   private played = false;
+  // Continuar viendo directo: el reproductor de Vega se queda cargando si se salta antes de que el video empiece
+  // (en loadedmetadata, como antes de la 1.0.4); se salta UNA vez apenas suena. seekTo = el segundo pedido mientras
+  // tanto (lo que suena es el principio: no cuenta como «ya sonó» ni se guarda); seekTimer: si en 15 s no llegó, siguen
+  // los pasos de siempre (el panel desde ese segundo)
+  private seekAfter = 0;
+  private seekTo = 0;
+  private seekTimer: ReturnType<typeof setTimeout> | null = null;
   // idiomas: aviso de una vez, lectura con el video abierto (intentos) y su temporizador
   private langNoticed = false;
   private langTries = 0;
@@ -172,6 +181,7 @@ export class Playback {
     const sameFile = url.replace(/^https?:\/\//i, '') === this.url.replace(/^https?:\/\//i, '');
     this.wantAt = live ? 0 : resume;
     this.played = false;
+    this.clearSeek();
     if (!sameFile) {
       this.langNoticed = false;
       this.langTries = 0;
@@ -315,15 +325,32 @@ export class Playback {
   private direct(at: number): void {
     this.stopHls();
     this.offset = 0;
-    this.resumeAt = at;
+    this.clearSeek();
+    if (at > 5 && !this.live && !this.played) {
+      // Continuar viendo: se abre y se salta apenas suena (onPlaying)
+      this.resumeAt = 0;
+      this.seekAfter = at;
+    } else this.resumeAt = at;
     this.v.src = this.url;
     this.v.play();
+  }
+
+  private clearSeek(): void {
+    this.seekAfter = 0;
+    this.seekTo = 0;
+    if (this.seekTimer) clearTimeout(this.seekTimer);
+    this.seekTimer = null;
+  }
+
+  // timeupdate: el salto de Continuar viendo ya llegó (el reproductor no siempre avisa "playing" después de saltar)
+  onTime(): void {
+    if (this.seekTo > 0 && !this.v.paused && (this.v.currentTime || 0) >= this.seekTo - 10) this.onPlaying();
   }
 
   // segundo desde donde reabrir tras un error: el que sonaba o, si aún no arrancó, el de «Continuar viendo»
   resumePos(): number {
     const p = this.realPos();
-    return p > 5 ? p : this.resumeAt || this.wantAt;
+    return p > 5 && !this.seekTo ? p : this.seekTo || this.seekAfter || this.resumeAt || this.wantAt;
   }
 
   // aún no empezó a sonar en el segundo guardado (no se guarda avance: se pisaría dónde quedó)
@@ -351,6 +378,7 @@ export class Playback {
       if (k.ok) this.probe = k;
     }
     if (g !== this.gen) return false;
+    this.clearSeek();
     const items = this.probe?.ok ? this.audioItems() : [];
     const it = this.preferredAudio(items) || items[this.probeDefault()];
     this.panelFallback = true;
@@ -369,8 +397,19 @@ export class Playback {
     this.remuxLive = false;
   }
 
+  // Continuar viendo: el panel no arrancó a tiempo; se deja para que el reproductor siga con sus pasos
+  panelStop(): void {
+    if (!this.remux || this.played) return;
+    this.remux = null;
+    this.audioKey = '';
+    this.panelFallback = false;
+    this.stopHls();
+    this.hooks.status('');
+  }
+
   destroy(): void {
     this.gen++;
+    this.clearSeek();
     this.stopHls();
     this.setExt(null);
     if (this.prefsTimer) clearTimeout(this.prefsTimer);
@@ -425,6 +464,26 @@ export class Playback {
 
   // "playing": se aplican los idiomas ya sabidos y, apenas suena, se mira cuántos audios hay (langCheck)
   onPlaying(): void {
+    if (this.seekAfter > 0 && !this.remux) {
+      // Continuar viendo: ya suena; ahora sí al segundo guardado (una vez)
+      const at = this.seekAfter;
+      const g = this.gen;
+      this.seekAfter = 0;
+      this.seekTo = at;
+      this.v.currentTime = at;
+      this.seekTimer = setTimeout(() => {
+        this.seekTimer = null;
+        if (g !== this.gen || this.played || !this.seekTo) return;
+        // no llegó al segundo guardado: el reproductor sigue con sus pasos (el panel desde ese segundo)
+        this.v.pause();
+        this.hooks.resumeFailed?.();
+      }, 15000);
+      return;
+    }
+    if (this.seekTo > 0 && !this.remux) {
+      if ((this.v.currentTime || 0) < this.seekTo - 10) return;
+    }
+    this.clearSeek();
     this.played = true;
     // cómo se pudo ver este archivo: por el panel (se recuerda) o directo (se olvida lo anterior)
     if (!this.live) setPanelRoute(this.url, this.remux && this.panelFallback ? (this.panelVideo ? 'v' : 'p') : this.remux ? panelRoute(this.url) : '');

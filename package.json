@@ -1,6 +1,6 @@
 {
   "name": "mpx-webos",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "private": true,
   "description": "MPX Player para LG Smart TV (webOS): la app de Vega OS con react-native-web",
   "scripts": {
