@@ -139,7 +139,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   versiones de prueba se olvidan (`panel_route_2`, `title_audio_2`).
 - **Barra de avance del reproductor (1.0.33)**: relleno rojo y resto son dos partes de una fila repartidas con `flex`
   (sin medir ni porcentajes). Sobre el video de Vega un ancho en porcentaje no se aplicaba y el ancho medido
-  (`onLayout`, 1.0.24) no llegaba: la barra se veía vacía aunque el tiempo avanzara.
+  (`onLayout`, 1.0.24) no llegaba: la barra se veía vacía aunque el tiempo avanzara. **1.0.34 (la causa real):** el
+  reproductor de Vega no da la duración de muchos videos (MKV directo, el panel antes de terminar), así que el avance
+  era siempre 0 %. Ahora la barra usa la duración del servidor (`QueueEntry.dur`, o la guardada con el avance), como
+  ya hacía Continuar viendo.
 - **Canales sin el corte de cada segmento (desde 1.0.25)**: en Vega el audio y el video de cada segmento no terminan
   juntos y lo entregado acababa unas décimas antes del segmento siguiente (`buf=[0.0-9.6,9.7-19.2,…]`): el reproductor
   se frenaba en cada unión y saltar ese hueco era un corte de ~1 s cada ~10 s. Ahora, si el segmento nuevo dejaría un

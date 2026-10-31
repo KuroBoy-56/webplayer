@@ -51,7 +51,8 @@ export function playMovie(nav: Nav, item: Item, ext: string, fromStart = false, 
     name: 'player',
     params: {
       kind: 'movie',
-      queue: [{ id: item.id, title: item.name, ext: ext || item.ext, poster: item.poster, dur: serverDurationSec(duration) }],
+      // sin la duración del servidor (botón del inicio): la guardada con el avance, para la barra del reproductor
+      queue: [{ id: item.id, title: item.name, ext: ext || item.ext, poster: item.poster, dur: serverDurationSec(duration) || Math.floor(p?.duration || 0) }],
       index: 0,
       saveTitle: item.name,
       savePoster: item.poster,

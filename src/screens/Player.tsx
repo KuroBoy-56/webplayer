@@ -846,7 +846,10 @@ export default function Player({ params }: { params: PlayParams }) {
 
   const now = nowSec();
   const cur = epg.find(e => e.s <= now && now < e.e);
-  const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
+  // el reproductor de Vega no siempre da la duración (la barra quedaba en 0 % aunque el tiempo avanzara): la del
+  // servidor, como el avance de Continuar viendo
+  const total = dur || (params.kind !== 'live' ? params.queue[index]?.dur || 0 : 0);
+  const pct = total > 0 ? Math.min(100, (pos / total) * 100) : 0;
 
   return (
     <View style={s.root}>
