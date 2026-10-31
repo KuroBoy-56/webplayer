@@ -18,6 +18,7 @@ import Grid from './screens/Grid';
 import Login from './screens/Login';
 import Main from './screens/Main';
 import Player from './screens/Player';
+import Review from './screens/Review';
 import { clearSportsCache } from './screens/Sports';
 import { clearTmdbCache } from './api/tmdb';
 import { resetEngine } from './api/media';
@@ -52,6 +53,8 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
       return <Grid title={route.title} mode={route.mode} keyName={route.key} kind={route.kind} />;
     case 'player':
       return <Player params={route.params} />;
+    case 'review':
+      return <Review data={route.data} />;
   }
 }
 

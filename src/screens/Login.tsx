@@ -1,7 +1,7 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, BackHandler, Easing, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelSubmit, resellerCode } from '../api/panel';
+import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelReview, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import { loginAll, sessionFrom } from '../api/xtream';
 import { Button, Focusable, Logo } from '../components/ui';
@@ -51,6 +51,8 @@ export default function Login() {
   const [checking, setChecking] = useState(true);
   // login.php features: hay demo configurada en el panel (null = no respondió o panel viejo)
   const [demoOk, setDemoOk] = useState<boolean | null>(null);
+  // tema de prueba del panel (Pantalla Falsa, solo con Omitir): caja sencilla con usuario, contraseña, Ingresar y Autodemo
+  const [review, setReview] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -58,7 +60,11 @@ export default function Login() {
     // Con una sola línea entra sola después de comprobarla en el servidor IPTV.
     (async () => {
       tmdbPosters().then(p => alive && setPosters(p));
-      const feat = panelFeatures().then(f => alive && setDemoOk(f ? f.demo : null));
+      const feat = panelFeatures().then(f => {
+        if (!alive) return;
+        setDemoOk(f ? f.demo : null);
+        setReview(!!f?.review);
+      });
       // manda el panel: con la llave, check_mac primero (la línea que el panel le da hoy a esta MAC, demo
       // vigente incluida, con su marca DEMO). auth.php solo sin llave o si check_mac no da línea: prefiere
       // cualquier línea vieja no demo y no sabe si es demo (en Roku eso hacía rebotar el inicio).
@@ -118,6 +124,16 @@ export default function Login() {
       return;
     }
     setError('');
+    if (review && !servers && !fromPanel && !demo) {
+      // una cuenta del tema de prueba entra al tema; cualquier otra sigue como siempre (línea IPTV)
+      setBusy(t('Entrando…'));
+      const r = await panelReview(u.trim(), p.trim(), false);
+      if (r.ok) {
+        setBusy('');
+        nav.reset({ name: 'review', data: r.review });
+        return;
+      }
+    }
     setBusy(t('Buscando tu cuenta en los servidores…'));
     const list = servers || (await panelDnsList());
     let r = await loginAll(list, u.trim(), p.trim());
@@ -182,6 +198,15 @@ export default function Login() {
   // Autodemo solo si el panel tiene una demo configurada; sin respuesta, lo de antes (con distribuidor
   // tenant_config; con Omitir se muestra)
   const canDemo = hasMasterKey() && (demoOk ?? features().demo);
+  // tema de prueba: Autodemo entra al tema (no crea ni registra ninguna demo)
+  const reviewDemo = async () => {
+    setError('');
+    setBusy(t('Creando tu demo…'));
+    const r = await panelReview('', '', true);
+    setBusy('');
+    if (r.ok) nav.reset({ name: 'review', data: r.review });
+    else setError(r.error);
+  };
 
   // vuelve al número de distribuidor (Continuar / Omitir): se olvidan la marca y la clave TMDB del anterior
   const changeDist = () => {
@@ -254,16 +279,17 @@ export default function Login() {
         {busy ? <Text style={s.busy}>{busy}</Text> : null}
         <View style={s.btns}>
           <Button label={busy ? t('Entrando…') : t('Ingresar')} primary onPress={() => !busy && enter(user, pass)} />
-          <Button label="DNS" last={!canDemo} onPress={() => setDnsOpen(true)} />
-          {canDemo ? <Button label="Autodemo" last onPress={() => !busy && demo()} /> : null}
+          {review ? <Button label="Autodemo" last onPress={() => !busy && reviewDemo()} /> : null}
+          {review ? null : <Button label="DNS" last={!canDemo} onPress={() => setDnsOpen(true)} />}
+          {canDemo && !review ? <Button label="Autodemo" last onPress={() => !busy && demo()} /> : null}
         </View>
-        {canDemo ? <Text style={s.tip}>{t('¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.')}</Text> : null}
-        {assigned.length ? (
+        {canDemo && !review ? <Text style={s.tip}>{t('¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.')}</Text> : null}
+        {assigned.length && !review ? (
           <View style={s.btns}>
             <Button label={t('Entrar con la cuenta de este equipo ({x})', { x: assigned[0].demo ? 'DEMO' : assigned[0].user })} small last onPress={() => !busy && enterAssigned()} />
           </View>
         ) : null}
-        <Text style={s.device}>{t('Código del equipo:')} {dev}</Text>
+        {review ? null : <Text style={s.device}>{t('Código del equipo:')} {dev}</Text>}
       </View>
       <View style={s.dist}>
         <Button label={t('Cambiar distribuidor')} small last onPress={changeDist} />

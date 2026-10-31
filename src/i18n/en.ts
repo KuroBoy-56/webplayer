@@ -306,6 +306,7 @@ const en = {
   "Empieza en {x} s": "Starts in {x} s",
   "¿Salir del video?": "Leave the video?",
   "Seguir viendo": "Keep watching",
+  "Todavía no hay videos de prueba.": "No test videos yet.",
 };
 
 export default en;

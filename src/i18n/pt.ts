@@ -307,6 +307,7 @@ const pt: Record<Key, string> = {
   "Empieza en {x} s": "Começa em {x} s",
   "¿Salir del video?": "Sair do vídeo?",
   "Seguir viendo": "Continuar assistindo",
+  "Todavía no hay videos de prueba.": "Ainda não há vídeos de teste.",
 };
 
 export default pt;

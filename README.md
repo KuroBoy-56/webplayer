@@ -129,6 +129,16 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
   oficiales); si el panel los rechaza (línea demo de otro equipo, vencida…) no entra. La línea de Autodemo
   no se vuelve a registrar (el panel ya la tiene en el historial de demos).
 
+## Tema de prueba (estilo IBO Player, 1.0.2)
+
+Si el panel lo ofrece (Pantalla Falsa › «Tema de prueba», solo con **Omitir**: `features.review`, `panelFeatures` en
+`src/api/panel.ts`), el inicio de sesión queda sencillo (usuario, contraseña, Ingresar y Autodemo; sin DNS ni código
+del equipo). **Autodemo** o una cuenta del tema (`panelReview`, `login.php review_login`) abren `src/screens/Review.tsx`
+(el mismo de Vega): Películas a la izquierda, Series al lado y Ajustes (solo «Cerrar sesión»), con los videos de la
+carpeta player del panel en un reproductor sencillo (AVPlay por el adaptador de `web/shims/w3cmedia.tsx`; sin sesión,
+progreso ni caché). No registra nada en el panel ni vence. Un usuario y contraseña que no son del tema entran como
+siempre (línea IPTV).
+
 ## Idiomas
 
 - La app está en **español, inglés, portugués (Brasil) y francés**. La primera vez (y con *Automático*)

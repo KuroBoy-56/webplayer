@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { Item } from './data/catalog';
+import type { Review } from './api/panel';
 
 // dur: duración que da el servidor (segundos), para el progreso cuando el reproductor no la sabe
 export type QueueEntry = { id: string; title: string; ext: string; poster: string; season?: number; num?: number; dur?: number };
@@ -16,7 +17,9 @@ export type Route =
   | { name: 'detail'; item: Item }
   | { name: 'actor'; personId: number; actorName: string }
   | { name: 'grid'; title: string; mode: 'cat' | 'platform' | 'genre' | 'recent'; key: string; kind?: 'vod' | 'series' }
-  | { name: 'player'; params: PlayParams };
+  | { name: 'player'; params: PlayParams }
+  // tema de prueba del panel (Pantalla Falsa, solo con Omitir)
+  | { name: 'review'; data: Review };
 
 export type Nav = {
   push: (r: Route) => void;

@@ -9,7 +9,7 @@ import { panel } from './panel';
 
 export type ErrorKind = 'crash' | 'error' | 'playback' | 'network' | 'panel' | 'warning';
 
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const recent: Record<string, number> = {};
 let ctx: () => { device: string; user: string; server: string } = () => ({ device: '', user: '', server: '' });
 
