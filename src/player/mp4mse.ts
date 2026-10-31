@@ -15,7 +15,8 @@ const MOOV_MAX = 64 * 1048576;
 type Trk = {
   // shift: segundos que se le suman a la pista para que video y audio queden como los muestra el archivo (lista de
   // edición: el video suele empezar unas décimas después por los cuadros B) sin tiempos negativos
-  kind: string; ts: number; enabled: boolean; entry: Uint8Array | null; width: number; height: number; mediaTime: number; shift: number;
+  // delay: tramos vacíos al principio de la lista de edición (la pista empieza más tarde), en la escala de la película
+  kind: string; ts: number; enabled: boolean; entry: Uint8Array | null; width: number; height: number; mediaTime: number; delay: number; shift: number;
   off: number[]; size: number[]; dts: number[]; cts: number[]; key: Set<number> | null;
 };
 
@@ -43,7 +44,7 @@ function kids(b: Uint8Array, s: number, e: number): { t: string; s: number; e: n
 const kid = (b: Uint8Array, s: number, e: number, t: string) => kids(b, s, e).find(k => k.t === t) || null;
 
 function parseTrak(b: Uint8Array, s: number, e: number): Trk | null {
-  const tk: Trk = { kind: '', ts: 0, enabled: false, entry: null, width: 0, height: 0, mediaTime: 0, shift: 0, off: [], size: [], dts: [], cts: [], key: null };
+  const tk: Trk = { kind: '', ts: 0, enabled: false, entry: null, width: 0, height: 0, mediaTime: 0, delay: 0, shift: 0, off: [], size: [], dts: [], cts: [], key: null };
   const tkhd = kid(b, s, e, 'tkhd');
   if (tkhd) tk.enabled = (b[tkhd.s + 3] & 1) === 1;
   const elst = kid(b, s, e, 'edts');
@@ -56,6 +57,9 @@ function parseTrak(b: Uint8Array, s: number, e: number): Trk | null {
         tk.mediaTime = mt;
         break;
       }
+      // tramo vacío (media_time -1): la pista empieza esa duración después (p. ej. el audio 5 s más tarde que el video;
+      // antes se ignoraba y ese audio sonaba 5 s adelantado)
+      tk.delay += v1 ? u64(b, o) : u32(b, o);
     }
   }
   const mdia = kid(b, s, e, 'mdia');
@@ -227,9 +231,14 @@ export class Mp4Mse {
     }
     this.vt = vt;
     this.at = ac ? at0 : null;
-    const lead = Math.max(vt.mediaTime / vt.ts, this.at ? this.at.mediaTime / this.at.ts : 0);
-    vt.shift = lead - vt.mediaTime / vt.ts;
-    if (this.at) this.at.shift = lead - this.at.mediaTime / this.at.ts;
+    // dónde empieza cada pista según la lista de edición (tramos vacíos y comienzo dentro de la pista), todo corrido para
+    // que nada quede antes de 0
+    const mvhd = kid(moov, 0, moov.length, 'mvhd');
+    const mts = mvhd ? u32(moov, mvhd.s + (moov[mvhd.s] === 1 ? 20 : 12)) || 1 : 1;
+    const offOf = (x: Trk) => x.delay / mts - x.mediaTime / x.ts;
+    const base = Math.min(offOf(vt), this.at ? offOf(this.at) : Infinity);
+    vt.shift = offOf(vt) - base;
+    if (this.at) this.at.shift = offOf(this.at) - base;
     this.arate = ac ? ac.rate : 0;
     if (!this.alive) return '';
     const ms: any = new MediaSource();

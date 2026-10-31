@@ -251,6 +251,8 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   redondeo y el reproductor de Vega estiraba o encimaba trocitos de audio en las uniones. Probado: cuadros de audio
   de 1024 exactos, sin huecos ni encimados; video con las mismas duraciones del archivo. El salto de un hueco espera
   1 s quieto (el tiempo del reproductor avanza a saltos).
+  **1.0.44:** la lista de edición también con **tramos vacíos** al principio (`media_time = -1`: la pista empieza N s
+  después, en la escala de `mvhd`): antes se ignoraban y ese audio sonaba N s adelantado al video.
 - **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
   si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
   y con el interruptor del dueño o del distribuidor encendido).
