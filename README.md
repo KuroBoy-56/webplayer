@@ -235,6 +235,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   va tal cual al reproductor (`initSegment(v, a, aEntry)`). Con FFmpeg apagado el menú de audio queda igual
   («Audio predeterminado» marcado y debajo los idiomas); elegir un idioma avisa «No compatible…» cada vez, no cambia lo
   marcado y no se recuerda para Continuar viendo.
+  **1.0.40:** todo título empieza siempre con el audio predeterminado directo del servidor IPTV, también con FFmpeg
+  encendido y en Continuar viendo: ya no se vuelve a pedir al panel el idioma elegido la vez anterior. El panel solo
+  convierte cuando se elige un idioma en el menú (p. ej. si el predeterminado no se escucha). Se olvidan los títulos
+  recordados como «solo por el panel» (`panel_route_3`): los MP4 ahora los lee la app.
 - **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
   si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
   y con el interruptor del dueño o del distribuidor encendido).

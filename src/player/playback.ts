@@ -71,7 +71,7 @@ function rememberLang(key: string, lang: string) {
 // se abren de una por ahí, sin probar antes el directo (ahorra los intentos y el tiempo). 7 días, los 300 más recientes.
 type Route = { r: 'p' | 'v'; t: number };
 // _2 (1.0.33): se olvidan las rutas que guardaba un Continuar viendo por el panel (abrían por el panel desde el principio)
-const ROUTE_KEY = 'panel_route_2';
+const ROUTE_KEY = 'panel_route_3'; // _3 (1.0.40): los MP4 que antes solo salían por el panel ahora los lee la app
 const routeKey = (u: string) => u.replace(/^https?:\/\//i, '');
 function panelRoute(url: string): 'p' | 'v' | '' {
   const e = (readJson<Record<string, Route>>(ROUTE_KEY) || {})[routeKey(url)];
@@ -884,19 +884,12 @@ export class Playback {
     this.hooks.changed();
   }
 
-  // Un título suena tal como viene del servidor IPTV (su audio predeterminado, sin el panel: no gasta la VPS). Solo se
-  // cambia solo al idioma que el usuario eligió antes para este mismo título (Continuar viendo), que prepara el panel.
-  // Antes también convertía solo si creía que el equipo no decodificaba el audio (la consulta es la de MSE y el video
-  // directo no va por MSE): los títulos nuevos salían «preparando con el panel». Si no suena, se elige en el menú.
+  // Todo título empieza con su audio predeterminado, tal como viene del servidor IPTV (sin el panel: no gasta la VPS),
+  // también con FFmpeg encendido y en Continuar viendo. El panel convierte solo cuando el usuario elige un idioma en el
+  // menú (p. ej. porque el predeterminado no se escucha). 1.0.40: antes se volvía a pedir al panel el idioma elegido la
+  // vez anterior al abrir el mismo título.
   private autoAudio(): void {
-    if (this.audioApplied || this.audioKey || this.remux) return;
-    const items = this.audioItems();
-    if (items.length < 2) return;
-    const want = this.preferredAudio(items);
-    if (!want) return;
     this.audioApplied = true;
-    // el idioma elegido para este título va por el panel aunque sea el que suena por defecto (así quedó elegido)
-    if (want !== this.audioOn(items) || this.panelMenu()) this.pickAudio(want, false, true);
   }
 
   // ya se eligió un audio antes de conocer los códecs: si el equipo no lo decodifica, otro del
