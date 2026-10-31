@@ -1015,14 +1015,15 @@ export default function Player({ params }: { params: PlayParams }) {
   );
 }
 
-// Barra de avance: el relleno se pinta en píxeles con el ancho medido de la barra (sobre el video de Vega un ancho en
-// porcentaje no se aplicaba y la barra quedaba vacía aunque el tiempo avanzara)
+// Barra de avance: relleno rojo y resto como dos partes de una fila repartidas con flex (sin medir ni porcentajes).
+// Sobre el video de Vega un ancho en porcentaje no se aplicaba y el ancho medido (onLayout) no llegaba: la barra
+// quedaba vacía aunque el tiempo avanzara
 function ProgressBar({ pct }: { pct: number }) {
-  const [w, setW] = useState(0);
-  const fill = w > 0 && pct > 0 ? Math.max(px(8), Math.round((w * Math.min(100, pct)) / 100)) : 0;
+  const p = Math.max(0, Math.min(100, pct || 0));
   return (
-    <View style={s.bar} onLayout={e => setW(e.nativeEvent.layout.width)}>
-      {fill > 0 ? <View style={[s.barFill, { width: fill }]} /> : null}
+    <View style={s.bar}>
+      <View style={[s.barFill, { flex: p }]} />
+      <View style={{ flex: 100 - p }} />
     </View>
   );
 }
@@ -1045,8 +1046,8 @@ const s = themed(() =>
     title: { color: C.text, fontSize: px(44), fontWeight: '800', flex: 1 },
     star: { color: '#f5c518', fontSize: px(40) },
     bottom: { paddingHorizontal: px(80), paddingBottom: px(60), paddingTop: px(40), backgroundColor: alpha(C.bg, 0.65) },
-    bar: { height: px(8), backgroundColor: alpha(C.text, 0.3), borderRadius: px(4), marginTop: px(12) },
-    barFill: { position: 'absolute', left: 0, top: 0, height: px(8), backgroundColor: C.red, borderRadius: px(4) },
+    bar: { flexDirection: 'row', height: px(8), backgroundColor: alpha(C.text, 0.3), borderRadius: px(4), overflow: 'hidden', marginTop: px(12) },
+    barFill: { backgroundColor: C.red },
     times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: px(10) },
     time: { color: C.text, fontSize: px(28) },
     now: { color: C.red, fontSize: px(26), fontWeight: '800' },

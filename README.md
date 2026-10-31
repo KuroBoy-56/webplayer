@@ -131,10 +131,15 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   se convierte solo por un idioma preferido). Con dos o más idiomas, el panel (VPS / VDS) prepara otro idioma solo
   cuando el usuario lo elige en el menú; esa elección se recuerda para ese título y se usa al volver a abrirlo
   («Continuar viendo» sigue en ese idioma). «Audio predeterminado» la borra. Un título nuevo siempre empieza con el
-  predeterminado. Ajustes ya no tiene «Idioma de audio preferido». El panel solo convierte solo cuando el equipo no
-  puede decodificar el audio que suena (DTS…, quedaría sin sonido) o no abre el archivo.
-- **Barra de avance del reproductor (desde 1.0.24)**: el relleno rojo se pinta en píxeles con el ancho medido de la
-  barra; con un ancho en porcentaje, sobre el video de Vega la barra se veía vacía aunque el tiempo avanzara.
+  predeterminado. Ajustes ya no tiene «Idioma de audio preferido». **Desde 1.0.33** el panel ya no convierte solo por
+  un audio que «no decodifica» (la consulta era la de MSE y el video directo no va por MSE: títulos nuevos salían
+  «preparando con el panel»); solo entra solo cuando el archivo no abre directo o para Continuar viendo, y entonces el
+  menú marca «Audio predeterminado» (antes marcaba el idioma, p. ej. «Inglés»). Un Continuar viendo por el panel ya no
+  deja el título como «solo por el panel» (abría por el panel también desde el principio); las memorias de las
+  versiones de prueba se olvidan (`panel_route_2`, `title_audio_2`).
+- **Barra de avance del reproductor (1.0.33)**: relleno rojo y resto son dos partes de una fila repartidas con `flex`
+  (sin medir ni porcentajes). Sobre el video de Vega un ancho en porcentaje no se aplicaba y el ancho medido
+  (`onLayout`, 1.0.24) no llegaba: la barra se veía vacía aunque el tiempo avanzara.
 - **Canales sin el corte de cada segmento (desde 1.0.25)**: en Vega el audio y el video de cada segmento no terminan
   juntos y lo entregado acababa unas décimas antes del segmento siguiente (`buf=[0.0-9.6,9.7-19.2,…]`): el reproductor
   se frenaba en cada unión y saltar ese hueco era un corte de ~1 s cada ~10 s. Ahora, si el segmento nuevo dejaría un

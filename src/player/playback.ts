@@ -69,7 +69,8 @@ function rememberLang(key: string, lang: string) {
 // Archivos que este equipo solo pudo ver por el panel ('p' = copia del panel, 'v' = video convertido): la próxima vez
 // se abren de una por ahí, sin probar antes el directo (ahorra los intentos y el tiempo). 7 días, los 300 más recientes.
 type Route = { r: 'p' | 'v'; t: number };
-const ROUTE_KEY = 'panel_route';
+// _2 (1.0.33): se olvidan las rutas que guardaba un Continuar viendo por el panel (abrían por el panel desde el principio)
+const ROUTE_KEY = 'panel_route_2';
 const routeKey = (u: string) => u.replace(/^https?:\/\//i, '');
 function panelRoute(url: string): 'p' | 'v' | '' {
   const e = (readJson<Record<string, Route>>(ROUTE_KEY) || {})[routeKey(url)];
@@ -80,7 +81,8 @@ function panelRoute(url: string): 'p' | 'v' | '' {
 // Un título nuevo (o sin elegir nada) empieza siempre con su audio predeterminado, directo del servidor IPTV; el panel
 // prepara otro idioma solo cuando el usuario lo elige. 180 días, los 400 más recientes. a = pista del archivo.
 type TitleLang = { l: string; a: number; t: number };
-const TLANG_KEY = 'title_audio';
+// _2 (1.0.33): se olvidan los idiomas elegidos en las versiones de prueba
+const TLANG_KEY = 'title_audio_2';
 function titleLang(url: string): TitleLang | null {
   const e = (readJson<Record<string, TitleLang>>(TLANG_KEY) || {})[routeKey(url)];
   return e && Date.now() - e.t < 180 * 86400000 ? e : null;
@@ -163,6 +165,9 @@ export class Playback {
   private lastSub = '';
   // el equipo no abrió el archivo y ya se le pidió al panel que lo convierta (una vez por video)
   private formatTried = false;
+  // el panel se usó para continuar en el segundo guardado (el directo no salta), no porque el archivo no abra: no se
+  // recuerda como «solo por el panel» (antes ese título abría por el panel también desde el principio)
+  private resumePanel = false;
   // el aviso de motor no disponible ya se mostró en este video
   private deniedShown = false;
   // «Continuar viendo»: segundo pedido y si ya sonó (nunca se abre desde el principio para saltar después: en algunos
@@ -227,6 +232,7 @@ export class Playback {
     this.setExt(null);
     this.subWait = null;
     this.formatTried = false;
+    this.resumePanel = false;
     this.deniedShown = false;
     if (live) {
       // .m3u8 del canal: el reproductor de Vega no abre HLS solo; lo lee la app y lo entrega por MSE
@@ -244,12 +250,12 @@ export class Playback {
       // ya se sabe que en este equipo solo se ve por el panel: de una por ahí (con el idioma elegido para este título o el predeterminado)
       this.formatTried = true;
       this.panelFallback = true;
+      this.resumePanel = !panelRoute(url);
       if (route === 'v') this.panelVideo = true;
       knownTracks(url).then(p => {
         if (g !== this.gen) return;
         if (p.ok) this.probe = p;
-        const items = p.ok ? this.audioItems() : [];
-        const it = this.preferredAudio(items) || items[this.probeDefault()];
+        const it = this.startAudio(p.ok ? this.audioItems() : []);
         // sin idiomas guardados: se leen de la cabecera a la vez (para el menú), sin esperar
         if (!p.ok)
           fileTracks(url, true).then(q => {
@@ -258,7 +264,7 @@ export class Playback {
               this.hooks.changed();
             }
           });
-        this.toRemux(it?.probe ?? 0, it?.label || t('Audio predeterminado'), false, '', resume).then(ok => {
+        this.toRemux(it.a, it.label, false, '', resume).then(ok => {
           if (!ok && g === this.gen) {
             // sin el panel: el camino de siempre
             this.panelFallback = false;
@@ -412,10 +418,10 @@ export class Playback {
     }
     if (g !== this.gen) return false;
     this.clearSeek();
-    const items = this.probe?.ok ? this.audioItems() : [];
-    const it = this.preferredAudio(items) || items[this.probeDefault()];
+    const it = this.startAudio(this.probe?.ok ? this.audioItems() : []);
     this.panelFallback = true;
-    const ok = await this.toRemux(it?.probe ?? 0, it?.label || t('Audio predeterminado'), false, '', at);
+    this.resumePanel = true;
+    const ok = await this.toRemux(it.a, it.label, false, '', at);
     if (!ok) this.panelFallback = false;
     return ok;
   }
@@ -537,7 +543,7 @@ export class Playback {
     // Continuar viendo que solo salió por el panel: en este servidor la próxima vez va directo por ahí
     if (!this.live && this.wantAt > 5 && this.remux && this.panelFallback) setResumeViaPanel(this.url, true);
     // cómo se pudo ver este archivo: por el panel (se recuerda) o directo (se olvida lo anterior)
-    if (!this.live) setPanelRoute(this.url, this.remux && this.panelFallback ? (this.panelVideo ? 'v' : 'p') : this.remux ? panelRoute(this.url) : '');
+    if (!this.live) setPanelRoute(this.url, this.remux && this.panelFallback && !this.resumePanel ? (this.panelVideo ? 'v' : 'p') : this.remux ? panelRoute(this.url) : '');
     if (this.live || this.probing) return;
     this.probing = true;
     if (this.probe?.ok) {
@@ -616,9 +622,8 @@ export class Playback {
     const def = items[this.probeDefault()];
     if (def && def.probe !== undefined && !this.decodable(def)) {
       // el panel lo convierte a AAC: de una vez el idioma elegido para este título (o el predeterminado)
-      const want = this.preferredAudio(items) || def;
-      const label = want.label;
-      return this.toRemux(want.probe ?? def.probe, label, false, t('Cambiando a {x}…', { x: label }), Math.floor(this.resumeAt || this.realPos()));
+      const it = this.startAudio(items);
+      return this.toRemux(it.a, it.label, false, t('Cambiando a {x}…', { x: it.label }), Math.floor(this.resumeAt || this.realPos()));
     }
     return this.formatFallback(items);
   }
@@ -633,8 +638,9 @@ export class Playback {
     if (this.formatTried || this.live) return false;
     this.formatTried = true;
     this.panelFallback = true;
-    const it = this.preferredAudio(items) || items[this.probeDefault()];
-    const ok = await this.toRemux(it?.probe ?? 0, it?.label || t('Audio {n}', { n: 1 }), false, t('Preparando el video en el panel…'), Math.floor(this.resumeAt || this.realPos()));
+    this.resumePanel = false;
+    const it = this.startAudio(items);
+    const ok = await this.toRemux(it.a, it.label, false, t('Preparando el video en el panel…'), Math.floor(this.resumeAt || this.realPos()));
     if (!ok) this.panelFallback = false;
     return ok;
   }
@@ -734,6 +740,14 @@ export class Playback {
     return items.find(i => i.probe === s.a && sameLang(i.lang, s.l)) || items.find(i => sameLang(i.lang, s.l));
   }
 
+  // pista con la que el panel abre el video cuando lo abre él (archivo que no abre directo, Continuar viendo): el idioma
+  // elegido para este título o, sin elegir, la marcada del archivo como «Audio predeterminado» (así queda marcado
+  // en el menú; antes salía marcado su idioma, p. ej. «Inglés»)
+  private startAudio(items: AudioItem[]): { a: number; label: string } {
+    const want = this.preferredAudio(items);
+    return { a: (want || items[this.probeDefault()])?.probe ?? 0, label: want ? want.label : t('Audio predeterminado') };
+  }
+
   private decodable(it: AudioItem): boolean {
     return it.probe === undefined || nativeAudioOk(it.codec, this.probe?.container || '');
   }
@@ -831,24 +845,19 @@ export class Playback {
     this.hooks.changed();
   }
 
-  // Un título nuevo suena tal como viene del servidor IPTV (su audio predeterminado). Solo se cambia solo a: el idioma
-  // que el usuario eligió antes para este mismo título (Continuar viendo), o, si el equipo no puede decodificar el
-  // audio que suena (DTS…, quedaría sin sonido), el mismo idioma en un audio que sí decodifica o el panel.
+  // Un título suena tal como viene del servidor IPTV (su audio predeterminado, sin el panel: no gasta la VPS). Solo se
+  // cambia solo al idioma que el usuario eligió antes para este mismo título (Continuar viendo), que prepara el panel.
+  // Antes también convertía solo si creía que el equipo no decodificaba el audio (la consulta es la de MSE y el video
+  // directo no va por MSE): los títulos nuevos salían «preparando con el panel». Si no suena, se elige en el menú.
   private autoAudio(): void {
     if (this.audioApplied || this.audioKey || this.remux) return;
     const items = this.audioItems();
-    if (!items.length) return;
-    const cur = this.audioOn(items);
+    if (items.length < 2) return;
     const want = this.preferredAudio(items);
-    // el audio que suena el equipo no lo puede decodificar (DTS…): hace falta el panel
-    const stuck = cur && !this.decodable(cur);
-    if (!want && !stuck) return;
-    if (items.length < 2 && !stuck) return;
+    if (!want) return;
     this.audioApplied = true;
-    const pick = want && this.decodable(want) ? want : stuck ? items.find(i => this.decodable(i) && sameLang(i.lang, cur!.lang)) || want || cur : want;
     // el idioma elegido para este título va por el panel aunque sea el que suena por defecto (así quedó elegido)
-    if (pick && (pick !== cur || (pick === want && this.panelMenu()))) this.pickAudio(pick, false, pick === want);
-    else if (stuck && cur) this.pickAudio(cur, false);
+    if (want !== this.audioOn(items) || this.panelMenu()) this.pickAudio(want, false, true);
   }
 
   // ya se eligió un audio antes de conocer los códecs: si el equipo no lo decodifica, otro del
