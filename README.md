@@ -231,6 +231,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   **1.0.38:** la consulta `isTypeSupported` ya no descarta (manda `addSourceBuffer`), la duración total ya no es
   obligatoria, el primer tramo empieza al momento aunque arranque unas décimas después, 45 s para empezar (no 20) y,
   si no sigue, el reporte dice por qué (`(lector MP4: …)` en el intento).
+  **1.0.39:** también con audio **Dolby** (E-AC-3 `ec-3` / AC-3 `ac-3`): su descripción del archivo (con `dec3`/`dac3`)
+  va tal cual al reproductor (`initSegment(v, a, aEntry)`). Con FFmpeg apagado el menú de audio queda igual
+  («Audio predeterminado» marcado y debajo los idiomas); elegir un idioma avisa «No compatible…» cada vez, no cambia lo
+  marcado y no se recuerda para Continuar viendo.
 - **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
   si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
   y con el interruptor del dueño o del distribuidor encendido).

@@ -792,7 +792,9 @@ export class Playback {
   // al elegirlos. Antes solo si el reproductor no informaba todos: con todos, cambiaba la pista en el reproductor de Vega
   // y ese cambio salta dentro del archivo (en algunos servidores falla: error 4)
   private panelMenu(): boolean {
-    return !this.live && !!this.probe?.ok && this.probe.audio.length > 1 && !engineDenied();
+    // también sin el motor del panel (FFmpeg apagado): el menú queda igual con «Audio predeterminado» marcado y elegir
+    // otro idioma solo avisa que no es compatible
+    return !this.live && !!this.probe?.ok && this.probe.audio.length > 1;
   }
 
   // menú de audio y subtítulos
@@ -849,14 +851,16 @@ export class Playback {
       const it = this.audioItems().find(i => i.key === m.key);
       if (it && it.probe !== undefined && this.panelMenu()) {
         // un idioma de la lista de abajo: lo prepara el panel (también el de por defecto)
-        setTitleLang(this.url, it);
         if (this.remux?.a === it.probe) {
           // el panel ya da esa pista (como «Audio predeterminado»): solo cambia lo marcado
+          setTitleLang(this.url, it);
           this.remux = { a: it.probe, label: it.label };
           this.hooks.changed();
           return;
         }
-        this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
+        // se recuerda solo si el panel lo prepara (sin el motor: el aviso y sigue «Audio predeterminado»)
+        const pick = it;
+        this.toRemux(pick.probe!, pick.label, true, t('Cambiando a {x}…', { x: pick.label })).then(ok => ok && setTitleLang(this.url, pick));
         return;
       }
       if (it) this.pickAudio(it, true);
@@ -1010,7 +1014,8 @@ export class Playback {
   }
 
   private denied(msg: string, user: boolean): void {
-    if (!user || this.deniedShown) return;
+    // cada vez que el usuario lo pide (antes una sola vez por video y después no pasaba nada)
+    if (!user) return;
     this.deniedShown = true;
     this.hooks.toast(msg);
   }

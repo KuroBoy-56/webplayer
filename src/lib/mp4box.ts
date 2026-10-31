@@ -84,8 +84,9 @@ function mp4a(a: AudioCfg): Uint8Array {
 
 const trex = (id: number) => box('trex', [0, 0, 0, 0, ...u32(id), 0, 0, 0, 1, ...zeros(8), 0, 1, 0, 1]);
 
-// ftyp + moov con las pistas que tenga el canal
-export function initSegment(v: VideoCfg | null, a: AudioCfg | null): Uint8Array {
+// ftyp + moov con las pistas que tenga el canal. aEntry: la descripción del audio tal cual del archivo (Dolby ec-3 /
+// ac-3 de un MP4, mp4mse.ts); sin ella, la de AAC armada con a
+export function initSegment(v: VideoCfg | null, a: AudioCfg | null, aEntry?: Uint8Array): Uint8Array {
   const ftyp = box('ftyp', [...tag('isom'), 0, 0, 0, 1, ...tag('isom'), ...tag('avc1'), ...tag('mp41')]);
   const mvhd = box('mvhd', [...zeros(12), ...u32(1000), ...zeros(4), 0, 1, 0, 0, 1, 0, ...zeros(10), ...MATRIX, ...zeros(24), 0xff, 0xff, 0xff, 0xff]);
   const traks: Uint8Array[] = [];
@@ -95,7 +96,7 @@ export function initSegment(v: VideoCfg | null, a: AudioCfg | null): Uint8Array 
     trexs.push(trex(VIDEO_ID));
   }
   if (a) {
-    traks.push(trak(AUDIO_ID, a.rate, null, mp4a(a)));
+    traks.push(trak(AUDIO_ID, a.rate, null, aEntry || mp4a(a)));
     trexs.push(trex(AUDIO_ID));
   }
   return concat([ftyp, box('moov', mvhd, ...traks, box('mvex', ...trexs))]);

@@ -140,6 +140,13 @@ function videoCfg(tk: Trk): VideoCfg | null {
   return { sps, pps: b.slice(p + 3, p + 3 + pl), width: u16(b, 8 + 24), height: u16(b, 8 + 26) };
 }
 
+// Dolby (ec-3 / ac-3): la descripción del archivo va tal cual al reproductor (con su dec3 / dac3)
+function dolbyCfg(tk: Trk): AudioCfg | null {
+  const b = tk.entry;
+  if (!b || (typ(b, 4) !== 'ec-3' && typ(b, 4) !== 'ac-3')) return null;
+  return { config: new Uint8Array(2), channels: u16(b, 8 + 16) || 2, rate: u16(b, 8 + 24) || tk.ts };
+}
+
 // AudioSpecificConfig del esds (solo AAC)
 function audioCfg(tk: Trk): AudioCfg | null {
   const b = tk.entry;
@@ -203,9 +210,11 @@ export class Mp4Mse {
     const auds = traks.filter(x => x.kind === 'soun');
     const at0 = auds.find(x => x.enabled) || auds[0] || null;
     const vc = vt ? videoCfg(vt) : null;
-    const ac = at0 ? audioCfg(at0) : null;
+    const aac = at0 ? audioCfg(at0) : null;
+    const dolby = at0 && !aac ? dolbyCfg(at0) : null;
+    const ac = aac || dolby;
     if (!vt || !vc || (at0 && !ac)) return 'códec v=' + (vt?.entry ? typ(vt.entry, 4) : '-') + ' a=' + (at0?.entry ? typ(at0.entry, 4) : '-');
-    const mime = mp4Mime(vc, ac);
+    const mime = dolby ? mp4Mime(vc, null).replace(/"$/, ',' + typ(at0!.entry!, 4) + '"') : mp4Mime(vc, ac);
     // la consulta no manda: algunos equipos dicen que no y lo aceptan; manda addSourceBuffer
     let typeOk = true;
     try {
@@ -241,7 +250,7 @@ export class Mp4Mse {
     } catch {
       // sin duración
     }
-    if (!(await this.append(initSegment(vc, ac)))) return 'inicio no aceptado: ' + this.why;
+    if (!(await this.append(initSegment(vc, ac, dolby ? at0!.entry! : undefined)))) return 'inicio no aceptado: ' + this.why;
     this.place(at);
     if (at > 0) this.v.currentTime = at;
     this.pump();
