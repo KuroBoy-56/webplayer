@@ -462,7 +462,9 @@ export class Mp4Mse {
         // ~4 s de video y el audio de ese mismo tramo
         const t0 = this.secs(vt, vt.dts[Math.min(this.vi, vt.dts.length - 1)]);
         let vj = this.vi;
-        while (vj < vt.dts.length && (vj === this.vi || this.secs(vt, vt.dts[vj]) < t0 + CHUNK)) vj++;
+        // hasta el cuadro clave siguiente (como mucho 15 s): cortar a mitad de un grupo con cuadros B dejaba huecos de
+        // milésimas entre tramos y el reproductor se frenaba en cada uno (micro cortes del audio)
+        while (vj < vt.dts.length && (vj === this.vi || this.secs(vt, vt.dts[vj]) < t0 + CHUNK || (vt.key && !vt.key.has(vj) && this.secs(vt, vt.dts[vj]) < t0 + 15))) vj++;
         const tEnd = vj < vt.dts.length ? this.secs(vt, vt.dts[vj]) : Infinity;
         let aj = this.ai;
         if (a) while (aj < a.dts.length && this.secs(a, a.dts[aj]) < tEnd) aj++;
@@ -533,17 +535,20 @@ export class Mp4Mse {
         this.lastT = t;
         this.lastMove = Date.now();
       }
-      const stalled = !this.v.paused && Date.now() - this.lastMove > 3000;
+      const still = this.v.paused ? 0 : Date.now() - this.lastMove;
+      const stalled = still > 3000;
       for (let i = 0; i < b.length; i++) {
         const st = b.start(i);
         const en = b.end(i);
         const next = i + 1 < b.length ? b.start(i + 1) : -1;
         if (t < st - 0.05) {
-          if (en - st > 0.5) this.jump(st + 0.1);
+          if (en - st > 0.5) this.jump(st + 0.02);
           return;
         }
         if (t <= en) {
-          if (next > 0 && (en - t < 0.5 || stalled)) this.jump(next + 0.1);
+          // un hueco: solo si de verdad se quedó quieto en él, y justo al otro lado (antes saltaba 0,5 s antes de cada
+          // final de tramo, +0,1 s: un «grumito» en el audio)
+          if (next > 0 && ((en - t < 0.3 && still > 400) || stalled)) this.jump(next + 0.02);
           else if (stalled && en - t > 1) this.jump(t + 0.5);
           return;
         }

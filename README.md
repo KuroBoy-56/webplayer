@@ -242,6 +242,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   **1.0.41:** el reproductor de Vega no acepta E-AC-3 por MSE (`addSourceBuffer type is not supported`): esos MP4 se
   reproducen **solo con el video** (sin sonido) y un aviso; los idiomas quedan en el menú (con FFmpeg el panel los
   convierte; sin él, «No compatible…»).
+  **1.0.42 (micro cortes del audio):** los tramos del video empiezan siempre en un cuadro clave (como mucho 15 s):
+  cortar a mitad de un grupo con cuadros B dejaba huecos de milésimas entre tramos. El vigilante de huecos ya no salta
+  0,5 s antes de cada final de tramo (+0,1 s): solo si el video de verdad se quedó quieto en un hueco (400 ms), y
+  justo al otro lado (+0,02 s).
 - **El panel cuando el equipo no abre el video** (MKV/MP4 que el reproductor rechaza): el panel lo prepara (HLS);
   si su certificado falla, por http (`plain=1`); si tampoco, el video convertido a H.264 (`v=1`, solo en la VPS / VDS
   y con el interruptor del dueño o del distribuidor encendido).
