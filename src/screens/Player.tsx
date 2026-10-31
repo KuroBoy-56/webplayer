@@ -1018,15 +1018,20 @@ export default function Player({ params }: { params: PlayParams }) {
   );
 }
 
-// Barra de avance: relleno rojo y resto como dos partes de una fila repartidas con flex (sin medir ni porcentajes).
-// Sobre el video de Vega un ancho en porcentaje no se aplicaba y el ancho medido (onLayout) no llegaba: la barra
-// quedaba vacía aunque el tiempo avanzara
+// Barra de avance con un punto grande donde va el video. Todo en píxeles fijos (ancho de diseño 1760 = 1920 menos los
+// márgenes), sin porcentajes, sin flex y sin medir: sobre el video de Vega ninguna de esas formas pintaba el relleno.
+// El punto va en el flujo normal (margen izquierdo) y sube sobre la barra con un margen negativo.
+const BAR_W = 1760;
+const DOT = 30;
 function ProgressBar({ pct }: { pct: number }) {
   const p = Math.max(0, Math.min(100, pct || 0));
+  const fill = Math.round((px(BAR_W) * p) / 100);
   return (
-    <View style={s.bar}>
-      <View style={[s.barFill, { flex: p }]} />
-      <View style={{ flex: 100 - p }} />
+    <View style={s.barWrap}>
+      <View style={s.bar}>
+        <View style={[s.barFill, { width: fill }]} />
+      </View>
+      <View style={[s.dot, { marginLeft: Math.max(0, Math.min(px(BAR_W) - px(DOT), fill - px(DOT / 2))) }]} />
     </View>
   );
 }
@@ -1049,8 +1054,10 @@ const s = themed(() =>
     title: { color: C.text, fontSize: px(44), fontWeight: '800', flex: 1 },
     star: { color: '#f5c518', fontSize: px(40) },
     bottom: { paddingHorizontal: px(80), paddingBottom: px(60), paddingTop: px(40), backgroundColor: alpha(C.bg, 0.65) },
-    bar: { flexDirection: 'row', height: px(8), backgroundColor: alpha(C.text, 0.3), borderRadius: px(4), overflow: 'hidden', marginTop: px(12) },
-    barFill: { backgroundColor: C.red },
+    barWrap: { width: px(BAR_W), height: px(DOT), marginTop: px(12) },
+    bar: { width: px(BAR_W), height: px(8), marginTop: px((DOT - 8) / 2), backgroundColor: alpha(C.text, 0.3), borderRadius: px(4) },
+    barFill: { height: px(8), backgroundColor: C.red, borderRadius: px(4) },
+    dot: { width: px(DOT), height: px(DOT), marginTop: -px((DOT + 8) / 2), borderRadius: px(DOT / 2), backgroundColor: C.red, borderWidth: px(3), borderColor: '#fff' },
     times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: px(10) },
     time: { color: C.text, fontSize: px(28) },
     now: { color: C.red, fontSize: px(26), fontWeight: '800' },

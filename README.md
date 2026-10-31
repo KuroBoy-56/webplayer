@@ -142,7 +142,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   (`onLayout`, 1.0.24) no llegaba: la barra se veía vacía aunque el tiempo avanzara. **1.0.34 (la causa real):** el
   reproductor de Vega no da la duración de muchos videos (MKV directo, el panel antes de terminar), así que el avance
   era siempre 0 %. Ahora la barra usa la duración del servidor (`QueueEntry.dur`, o la guardada con el avance), como
-  ya hacía Continuar viendo.
+  ya hacía Continuar viendo. **1.0.35:** barra y relleno con anchos fijos en píxeles (sin porcentajes, flex ni
+  medir) y un **punto rojo grande** donde va el video. **Continuar viendo** ya no recuerda por servidor que va por el
+  panel (1.0.30 lo hacía y desde entonces gastaba la VPS con el audio predeterminado): siempre prueba primero directo
+  del servidor IPTV; el panel entra solo si ese video no salta al segundo guardado.
 - **Canales sin el corte de cada segmento (desde 1.0.25)**: en Vega el audio y el video de cada segmento no terminan
   juntos y lo entregado acababa unas décimas antes del segmento siguiente (`buf=[0.0-9.6,9.7-19.2,…]`): el reproductor
   se frenaba en cada unión y saltar ese hueco era un corte de ~1 s cada ~10 s. Ahora, si el segmento nuevo dejaría un
@@ -198,7 +201,7 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   reproductor rechazara el MP4 el resto de la sesión va en MPEG-TS. Un salto dentro de lo convertido rehace la conversión
   con el segmento puesto en su segundo. Además, en un servidor donde Continuar viendo solo salió por el panel, la
   próxima vez va directo por el panel (`resume_panel`, 7 días): sin el intento directo que falla, la consulta ni la
-  espera. Un video desde el principio sigue directo.
+  espera. Un video desde el principio sigue directo. *(Quitado en 1.0.35: gastaba la VPS en todo Continuar viendo.)*
   **1.0.31:** el lector del panel (`hls.ts`) no tenía el vigilante del lector de canales: el reproductor de Vega no
   empieza si lo bajado no arranca justo en el segundo actual (el video del panel empieza en ~1,4 s) y se queda quieto en
   los huecos entre segmentos, así que el **cambio de idioma** y Continuar viendo por el panel quedaban cargando sin fin.

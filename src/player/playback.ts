@@ -99,22 +99,9 @@ function setTitleLang(url: string, it: { lang: string; probe?: number } | null):
   const keep = Object.entries(all).sort((x, y) => y[1].t - x[1].t).slice(0, 400);
   writeJson(TLANG_KEY, Object.fromEntries(keep));
 }
-// Servidores donde «Continuar viendo» solo se pudo ver por el panel (el reproductor de Vega no salta en sus archivos,
-// error 4): la próxima vez va directo por el panel, sin el intento que falla, la consulta y la espera. 7 días.
-const RESUME_KEY = 'resume_panel';
-const hostOf = (u: string) => routeKey(u).split('/')[0];
-function resumeViaPanel(url: string): boolean {
-  const t = (readJson<Record<string, number>>(RESUME_KEY) || {})[hostOf(url)];
-  return !!t && Date.now() - t < 7 * 86400000;
-}
-function setResumeViaPanel(url: string, on: boolean): void {
-  const all = readJson<Record<string, number>>(RESUME_KEY) || {};
-  const k = hostOf(url);
-  if (on) all[k] = Date.now();
-  else if (all[k]) delete all[k];
-  else return;
-  writeJson(RESUME_KEY, all);
-}
+// 1.0.35: ya no se recuerda por servidor que «Continuar viendo» va por el panel (1.0.30 lo hacía y desde entonces todo
+// Continuar viendo de ese servidor gastaba la VPS con el audio predeterminado): siempre se prueba primero directo del
+// servidor IPTV y el panel entra solo si ese video no salta al segundo guardado (pasos de Player.tsx)
 function setPanelRoute(url: string, r: 'p' | 'v' | ''): void {
   const all = readJson<Record<string, Route>>(ROUTE_KEY) || {};
   const k = routeKey(url);
@@ -245,12 +232,11 @@ export class Playback {
     // ya abierto, una y otra vez hasta que salgan (langCheck). Nada de leer el archivo antes de abrirlo: muchos
     // servidores bloqueaban la línea un rato.
     const g = this.gen;
-    const route = engineDenied() ? '' : panelRoute(url) || (resume > 5 && resumeViaPanel(url) ? 'p' : '');
+    const route = engineDenied() ? '' : panelRoute(url);
     if (route) {
       // ya se sabe que en este equipo solo se ve por el panel: de una por ahí (con el idioma elegido para este título o el predeterminado)
       this.formatTried = true;
       this.panelFallback = true;
-      this.resumePanel = !panelRoute(url);
       if (route === 'v') this.panelVideo = true;
       knownTracks(url).then(p => {
         if (g !== this.gen) return;
@@ -441,7 +427,6 @@ export class Playback {
     if (!this.remux || this.played) return;
     // si se abrió por el panel porque así se vio antes y ahora no arrancó, la próxima vez se prueba directo
     setPanelRoute(this.url, '');
-    setResumeViaPanel(this.url, false);
     this.remux = null;
     this.audioKey = '';
     this.panelFallback = false;
@@ -540,8 +525,6 @@ export class Playback {
     if (this.seekTo > 0 && !this.remux) return;
     this.clearSeek();
     this.played = true;
-    // Continuar viendo que solo salió por el panel: en este servidor la próxima vez va directo por ahí
-    if (!this.live && this.wantAt > 5 && this.remux && this.panelFallback) setResumeViaPanel(this.url, true);
     // cómo se pudo ver este archivo: por el panel (se recuerda) o directo (se olvida lo anterior)
     if (!this.live) setPanelRoute(this.url, this.remux && this.panelFallback && !this.resumePanel ? (this.panelVideo ? 'v' : 'p') : this.remux ? panelRoute(this.url) : '');
     if (this.live || this.probing) return;
