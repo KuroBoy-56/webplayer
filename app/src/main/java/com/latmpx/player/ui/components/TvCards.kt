@@ -140,7 +140,7 @@ fun TvCard(item: Item, width: Dp, progress: Float = 0f, onFocus: (() -> Unit)? =
 
 /** Top 10 numerado: número grande con contorno gris (#595959) detrás de la carátula; el 10 lleva más espacio */
 @Composable
-fun TvTop10Card(rank: Int, item: Item, width: Dp, onClick: () -> Unit) {
+fun TvTop10Card(rank: Int, item: Item, width: Dp, onFocus: (() -> Unit)? = null, onClick: () -> Unit) {
     val ten = rank >= 10
     val numW = if (ten) width * 1.2f else width * 0.55f
     val fs = (width.value * if (ten) 0.9f else 1.05f).sp
@@ -150,15 +150,15 @@ fun TvTop10Card(rank: Int, item: Item, width: Dp, onClick: () -> Unit) {
             Text("$rank", style = base.copy(color = NfBg), maxLines = 1, softWrap = false)
             Text("$rank", style = base.copy(color = Color(0xFF595959), drawStyle = Stroke(width = 6f)), maxLines = 1, softWrap = false)
         }
-        Box(Modifier.align(Alignment.BottomEnd)) { TvCard(item, width, onClick = onClick) }
+        Box(Modifier.align(Alignment.BottomEnd)) { TvCard(item, width, onFocus = onFocus, onClick = onClick) }
     }
 }
 
 /** .nf-plat: mosaico 16:9 de la plataforma con borde tenue; con el foco crece y el borde se vuelve blanco */
 @Composable
-fun TvPlatformTile(p: Platform, width: Dp, onClick: () -> Unit) {
+fun TvPlatformTile(p: Platform, width: Dp, onFocus: (() -> Unit)? = null, onClick: () -> Unit) {
     val shape = RoundedCornerShape(8.dp)
-    TvFocusable(onClick = onClick, shape = shape, scale = 1.08f, border = false, modifier = Modifier.width(width).aspectRatio(16f / 9f)) { f ->
+    TvFocusable(onClick = onClick, onFocus = onFocus, shape = shape, scale = 1.08f, border = false, modifier = Modifier.width(width).aspectRatio(16f / 9f)) { f ->
         Box(
             Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF1D1D1D), Color(0xFF0D0D0D))))
                 .border(2.dp, if (f) NfFocus else Color(0x1FFFFFFF), shape),
@@ -171,17 +171,24 @@ fun TvPlatformTile(p: Platform, width: Dp, onClick: () -> Unit) {
     }
 }
 
-/** .nf-row: título y fila deslizable; al final una tarjeta "Ver todo" si hay más */
+/**
+ * .nf-row: título y fila deslizable; al final una tarjeta "Ver todo" si hay más. cardWidth: ancho de la tarjeta "Ver todo"
+ * (el de las carátulas de la fila); onViewAllFocus: el foco llegó a "Ver todo"
+ */
 @Composable
-fun <T> TvRow(title: String, items: List<T>, onViewAll: (() -> Unit)? = null, onFocused: (() -> Unit)? = null, content: @Composable (Int, T) -> Unit) {
+fun <T> TvRow(
+    title: String, items: List<T>, onViewAll: (() -> Unit)? = null, onFocused: (() -> Unit)? = null, cardWidth: Dp? = null, top: Dp = 22.dp,
+    onViewAllFocus: (() -> Unit)? = null, content: @Composable (Int, T) -> Unit,
+) {
     if (items.isEmpty()) return
     val pad = tvPad()
-    Column(Modifier.padding(top = 22.dp).onFocusChanged { if (it.hasFocus) onFocused?.invoke() }) {
+    val seeAllW = cardWidth ?: tvCardWidth()
+    Column(Modifier.padding(top = top).onFocusChanged { if (it.hasFocus) onFocused?.invoke() }) {
         Text(title, color = Color(0xFFE5E5E5), fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = pad, end = pad))
         LazyRow(contentPadding = PaddingValues(start = pad, end = pad, top = 12.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(items) { i, it -> content(i, it) }
             if (onViewAll != null) item {
-                TvFocusable(onClick = onViewAll, scale = 1.06f, modifier = Modifier.width(tvCardWidth()).aspectRatio(2f / 3f)) { f ->
+                TvFocusable(onClick = onViewAll, onFocus = onViewAllFocus, scale = 1.06f, modifier = Modifier.width(seeAllW).aspectRatio(2f / 3f)) { f ->
                     Column(
                         Modifier.fillMaxSize().background(if (f) Color(0xFF333333) else Color(0xFF1C1C1C)),
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
@@ -214,10 +221,10 @@ fun TvChip(text: String, selected: Boolean = false, onFocus: (() -> Unit)? = nul
 
 /** Fila con chips de géneros (desliza con el control) */
 @Composable
-fun TvChipRow(chips: List<String>, modifier: Modifier = Modifier, selected: String? = null, onClick: (Int) -> Unit) {
+fun TvChipRow(chips: List<String>, modifier: Modifier = Modifier, selected: String? = null, onFocus: ((Int) -> Unit)? = null, onClick: (Int) -> Unit) {
     if (chips.isEmpty()) return
     val pad = tvPad()
     LazyRow(modifier, contentPadding = PaddingValues(horizontal = pad, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        itemsIndexed(chips) { i, c -> TvChip(c, c == selected) { onClick(i) } }
+        itemsIndexed(chips) { i, c -> TvChip(c, c == selected, onFocus = onFocus?.let { f -> { f(i) } }) { onClick(i) } }
     }
 }

@@ -64,44 +64,16 @@ private val preferredGenres get() = listOf(
 private fun safe(cats: List<Category>) = cats.filter { it.id !in Store.blockedCats }
 
 /**
- * El menú superior se oculta al bajar por las filas (Netflix para TV) y la fila enfocada se coloca arriba,
- * con su título visible. Atrás (TvShell) devuelve la lista al inicio.
- */
-@Composable
-private fun HeaderAndScroll(state: AppState, list: LazyListState) {
-    val hidden by remember { derivedStateOf { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > 40 } }
-    LaunchedEffect(hidden) { state.tvHeaderHidden = hidden }
-    LaunchedEffect(state.tvScrollTop) { if (state.tvScrollTop > 0) list.animateScrollToItem(0) }
-    DisposableEffect(Unit) { onDispose { state.tvHeaderHidden = false } }
-}
-
-/** lleva la fila [key] al borde superior (después del desplazamiento automático del foco, para que gane este) */
-private fun CoroutineScope.focusRow(list: LazyListState, key: Any) = launch {
-    delay(40)
-    val i = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }?.index ?: return@launch
-    list.animateScrollToItem(i)
-}
-
-/**
- * Inicio de la TV igual que homex.php: destacado, mosaicos de plataformas montados sobre el destacado,
- * Continuar viendo, Mi lista, Top 10, recién agregadas, "Lo mejor de" cada plataforma, géneros y sugerencias.
+ * Inicio de la TV como Roku y Vega OS (portada fija y una sola fila abajo, TvBrowse), con las filas de homex.php:
+ * plataformas, Continuar viendo, Mi lista, Top 10, recién agregadas, "Lo mejor de" cada plataforma, géneros y sugerencias.
  */
 @Composable
 fun TvHomeScreen(state: AppState) {
     if (state.loading && state.movies.isEmpty()) { Loading(stringResource(R.string.preparing_catalog)); return }
     val movies = state.movies
     val series = state.series
-    val w = tvCardWidth()
-    val pad = tvPad()
-    val sw = LocalConfiguration.current.screenWidthDp
-    val list = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    HeaderAndScroll(state, list)
 
     val pool = remember(movies.size, series.size) { heroPool(listOf(movies, series)) }
-    val recentMovies = remember(movies) { movies.sortedByDescending { it.added }.take(30) }
-    val recentSeries = remember(series) { series.sortedByDescending { it.added }.take(30) }
-    val top10 = remember(movies) { movies.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10) }
     val platOn = com.latmpx.player.data.Tenant.platformsEnabled
     val platforms = remember(state.movieCats, state.seriesCats, platOn) {
         // platforms=false del distribuidor: sin mosaicos ni filas de plataformas
@@ -109,104 +81,77 @@ fun TvHomeScreen(state: AppState) {
         val cats = safe(state.movieCats + state.seriesCats)
         Platforms.list.filter { p -> Platforms.categoriesFor(cats, p.kw).isNotEmpty() }
     }
-    val platformRows = remember(platforms, movies, series) {
+    val tPlats = stringResource(R.string.browse_platforms)
+    val tCont = stringResource(R.string.continue_watching)
+    val tMyList = stringResource(R.string.my_list)
+    val tTop = stringResource(R.string.top10_today)
+    val tNewMovies = stringResource(R.string.new_movies)
+    val tNewSeries = stringResource(R.string.new_series)
+    val tSeriesForYou = stringResource(R.string.series_for_you)
+    val tMoviesForYou = stringResource(R.string.movies_for_you)
+    val bestOf = stringResource(R.string.best_of, "%s")
+    val rows = remember(movies, series, platforms, state.movieCats, state.seriesCats, state.refresh, Cloud.rev) {
+        val out = ArrayList<BrowseRow>()
+        if (platforms.isNotEmpty()) out += BrowseRow.Plats("plats", tPlats, platforms)
+        continueRow(state, tCont) { state.push(Route.Saved(continueWatching = true)) }?.let { out += it }
+        val favs = Cloud.favList().filter { it.kind != Kind.LIVE }
+        if (favs.isNotEmpty()) out += BrowseRow.Posters("favs", tMyList, favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) })
+        val top10 = movies.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10)
+        if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10)
+        val rm = movies.sortedByDescending { it.added }.take(30)
+        if (rm.isNotEmpty()) out += BrowseRow.Posters("rm", tNewMovies, rm, onViewAll = { state.push(Route.Browse(tNewMovies, Kind.MOVIE, emptySet())) })
+        val rs = series.sortedByDescending { it.added }.take(30)
+        if (rs.isNotEmpty()) out += BrowseRow.Posters("rs", tNewSeries, rs, onViewAll = { state.push(Route.Browse(tNewSeries, Kind.SERIES, emptySet())) })
         platforms.filter { it.key != "xmas" && it.key != "halloween" }.map { p ->
             val m = Platforms.categoriesFor(safe(state.movieCats), p.kw)
             val se = Platforms.categoriesFor(safe(state.seriesCats), p.kw)
             p to (movies.filter { it.categoryId in m } + series.filter { it.categoryId in se }).sortedByDescending { it.added }.take(30)
-        }.filter { it.second.size >= 4 }.take(5)
-    }
-    val seriesForYou = remember(series) { series.filter { it.poster.isNotBlank() }.shuffled().take(24) }
-    val moviesForYou = remember(movies) { movies.filter { it.poster.isNotBlank() }.shuffled().take(24) }
-    val genreRows = remember(movies, series, state.movieCats, state.seriesCats) {
-        preferredGenres.mapNotNull { label ->
-            val kw = Platforms.genres.firstOrNull { it.first == label }?.second ?: return@mapNotNull null
+        }.filter { it.second.size >= 4 }.take(5).forEach { (p, l) ->
+            out += BrowseRow.Posters("p_${p.key}", bestOf.replace("%s", p.label), l, onViewAll = { state.push(Route.PlatformPage(p)) })
+        }
+        val sfy = series.filter { it.poster.isNotBlank() }.shuffled().take(24)
+        if (sfy.isNotEmpty()) out += BrowseRow.Posters("sfy", tSeriesForYou, sfy)
+        preferredGenres.forEach { label ->
+            val kw = Platforms.genres.firstOrNull { it.first == label }?.second ?: return@forEach
             val m = Platforms.categoriesFor(safe(state.movieCats), kw)
             val se = Platforms.categoriesFor(safe(state.seriesCats), kw)
             val l = (movies.filter { it.categoryId in m } + series.filter { it.categoryId in se }).sortedByDescending { it.added }.take(30)
-            if (l.size >= 4) Triple(label, m, l) else null
+            if (l.size >= 4) out += BrowseRow.Posters("g_$label", label, l, onViewAll = { state.push(Route.Browse(label, Kind.MOVIE, m)) })
         }
+        val mfy = movies.filter { it.poster.isNotBlank() }.shuffled().take(24)
+        if (mfy.isNotEmpty()) out += BrowseRow.Posters("mfy", tMoviesForYou, mfy)
+        out
     }
-    val cont = remember(state.refresh, Cloud.rev, movies, series) { Cloud.progressList() }
-    val favs = remember(state.refresh, Cloud.rev) { Cloud.favList().filter { it.kind != Kind.LIVE } }
-    val open: (Item) -> Unit = { state.push(Route.Detail(it)) }
-
-    LazyColumn(Modifier.fillMaxSize().background(NfBg), state = list, contentPadding = PaddingValues(bottom = 48.dp)) {
-        item(key = "hero") { TvBillboard(state, pool, "home") { scope.launch { list.animateScrollToItem(0) } } }
-        if (platforms.isNotEmpty()) item(key = "plats") {
-            // .nf-platforms: margin-top -9vw, encima del destacado
-            LazyRow(
-                Modifier.fillMaxWidth().pullUp((sw * 0.09f).dp).onFocusChanged { if (it.hasFocus) scope.launch { delay(40); list.animateScrollToItem(0) } },
-                contentPadding = PaddingValues(horizontal = pad, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                items(platforms, key = { it.key }) { p -> TvPlatformTile(p, (sw * 0.125f).coerceIn(130f, 210f).dp) { state.push(Route.PlatformPage(p)) } }
-            }
-        }
-        if (cont.isNotEmpty()) item(key = "cont") {
-            TvRow(stringResource(R.string.continue_watching), cont, onViewAll = { state.push(Route.Saved(continueWatching = true)) }, onFocused = { scope.focusRow(list, "cont") }) { _, p ->
-                val it = state.itemFromProgress(p) ?: return@TvRow
-                TvCard(it.copy(poster = p.poster.ifEmpty { it.poster }), w, progress = if (p.duration > 0) p.position.toFloat() / p.duration else 0.05f) { open(it) }
-            }
-        }
-        if (favs.isNotEmpty()) item(key = "favs") { TvRow(stringResource(R.string.my_list), favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) }, onFocused = { scope.focusRow(list, "favs") }) { _, it -> TvCard(it, w) { open(it) } } }
-        item(key = "top") { TvRow(stringResource(R.string.top10_today), top10, onFocused = { scope.focusRow(list, "top") }) { i, it -> TvTop10Card(i + 1, it, w) { open(it) } } }
-        item(key = "rm") {
-            TvRow(stringResource(R.string.new_movies), recentMovies, onViewAll = { state.push(Route.Browse(tr(R.string.new_movies), Kind.MOVIE, emptySet())) }, onFocused = { scope.focusRow(list, "rm") }) { _, it -> TvCard(it, w) { open(it) } }
-        }
-        item(key = "rs") {
-            TvRow(stringResource(R.string.new_series), recentSeries, onViewAll = { state.push(Route.Browse(tr(R.string.new_series), Kind.SERIES, emptySet())) }, onFocused = { scope.focusRow(list, "rs") }) { _, it -> TvCard(it, w) { open(it) } }
-        }
-        platformRows.forEach { (p, l) ->
-            item(key = "p_${p.key}") { TvRow(stringResource(R.string.best_of, p.label), l, onViewAll = { state.push(Route.PlatformPage(p)) }, onFocused = { scope.focusRow(list, "p_${p.key}") }) { _, it -> TvCard(it, w) { open(it) } } }
-        }
-        item(key = "sfy") { TvRow(stringResource(R.string.series_for_you), seriesForYou, onFocused = { scope.focusRow(list, "sfy") }) { _, it -> TvCard(it, w) { open(it) } } }
-        genreRows.forEach { (label, ids, l) ->
-            item(key = "g_$label") { TvRow(label, l, onViewAll = { state.push(Route.Browse(label, Kind.MOVIE, ids)) }, onFocused = { scope.focusRow(list, "g_$label") }) { _, it -> TvCard(it, w) { open(it) } } }
-        }
-        item(key = "mfy") { TvRow(stringResource(R.string.movies_for_you), moviesForYou, onFocused = { scope.focusRow(list, "mfy") }) { _, it -> TvCard(it, w) { open(it) } } }
-    }
+    TvBrowse(state, pool, "home", rows)
 }
 
 /**
- * Películas / Series de la TV igual que includes/ondemand.php: destacado del tipo, título con los géneros en píldoras,
- * Agregadas recientemente, Top 10 de hoy y una fila por categoría.
+ * Películas / Series de la TV como Roku y Vega OS (TvBrowse), con las filas de includes/ondemand.php: Agregadas
+ * recientemente, los géneros en píldoras, Top 10 de hoy y una fila por categoría.
  */
 @Composable
 fun TvCatalogScreen(state: AppState, kind: Kind) {
     val all = if (kind == Kind.MOVIE) state.movies else state.series
     if (state.loading && all.isEmpty()) { Loading(); return }
     val cats = safe(if (kind == Kind.MOVIE) state.movieCats else state.seriesCats)
-    val label = stringResource(if (kind == Kind.MOVIE) R.string.movies else R.string.series)
-    val w = tvCardWidth()
-    val pad = tvPad()
-    val list = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    HeaderAndScroll(state, list)
-
     val pool = remember(all.size) { heroPool(listOf(all)) }
-    val recent = remember(all) { all.sortedByDescending { it.added }.take(30) }
-    val top10 = remember(all) { all.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10) }
-    val genres = remember(cats) { Platforms.genres.map { (g, kw) -> g to Platforms.categoriesFor(cats, kw) }.filter { it.second.isNotEmpty() } }
+    val tRecent = stringResource(R.string.recently_added)
+    val tGenres = stringResource(R.string.browse_genres)
+    val tTop = stringResource(if (kind == Kind.MOVIE) R.string.top10_movies_today else R.string.top10_series_today)
     val rows = remember(all, cats) {
+        val out = ArrayList<BrowseRow>()
+        val recent = all.sortedByDescending { it.added }.take(30)
+        if (recent.isNotEmpty()) out += BrowseRow.Posters("recent", tRecent, recent, onViewAll = { state.push(Route.Browse(tRecent, kind, emptySet())) })
+        val genres = Platforms.genres.map { (g, kw) -> g to Platforms.categoriesFor(cats, kw) }.filter { it.second.isNotEmpty() }
+        if (genres.isNotEmpty()) out += BrowseRow.Chips("genres", tGenres, genres.map { it.first }) { i -> genres.getOrNull(i)?.let { (g, ids) -> state.push(Route.Browse(g, kind, ids)) } }
+        val top10 = all.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10)
+        if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10)
         val byCat = all.groupBy { it.categoryId }
-        cats.mapNotNull { c -> byCat[c.id]?.takeIf { it.isNotEmpty() }?.let { c to it.take(30) } }
+        cats.forEach { c ->
+            val l = byCat[c.id]?.take(30).orEmpty()
+            if (l.isNotEmpty()) out += BrowseRow.Posters("c_${c.id}", c.name, l, onViewAll = { state.push(Route.Browse(c.name, kind, setOf(c.id))) })
+        }
+        out
     }
-    val open: (Item) -> Unit = { state.push(Route.Detail(it)) }
-
-    LazyColumn(Modifier.fillMaxSize().background(NfBg), state = list, contentPadding = PaddingValues(bottom = 48.dp)) {
-        item(key = "hero") { TvBillboard(state, pool, kind.name) { scope.launch { list.animateScrollToItem(0) } } }
-        item(key = "head") {
-            Column(Modifier.onFocusChanged { if (it.hasFocus) scope.focusRow(list, "head") }) {
-                Text(label, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = pad, end = pad, top = 4.dp))
-                TvChipRow(genres.map { it.first }) { i -> genres.getOrNull(i)?.let { (g, ids) -> state.push(Route.Browse(g, kind, ids)) } }
-            }
-        }
-        item(key = "recent") {
-            TvRow(stringResource(R.string.recently_added), recent, onViewAll = { state.push(Route.Browse(tr(R.string.recently_added), kind, emptySet())) }, onFocused = { scope.focusRow(list, "recent") }) { _, it -> TvCard(it, w) { open(it) } }
-        }
-        item(key = "top") { TvRow(stringResource(if (kind == Kind.MOVIE) R.string.top10_movies_today else R.string.top10_series_today), top10, onFocused = { scope.focusRow(list, "top") }) { i, it -> TvTop10Card(i + 1, it, w) { open(it) } } }
-        rows.forEach { (c, l) ->
-            item(key = "c_${c.id}") { TvRow(c.name, l, onViewAll = { state.push(Route.Browse(c.name, kind, setOf(c.id))) }, onFocused = { scope.focusRow(list, "c_${c.id}") }) { _, it -> TvCard(it, w) { open(it) } } }
-        }
-    }
+    TvBrowse(state, pool, kind.name, rows)
 }
