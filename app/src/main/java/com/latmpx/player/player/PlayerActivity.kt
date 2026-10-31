@@ -440,14 +440,20 @@ class PlayerActivity : ComponentActivity() {
         )
         if (isFinishing) return
         val decoding = e.errorCode in 4000..4999
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        // «Abrir en VLC» solo con el reproductor externo elegido en Ajustes; con el interno (ExoPlayer, el de siempre)
+        // solo el aviso y «Cerrar»: se vuelve a la pantalla de antes (Deportes, TV en vivo…) con el foco donde estaba
+        val ext = com.latmpx.player.data.Store.externalPlayer
+        val dlg = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(R.string.play_failed)
             .setMessage(
-                getString(if (decoding) R.string.play_failed_decoder else R.string.play_failed_server),
+                getString(
+                    if (decoding) (if (ext) R.string.play_failed_decoder else R.string.play_failed_decoder_plain)
+                    else (if (ext) R.string.play_failed_server else R.string.play_failed_server_plain),
+                ),
             )
-            // ya se probó solo (el otro protocolo y 6 reconexiones): sin «Reintentar»
-            .setNeutralButton(R.string.open_in_vlc) { _, _ -> openVlc(player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty(), q.title) }
-            .setNegativeButton(R.string.close) { _, _ -> finish() }
+        // ya se probó solo (el otro protocolo y 6 reconexiones): sin «Reintentar»
+        if (ext) dlg.setNeutralButton(R.string.open_in_vlc) { _, _ -> openVlc(player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty(), q.title) }
+        dlg.setNegativeButton(R.string.close) { _, _ -> finish() }
             .setOnCancelListener { finish() } // Atrás sobre el aviso sale del reproductor
             .show()
     }

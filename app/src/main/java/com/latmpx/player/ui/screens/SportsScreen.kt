@@ -114,6 +114,15 @@ fun SportsScreen(state: AppState) {
     var tab by rememberSaveable { mutableStateOf(SpTab.TODAY) }
     var sport by rememberSaveable { mutableStateOf("") }
     var menu by remember { mutableStateOf<Triple<String, String, List<MenuOpt>>?>(null) }
+    // el partido que se abrió: al cerrar su menú o volver del canal (también tras «No se pudo reproducir · Cerrar») el foco
+    // vuelve a su tarjeta, como Roku y Vega
+    var lastOpen by remember { mutableStateOf<String?>(null) }
+    val lastFr = remember { FocusRequester() }
+    var backTick by remember { mutableIntStateOf(0) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) { backTick++; onPauseOrDispose { } }
+    LaunchedEffect(menu == null, backTick) {
+        if (menu == null && lastOpen != null) { delay(120); runCatching { lastFr.requestFocus() } }
+    }
     var typing by remember { mutableStateOf<String?>(null) }
 
     val d = data
@@ -213,6 +222,7 @@ fun SportsScreen(state: AppState) {
     // menú del partido: el automático, los canales que lo transmiten, los de la guía y los equipos (en verde los que
     // tiene el cliente), buscar por el nombre de cada equipo y escribir otro nombre
     fun open(e: SportEvent) {
+        lastOpen = e.id
         if (!playable(e)) return
         // todavía buscando los canales de la agenda: se avisa (antes se buscaba aquí mismo y se trababa)
         if (chans == null || found == null) { say(tr(R.string.sp_loading_channels)); return }
@@ -320,7 +330,8 @@ fun SportsScreen(state: AppState) {
         }
         items(rows, key = { "e" + it.id }) { e ->
             val c = chanOf(e, false)
-            SportCardView(e, d.sports[e.sport], now, compact, chan = c.first, chanFound = c.second, tvLine = tvLine(e)) { open(e) }
+            SportCardView(e, d.sports[e.sport], now, compact, if (e.id == lastOpen) Modifier.focusRequester(lastFr) else Modifier,
+                chan = c.first, chanFound = c.second, tvLine = tvLine(e)) { open(e) }
         }
         if (rows.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
