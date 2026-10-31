@@ -162,6 +162,30 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
         }
     }
 
+    // Android TV: como Roku y Vega (tarjeta de la línea a la izquierda, ajustes a la derecha, solo con el foco)
+    if (com.latmpx.player.ui.components.LocalIsTv.current) {
+        AccountTv(
+            state, s, streamFormat, extPlayer,
+            onLang = { langDialog = true },
+            onParental = {
+                pinValue = com.latmpx.player.data.Store.parentalPin
+                pinStep = "ENTER"; pinError = false; pinMsg = null
+                tempPin = ""
+                pinDialog = true
+            },
+            onStreamFormat = {
+                streamFormat = when (streamFormat) { "m3u8" -> "ts"; "ts" -> "auto"; else -> "m3u8" }
+                com.latmpx.player.data.Store.streamFormat = streamFormat
+            },
+            onPlayer = {
+                extPlayer = !extPlayer
+                com.latmpx.player.data.Store.externalPlayer = extPlayer
+            },
+            onChangeDistributor = onChangeDistributor,
+            onLogout = onLogout,
+        )
+        return
+    }
     Column(Modifier.fillMaxSize().background(NfBg).verticalScroll(rememberScrollState()).padding(sidePad())) {
         LogoHeader(height = 50.dp)
         Spacer(Modifier.height(24.dp))

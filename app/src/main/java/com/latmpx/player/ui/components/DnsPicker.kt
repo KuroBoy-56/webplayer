@@ -3,6 +3,7 @@ package com.latmpx.player.ui.components
 import androidx.compose.ui.res.stringResource
 import com.latmpx.player.R
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,11 +40,17 @@ import com.latmpx.player.ui.theme.NfRed
 
 /** Botón "DNS: …" que abre la lista de DNS seguros. Sirve con el dedo y con el control remoto. */
 @Composable
-fun DnsButton(modifier: Modifier = Modifier, onChanged: () -> Unit = {}) {
+fun DnsButton(
+    modifier: Modifier = Modifier,
+    onChanged: () -> Unit = {},
+    // Ajustes de Android TV: la misma fila que los demás ajustes (foco, nombre y valor) en lugar del botón
+    row: (@Composable BoxScope.(focused: Boolean, value: String) -> Unit)? = null,
+) {
     var open by remember { mutableStateOf(false) }
     var current by remember { mutableStateOf(SecureDns.current) }
-    FocusBox(onClick = { open = true }, modifier = modifier, shape = RoundedCornerShape(4.dp), focusScale = 1.05f) { f ->
-        Row(
+    FocusBox(onClick = { open = true }, modifier = modifier, shape = RoundedCornerShape(if (row != null) 6.dp else 4.dp), focusScale = if (row != null) 1.02f else 1.05f) { f ->
+        if (row != null) row(f, current.label)
+        else Row(
             Modifier.background(if (f) Color(0xCCFFFFFF) else Color(0x806D6D6E)).padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
