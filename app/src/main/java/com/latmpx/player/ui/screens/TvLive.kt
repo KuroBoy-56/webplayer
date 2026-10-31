@@ -168,9 +168,11 @@ fun TvLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
             val short = runCatching { Xtream.shortEpg(s, ch.id, 60) }.getOrDefault(emptyList())
             g = inWindow((g + short).sortedBy { it.start }.distinctBy { it.start })
         }
-        if (g.isEmpty()) {
+        // sin nada en sintonía ni por venir (guía vacía o vieja del servidor): la del panel, como Roku y Vega
+        if (g.none { it.end > System.currentTimeMillis() }) {
             val i = shown.indexOfFirst { it.id == ch.id }.coerceAtLeast(0)
-            g = inWindow(PanelEpg.full(ch, shown.subList(i, minOf(shown.size, i + 400))))
+            val panel = inWindow(PanelEpg.full(ch, shown.subList(i, minOf(shown.size, i + 400))))
+            if (panel.any { it.end > System.currentTimeMillis() }) g = panel
         }
         if (g.isNotEmpty()) {
             GuideCache.put(ch.id, g)

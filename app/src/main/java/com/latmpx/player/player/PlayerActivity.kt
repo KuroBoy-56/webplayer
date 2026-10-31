@@ -58,6 +58,8 @@ import com.latmpx.player.data.Progress
 import com.latmpx.player.data.Session
 import com.latmpx.player.data.Store
 import com.latmpx.player.data.Xtream
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 
 /**
  * Reproductor nativo con ExoPlayer (Media3).
@@ -104,6 +106,11 @@ class PlayerActivity : ComponentActivity() {
     private var userPickedTracks = false
     /** última tecla del control (que no sea Atrás): para saber si el usuario está usando los controles */
     private var lastUserKey = 0L
+    /** «Desde el inicio» de la ficha: el primero empieza en 0 */
+    private var fromStart = false
+    /** canales: id de guía de cada uno (para la guía del panel) y la consulta de la guía en curso */
+    private var epgIds: Array<String> = emptyArray()
+    private var epgJob: kotlinx.coroutines.Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         open++
@@ -120,6 +127,8 @@ class PlayerActivity : ComponentActivity() {
         val exts = intent.getStringArrayExtra(Play.X_EXTS) ?: emptyArray()
         extra = intent.getStringExtra(Play.X_EXTRA).orEmpty()
         pipOnStart = intent.getBooleanExtra(Play.X_PIP, false)
+        fromStart = intent.getBooleanExtra(Play.X_FROM_START, false)
+        epgIds = intent.getStringArrayExtra(Play.X_EPGS) ?: emptyArray()
         saveTitle = intent.getStringExtra(Play.X_SAVE_TITLE).orEmpty()
         savePoster = intent.getStringExtra(Play.X_SAVE_POSTER).orEmpty()
         category = intent.getStringExtra(Play.X_CATEGORY).orEmpty()
@@ -146,10 +155,11 @@ class PlayerActivity : ComponentActivity() {
         view.player = player
         applyTitle(start)
 
-        player.setMediaItems(queue.map { mediaItem(it) }, start, resumePosition(queue[start]))
+        val startPos = if (fromStart) 0L else resumePosition(queue[start])
+        player.setMediaItems(queue.map { mediaItem(it) }, start, startPos)
         player.prepare()
         player.playWhenReady = true
-        if (kind != Kind.LIVE) resumePosition(queue[start]).takeIf { it > 0 }?.let { showToast(getString(R.string.resuming_from, fmt(it))) }
+        if (kind != Kind.LIVE) startPos.takeIf { it > 0 }?.let { showToast(getString(R.string.resuming_from, fmt(it))) }
         ui.post(saver)
     }
 
@@ -214,6 +224,28 @@ class PlayerActivity : ComponentActivity() {
         } else { ui2.title = q.title; ui2.subtitle = "" }
         ui2.index = i
         ui2.hasNext = kind == Kind.SERIES && i < queue.lastIndex
+        loadEpg(i)
+    }
+
+    /**
+     * Canal: el programa que está en sintonía debajo del nombre, como Roku y Vega. Primero la guía del servidor IPTV
+     * (get_short_epg) y, si no trae nada, la del panel (epg.php, por el id de guía y el nombre del canal).
+     */
+    private fun loadEpg(i: Int) {
+        if (kind != Kind.LIVE) return
+        val q = queue.getOrNull(i) ?: return
+        epgJob?.cancel()
+        epgJob = lifecycleScope.launch {
+            var list = runCatching { Xtream.shortEpg(session, q.id, 4) }.getOrDefault(emptyList())
+            if (list.isEmpty()) {
+                val items = queue.mapIndexed { j, e -> com.latmpx.player.data.Item(e.id, e.title, e.poster, Kind.LIVE, epgId = epgIds.getOrElse(j) { "" }) }
+                list = runCatching { com.latmpx.player.data.PanelEpg.guide(items[i], items.subList(i, minOf(items.size, i + 400))) }.getOrDefault(emptyList())
+            }
+            val now = System.currentTimeMillis()
+            val cur = list.firstOrNull { it.start <= now && it.end > now } ?: return@launch
+            val hm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+            if (::player.isInitialized && player.currentMediaItemIndex == i) ui2.subtitle = getString(R.string.epg_now_line, hm.format(cur.start), hm.format(cur.end), cur.title)
+        }
     }
 
     /* ---------------- reproductor ---------------- */
@@ -441,7 +473,8 @@ class PlayerActivity : ComponentActivity() {
             return if (d.position > 30_000 && (d.duration <= 0 || d.position < d.duration * 0.95)) d.position else 0
         }
         val p = Cloud.progress(q.key) ?: return 0
-        return if (p.position > 30_000 && (p.duration <= 0 || p.position < p.duration * 0.95)) p.position else 0
+        // como Roku y Vega: con más de 5 s vistos se continúa (y hasta el 95 %)
+        return if (p.position > 5_000 && (p.duration <= 0 || p.position < p.duration * 0.95)) p.position else 0
     }
 
     /** Guarda en el panel con el formato de la web: película por nombre; serie una entrada por serie. */

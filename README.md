@@ -13,6 +13,19 @@ La app para celular y tablet está en la rama `android`. Las dos se pueden insta
   de abajo sube a su lugar) y la portada muestra el título enfocado (fondo del servidor o de TMDB, nombre, año, nota y
   sinopsis). Los textos empiezan debajo del menú de arriba y nunca tapan los botones. Arriba desde la primera fila vuelve a
   los botones; desde las demás, a la fila de arriba.
+- **Ficha de película o serie como Roku y Vega OS** (`TvDetail.kt`): la imagen queda fija arriba a la derecha (nunca
+  cambia de lugar) y por encima se mueven título, datos, sinopsis, botones, temporadas con sus episodios en fila, reparto y
+  «Más títulos como este». Película ya vista (más de 5 s y menos del 95 %): **Continuar 1:23:45** y **Desde el inicio**;
+  serie vista: **Continuar T1 E3**. El reproductor continúa desde el segundo guardado con el mismo criterio.
+- **Actor** (`TvActor.kt`): al elegir a alguien del reparto se ve su foto, nacimiento, el comienzo de la biografía con
+  **Leer biografía** (la completa en una ventana que se recorre con el control) y **Disponible en el servidor**: sus
+  películas y series del servidor.
+- **Carátulas** (`PanelImg.kt`, igual que Roku y Vega): la copia del panel en el hosting (`api/imgc/<sha1>.jpg`) →
+  `api/img.php` (con el título busca en TMDB con la clave del panel si el servidor no tiene) → la imagen del servidor IPTV;
+  si todo falla, TMDB desde el equipo. Con la caché apagada en el panel (`img: false`) va directo al servidor IPTV.
+- **Guía (EPG)**: primero la del servidor IPTV (`get_simple_data_table` / `get_short_epg`) y, si no tiene nada en
+  sintonía ni por venir, la del panel (`api/epg.php`, por el id de guía y el nombre del canal, en lotes de hasta 400). En el
+  reproductor de canales, el programa en sintonía va debajo del nombre («AHORA · 10:00 - 11:00 · …»).
 - **Foco** visible para el control remoto (borde blanco o del color del distribuidor, y zoom), guía de canales al costado, arriba/abajo o CH+/CH- para cambiar de canal.
 - **Control parental** con teclado numérico en pantalla.
 - Descarga: Releases > `apk-tv-latest` (se compila sola con cada cambio en esta rama).

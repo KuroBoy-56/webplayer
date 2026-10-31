@@ -28,6 +28,10 @@ object Play {
     const val X_FILES = "files"
     /** TV en vivo desde la miniatura: entra directo a imagen en imagen */
     const val X_PIP = "pip"
+    /** «Desde el inicio» de la ficha: el primero empieza en 0 aunque tenga avance guardado */
+    const val X_FROM_START = "from_start"
+    /** canales: el id de guía (epg_channel_id) de cada uno, para la guía del panel en el reproductor */
+    const val X_EPGS = "epgs"
 
     /** descargas sin internet: película sola o los episodios descargados de una serie (pasa al siguiente) */
     fun offline(ctx: Context, list: List<com.latmpx.player.data.Downloads.Entry>, index: Int) {
@@ -63,8 +67,9 @@ object Play {
         })
     }
 
-    fun movie(ctx: Context, item: Item, ext: String) =
-        start(ctx, Kind.MOVIE, listOf(QueueEntry(item.id, item.name, item.key, item.poster, ext.ifEmpty { item.ext })), 0, "", item.name, item.poster, item.categoryId)
+    fun movie(ctx: Context, item: Item, ext: String, fromStart: Boolean = false) =
+        start(ctx, Kind.MOVIE, listOf(QueueEntry(item.id, item.name, item.key, item.poster, ext.ifEmpty { item.ext })), 0, "", item.name, item.poster, item.categoryId,
+            fromStart = fromStart)
 
     /** episodio: la lista incluye los siguientes de la temporada para pasar al siguiente automáticamente */
     fun episode(ctx: Context, series: Item, eps: List<Episode>, index: Int) =
@@ -75,10 +80,10 @@ object Play {
 
     /** canal: la lista completa de la categoría permite cambiar de canal con arriba/abajo o CH+/CH- */
     fun live(ctx: Context, channels: List<Item>, index: Int, pip: Boolean = false) =
-        start(ctx, Kind.LIVE, channels.map { QueueEntry(it.id, it.name, it.key, it.poster, "") }, index, "", "", "", "", pip)
+        start(ctx, Kind.LIVE, channels.map { QueueEntry(it.id, it.name, it.key, it.poster, "") }, index, "", "", "", "", pip, epgs = channels.map { it.epgId })
 
     private fun start(ctx: Context, kind: Kind, q: List<QueueEntry>, index: Int, extra: String, saveTitle: String, savePoster: String, category: String,
-                      pip: Boolean = false) {
+                      pip: Boolean = false, fromStart: Boolean = false, epgs: List<String>? = null) {
         // un intent no aguanta listas enormes: se envía una ventana alrededor del elegido
         val from = (index - 300).coerceAtLeast(0)
         val win = q.subList(from, (index + 300).coerceAtMost(q.size))
@@ -115,6 +120,8 @@ object Play {
             putExtra(X_SAVE_POSTER, savePoster)
             putExtra(X_CATEGORY, category)
             putExtra(X_PIP, pip)
+            putExtra(X_FROM_START, fromStart)
+            if (epgs != null) putExtra(X_EPGS, epgs.subList(from, from + win.size).toTypedArray())
         })
     }
 }
