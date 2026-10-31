@@ -144,7 +144,7 @@ function videoCfg(tk: Trk): VideoCfg | null {
 function dolbyCfg(tk: Trk): AudioCfg | null {
   const b = tk.entry;
   if (!b || (typ(b, 4) !== 'ec-3' && typ(b, 4) !== 'ac-3')) return null;
-  return { config: new Uint8Array(2), channels: u16(b, 8 + 16) || 2, rate: u16(b, 8 + 24) || tk.ts };
+  return { config: new Uint8Array(2), channels: u16(b, 8 + 16) || 2, rate: tk.ts <= 65535 ? tk.ts : u16(b, 8 + 24) };
 }
 
 // AudioSpecificConfig del esds (solo AAC)
@@ -175,7 +175,8 @@ function audioCfg(tk: Trk): AudioCfg | null {
   o += 13;
   const [tag, len] = desc();
   if (tag !== 5 || !len) return null;
-  const rate = u16(b, 8 + 24) || tk.ts;
+  // la escala de tiempo del archivo (mdhd: casi siempre la frecuencia del audio): los tiempos van tal cual, sin redondear
+  const rate = tk.ts <= 65535 ? tk.ts : u16(b, 8 + 24) || 48000;
   return { config: b.slice(o, o + len), channels: u16(b, 8 + 16) || 2, rate };
 }
 
@@ -244,14 +245,14 @@ export class Mp4Mse {
     let init: Uint8Array;
     try {
       this.sb = ms.addSourceBuffer(mime);
-      init = initSegment(vc, ac, dolby ? at0!.entry! : undefined);
+      init = initSegment(vc, ac, dolby ? at0!.entry! : undefined, vt.ts);
     } catch (e: any) {
       // el audio no lo acepta (Vega no trae E-AC-3 por MSE): solo el video, sin sonido
       const vOnly = mp4Mime(vc, null);
       try {
         if (!this.at) throw e;
         this.sb = ms.addSourceBuffer(vOnly);
-        init = initSegment(vc, null);
+        init = initSegment(vc, null, undefined, vt.ts);
         this.at = null;
         this.noAudio = true;
       } catch {
@@ -495,7 +496,8 @@ export class Mp4Mse {
           return;
         }
         const out: Uint8Array[] = [];
-        if (vs) out.push(this.frag(vt, VIDEO_ID, 90000, this.vi, vj, vb!, vbase));
+        // la escala de tiempo del archivo: duraciones exactas (antes a 90 kHz, con redondeos de ±1 en cada cuadro)
+        if (vs) out.push(this.frag(vt, VIDEO_ID, vt.ts, this.vi, vj, vb!, vbase));
         if (a && as) out.push(this.frag(a, AUDIO_ID, this.arate, this.ai, aj, ab!, abase));
         await this.trim();
         if (g !== this.gen) continue;
@@ -546,9 +548,9 @@ export class Mp4Mse {
           return;
         }
         if (t <= en) {
-          // un hueco: solo si de verdad se quedó quieto en él, y justo al otro lado (antes saltaba 0,5 s antes de cada
+          // un hueco: solo si de verdad se quedó quieto en él (1 s: el tiempo del reproductor avanza a saltos), y justo al otro lado (antes saltaba 0,5 s antes de cada
           // final de tramo, +0,1 s: un «grumito» en el audio)
-          if (next > 0 && ((en - t < 0.3 && still > 400) || stalled)) this.jump(next + 0.02);
+          if (next > 0 && ((en - t < 0.3 && still > 1000) || stalled)) this.jump(next + 0.02);
           else if (stalled && en - t > 1) this.jump(t + 0.5);
           return;
         }
