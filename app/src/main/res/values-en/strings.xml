@@ -301,6 +301,8 @@
     <string name="play_failed">Couldn\'t play</string>
     <string name="play_failed_decoder">This device can\'t decode this content\'s format. You can try again or open it in VLC.</string>
     <string name="play_failed_server">The server didn\'t respond or the file is damaged. You can try again or open it in VLC.</string>
+    <string name="play_failed_decoder_plain">This device can\'t decode this content\'s format.</string>
+    <string name="play_failed_server_plain">The server didn\'t respond or the file is damaged.</string>
     <string name="open_in_vlc">Open in VLC</string>
     <string name="no_external_player">No external player installed</string>
     <string name="exit_question">Do you want to exit?</string>

@@ -159,6 +159,8 @@ Todas estas llamadas usan un token: la app hace `POST progress.php {"action":"au
 
 Como Roku y Vega (`ui/screens/AccountTv.kt`): a la izquierda la tarjeta de la línea (usuario, estado, vencimiento, conexiones, desde, servidor, canales / películas / series, distribuidor y la MAC abajo); a la derecha **Ajustes**, una fila por ajuste con su valor (idioma de la app, control parental, formato, reproductor, DNS, cambiar distribuidor, cerrar sesión) y la versión. Todo con el foco del control remoto. El celular sigue con su pantalla de siempre.
 
+**1.3.5:** la tarjeta va debajo del menú, con los datos en dos columnas (nombre a la izquierda, valor a la derecha) y la MAC al pie sin taparlos; en Ajustes el nombre de cada opción se ve completo («Idioma de la app», «Control parental») y su valor va pegado a la derecha. Un canal o video que no se puede reproducir solo dice el error y **Cerrar** (que vuelve a la pantalla de antes, en Deportes con el foco en el partido que se abrió); **Abrir en VLC** solo aparece con el reproductor externo elegido en Ajustes.
+
 ## DNS
 
 Botón **DNS** en el inicio de sesión y en **Cuenta**: Automático (por defecto), Cloudflare, Google, Quad9, AdGuard (sin rastreo ni anuncios), NextDNS (anti-bloqueo geográfico) y OpenDNS.

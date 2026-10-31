@@ -302,6 +302,8 @@
     <string name="play_failed">No se pudo reproducir</string>
     <string name="play_failed_decoder">Este equipo no puede decodificar el formato de este contenido. Puedes intentarlo de nuevo o abrirlo en VLC.</string>
     <string name="play_failed_server">El servidor no respondió o el archivo está dañado. Puedes intentarlo de nuevo o abrirlo en VLC.</string>
+    <string name="play_failed_decoder_plain">Este equipo no puede decodificar el formato de este contenido.</string>
+    <string name="play_failed_server_plain">El servidor no respondió o el archivo está dañado.</string>
     <string name="open_in_vlc">Abrir en VLC</string>
     <string name="no_external_player">No hay reproductor externo instalado</string>
     <string name="exit_question">¿Quieres salir?</string>
