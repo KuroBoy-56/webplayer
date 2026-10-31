@@ -153,7 +153,10 @@ fun SportsScreen(state: AppState) {
     // el canal de un partido: el que lo transmite (si el cliente lo tiene), el de la guía o el de los equipos
     fun resolve(e: SportEvent): SportMatch? {
         val c = chans ?: return null
-        val m = found?.get(e.id) ?: extra.getOrPut(e.id + "|" + e.start) { Sports.match(e, c.prepared, d.rules) }
+        // mientras se buscan los canales de la agenda (en segundo plano) nada se busca aquí: esto corre al dibujar cada
+        // tarjeta y, al abrir Deportes, todas buscaban a la vez en el hilo principal («la aplicación no responde»)
+        val all = found ?: return null
+        val m = all[e.id] ?: extra.getOrPut(e.id + "|" + e.start) { Sports.match(e, c.prepared, d.rules) }
         val epg = epgMap[e.id].orEmpty().mapNotNull { id -> id.toIntOrNull()?.let { c.byId[it] } }
         if (epg.isEmpty()) return m
         return m.copy(epg = epg, best = m.tv.firstOrNull { it.second != null }?.second ?: epg.first())
@@ -211,7 +214,8 @@ fun SportsScreen(state: AppState) {
     // tiene el cliente), buscar por el nombre de cada equipo y escribir otro nombre
     fun open(e: SportEvent) {
         if (!playable(e)) return
-        if (chans == null) { say(tr(R.string.sp_loading_channels)); return }
+        // todavía buscando los canales de la agenda: se avisa (antes se buscaba aquí mismo y se trababa)
+        if (chans == null || found == null) { say(tr(R.string.sp_loading_channels)); return }
         val m = resolve(e)
         val best = m?.best
         val opts = ArrayList<MenuOpt>()
