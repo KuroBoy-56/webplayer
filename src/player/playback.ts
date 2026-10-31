@@ -750,8 +750,9 @@ export class Playback {
     const out: MenuItem[] = [];
     const a = this.audioItems();
     if (this.panelMenu()) {
-      out.push({ kind: 'audio', key: 'def', label: t('Audio predeterminado'), on: !this.remux });
-      for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: this.remux?.a === it.probe });
+      const def = !this.remux || this.remux.label === t('Audio predeterminado');
+      out.push({ kind: 'audio', key: 'def', label: t('Audio predeterminado'), on: def });
+      for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: !def && this.remux?.a === it.probe });
     } else {
       const on = this.audioOn(a);
       for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: it === on });
@@ -775,16 +776,24 @@ export class Playback {
     }
     if (m.kind === 'audio') {
       if (m.key === 'def') {
-        // «Audio predeterminado»: el video directo (este título vuelve a empezar así)
+        // «Audio predeterminado»: el audio que el archivo trae marcado (este título vuelve a empezar así, directo)
         this.audioKey = '';
         setTitleLang(this.url, null);
-        // el equipo no abre este video directo (sigue por el panel): el primer audio del archivo, preparado por el panel
-        if (this.panelFallback && this.remux) {
-          if (this.remux.a !== 0) this.toRemux(0, t('Audio predeterminado'), true, t('Cambiando a {x}…', { x: t('Audio predeterminado') }));
+        if (this.remux) {
+          // al principio, otra vez el video directo; ya avanzado, el panel sigue con el audio marcado del archivo, sin
+          // cortar: volver al directo obliga al reproductor a saltar dentro del archivo y en Vega eso falla en algunos
+          // servidores (error 4: quedaba cargando sin fin y «Audio predeterminado» no se podía elegir)
+          const d = this.probeDefault();
+          if (this.realPos() < 5 && !this.panelFallback) this.leaveRemux();
+          else if (this.remux.a !== d) this.toRemux(d, t('Audio predeterminado'), true, t('Cambiando a {x}…', { x: t('Audio predeterminado') }));
+          else {
+            // ya suena esa misma pista: solo cambia lo marcado en el menú
+            this.remux = { a: d, label: t('Audio predeterminado') };
+            this.hooks.changed();
+          }
           return;
         }
-        if (this.remux) this.leaveRemux();
-        else this.hooks.toast(t('Audio: {x}', { x: t('Audio predeterminado') }));
+        this.hooks.toast(t('Audio: {x}', { x: t('Audio predeterminado') }));
         return;
       }
       const it = this.audioItems().find(i => i.key === m.key);

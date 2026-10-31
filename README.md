@@ -191,6 +191,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   con el segmento puesto en su segundo. Además, en un servidor donde Continuar viendo solo salió por el panel, la
   próxima vez va directo por el panel (`resume_panel`, 7 días): sin el intento directo que falla, la consulta ni la
   espera. Un video desde el principio sigue directo.
+  **1.0.31:** el lector del panel (`hls.ts`) no tenía el vigilante del lector de canales: el reproductor de Vega no
+  empieza si lo bajado no arranca justo en el segundo actual (el video del panel empieza en ~1,4 s) y se queda quieto en
+  los huecos entre segmentos, así que el **cambio de idioma** y Continuar viendo por el panel quedaban cargando sin fin.
+  Ahora cada 300 ms salta al tramo con datos (`unstick`, como `livehls.ts`). **Menú de audio:** «Audio predeterminado»
+  arriba (el audio que el archivo trae marcado, directo del servidor IPTV al empezar) y debajo los idiomas del archivo;
+  elegir uno lo prepara el panel sin cortar. Volver a «Audio predeterminado» con la película avanzada sigue por el
+  panel con la pista **marcada** del archivo (antes la primera, y volvía al directo, que obliga a saltar dentro del
+  archivo: error 4 en Vega y no se podía elegir); al principio vuelve al directo.
 - **Cuando un video no abre** (`src/screens/Player.tsx` + `src/player/streamcheck.ts`): vigilante de 20 s (15 s en
   Continuar viendo); una vez se le pregunta al servidor qué pasa: código HTTP, cuenta (`user_info`) y si la película
   sigue (`get_vod_info`). 404 / ya no está → «Video no disponible»; otra extensión → se abre con la de verdad; cuenta

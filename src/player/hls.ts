@@ -68,6 +68,7 @@ export class PanelHls {
     if (ms.readyState !== 'open') return t('El reproductor no aceptó el audio del panel');
     // el SourceBuffer se crea con el primer segmento (MP4 convertido o MPEG-TS: deliver)
     this.pump();
+    this.watch = setInterval(() => this.alive && this.unstick(), 300);
     return '';
   }
 
@@ -84,6 +85,8 @@ export class PanelHls {
   destroy(): void {
     this.alive = false;
     this.gen++;
+    if (this.watch) clearInterval(this.watch);
+    this.watch = null;
     try {
       if (this.sb?.updating) this.sb.abort();
     } catch {
@@ -196,6 +199,47 @@ export class PanelHls {
     }
     await this.idle();
     return true;
+  }
+
+  // El reproductor de Vega no empieza si lo bajado no arranca justo en el segundo actual (el video del panel empieza en
+  // ~1,4 s) y se queda quieto para siempre en un hueco entre segmentos: el cambio de idioma y Continuar viendo quedaban
+  // cargando sin fin. Como el lector de canales (livehls.ts unstick), cada 300 ms se salta al tramo con datos; quieto
+  // 3 s con video por delante, se empuja.
+  private watch: ReturnType<typeof setInterval> | null = null;
+  private lastT = -1;
+  private lastMove = Date.now();
+  private unstick(): void {
+    try {
+      const b = this.sb.buffered;
+      const t = this.v.currentTime || 0;
+      if (t !== this.lastT) {
+        this.lastT = t;
+        this.lastMove = Date.now();
+      }
+      const stalled = !this.v.paused && Date.now() - this.lastMove > 3000;
+      for (let i = 0; i < b.length; i++) {
+        const st = b.start(i);
+        const en = b.end(i);
+        const next = i + 1 < b.length ? b.start(i + 1) : -1;
+        if (t < st - 0.3) {
+          if (en - st > 0.5) this.jump(st + 0.1);
+          return;
+        }
+        if (t <= en) {
+          if (next > 0 && (en - t < 0.5 || stalled)) this.jump(next + 0.1);
+          else if (stalled && en - t > 1) this.jump(t + 0.5);
+          return;
+        }
+      }
+    } catch {
+      // sin datos todavía
+    }
+  }
+
+  private jump(to: number): void {
+    this.v.currentTime = to;
+    this.lastMove = Date.now();
+    if (this.v.paused) this.v.play();
   }
 
   // un segmento al reproductor: convertido a MP4 o, si no se puede, el MPEG-TS tal cual. false = no lo aceptó
