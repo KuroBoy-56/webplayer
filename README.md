@@ -207,6 +207,8 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Reproductor más limpio (1.0.55)**: sin los botones ◀◀ / pausa / ▶▶ en pantalla (◀ ▶ y OK del control lo hacen
+  directo, sin redibujar nada); en series quedan solo capítulo anterior |◀ y siguiente ▶| (▲ los elige).
 - **Motor Shaka, teclado y fluidez (1.0.46)**: películas y series en HLS / DASH con Shaka Player 4.16.13 con los parches
   de Amazon para Vega (`src/player/shaka.ts`, `vendor/`); MP4 por el lector MSE propio con cambio de audio local; MKV con
   las pistas del equipo y el panel solo como respaldo. Botón «Audio · idioma» en el reproductor. Teclado con teclas

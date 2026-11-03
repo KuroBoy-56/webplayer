@@ -63,13 +63,8 @@ export default function Player({ params }: { params: PlayParams }) {
   const [menuMode, setMenuMode] = useState<'audio' | 'all'>('all');
   const [audioLabel, setAudioLabel] = useState('');
   // botón de la barra central que se ilumina un instante al usarlo con el control (◀◀ 10 s, pausa, 10 s ▶▶)
-  const [flash, setFlash] = useState<'' | 'back' | 'play' | 'fwd'>('');
-  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flashKey = (k: 'back' | 'play' | 'fwd') => {
-    setFlash(k);
-    if (flashTimer.current) clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setFlash(''), 350);
-  };
+  // (los botones ◀◀ / pausa / ▶▶ se quitaron: ◀ ▶ y OK del control lo hacen directo, sin redibujar la pantalla)
+  const flashKey = (_k: 'back' | 'play' | 'fwd') => {};
   const menuOpen = useRef(false);
   menuOpen.current = !!menu;
   // el menú se vuelve a dibujar solo si cambió algo (antes cada aviso del reproductor lo rehacía entero y, con el
@@ -1019,7 +1014,11 @@ export default function Player({ params }: { params: PlayParams }) {
       case 'up':
       case 'channel_up':
         if (live) zap(-1);
-        else { showOverlay(); setControlsFocused(true); }
+        else {
+          showOverlay();
+          // solo las series tienen botones (capítulo anterior / siguiente)
+          if (params.kind === 'episode') setControlsFocused(true);
+        }
         break;
       case 'channel_down':
         zap(1);
@@ -1100,20 +1099,12 @@ export default function Player({ params }: { params: PlayParams }) {
       ) : null}
 
       {anchorOn ? <Focusable preferred onPress={onSelect} style={s.anchor}>{null}</Focusable> : null}
-      {/* controles de un reproductor normal (dibujados, sin números ni símbolos de texto): ◀◀ atrasar, pausa / reproducir y
-          ▶▶ adelantar; en series además capítulo anterior |◀ y siguiente ▶|. ◀ ▶ y OK los usan directo; con ▲ se eligen
-          con el control (◀ ▶ para moverse, OK para usar, ▼ vuelve) */}
-      {!live && (overlay || paused) && !buffering && !error && !menu && !askExit && !(nextSecs > 0) ? (
+      {/* series: solo capítulo anterior |◀ y siguiente ▶| (adelantar, atrasar y pausa van con ◀ ▶ y OK del control, sin
+          botones en pantalla); con ▲ se eligen (◀ ▶ para moverse, OK para usar, ▼ vuelve) */}
+      {params.kind === 'episode' && (overlay || paused) && !buffering && !error && !menu && !askExit && !(nextSecs > 0) ? (
         <View style={s.centerCtl} pointerEvents={controlsFocused ? 'auto' : 'none'}>
-          {params.kind === 'episode' ? (
-            <CtlButton icon="prev" on={false} focusable={controlsFocused} disabled={index === 0} onPress={prevEp} />
-          ) : null}
-          <CtlButton icon="rew" on={flash === 'back'} focusable={controlsFocused} onPress={() => seek(-10)} />
-          <CtlButton icon={paused ? 'play' : 'pause'} big on={flash === 'play'} focusable={controlsFocused} preferred onPress={togglePause} />
-          <CtlButton icon="ffw" on={flash === 'fwd'} focusable={controlsFocused} onPress={() => seek(10)} />
-          {params.kind === 'episode' ? (
-            <CtlButton icon="next" on={false} focusable={controlsFocused} disabled={index + 1 >= params.queue.length} onPress={() => next()} />
-          ) : null}
+          <CtlButton icon="prev" on={false} focusable={controlsFocused} disabled={index === 0} onPress={prevEp} />
+          <CtlButton icon="next" on={false} focusable={controlsFocused} preferred disabled={index + 1 >= params.queue.length} onPress={() => next()} />
         </View>
       ) : null}
       {overlay || paused ? (
