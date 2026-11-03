@@ -151,6 +151,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   se frenaba en cada unión y saltar ese hueco era un corte de ~1 s cada ~10 s. Ahora, si el segmento nuevo dejaría un
   hueco de hasta medio segundo, se pega al final de lo entregado (`src/player/livehls.ts`, `place`). El reporte del canal
   cuenta esas uniones (`pegados=`); `huecos=` debería quedar en 0.
+- **Lista negra del panel (1.0.47)**: si el distribuidor (o el dueño con Omitir) bloqueó este equipo, `login.php` responde
+  403 `device_blocked`: el inicio de sesión muestra «Este equipo está bloqueado. Contacta a tu proveedor.», no usa líneas
+  guardadas ni la pantalla falsa, no registra la cuenta escrita ni la demo, y una sesión abierta se cierra en la próxima
+  consulta al panel (cada 10 min o al volver a la app). `deviceBlocked()` en `src/api/panel.ts`.
 - **Motor Shaka, teclado y fluidez (1.0.46)**: películas y series en HLS / DASH con Shaka Player 4.16.13 con los parches
   de Amazon para Vega (`src/player/shaka.ts`, `vendor/`); MP4 por el lector MSE propio con cambio de audio local; MKV con
   las pistas del equipo y el panel solo como respaldo. Botón «Audio · idioma» en el reproductor. Teclado con teclas

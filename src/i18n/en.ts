@@ -3,6 +3,7 @@
 const en = {
   "1 día": "1 day",
   "1 hora": "1 hour",
+  "Este equipo está bloqueado. Contacta a tu proveedor.": "This device is blocked. Contact your provider.",
   "1 minuto": "1 minute",
   "1 temporada": "1 season",
   "Acción": "Action",

@@ -4,6 +4,7 @@ import type { Key } from '../lib/i18n';
 const pt: Record<Key, string> = {
   "1 día": "1 dia",
   "1 hora": "1 hora",
+  "Este equipo está bloqueado. Contacta a tu proveedor.": "Este aparelho está bloqueado. Fale com o seu provedor.",
   "1 minuto": "1 minuto",
   "1 temporada": "1 temporada",
   "Acción": "Ação",
