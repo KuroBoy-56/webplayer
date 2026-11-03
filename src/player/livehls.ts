@@ -51,6 +51,8 @@ export function disableMp4(): void {
 export class LiveHls {
   private ms: any = null;
   private sb: any = null;
+  private objectUrl = '';
+  private requests = new Set<AbortController>();
   private first: string;
   private list: string;
   private segs: Seg[] = [];
@@ -172,11 +174,13 @@ export class LiveHls {
       // sin el evento
     }
     try {
-      this.v.src = (URL as any).createObjectURL(ms);
+      this.objectUrl = (URL as any).createObjectURL(ms);
+      this.v.src = this.objectUrl;
     } catch {
       (this.v as any).srcObject = ms;
     }
     await Promise.race([opened, sleep(10000)]);
+    if (!this.alive) return '';
     if (ms.readyState !== 'open') return 'el reproductor no abrió MediaSource';
     // el SourceBuffer (MP4 o MPEG-TS) se crea con el primer segmento (deliver)
     this.timer = setInterval(this.tick, 300);
@@ -189,11 +193,18 @@ export class LiveHls {
     this.holding = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    for (const request of this.requests) request.abort();
+    this.requests.clear();
     this.inflight.clear();
+    this.keys.clear();
     try {
       this.v.removeEventListener('waiting', this.onWaiting);
     } catch {
       // ya cerrado
+    }
+    if (this.objectUrl) {
+      try { (URL as any).revokeObjectURL?.(this.objectUrl); } catch { /* sin URL de objetos */ }
+      this.objectUrl = '';
     }
     try {
       if (this.sb?.updating) this.sb.abort();
@@ -207,11 +218,14 @@ export class LiveHls {
   // mode: 'list' = texto; 'seg' = bytes salvo que llegue una página (motivo de XUI); 'bin' = siempre bytes (la llave:
   // XUI la manda desde PHP marcada como text/html y antes se leía como texto y no se podía descifrar)
   private async get(url: string, timeout: number, mode: 'list' | 'seg' | 'bin'): Promise<{ code: number; url: string; text?: string; data?: Uint8Array; type?: string }> {
+    if (!this.alive) return { code: 0, url };
     const ctrl = new AbortController();
+    this.requests.add(ctrl);
     const timer = setTimeout(() => ctrl.abort(), timeout);
     let at = url;
     try {
       for (let hop = 0; hop < 6; hop++) {
+        if (!this.alive) return { code: 0, url: at };
         const res = await fetch(at, { headers: { 'User-Agent': UA }, signal: ctrl.signal, redirect: 'manual' } as any);
         const loc = res.headers.get('location');
         if (res.status >= 300 && res.status < 400 && loc) {
@@ -228,6 +242,7 @@ export class LiveHls {
     } catch {
       return { code: 0, url: at };
     } finally {
+      this.requests.delete(ctrl);
       clearTimeout(timer);
     }
   }

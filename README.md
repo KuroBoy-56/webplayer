@@ -151,6 +151,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   se frenaba en cada unión y saltar ese hueco era un corte de ~1 s cada ~10 s. Ahora, si el segmento nuevo dejaría un
   hueco de hasta medio segundo, se pega al final de lo entregado (`src/player/livehls.ts`, `place`). El reporte del canal
   cuenta esas uniones (`pegados=`); `huecos=` debería quedar en 0.
+- **Motor Shaka, teclado y fluidez (1.0.46)**: películas y series en HLS / DASH con Shaka Player 4.16.13 con los parches
+  de Amazon para Vega (`src/player/shaka.ts`, `vendor/`); MP4 por el lector MSE propio con cambio de audio local; MKV con
+  las pistas del equipo y el panel solo como respaldo. Botón «Audio · idioma» en el reproductor. Teclado con teclas
+  compactas (sin letras recortadas), ñ y borrado de un carácter completo. Menos redibujos en Inicio, canales y vista
+  previa; la vista previa se cierra antes de abrir la pantalla completa. Los canales en vivo siguen con el lector propio
+  sin huecos. Detalle en `INTEGRACION_REPRODUCTOR.md`; pruebas: `npm run test:player` y `npm run test:interface`.
 - **Canales de corrido: MP4 propio (desde 1.0.26)**: aun pegando los segmentos, el lector MPEG-TS de Vega dejaba
   micro-huecos en algunas uniones (`buf=[42.0-59.0,59.0-89.6]`) y saltarlos era un corte. Ahora cada segmento H.264 +
   AAC se convierte en la app a MP4 fragmentado (`src/lib/tsdemux.ts`, `tsmux.ts`, `mp4box.ts`): cada cuadro de video

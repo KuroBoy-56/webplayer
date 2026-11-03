@@ -60,6 +60,10 @@ let state: State = {
 };
 
 const listeners = new Set<() => void>();
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+};
 function set(patch: Partial<State>) {
   state = { ...state, ...patch, rev: state.rev + 1 };
   listeners.forEach(l => l());
@@ -71,12 +75,15 @@ export function getState(): State {
 
 export function useAppState(): State {
   return useSyncExternalStore(
-    l => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
+    subscribe,
     () => state,
   );
+}
+
+// Seleccionar valores estables (primitivas o referencias del estado) evita
+// redibujar listas por avisos, progreso u otros cambios que no utilizan.
+export function useAppSelector<T>(select: (snapshot: State) => T): T {
+  return useSyncExternalStore(subscribe, () => select(state));
 }
 
 bindSession(() => state.session);

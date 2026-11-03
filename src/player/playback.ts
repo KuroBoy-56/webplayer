@@ -1,6 +1,7 @@
 // Fuente del video, audio y subtítulos del reproductor (misma lógica que PlayerTracks.brs de Roku).
 // - Pistas que informa el reproductor de Vega (audioTracks / textTracks): se eligen ahí y se comprueba
 //   que el cambio quedó; el búfer se vuelve a llenar en el mismo segundo para que se oiga enseguida.
+// - Shaka con MSE para HLS/DASH y lector MSE local para MP4: pistas y cambios en el equipo.
 // - Pistas leídas de la cabecera del MKV/MP4 (probe.ts): idioma y códec de cada una.
 // - Audio que el equipo no puede cambiar o decodificar (DTS, TrueHD…): el motor del panel lo prepara
 //   en AAC y llega como HLS desde el segundo actual (hls.ts). Subtítulos que el equipo no muestra:
@@ -18,10 +19,11 @@ import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
 import { Mp4Mse } from './mp4mse';
 import { reportError } from '../api/report';
+import { ShakaPlayback } from './shaka';
 
 export type MenuItem = { kind: 'audio' | 'text' | 'panel'; key: string; label: string; on: boolean };
 
-type AudioItem = { key: string; label: string; lang: string; codec: string; native?: number; probe?: number };
+type AudioItem = { key: string; label: string; lang: string; codec: string; native?: number; probe?: number; shaka?: string; mp4?: number };
 type SubItem = { key: string; label: string; lang: string; image: boolean; native?: number; probe?: number };
 
 export type Hooks = {
@@ -136,6 +138,14 @@ export class Playback {
   // por qué la lectura propia del MP4 no siguió (va al reporte)
   private mp4Why = '';
   private liveHls: LiveHls | null = null;
+  private shaka: ShakaPlayback | null = null;
+  private shakaRelease: Promise<void> | null = null;
+  private adaptiveTried = false;
+  private mp4Audio = -1;
+  private mp4Index: Uint8Array | null = null;
+  private mp4Paused = false;
+  private audioChange = 0;
+  private audioTimer: ReturnType<typeof setTimeout> | null = null;
   // audio del canal elegido en el menú (canales con varios idiomas)
   private liveAudio = 0;
   // el HLS del panel que sigue sonando mientras se prepara otro idioma
@@ -193,6 +203,9 @@ export class Playback {
 
   load(url: string, resume: number, live: boolean): void {
     this.gen++;
+    this.audioChange++;
+    if (this.audioTimer) clearTimeout(this.audioTimer);
+    this.audioTimer = null;
     this.stopHls();
     const sameFile = url.replace(/^https?:\/\//i, '') === this.url.replace(/^https?:\/\//i, '');
     this.wantAt = live ? 0 : resume;
@@ -212,6 +225,10 @@ export class Playback {
     this.url = url;
     this.live = live;
     this.liveAudio = 0;
+    this.mp4Audio = -1;
+    this.mp4Index = null;
+    this.mp4Paused = false;
+    this.adaptiveTried = false;
     this.probe = null;
     this.probing = false;
     this.remux = null;
@@ -230,80 +247,14 @@ export class Playback {
     this.mp4Why = '';
     this.deniedShown = false;
     if (live) {
-      // .m3u8 del canal: el reproductor de Vega no abre HLS solo; lo lee la app y lo entrega por MSE
-      if (/\.m3u8(\?|$)/i.test(url) && !(globalThis as any).PalmSystem && LiveHls.supported()) this.openLive(url);
-      else this.direct(resume);
-      return;
-    }
-    // Idiomas que ya se saben SIN tocar el servidor IPTV (lo leído antes en el equipo o lo que recuerda el panel, que
-    // la ficha ya pidió al entrar): llegan para el menú y el idioma preferido. Si nadie los sabe, se leen con el video
-    // ya abierto, una y otra vez hasta que salgan (langCheck). Nada de leer el archivo antes de abrirlo: muchos
-    // servidores bloqueaban la línea un rato.
-    const g = this.gen;
-    const route = engineDenied() ? '' : panelRoute(url);
-    if (route) {
-      // ya se sabe que en este equipo solo se ve por el panel: de una por ahí (con el idioma elegido para este título o el predeterminado)
-      this.formatTried = true;
-      this.panelFallback = true;
-      if (route === 'v') this.panelVideo = true;
-      knownTracks(url).then(p => {
-        if (g !== this.gen) return;
-        if (p.ok) this.probe = p;
-        const it = this.startAudio(p.ok ? this.audioItems() : []);
-        // sin idiomas guardados: se leen de la cabecera a la vez (para el menú), sin esperar
-        if (!p.ok)
-          fileTracks(url, true).then(q => {
-            if (g === this.gen && q.ok && !this.probe) {
-              this.probe = q;
-              this.hooks.changed();
-            }
-          });
-        this.toRemux(it.a, it.label, false, '', resume).then(ok => {
-          if (!ok && g === this.gen) {
-            // sin el panel: el camino de siempre
-            this.panelFallback = false;
-            this.formatTried = false;
-            this.direct(resume);
-          }
-        });
-      });
-      return;
-    }
-    // Como Roku: los idiomas se piden al entrar a la ficha (warmTracks); si ya llegaron, el video empieza con el idioma
-    // elegido. Si todavía no, se espera ese pedido como mucho 2 s (como Roku) y se abre; lo que llegue después se aplica al
-    // momento y, si nadie los sabe, se siguen pidiendo con el video abierto hasta tenerlos (langCheck).
-    const now = knownNow(url);
-    if (now) {
-      this.probe = now;
       this.direct(resume);
-      this.langWatch(3000);
       return;
     }
-    let opened = false;
-    const open = () => {
-      if (opened || g !== this.gen) return;
-      opened = true;
-      this.direct(resume);
-      this.langWatch(3000);
-    };
-    const wait = setTimeout(open, 2000);
-    knownTracks(url).then(p => {
-      clearTimeout(wait);
-      if (g !== this.gen) return;
-      if (p.ok && !this.probe) {
-        this.probe = p;
-        // ya sonando: el idioma preferido y el aviso de idiomas con lo que se acaba de saber
-        if (this.played) {
-          if (!this.audioKey) this.audioApplied = false;
-          else this.checkDecodable();
-          if (!this.subKey) this.subApplied = false;
-          this.applyPrefs();
-          this.langNotice();
-        }
-        this.hooks.changed();
-      }
-      open();
-    });
+    // Abrir ya: la detección de pistas nunca espera al panel ni reutiliza una ruta
+    // remota antigua antes de probar las capacidades locales actuales.
+    this.probe = knownNow(url);
+    this.direct(resume);
+    if (!/\.(m3u8|mpd)(\?|$)/i.test(url)) this.langWatch(3000);
   }
 
   // canal en vivo por HLS con el lector propio
@@ -342,15 +293,40 @@ export class Playback {
 
   private direct(at: number): void {
     this.stopHls();
+    const g = this.gen;
+    if (this.shakaRelease) {
+      this.shakaRelease.then(() => g === this.gen && this.startDirect(at));
+    } else this.startDirect(at);
+  }
+
+  private startDirect(at: number): void {
     this.offset = 0;
     this.clearSeek();
+    // Canales: el lector propio (livehls.ts) convierte cada segmento a MP4 de corrido; con Shaka el MPEG-TS va al lector
+    // de Vega, que deja micro-huecos entre segmentos (los cortes de 1.0.20-1.0.25). Shaka queda para HLS/DASH de
+    // películas y series, y para canales si el equipo no tiene MSE para el lector propio.
+    if (this.live && /\.m3u8(\?|$)/i.test(this.url) && LiveHls.supported()) {
+      this.openLive(this.url);
+      return;
+    }
+    if (!this.adaptiveTried && /\.(m3u8|mpd)(\?|$)/i.test(this.url)) {
+      this.openAdaptive(at);
+      return;
+    }
     // MP4: la app lo lee del servidor IPTV y lo entrega al reproductor (el modo directo de Vega da error 4 con los MP4
     // de índice al final, los de casi todos los servidores IPTV). Empieza ya en el segundo pedido (sin el salto)
     if (!this.live && !this.mp4Url && /\.(mp4|m4v|mov)(\?|$)/i.test(this.url)) {
       this.resumeAt = 0;
       const g = this.gen;
-      const m = new Mp4Mse(this.v, this.url);
+      const m = new Mp4Mse(this.v, this.url, this.mp4Audio, this.mp4Index);
       this.mse = m;
+      m.onTracks = () => {
+        if (g !== this.gen || this.mse !== m) return;
+        this.mp4Index = m.index;
+        if (this.mp4Paused) { this.mp4Paused = false; this.v.pause(); }
+        this.applyPrefs();
+        this.hooks.changed();
+      };
       m.onError = () => g === this.gen && this.mse === m && this.mp4Failed(at, m.why);
       m.start(at)
         .catch((e: any) => 'excepción: ' + String(e?.message || e).slice(0, 80))
@@ -369,6 +345,33 @@ export class Playback {
     } else this.resumeAt = at;
     this.v.src = this.url;
     this.v.play();
+  }
+
+  private openAdaptive(at: number): void {
+    this.adaptiveTried = true;
+    const g = this.gen;
+    const s = new ShakaPlayback(this.v);
+    this.shaka = s;
+    s.onTracks = () => {
+      if (g !== this.gen || this.shaka !== s) return;
+      this.applyPrefs();
+      this.langNotice();
+      this.hooks.changed();
+    };
+    s.onError = () => g === this.gen && this.shaka === s && this.adaptiveFallback();
+    // como Roku: sin elección guardada para este título, el audio predeterminado del archivo
+    const language = titleLang(this.url)?.l || '';
+    s.start(this.url, at, language, this.live).catch(() => {
+      if (g === this.gen && this.shaka === s) this.adaptiveFallback();
+    });
+  }
+
+  // Shaka falló: se prueba el lector local anterior antes de los pasos del panel.
+  adaptiveFallback(): boolean {
+    if (!this.shaka) return false;
+    const pos = this.live ? 0 : this.realPos() || this.wantAt;
+    this.direct(pos);
+    return true;
   }
 
   // la lectura propia del MP4 no pudo (códec raro, el servidor cortó): el modo directo de siempre desde donde iba
@@ -464,6 +467,13 @@ export class Playback {
   }
 
   private stopHls(): void {
+    if (this.shaka) {
+      const s = this.shaka;
+      this.shaka = null;
+      const done = s.destroy().catch(() => {});
+      this.shakaRelease = done;
+      done.then(() => { if (this.shakaRelease === done) this.shakaRelease = null; });
+    }
     this.mse?.destroy();
     this.mse = null;
     this.hls?.destroy();
@@ -487,13 +497,17 @@ export class Playback {
     this.hooks.status('');
   }
 
-  destroy(): void {
+  destroy(): Promise<void> {
     this.gen++;
+    this.audioChange++;
+    if (this.audioTimer) clearTimeout(this.audioTimer);
+    this.audioTimer = null;
     this.clearSeek();
     this.stopHls();
     this.setExt(null);
     if (this.prefsTimer) clearTimeout(this.prefsTimer);
     if (this.langTimer) clearTimeout(this.langTimer);
+    return this.shakaRelease || Promise.resolve();
   }
 
   // segundo real del contenido (el HLS del panel empieza en offset)
@@ -609,7 +623,7 @@ export class Playback {
 
   // aviso de idiomas: una vez por video, con 2 o más audios (los del reproductor o los ya sabidos)
   private langNotice(): void {
-    const n = Math.max(this.nativeAudio().length, this.probe?.ok ? this.probe.audio.length : 0);
+    const n = this.audioItems().length;
     if (n < 2 || this.langNoticed) return;
     this.langNoticed = true;
     this.hooks.toast(t('{n} idiomas de audio en este video: pulsa ▼ para cambiar', { n }));
@@ -621,6 +635,7 @@ export class Playback {
     if (this.live || this.langBusy) return;
     this.langChecked = true;
     this.langNotice();
+    if (this.shaka || this.mse?.tracks.length) return;
     if (this.langNoticed || this.probe?.ok || this.remux) return;
     this.langBusy = true;
     this.langTries++;
@@ -717,6 +732,10 @@ export class Playback {
   }
 
   private audioItems(): AudioItem[] {
+    if (this.shaka) return this.shaka.audioTracks().map(tr => ({ key: 's:' + tr.id, label: tr.label, lang: tr.lang, codec: tr.codec, shaka: tr.id }));
+    if (this.mse?.tracks.length) return numbered(this.mse.tracks.map((tr, i) => ({
+      key: 'm:' + i, label: langName(tr.lang, '') || t('Audio {n}', { n: i + 1 }), lang: tr.lang, codec: tr.codec, mp4: i, probe: i,
+    })));
     // canal con varios idiomas (lector propio): uno por audio del canal
     const hl = this.live && this.liveHls ? this.liveHls.audioLangs() : [];
     if (hl.length > 1) return numbered(hl.map((l, i) => ({ key: 'h:' + i, label: langName(l, '') || t('Audio {n}', { n: i + 1 }), lang: trackLang(l, ''), codec: '' })));
@@ -763,6 +782,11 @@ export class Playback {
   }
 
   private audioOn(items: AudioItem[]): AudioItem | undefined {
+    if (this.shaka) {
+      const active = this.shaka.audioTracks().find(tr => tr.active);
+      return items.find(it => it.shaka === active?.id);
+    }
+    if (this.mse) return items.find(it => it.mp4 === this.mse!.audioIdx);
     if (this.liveHls && items[0]?.key.startsWith('h:')) return items.find(i => i.key === 'h:' + this.liveHls!.audioIdx);
     if (this.remux) return items.find(i => i.probe === this.remux!.a);
     const n = this.enabledNative();
@@ -792,14 +816,9 @@ export class Playback {
     return it.probe === undefined || nativeAudioOk(it.codec, this.probe?.container || '');
   }
 
-  // El archivo trae varios idiomas (y el panel está): arriba «Audio predeterminado» (el video directo, tal como lo da el
-  // servidor IPTV, sin la VPS) y debajo todos los idiomas del archivo (también el predeterminado), que prepara el panel
-  // al elegirlos. Antes solo si el reproductor no informaba todos: con todos, cambiaba la pista en el reproductor de Vega
-  // y ese cambio salta dentro del archivo (en algunos servidores falla: error 4)
+  // Menú remoto únicamente cuando no existe un lector local ni pistas nativas expuestas.
   private panelMenu(): boolean {
-    // también sin el motor del panel (FFmpeg apagado): el menú queda igual con «Audio predeterminado» marcado y elegir
-    // otro idioma solo avisa que no es compatible
-    return !this.live && !!this.probe?.ok && this.probe.audio.length > 1;
+    return !this.live && !this.shaka && !this.mse && !this.nativeAudio().length && !!this.probe?.ok && this.probe.audio.length > 1;
   }
 
   // menú de audio y subtítulos
@@ -814,6 +833,12 @@ export class Playback {
       const on = this.audioOn(a);
       for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: it === on });
     }
+    if (this.shaka) {
+      const subs = this.shaka.textTracks();
+      out.push({ kind: 'text', key: 'off', label: t('Desactivados'), on: !subs.some(tr => tr.active) });
+      for (const tr of subs) out.push({ kind: 'text', key: 's:' + tr.id, label: tr.label, on: tr.active });
+      return out;
+    }
     const subs = this.subItems();
     const showing = this.nativeSubs().find(t => t.showing);
     out.push({ kind: 'text', key: 'off', label: t('Desactivados'), on: this.subKey === 'off' || (!this.ext && !showing) });
@@ -825,6 +850,12 @@ export class Playback {
   }
 
   select(m: MenuItem): void {
+    if (this.shaka && m.kind === 'text') {
+      this.subApplied = true;
+      this.subKey = m.key;
+      this.shaka.selectText(m.key === 'off' ? null : m.key.slice(2));
+      return;
+    }
     if (m.kind === 'panel') {
       const a = this.audioItems();
       const it = a.find(i => i.key === this.audioKey) || this.audioOn(a);
@@ -889,12 +920,17 @@ export class Playback {
     this.hooks.changed();
   }
 
-  // Todo título empieza con su audio predeterminado, tal como viene del servidor IPTV (sin el panel: no gasta la VPS),
-  // también con FFmpeg encendido y en Continuar viendo. El panel convierte solo cuando el usuario elige un idioma en el
-  // menú (p. ej. porque el predeterminado no se escucha). 1.0.40: antes se volvía a pedir al panel el idioma elegido la
-  // vez anterior al abrir el mismo título.
+  // Recordar la elección local del título. Una preferencia nunca enciende por sí sola el panel.
   private autoAudio(): void {
+    if (this.audioApplied || this.audioKey) return;
+    const items = this.audioItems();
+    if (!items.length) return;
     this.audioApplied = true;
+    // solo el idioma que el usuario eligió antes para este título (Continuar viendo); un título nuevo empieza con el
+    // audio predeterminado, como Roku
+    const want = this.preferredAudio(items);
+    // Las preferencias automáticas solo se aplican a pistas disponibles localmente.
+    if (want && (want.shaka !== undefined || want.mp4 !== undefined || want.native !== undefined)) this.pickAudio(want, false);
   }
 
   // ya se eligió un audio antes de conocer los códecs: si el equipo no lo decodifica, otro del
@@ -910,6 +946,15 @@ export class Playback {
 
   private autoSubs(): void {
     if (this.subApplied || this.subKey) return;
+    if (this.shaka) {
+      const tracks = this.shaka.textTracks();
+      if (!tracks.length) return;
+      this.subApplied = true;
+      const language = pref('subs_lang', 'off');
+      const want = language !== 'off' ? tracks.find(tr => sameLang(tr.lang, language)) : undefined;
+      this.shaka.selectText(want?.id || null);
+      return;
+    }
     const items = this.subItems();
     if (!items.length) return;
     this.subApplied = true;
@@ -930,15 +975,48 @@ export class Playback {
     } catch {
       // el reproductor no permitió el cambio: lo detecta la comprobación
     }
-    // el búfer ya tenía el audio anterior: se vuelve al mismo punto
-    if (!this.live) {
-      const t = this.v.currentTime || 0;
-      if (t > 1) this.v.currentTime = t;
-    }
+    // El cambio de pista nativo no fuerza una búsqueda ni recarga del archivo.
   }
 
   // saved = el idioma que el usuario eligió antes para este título: puede usar el panel como si lo eligiera ahora
   private pickAudio(it: AudioItem, user: boolean, saved = false): void {
+    const choice = ++this.audioChange;
+    if (this.audioTimer) clearTimeout(this.audioTimer);
+    this.audioTimer = null;
+    if (it.shaka !== undefined && this.shaka) {
+      if (this.shaka.selectAudio(it.shaka)) {
+        this.audioKey = it.key;
+        if (user) {
+          setTitleLang(this.url, it);
+          this.hooks.toast(t('Audio: {x}', { x: it.label }));
+        }
+        this.hooks.changed();
+      }
+      return;
+    }
+    if (it.mp4 !== undefined && this.mse) {
+      if (this.mse.noAudio && this.mse.audioIdx === it.mp4) {
+        this.toRemux(it.mp4, it.label, user, t('Cambiando a {x}…', { x: it.label }));
+        return;
+      }
+      if (this.mse.audioIdx !== it.mp4 || this.mse.noAudio) {
+        if (!this.decodable(it)) {
+          this.toRemux(it.mp4, it.label, user, t('Cambiando a {x}…', { x: it.label }));
+          return;
+        }
+        const pos = this.realPos();
+        this.mp4Audio = it.mp4;
+        this.mp4Paused = this.v.paused;
+        this.direct(pos);
+      }
+      this.audioKey = it.key;
+      if (user) {
+        setTitleLang(this.url, it);
+        this.hooks.toast(t('Audio: {x}', { x: it.label }));
+      }
+      this.hooks.changed();
+      return;
+    }
     if (it.key.startsWith('h:')) {
       // otro idioma del canal: el lector vuelve a abrir el canal con ese audio
       const i = Number(it.key.slice(2));
@@ -973,8 +1051,9 @@ export class Playback {
       this.enableNative(it.native);
       const g = this.gen;
       const n = it.native;
-      setTimeout(() => {
-        if (g !== this.gen || this.remux) return;
+      this.audioTimer = setTimeout(() => {
+        this.audioTimer = null;
+        if (g !== this.gen || choice !== this.audioChange || this.remux) return;
         if (this.enabledNative() === n) {
           if (user) this.hooks.toast(t('Audio: {x}', { x: it.label }));
         } else if (it.probe !== undefined && !this.live && (user || saved)) {
@@ -1023,8 +1102,9 @@ export class Playback {
   private async toRemux(a: number, label: string, user: boolean, note: string, at?: number): Promise<boolean> {
     if (this.live || this.remux?.a === a) return false;
     const g = this.gen;
+    const choice = this.audioChange;
     const e = await this.getEngine(user);
-    if (g !== this.gen) return false;
+    if (g !== this.gen || choice !== this.audioChange) return false;
     if (!e || !PanelHls.supported()) {
       if (e && user) this.hooks.toast(t('Este equipo no puede reproducir el audio que prepara el panel.'));
       this.audioKey = '';
@@ -1048,7 +1128,14 @@ export class Playback {
     // mientras se prepara sigue sonando lo de ahora: el HLS anterior del panel sigue bajando hasta que el nuevo está
     // listo (antes se cortaba al pedir otro idioma y, si el nuevo tardaba o fallaba, el video quedaba sin nada)
     const prev = before && this.hls?.attached && this.played ? this.hls : null;
-    if (!prev) this.stopHls();
+    if (!prev) {
+      this.stopHls();
+      if (this.shakaRelease) {
+        const g = this.gen;
+        await this.shakaRelease;
+        if (g !== this.gen || !this.remux || !this.engine) return;
+      }
+    }
     else {
       this.prevHls?.destroy();
       this.prevHls = prev;

@@ -261,8 +261,29 @@ export async function seriesInfo(s: Session, id: string): Promise<SeriesInfo | n
 
 export type EpgEntry = { t: string; d: string; s: number; e: number };
 
+// La guía de la vista previa y la del reproductor comparten una petición.
+// Solo memoria, separada por sesión y limitada a 64 canales / 60 segundos.
+const epgCache = new Map<string, { until: number; entries: EpgEntry[] }>();
+const epgPending = new Map<string, Promise<EpgEntry[]>>();
+
 // guía: primero get_short_epg del proveedor y, si no trae nada, epg.php del panel
-export async function channelEpg(s: Session, ch: { id: string; epg: string; name: string }): Promise<EpgEntry[]> {
+export function channelEpg(s: Session, ch: { id: string; epg: string; name: string }): Promise<EpgEntry[]> {
+  const key = JSON.stringify([s.base, s.user, s.pass, ch.id, ch.epg, ch.name]);
+  const cached = epgCache.get(key);
+  if (cached && cached.until > Date.now()) return Promise.resolve(cached.entries.filter(e => e.e > nowSec()));
+  const pending = epgPending.get(key);
+  if (pending) return pending;
+  const request = fetchChannelEpg(s, ch).then(entries => {
+    epgCache.delete(key);
+    epgCache.set(key, { entries, until: Date.now() + (entries.length ? 60000 : 5000) });
+    while (epgCache.size > 64) epgCache.delete(epgCache.keys().next().value!);
+    return entries;
+  }).finally(() => epgPending.delete(key));
+  epgPending.set(key, request);
+  return request;
+}
+
+async function fetchChannelEpg(s: Session, ch: { id: string; epg: string; name: string }): Promise<EpgEntry[]> {
   const now = nowSec();
   let out: EpgEntry[] = [];
   const j = json(await http(api(s, 'get_short_epg', '&stream_id=' + enc(ch.id) + '&limit=8'), { timeout: 10000 }));

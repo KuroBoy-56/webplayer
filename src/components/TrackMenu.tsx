@@ -7,10 +7,11 @@ import { alpha, C, px, themed } from '../theme';
 import { Button } from './ui';
 
 // memo: el reproductor se redibuja seguido (barra, avisos); el menú solo cuando cambian sus opciones
-export default memo(function TrackMenu({ items, favLabel, onFav, onPick }: { items: MenuItem[]; favLabel: string; onFav: () => void; onPick: (m: MenuItem) => void }) {
+export default memo(function TrackMenu({ items, favLabel, onFav, onPick, audioOnly = false }: { items: MenuItem[]; favLabel: string; onFav: () => void; onPick: (m: MenuItem) => void; audioOnly?: boolean }) {
   const safe = (items || []).filter(Boolean);
   const audio = safe.filter(m => m.kind !== 'text');
-  const subs = safe.filter(m => m.kind === 'text');
+  const subs = audioOnly ? [] : safe.filter(m => m.kind === 'text');
+  if (audioOnly) favLabel = '';
   const realAudio = audio.filter(m => m.kind === 'audio');
   // el foco empieza en lo que suena ahora
   const first = (favLabel ? null : realAudio.find(m => m.on) || audio[0] || subs.find(m => m.on) || subs[0]) || null;
@@ -21,7 +22,7 @@ export default memo(function TrackMenu({ items, favLabel, onFav, onPick }: { ite
   );
   return (
     <View style={s.menu}>
-      <Text style={s.menuTitle}>{t('Audio y subtítulos')}</Text>
+      <Text style={s.menuTitle}>{t(audioOnly ? 'Audio' : 'Audio y subtítulos')}</Text>
       <ScrollView>
         {favLabel ? (
           <View style={s.opt}>
@@ -32,7 +33,7 @@ export default memo(function TrackMenu({ items, favLabel, onFav, onPick }: { ite
         {realAudio.length ? null : <Text style={s.note}>{t('Audio predeterminado')}</Text>}
         {audio.map(row)}
         {realAudio.length === 1 ? <Text style={s.note}>{t('Este contenido tiene una sola pista de audio.')}</Text> : null}
-        <Text style={s.head}>{t('Subtítulos')}</Text>
+        {!audioOnly ? <Text style={s.head}>{t('Subtítulos')}</Text> : null}
         {subs.map(row)}
       </ScrollView>
       <Text style={s.hint}>{t('Atrás para cerrar')}</Text>

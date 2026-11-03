@@ -3,12 +3,12 @@
 // (a la sección actual); Atrás en el menú pregunta si salir («¿Salir de …?», «Puedes volver cuando quieras.»).
 // Solo BackHandler: useKeplerBackHandler crea un segundo receptor del Atrás que, sin manejadores propios, cerraba la
 // app con cada Atrás (aunque la pantalla ya lo hubiera atendido).
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { BackHandler, Image, Modal, StyleSheet, Text, View } from 'react-native';
 import { Button, Focusable, Logo } from '../components/ui';
 import { Key, langChanged, t } from '../lib/i18n';
 import { brandName, features, useBrandRev } from '../lib/tenant';
-import { useAppState } from '../state';
+import { useAppSelector } from '../state';
 import { alpha, C, px, SIDE, themed } from '../theme';
 import Account from './Account';
 import Browse from './Browse';
@@ -40,8 +40,19 @@ const clock = () => {
   return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
 };
 
+// El reloj y el foco del menú no deben volver a dibujar toda la sección.
+const SectionContent = memo(function SectionContent({ section, active, back }: { section: Section; active: boolean; back: number }) {
+  useBrandRev();
+  if (section === 'home' || section === 'series' || section === 'movies') return <Browse key={section} section={section} active={active} />;
+  if (section === 'live') return <Live active={active} />;
+  if (section === 'sports') return <Sports active={active} back={back} />;
+  if (section === 'mylist') return <MyList />;
+  if (section === 'search') return <Search />;
+  return <Account />;
+});
+
 export default function Main({ active }: { active: boolean }) {
-  const st = useAppState();
+  const loading = useAppSelector(st => st.loading);
   // tras cambiar el idioma se vuelve a Cuenta
   const [section, setSection] = useState<Section>(() => (langChanged() ? 'account' : 'home'));
   const [exitAsk, setExitAsk] = useState(false);
@@ -55,9 +66,11 @@ export default function Main({ active }: { active: boolean }) {
   const menu = features().sports ? MENU : MENU.filter(m => m[0] !== 'sports');
 
   useEffect(() => {
+    if (!active) return;
+    setNow(clock());
     const id = setInterval(() => setNow(clock()), 20000);
     return () => clearInterval(id);
-  }, []);
+  }, [active]);
 
   // estado leído por referencia: el Atrás se registra una sola vez por activación (sin huecos entre registros)
   const exitRef = useRef(false);
@@ -88,12 +101,7 @@ export default function Main({ active }: { active: boolean }) {
   return (
     <View style={s.root}>
       <View style={s.content}>
-        {section === 'home' || section === 'series' || section === 'movies' ? <Browse key={section} section={section} /> : null}
-        {section === 'live' ? <Live active={active} /> : null}
-        {section === 'sports' ? <Sports active={active} back={menuRev} /> : null}
-        {section === 'mylist' ? <MyList /> : null}
-        {section === 'search' ? <Search /> : null}
-        {section === 'account' ? <Account /> : null}
+        <SectionContent section={section} active={active} back={menuRev} />
       </View>
       <View style={s.menu}>
         <Logo size={64} />
@@ -109,7 +117,7 @@ export default function Main({ active }: { active: boolean }) {
             </Focusable>
           ))}
         </View>
-        {st.loading ? <Text style={s.loading}>{t(st.loading === 'vod' ? 'Cargando películas…' : st.loading === 'series' ? 'Cargando series…' : 'Cargando canales…')}</Text> : null}
+        {loading ? <Text style={s.loading}>{t(loading === 'vod' ? 'Cargando películas…' : loading === 'series' ? 'Cargando series…' : 'Cargando canales…')}</Text> : null}
         {ICONS.map(([key, src]) => (
           <Focusable
             key={key + ':' + menuRev}

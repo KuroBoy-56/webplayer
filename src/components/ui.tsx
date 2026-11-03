@@ -52,6 +52,8 @@ export type ButtonProps = {
   width?: number;
   // más alto (teclado en pantalla, filas de ajustes)
   big?: boolean;
+  // Teclas: deja sitio al glifo sin el relleno lateral de un botón de texto.
+  compact?: boolean;
   fontSize?: number;
   last?: boolean;
   disabled?: boolean;
@@ -64,7 +66,7 @@ export type ButtonProps = {
 
 const BORDER = 3;
 
-export function Button({ label, onPress, primary, preferred, icon, small, value, left, width, big, fontSize, last, disabled, onFocus, ...next }: ButtonProps) {
+export function Button({ label, onPress, primary, preferred, icon, small, value, left, width, big, compact, fontSize, last, disabled, onFocus, ...next }: ButtonProps) {
   useBrandRev();
   const [focused, setFocused] = useState(false);
   const scale = useRef(new Animated.Value(1)).current;
@@ -92,9 +94,10 @@ export function Button({ label, onPress, primary, preferred, icon, small, value,
           big && s.btnBig,
           primary ? s.btnPrimary : focused ? s.btnGhostF : s.btnGhost,
           (row || left) && s.btnRow,
+          compact && s.btnCompact,
           disabled && s.btnDisabled,
         ]}>
-        <Text style={[s.btnText, small && s.btnTextSmall, fontSize ? { fontSize } : null, { color: textColor }, row && s.btnTextRow]} numberOfLines={1}>
+        <Text style={[s.btnText, small && s.btnTextSmall, fontSize ? { fontSize } : null, { color: textColor }, row && s.btnTextRow, compact && s.keyText]} numberOfLines={1}>
           {icon ? icon + '  ' : ''}
           {label}
         </Text>
@@ -154,6 +157,8 @@ const s = themed(() =>
     btnSmall: { height: px(48), paddingHorizontal: px(24) },
     btnBig: { height: px(76) },
     btnRow: { justifyContent: 'space-between', paddingHorizontal: px(28) },
+    btnCompact: { paddingHorizontal: px(8) },
+    keyText: { flexShrink: 0, textAlign: 'center' },
     btnPrimary: { backgroundColor: C.red },
     btnGhost: { backgroundColor: alpha(C.text, 0.15) },
     btnGhostF: { backgroundColor: alpha(C.text, 0.25) },

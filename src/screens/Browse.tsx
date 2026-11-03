@@ -89,7 +89,7 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
   );
 }
 
-export default function Browse({ section }: { section: 'home' | 'series' | 'movies' }) {
+export default function Browse({ section, active = true }: { section: 'home' | 'series' | 'movies'; active?: boolean }) {
   const nav = useNav();
   const st = useAppState();
   // el distribuidor puede no separar su contenido por plataformas
@@ -134,7 +134,7 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
   const [heroArtOf, setHeroArtOf] = useState<{ id: string; art: Art } | null>(null);
   useEffect(() => {
     const h = base.hero;
-    if (!h || h.backdrop || (h.kind !== 'vod' && h.kind !== 'series')) return;
+    if (!active || !h || h.backdrop || (h.kind !== 'vod' && h.kind !== 'series')) return;
     const known = savedArt(h);
     if (known) return setHeroArtOf({ id: h.kind + h.id, art: known });
     let live = true;
@@ -142,7 +142,7 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
     return () => {
       live = false;
     };
-  }, [base.hero]);
+  }, [base.hero, active]);
   const firstHero = useMemo(() => {
     const h = base.hero;
     return h && heroArtOf && heroArtOf.id === h.kind + h.id ? withArt(h, heroArtOf.art) : h;
@@ -152,6 +152,7 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
   const [heroes, setHeroes] = useState<Item[]>([]);
   const [heroIdx, setHeroIdx] = useState(0);
   useEffect(() => {
+    if (!active) return;
     setHeroes([]);
     setHeroIdx(0);
     let live = true;
@@ -168,15 +169,15 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
     return () => {
       live = false;
     };
-  }, [base.heroes]);
+  }, [base.heroes, active]);
   const hero = heroes.length ? heroes[heroIdx % heroes.length] : firstHero;
   const [inRows, setInRows] = useState(false);
   // cambia de destacado cada 8 s solo con la portada a la vista (no recorriendo las filas)
   useEffect(() => {
-    if (inRows || heroes.length < 2) return;
+    if (!active || inRows || heroes.length < 2) return;
     const id = setInterval(() => setHeroIdx(i => (i + 1) % heroes.length), 8000);
     return () => clearInterval(id);
-  }, [inRows, heroes.length]);
+  }, [active, inRows, heroes.length]);
   const [rowIdx, setRowIdx] = useState(0);
   const [info, setInfo] = useState<Info>({ item: hero });
   // el fondo del destacado puede llegar con el foco ya en las filas: ahí la portada sigue mostrando lo enfocado
@@ -248,6 +249,12 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
     list.current?.scrollToOffset({ offset: 0, animated: false });
   };
 
+  const selectItem = useCallback((it: Item) => openItem(nav, it), [nav]);
+  const selectSpecial = useCallback((sp: Special) => openSpecial(nav, sp), [nav]);
+  const renderRow = useCallback(({ item, index }: { item: Row; index: number }) => (
+    <RowView row={item} rowIndex={index} onItem={selectItem} onSpecial={selectSpecial} onFocusRow={onFocusAt} progressOf={progressOf} />
+  ), [selectItem, selectSpecial, onFocusAt, progressOf]);
+
   if (!ready) return <Spinner label={st.error || t('Cargando el catálogo…')} />;
   if (!rows.length) return <Message text={t('No hay contenido para mostrar.')} />;
 
@@ -296,9 +303,7 @@ export default function Browse({ section }: { section: 'home' | 'series' | 'movi
           initialNumToRender={4}
           windowSize={5}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item, index }) => (
-            <RowView row={item} onItem={it => openItem(nav, it)} onSpecial={sp => openSpecial(nav, sp)} onFocusAny={x => onFocusAt(index, x)} progressOf={progressOf} />
-          )}
+          renderItem={renderRow}
           contentContainerStyle={{ paddingBottom: px(600) }}
         />
       </View>

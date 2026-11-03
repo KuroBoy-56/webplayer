@@ -16,7 +16,7 @@ type Trk = {
   // shift: segundos que se le suman a la pista para que video y audio queden como los muestra el archivo (lista de
   // edición: el video suele empezar unas décimas después por los cuadros B) sin tiempos negativos
   // delay: tramos vacíos al principio de la lista de edición (la pista empieza más tarde), en la escala de la película
-  kind: string; ts: number; enabled: boolean; entry: Uint8Array | null; width: number; height: number; mediaTime: number; delay: number; shift: number;
+  kind: string; lang: string; ts: number; enabled: boolean; entry: Uint8Array | null; width: number; height: number; mediaTime: number; delay: number; shift: number;
   off: number[]; size: number[]; dts: number[]; cts: number[]; key: Set<number> | null;
 };
 
@@ -44,7 +44,7 @@ function kids(b: Uint8Array, s: number, e: number): { t: string; s: number; e: n
 const kid = (b: Uint8Array, s: number, e: number, t: string) => kids(b, s, e).find(k => k.t === t) || null;
 
 function parseTrak(b: Uint8Array, s: number, e: number): Trk | null {
-  const tk: Trk = { kind: '', ts: 0, enabled: false, entry: null, width: 0, height: 0, mediaTime: 0, delay: 0, shift: 0, off: [], size: [], dts: [], cts: [], key: null };
+  const tk: Trk = { kind: '', lang: '', ts: 0, enabled: false, entry: null, width: 0, height: 0, mediaTime: 0, delay: 0, shift: 0, off: [], size: [], dts: [], cts: [], key: null };
   const tkhd = kid(b, s, e, 'tkhd');
   if (tkhd) tk.enabled = (b[tkhd.s + 3] & 1) === 1;
   const elst = kid(b, s, e, 'edts');
@@ -70,6 +70,8 @@ function parseTrak(b: Uint8Array, s: number, e: number): Trk | null {
   const stbl = minf ? kid(b, minf.s, minf.e, 'stbl') : null;
   if (!mdhd || !hdlr || !stbl) return null;
   tk.ts = u32(b, mdhd.s + (b[mdhd.s] === 1 ? 20 : 12));
+  const language = u16(b, mdhd.s + (b[mdhd.s] === 1 ? 32 : 20));
+  if (language) tk.lang = String.fromCharCode(96 + ((language >> 10) & 31), 96 + ((language >> 5) & 31), 96 + (language & 31));
   tk.kind = typ(b, hdlr.s + 8);
   const box = (t: string) => kid(b, stbl.s, stbl.e, t);
   const stsd = box('stsd');
@@ -185,7 +187,13 @@ function audioCfg(tk: Trk): AudioCfg | null {
 }
 
 export class Mp4Mse {
+  tracks: { lang: string; codec: string }[] = [];
+  audioIdx = -1;
+  onTracks: () => void = () => {};
+  index: Uint8Array | null = null;
   private ms: any = null;
+  private objectUrl = '';
+  private requests = new Set<AbortController>();
   private sb: any = null;
   private size = 0;
   private vt: Trk | null = null;
@@ -206,16 +214,22 @@ export class Mp4Mse {
   noAudio = false;
   onError: () => void = () => {};
 
-  constructor(private v: VideoPlayer, private url: string) {}
+  constructor(private v: VideoPlayer, private url: string, private selectedAudio = -1, index: Uint8Array | null = null) {
+    this.index = index;
+  }
 
   // '' = empezó en el segundo pedido; si no, el motivo (el que llama sigue con el modo directo de siempre)
   async start(at: number): Promise<string> {
-    const moov = await this.readMoov();
+    const moov = this.index || await this.readMoov();
     if (!moov) return 'índice: ' + (this.why || 'no encontrado');
+    if (!this.alive) return '';
+    this.index = moov;
     const traks = kids(moov, 0, moov.length).filter(k => k.t === 'trak').map(k => parseTrak(moov, k.s, k.e)).filter((x): x is Trk => !!x);
     const vt = traks.find(x => x.kind === 'vide') || null;
     const auds = traks.filter(x => x.kind === 'soun');
-    const at0 = auds.find(x => x.enabled) || auds[0] || null;
+    this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '' }));
+    const at0 = auds[this.selectedAudio] || auds.find(x => x.enabled) || auds[0] || null;
+    this.audioIdx = at0 ? auds.indexOf(at0) : -1;
     const vc = vt ? videoCfg(vt) : null;
     const aac = at0 ? audioCfg(at0) : null;
     const dolby = at0 && !aac ? dolbyCfg(at0) : null;
@@ -245,7 +259,8 @@ export class Mp4Mse {
     this.ms = ms;
     const opened = new Promise<void>(res => ms.addEventListener('sourceopen', () => res()));
     try {
-      this.v.src = (URL as any).createObjectURL(ms);
+      this.objectUrl = (URL as any).createObjectURL(ms);
+      this.v.src = this.objectUrl;
     } catch {
       (this.v as any).srcObject = ms;
     }
@@ -280,18 +295,25 @@ export class Mp4Mse {
     this.pump();
     this.watch = setInterval(() => this.alive && this.unstick(), 300);
     this.v.play();
+    this.onTracks();
     return '';
   }
 
   destroy(): void {
     this.alive = false;
     this.gen++;
+    for (const request of this.requests) request.abort();
+    this.requests.clear();
     if (this.watch) clearInterval(this.watch);
     this.watch = null;
     try {
       if (this.sb?.updating) this.sb.abort();
     } catch {
       // ya cerrado
+    }
+    if (this.objectUrl) {
+      try { (URL as any).revokeObjectURL?.(this.objectUrl); } catch { /* API opcional en Vega */ }
+      this.objectUrl = '';
     }
   }
 
@@ -366,6 +388,7 @@ export class Mp4Mse {
   private async get(off: number, len: number): Promise<Uint8Array | null> {
     for (let tries = 0; tries < 3 && this.alive; tries++) {
       const ctrl = new AbortController();
+      this.requests.add(ctrl);
       const timer = setTimeout(() => ctrl.abort(), 30000);
       try {
         const r = await fetch(this.url, { headers: { 'User-Agent': UA, Range: 'bytes=' + off + '-' + (off + len - 1) }, signal: ctrl.signal });
@@ -378,10 +401,12 @@ export class Mp4Mse {
         if (tot > 0) this.size = tot;
         return new Uint8Array(await r.arrayBuffer());
       } catch (e: any) {
+        if (!this.alive) return null;
         this.why = 'red: ' + String(e?.message || e).slice(0, 60);
         await sleep(1000);
       } finally {
         clearTimeout(timer);
+        this.requests.delete(ctrl);
       }
     }
     return null;

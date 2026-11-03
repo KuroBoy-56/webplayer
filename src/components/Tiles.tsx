@@ -1,5 +1,5 @@
 // Portadas, tarjetas de plataformas/géneros y filas horizontales estilo Netflix.
-import React, { memo, useMemo } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { isItem, Item, Row, Special } from '../data/catalog';
 import { t } from '../lib/i18n';
@@ -81,12 +81,14 @@ export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: {
 export const cardsHeight = (row: Row) => (row.type === 'platform' ? px(190) : row.type === 'genre' ? px(130) : posterH() + px(30));
 export const rowHeight = (row: Row) => cardsHeight(row) + (row.title ? px(46) : px(4)) + px(18);
 
-export function RowView({
+export const RowView = memo(function RowView({
   row,
   onItem,
   onSpecial,
   onFocusItem,
   onFocusAny,
+  rowIndex,
+  onFocusRow,
   progressOf,
 }: {
   row: Row;
@@ -95,9 +97,16 @@ export function RowView({
   onFocusItem?: (it: Item) => void;
   // cualquier tarjeta de la fila (también plataformas, géneros y «Ver todo»)
   onFocusAny?: (x: Item | Special) => void;
+  rowIndex?: number;
+  onFocusRow?: (index: number, x: Item | Special) => void;
   progressOf?: (it: Item) => number | undefined;
 }) {
   const height = cardsHeight(row);
+  const focus = useCallback((x: Item | Special) => {
+    if (isItem(x)) onFocusItem?.(x);
+    onFocusAny?.(x);
+    if (rowIndex !== undefined) onFocusRow?.(rowIndex, x);
+  }, [onFocusItem, onFocusAny, rowIndex, onFocusRow]);
   return (
     <View style={[s.row, { height: rowHeight(row) - px(18) }]}>
       {row.title ? <Text style={s.rowTitle} numberOfLines={1}>{row.title}</Text> : <View style={{ height: px(4) }} />}
@@ -117,16 +126,16 @@ export function RowView({
               rank={row.type === 'top10' ? index + 1 : undefined}
               progress={progressOf?.(x)}
               onPress={() => onItem(x)}
-              onFocus={onFocusItem || onFocusAny ? () => (onFocusItem?.(x), onFocusAny?.(x)) : undefined}
+              onFocus={onFocusItem || onFocusAny || onFocusRow ? () => focus(x) : undefined}
             />
           ) : (
-            <SpecialTile sp={x} onPress={() => onSpecial(x)} onFocus={onFocusAny ? () => onFocusAny(x) : undefined} />
+            <SpecialTile sp={x} onPress={() => onSpecial(x)} onFocus={onFocusAny || onFocusRow ? () => focus(x) : undefined} />
           )
         }
       />
     </View>
   );
-}
+});
 
 const s = themed(() =>
   StyleSheet.create({
