@@ -173,6 +173,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   propio no puede con el archivo, sigue el modo directo de siempre. Ya no hay botón «Audio» arriba (▲ solo muestra la
   barra). Canales: con segmentos largos (≥ 8 s) el convertidor a MP4 espera 2 segmentos (antes 3) antes de entregar el
   MPEG-TS, y el vigilante da 15 s más si el canal sigue bajando video.
+- **Controles de reproductor normales (1.0.50)**: en el centro, dibujados con formas (sin números ni símbolos de texto):
+  ◀◀ atrasar, pausa / reproducir y ▶▶ adelantar; en series además |◀ capítulo anterior y ▶| siguiente. ◀ ▶ y OK los usan
+  directo (el botón se ilumina); con ▲ se eligen con el control (◀ ▶ para moverse, OK para usar, ▼ o Atrás vuelven).
 - **Motor Shaka, teclado y fluidez (1.0.46)**: películas y series en HLS / DASH con Shaka Player 4.16.13 con los parches
   de Amazon para Vega (`src/player/shaka.ts`, `vendor/`); MP4 por el lector MSE propio con cambio de audio local; MKV con
   las pistas del equipo y el panel solo como respaldo. Botón «Audio · idioma» en el reproductor. Teclado con teclas

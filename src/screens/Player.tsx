@@ -276,6 +276,16 @@ export default function Player({ params }: { params: PlayParams }) {
     return true;
   }, [params, load, showOverlay]);
 
+  // capítulo anterior (botón |◀ de las series)
+  const prevEp = useCallback(() => {
+    if (params.kind !== 'episode') return;
+    const n = indexRef.current - 1;
+    if (n < 0) return;
+    setIndex(n);
+    load(n);
+    showOverlay();
+  }, [params, load, showOverlay]);
+
   // canal n de la carpeta (▲▼ o la lista de canales)
   const goTo = useCallback(
     (n: number) => {
@@ -971,7 +981,7 @@ export default function Player({ params }: { params: PlayParams }) {
       case 'up':
       case 'channel_up':
         if (live) zap(-1);
-        else showOverlay();
+        else { showOverlay(); setControlsFocused(true); }
         break;
       case 'channel_down':
         zap(1);
@@ -1052,20 +1062,20 @@ export default function Player({ params }: { params: PlayParams }) {
       ) : null}
 
       {anchorOn ? <Focusable preferred onPress={onSelect} style={s.anchor}>{null}</Focusable> : null}
-      {/* como Android: atrasar 10 s, pausa / reproducir y adelantar 10 s en el centro (◀ ▶ y OK del control) */}
+      {/* controles de un reproductor normal (dibujados, sin números ni símbolos de texto): ◀◀ atrasar, pausa / reproducir y
+          ▶▶ adelantar; en series además capítulo anterior |◀ y siguiente ▶|. ◀ ▶ y OK los usan directo; con ▲ se eligen
+          con el control (◀ ▶ para moverse, OK para usar, ▼ vuelve) */}
       {!live && (overlay || paused) && !buffering && !error && !menu && !askExit && !(nextSecs > 0) ? (
-        <View style={s.centerCtl} pointerEvents="none">
-          <View style={[s.ctlBtn, flash === 'back' && s.ctlBtnOn]}>
-            <Text style={[s.ctlIcon, flash === 'back' && s.ctlIconOn]}>◀◀</Text>
-            <Text style={[s.ctlSec, flash === 'back' && s.ctlIconOn]}>10</Text>
-          </View>
-          <View style={[s.ctlBtn, s.ctlBig, flash === 'play' && s.ctlBtnOn]}>
-            <Text style={[s.ctlIcon, s.ctlIconBig, flash === 'play' && s.ctlIconOn]}>{paused ? '▶' : '❚❚'}</Text>
-          </View>
-          <View style={[s.ctlBtn, flash === 'fwd' && s.ctlBtnOn]}>
-            <Text style={[s.ctlIcon, flash === 'fwd' && s.ctlIconOn]}>▶▶</Text>
-            <Text style={[s.ctlSec, flash === 'fwd' && s.ctlIconOn]}>10</Text>
-          </View>
+        <View style={s.centerCtl} pointerEvents={controlsFocused ? 'auto' : 'none'}>
+          {params.kind === 'episode' ? (
+            <CtlButton icon="prev" on={false} focusable={controlsFocused} disabled={index === 0} onPress={prevEp} />
+          ) : null}
+          <CtlButton icon="rew" on={flash === 'back'} focusable={controlsFocused} onPress={() => seek(-10)} />
+          <CtlButton icon={paused ? 'play' : 'pause'} big on={flash === 'play'} focusable={controlsFocused} preferred onPress={togglePause} />
+          <CtlButton icon="ffw" on={flash === 'fwd'} focusable={controlsFocused} onPress={() => seek(10)} />
+          {params.kind === 'episode' ? (
+            <CtlButton icon="next" on={false} focusable={controlsFocused} disabled={index + 1 >= params.queue.length} onPress={() => next()} />
+          ) : null}
         </View>
       ) : null}
       {overlay || paused ? (
@@ -1183,6 +1193,47 @@ export default function Player({ params }: { params: PlayParams }) {
   );
 }
 
+// Iconos de reproductor dibujados con formas (triángulos con bordes y barras): se ven igual en todo Fire TV, sin
+// depender de los símbolos de la fuente
+type CtlIconKind = 'play' | 'pause' | 'rew' | 'ffw' | 'prev' | 'next';
+function Tri({ dir, size, color }: { dir: 'l' | 'r'; size: number; color: string }) {
+  const h = px(size);
+  const w = Math.round(h * 0.87);
+  return (
+    <View style={{ width: 0, height: 0, borderTopWidth: h / 2, borderBottomWidth: h / 2, borderTopColor: 'transparent', borderBottomColor: 'transparent',
+      ...(dir === 'r' ? { borderLeftWidth: w, borderLeftColor: color } : { borderRightWidth: w, borderRightColor: color }) }} />
+  );
+}
+function Bar({ size, color }: { size: number; color: string }) {
+  return <View style={{ width: px(size * 0.22), height: px(size), backgroundColor: color, borderRadius: px(2) }} />;
+}
+function CtlIcon({ kind, color, big }: { kind: CtlIconKind; color: string; big?: boolean }) {
+  const n = big ? 56 : 36;
+  const row = { flexDirection: 'row' as const, alignItems: 'center' as const };
+  if (kind === 'play') return <View style={{ marginLeft: px(8) }}><Tri dir="r" size={n} color={color} /></View>;
+  if (kind === 'pause') return <View style={[row, { gap: px(n * 0.22) }]}><Bar size={n} color={color} /><Bar size={n} color={color} /></View>;
+  if (kind === 'rew') return <View style={row}><Tri dir="l" size={n} color={color} /><Tri dir="l" size={n} color={color} /></View>;
+  if (kind === 'ffw') return <View style={row}><Tri dir="r" size={n} color={color} /><Tri dir="r" size={n} color={color} /></View>;
+  if (kind === 'prev') return <View style={row}><Bar size={n} color={color} /><Tri dir="l" size={n} color={color} /></View>;
+  return <View style={row}><Tri dir="r" size={n} color={color} /><Bar size={n} color={color} /></View>;
+}
+function CtlButton({ icon, big, on, focusable, preferred, disabled, onPress }: { icon: CtlIconKind; big?: boolean; on: boolean; focusable: boolean; preferred?: boolean; disabled?: boolean; onPress: () => void }) {
+  const face = (f: boolean) => {
+    const lit = (f || on) && !disabled;
+    return (
+      <View style={[s.ctlBtn, big && s.ctlBig, lit && s.ctlBtnOn, disabled && s.ctlOff]}>
+        <CtlIcon kind={icon} big={big} color={lit ? '#000' : '#fff'} />
+      </View>
+    );
+  };
+  if (!focusable) return face(false);
+  return (
+    <Focusable preferred={preferred} disabled={disabled} onPress={() => !disabled && onPress()}>
+      {(f: boolean) => face(f)}
+    </Focusable>
+  );
+}
+
 // Barra de avance con un punto grande donde va el video. Todo en píxeles fijos (ancho de diseño 1760 = 1920 menos los
 // márgenes), sin porcentajes, sin flex y sin medir: sobre el video de Vega ninguna de esas formas pintaba el relleno.
 // El punto va en el flujo normal (margen izquierdo) y sube sobre la barra con un margen negativo.
@@ -1242,14 +1293,11 @@ const s = themed(() =>
     chRowLogo: { width: px(80), height: px(50), marginRight: px(16) },
     chName: { color: C.text, fontSize: px(28), flex: 1 },
     chTextF: { color: C.onFocus },
-    centerCtl: { position: 'absolute', left: 0, right: 0, top: px(430), flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: px(90), zIndex: 7 },
+    centerCtl: { position: 'absolute', left: 0, right: 0, top: px(430), flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: px(70), zIndex: 7 },
     ctlBtn: { width: px(130), height: px(130), borderRadius: px(65), backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: px(3), borderColor: 'rgba(255,255,255,0.55)', alignItems: 'center', justifyContent: 'center' },
     ctlBig: { width: px(170), height: px(170), borderRadius: px(85) },
     ctlBtnOn: { backgroundColor: C.text, borderColor: C.text, transform: [{ scale: 1.08 }] },
-    ctlIcon: { color: '#fff', fontSize: px(34), fontWeight: '800' },
-    ctlIconBig: { fontSize: px(54) },
-    ctlSec: { color: '#fff', fontSize: px(24), fontWeight: '700', marginTop: px(2) },
-    ctlIconOn: { color: '#000' },
+    ctlOff: { opacity: 0.35 },
     anchor: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 1 },
     exitShade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 50, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' },
     exitBox: { backgroundColor: alpha(C.bg2, 0.97), borderRadius: px(12), padding: px(40), alignItems: 'center' },
