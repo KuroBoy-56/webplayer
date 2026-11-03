@@ -95,8 +95,8 @@
     <string name="settings">Ajustes</string>
     <string name="continue_watching_for">Continuar viendo para %1$s</string>
     <string name="continue_watching">Continuar viendo</string>
-    <string name="top10_today">Top 10 de hoy</string>
-    <string name="top10">Top 10</string>
+    <string name="top10_today">Top 10 de la semana</string>
+    <string name="top10">Top 10 de la semana</string>
     <string name="platforms">Plataformas</string>
     <string name="new_movies">Películas recién agregadas</string>
     <string name="new_series">Series recién agregadas</string>
@@ -328,8 +328,8 @@
     <string name="upcoming_badge">PRÓXIMO</string>
     <string name="series_for_you">Series para ti</string>
     <string name="movies_for_you">Películas para ti</string>
-    <string name="top10_movies_today">Top 10 películas hoy</string>
-    <string name="top10_series_today">Top 10 series hoy</string>
+    <string name="top10_movies_today">Top 10 películas de la semana</string>
+    <string name="top10_series_today">Top 10 series de la semana</string>
     <string name="tv_no_favs">Aún no tienes favoritos.\nMantén presionado OK (o MENÚ) sobre un canal para agregarlo.</string>
     <string name="no_channels_category">No hay canales en esta categoría.</string>
     <string name="best_of">Lo mejor de %1$s</string>

@@ -90,7 +90,9 @@ fun HomeScreen(state: AppState) {
 
     val recentMovies = remember(movies) { movies.sortedByDescending { it.added }.take(40) }
     val recentSeries = remember(series) { series.sortedByDescending { it.added }.take(40) }
-    val top10 = remember(movies) { movies.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10) }
+    // Top 10 de la semana del panel (cada 12 h), como Roku y Vega OS
+    androidx.compose.runtime.LaunchedEffect(Unit) { com.latmpx.player.data.WeekTop.load() }
+    val top10 = remember(movies, series, com.latmpx.player.data.WeekTop.rev) { com.latmpx.player.data.WeekTop.top10Home(movies, series) }
     val genreRows = remember(movies, state.movieCats) {
         Platforms.genres.mapNotNull { (label, kw) ->
             val mcats = state.movieCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }
