@@ -24,6 +24,7 @@
     <string name="err_demo_too_many">Demasiadas demos desde esta conexión. Inténtalo mañana.</string>
     <string name="err_demo_unavailable">La demo no está disponible en este momento. Inténtalo más tarde.</string>
     <string name="err_demo_create">No se pudo crear la demo</string>
+    <string name="err_device_blocked">Este equipo está bloqueado. Contacta a tu proveedor.</string>
     <string name="err_pin_not_saved_code">El panel no guardó el PIN (%1$d)</string>
     <string name="server">Servidor</string>
     <string name="tenant_invalid">Número de distribuidor no válido</string>

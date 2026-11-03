@@ -23,6 +23,7 @@
     <string name="err_demo_too_many">Too many demos from this connection. Try again tomorrow.</string>
     <string name="err_demo_unavailable">The demo isn\'t available right now. Try again later.</string>
     <string name="err_demo_create">Couldn\'t create the demo</string>
+    <string name="err_device_blocked">This device is blocked. Contact your provider.</string>
     <string name="err_pin_not_saved_code">The panel didn\'t save the PIN (%1$d)</string>
     <string name="server">Server</string>
     <string name="tenant_invalid">Invalid distributor number</string>
