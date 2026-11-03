@@ -6,7 +6,8 @@ import { UA } from './http';
 
 export type ProbeTrack = { id: string; lang: string; codec: string; name: string; def: boolean; forced: boolean };
 // headOk: el archivo contestó (si no es MKV ni MP4 —AVI, TS— no hay pistas que leer y no se vuelve a intentar)
-export type Probe = { ok: boolean; container: '' | 'mp4' | 'mkv'; audio: ProbeTrack[]; subs: ProbeTrack[]; headOk?: boolean };
+// video / moovEnd: solo para el reporte de un video que el equipo no abre (códec del video; índice MP4 al final)
+export type Probe = { ok: boolean; container: '' | 'mp4' | 'mkv'; audio: ProbeTrack[]; subs: ProbeTrack[]; headOk?: boolean; video?: string; moovEnd?: boolean };
 
 const CHUNK = 262144;
 // la primera lectura de 256 KB: en un MKV las pistas están al principio y con el video sonando sale más rápido
@@ -122,8 +123,9 @@ async function prefetch(r: Reader, off: number, len: number): Promise<void> {
   if (data) r.chunks.push({ start: off, data });
 }
 
-async function mp4(r: Reader): Promise<{ audio: ProbeTrack[]; subs: ProbeTrack[] }> {
+async function mp4(r: Reader): Promise<{ audio: ProbeTrack[]; subs: ProbeTrack[]; video?: string; moovEnd?: boolean }> {
   let off = 0;
+  let mdat = false;
   for (let i = 0; i < 20; i++) {
     const lim = r.size > 0 ? r.size : Number.MAX_SAFE_INTEGER;
     // moov al final del archivo (después del video): el final entero en un solo pedido
@@ -132,8 +134,9 @@ async function mp4(r: Reader): Promise<{ audio: ProbeTrack[]; subs: ProbeTrack[]
     if (!b) break;
     if (b.type === 'moov') {
       if (b.size <= MOOV_MAX) await prefetch(r, off, b.size);
-      return moov(r, off + b.hl, off + b.size);
+      return { ...(await moov(r, off + b.hl, off + b.size)), moovEnd: mdat };
     }
+    if (b.type === 'mdat') mdat = true;
     off += b.size;
     if (r.size > 0 && off >= r.size) break;
   }
@@ -144,7 +147,7 @@ async function mp4(r: Reader): Promise<{ audio: ProbeTrack[]; subs: ProbeTrack[]
 const SUB_HANDLERS = ['sbtl', 'text', 'subt', 'clcp'];
 
 async function moov(r: Reader, off: number, end: number) {
-  const out = { audio: [] as ProbeTrack[], subs: [] as ProbeTrack[] };
+  const out = { audio: [] as ProbeTrack[], subs: [] as ProbeTrack[], video: '' };
   let n = 0;
   while (off < end && n < 32) {
     const b = await box(r, off, end);
@@ -154,6 +157,7 @@ async function moov(r: Reader, off: number, end: number) {
       const t = await trak(r, off + b.hl, off + b.size);
       const e = { id: t.id, lang: t.lang, codec: t.codec, name: t.name, def: t.enabled, forced: false };
       if (t.handler === 'soun') out.audio.push(e);
+      else if (t.handler === 'vide' && !out.video) out.video = t.codec;
       else if (SUB_HANDLERS.includes(t.handler)) out.subs.push(e);
     }
     off += b.size;
@@ -252,7 +256,7 @@ async function mkv(r: Reader) {
 // TrackEntry: TrackNumber D7, TrackType 83 (2 audio, 17 subtítulos), Language 22B59C, CodecID 86,
 // Name 536E, FlagDefault 88 (vale 1 si no viene), FlagForced 55AA
 async function mkvTracks(r: Reader, off: number, end: number) {
-  const out = { audio: [] as ProbeTrack[], subs: [] as ProbeTrack[] };
+  const out = { audio: [] as ProbeTrack[], subs: [] as ProbeTrack[], video: '' };
   for (let i = 0; i < 64 && off < end; i++) {
     const x = await el(r, off);
     if (!x || x.size < 0) break;
@@ -283,6 +287,7 @@ async function mkvTracks(r: Reader, off: number, end: number) {
         o = c.data + c.size;
       }
       const e = { id: t.num, lang: t.lang, codec: t.codec, name: t.name, def: t.def, forced: t.forced };
+      if (t.type === 1 && !out.video) out.video = t.codec;
       if (t.type === 2) out.audio.push(e);
       if (t.type === 17) out.subs.push(e);
     }
@@ -313,7 +318,7 @@ async function readTracks(url: string): Promise<Probe> {
     const head = await read(r, 0, 16);
     if (!head || head.length < 8) return out;
     out.headOk = true;
-    let res = { audio: [] as ProbeTrack[], subs: [] as ProbeTrack[] };
+    let res: { audio: ProbeTrack[]; subs: ProbeTrack[]; video?: string; moovEnd?: boolean } = { audio: [], subs: [] };
     if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) {
       out.container = 'mkv';
       res = await mkv(r);
@@ -323,6 +328,8 @@ async function readTracks(url: string): Promise<Probe> {
     }
     out.audio = res.audio;
     out.subs = res.subs;
+    out.video = res.video;
+    out.moovEnd = res.moovEnd;
     out.ok = !r.failed && (out.audio.length > 0 || out.subs.length > 0);
   } catch {
     out.ok = false;

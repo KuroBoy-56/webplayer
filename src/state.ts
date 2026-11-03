@@ -1,5 +1,6 @@
 // Estado global: sesión, carga del catálogo, progreso ("Continuar viendo") y Mi lista,
 // sincronizados con api/progress.php del panel igual que la web, Android y Roku.
+import { loadWeekTop } from './data/top10';
 import { useSyncExternalStore } from 'react';
 import { bindSession, cloud, forgetCloud, onPanelDemo, panelTenantConfig, Session } from './api/panel';
 import { Kind, loadKind, setStreamFlip } from './api/xtream';
@@ -61,6 +62,10 @@ let state: State = {
 };
 
 const listeners = new Set<() => void>();
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+};
 function set(patch: Partial<State>) {
   state = { ...state, ...patch, rev: state.rev + 1 };
   listeners.forEach(l => l());
@@ -72,12 +77,15 @@ export function getState(): State {
 
 export function useAppState(): State {
   return useSyncExternalStore(
-    l => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
+    subscribe,
     () => state,
   );
+}
+
+// Seleccionar valores estables (primitivas o referencias del estado) evita
+// redibujar listas por avisos, progreso u otros cambios que no utilizan.
+export function useAppSelector<T>(select: (snapshot: State) => T): T {
+  return useSyncExternalStore(subscribe, () => select(state));
 }
 
 bindSession(() => state.session);
@@ -137,6 +145,8 @@ export async function loadCatalog(force = false) {
     catalog.clear();
     set({ loaded: { vod: false, series: false, live: false }, error: '' });
   }
+  // Top 10 de la semana del panel: si llega una lista nueva, se rehacen las filas (sin volver a descargar)
+  loadWeekTop().then(changed => changed && state.session === s && refreshCatalog()).catch(() => {});
   // las tres listas a la vez; cada una se muestra en cuanto llega
   const kinds = (['vod', 'series', 'live'] as Kind[]).filter(k => !state.loaded[k]);
   set({ loading: kinds[0] || '' });

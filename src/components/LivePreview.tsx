@@ -2,22 +2,18 @@
 // cuadro de la derecha (donde estaba el logo). Al moverse a otro canal se corta; con OK se abre a pantalla completa
 // (antes se apaga la vista previa: no se usan dos conexiones de la línea a la vez). Mientras carga, el logo.
 import { KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { LIVE_FORMATS, liveUrl, otherScheme, streamFlip } from '../api/xtream';
 import { Item } from '../data/catalog';
 import { Playback } from '../player/playback';
+import { registerLivePreview, waitForLivePreview } from '../player/preview-session';
 import { getState } from '../state';
 import { px, themed } from '../theme';
 
-// la vista previa que está sonando (para apagarla justo antes de abrir el reproductor)
-let stopCurrent: (() => void) | null = null;
-export function stopLivePreview(): void {
-  stopCurrent?.();
-  stopCurrent = null;
-}
+export { stopLivePreview } from '../player/preview-session';
 
-export default function LivePreview({ channel, active }: { channel: Item | null; active: boolean }) {
+export default memo(function LivePreview({ channel, active }: { channel: Item | null; active: boolean }) {
   const surface = useRef('');
   const video = useRef<VideoPlayer | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -29,45 +25,50 @@ export default function LivePreview({ channel, active }: { channel: Item | null;
     let alive = true;
     let v: VideoPlayer | null = null;
     let c: Playback | null = null;
+    let initializing: Promise<void> | null = null;
+    let closed: Promise<void> | null = null;
     const onPlaying = () => alive && setPlaying(true);
-    const stop = () => {
-      if (!alive) return;
+    const stop = (): Promise<void> => {
+      if (closed) return closed;
       alive = false;
+      clearTimeout(timer);
       setPlaying(false);
-      try {
-        c?.destroy();
-        if (v) {
-          v.removeEventListener('playing', onPlaying);
-          v.pause();
-          if (surface.current) v.clearSurfaceHandle(surface.current);
-          v.deinitialize().catch(() => {});
-        }
-      } catch {
-        // ya cerrado
-      }
       video.current = null;
+      const player = v;
+      closed = (async () => {
+        if (!player) return;
+        try { await initializing; } catch { /* inicialización interrumpida */ }
+        try {
+          player.removeEventListener('playing', onPlaying);
+          player.pause();
+          if (surface.current) player.clearSurfaceHandle(surface.current);
+        } catch { /* ya cerrado */ }
+        try { await c?.destroy(); } catch { /* sin motor */ }
+        try { await player.deinitialize(); } catch { /* ya cerrado */ }
+      })();
+      return closed;
     };
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
+      await waitForLivePreview();
       if (!alive) return;
-      v = new VideoPlayer();
-      video.current = v;
-      v.initialize()
-        .then(() => {
-          if (!alive || !v) return;
-          v.autoplay = false;
-          v.addEventListener('playing', onPlaying);
-          if (surface.current) v.setSurfaceHandle(surface.current);
-          c = new Playback(v, { toast: () => {}, status: () => {}, changed: () => {}, subText: () => {}, fatal: () => {} });
-          const u = liveUrl(s, channel.id, LIVE_FORMATS[0]);
-          c.load(streamFlip() ? otherScheme(u) : u, 0, true);
-        })
-        .catch(() => {});
+      try {
+        v = new VideoPlayer();
+        initializing = v.initialize();
+        await initializing;
+        if (!alive) return;
+        video.current = v;
+        v.autoplay = false;
+        v.addEventListener('playing', onPlaying);
+        if (surface.current) v.setSurfaceHandle(surface.current);
+        c = new Playback(v, { toast: () => {}, status: () => {}, changed: () => {}, subText: () => {}, fatal: () => {} });
+        const u = liveUrl(s, channel.id, LIVE_FORMATS[0]);
+        c.load(streamFlip() ? otherScheme(u) : u, 0, true);
+      } catch { void stop(); }
     }, 2500);
-    stopCurrent = stop;
+    const unregister = registerLivePreview(stop);
     return () => {
       clearTimeout(timer);
-      stop();
-      if (stopCurrent === stop) stopCurrent = null;
+      unregister();
     };
   }, [channel, active]);
 
@@ -93,7 +94,7 @@ export default function LivePreview({ channel, active }: { channel: Item | null;
       ) : null}
     </View>
   );
-}
+});
 
 const s = themed(() =>
   StyleSheet.create({

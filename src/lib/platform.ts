@@ -9,8 +9,9 @@ let udid = '';
 let model = '';
 let os = '';
 
-// llamada a un servicio luna:// ; null si no hay bus, no responde en 3 s o la respuesta no sirve
-function luna(uri: string, params: object): Promise<any> {
+// llamada a un servicio luna:// ; null si no hay bus, no responde en 3 s o la respuesta no sirve (también la usa el
+// reproductor: web/shims/w3cmedia.tsx, cambio de audio y subtítulos con com.webos.media)
+export function luna(uri: string, params: object): Promise<any> {
   return new Promise(resolve => {
     let done = false;
     const end = (v: any) => {

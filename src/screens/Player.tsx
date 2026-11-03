@@ -1,4 +1,4 @@
-// Reproductor nativo de Vega (W3C Media, modo URL: MP4, MKV, AVI, MOV, MPEG-TS…) sin límite de
+// Reproductor Vega: Shaka/MSE para HLS/DASH, MSE local MP4 y modo URL para los otros archivos, sin límite de
 // resolución ni de bitrate (4K si el equipo y el archivo lo tienen).
 // Películas y episodios: continuar donde quedó, adelantar/retroceder, audio y subtítulos (con el
 // motor del panel cuando el equipo no puede: player/playback.ts), siguiente episodio automático.
@@ -6,19 +6,22 @@
 import { HWEvent, useTVEventHandler } from '@amazon-devices/react-native-kepler';
 import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { reportError } from '../api/report';
-import { warmTracks } from '../api/media';
+import { engineDenied, warmTracks } from '../api/media';
 import { viaDns } from '../lib/securedns';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
-import { Button, Focusable } from '../components/ui';
+import { Button, Focusable, Loader } from '../components/ui';
 import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { MenuItem, Playback } from '../player/playback';
+import { stopLivePreview } from '../player/preview-session';
+import { prefetchList, prefetchRange } from '../player/prefetch';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
+import { probeTracks } from '../lib/probe';
 import { getState, isFav, saveProgress, toggleFav } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
@@ -50,8 +53,18 @@ export default function Player({ params }: { params: PlayParams }) {
   const [paused, setPaused] = useState(false);
   const [buffering, setBuffering] = useState(true);
   const [overlay, setOverlay] = useState(true);
+  const overlayVisible = useRef(true);
+  overlayVisible.current = overlay;
+  const [controlsFocused, setControlsFocused] = useState(false);
+  const controlsFocus = useRef(false);
+  controlsFocus.current = controlsFocused;
   const [error, setError] = useState('');
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
+  const [menuMode, setMenuMode] = useState<'audio' | 'all'>('all');
+  const [audioLabel, setAudioLabel] = useState('');
+  // botón de la barra central que se ilumina un instante al usarlo con el control (◀◀ 10 s, pausa, 10 s ▶▶)
+  // (los botones ◀◀ / pausa / ▶▶ se quitaron: ◀ ▶ y OK del control lo hacen directo, sin redibujar la pantalla)
+  const flashKey = (_k: 'back' | 'play' | 'fwd') => {};
   const menuOpen = useRef(false);
   menuOpen.current = !!menu;
   // el menú se vuelve a dibujar solo si cambió algo (antes cada aviso del reproductor lo rehacía entero y, con el
@@ -60,6 +73,9 @@ export default function Player({ params }: { params: PlayParams }) {
   const showMenu = useCallback((items: MenuItem[] | null) => {
     const sig = items ? items.map(m => m.kind + m.key + (m.on ? '1' : '0') + m.label).join('|') : '';
     if (items && sig === menuSig.current && menuOpen.current) return;
+    // Los eventos de Shaka pueden llegar antes del siguiente render de React.
+    // Cerrar también la referencia evita que uno de ellos vuelva a abrir el menú.
+    menuOpen.current = !!items;
     menuSig.current = sig;
     setMenu(items);
   }, []);
@@ -78,6 +94,8 @@ export default function Player({ params }: { params: PlayParams }) {
   const firstResume = useRef(params.kind === 'live' ? 0 : params.resume);
   const indexRef = useRef(index);
   indexRef.current = index;
+  const zapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadRev = useRef(0);
 
   const live = params.kind === 'live';
   const channel: Item | null = live ? params.channels[index] || params.channel : null;
@@ -102,6 +120,8 @@ export default function Player({ params }: { params: PlayParams }) {
   const vod = useRef({ idx: -1, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, format: false, srv: 0, acct: '', attempts: [] as string[], live: null as StreamCheck | null, xui: null as StreamCheck | null });
   // vigilante: si el video no empieza a sonar a tiempo, se prueba otra forma (antes podía quedar cargando para siempre)
   const startDog = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ya se le dieron 15 s más a este canal porque seguía bajando video
+  const liveWait = useRef(false);
   const onErrorRef = useRef<() => void>(() => {});
   // canal: motivo del último intento que no salió del reproductor (lector HLS, vigilante)
   const liveNote = useRef('');
@@ -132,8 +152,14 @@ export default function Player({ params }: { params: PlayParams }) {
 
   const showOverlay = useCallback(() => {
     setOverlay(true);
+    if (ctl.current && ready.current) {
+      setPos(Math.floor(ctl.current.realPos()));
+      setDur(ctl.current.duration());
+    }
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setOverlay(false), 5000);
+    hideTimer.current = setTimeout(() => {
+      if (!menuOpen.current && !controlsFocus.current) setOverlay(false);
+    }, 5000);
   }, []);
 
   const showToast = useCallback((msg: string) => {
@@ -176,23 +202,90 @@ export default function Player({ params }: { params: PlayParams }) {
     (i: number, resume = 0) => {
       const c = ctl.current;
       if (!c || !ready.current) return;
+      loadRev.current++;
       setError('');
       setBuffering(true);
       setPos(0);
       setDur(0);
       setSub('');
+      setAudioLabel('');
       setWork('');
       setStatus(live ? t('Conectando con el canal…') : t('Cargando…'));
       if (vod.current.idx !== i) vod.current = { idx: i, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, format: false, srv: 0, acct: '', attempts: [], live: null, xui: null };
       c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
+      liveWait.current = false;
       // 20 s para empezar a sonar (15 s en Continuar viendo; 25 s en los canales: la app baja la lista y los primeros
       // segmentos); con el panel, sus propios plazos
       startDog.current = setTimeout(() => {
         startDog.current = null;
-        if (!ctl.current || ctl.current.hasPlayed() || ctl.current.panelActive()) return;
+        if (!ctl.current || ctl.current.hasPlayed()) return;
+        if (ctl.current.panelActive()) {
+          // abierto por el panel (así se vio antes este archivo): 45 s más para empezar; si no, se deja y siguen los
+          // pasos (antes no había plazo y quedaba cargando sin fin)
+          startDog.current = setTimeout(() => {
+            startDog.current = null;
+            const c2 = ctl.current;
+            if (!c2 || c2.hasPlayed() || !c2.panelActive() || indexRef.current !== i) return;
+            c2.panelStop();
+            onErrorRef.current();
+          }, 45000);
+          return;
+        }
+        // el canal sigue bajando (segmentos largos, servidor lento): 15 s más una vez antes de probar otra forma
+        if (live && ctl.current.liveBusy() && !liveWait.current) {
+          liveWait.current = true;
+          startDog.current = setTimeout(() => {
+            startDog.current = null;
+            const c2 = ctl.current;
+            if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
+            liveNote.current = 'sin imagen en 40 s';
+            onErrorRef.current();
+          }, 15000);
+          return;
+        }
         if (live) liveNote.current = 'sin imagen en 25 s';
+        // el MP4 que lee la app (índice al final del archivo) puede tardar más en empezar: 25 s más
+        // el lector propio sin el índice del archivo en 20 s: el servidor no lo entrega así; se sigue ya con lo demás
+        // (antes se esperaban 25 s más: 45 s con la pantalla cargando)
+        // si el servidor sigue entregando (XUI da las películas a la velocidad del video y el índice de muchos MP4 está
+        // al final y pesa varios MB) se espera mientras llegue algo, hasta 2 min; sin nada llegando, se sigue ya
+        if (!live && ctl.current.mp4Starting() && !ctl.current.mp4Indexed()) {
+          const t0 = Date.now();
+          const waitIndex = () => {
+            startDog.current = null;
+            const c2 = ctl.current;
+            if (!c2 || c2.hasPlayed() || indexRef.current !== i || !c2.mp4Starting()) return;
+            if (c2.mp4Indexed()) {
+              // ya tiene el índice: 25 s más para empezar a sonar
+              startDog.current = setTimeout(() => {
+                startDog.current = null;
+                const c3 = ctl.current;
+                if (!c3 || c3.hasPlayed() || indexRef.current !== i) return;
+                if (!c3.mp4Fallback('sin empezar tras leer el índice')) onErrorRef.current();
+              }, 25000);
+              return;
+            }
+            if (c2.mp4Busy() && Date.now() - t0 < 100000) {
+              setStatus(t('Cargando…'));
+              startDog.current = setTimeout(waitIndex, 5000);
+              return;
+            }
+            if (!c2.mp4Fallback('sin índice en ' + Math.round(20 + (Date.now() - t0) / 1000) + ' s')) onErrorRef.current();
+          };
+          waitIndex();
+          return;
+        }
+        if (!live && ctl.current.mp4Starting()) {
+          startDog.current = setTimeout(() => {
+            startDog.current = null;
+            const c2 = ctl.current;
+            if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
+            if (!c2.mp4Fallback('sin empezar en 45 s')) onErrorRef.current();
+          }, 25000);
+          return;
+        }
         onErrorRef.current();
       }, live ? 25000 : resume > 0 ? 15000 : 20000);
     },
@@ -209,6 +302,16 @@ export default function Player({ params }: { params: PlayParams }) {
     return true;
   }, [params, load, showOverlay]);
 
+  // capítulo anterior (botón |◀ de las series)
+  const prevEp = useCallback(() => {
+    if (params.kind !== 'episode') return;
+    const n = indexRef.current - 1;
+    if (n < 0) return;
+    setIndex(n);
+    load(n);
+    showOverlay();
+  }, [params, load, showOverlay]);
+
   // canal n de la carpeta (▲▼ o la lista de canales)
   const goTo = useCallback(
     (n: number) => {
@@ -219,9 +322,22 @@ export default function Player({ params }: { params: PlayParams }) {
       fmtAt.current = 0;
       rounds.current = 0;
       liveRecon.current = { n: 0, ok: 0, since: 0 };
+      // El índice cambia ya, incluso si llegan varias flechas antes del render.
+      // Al mantener la tecla, solo abre el último canal elegido tras 120 ms.
+      indexRef.current = n;
+      loadRev.current++;
+      if (zapTimer.current) clearTimeout(zapTimer.current);
+      if (startDog.current) clearTimeout(startDog.current);
+      startDog.current = null;
       setIndex(n);
       setEpg([]);
-      load(n);
+      setError('');
+      setBuffering(true);
+      setStatus(t('Conectando con el canal…'));
+      zapTimer.current = setTimeout(() => {
+        zapTimer.current = null;
+        load(n);
+      }, 120);
       showOverlay();
     },
     [params, load, showOverlay],
@@ -244,7 +360,11 @@ export default function Player({ params }: { params: PlayParams }) {
     const c = new Playback(v, {
       toast: showToast,
       status: setWork,
-      changed: () => menuOpen.current && showMenu(c.menu()),
+      changed: () => {
+        const items = c.menu();
+        setAudioLabel(items.find(item => item.kind === 'audio' && item.on)?.label || '');
+        if (menuOpen.current) showMenu(items);
+      },
       subText: setSub,
       fatal: msg => {
         setBuffering(false);
@@ -267,21 +387,37 @@ export default function Player({ params }: { params: PlayParams }) {
     });
     ctl.current = c;
     let alive = true;
+    let initialized = false;
+    let initializing: Promise<void> | null = null;
+    let released: Promise<void> = Promise.resolve();
+
+    // Los reintentos pertenecen al intento que los creó; otro canal o una
+    // conexión más reciente invalida el temporizador y sus respuestas.
+    const retryLive = (i: number, delay: number) => {
+      const revision = loadRev.current;
+      setTimeout(() => {
+        if (alive && !zapTimer.current && indexRef.current === i && loadRev.current === revision) load(i);
+      }, delay);
+    };
 
     const onMeta = () => c.onMeta();
     const onTime = () => {
       c.onTime();
       const now = Date.now();
-      if (now - lastUi.current < 500) return;
+      if (now - lastUi.current < 1000) return;
       lastUi.current = now;
       save(false);
       // con el menú abierto la barra no se ve: no se redibuja el reproductor cada medio segundo (el menú se trababa);
       // en los canales no hay barra: sin redibujar, la app queda libre para bajar y descifrar el canal
       if (menuOpen.current || live) return;
-      setPos(c.realPos());
+      const remaining = c.duration() - c.realPos();
+      const nextSoon = params.kind === 'episode' && indexRef.current + 1 < params.queue.length && remaining > 0 && remaining <= 20;
+      if (!overlayVisible.current && !nextSoon) return;
+      setPos(Math.floor(c.realPos()));
       setDur(c.duration());
     };
     const onPlaying = () => {
+      if (!alive || zapTimer.current) return;
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
       setBuffering(false);
@@ -296,8 +432,9 @@ export default function Player({ params }: { params: PlayParams }) {
       // los idiomas del episodio siguiente, para que también empiece con el idioma elegido
       if (params.kind === 'episode' && indexRef.current + 1 < params.queue.length) warmTracks(urlFor(indexRef.current + 1));
     };
-    const onWaiting = () => setBuffering(true);
+    const onWaiting = () => alive && !zapTimer.current && setBuffering(true);
     const onPause = () => {
+      if (!alive || zapTimer.current) return;
       // el lector del canal juntando margen: se ve «cargando», no la pausa
       if (c.liveHolding()) {
         setBuffering(true);
@@ -307,6 +444,7 @@ export default function Player({ params }: { params: PlayParams }) {
       save(true);
     };
     const onEnded = () => {
+      if (!alive || zapTimer.current) return;
       // se cortó antes del final (servidor, audio del panel): no es el fin del capítulo, se trata como error
       const d = c.duration();
       const p = c.realPos();
@@ -326,7 +464,19 @@ export default function Player({ params }: { params: PlayParams }) {
       setBuffering(false);
       setStatus('');
       setError(text);
-      reportError('playback', 'No se pudo reproducir (' + params.kind + ')', 'kind=' + params.kind + ' ext=' + (entry?.ext || '') + ' servidor=' + vs.srv + vs.acct + ' intentos=[' + vs.attempts.join(' | ') + ']', 'Reproductor');
+      const base = 'kind=' + params.kind + ' ext=' + (entry?.ext || '') + ' servidor=' + vs.srv + vs.acct + ' intentos=[' + vs.attempts.join(' | ') + ']';
+      if (params.kind === 'live') {
+        reportError('playback', 'No se pudo reproducir (' + params.kind + ')', base, 'Reproductor');
+        return;
+      }
+      // ya sin reproductor: qué trae el archivo (códec del video y de los audios, índice del MP4 al final) para saber por
+      // qué el equipo no lo abre directo
+      probeTracks(urlFor(indexRef.current))
+        .catch(() => null)
+        .then(p => {
+          const file = p && p.headOk ? ' archivo=' + (p.container || '?') + ' video=' + (p.video || '?') + ' audio=' + (p.audio.map(a => a.codec + (a.lang ? '(' + a.lang + ')' : '')).join(',') || '?') + (p.container === 'mp4' ? ' moov=' + (p.moovEnd ? 'final' : 'inicio') : '') : ' archivo=sin leer';
+          reportError('playback', 'No se pudo reproducir (' + params.kind + ')', base + file, 'Reproductor');
+        });
     };
     const failText = (): string => {
       const vs = vod.current;
@@ -335,6 +485,8 @@ export default function Player({ params }: { params: PlayParams }) {
       if (vs.inUse) return t('Línea en uso en otro equipo');
       if (vs.stage >= 2) return t('No se pudo continuar donde quedó');
       if (vs.srv >= 400) return t('Error de comunicación con el servidor');
+      // el equipo no lo abre de ninguna forma y el servidor (VPS / VDS) está apagado o sin permiso: se dice qué falta
+      if (engineDenied()) return t('Este video no se puede abrir en este equipo: es necesario encender el servidor.');
       return t('No se pudo reproducir este contenido.');
     };
     // película o episodio que todavía no sonó (Roku: onError → streamCheck, Continuar viendo por pasos)
@@ -344,13 +496,13 @@ export default function Player({ params }: { params: PlayParams }) {
       const e = params.kind === 'live' ? null : params.queue[i];
       if (!e || c.hasPlayed() || c.panelActive()) return false;
       const err: any = (v as any).error;
-      if (vs.attempts.length < 12) vs.attempts.push((flipped.current ? 'otro protocolo' : 'directo') + ': ' + (err?.code ?? '') + ' ' + String(err?.message || '').slice(0, 80));
+      if (vs.attempts.length < 12) vs.attempts.push((flipped.current ? 'otro protocolo' : 'directo') + ': ' + (err?.code ?? '') + ' ' + String(err?.message || '').slice(0, 80) + (c.mp4Note() ? ' (lector MP4: ' + c.mp4Note() + ')' : ''));
       const at = c.resumePos();
       // 1) una vez: qué contesta el servidor (código, cuenta, si la película sigue y con qué extensión)
       if (!vs.checked) {
         vs.checked = true;
         setStatus(t('Cargando…'));
-        streamCheck(urlFor(i), getState().session!, params.kind === 'movie' ? e.id : '').then(r => {
+        streamCheck(urlFor(i), getState().session!, params.kind === 'movie' ? e.id : '', true).then(r => {
           if (!alive || indexRef.current !== i) return;
           vs.srv = r.code;
           if (r.status !== undefined) vs.acct = ' cuenta=' + r.status + ' conexiones=' + r.active + '/' + r.max;
@@ -358,7 +510,7 @@ export default function Player({ params }: { params: PlayParams }) {
           // el servidor sí entrega el video y el equipo no lo abre: es el formato; directo al panel (sin el otro
           // protocolo, el DNS ni otra vuelta: antes el panel lo preparaba hasta 3 veces y tardaba mucho)
           vs.format = r.code >= 200 && r.code < 300 && !r.html && /video|octet|matroska|mp4|msvideo|mpeg/i.test(r.type || '');
-          vs.attempts.push('servidor: ' + r.code + (r.xui ? ' xui=' + r.xui + ' (' + (r.xuiText || '') + ')' : r.html ? ' html=«' + (r.page || '') + '»' : '') + vs.acct + (r.exists !== undefined ? ' existe=' + r.exists + ' ext=' + r.ext : ''));
+          vs.attempts.push('servidor: ' + r.code + ' tipo=' + (r.type || '?') + (r.size ? ' tamaño=' + Math.round(r.size / 1048576) + 'MB' : '') + (r.ranges ? ' rangos=' + r.ranges : '') + (r.moved ? ' redirige=' + r.moved : '') + (r.xui ? ' xui=' + r.xui + ' (' + (r.xuiText || '') + ')' : r.html ? ' html=«' + (r.page || '') + '»' : '') + vs.acct + (r.exists !== undefined ? ' existe=' + r.exists + ' ext=' + r.ext : ''));
           if (r.xui) {
             // el servidor contestó con la página de error de XUI («Debug Mode»): el motivo exacto, sin insistir
             vs.xui = r;
@@ -454,8 +606,9 @@ export default function Player({ params }: { params: PlayParams }) {
       const vs = vod.current;
       if (vs.live) return showLive(vs.live);
       const i = indexRef.current;
+      const revision = loadRev.current;
       setStatus(t('Revisando el canal…'));
-      streamCheck(urlFor(i), getState().session!, '', true).then(r => alive && indexRef.current === i && showLive(r));
+      streamCheck(urlFor(i), getState().session!, '', true).then(r => alive && indexRef.current === i && loadRev.current === revision && showLive(r));
     };
     // siguiente forma de abrir el canal: los otros formatos, luego el otro protocolo (http / https) con los formatos
     // otra vez y, si hay un DNS elegido, por él. Sin vueltas extra: muchos intentos seguidos hacen que el servidor
@@ -465,7 +618,7 @@ export default function Player({ params }: { params: PlayParams }) {
       if (fmtAt.current < LIVE_FORMATS.length - 1) {
         fmtAt.current++;
         setStatus(t('Reintentando…'));
-        setTimeout(() => alive && load(i), 1000);
+        retryLive(i, 1000);
         return;
       }
       if (!triedOther.current) {
@@ -473,13 +626,14 @@ export default function Player({ params }: { params: PlayParams }) {
         flipped.current = !flipped.current;
         fmtAt.current = 0;
         setStatus(t('Reintentando…'));
-        setTimeout(() => alive && load(i), 1500);
+        retryLive(i, 1500);
         return;
       }
       if (!triedDns.current) {
         triedDns.current = true;
+        const revision = loadRev.current;
         viaDns(urlFor(i)).then(url => {
-          if (!alive) return;
+          if (!alive || indexRef.current !== i || loadRev.current !== revision) return;
           if (!url) return failLive();
           dnsUrl.current = { i, url };
           setStatus(t('Reintentando con el DNS elegido…'));
@@ -490,8 +644,10 @@ export default function Player({ params }: { params: PlayParams }) {
       failLive();
     };
     const onError = () => {
+      if (!alive || zapTimer.current) return;
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
+      if (c.adaptiveFallback()) return;
       if (params.kind === 'live') {
         // el reproductor rechazó el video convertido por el lector (MP4): el mismo canal otra vez en MPEG-TS
         const before = c.liveDiag();
@@ -524,7 +680,7 @@ export default function Player({ params }: { params: PlayParams }) {
           setStatus(t('Reconectando…'));
           setBuffering(true);
           const i = indexRef.current;
-          setTimeout(() => alive && indexRef.current === i && load(i), [300, 1000, 2000, 4000, 8000][rc.n - 1]);
+          retryLive(i, [300, 1000, 2000, 4000, 8000][rc.n - 1]);
           return;
         }
         if (vs.attempts.length < 16) vs.attempts.push(LIVE_FORMATS[fmtAt.current] + (flipped.current ? ' (otro protocolo)' : '') + (dnsUrl.current ? ' (DNS)' : '') + ': ' + why);
@@ -533,9 +689,10 @@ export default function Player({ params }: { params: PlayParams }) {
         if (!vs.checked) {
           vs.checked = true;
           const i = indexRef.current;
+          const revision = loadRev.current;
           setStatus(t('Revisando el canal…'));
           streamCheck(urlFor(i), getState().session!, '', true).then(r => {
-            if (!alive || indexRef.current !== i) return;
+            if (!alive || indexRef.current !== i || loadRev.current !== revision) return;
             vs.live = r;
             // una página sin código de XUI no dice el motivo: se siguen probando las otras formas
             if (r.xui || r.code >= 400 || (r.status && r.status !== 'active')) return showLive(r);
@@ -546,6 +703,8 @@ export default function Player({ params }: { params: PlayParams }) {
         nextLive();
         return;
       }
+      // el MP4 que lee la app no le gustó al reproductor: el modo directo de siempre (y sus pasos) con este video
+      if (c.mp4Fallback()) return;
       if (vodError()) return;
       if (vod.current.format) {
         triedOther.current = true;
@@ -599,7 +758,20 @@ export default function Player({ params }: { params: PlayParams }) {
       if (menuOpen.current) showMenu(c.menu());
     };
 
-    v.initialize()
+    stopLivePreview()
+      .then(() => {
+        if (!alive) return;
+        // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
+        const first = dnsUrl.current && dnsUrl.current.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
+        // en el televisor (LG) el video lo pide su propio reproductor: nada adelantado (sería una conexión de más)
+        if ((v as any).nativeFiles) {
+          // nada
+        } else if (live && /\.m3u8(\?|$)/i.test(first)) prefetchList(first);
+        else if (!live && /\.mkv(\?|$)/i.test(first)) prefetchRange(first, 0, 262144);
+        else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) prefetchRange(first, 0, 65536);
+        initializing = v.initialize().then(() => { initialized = true; });
+        return initializing;
+      })
       .then(() => {
         if (!alive) return;
         ready.current = true;
@@ -612,6 +784,7 @@ export default function Player({ params }: { params: PlayParams }) {
         v.addEventListener('ended', onEnded);
         v.addEventListener('error', onError);
         (v as any).audioTracks?.addEventListener?.('addtrack', onTrack);
+        (v as any).audioTracks?.addEventListener?.('change', onTrack);
         (v as any).textTracks?.addEventListener?.('addtrack', onTrack);
         if (surface.current) v.setSurfaceHandle(surface.current);
         if (captions.current) v.setCaptionViewHandle(captions.current);
@@ -621,33 +794,39 @@ export default function Player({ params }: { params: PlayParams }) {
 
     return () => {
       alive = false;
+      loadRev.current++;
       try {
         save(true);
-        c.destroy();
+        released = c.destroy();
       } catch {
         // nada que guardar o el motor ya estaba cerrado
       }
       if (hideTimer.current) clearTimeout(hideTimer.current);
       if (toastTimer.current) clearTimeout(toastTimer.current);
+      if (zapTimer.current) clearTimeout(zapTimer.current);
+      zapTimer.current = null;
       try {
-        v.removeEventListener('loadedmetadata', onMeta);
-        v.removeEventListener('timeupdate', onTime);
-        v.removeEventListener('playing', onPlaying);
-        v.removeEventListener('waiting', onWaiting);
-        v.removeEventListener('pause', onPause);
-        v.removeEventListener('ended', onEnded);
-        v.removeEventListener('error', onError);
-        (v as any).audioTracks?.removeEventListener?.('addtrack', onTrack);
-        (v as any).textTracks?.removeEventListener?.('addtrack', onTrack);
-        v.pause();
-        if (surface.current) v.clearSurfaceHandle(surface.current);
+        if (initialized) {
+          v.removeEventListener('loadedmetadata', onMeta);
+          v.removeEventListener('timeupdate', onTime);
+          v.removeEventListener('playing', onPlaying);
+          v.removeEventListener('waiting', onWaiting);
+          v.removeEventListener('pause', onPause);
+          v.removeEventListener('ended', onEnded);
+          v.removeEventListener('error', onError);
+          (v as any).audioTracks?.removeEventListener?.('addtrack', onTrack);
+          (v as any).audioTracks?.removeEventListener?.('change', onTrack);
+          (v as any).textTracks?.removeEventListener?.('addtrack', onTrack);
+          v.pause();
+          if (surface.current) v.clearSurfaceHandle(surface.current);
+        }
       } catch {
         // el reproductor ya estaba cerrado
       }
       // se libera en segundo plano: deinitializeSync() bloqueaba la app hasta 3 s al salir de un canal que
       // todavía conectaba (deportes) y los Atrás que se apretaban mientras tanto llegaban después a la pantalla de abajo
       try {
-        v.deinitialize().catch(() => {});
+        Promise.all([released, initializing?.catch(() => {})]).then(() => initialized ? v.deinitialize() : undefined).catch(() => {});
       } catch {
         // el reproductor ya estaba cerrado
       }
@@ -663,9 +842,13 @@ export default function Player({ params }: { params: PlayParams }) {
     if (!channel) return;
     let alive = true;
     const s = getState().session;
-    if (s) channelEpg(s, { id: channel.id, epg: channel.epg, name: channel.name }).then(l => alive && setEpg(l));
+    // Un barrido con las flechas no necesita descargar la guía de cada paso.
+    const timer = setTimeout(() => {
+      if (s) channelEpg(s, { id: channel.id, epg: channel.epg, name: channel.name }).then(l => alive && setEpg(l)).catch(() => {});
+    }, 350);
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
   }, [channel]);
 
@@ -691,6 +874,12 @@ export default function Player({ params }: { params: PlayParams }) {
         menuOpen.current = false;
         menuSig.current = '';
         setMenu(null);
+        showOverlay();
+        return true;
+      }
+      if (controlsFocus.current) {
+        setControlsFocused(false);
+        showOverlay();
         return true;
       }
       if (askRef.current) {
@@ -714,7 +903,7 @@ export default function Player({ params }: { params: PlayParams }) {
   const leave = () => {
     leaving.current = true;
     try {
-      video.current?.pause();
+      if (ready.current) video.current?.pause();
     } catch {
       // ya estaba detenido
     }
@@ -729,7 +918,12 @@ export default function Player({ params }: { params: PlayParams }) {
       ? Math.ceil(left)
       : 0;
 
-  const openMenu = () => ctl.current && showMenu(ctl.current.menu());
+  const openMenu = (mode: 'audio' | 'all' = 'all') => {
+    if (!ctl.current || !ready.current) return;
+    setMenuMode(mode);
+    setControlsFocused(false);
+    showMenu(ctl.current.menu());
+  };
 
   const chanRef = useRef(channel);
   chanRef.current = channel;
@@ -742,12 +936,16 @@ export default function Player({ params }: { params: PlayParams }) {
   }, []);
   const onPick = useCallback((m: MenuItem) => {
     ctl.current?.select(m);
-    setTimeout(() => menuOpen.current && ctl.current && showMenu(ctl.current.menu()), 300);
-  }, [showMenu]);
+    if (m.kind === 'audio') {
+      showMenu(null);
+      showOverlay();
+    } else if (ctl.current) showMenu(ctl.current.menu());
+  }, [showMenu, showOverlay]);
 
   const seek = (delta: number) => {
     const c = ctl.current;
-    if (!c || live) return;
+    if (!c || !ready.current || live) return;
+    flashKey(delta < 0 ? 'back' : 'fwd');
     const d = c.duration();
     let t = c.realPos() + delta;
     if (d > 0) t = Math.min(t, d - 2);
@@ -759,7 +957,8 @@ export default function Player({ params }: { params: PlayParams }) {
 
   const togglePause = () => {
     const v = video.current;
-    if (!v) return;
+    if (!v || !ready.current) return;
+    flashKey('play');
     if (v.paused) v.play();
     else v.pause();
     showOverlay();
@@ -778,10 +977,15 @@ export default function Player({ params }: { params: PlayParams }) {
   };
   // ancla de foco: un botón invisible a pantalla completa que tiene el foco mientras no hay menú ni aviso. Sin él, al
   // abrir un canal desde la lista el foco se quedaba en la lista de abajo (oculta) y OK, ▲ y ▼ no llegaban al reproductor
-  const anchorOn = !menu && !askExit && !chList && !(nextSecs > 0);
+  const anchorOn = !menu && !askExit && !chList && !(nextSecs > 0) && !controlsFocused;
   useTVEventHandler((evt: HWEvent) => {
     if (evt.eventKeyAction !== undefined && evt.eventKeyAction !== 0) return;
     if (menu || askExit || nextSecs > 0 || chList) return; // menú, lista de canales, aviso del siguiente y «¿Salir?» usan el foco normal
+    if (controlsFocused) {
+      if (evt.eventType === 'down') { setControlsFocused(false); showOverlay(); }
+      if (['menu', 'info', 'more', 'context_menu'].includes(evt.eventType)) openMenu();
+      return;
+    }
     // en vivo solo OK (lista de canales), ▲▼ (cambiar de canal) y MENÚ: pausa, ◀▶ y adelantar no hacen nada (pausar un
     // canal en vivo lo dejaba trabado)
     if (live && !['select', 'up', 'down', 'channel_up', 'channel_down', 'menu', 'info', 'more', 'context_menu'].includes(evt.eventType)) return;
@@ -812,7 +1016,12 @@ export default function Player({ params }: { params: PlayParams }) {
         break;
       case 'up':
       case 'channel_up':
-        live ? zap(-1) : showOverlay();
+        if (live) zap(-1);
+        else {
+          showOverlay();
+          // solo las series tienen botones (capítulo anterior / siguiente)
+          if (params.kind === 'episode') setControlsFocused(true);
+        }
         break;
       case 'channel_down':
         zap(1);
@@ -834,7 +1043,10 @@ export default function Player({ params }: { params: PlayParams }) {
 
   const now = nowSec();
   const cur = epg.find(e => e.s <= now && now < e.e);
-  const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
+  // el reproductor de Vega no siempre da la duración (la barra quedaba en 0 % aunque el tiempo avanzara): la del
+  // servidor, como el avance de Continuar viendo
+  const total = dur || (params.kind !== 'live' ? params.queue[index]?.dur || 0 : 0);
+  const pct = total > 0 ? Math.min(100, (pos / total) * 100) : 0;
 
   return (
     <View style={s.root}>
@@ -866,7 +1078,7 @@ export default function Player({ params }: { params: PlayParams }) {
 
       {buffering && !error ? (
         <View style={s.center}>
-          <View style={s.spinner} />
+          <Loader />
           {status || work ? <Text style={s.status}>{work || status}</Text> : null}
         </View>
       ) : null}
@@ -890,6 +1102,14 @@ export default function Player({ params }: { params: PlayParams }) {
       ) : null}
 
       {anchorOn ? <Focusable preferred onPress={onSelect} style={s.anchor}>{null}</Focusable> : null}
+      {/* series: solo capítulo anterior |◀ y siguiente ▶| (adelantar, atrasar y pausa van con ◀ ▶ y OK del control, sin
+          botones en pantalla); con ▲ se eligen (◀ ▶ para moverse, OK para usar, ▼ vuelve) */}
+      {params.kind === 'episode' && (overlay || paused) && !buffering && !error && !menu && !askExit && !(nextSecs > 0) ? (
+        <View style={s.centerCtl} pointerEvents={controlsFocused ? 'auto' : 'none'}>
+          <CtlButton icon="prev" on={false} focusable={controlsFocused} disabled={index === 0} onPress={prevEp} />
+          <CtlButton icon="next" on={false} focusable={controlsFocused} preferred disabled={index + 1 >= params.queue.length} onPress={() => next()} />
+        </View>
+      ) : null}
       {overlay || paused ? (
         <View style={s.overlay}>
           <View style={s.topBar}>
@@ -898,6 +1118,7 @@ export default function Player({ params }: { params: PlayParams }) {
               {title}
             </Text>
             {live && channel && isFav('live', channel.id) ? <Text style={s.star}>★</Text> : null}
+            {/* sin botón de audio arriba: los idiomas salen con ▼ (películas y series) o MENÚ (canales) */}
           </View>
           <View style={s.bottom}>
             {live ? (
@@ -947,6 +1168,7 @@ export default function Player({ params }: { params: PlayParams }) {
       {menu ? (
         <TrackMenu
           items={menu}
+          audioOnly={menuMode === 'audio'}
           favLabel={live && channel ? (isFav('live', channel.id) ? '★ ' + t('Quitar de favoritos') : '☆ ' + t('Agregar a favoritos')) : ''}
           onFav={onFav}
           onPick={onPick}
@@ -1003,14 +1225,61 @@ export default function Player({ params }: { params: PlayParams }) {
   );
 }
 
-// Barra de avance: el relleno se pinta en píxeles con el ancho medido de la barra (sobre el video de Vega un ancho en
-// porcentaje no se aplicaba y la barra quedaba vacía aunque el tiempo avanzara)
-function ProgressBar({ pct }: { pct: number }) {
-  const [w, setW] = useState(0);
-  const fill = w > 0 && pct > 0 ? Math.max(px(8), Math.round((w * Math.min(100, pct)) / 100)) : 0;
+// Iconos de reproductor dibujados con formas (triángulos con bordes y barras): se ven igual en todo Fire TV, sin
+// depender de los símbolos de la fuente
+type CtlIconKind = 'play' | 'pause' | 'rew' | 'ffw' | 'prev' | 'next';
+function Tri({ dir, size, color }: { dir: 'l' | 'r'; size: number; color: string }) {
+  const h = px(size);
+  const w = Math.round(h * 0.87);
   return (
-    <View style={s.bar} onLayout={e => setW(e.nativeEvent.layout.width)}>
-      {fill > 0 ? <View style={[s.barFill, { width: fill }]} /> : null}
+    <View style={{ width: 0, height: 0, borderTopWidth: h / 2, borderBottomWidth: h / 2, borderTopColor: 'transparent', borderBottomColor: 'transparent',
+      ...(dir === 'r' ? { borderLeftWidth: w, borderLeftColor: color } : { borderRightWidth: w, borderRightColor: color }) }} />
+  );
+}
+function Bar({ size, color }: { size: number; color: string }) {
+  return <View style={{ width: px(size * 0.22), height: px(size), backgroundColor: color, borderRadius: px(2) }} />;
+}
+function CtlIcon({ kind, color, big }: { kind: CtlIconKind; color: string; big?: boolean }) {
+  const n = big ? 56 : 36;
+  const row = { flexDirection: 'row' as const, alignItems: 'center' as const };
+  if (kind === 'play') return <View style={{ marginLeft: px(8) }}><Tri dir="r" size={n} color={color} /></View>;
+  if (kind === 'pause') return <View style={[row, { gap: px(n * 0.22) }]}><Bar size={n} color={color} /><Bar size={n} color={color} /></View>;
+  if (kind === 'rew') return <View style={row}><Tri dir="l" size={n} color={color} /><Tri dir="l" size={n} color={color} /></View>;
+  if (kind === 'ffw') return <View style={row}><Tri dir="r" size={n} color={color} /><Tri dir="r" size={n} color={color} /></View>;
+  if (kind === 'prev') return <View style={row}><Bar size={n} color={color} /><Tri dir="l" size={n} color={color} /></View>;
+  return <View style={row}><Tri dir="r" size={n} color={color} /><Bar size={n} color={color} /></View>;
+}
+function CtlButton({ icon, big, on, focusable, preferred, disabled, onPress }: { icon: CtlIconKind; big?: boolean; on: boolean; focusable: boolean; preferred?: boolean; disabled?: boolean; onPress: () => void }) {
+  const face = (f: boolean) => {
+    const lit = (f || on) && !disabled;
+    return (
+      <View style={[s.ctlBtn, big && s.ctlBig, lit && s.ctlBtnOn, disabled && s.ctlOff]}>
+        <CtlIcon kind={icon} big={big} color={lit ? '#000' : '#fff'} />
+      </View>
+    );
+  };
+  if (!focusable) return face(false);
+  return (
+    <Focusable preferred={preferred} disabled={disabled} onPress={() => !disabled && onPress()}>
+      {(f: boolean) => face(f)}
+    </Focusable>
+  );
+}
+
+// Barra de avance con un punto grande donde va el video. Todo en píxeles fijos (ancho de diseño 1760 = 1920 menos los
+// márgenes), sin porcentajes, sin flex y sin medir: sobre el video de Vega ninguna de esas formas pintaba el relleno.
+// El punto va en el flujo normal (margen izquierdo) y sube sobre la barra con un margen negativo.
+const BAR_W = 1760;
+const DOT = 30;
+function ProgressBar({ pct }: { pct: number }) {
+  const p = Math.max(0, Math.min(100, pct || 0));
+  const fill = Math.round((px(BAR_W) * p) / 100);
+  return (
+    <View style={s.barWrap}>
+      <View style={s.bar}>
+        <View style={[s.barFill, { width: fill }]} />
+      </View>
+      <View style={[s.dot, { marginLeft: Math.max(0, Math.min(px(BAR_W) - px(DOT), fill - px(DOT / 2))) }]} />
     </View>
   );
 }
@@ -1024,7 +1293,6 @@ const s = themed(() =>
     subBoxUp: { bottom: px(260) },
     subText: { color: '#fff', fontSize: px(44), fontWeight: '700', textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: px(16), paddingVertical: px(4), textShadowColor: '#000', textShadowRadius: px(4), textShadowOffset: { width: 0, height: 0 } },
     center: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 5 },
-    spinner: { width: px(90), height: px(90), borderRadius: px(45), borderWidth: px(8), borderColor: 'rgba(255,255,255,0.25)', borderTopColor: C.red },
     status: { color: C.green, fontSize: px(28), marginTop: px(20) },
     error: { color: '#fff', fontSize: px(38), fontWeight: '700', textAlign: 'center' },
     overlay: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, justifyContent: 'space-between', zIndex: 6 },
@@ -1032,9 +1300,12 @@ const s = themed(() =>
     chLogo: { width: px(130), height: px(74), marginRight: px(24) },
     title: { color: C.text, fontSize: px(44), fontWeight: '800', flex: 1 },
     star: { color: '#f5c518', fontSize: px(40) },
+    audioButton: { marginLeft: px(24), minWidth: px(180) },
     bottom: { paddingHorizontal: px(80), paddingBottom: px(60), paddingTop: px(40), backgroundColor: alpha(C.bg, 0.65) },
-    bar: { height: px(8), backgroundColor: alpha(C.text, 0.3), borderRadius: px(4), marginTop: px(12) },
-    barFill: { position: 'absolute', left: 0, top: 0, height: px(8), backgroundColor: C.red, borderRadius: px(4) },
+    barWrap: { width: px(BAR_W), height: px(DOT), marginTop: px(12) },
+    bar: { width: px(BAR_W), height: px(8), marginTop: px((DOT - 8) / 2), backgroundColor: alpha(C.text, 0.3), borderRadius: px(4) },
+    barFill: { height: px(8), backgroundColor: C.red, borderRadius: px(4) },
+    dot: { width: px(DOT), height: px(DOT), marginTop: -px((DOT + 8) / 2), borderRadius: px(DOT / 2), backgroundColor: C.red, borderWidth: px(3), borderColor: '#fff' },
     times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: px(10) },
     time: { color: C.text, fontSize: px(28) },
     now: { color: C.red, fontSize: px(26), fontWeight: '800' },
@@ -1054,6 +1325,11 @@ const s = themed(() =>
     chRowLogo: { width: px(80), height: px(50), marginRight: px(16) },
     chName: { color: C.text, fontSize: px(28), flex: 1 },
     chTextF: { color: C.onFocus },
+    centerCtl: { position: 'absolute', left: 0, right: 0, top: px(430), flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: px(70), zIndex: 7 },
+    ctlBtn: { width: px(130), height: px(130), borderRadius: px(65), backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: px(3), borderColor: 'rgba(255,255,255,0.55)', alignItems: 'center', justifyContent: 'center' },
+    ctlBig: { width: px(170), height: px(170), borderRadius: px(85) },
+    ctlBtnOn: { backgroundColor: C.text, borderColor: C.text, transform: [{ scale: 1.08 }] },
+    ctlOff: { opacity: 0.35 },
     anchor: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 1 },
     exitShade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 50, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' },
     exitBox: { backgroundColor: alpha(C.bg2, 0.97), borderRadius: px(12), padding: px(40), alignItems: 'center' },

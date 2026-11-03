@@ -11,6 +11,62 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+## Novedades de la 1.3.0 (traídas de Vega OS 1.0.29 a 1.0.55, más lo propio de LG)
+
+**Reproducción en el televisor: el servidor es el último recurso.** Todo lo abre primero el reproductor por hardware
+del televisor LG (MP4, MKV, MOV, TS y HLS; Dolby y DTS los decodifica la tele). Para cambiar de idioma o de subtítulo,
+en este orden y solo si el paso anterior no puede:
+
+1. **Las pistas del `<video>`** (`audioTracks` / `textTracks`): el cambio se comprueba a los 1,5 s.
+2. **El servicio de medios del televisor** (`luna://com.webos.media/selectTrack` con el `mediaId` del `<video>`;
+   `setSubtitleEnable` para los subtítulos): para los archivos en los que el `<video>` no informa sus pistas. El índice
+   es el orden de la pista en el archivo, el mismo de la cabecera que lee la app. Los subtítulos de imagen (PGS) también
+   los dibuja la tele por aquí. Código: `web/shims/w3cmedia.tsx` (`tvSelectTrack`, `tvSubtitleOff`).
+3. **El lector propio de la app** (el de Vega: `src/player/mp4mse.ts`, `mkvmse.ts`): reabre el video en el mismo
+   segundo leyendo el archivo y entregándolo por MSE con el audio elegido; los subtítulos de texto del MKV (SRT, ASS,
+   WebVTT) los lee la app.
+4. **El servidor** (VPS / VDS, `media_webos.php`); si está apagado o sin permiso: «Audio no compatible con este
+   equipo: es necesario encender el servidor.» (y lo mismo para subtítulos y video), con el reporte al panel.
+
+Cómo se decide (sin `if` de plataforma en `src/`): el `<video>` del televisor anuncia `nativeFiles` (y `nativeHls`);
+`src/player/playback.ts` con `nativeFiles` no usa los lectores de Vega para abrir (`tvNative()`), deja los canales al
+reproductor del televisor (no `livehls.ts`) y sigue la cadena de arriba (`tvAudio`, `tvSub`). En Vega esos campos no
+existen y todo sigue igual que allá. Pruebas: `npm run test:player` (casos «LG:»).
+
+**Más de Vega (1.0.29 a 1.0.55):**
+- **Controles del reproductor**: sin botones de adelantar, atrasar ni pausa en pantalla (◀ ▶ y OK del control); en
+  series solo capítulo anterior |◀ y siguiente ▶| (▲ los elige; dibujados, sin símbolos de texto). Sin el botón «Audio»
+  de arriba: ▼ o los botones rojo / verde abren idiomas y subtítulos.
+- **Top 10 de la semana** (`api/top10.php`: lo más popular de la semana en TMDB cruzado con el catálogo; lo que falte,
+  de lo mejor calificado, distinto cada semana).
+- **Lista negra del panel**: un televisor bloqueado ve «Este equipo está bloqueado…», no entra ni vincula cuenta y la
+  sesión abierta se cierra.
+- **Interruptor de la conversión de audio del distribuidor** (`features.ffmpeg`): apagado, solo el audio que reproduce
+  la tele.
+- Avisos claros cuando hace falta el servidor; filas de Inicio sin animación; círculo de carga que gira; teclado de la
+  app corregido; reportes de error con el archivo y lo que contestó el servidor.
+- **Fluidez en la tele**: el foco crece al instante (sin animación cuadro por cuadro en JavaScript) y el círculo de
+  carga gira con CSS (`src/components/ui.tsx`, `Platform.OS === 'web'`).
+- Lo que es solo de Vega queda fuera en LG: **Shaka** (motor HLS / DASH con parches de Amazon; no corre en webOS 4.x y
+  la tele abre HLS sola: `tools/build-webos.js` pone `web/shims/shaka.ts`), el **lector de canales** (`livehls.ts`) y
+  el pedido adelantado del video (`prefetch.ts`: en la tele sería una conexión de más).
+- **Tema de prueba del dueño** (estilo IBO Player, con Omitir, cuando el panel lo ofrece): ya estaba desde la 1.2.4; el
+  panel lo da también para `webos` (`includes/review_theme.php`).
+
+### Guía para Tizen OS (Samsung), la siguiente
+
+Mismo camino que aquí: `git merge` de `vega-os` en `tizenOS`, conflictos solo en versiones y README, y en `web/` lo
+propio del equipo. Puntos a revisar:
+1. **No perder lo propio del equipo en el merge**: buscar en `src/player/playback.ts` las condiciones de plataforma
+   (aquí se perdió el `PalmSystem` que dejaba los canales al reproductor de la tele) y pasarlas a capacidades del
+   reproductor (`nativeFiles`, `nativeHls`, `tvSelectTrack`) en `web/shims/w3cmedia.tsx` del equipo.
+2. **Samsung reproduce con AVPlay** (`webapis.avplay`), que sí tiene pistas: `getTotalTrackInfo()` para listarlas y
+   `setSelectTrack('AUDIO' | 'TEXT', index)` para cambiarlas. Implementar `tvSelectTrack` con eso (paso 2 de la cadena).
+3. **Shaka fuera** con el mismo plugin de `tools/build-webos.js` (Tizen viejos tampoco lo corren).
+4. `hls.ts`: el campo `watch` de Vega choca con el `watch()` de la tele; aquí se llamó `gapTimer`.
+5. Pruebas: `npm run typecheck`, `npm run test:player`, `npm run test:interface`, el build y abrir `dist/index.html`
+   en Chromium (debe salir el número de distribuidor sin errores en la consola).
+
 ## Novedades de la 1.2.0 (traídas de Vega OS 1.0.12 a 1.0.21)
 
 - **Portada como Roku**: degradados a la izquierda y abajo con el color del tema; los destacados van pasando solos
@@ -256,6 +312,8 @@ también el arreglo de Continuar viendo de la 1.0.27).
 | Foco del control (nativo en Vega) | `web/spatial.ts`: las flechas van al botón más cercano en esa dirección; el puntero del Magic Remote también hace clic |
 | AsyncStorage | `localStorage` del televisor (se borra al desinstalar la app) |
 | HLS del motor del panel por MSE | el `<video>` de webOS lo abre directo (`src/player/hls.ts`, modo `nativeHls`) |
+| Lectores propios de Vega (MP4 / MKV / canales) y Shaka | el reproductor del televisor abre todo (`nativeFiles`); los lectores solo para cambiar audio o subtítulos si la tele no puede; Shaka fuera del paquete (`web/shims/shaka.ts`) |
+| Cambio de pista de Vega | `audioTracks` / `textTracks` y, si no informan, `luna://com.webos.media/selectTrack` (`tvSelectTrack` en `web/shims/w3cmedia.tsx`) |
 | Televisores viejos | `web/polyfills.ts`: `globalThis`, `padStart`, `Promise.finally`, `Object.entries` y un `AbortController` que sí corta las peticiones (webOS 4.x, Chromium 53) |
 
 `tools/build-webos.js` compila todo con esbuild en `dist/` (`app.js` para Chromium 53 = webOS 4.0, televisores LG

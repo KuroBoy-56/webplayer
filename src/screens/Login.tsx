@@ -1,11 +1,11 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, BackHandler, Easing, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelReview, panelSubmit, resellerCode } from '../api/panel';
+import { Animated, BackHandler, Easing, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { deviceBlocked, FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelReview, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import KeyboardModal from '../components/KeyboardModal';
 import { loginAll, sessionFrom } from '../api/xtream';
-import { Button, Focusable, Logo } from '../components/ui';
+import { Button, Focusable, Loader, Logo } from '../components/ui';
 import { json } from '../lib/http';
 import { hasMasterKey } from '../lib/aes';
 import { t, tmdbLang } from '../lib/i18n';
@@ -77,6 +77,16 @@ export default function Login() {
       if (hasMasterKey()) {
         const ln = await panelCheckMac(dev);
         if (ln) lines = [ln];
+      }
+      // equipo en la lista negra del panel (de este distribuidor o del dueño con Omitir): solo el aviso, sin
+      // líneas guardadas ni pantalla falsa
+      if (deviceBlocked()) {
+        await feat;
+        if (!alive) return;
+        setChecking(false);
+        setBusy('');
+        setError(deviceBlocked());
+        return;
       }
       if (!lines.length) {
         const r = await panelPlaylists(dev);
@@ -180,7 +190,7 @@ export default function Login() {
     if (!d.ok) {
       setBusy('');
       // 404 (código de revendedor que no existe): la demo sigue disponible
-      if (d.code === 403) write(scoped('demo_used'), '1');
+      if (d.code === 403 && !deviceBlocked()) write(scoped('demo_used'), '1');
       setError(d.error || t('No se pudo crear la demo'));
       return;
     }
@@ -222,7 +232,7 @@ export default function Login() {
   if (checking && !fake) {
     return (
       <View style={s.checking}>
-        <ActivityIndicator size="large" color={C.red} />
+        <Loader />
       </View>
     );
   }

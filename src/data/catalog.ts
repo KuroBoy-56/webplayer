@@ -4,6 +4,8 @@ import { imgPath, Kind } from '../api/xtream';
 import { fold, float, isAdult, shuffle, str } from '../lib/util';
 import { pref, readJson } from '../lib/storage';
 import { Key, t } from '../lib/i18n';
+import { buildTitleIndex, lookupTitle, TitleIndex } from '../lib/titles';
+import { TopEntry, weekShuffle, weekTop } from './top10';
 
 // nombre en el idioma de la app (las marcas como Netflix no están en los diccionarios y quedan igual);
 // las palabras clave (kw) siguen en español: buscan en los nombres de categoría del servidor
@@ -116,6 +118,48 @@ class Catalog {
 
   clear() {
     this.k = {};
+    this.tIdx = {};
+  }
+
+  // ---------- Top 10 de la semana ----------
+  // títulos del catálogo visible por tipo (para cruzar la lista de la semana del panel); id = posición en items
+  private tIdx: Partial<Record<Kind, { rev: string; idx: TitleIndex }>> = {};
+  private titleIdx(kind: Kind, vis: number[]): TitleIndex {
+    const d = this.k[kind]!;
+    const rev = vis.length + ':' + d.items.length + ':' + this.unlocked;
+    const c = this.tIdx[kind];
+    if (c && c.rev === rev) return c.idx;
+    const idx = buildTitleIndex(vis.map(i => ({ id: String(i), name: str(d.items[i]?.name), year: str(d.items[i]?.year) || str(d.items[i]?.releaseDate).slice(0, 4) })));
+    this.tIdx[kind] = { rev, idx };
+    return idx;
+  }
+
+  // posiciones del catálogo de la lista de la semana, en su orden (sin repetir)
+  private weekMatches(kind: Kind, list: TopEntry[], vis: number[], n: number): number[] {
+    if (!list.length || !vis.length) return [];
+    const ti = this.titleIdx(kind, vis);
+    const out: number[] = [];
+    for (const e of list) {
+      const id = lookupTitle(ti, [e.t, e.o].filter(Boolean), e.y || null);
+      if (id && !out.includes(Number(id))) out.push(Number(id));
+      if (out.length >= n) break;
+    }
+    return out;
+  }
+
+  // relleno: de las 40 mejor calificadas, unas distintas cada semana (ordenadas por calificación)
+  private weekFill(kind: Kind, vis: number[], skip: number[], n: number, salt: number): number[] {
+    if (n <= 0) return [];
+    const pool = this.top(kind, vis, 'rating', 40).filter(i => !skip.includes(i));
+    const pick = new Set(weekShuffle(pool, salt).slice(0, n));
+    return pool.filter(i => pick.has(i));
+  }
+
+  // Top 10 de un tipo (Películas o Series)
+  weekTop10(kind: Kind, vis: number[]): number[] {
+    const w = weekTop();
+    const got = this.weekMatches(kind, (kind === 'series' ? w?.series : w?.movies) || [], vis, 10);
+    return [...got, ...this.weekFill(kind, vis, got, 10 - got.length, kind === 'series' ? 2 : 1)];
   }
 
   set(kind: Kind, cats: any[], items: any[]) {
@@ -232,14 +276,28 @@ class Catalog {
     }
     if (plats.items.length) rows.push(plats);
 
-    // Top 10 de hoy: las mejor calificadas de películas y series juntas
-    const scored = [
-      ...this.top('vod', vodIdx, 'rating', 10).map(i => ({ kind: 'vod' as Kind, i, v: this.sortKey('vod', this.k.vod!.items[i], 'rating') })),
-      ...this.top('series', serIdx, 'rating', 10).map(i => ({ kind: 'series' as Kind, i, v: this.sortKey('series', this.k.series!.items[i], 'rating') })),
-    ]
-      .sort((x, y) => y.v - x.v)
-      .slice(0, 10);
-    if (scored.length >= 5) rows.push({ title: t('Top 10 de hoy'), type: 'top10', items: scored.map(x => this.items(x.kind, [x.i])[0]) });
+    // Top 10 de la semana: lo más popular de la semana (panel, TMDB) que está en el catálogo, películas y series en su
+    // orden; lo que falte, de las mejor calificadas, distintas cada semana
+    const w = weekTop();
+    const picks: { kind: Kind; i: number }[] = [];
+    if (w?.all.length) {
+      const mv = this.k.vod ? this.weekMatches('vod', w.all.filter(e => e.k !== 's'), vodIdx, 10) : [];
+      const sv = this.k.series ? this.weekMatches('series', w.all.filter(e => e.k === 's'), serIdx, 10) : [];
+      // en el orden de la lista de la semana (alternada): la n-ésima película coincide con la n-ésima de la lista
+      for (let a = 0, b = 0; picks.length < 10 && (a < mv.length || b < sv.length); ) {
+        if (a < mv.length) picks.push({ kind: 'vod', i: mv[a++] });
+        if (picks.length < 10 && b < sv.length) picks.push({ kind: 'series', i: sv[b++] });
+      }
+    }
+    if (picks.length < 10) {
+      const need = 10 - picks.length;
+      const fill = [
+        ...(this.k.vod ? this.weekFill('vod', vodIdx, picks.filter(p => p.kind === 'vod').map(p => p.i), need, 3).map(i => ({ kind: 'vod' as Kind, i })) : []),
+        ...(this.k.series ? this.weekFill('series', serIdx, picks.filter(p => p.kind === 'series').map(p => p.i), need, 4).map(i => ({ kind: 'series' as Kind, i })) : []),
+      ];
+      picks.push(...weekShuffle(fill, 5).slice(0, need));
+    }
+    if (picks.length >= 5) rows.push({ title: t('Top 10 de la semana'), type: 'top10', items: picks.map(x => this.items(x.kind, [x.i])[0]) });
 
     const recentMovies = this.top('vod', vodIdx, 'added', 30);
     if (recentMovies.length) {
@@ -326,8 +384,8 @@ class Catalog {
     const gen: Row = { title: t('Géneros'), type: 'genre', items: [] };
     for (const g of GENRES) if (this.idxForKw(kind, g.kw).length) gen.items.push({ kind: 'genre', key: g.key, label: label(g), color: g.color, extra: kind });
     if (gen.items.length) rows.push(gen);
-    const top = this.top(kind, all, 'rating', 10);
-    if (top.length >= 5) rows.push({ title: t('Top 10'), type: 'top10', items: this.items(kind, top) });
+    const top = this.weekTop10(kind, all);
+    if (top.length >= 5) rows.push({ title: t('Top 10 de la semana'), type: 'top10', items: this.items(kind, top) });
     for (const c of this.visibleCats(kind)) {
       const idx = d.byCat.get(c.id) || [];
       if (!idx.length) continue;

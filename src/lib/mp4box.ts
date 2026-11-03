@@ -82,20 +82,42 @@ function mp4a(a: AudioCfg): Uint8Array {
   return box('mp4a', [...zeros(6), 0, 1, ...zeros(8), 0, a.channels, 0, 16, ...zeros(4), ...u16(a.rate), 0, 0], esds);
 }
 
+// descripciones armadas con la configuración tal cual del archivo (MKV, mkvmse.ts): avcC / hvcC del video, dac3 / dec3
+// o esds del audio
+export function rawBox(type: string, data: Uint8Array | number[]): Uint8Array {
+  return box(type, data);
+}
+export function videoEntry(type: 'avc1' | 'hvc1', cfg: Uint8Array, width: number, height: number): Uint8Array {
+  return box(type, [...zeros(6), 0, 1, ...zeros(16), ...u16(width), ...u16(height), 0, 0x48, 0, 0, 0, 0x48, 0, 0, ...zeros(4), 0, 1, ...zeros(32), 0, 0x18, 0xff, 0xff],
+    box(type === 'avc1' ? 'avcC' : 'hvcC', cfg));
+}
+export function audioEntry(type: string, channels: number, rate: number, child: Uint8Array): Uint8Array {
+  return box(type, [...zeros(6), 0, 1, ...zeros(8), 0, channels, 0, 16, ...zeros(4), ...u16(rate), 0, 0], child);
+}
+// esds sin configuración (MP3: objeto 0x6B)
+export function esdsFor(obj: number, config: Uint8Array | null): Uint8Array {
+  const n = config ? config.length : 0;
+  const dsi = config ? [0x05, n, ...Array.from(config)] : [];
+  const dcd = [0x04, 0x0d + dsi.length, obj, 0x15, ...zeros(11), ...dsi];
+  return box('esds', [0, 0, 0, 0, 0x03, 0x03 + dcd.length + 3, 0, 1, 0, ...dcd, 0x06, 0x01, 0x02]);
+}
+
 const trex = (id: number) => box('trex', [0, 0, 0, 0, ...u32(id), 0, 0, 0, 1, ...zeros(8), 0, 1, 0, 1]);
 
-// ftyp + moov con las pistas que tenga el canal
-export function initSegment(v: VideoCfg | null, a: AudioCfg | null): Uint8Array {
+// ftyp + moov con las pistas que tenga el canal. aEntry: la descripción del audio tal cual del archivo (Dolby ec-3 /
+// ac-3 de un MP4, mp4mse.ts); sin ella, la de AAC armada con a. vScale: escala de tiempo del video (la del archivo en
+// mp4mse.ts, sin redondeos; los canales usan 90 kHz)
+export function initSegment(v: VideoCfg | null, a: AudioCfg | null, aEntry?: Uint8Array, vScale = 90000, vEntry?: Uint8Array): Uint8Array {
   const ftyp = box('ftyp', [...tag('isom'), 0, 0, 0, 1, ...tag('isom'), ...tag('avc1'), ...tag('mp41')]);
   const mvhd = box('mvhd', [...zeros(12), ...u32(1000), ...zeros(4), 0, 1, 0, 0, 1, 0, ...zeros(10), ...MATRIX, ...zeros(24), 0xff, 0xff, 0xff, 0xff]);
   const traks: Uint8Array[] = [];
   const trexs: Uint8Array[] = [];
   if (v) {
-    traks.push(trak(VIDEO_ID, 90000, v, avc1(v)));
+    traks.push(trak(VIDEO_ID, vScale, v, vEntry || avc1(v)));
     trexs.push(trex(VIDEO_ID));
   }
   if (a) {
-    traks.push(trak(AUDIO_ID, a.rate, null, mp4a(a)));
+    traks.push(trak(AUDIO_ID, a.rate, null, aEntry || mp4a(a)));
     trexs.push(trex(AUDIO_ID));
   }
   return concat([ftyp, box('moov', mvhd, ...traks, box('mvex', ...trexs))]);

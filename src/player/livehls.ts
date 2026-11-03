@@ -14,6 +14,7 @@
 // se salta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { UA } from '../lib/http';
+import { takeList } from './prefetch';
 import { xuiError } from '../lib/xui';
 import { cbc } from '@noble/ciphers/aes';
 import { parseList, resolveUrl, Seg, segIv, tsStart, tsStartPts } from '../lib/hlslist';
@@ -51,6 +52,8 @@ export function disableMp4(): void {
 export class LiveHls {
   private ms: any = null;
   private sb: any = null;
+  private objectUrl = '';
+  private requests = new Set<AbortController>();
   private first: string;
   private list: string;
   private segs: Seg[] = [];
@@ -172,11 +175,13 @@ export class LiveHls {
       // sin el evento
     }
     try {
-      this.v.src = (URL as any).createObjectURL(ms);
+      this.objectUrl = (URL as any).createObjectURL(ms);
+      this.v.src = this.objectUrl;
     } catch {
       (this.v as any).srcObject = ms;
     }
     await Promise.race([opened, sleep(10000)]);
+    if (!this.alive) return '';
     if (ms.readyState !== 'open') return 'el reproductor no abrió MediaSource';
     // el SourceBuffer (MP4 o MPEG-TS) se crea con el primer segmento (deliver)
     this.timer = setInterval(this.tick, 300);
@@ -189,11 +194,18 @@ export class LiveHls {
     this.holding = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    for (const request of this.requests) request.abort();
+    this.requests.clear();
     this.inflight.clear();
+    this.keys.clear();
     try {
       this.v.removeEventListener('waiting', this.onWaiting);
     } catch {
       // ya cerrado
+    }
+    if (this.objectUrl) {
+      try { (URL as any).revokeObjectURL?.(this.objectUrl); } catch { /* sin URL de objetos */ }
+      this.objectUrl = '';
     }
     try {
       if (this.sb?.updating) this.sb.abort();
@@ -207,11 +219,22 @@ export class LiveHls {
   // mode: 'list' = texto; 'seg' = bytes salvo que llegue una página (motivo de XUI); 'bin' = siempre bytes (la llave:
   // XUI la manda desde PHP marcada como text/html y antes se leía como texto y no se podía descifrar)
   private async get(url: string, timeout: number, mode: 'list' | 'seg' | 'bin'): Promise<{ code: number; url: string; text?: string; data?: Uint8Array; type?: string }> {
+    if (!this.alive) return { code: 0, url };
+    // la lista del canal ya pedida por Player mientras se iniciaba el reproductor (prefetch.ts)
+    if (mode === 'list') {
+      const pre = takeList(url);
+      if (pre) {
+        const got = await pre;
+        if (got.code) return got;
+      }
+    }
     const ctrl = new AbortController();
+    this.requests.add(ctrl);
     const timer = setTimeout(() => ctrl.abort(), timeout);
     let at = url;
     try {
       for (let hop = 0; hop < 6; hop++) {
+        if (!this.alive) return { code: 0, url: at };
         const res = await fetch(at, { headers: { 'User-Agent': UA }, signal: ctrl.signal, redirect: 'manual' } as any);
         const loc = res.headers.get('location');
         if (res.status >= 300 && res.status < 400 && loc) {
@@ -228,6 +251,7 @@ export class LiveHls {
     } catch {
       return { code: 0, url: at };
     } finally {
+      this.requests.delete(ctrl);
       clearTimeout(timer);
     }
   }
@@ -358,6 +382,8 @@ export class LiveHls {
     }
   }
 
+  // último segmento que llegó del servidor (el vigilante de Player espera más si el canal sigue bajando)
+  lastData = 0;
   private lastJump = 0;
   private jump(to: number): void {
     if (this.started) this.gapJumps++;
@@ -506,6 +532,8 @@ export class LiveHls {
         continue;
       }
       const t0 = Date.now();
+      // al empezar, el siguiente se pide a la vez que el primero (el canal se ve antes)
+      if (!this.appended) this.prefetch(seg.seq);
       const r = await this.fetchSeg(seg);
       this.inflight.delete(seg.seq);
       if (!this.alive) return;
@@ -530,6 +558,7 @@ export class LiveHls {
         if (this.next !== seg.seq) segFails = 0;
         continue;
       }
+      this.lastData = Date.now();
       // mientras este se descifra y se entrega, los siguientes ya se bajan
       this.prefetch(seg.seq);
       let data: Uint8Array = r.data;
@@ -572,9 +601,12 @@ export class LiveHls {
       this.appended++;
       this.bytes += data.length;
       this.lastAppend = Date.now();
-      // empieza a sonar con 2 segmentos entregados (o con 1 si la lista no tiene más): arranca con margen
+      // empieza a sonar con el primer segmento entregado cuando la lista ya tiene al menos 2 más listos para bajar
+      // (empieza 5 antes del final: esos ya existen y se bajan al instante, en paralelo); si no, con 2 (o con 1 si la
+      // lista no tiene más). Antes esperaba siempre 2: el canal tardaba un segmento más en verse
       const more = this.segs.some(sg => sg.seq === this.next);
-      if (!this.started && (this.appended >= 2 || !more)) {
+      const backlog = this.segs.filter(sg => sg.seq >= this.next).length;
+      if (!this.started && (this.appended >= 2 || !more || backlog >= 2)) {
         this.started = true;
         this.unstick();
         if (this.v.paused) this.v.play();
@@ -639,7 +671,7 @@ export class LiveHls {
   // 1 = entregado, 2 = nada que entregar todavía
   private async deliver(data: Uint8Array): Promise<0 | 1 | 2> {
     if (this.mode !== 'ts' && !mp4Off) {
-      if (!this.mux) this.mux = new TsMux(this.audioIdx);
+      if (!this.mux) this.mux = new TsMux(this.audioIdx, false, this.target >= 8 ? 2 : 3);
       await sleep(0);
       let r;
       try {

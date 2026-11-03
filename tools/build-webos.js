@@ -27,6 +27,16 @@ esbuild
       '@react-native-async-storage/async-storage': './web/shims/async-storage.ts',
     },
     loader: { '.png': 'file', '.jpg': 'file' },
+    // Shaka (motor de Vega para HLS / DASH) no va en LG: el <video> del televisor abre HLS solo y Shaka no corre en
+    // webOS 4.x. src/player/shaka.ts se cambia por web/shims/shaka.ts (sin Shaka ni sus dependencias en app.js)
+    plugins: [
+      {
+        name: 'sin-shaka',
+        setup(b) {
+          b.onResolve({ filter: /^\.\/shaka$/ }, a => (/src[\\/]player$/.test(a.resolveDir) ? { path: path.join(root, 'web', 'shims', 'shaka.ts') } : undefined));
+        },
+      },
+    ],
     assetNames: 'img/[name]-[hash]',
     define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false', global: 'window' },
     legalComments: 'none',

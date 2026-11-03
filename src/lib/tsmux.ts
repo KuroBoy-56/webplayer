@@ -56,7 +56,12 @@ export class TsMux {
   mime = '';
   // idiomas de los audios AAC del canal (en orden) y el que suena
   langs: string[] = [];
-  constructor(readonly audioIdx = 0) {}
+  // padStart (video del panel, hls.ts): el panel corta el video en el cuadro clave anterior al segundo pedido y el audio
+  // empieza justo en ese segundo (0,5-1 s después); el reproductor de Vega no respeta ese hueco inicial y el audio quedaba
+  // atrasado. Con padStart el audio empieza con el video, con silencio hasta su primer cuadro
+  // maxWaits: segmentos sin poder empezar antes de entregar el MPEG-TS como antes (2 con segmentos largos: con 3 de 11 s
+  // el canal no se veía en 25 s)
+  constructor(readonly audioIdx = 0, readonly padStart = false, readonly maxWaits = 3) {}
 
   private fix(v: number): number {
     if (this.ref === null) return v;
@@ -129,7 +134,7 @@ export class TsMux {
 
   // nada que entregar todavía; 3 segmentos sin poder empezar: el lector entrega el MPEG-TS como antes
   private wait(why: string): MuxResult {
-    if (!this.started && ++this.waits >= 3) return { ok: false, why };
+    if (!this.started && ++this.waits >= this.maxWaits) return { ok: false, why };
     return { ok: true, mime: this.mime, data: null };
   }
 
@@ -226,11 +231,14 @@ export class TsMux {
       const at = src >= 0 ? src + this.off! : -1;
       if (this.aNext === null) {
         if (at < 0) continue;
-        this.aNext = Math.max(0, Math.round((at * au.rate) / HZ));
+        this.aNext = this.padStart && this.vPid >= 0 && silent ? 0 : Math.max(0, Math.round((at * au.rate) / HZ));
       }
       if (at >= 0) {
+        // margen de 4 cuadros (~85 ms, no se nota en la sincronía): con 1,5 cuadros, los canales con marcas de tiempo
+        // irregulares recibían silencio y descartes a cada rato (microcortes, «grumos» en el audio)
+        const tol = 4 * step;
         const drift = at - (this.aNext * HZ) / au.rate;
-        if (drift < -1.5 * step) {
+        if (drift < -tol) {
           if (drift > -2 * HZ) {
             this.dropped++;
             continue;
@@ -238,8 +246,9 @@ export class TsMux {
           // salto grande hacia atrás: se sigue desde ahí
           flush();
           this.aNext = Math.max(0, Math.round((at * au.rate) / HZ));
-        } else if (drift > 1.5 * step) {
-          if (drift < 2 * HZ) {
+        } else if (drift > tol) {
+          // el hueco del principio (padStart) se rellena aunque sea largo (un grupo de cuadros, hasta 15 s)
+          if (drift < (this.padStart && !this.aLast && silent ? 15 : 2) * HZ) {
             for (let k = Math.round(drift / step); k > 0; k--) {
               put(silent || this.aLast || f.data);
               this.filled++;
