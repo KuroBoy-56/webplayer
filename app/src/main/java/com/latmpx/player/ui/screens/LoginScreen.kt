@@ -152,16 +152,16 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
 
     suspend fun resolve(): Boolean {
         busy = true; status = tr(R.string.login_checking_device)
+        // check_mac primero: la lista negra del panel (con el equipo bloqueado tampoco valen las líneas de auth.php) y la
+        // orden de borrado de caché
+        val c = if (PanelCrypto.hasKey()) Panel.checkMac(deviceId) else null
+        Panel.blocked?.let { lines = emptyList(); err = it; busy = false; return false }
         val a = Panel.playlists(deviceId)
         var found = a.value.orEmpty()
         var problem = a.error
-        if (found.isEmpty()) {
-            val c = Panel.checkMac(deviceId)
+        if (found.isEmpty() && c != null) {
             c.value?.let { found = listOf(it) }
             if (problem == null) problem = c.error
-        } else {
-            // las listas vinieron de auth.php: check_mac igual, en segundo plano, por la orden de borrado de caché
-            scope.launch { Panel.checkMac(deviceId) }
         }
         lines = found
         if (found.isNotEmpty()) connectFirst(found)
@@ -331,7 +331,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                                 val demo = r.value
                                 if (demo == null) {
                                     err = r.error
-                                    if (r.code == 403) { demoUsed = true; Store.demoUsed = true }
+                                    if (r.code == 403 && Panel.blocked == null) { demoUsed = true; Store.demoUsed = true }
                                     return@act
                                 }
                                 Store.demoUsed = false; demoUsed = false

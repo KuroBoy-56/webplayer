@@ -187,8 +187,9 @@ fun AppRoot() {
         lastPanelCheck.longValue = System.currentTimeMillis()
         scope.launch {
             val c = com.latmpx.player.data.Panel.checkMac(Store.deviceIdOrEmpty(), poll = true)
-            // sin conexión o error del panel no se cierra la sesión; solo cuando el panel dice que no hay línea
-            if (c.error == null && c.value == null && state.session === s) {
+            // sin conexión o error del panel no se cierra la sesión; solo cuando el panel dice que no hay línea o que el
+            // equipo está en la lista negra
+            if (((c.error == null && c.value == null) || com.latmpx.player.data.Panel.blocked != null) && state.session === s) {
                 Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
             }
         }
