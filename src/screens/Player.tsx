@@ -6,7 +6,7 @@
 import { HWEvent, useTVEventHandler } from '@amazon-devices/react-native-kepler';
 import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { reportError } from '../api/report';
-import { warmTracks } from '../api/media';
+import { engineDenied, warmTracks } from '../api/media';
 import { viaDns } from '../lib/securedns';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
@@ -252,6 +252,12 @@ export default function Player({ params }: { params: PlayParams }) {
         }
         if (live) liveNote.current = 'sin imagen en 25 s';
         // el MP4 que lee la app (índice al final del archivo) puede tardar más en empezar: 25 s más
+        // el lector propio sin el índice del archivo en 20 s: el servidor no lo entrega así; se sigue ya con lo demás
+        // (antes se esperaban 25 s más: 45 s con la pantalla cargando)
+        if (!live && ctl.current.mp4Starting() && !ctl.current.mp4Indexed()) {
+          if (!ctl.current.mp4Fallback('sin índice en 20 s')) onErrorRef.current();
+          return;
+        }
         if (!live && ctl.current.mp4Starting()) {
           startDog.current = setTimeout(() => {
             startDog.current = null;
@@ -460,6 +466,8 @@ export default function Player({ params }: { params: PlayParams }) {
       if (vs.inUse) return t('Línea en uso en otro equipo');
       if (vs.stage >= 2) return t('No se pudo continuar donde quedó');
       if (vs.srv >= 400) return t('Error de comunicación con el servidor');
+      // el equipo no lo abre de ninguna forma y el servidor (VPS / VDS) está apagado o sin permiso: se dice qué falta
+      if (engineDenied()) return t('Este video no se puede abrir en este equipo: es necesario encender el servidor.');
       return t('No se pudo reproducir este contenido.');
     };
     // película o episodio que todavía no sonó (Roku: onError → streamCheck, Continuar viendo por pasos)

@@ -5,8 +5,7 @@
 // leer desde el mismo segundo con otra pista, sin servidor. Lo que el equipo no decodifica (DTS, TrueHD, E-AC-3 en
 // algunos Fire TV) no se puede así: Playback pide entonces el servidor o avisa que hace falta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import { UA } from '../lib/http';
-import { takeRange } from './prefetch';
+import { rangeGet, RangeState } from './rangeget';
 import { AUDIO_ID, audioEntry, concat, esdsFor, fragment, initSegment, rawBox, Sample, VIDEO_ID, videoEntry } from '../lib/mp4box';
 import { Probe } from '../lib/probe';
 import { Cue } from '../lib/vtt';
@@ -43,6 +42,8 @@ export class MkvMse {
   private ms: any = null;
   private objectUrl = '';
   private requests = new Set<AbortController>();
+  // pedidos al servidor: cierre de conexión, servidor que ignora el final del Range, tamaño y motivo (rangeget.ts)
+  private rs: RangeState = { close: false, unbounded: false, size: 0, why: '' };
   private sb: any = null;
   private vt: MkvTrack | null = null;
   private at: MkvTrack | null = null;
@@ -90,6 +91,11 @@ export class MkvMse {
     let list = this.subMap().get(st.num);
     if (!list) this.subMap().set(st.num, (list = []));
     return list;
+  }
+
+  // ya leyó la cabecera y armó el video (si no, Player no le da más tiempo)
+  get indexed(): boolean {
+    return !!this.vt;
   }
 
   // pistas como las lee probe.ts (el panel usa el mismo orden: 0:a:N y 0:s:N), para el menú y los subtítulos
@@ -304,40 +310,11 @@ export class MkvMse {
 
   // [off, off + len) del archivo
   private async get(off: number, len: number): Promise<Uint8Array | null> {
-    // el primer pedido ya lanzado por Player mientras se iniciaba el reproductor (prefetch.ts)
-    const pre = takeRange(this.url, off, len);
-    if (pre) {
-      const got = await pre;
-      if (got) {
-        if (got.size > 0) this.size = got.size;
-        return got.data;
-      }
-    }
-    for (let tries = 0; tries < 3 && this.alive; tries++) {
-      const ctrl = new AbortController();
-      this.requests.add(ctrl);
-      const timer = setTimeout(() => ctrl.abort(), 30000);
-      const g = this.gen;
-      try {
-        const r = await fetch(this.url, { headers: { 'User-Agent': UA, Range: 'bytes=' + off + '-' + (off + len - 1) }, signal: ctrl.signal });
-        if (r.status !== 206) {
-          this.why = 'pedido ' + r.status;
-          ctrl.abort();
-          return null;
-        }
-        const tot = Number((r.headers.get('content-range') || '').split('/')[1]);
-        if (tot > 0) this.size = tot;
-        return new Uint8Array(await r.arrayBuffer());
-      } catch (e: any) {
-        if (!this.alive || g !== this.gen) return null;
-        this.why = 'red: ' + String(e?.message || e).slice(0, 60);
-        await sleep(1000);
-      } finally {
-        clearTimeout(timer);
-        this.requests.delete(ctrl);
-      }
-    }
-    return null;
+    const g = this.gen;
+    const d = await rangeGet(this.url, off, len, this.rs, this.requests, () => this.alive && g === this.gen);
+    if (this.rs.size > 0) this.size = this.rs.size;
+    if (!d) this.why = this.rs.why || this.why;
+    return d;
   }
 
   // que haya n bytes desde pos (lee más del archivo)

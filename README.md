@@ -184,6 +184,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   (`src/player/prefetch.ts`); el MP4 encuentra su índice en 1-2 pedidos (antes uno por caja); el índice del MKV para
   Continuar viendo en un pedido; el primer tramo del MKV ya leído no se pide dos veces; sin lecturas de cabecera aparte
   que compitan con el video; el canal pide sus dos primeros segmentos a la vez.
+- **Top 10 de la semana y videos que siempre intentan abrir (1.0.52)**: el Top 10 ya no es lo mejor calificado del
+  catálogo (no cambiaba nunca): es lo más popular de la semana en TMDB que manda el panel (`api/top10.php`,
+  `src/data/top10.ts`, cada 12 h) cruzado con el catálogo por título y año (`catalog.weekTop10`), completado con lo
+  mejor calificado distinto cada semana (también sin clave de TMDB). Lectores propios (MP4 / MKV): pedidos con plazo
+  para contestar (12 s) y para bajar según el tamaño, `Connection: close` tras un pedido sin respuesta, y si el servidor
+  ignora el final del Range (manda el resto del archivo) se pasa enseguida al modo directo (`src/player/rangeget.ts`);
+  sin el índice en 20 s también (antes 45 s cargando). Si nada abre y el servidor está apagado: «Este video no se puede
+  abrir en este equipo: es necesario encender el servidor.»
 - **Motor Shaka, teclado y fluidez (1.0.46)**: películas y series en HLS / DASH con Shaka Player 4.16.13 con los parches
   de Amazon para Vega (`src/player/shaka.ts`, `vendor/`); MP4 por el lector MSE propio con cambio de audio local; MKV con
   las pistas del equipo y el panel solo como respaldo. Botón «Audio · idioma» en el reproductor. Teclado con teclas

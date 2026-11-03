@@ -422,6 +422,11 @@ export class Playback {
     return !!this.mse && !this.mp4Url && !this.played;
   }
 
+  // el lector propio ya leyó el índice del archivo (si no, no vale la pena esperarlo más)
+  mp4Indexed(): boolean {
+    return !!this.mse?.indexed;
+  }
+
   mp4Note(): string {
     return this.mp4Why;
   }

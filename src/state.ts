@@ -1,5 +1,6 @@
 // Estado global: sesión, carga del catálogo, progreso ("Continuar viendo") y Mi lista,
 // sincronizados con api/progress.php del panel igual que la web, Android y Roku.
+import { loadWeekTop } from './data/top10';
 import { useSyncExternalStore } from 'react';
 import { bindSession, cloud, forgetCloud, onPanelDemo, panelTenantConfig, Session } from './api/panel';
 import { Kind, loadKind, setStreamFlip } from './api/xtream';
@@ -143,6 +144,8 @@ export async function loadCatalog(force = false) {
     catalog.clear();
     set({ loaded: { vod: false, series: false, live: false }, error: '' });
   }
+  // Top 10 de la semana del panel: si llega una lista nueva, se rehacen las filas (sin volver a descargar)
+  loadWeekTop().then(changed => changed && state.session === s && refreshCatalog()).catch(() => {});
   // las tres listas a la vez; cada una se muestra en cuanto llega
   const kinds = (['vod', 'series', 'live'] as Kind[]).filter(k => !state.loaded[k]);
   set({ loading: kinds[0] || '' });

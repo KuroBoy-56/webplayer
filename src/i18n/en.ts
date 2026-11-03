@@ -133,6 +133,8 @@ const en = {
   "Este equipo no acepta el video que prepara el panel": "This device doesn't accept the video prepared by the panel",
   "Audio no compatible con este equipo: es necesario encender el servidor.": "Audio not supported by this device: the server needs to be turned on.",
   "Subtítulo no compatible con este equipo: es necesario encender el servidor.": "Subtitle not supported by this device: the server needs to be turned on.",
+  "Top 10 de la semana": "Top 10 this week",
+  "Este video no se puede abrir en este equipo: es necesario encender el servidor.": "This video can't be opened on this device: the server needs to be turned on.",
   "Este equipo no pudo cambiar a {x}.": "This device couldn't switch to {x}.",
   "Este equipo no puede reproducir el audio que prepara el panel.": "This device can't play the audio prepared by the panel.",
   "Este equipo no reproduce el audio {x}: se prepara con el panel…": "This device can't play {x} audio: the panel is preparing it…",
