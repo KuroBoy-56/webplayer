@@ -90,13 +90,15 @@ fun TvHomeScreen(state: AppState) {
     val tSeriesForYou = stringResource(R.string.series_for_you)
     val tMoviesForYou = stringResource(R.string.movies_for_you)
     val bestOf = stringResource(R.string.best_of, "%s")
-    val rows = remember(movies, series, platforms, state.movieCats, state.seriesCats, state.refresh, Cloud.rev) {
+    // Top 10 de la semana del panel (cada 12 h); al llegar una lista nueva se rehacen las filas
+    LaunchedEffect(Unit) { com.latmpx.player.data.WeekTop.load() }
+    val rows = remember(movies, series, platforms, state.movieCats, state.seriesCats, state.refresh, Cloud.rev, com.latmpx.player.data.WeekTop.rev) {
         val out = ArrayList<BrowseRow>()
         if (platforms.isNotEmpty()) out += BrowseRow.Plats("plats", tPlats, platforms)
         continueRow(state, tCont) { state.push(Route.Saved(continueWatching = true)) }?.let { out += it }
         val favs = Cloud.favList().filter { it.kind != Kind.LIVE }
         if (favs.isNotEmpty()) out += BrowseRow.Posters("favs", tMyList, favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) })
-        val top10 = movies.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10)
+        val top10 = com.latmpx.player.data.WeekTop.top10Home(movies, series)
         if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10)
         val rm = movies.sortedByDescending { it.added }.take(30)
         if (rm.isNotEmpty()) out += BrowseRow.Posters("rm", tNewMovies, rm, onViewAll = { state.push(Route.Browse(tNewMovies, Kind.MOVIE, emptySet())) })
@@ -138,13 +140,14 @@ fun TvCatalogScreen(state: AppState, kind: Kind) {
     val tRecent = stringResource(R.string.recently_added)
     val tGenres = stringResource(R.string.browse_genres)
     val tTop = stringResource(if (kind == Kind.MOVIE) R.string.top10_movies_today else R.string.top10_series_today)
-    val rows = remember(all, cats) {
+    LaunchedEffect(Unit) { com.latmpx.player.data.WeekTop.load() }
+    val rows = remember(all, cats, com.latmpx.player.data.WeekTop.rev) {
         val out = ArrayList<BrowseRow>()
         val recent = all.sortedByDescending { it.added }.take(30)
         if (recent.isNotEmpty()) out += BrowseRow.Posters("recent", tRecent, recent, onViewAll = { state.push(Route.Browse(tRecent, kind, emptySet())) })
         val genres = Platforms.genres.map { (g, kw) -> g to Platforms.categoriesFor(cats, kw) }.filter { it.second.isNotEmpty() }
         if (genres.isNotEmpty()) out += BrowseRow.Chips("genres", tGenres, genres.map { it.first }) { i -> genres.getOrNull(i)?.let { (g, ids) -> state.push(Route.Browse(g, kind, ids)) } }
-        val top10 = all.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10)
+        val top10 = com.latmpx.player.data.WeekTop.top10(all, kind)
         if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10)
         val byCat = all.groupBy { it.categoryId }
         cats.forEach { c ->
