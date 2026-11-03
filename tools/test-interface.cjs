@@ -136,14 +136,14 @@ test('HLS libera la URL MSE al cerrar', () => {
     assert.deepEqual(revoked, ['blob:fixture']);
   } finally { URL.revokeObjectURL = realRevoke; }
 });
-test('Shaka usa un margen de arranque menor solo para canales en vivo', async () => {
+test('Shaka arranca con 1 s bajado (canales, películas y series) y guarda más margen en VOD', async () => {
   const { ShakaPlayback } = require('../src/player/shaka.ts');
   const video = { play: async () => {} };
   for (const live of [true, false]) {
     const adapter = new ShakaPlayback(video);
     adapter.onTracks = () => {};
     await adapter.start('https://fixture.invalid/live.m3u8', 0, '', live);
-    assert.equal(configured.streaming.rebufferingGoal, live ? 1 : 2);
+    assert.equal(configured.streaming.rebufferingGoal, 1);
     assert.equal(configured.streaming.bufferingGoal, live ? 12 : 18);
     assert.equal(configured.abr.enabled, true);
     await adapter.destroy();

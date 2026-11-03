@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
-import { Button, Focusable } from '../components/ui';
+import { Button, Focusable, Loader } from '../components/ui';
 import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
@@ -61,6 +61,14 @@ export default function Player({ params }: { params: PlayParams }) {
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [menuMode, setMenuMode] = useState<'audio' | 'all'>('all');
   const [audioLabel, setAudioLabel] = useState('');
+  // botón de la barra central que se ilumina un instante al usarlo con el control (◀◀ 10 s, pausa, 10 s ▶▶)
+  const [flash, setFlash] = useState<'' | 'back' | 'play' | 'fwd'>('');
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashKey = (k: 'back' | 'play' | 'fwd') => {
+    setFlash(k);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(''), 350);
+  };
   const menuOpen = useRef(false);
   menuOpen.current = !!menu;
   // el menú se vuelve a dibujar solo si cambió algo (antes cada aviso del reproductor lo rehacía entero y, con el
@@ -876,6 +884,7 @@ export default function Player({ params }: { params: PlayParams }) {
   const seek = (delta: number) => {
     const c = ctl.current;
     if (!c || !ready.current || live) return;
+    flashKey(delta < 0 ? 'back' : 'fwd');
     const d = c.duration();
     let t = c.realPos() + delta;
     if (d > 0) t = Math.min(t, d - 2);
@@ -888,6 +897,7 @@ export default function Player({ params }: { params: PlayParams }) {
   const togglePause = () => {
     const v = video.current;
     if (!v || !ready.current) return;
+    flashKey('play');
     if (v.paused) v.play();
     else v.pause();
     showOverlay();
@@ -1003,7 +1013,7 @@ export default function Player({ params }: { params: PlayParams }) {
 
       {buffering && !error ? (
         <View style={s.center}>
-          <View style={s.spinner} />
+          <Loader />
           {status || work ? <Text style={s.status}>{work || status}</Text> : null}
         </View>
       ) : null}
@@ -1027,6 +1037,22 @@ export default function Player({ params }: { params: PlayParams }) {
       ) : null}
 
       {anchorOn ? <Focusable preferred onPress={onSelect} style={s.anchor}>{null}</Focusable> : null}
+      {/* como Android: atrasar 10 s, pausa / reproducir y adelantar 10 s en el centro (◀ ▶ y OK del control) */}
+      {!live && (overlay || paused) && !buffering && !error && !menu && !askExit && !(nextSecs > 0) ? (
+        <View style={s.centerCtl} pointerEvents="none">
+          <View style={[s.ctlBtn, flash === 'back' && s.ctlBtnOn]}>
+            <Text style={[s.ctlIcon, flash === 'back' && s.ctlIconOn]}>◀◀</Text>
+            <Text style={[s.ctlSec, flash === 'back' && s.ctlIconOn]}>10</Text>
+          </View>
+          <View style={[s.ctlBtn, s.ctlBig, flash === 'play' && s.ctlBtnOn]}>
+            <Text style={[s.ctlIcon, s.ctlIconBig, flash === 'play' && s.ctlIconOn]}>{paused ? '▶' : '❚❚'}</Text>
+          </View>
+          <View style={[s.ctlBtn, flash === 'fwd' && s.ctlBtnOn]}>
+            <Text style={[s.ctlIcon, flash === 'fwd' && s.ctlIconOn]}>▶▶</Text>
+            <Text style={[s.ctlSec, flash === 'fwd' && s.ctlIconOn]}>10</Text>
+          </View>
+        </View>
+      ) : null}
       {overlay || paused ? (
         <View style={s.overlay}>
           <View style={s.topBar}>
@@ -1035,7 +1061,8 @@ export default function Player({ params }: { params: PlayParams }) {
               {title}
             </Text>
             {live && channel && isFav('live', channel.id) ? <Text style={s.star}>★</Text> : null}
-            {!menu && !askExit && !chList && !nextSecs ? (
+            {/* en vivo no hay botón de audio arriba: los idiomas del canal salen con MENÚ (▲▼ cambian de canal) */}
+            {!live && !menu && !askExit && !chList && !nextSecs ? (
               <View style={s.audioButton}>
                 <Button label={t('Audio') + (audioLabel ? ' · ' + audioLabel : '')} preferred={controlsFocused} last
                   onFocus={() => { setControlsFocused(true); showOverlay(); }}
@@ -1175,7 +1202,6 @@ const s = themed(() =>
     subBoxUp: { bottom: px(260) },
     subText: { color: '#fff', fontSize: px(44), fontWeight: '700', textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: px(16), paddingVertical: px(4), textShadowColor: '#000', textShadowRadius: px(4), textShadowOffset: { width: 0, height: 0 } },
     center: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 5 },
-    spinner: { width: px(90), height: px(90), borderRadius: px(45), borderWidth: px(8), borderColor: 'rgba(255,255,255,0.25)', borderTopColor: C.red },
     status: { color: C.green, fontSize: px(28), marginTop: px(20) },
     error: { color: '#fff', fontSize: px(38), fontWeight: '700', textAlign: 'center' },
     overlay: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, justifyContent: 'space-between', zIndex: 6 },
@@ -1208,6 +1234,14 @@ const s = themed(() =>
     chRowLogo: { width: px(80), height: px(50), marginRight: px(16) },
     chName: { color: C.text, fontSize: px(28), flex: 1 },
     chTextF: { color: C.onFocus },
+    centerCtl: { position: 'absolute', left: 0, right: 0, top: px(430), flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: px(90), zIndex: 7 },
+    ctlBtn: { width: px(130), height: px(130), borderRadius: px(65), backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: px(3), borderColor: 'rgba(255,255,255,0.55)', alignItems: 'center', justifyContent: 'center' },
+    ctlBig: { width: px(170), height: px(170), borderRadius: px(85) },
+    ctlBtnOn: { backgroundColor: C.text, borderColor: C.text, transform: [{ scale: 1.08 }] },
+    ctlIcon: { color: '#fff', fontSize: px(34), fontWeight: '800' },
+    ctlIconBig: { fontSize: px(54) },
+    ctlSec: { color: '#fff', fontSize: px(24), fontWeight: '700', marginTop: px(2) },
+    ctlIconOn: { color: '#000' },
     anchor: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 1 },
     exitShade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 50, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' },
     exitBox: { backgroundColor: alpha(C.bg2, 0.97), borderRadius: px(12), padding: px(40), alignItems: 'center' },

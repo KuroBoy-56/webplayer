@@ -587,9 +587,12 @@ export class LiveHls {
       this.appended++;
       this.bytes += data.length;
       this.lastAppend = Date.now();
-      // empieza a sonar con 2 segmentos entregados (o con 1 si la lista no tiene más): arranca con margen
+      // empieza a sonar con el primer segmento entregado cuando la lista ya tiene al menos 2 más listos para bajar
+      // (empieza 5 antes del final: esos ya existen y se bajan al instante, en paralelo); si no, con 2 (o con 1 si la
+      // lista no tiene más). Antes esperaba siempre 2: el canal tardaba un segmento más en verse
       const more = this.segs.some(sg => sg.seq === this.next);
-      if (!this.started && (this.appended >= 2 || !more)) {
+      const backlog = this.segs.filter(sg => sg.seq >= this.next).length;
+      if (!this.started && (this.appended >= 2 || !more || backlog >= 2)) {
         this.started = true;
         this.unstick();
         if (this.v.paused) this.v.play();

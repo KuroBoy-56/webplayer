@@ -155,6 +155,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   403 `device_blocked`: el inicio de sesión muestra «Este equipo está bloqueado. Contacta a tu proveedor.», no usa líneas
   guardadas ni la pantalla falsa, no registra la cuenta escrita ni la demo, y una sesión abierta se cierra en la próxima
   consulta al panel (cada 10 min o al volver a la app). `deviceBlocked()` en `src/api/panel.ts`.
+- **Reproductor más rápido y fluido (1.0.48)**: películas y series muestran en el centro ◀◀ 10, pausa / reproducir y
+  10 ▶▶ (como Android; ◀ ▶ y OK del control los usan y el botón se ilumina). En los canales ya no está el botón «Audio»
+  de arriba (▲▼ cambian de canal y MENÚ abre idiomas y subtítulos). El círculo de carga gira (`Loader` en
+  `src/components/ui.tsx`, también en el inicio de sesión y las pantallas que cargan). Las filas de Inicio, Películas y
+  Series cambian sin animación al subir o bajar. El canal empieza con el primer segmento cuando la lista ya tiene otros
+  dos listos (`livehls.ts`); Shaka arranca con 1 s bajado; los idiomas del archivo se leen a los 1,5 s o apenas suena.
+  Si el distribuidor apaga el motor del panel para Vega (su Guía EPG), `features.ffmpeg` llega en false y la app usa
+  solo los audios que el equipo lee.
 - **Motor Shaka, teclado y fluidez (1.0.46)**: películas y series en HLS / DASH con Shaka Player 4.16.13 con los parches
   de Amazon para Vega (`src/player/shaka.ts`, `vendor/`); MP4 por el lector MSE propio con cambio de audio local; MKV con
   las pistas del equipo y el panel solo como respaldo. Botón «Audio · idioma» en el reproductor. Teclado con teclas

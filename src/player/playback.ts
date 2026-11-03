@@ -254,7 +254,8 @@ export class Playback {
     // remota antigua antes de probar las capacidades locales actuales.
     this.probe = knownNow(url);
     this.direct(resume);
-    if (!/\.(m3u8|mpd)(\?|$)/i.test(url)) this.langWatch(3000);
+    // los idiomas del archivo se leen a los 1,5 s de abrirlo (antes 3 s), o apenas suena (onPlaying), lo que llegue antes
+    if (!/\.(m3u8|mpd)(\?|$)/i.test(url)) this.langWatch(1500);
   }
 
   // canal en vivo por HLS con el lector propio
@@ -606,7 +607,12 @@ export class Playback {
       if (!this.subKey) this.subApplied = false;
       this.applyPrefs();
     }
-    if (!this.langChecked) this.langWatch(500);
+    if (!this.langChecked) {
+      // ya suena (la conexión del video está abierta): los idiomas se leen ya, sin esperar el plazo de load()
+      if (this.langTimer) clearTimeout(this.langTimer);
+      this.langTimer = null;
+      this.langWatch(150);
+    }
     this.hooks.changed();
   }
 

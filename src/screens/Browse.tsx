@@ -212,7 +212,8 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     (i: number, x: Item | Special) => {
       setInRows(true);
       setRowIdx(i);
-      list.current?.scrollToOffset({ offset: offsets[i] || 0, animated: true });
+      // sin animación: al bajar o subir de fila el salto es inmediato (la animación hacía lenta la navegación)
+      list.current?.scrollToOffset({ offset: offsets[i] || 0, animated: false });
       if (timer.current) clearTimeout(timer.current);
       if (artTimer.current) clearTimeout(artTimer.current);
       focused.current = isItem(x) ? x : null;

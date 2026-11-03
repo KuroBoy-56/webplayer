@@ -1,11 +1,11 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, BackHandler, Easing, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, BackHandler, Easing, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { deviceBlocked, FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelReview, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import KeyboardModal from '../components/KeyboardModal';
 import { loginAll, sessionFrom } from '../api/xtream';
-import { Button, Focusable, Logo } from '../components/ui';
+import { Button, Focusable, Loader, Logo } from '../components/ui';
 import { json } from '../lib/http';
 import { hasMasterKey } from '../lib/aes';
 import { t, tmdbLang } from '../lib/i18n';
@@ -232,7 +232,7 @@ export default function Login() {
   if (checking && !fake) {
     return (
       <View style={s.checking}>
-        <ActivityIndicator size="large" color={C.red} />
+        <Loader />
       </View>
     );
   }

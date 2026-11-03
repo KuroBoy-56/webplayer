@@ -49,7 +49,8 @@ export class ShakaPlayback {
       abr: { enabled: true },
       streaming: {
         bufferingGoal: live ? 12 : 18,
-        rebufferingGoal: live ? 1 : 2,
+        // empieza con 1 s bajado (antes 2 en películas y series): arranca antes, como Android (ExoPlayer)
+        rebufferingGoal: 1,
         bufferBehind: live ? 6 : 10,
         ignoreTextStreamFailures: true,
         retryParameters: { maxAttempts: 2, timeout: 12000 },

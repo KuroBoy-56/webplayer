@@ -1,6 +1,6 @@
 // Piezas de interfaz con foco para el control remoto.
-import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Image, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { brand, brandLogo, brandName, useBrandRev } from '../lib/tenant';
 import { alpha, C, px, themed } from '../theme';
 
@@ -113,10 +113,27 @@ export function Button({ label, onPress, primary, preferred, icon, small, value,
   );
 }
 
+// Círculo de carga que gira (el ActivityIndicator de Vega y el aro fijo del reproductor se veían quietos): un aro con
+// la parte de arriba en rojo que da una vuelta cada 0,8 s en el hilo nativo (no se traba aunque JS esté ocupado)
+export function Loader({ size = 90 }: { size?: number }) {
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 800, easing: Easing.linear, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [spin]);
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  return (
+    <Animated.View
+      style={{ width: px(size), height: px(size), borderRadius: px(size / 2), borderWidth: px(Math.max(6, size / 11)), borderColor: 'rgba(255,255,255,0.22)', borderTopColor: C.red, transform: [{ rotate }] }}
+    />
+  );
+}
+
 export function Spinner({ label }: { label?: string }) {
   return (
     <View style={s.center}>
-      <ActivityIndicator size="large" color={C.red} />
+      <Loader />
       {label ? <Text style={s.spinText}>{label}</Text> : null}
     </View>
   );
