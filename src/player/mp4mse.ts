@@ -5,6 +5,7 @@
 // No pasa por la VPS: solo el cambio de idioma la usa. Saltos (◀▶, Continuar viendo) desde el cuadro clave anterior.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { UA } from '../lib/http';
+import { takeRange } from './prefetch';
 import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VIDEO_ID, VideoCfg } from '../lib/mp4box';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -363,17 +364,27 @@ export class Mp4Mse {
     if (a) while (this.ai < a.dts.length && this.secs(a, a.dts[this.ai]) < from) this.ai++;
   }
 
-  // el índice: al principio o (lo normal en IPTV) al final, después del video
+  // el índice: al principio o (lo normal en IPTV) al final, después del video. Pocos pedidos: el principio del archivo
+  // de una vez (64 KB: ftyp y, si está al principio, el moov) y, al saltar al final, 1 MB desde la cabecera del moov
+  // (casi siempre entra entero); antes eran 16 bytes por caja y otro pedido para el moov
   private async readMoov(): Promise<Uint8Array | null> {
     let off = 0;
-    for (let i = 0; i < 12; i++) {
-      const h = await this.get(off, 16);
-      if (!h || h.length < 8) return null;
+    let win = await this.get(0, 65536);
+    let wOff = 0;
+    for (let i = 0; i < 12 && win; i++) {
+      if (off + 16 > wOff + win.length) {
+        if (this.size && off >= this.size) return null;
+        win = await this.get(off, 1048576);
+        wOff = off;
+        if (!win || win.length < 8) return null;
+      }
+      const h = win.subarray(off - wOff);
       let size = u32(h, 0);
       if (size === 1) size = u64(h, 8);
       else if (size === 0) size = this.size - off;
       if (typ(h, 4) === 'moov') {
         if (size > MOOV_MAX) return null;
+        if (off - wOff + size <= win.length) return kidsBody(win.slice(off - wOff, off - wOff + size));
         const m = await this.get(off, size);
         return m && m.length === size ? kidsBody(m) : null;
       }
@@ -386,6 +397,15 @@ export class Mp4Mse {
 
   // [off, off + len) del archivo en el servidor IPTV
   private async get(off: number, len: number): Promise<Uint8Array | null> {
+    // el primer pedido ya lanzado por Player mientras se iniciaba el reproductor (prefetch.ts)
+    const pre = takeRange(this.url, off, len);
+    if (pre) {
+      const got = await pre;
+      if (got) {
+        if (got.size > 0) this.size = got.size;
+        return got.data;
+      }
+    }
     for (let tries = 0; tries < 3 && this.alive; tries++) {
       const ctrl = new AbortController();
       this.requests.add(ctrl);

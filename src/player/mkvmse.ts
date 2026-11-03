@@ -6,9 +6,11 @@
 // algunos Fire TV) no se puede así: Playback pide entonces el servidor o avisa que hace falta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { UA } from '../lib/http';
+import { takeRange } from './prefetch';
 import { AUDIO_ID, audioEntry, concat, esdsFor, fragment, initSegment, rawBox, Sample, VIDEO_ID, videoEntry } from '../lib/mp4box';
 import { Probe } from '../lib/probe';
-import { ebmlId, ebmlSize, ebmlUint, ac3Info, aacRate, Mkv, MkvTrack, mpaInfo, readMkvHeader, readCues, hevcCodec } from './mkvparse';
+import { Cue } from '../lib/vtt';
+import { str, ebmlId, ebmlSize, ebmlUint, ac3Info, aacRate, Mkv, MkvTrack, mpaInfo, readMkvHeader, readCues, hevcCodec } from './mkvparse';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const AHEAD = 40; // segundos bajados por adelantado
@@ -66,9 +68,28 @@ export class MkvMse {
   private startAt = 0; // segundo desde el que se arma (después de un salto)
   private firstOut = true;
   private size = 0;
+  // el primer tramo de los Cluster ya leído al buscar la cabecera del audio: el video empieza con él, sin pedirlo otra vez
+  private pre: { off: number; data: Uint8Array } | null = null;
 
   constructor(private v: VideoPlayer, private url: string, private selectedAudio = -1, index: Mkv | null = null) {
     this.index = index;
+  }
+
+  // subtítulos de texto del archivo (SRT, ASS, WebVTT) por pista: se juntan mientras se lee el video, sin servidor
+  private subMap(): Map<number, Cue[]> {
+    const m = this.index!;
+    if (!m.subs) m.subs = new Map();
+    return m.subs;
+  }
+
+  // subtítulos de texto de la pista N (orden de las pistas de subtítulos, como el panel: 0:s:N); null = de imagen u
+  // otro formato (los prepara el servidor). La lista crece mientras se lee el video
+  subCues(n: number): Cue[] | null {
+    const st = (this.index?.tracks || []).filter(x => x.type === 17)[n];
+    if (!st || st.compressed || !/^S_TEXT\//.test(st.codec)) return null;
+    let list = this.subMap().get(st.num);
+    if (!list) this.subMap().set(st.num, (list = []));
+    return list;
   }
 
   // pistas como las lee probe.ts (el panel usa el mismo orden: 0:a:N y 0:s:N), para el menú y los subtítulos
@@ -221,6 +242,10 @@ export class MkvMse {
       else if (m.duration > 0 && this.size > 0) at = Math.max(m.firstCluster, Math.floor((t / m.duration) * this.size) - 2097152);
     }
     this.pos = this.bufOff = at;
+    if (this.pre && this.pre.off === at) {
+      this.buf = this.pre.data;
+      this.pre = null;
+    }
   }
 
   private async audioOf(a: MkvTrack): Promise<{ codec: string; entry: Uint8Array; rate: number; channels: number; frameLen: number } | null> {
@@ -251,8 +276,9 @@ export class MkvMse {
   // primer cuadro de una pista (para leer la cabecera AC-3 / MP3): se buscan los bloques del primer Cluster
   private async firstAudioFrame(num: number): Promise<Uint8Array | null> {
     const m = this.index!;
-    const data = await this.get(m.firstCluster, 2097152);
+    const data = this.pre?.off === m.firstCluster ? this.pre.data : await this.get(m.firstCluster, 1048576);
     if (!data) return null;
+    this.pre = { off: m.firstCluster, data };
     let p = 0;
     let n = 0;
     while (p < data.length - 12 && n++ < 4000) {
@@ -278,6 +304,15 @@ export class MkvMse {
 
   // [off, off + len) del archivo
   private async get(off: number, len: number): Promise<Uint8Array | null> {
+    // el primer pedido ya lanzado por Player mientras se iniciaba el reproductor (prefetch.ts)
+    const pre = takeRange(this.url, off, len);
+    if (pre) {
+      const got = await pre;
+      if (got) {
+        if (got.size > 0) this.size = got.size;
+        return got.data;
+      }
+    }
     for (let tries = 0; tries < 3 && this.alive; tries++) {
       const ctrl = new AbortController();
       this.requests.add(ctrl);
@@ -415,7 +450,29 @@ export class MkvMse {
         this.aq.push({ t, data: f });
         t += this.aFrameLen / this.arate;
       }
+      return;
     }
+    const list = this.subMap().get(b.track) || this.textTrack(b.track);
+    if (list) {
+      const d = group ? groupDuration(group) : -1;
+      const text = subText(str(b.frames[0] || new Uint8Array(0)), this.index!.tracks.find(x => x.num === b.track)!.codec);
+      if (!text) return;
+      const cue = { s: t0, e: t0 + (d > 0 ? (d * m.scale) / 1e9 : 4), text };
+      // en orden y sin repetir (después de un salto se vuelve a leer lo mismo)
+      let i = list.length;
+      while (i > 0 && list[i - 1].s > cue.s) i--;
+      if (i > 0 && list[i - 1].s === cue.s && list[i - 1].text === cue.text) return;
+      list.splice(i, 0, cue);
+    }
+  }
+
+  // lista de una pista de subtítulos de texto (se crea al primer bloque)
+  private textTrack(num: number): Cue[] | null {
+    const st = this.index?.tracks.find(x => x.num === num);
+    if (!st || st.type !== 17 || st.compressed || !/^S_TEXT\//.test(st.codec)) return null;
+    const list: Cue[] = [];
+    this.subMap().set(num, list);
+    return list;
   }
 
   // hay video para una entrega (o se terminó el archivo)
@@ -722,6 +779,32 @@ function groupBlock(g: Uint8Array): Uint8Array | null {
     p = body + sz.size;
   }
   return null;
+}
+
+// BlockDuration de un BlockGroup (unidades de tiempo del archivo); -1 = no tiene
+function groupDuration(g: Uint8Array): number {
+  let p = 0;
+  while (p < g.length) {
+    const id = ebmlId(g, p);
+    const sz = id ? ebmlSize(g, p + id.len) : null;
+    if (!id || !sz || sz.size < 0) return -1;
+    const body = p + id.len + sz.len;
+    if (id.id === 0x9b) return ebmlUint(g.subarray(body, body + sz.size));
+    p = body + sz.size;
+  }
+  return -1;
+}
+
+// texto de un bloque de subtítulos: SRT / WebVTT sin etiquetas; ASS / SSA solo el texto (el bloque trae «orden, capa,
+// estilo, nombre, márgenes, efecto, texto») sin sus códigos {\...}
+export function subText(raw: string, codec: string): string {
+  let t = raw;
+  if (/^S_TEXT\/(ASS|SSA)/.test(codec)) {
+    const parts = t.split(',');
+    t = parts.length >= 9 ? parts.slice(8).join(',') : t;
+    t = t.replace(/\{[^}]*\}/g, '').replace(/\\N/gi, '\n').replace(/\\h/g, ' ');
+  }
+  return t.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\r/g, '').trim();
 }
 
 // BlockGroup con ReferenceBlock = no es cuadro clave

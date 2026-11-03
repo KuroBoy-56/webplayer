@@ -14,6 +14,7 @@
 // se salta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { UA } from '../lib/http';
+import { takeList } from './prefetch';
 import { xuiError } from '../lib/xui';
 import { cbc } from '@noble/ciphers/aes';
 import { parseList, resolveUrl, Seg, segIv, tsStart, tsStartPts } from '../lib/hlslist';
@@ -219,6 +220,14 @@ export class LiveHls {
   // XUI la manda desde PHP marcada como text/html y antes se leía como texto y no se podía descifrar)
   private async get(url: string, timeout: number, mode: 'list' | 'seg' | 'bin'): Promise<{ code: number; url: string; text?: string; data?: Uint8Array; type?: string }> {
     if (!this.alive) return { code: 0, url };
+    // la lista del canal ya pedida por Player mientras se iniciaba el reproductor (prefetch.ts)
+    if (mode === 'list') {
+      const pre = takeList(url);
+      if (pre) {
+        const got = await pre;
+        if (got.code) return got;
+      }
+    }
     const ctrl = new AbortController();
     this.requests.add(ctrl);
     const timer = setTimeout(() => ctrl.abort(), timeout);
@@ -523,6 +532,8 @@ export class LiveHls {
         continue;
       }
       const t0 = Date.now();
+      // al empezar, el siguiente se pide a la vez que el primero (el canal se ve antes)
+      if (!this.appended) this.prefetch(seg.seq);
       const r = await this.fetchSeg(seg);
       this.inflight.delete(seg.seq);
       if (!this.alive) return;

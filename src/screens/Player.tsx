@@ -18,6 +18,7 @@ import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { MenuItem, Playback } from '../player/playback';
 import { stopLivePreview } from '../player/preview-session';
+import { prefetchList, prefetchRange } from '../player/prefetch';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
 import { probeTracks } from '../lib/probe';
@@ -733,6 +734,11 @@ export default function Player({ params }: { params: PlayParams }) {
     stopLivePreview()
       .then(() => {
         if (!alive) return;
+        // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
+        const first = dnsUrl.current && dnsUrl.current.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
+        if (live && /\.m3u8(\?|$)/i.test(first)) prefetchList(first);
+        else if (!live && /\.mkv(\?|$)/i.test(first)) prefetchRange(first, 0, 262144);
+        else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) prefetchRange(first, 0, 65536);
         initializing = v.initialize().then(() => { initialized = true; });
         return initializing;
       })

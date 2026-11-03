@@ -176,6 +176,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 - **Controles de reproductor normales (1.0.50)**: en el centro, dibujados con formas (sin números ni símbolos de texto):
   ◀◀ atrasar, pausa / reproducir y ▶▶ adelantar; en series además |◀ capítulo anterior y ▶| siguiente. ◀ ▶ y OK los usan
   directo (el botón se ilumina); con ▲ se eligen con el control (◀ ▶ para moverse, OK para usar, ▼ o Atrás vuelven).
+- **Subtítulos en el equipo y arranque más rápido (1.0.51)**: los subtítulos de texto del MKV (SRT, ASS / SSA, WebVTT)
+  los lee la app junto con el video (`MkvMse.subCues`, sin servidor; se conservan al cambiar de audio) y se dibujan
+  sobre el video. El servidor solo para subtítulos que la app no puede leer (MP4, modo directo); apagado, «Subtítulo no
+  compatible con este equipo: es necesario encender el servidor.» y reporte al panel. Más rápido al abrir: el primer
+  pedido del video (lista del canal, cabecera del MKV / MP4) sale mientras el reproductor de Vega se inicia
+  (`src/player/prefetch.ts`); el MP4 encuentra su índice en 1-2 pedidos (antes uno por caja); el índice del MKV para
+  Continuar viendo en un pedido; el primer tramo del MKV ya leído no se pide dos veces; sin lecturas de cabecera aparte
+  que compitan con el video; el canal pide sus dos primeros segmentos a la vez.
 - **Motor Shaka, teclado y fluidez (1.0.46)**: películas y series en HLS / DASH con Shaka Player 4.16.13 con los parches
   de Amazon para Vega (`src/player/shaka.ts`, `vendor/`); MP4 por el lector MSE propio con cambio de audio local; MKV con
   las pistas del equipo y el panel solo como respaldo. Botón «Audio · idioma» en el reproductor. Teclado con teclas

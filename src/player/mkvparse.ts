@@ -6,7 +6,8 @@ export type MkvTrack = {
   width: number; height: number; rate: number; channels: number; compressed: boolean;
 };
 // scale: nanosegundos por unidad de tiempo; duration en segundos; posiciones absolutas en el archivo
-export type Mkv = { scale: number; duration: number; tracks: MkvTrack[]; segStart: number; firstCluster: number; cuesPos: number; cues: { t: number; pos: number }[] | null; vnum: number };
+// subs: textos de los subtítulos ya leídos por pista (se conservan al cambiar de audio, que vuelve a abrir el lector)
+export type Mkv = { scale: number; duration: number; tracks: MkvTrack[]; segStart: number; firstCluster: number; cuesPos: number; cues: { t: number; pos: number }[] | null; vnum: number; subs?: Map<number, { s: number; e: number; text: string }[]> };
 type Get = (off: number, len: number) => Promise<Uint8Array | null>;
 
 export function ebmlId(b: Uint8Array, o: number): { id: number; len: number } | null {
@@ -48,8 +49,8 @@ export function ebmlFloat(b: Uint8Array): number {
   return 0;
 }
 
-// texto UTF-8 (nombres de pista con acentos)
-const str = (b: Uint8Array) => {
+// texto UTF-8 (nombres de pista con acentos, subtítulos)
+export const str = (b: Uint8Array) => {
   let s = '';
   for (let i = 0; i < b.length && b[i]; ) {
     const c = b[i];
@@ -111,7 +112,7 @@ function track(e: Uint8Array): MkvTrack {
 // EBML + Segment hasta el primer Cluster: escala, duración, pistas y dónde está el índice
 export async function readMkvHeader(get: Get): Promise<Mkv | null> {
   let base = 0;
-  let b = await get(0, 524288);
+  let b = await get(0, 262144);
   if (!b || b.length < 32) return null;
   const at = async (off: number, need: number): Promise<number> => {
     // posición de off dentro de b (lee de nuevo si hace falta)
@@ -180,11 +181,13 @@ export async function readMkvHeader(get: Get): Promise<Mkv | null> {
 
 // índice Cues: segundo y Cluster de cada punto (los del video)
 export async function readCues(get: Get, m: Mkv): Promise<{ t: number; pos: number }[] | null> {
-  const h = await get(m.cuesPos, 16);
+  // un solo pedido casi siempre (el índice de una película entra en 512 KB); si es más grande, el resto
+  const h = await get(m.cuesPos, 524288);
   const id = h ? ebmlId(h, 0) : null;
   const sz = id ? ebmlSize(h!, id.len) : null;
   if (!id || id.id !== 0x1c53bb6b || !sz || sz.size < 0 || sz.size > 16777216) return null;
-  const b = await get(m.cuesPos + id.len + sz.len, sz.size);
+  const hl = id.len + sz.len;
+  const b = h!.length >= hl + sz.size ? h!.subarray(hl, hl + sz.size) : await get(m.cuesPos + hl, sz.size);
   if (!b) return null;
   const out: { t: number; pos: number }[] = [];
   for (const cp of kids(b)) {

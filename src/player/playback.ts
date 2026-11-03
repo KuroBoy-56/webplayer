@@ -262,7 +262,8 @@ export class Playback {
     this.probe = knownNow(url);
     this.direct(resume);
     // los idiomas del archivo se leen a los 1,5 s de abrirlo (antes 3 s), o apenas suena (onPlaying), lo que llegue antes
-    if (!/\.(m3u8|mpd)(\?|$)/i.test(url)) this.langWatch(1500);
+    // MP4 y MKV: el lector propio ya trae las pistas (leer la cabecera aparte competía con el video al abrir)
+    if (!/\.(m3u8|mpd|mp4|m4v|mov|mkv)(\?|$)/i.test(url)) this.langWatch(1500);
   }
 
   // canal en vivo por HLS con el lector propio
@@ -667,7 +668,7 @@ export class Playback {
     if (this.live || this.langBusy) return;
     this.langChecked = true;
     this.langNotice();
-    if (this.shaka || this.mse?.tracks.length) return;
+    if (this.shaka || (this.mse && !this.mp4Url)) return;
     if (this.langNoticed || this.probe?.ok || this.remux) return;
     this.langBusy = true;
     this.langTries++;
@@ -991,7 +992,7 @@ export class Playback {
     if (!items.length) return;
     this.subApplied = true;
     const p = pref('subs_lang', 'off');
-    const want = p !== 'off' ? items.find(i => sameLang(i.lang, p) && i.native !== undefined) : undefined;
+    const want = p !== 'off' ? items.find(i => sameLang(i.lang, p) && (i.native !== undefined || !!this.localCues(i))) : undefined;
     this.pickSub(want || null, false);
   }
 
@@ -1318,8 +1319,18 @@ export class Playback {
       return;
     }
     if (it.probe === undefined || this.live) return;
+    // subtítulo de texto del MKV: lo lee la app junto con el video (como Android), sin servidor
+    const local = this.localCues(it);
+    if (local) {
+      this.subWait = null;
+      this.setNativeSub(-1);
+      if (this.ext?.s !== it.probe || this.ext.cues !== local) this.setExt({ s: it.probe, cues: local });
+      if (user) this.hooks.toast(t('Subtítulos: {x}', { x: it.label }));
+      this.hooks.changed();
+      return;
+    }
     if (this.ext?.s === it.probe) return;
-    // el panel solo trabaja cuando el usuario elige (nunca por el idioma de Ajustes)
+    // el servidor solo trabaja cuando el usuario elige (nunca por el idioma de Ajustes) y solo si el equipo no puede
     if (!user) {
       this.subKey = '';
       return;
@@ -1331,6 +1342,11 @@ export class Playback {
       return;
     }
     this.extSub(it.probe, it.label);
+  }
+
+  // textos de un subtítulo que la app lee del MKV (null = de imagen, otro formato o sin lector propio)
+  private localCues(it: SubItem): Cue[] | null {
+    return it.probe !== undefined && this.mse instanceof MkvMse && !this.mp4Url ? this.mse.subCues(it.probe) : null;
   }
 
   private async extSub(s: number, label: string): Promise<void> {
