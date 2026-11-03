@@ -52,7 +52,8 @@ fun CatalogScreen(state: AppState, kind: Kind) {
     val solid by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 260 } }
     // filas calculadas una vez por catálogo (antes se filtraba todo el catálogo por cada categoría en cada recomposición)
     val recent = remember(all) { all.sortedByDescending { it.added }.take(20) }
-    val top10 = remember(all) { all.sortedByDescending { it.added }.take(300).sortedByDescending { it.rating }.take(10) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { com.latmpx.player.data.WeekTop.load() }
+    val top10 = remember(all, com.latmpx.player.data.WeekTop.rev) { com.latmpx.player.data.WeekTop.top10(all, kind) }
     val rows = remember(all, cats) {
         val byCat = all.groupBy { it.categoryId }
         cats.mapNotNull { c -> byCat[c.id]?.sortedByDescending { it.added }?.take(20)?.let { c to it } }
