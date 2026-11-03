@@ -488,6 +488,12 @@ class PlayerActivity : ComponentActivity() {
                 KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> if (kind == Kind.LIVE) { zap(-1); return true }
                 KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> if (kind == Kind.LIVE) { zap(1); return true }
             }
+            // canal en vivo: ▲▼ del control cambian de canal siempre (también con la información a la vista); no hay
+            // botones de canal ni de pausa en pantalla
+            if (kind == Kind.LIVE && ui2.panel == null && !ui2.locked) when (k) {
+                KeyEvent.KEYCODE_DPAD_UP -> { zap(-1); ui2.poke(); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { zap(1); ui2.poke(); return true }
+            }
             // controles escondidos: el control remoto no navega, actúa directo (como Netflix en TV)
             if (!ui2.visible && ui2.panel == null) {
                 when (k) {

@@ -41,8 +41,6 @@ import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PictureInPictureAlt
@@ -77,6 +75,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import kotlin.math.abs
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -268,7 +268,15 @@ fun PlayerOverlay(m: PlayerUiModel, a: PlayerActions) {
                     m.seekHint = if (left) "« 10 s" else "10 s »"
                 },
             )
-        },
+        }.then(
+            // canal en vivo: deslizar hacia arriba = canal siguiente, hacia abajo = anterior (como ▼ / ▲ del control)
+            if (m.live) Modifier.pointerInput(m.locked) {
+                var dy = 0f
+                detectVerticalDragGestures(onDragStart = { dy = 0f }, onDragEnd = {
+                    if (!m.locked && m.panel == null && abs(dy) > 140f) a.zap(if (dy < 0) 1 else -1)
+                }) { _, d -> dy += d }
+            } else Modifier,
+        ),
     ) {
         if (m.buffering) CircularProgressIndicator(color = Red, strokeWidth = 4.dp, modifier = Modifier.size(64.dp).align(Alignment.Center))
         m.seekHint?.let { Text(it, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center).background(Color(0x99000000), RoundedCornerShape(30.dp)).padding(horizontal = 20.dp, vertical = 10.dp)) }
@@ -316,13 +324,12 @@ private fun Controls(m: PlayerUiModel, a: PlayerActions) {
             a.pip?.let { enter -> Spacer(Modifier.width(10.dp)); CtrlButton(Icons.Filled.PictureInPictureAlt, stringResource(R.string.pip), big = false) { enter() } }
         }
 
-        // centro: -10, reproducir/pausa, +10 (en vivo: canal anterior/siguiente)
-        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (m.tv) 36.dp else 48.dp)) {
-            if (m.live) CtrlButton(Icons.Filled.KeyboardArrowUp, stringResource(R.string.prev_channel), big = false) { a.zap(-1); m.poke() }
-            else CtrlButton(Icons.Filled.Replay10, stringResource(R.string.rewind_10)) { m.player.seekBack(); m.poke() }
+        // centro: -10, reproducir/pausa, +10. En vivo no hay botones en el centro: el canal cambia con ▲▼ del control
+        // (o deslizando arriba / abajo en la pantalla) y no se pausa
+        if (!m.live) Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (m.tv) 36.dp else 48.dp)) {
+            CtrlButton(Icons.Filled.Replay10, stringResource(R.string.rewind_10)) { m.player.seekBack(); m.poke() }
             CtrlButton(if (m.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, stringResource(if (m.playing) R.string.pause else R.string.play), Modifier.focusRequester(playFocus), huge = true) { m.toggle() }
-            if (m.live) CtrlButton(Icons.Filled.KeyboardArrowDown, stringResource(R.string.next_channel), big = false) { a.zap(1); m.poke() }
-            else CtrlButton(Icons.Filled.Forward10, stringResource(R.string.forward_10)) { m.player.seekForward(); m.poke() }
+            CtrlButton(Icons.Filled.Forward10, stringResource(R.string.forward_10)) { m.player.seekForward(); m.poke() }
         }
 
         // abajo: barra de progreso y opciones
