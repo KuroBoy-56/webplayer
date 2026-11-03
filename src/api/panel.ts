@@ -328,16 +328,31 @@ function parseFake(j: any): FakeScreen | null {
   };
 }
 
+// Lista negra del panel (blacklist.php): el distribuidor (o el dueño con Omitir) bloqueó este equipo. login.php
+// responde 403 {"code": "device_blocked"} a check_mac, submit_url, auto_demo y set_pin: la app muestra el aviso,
+// cierra la sesión y no usa ninguna línea guardada. '' = no está bloqueado (según la última respuesta del panel).
+let blockedMsg = '';
+function noteBlocked(r: HttpResult): void {
+  const j = r.code === 403 ? json<any>(r) : null;
+  if (j && typeof j === 'object' && str(j.code) === 'device_blocked') blockedMsg = str(j.error) || t('Este equipo está bloqueado. Contacta a tu proveedor.');
+  else if (r.code === 200) blockedMsg = '';
+}
+export function deviceBlocked(): string {
+  return blockedMsg;
+}
+
 // línea activada para este equipo en el panel
-export async function panelCheckMac(deviceId: string): Promise<Line | null> {
+// poll: la app ya abierta vuelve a preguntar (cada 10 min): el panel no lo cuenta como otra apertura
+export async function panelCheckMac(deviceId: string, poll = false): Promise<Line | null> {
   if (!hasMasterKey()) return null;
   // cc: última orden de borrar la caché que esta app ya aplicó
-  const r = await panelLogin('check_mac', { mac_address: deviceId, enc: 1, cc: cacheSeen() });
+  const r = await panelLogin('check_mac', { mac_address: deviceId, enc: 1, cc: cacheSeen(), ...(poll ? { poll: 1 } : {}) });
+  noteBlocked(r);
   const j = loginReply(r);
-  // el panel contestó (aunque sea "no hay línea"): sirve para cerrar la sesión al volver a la app
-  lastCheckAnswered = r.code === 200 && !!j;
+  // el panel contestó (aunque sea "no hay línea" o «equipo bloqueado»): sirve para cerrar la sesión al volver a la app
+  lastCheckAnswered = (r.code === 200 && !!j) || !!blockedMsg;
   // orden del panel de borrar la caché (viene con o sin línea; un panel viejo no la manda)
-  if (lastCheckAnswered && takeCacheOrder(j.cache_clear)) cacheHook();
+  if (lastCheckAnswered && takeCacheOrder(j.cache_clear, j.cache_clear_at, Math.floor(Date.now() / 1000) + clockSkew)) cacheHook();
   fakeScreen = parseFake(j);
   if (!j || j.exists !== true) return null;
   // PIN parental del panel: es el que usa la app
@@ -385,6 +400,7 @@ export function panelAnswered(): boolean {
 // cambia el PIN parental en el panel (pide el actual); si el panel no lo acepta, no cambia
 export async function panelSetPin(deviceId: string, oldPin: string, pin: string): Promise<{ ok: boolean; error?: string }> {
   const r = await panelLogin('set_pin', { mac_address: deviceId, old_pin: oldPin, pin });
+  noteBlocked(r);
   const j = loginReply(r);
   if (r.ok && j && j.ok === true) {
     write(scoped('panel_pin'), pin);
@@ -397,6 +413,7 @@ export async function panelSetPin(deviceId: string, oldPin: string, pin: string)
 // code: respuesta HTTP del panel (0 = sin conexión)
 export async function panelSubmit(deviceId: string, user: string, pass: string, dns: string): Promise<{ ok: boolean; error?: string; code: number }> {
   const r = await panelLogin('submit_url', { mac_address: deviceId, username: user, password: pass, url: dns });
+  noteBlocked(r);
   const j = json(r);
   if (r.ok && j && str(j.status) === 'ok') return { ok: true, code: r.code };
   return { ok: false, error: panelError(r, t('No se pudo registrar el equipo')), code: r.code };
@@ -418,6 +435,7 @@ export async function panelDemo(
 ): Promise<{ ok: boolean; user?: string; pass?: string; url?: string; expires?: number; duration?: number; error?: string; code: number }> {
   const code = resellerCode(reseller);
   const r = await panelLogin('auto_demo', code ? { mac_address: deviceId, reseller: code, enc: 1 } : { mac_address: deviceId, enc: 1 });
+  noteBlocked(r);
   const j = loginReply(r);
   if (r.ok && j && str(j.status) === 'ok' && str(j.username)) return {
       ok: true,

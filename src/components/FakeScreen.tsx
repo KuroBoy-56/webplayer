@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import type { FakeScreen as Fake } from '../api/panel';
-import { px } from '../theme';
+import { px, themed } from '../theme';
 import { Focusable } from './ui';
 
 const KEYS = [
@@ -122,7 +122,7 @@ export default function FakeScreen({ screen, device, onUnlock }: { screen: Fake;
   );
 }
 
-const s = StyleSheet.create({
+const s = themed(() => StyleSheet.create({
   root: { ...StyleSheet.absoluteFillObject, backgroundColor: '#111827', alignItems: 'center', justifyContent: 'center' },
   full: { width: '100%', height: '100%' },
   calc: { width: px(560), backgroundColor: '#1f2937', borderRadius: px(24), padding: px(26) },
@@ -133,4 +133,4 @@ const s = StyleSheet.create({
   keyFocus: { borderColor: '#fff', transform: [{ scale: 1.06 }] },
   keyText: { color: '#fff', fontSize: px(34), fontWeight: 'bold' },
   id: { position: 'absolute', bottom: px(10), color: 'rgba(255,255,255,0.35)', fontSize: px(16) },
-});
+}));

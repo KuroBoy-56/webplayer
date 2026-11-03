@@ -1,6 +1,7 @@
 // Fuente del video, audio y subtítulos del reproductor (misma lógica que PlayerTracks.brs de Roku).
 // - Pistas que informa el reproductor de Vega (audioTracks / textTracks): se eligen ahí y se comprueba
 //   que el cambio quedó; el búfer se vuelve a llenar en el mismo segundo para que se oiga enseguida.
+// - Shaka con MSE para HLS/DASH y lector MSE local para MP4: pistas y cambios en el equipo.
 // - Pistas leídas de la cabecera del MKV/MP4 (probe.ts): idioma y códec de cada una.
 // - Audio que el equipo no puede cambiar o decodificar (DTS, TrueHD…): el motor del panel lo prepara
 //   en AAC y llega como HLS desde el segundo actual (hls.ts). Subtítulos que el equipo no muestra:
@@ -8,17 +9,23 @@
 // - Sin permiso del motor (Sin permisos / No compatible): el texto del panel una vez por video y el
 //   video sigue directo; nada automático pasa por el motor (estado guardado por línea en media.ts).
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import { Engine, engineDenied, fileTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
+import { disableMp4, LiveHls } from './livehls';
+import { Engine, engineDenied, fileTracks, knownNow, knownTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
 import { Probe } from '../lib/probe';
 import { pref, readJson, setPref, writeJson } from '../lib/storage';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
+import { Mp4Mse } from './mp4mse';
+import { MkvMse } from './mkvmse';
+import { Mkv } from './mkvparse';
+import { reportError } from '../api/report';
+import { ShakaPlayback } from './shaka';
 
 export type MenuItem = { kind: 'audio' | 'text' | 'panel'; key: string; label: string; on: boolean };
 
-type AudioItem = { key: string; label: string; lang: string; codec: string; native?: number; probe?: number };
+type AudioItem = { key: string; label: string; lang: string; codec: string; native?: number; probe?: number; shaka?: string; mp4?: number };
 type SubItem = { key: string; label: string; lang: string; image: boolean; native?: number; probe?: number };
 
 export type Hooks = {
@@ -28,6 +35,14 @@ export type Hooks = {
   subText: (text: string) => void;
   // no se puede seguir (el video directo falló y el panel tampoco pudo)
   fatal: (msg: string) => void;
+  // el panel no pudo preparar el video que el equipo no abrió: el reproductor sigue con sus otros pasos
+  panelFailed?: () => void;
+  // Continuar viendo directo: no llegó al segundo guardado en 15 s (siguen los pasos: el panel desde ese segundo)
+  resumeFailed?: () => void;
+  // canal en vivo por HLS (lector propio) que no se pudo abrir o se cortó: el motivo, para el siguiente formato
+  liveFailed?: (why: string) => void;
+  // el canal se detuvo varias veces (sin datos a tiempo): el estado del lector para el reporte
+  liveStalls?: (diag: string) => void;
 };
 
 const decodeCache: Record<string, boolean> = {};
@@ -51,12 +66,28 @@ export function nativeAudioOk(codec: string, container: string): boolean {
   return decodeCache[k];
 }
 
+function rememberLang(key: string, lang: string) {
+  const k = langKey(lang);
+  if (k === 'es' || k === 'en') setPref(key, k);
+}
+
+// Archivos que este equipo solo pudo ver por el panel ('p' = copia del panel, 'v' = video convertido): la próxima vez
+// se abren de una por ahí, sin probar antes el directo (ahorra los intentos y el tiempo). 7 días, los 300 más recientes.
+type Route = { r: 'p' | 'v'; t: number };
+// _2 (1.0.33): se olvidan las rutas que guardaba un Continuar viendo por el panel (abrían por el panel desde el principio)
+const ROUTE_KEY = 'panel_route_3'; // _3 (1.0.40): los MP4 que antes solo salían por el panel ahora los lee la app
+const routeKey = (u: string) => u.replace(/^https?:\/\//i, '');
+function panelRoute(url: string): 'p' | 'v' | '' {
+  const e = (readJson<Record<string, Route>>(ROUTE_KEY) || {})[routeKey(url)];
+  return e && Date.now() - e.t < 7 * 86400000 ? e.r : '';
+}
+
 // Idioma que el usuario eligió para ESTE título (menú de audio): se usa al volver a abrirlo (también «Continuar viendo»).
 // Un título nuevo (o sin elegir nada) empieza siempre con su audio predeterminado, directo del servidor IPTV; el panel
 // prepara otro idioma solo cuando el usuario lo elige. 180 días, los 400 más recientes. a = pista del archivo.
 type TitleLang = { l: string; a: number; t: number };
-const TLANG_KEY = 'title_audio';
-const routeKey = (u: string) => u.replace(/^https?:\/\//i, '');
+// _2 (1.0.33): se olvidan los idiomas elegidos en las versiones de prueba
+const TLANG_KEY = 'title_audio_2';
 function titleLang(url: string): TitleLang | null {
   const e = (readJson<Record<string, TitleLang>>(TLANG_KEY) || {})[routeKey(url)];
   return e && Date.now() - e.t < 180 * 86400000 ? e : null;
@@ -73,10 +104,25 @@ function setTitleLang(url: string, it: { lang: string; probe?: number } | null):
   const keep = Object.entries(all).sort((x, y) => y[1].t - x[1].t).slice(0, 400);
   writeJson(TLANG_KEY, Object.fromEntries(keep));
 }
-
-function rememberLang(key: string, lang: string) {
-  const k = langKey(lang);
-  if (k === 'es' || k === 'en') setPref(key, k);
+// 1.0.35: ya no se recuerda por servidor que «Continuar viendo» va por el panel (1.0.30 lo hacía y desde entonces todo
+// Continuar viendo de ese servidor gastaba la VPS con el audio predeterminado): siempre se prueba primero directo del
+// servidor IPTV y el panel entra solo si ese video no salta al segundo guardado (pasos de Player.tsx)
+function setPanelRoute(url: string, r: 'p' | 'v' | ''): void {
+  const all = readJson<Record<string, Route>>(ROUTE_KEY) || {};
+  const k = routeKey(url);
+  if (!r) {
+    if (!all[k]) return;
+    delete all[k];
+  } else {
+    if (all[k]?.r === r) return;
+    all[k] = { r, t: Date.now() };
+    const ks = Object.keys(all);
+    if (ks.length > 300) {
+      ks.sort((a, b) => all[a].t - all[b].t);
+      for (const x of ks.slice(0, ks.length - 300)) delete all[x];
+    }
+  }
+  writeJson(ROUTE_KEY, all);
 }
 
 export class Playback {
@@ -88,6 +134,37 @@ export class Playback {
   private resumeAt = 0;
   private remux: { a: number; label: string } | null = null;
   private hls: PanelHls | null = null;
+  // MP4 leído por la app del servidor IPTV (mp4mse.ts); mp4Url: no se pudo, este video va con el modo directo de siempre
+  // MKV: también leído por la app (mkvmse.ts) para cambiar el audio en el equipo, sin servidor (como ExoPlayer en Android)
+  private mse: Mp4Mse | MkvMse | null = null;
+  private mkvIndex: Mkv | null = null;
+  // Televisor (Samsung AVPlay / LG webOS, VideoPlayer con nativeFiles): MP4 / MKV los abre su reproductor por hardware; el lector propio
+  // solo si el televisor no pudo cambiar el audio o los subtítulos (readerWanted). lunaAudio / lunaSub: pista elegida con
+  // el servicio de medios del televisor (tvSelectTrack); tvLuna*Failed: ese servicio no la tomó en este video
+  private readerWanted = false;
+  private lunaAudio = -1;
+  private lunaSub = -1;
+  private tvLunaAudioFailed = false;
+  private tvLunaSubFailed = false;
+  private pendingSub = -1;
+  // lo que se pidió al servidor (para el aviso y el reporte cuando está apagado)
+  private wantNote = '';
+  private mp4Url = false;
+  // por qué la lectura propia del MP4 no siguió (va al reporte)
+  private mp4Why = '';
+  private liveHls: LiveHls | null = null;
+  private shaka: ShakaPlayback | null = null;
+  private shakaRelease: Promise<void> | null = null;
+  private adaptiveTried = false;
+  private mp4Audio = -1;
+  private mp4Index: Uint8Array | null = null;
+  private mp4Paused = false;
+  private audioChange = 0;
+  private audioTimer: ReturnType<typeof setTimeout> | null = null;
+  // audio del canal elegido en el menú (canales con varios idiomas)
+  private liveAudio = 0;
+  // el HLS del panel que sigue sonando mientras se prepara otro idioma
+  private prevHls: PanelHls | null = null;
   private offset = 0;
   // el HLS del panel ya suena (antes sigue el video directo mientras se prepara)
   private remuxLive = false;
@@ -106,15 +183,34 @@ export class Playback {
   private lastSub = '';
   // el equipo no abrió el archivo y ya se le pidió al panel que lo convierta (una vez por video)
   private formatTried = false;
-  // el panel abrió el video porque el equipo no pudo (no un cambio de idioma): si su copia tampoco abre, por http y
-  // después con el video convertido a H.264 (último recurso, como webOS / Vega / Roku)
+  // el panel se usó para continuar en el segundo guardado (el directo no salta), no porque el archivo no abra: no se
+  // recuerda como «solo por el panel» (antes ese título abría por el panel también desde el principio)
+  private resumePanel = false;
+  // el aviso de motor no disponible ya se mostró en este video
+  private deniedShown = false;
+  // «Continuar viendo»: segundo pedido y si ya sonó (nunca se abre desde el principio para saltar después: en algunos
+  // videos o líneas el servidor no deja saltar y quedaba en bucle)
+  private wantAt = 0;
+  private played = false;
+  // Continuar viendo directo: el reproductor de Vega se queda cargando si se salta antes de que el video empiece
+  // (en loadedmetadata, como antes de la 1.0.4); se salta UNA vez apenas suena. seekTo = el segundo pedido mientras
+  // tanto (lo que suena es el principio: no cuenta como «ya sonó» ni se guarda); seekTimer: si en 15 s no llegó, siguen
+  // los pasos de siempre (el panel desde ese segundo)
+  private seekAfter = 0;
+  private seekTo = 0;
+  private seekTimer: ReturnType<typeof setTimeout> | null = null;
+  // lo que suena antes del salto (el principio) va sin sonido
+  private seekMuted = false;
+  // idiomas: aviso de una vez, lectura con el video abierto (intentos) y su temporizador
+  private langNoticed = false;
+  private langTries = 0;
+  private langBusy = false;
+  private langChecked = false;
+  private langTimer: ReturnType<typeof setTimeout> | null = null;
+  // el panel prepara el video que el equipo no abrió (no un cambio de idioma): por http / con el video convertido
   private panelFallback = false;
   private panelPlain = false;
   private panelVideo = false;
-  // ya sonó (el video directo o el del panel)
-  private played = false;
-  // el aviso de motor no disponible ya se mostró en este video
-  private deniedShown = false;
 
   constructor(private v: VideoPlayer, private hooks: Hooks) {}
 
@@ -122,9 +218,39 @@ export class Playback {
 
   load(url: string, resume: number, live: boolean): void {
     this.gen++;
+    this.audioChange++;
+    if (this.audioTimer) clearTimeout(this.audioTimer);
+    this.audioTimer = null;
     this.stopHls();
+    const sameFile = url.replace(/^https?:\/\//i, '') === this.url.replace(/^https?:\/\//i, '');
+    this.wantAt = live ? 0 : resume;
+    this.played = false;
+    this.clearSeek();
+    if (!sameFile) {
+      this.readerWanted = false;
+      this.lunaAudio = -1;
+      this.lunaSub = -1;
+      this.tvLunaAudioFailed = false;
+      this.tvLunaSubFailed = false;
+      this.pendingSub = -1;
+      this.langNoticed = false;
+      this.langTries = 0;
+      this.langChecked = false;
+      this.panelPlain = false;
+      this.panelVideo = false;
+    }
+    if (this.langTimer) clearTimeout(this.langTimer);
+    this.langTimer = null;
+    this.langBusy = false;
+    this.panelFallback = false;
     this.url = url;
     this.live = live;
+    this.liveAudio = 0;
+    this.mp4Audio = -1;
+    this.mp4Index = null;
+    this.mkvIndex = null;
+    this.mp4Paused = false;
+    this.adaptiveTried = false;
     this.probe = null;
     this.probing = false;
     this.remux = null;
@@ -138,39 +264,403 @@ export class Playback {
     this.setExt(null);
     this.subWait = null;
     this.formatTried = false;
-    this.panelFallback = false;
-    this.panelPlain = false;
-    this.panelVideo = false;
-    this.played = false;
+    this.resumePanel = false;
+    this.mp4Url = false;
+    this.mp4Why = '';
     this.deniedShown = false;
-    // los idiomas se buscan mientras el video carga (en el panel o en la cabecera); onPlaying y onError usan esto mismo
-    if (!live) void fileTracks(url);
+    if (live) {
+      this.direct(resume);
+      return;
+    }
+    // Abrir ya: la detección de pistas nunca espera al panel ni reutiliza una ruta
+    // remota antigua antes de probar las capacidades locales actuales.
+    this.probe = knownNow(url);
     this.direct(resume);
+    // los idiomas del archivo se leen a los 1,5 s de abrirlo (antes 3 s), o apenas suena (onPlaying), lo que llegue antes
+    // MP4 y MKV: el lector propio ya trae las pistas (leer la cabecera aparte competía con el video al abrir)
+    if (!/\.(m3u8|mpd)(\?|$)/i.test(url) && (this.tvNative() || !/\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url))) this.langWatch(1500);
+  }
+
+  // canal en vivo por HLS con el lector propio
+  private openLive(url: string): void {
+    const g = this.gen;
+    const h = new LiveHls(this.v, url, this.liveAudio);
+    this.liveHls = h;
+    h.onError = why => g === this.gen && this.liveHls === h && this.hooks.liveFailed?.(why);
+    h.onStalls = () => g === this.gen && this.liveHls === h && this.hooks.liveStalls?.(h.diag());
+    // empieza a sonar el lector cuando tiene 2 segmentos (con margen), no antes
+    h.start().then(err => {
+      if (err && g === this.gen && this.liveHls === h) this.hooks.liveFailed?.(err);
+    });
+  }
+
+  // el lector del canal pausó a propósito para juntar margen (Player muestra «cargando», no «en pausa»)
+  liveHolding(): boolean {
+    return !!this.liveHls?.holding;
+  }
+
+  // estado del canal por HLS (para el reporte): lista, segmentos entregados, lo que tiene el reproductor
+  // El canal iba en MP4 propio y el reproductor lo rechazó: otra vez el mismo canal entregando el MPEG-TS (el resto
+  // de la sesión), sin pasar por otro formato ni protocolo. false = no era eso
+  liveRetryTs(): boolean {
+    const h = this.liveHls;
+    if (!this.live || !h || !h.isMp4() || !(h.mediaFailed() || (this.v as any).error)) return false;
+    disableMp4();
+    h.destroy();
+    this.openLive(this.url);
+    return true;
+  }
+
+  // el canal todavía no se ve pero sigue llegando video (segmentos largos o servidor lento)
+  liveBusy(): boolean {
+    return !!this.liveHls && Date.now() - this.liveHls.lastData < 8000;
+  }
+
+  liveDiag(): string {
+    return this.liveHls ? this.liveHls.diag() : '';
   }
 
   private direct(at: number): void {
     this.stopHls();
+    const g = this.gen;
+    if (this.shakaRelease) {
+      this.shakaRelease.then(() => g === this.gen && this.startDirect(at));
+    } else this.startDirect(at);
+  }
+
+  private startDirect(at: number): void {
     this.offset = 0;
-    this.resumeAt = at;
+    this.clearSeek();
+    // Canales: el lector propio (livehls.ts) convierte cada segmento a MP4 de corrido; con Shaka el MPEG-TS va al lector
+    // de Vega, que deja micro-huecos entre segmentos (los cortes de 1.0.20-1.0.25). Shaka queda para HLS/DASH de
+    // películas y series, y para canales si el equipo no tiene MSE para el lector propio.
+    // el televisor (Samsung / LG) abre los canales HLS con su propio reproductor
+    if (this.live && /\.m3u8(\?|$)/i.test(this.url) && !this.tvNative() && LiveHls.supported()) {
+      this.openLive(this.url);
+      return;
+    }
+    if (!this.adaptiveTried && !this.tvNative() && /\.(m3u8|mpd)(\?|$)/i.test(this.url)) {
+      this.openAdaptive(at);
+      return;
+    }
+    // MP4: la app lo lee del servidor IPTV y lo entrega al reproductor (el modo directo de Vega da error 4 con los MP4
+    // de índice al final, los de casi todos los servidores IPTV). Empieza ya en el segundo pedido (sin el salto)
+    if (!this.live && !this.mp4Url && (!this.tvNative() || this.readerWanted) && /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(this.url)) {
+      this.resumeAt = 0;
+      const g = this.gen;
+      const mkv = /\.mkv(\?|$)/i.test(this.url);
+      const want = this.mp4Audio;
+      const m = mkv ? new MkvMse(this.v, this.url, this.mp4Audio, this.mkvIndex) : new Mp4Mse(this.v, this.url, this.mp4Audio, this.mp4Index);
+      this.mse = m;
+      m.onTracks = () => {
+        if (g !== this.gen || this.mse !== m) return;
+        if (m instanceof MkvMse) {
+          this.mkvIndex = m.index;
+          // las pistas del MKV ya leídas: el menú (audio y subtítulos) sin leer otra vez la cabecera
+          if (!this.probe?.ok) this.probe = m.probe();
+        } else this.mp4Index = m.index;
+        // el subtítulo que se eligió y el televisor no mostró: ahora lo lee la app
+        if (this.pendingSub >= 0) {
+          const ps = this.subItems().find(x => x.probe === this.pendingSub);
+          this.pendingSub = -1;
+          if (ps) setTimeout(() => g === this.gen && this.pickSub(ps, true), 0);
+        }
+        if (this.mp4Paused) { this.mp4Paused = false; this.v.pause(); }
+        this.applyPrefs();
+        this.hooks.changed();
+      };
+      m.onError = () => g === this.gen && this.mse === m && this.mp4Failed(at, m.why);
+      m.start(at)
+        .catch((e: any) => 'excepción: ' + String(e?.message || e).slice(0, 80))
+        .then(err => {
+          if (g !== this.gen || this.mse !== m) return;
+          if (err) {
+            this.mp4Failed(at, err);
+            return;
+          }
+          // el equipo no tomó el audio pedido (o ninguno del archivo): el servidor lo prepara; apagado, el aviso
+          const lost = m.noAudio ? (want >= 0 ? want : Math.max(0, this.probeDefault())) : want >= 0 && m.audioIdx !== want ? want : -1;
+          if (lost >= 0) {
+            const label = this.audioItems().find(i => i.mp4 === lost)?.label || t('Audio predeterminado');
+            this.toRemux(lost, label, true, t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: label }));
+          }
+        });
+      return;
+    }
+    if (at > 5 && !this.live && !this.played) {
+      // Continuar viendo: se abre y se salta apenas suena (onPlaying)
+      this.resumeAt = 0;
+      this.seekAfter = at;
+    } else this.resumeAt = at;
     this.v.src = this.url;
     this.v.play();
   }
 
+  private openAdaptive(at: number): void {
+    this.adaptiveTried = true;
+    const g = this.gen;
+    const s = new ShakaPlayback(this.v);
+    this.shaka = s;
+    s.onTracks = () => {
+      if (g !== this.gen || this.shaka !== s) return;
+      this.applyPrefs();
+      this.langNotice();
+      this.hooks.changed();
+    };
+    s.onError = () => g === this.gen && this.shaka === s && this.adaptiveFallback();
+    // como Roku: sin elección guardada para este título, el audio predeterminado del archivo
+    const language = titleLang(this.url)?.l || '';
+    s.start(this.url, at, language, this.live).catch(() => {
+      if (g === this.gen && this.shaka === s) this.adaptiveFallback();
+    });
+  }
+
+  // Shaka falló: se prueba el lector local anterior antes de los pasos del panel.
+  adaptiveFallback(): boolean {
+    if (!this.shaka) return false;
+    const pos = this.live ? 0 : this.realPos() || this.wantAt;
+    this.direct(pos);
+    return true;
+  }
+
+  // la lectura propia del MP4 no pudo (códec raro, el servidor cortó): el modo directo de siempre desde donde iba
+  private mp4Failed(at: number, why: string): void {
+    const pos = this.played ? this.realPos() : at;
+    this.mp4Why = why;
+    this.mp4Url = true;
+    // televisor: el lector se abrió para cambiar de audio y no pudo; vuelve el reproductor del televisor y ese audio lo
+    // prepara el servidor (último recurso; apagado, el aviso)
+    const want = this.tvNative() && this.readerWanted ? this.mp4Audio : -1;
+    this.direct(pos);
+    if (want >= 0) {
+      const it = this.audioItems().find(i => i.probe === want);
+      this.toRemux(want, it?.label || t('Audio predeterminado'), true, t('Cambiando a {x}…', { x: it?.label || '' }), Math.floor(pos));
+    }
+  }
+
+  // error del reproductor con el MP4 leído por la app: true = se sigue con el modo directo de siempre
+  mp4Fallback(why = 'error del reproductor'): boolean {
+    if (!this.mse || this.mp4Url) return false;
+    const e: any = (this.v as any).error;
+    this.mp4Failed(this.played ? this.realPos() : this.wantAt, why + (e?.code ? ' ' + e.code : '') + (this.mse.why ? ' · ' + this.mse.why : ''));
+    return true;
+  }
+
+  // la app todavía arma el MP4 (el reproductor espera más antes de darlo por perdido)
+  mp4Starting(): boolean {
+    return !!this.mse && !this.mp4Url && !this.played;
+  }
+
+  // el reproductor es el del televisor (Samsung AVPlay / LG webOS): abre MP4 / MKV / HLS solo
+  private tvNative(): boolean {
+    return !!(this.v as any).nativeFiles;
+  }
+
+  // el lector propio puede leer este archivo (MP4 / MKV con MSE en el equipo)
+  private readerCan(): boolean {
+    // Samsung (AVPlay): no recibe un MediaSource, sus lectores no sirven ahí
+    if ((this.v as any).noMse) return false;
+    try {
+      return /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(this.url) && !!(MediaSource as any)?.isTypeSupported?.('video/mp4; codecs="avc1.640028"');
+    } catch {
+      return false;
+    }
+  }
+
+  // Televisor: otro idioma sin el servidor. 1) el servicio de medios del televisor (selectTrack), 2) el lector propio de la
+  // app (MP4 / MKV: el audio cambia en la app, desde el mismo segundo), 3) solo entonces el servidor (si está apagado,
+  // el aviso de encenderlo)
+  private async tvAudio(it: AudioItem, user: boolean): Promise<void> {
+    if (it.probe === undefined) return;
+    const g = this.gen;
+    const sel = (this.v as any).tvSelectTrack;
+    if (sel && !this.tvLunaAudioFailed && !this.mse) {
+      const ok = await Promise.resolve(sel('audio', it.probe)).catch(() => false);
+      if (g !== this.gen) return;
+      if (ok) {
+        this.lunaAudio = it.probe;
+        this.audioKey = it.key;
+        if (user) {
+          setTitleLang(this.url, it);
+          this.hooks.toast(t('Audio: {x}', { x: it.label }));
+        }
+        this.hooks.changed();
+        return;
+      }
+      this.tvLunaAudioFailed = true;
+    }
+    if (!this.readerWanted && !this.mse && this.readerCan()) {
+      this.readerWanted = true;
+      this.mp4Audio = it.probe;
+      this.audioKey = it.key;
+      if (user) {
+        setTitleLang(this.url, it);
+        this.hooks.toast(t('Cambiando a {x}…', { x: it.label }));
+      }
+      this.direct(this.realPos());
+      return;
+    }
+    const pick = it;
+    this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label })).then(ok => ok && user && setTitleLang(this.url, pick));
+  }
+
+  // Televisor: un subtítulo que el <video> no muestra. 1) el servicio de medios del televisor (también los de imagen,
+  // los dibuja el televisor), 2) MKV de texto: el lector propio de la app, 3) false = sigue el servidor
+  private async tvSub(it: SubItem): Promise<boolean> {
+    if (it.probe === undefined) return false;
+    const g = this.gen;
+    const sel = (this.v as any).tvSelectTrack;
+    if (sel && !this.tvLunaSubFailed && !this.mse) {
+      const ok = await Promise.resolve(sel('text', it.probe)).catch(() => false);
+      if (g !== this.gen) return true;
+      if (ok) {
+        this.lunaSub = it.probe;
+        this.subKey = it.key;
+        this.setExt(null);
+        this.hooks.toast(t('Subtítulos: {x}', { x: it.label }));
+        this.hooks.changed();
+        return true;
+      }
+      this.tvLunaSubFailed = true;
+    }
+    if (!it.image && !this.readerWanted && !this.mse && /\.mkv(\?|$)/i.test(this.url) && this.readerCan()) {
+      this.readerWanted = true;
+      this.pendingSub = it.probe;
+      this.subKey = it.key;
+      this.direct(this.realPos());
+      return true;
+    }
+    return false;
+  }
+
+  // el lector propio ya leyó el índice del archivo (si no, no vale la pena esperarlo más)
+  mp4Indexed(): boolean {
+    return !!this.mse?.indexed;
+  }
+
+  // el lector propio todavía está bajando el índice (servidor lento pero entregando)
+  mp4Busy(): boolean {
+    return !!this.mse && !this.mp4Url && this.mse.busy();
+  }
+
+  mp4Note(): string {
+    return this.mp4Why;
+  }
+
+  private clearSeek(): void {
+    this.seekAfter = 0;
+    this.seekTo = 0;
+    if (this.seekTimer) clearTimeout(this.seekTimer);
+    this.seekTimer = null;
+  }
+
+  // timeupdate: el salto de Continuar viendo ya llegó. Cuenta solo cuando el video AVANZA pasado el segundo pedido: al
+  // saltar, el reproductor avisa timeupdate al instante con ese segundo aunque se quede cargando (1.0.27 lo tomaba como
+  // «ya suena», apagaba el vigilante y quedaba cargando sin fin)
+  onTime(): void {
+    if (this.seekTo > 0 && !this.remux && !this.v.paused && (this.v.currentTime || 0) >= this.seekTo + 1.5) this.arrived();
+  }
+
+  private arrived(): void {
+    if (this.seekMuted) {
+      this.seekMuted = false;
+      try {
+        (this.v as any).muted = false;
+      } catch {
+        // sin control de silencio
+      }
+    }
+    this.clearSeek();
+    this.onPlaying();
+  }
+
+  // segundo desde donde reabrir tras un error: el que sonaba o, si aún no arrancó, el de «Continuar viendo»
+  resumePos(): number {
+    const p = this.realPos();
+    return p > 5 && !this.seekTo ? p : this.seekTo || this.seekAfter || this.resumeAt || this.wantAt;
+  }
+
+  // aún no empezó a sonar en el segundo guardado (no se guarda avance: se pisaría dónde quedó)
+  seeking(): boolean {
+    return !this.played && this.wantAt > 0;
+  }
+
+  // ya empezó a sonar (directo o con el panel)
+  hasPlayed(): boolean {
+    return this.played;
+  }
+
+  // el panel está preparando o ya entrega este video
+  panelActive(): boolean {
+    return !!this.remux;
+  }
+
+  // Continuar viendo o un video que el equipo no abrió: lo prepara el panel desde ese segundo con el idioma elegido para
+  // este título (o el predeterminado). false = sin panel (sin permiso o sin motor)
+  async panelOpen(at: number): Promise<boolean> {
+    if (this.live || engineDenied()) return false;
+    const g = this.gen;
+    if (!this.probe?.ok) {
+      const k = await knownTracks(this.url);
+      if (k.ok) this.probe = k;
+    }
+    if (g !== this.gen) return false;
+    this.clearSeek();
+    const it = this.startAudio(this.probe?.ok ? this.audioItems() : []);
+    this.panelFallback = true;
+    this.resumePanel = true;
+    const ok = await this.toRemux(it.a, it.label, false, '', at);
+    if (!ok) this.panelFallback = false;
+    return ok;
+  }
+
   private stopHls(): void {
+    if (this.shaka) {
+      const s = this.shaka;
+      this.shaka = null;
+      const done = s.destroy().catch(() => {});
+      this.shakaRelease = done;
+      done.then(() => { if (this.shakaRelease === done) this.shakaRelease = null; });
+    }
+    this.mse?.destroy();
+    this.mse = null;
     this.hls?.destroy();
     this.hls = null;
+    this.prevHls?.destroy();
+    this.prevHls = null;
+    this.liveHls?.destroy();
+    this.liveHls = null;
     this.remuxLive = false;
   }
 
-  destroy(): void {
+  // Continuar viendo: el panel no arrancó a tiempo; se deja para que el reproductor siga con sus pasos
+  panelStop(): void {
+    if (!this.remux || this.played) return;
+    // si se abrió por el panel porque así se vio antes y ahora no arrancó, la próxima vez se prueba directo
+    setPanelRoute(this.url, '');
+    this.remux = null;
+    this.audioKey = '';
+    this.panelFallback = false;
+    this.stopHls();
+    this.hooks.status('');
+  }
+
+  destroy(): Promise<void> {
     this.gen++;
+    this.audioChange++;
+    if (this.audioTimer) clearTimeout(this.audioTimer);
+    this.audioTimer = null;
+    this.clearSeek();
     this.stopHls();
     this.setExt(null);
     if (this.prefsTimer) clearTimeout(this.prefsTimer);
+    if (this.langTimer) clearTimeout(this.langTimer);
+    return this.shakaRelease || Promise.resolve();
   }
 
   // segundo real del contenido (el HLS del panel empieza en offset)
   realPos(): number {
+    if (this.mse instanceof MkvMse) return this.mse.timeOf(this.v.currentTime || 0);
     return this.offset + (this.v.currentTime || 0);
   }
 
@@ -198,6 +688,10 @@ export class Playback {
       this.startRemux(target);
       return;
     }
+    if (this.mse) {
+      this.mse.seekTo(target);
+      return;
+    }
     this.v.currentTime = target;
   }
 
@@ -215,23 +709,107 @@ export class Playback {
     this.schedulePrefs();
   }
 
-  // primera vez "playing": se aplican los idiomas del archivo (la búsqueda empezó al abrir el video, load)
+  // "playing": se aplican los idiomas ya sabidos y, apenas suena, se mira cuántos audios hay (langCheck)
   onPlaying(): void {
+    if (this.seekAfter > 0 && !this.remux) {
+      // Continuar viendo: ya suena; ahora sí al segundo guardado (una vez)
+      const at = this.seekAfter;
+      const g = this.gen;
+      this.seekAfter = 0;
+      this.seekTo = at;
+      try {
+        (this.v as any).muted = true;
+        this.seekMuted = true;
+      } catch {
+        // sin control de silencio: se oye un instante el principio
+      }
+      this.v.currentTime = at;
+      this.seekTimer = setTimeout(() => {
+        this.seekTimer = null;
+        if (g !== this.gen || this.played || !this.seekTo) return;
+        // no llegó al segundo guardado: el reproductor sigue con sus pasos (el panel desde ese segundo)
+        this.v.pause();
+        if (this.seekMuted) {
+          this.seekMuted = false;
+          try {
+            (this.v as any).muted = false;
+          } catch {
+            // sin control de silencio
+          }
+        }
+        this.hooks.resumeFailed?.();
+      }, 15000);
+      return;
+    }
+    // saltando al segundo guardado: "playing" no basta (puede llegar antes de que el video avance); manda onTime
+    if (this.seekTo > 0 && !this.remux) return;
+    this.clearSeek();
     this.played = true;
-    if (this.live || this.probe || this.probing) return;
+    // cómo se pudo ver este archivo: por el panel (se recuerda) o directo (se olvida lo anterior)
+    if (!this.live) setPanelRoute(this.url, this.remux && this.panelFallback && !this.resumePanel ? (this.panelVideo ? 'v' : 'p') : this.remux ? panelRoute(this.url) : '');
+    if (this.live || this.probing) return;
     this.probing = true;
+    if (this.probe?.ok) {
+      if (!this.audioKey) this.audioApplied = false;
+      else this.checkDecodable();
+      if (!this.subKey) this.subApplied = false;
+      this.applyPrefs();
+    }
+    if (!this.langChecked) {
+      // ya suena (la conexión del video está abierta): los idiomas se leen ya, sin esperar el plazo de load()
+      if (this.langTimer) clearTimeout(this.langTimer);
+      this.langTimer = null;
+      this.langWatch(150);
+    }
+    this.hooks.changed();
+  }
+
+  // ---------- idiomas: aviso y lectura con el video abierto ----------
+
+  private langWatch(ms: number): void {
+    if (this.live || this.langTimer) return;
     const g = this.gen;
-    fileTracks(this.url).then(p => {
+    this.langTimer = setTimeout(() => {
+      this.langTimer = null;
+      if (g === this.gen) this.langCheck();
+    }, ms);
+  }
+
+  // aviso de idiomas: una vez por video, con 2 o más audios (los del reproductor o los ya sabidos)
+  private langNotice(): void {
+    const n = this.audioItems().length;
+    if (n < 2 || this.langNoticed) return;
+    this.langNoticed = true;
+    this.hooks.toast(t('{n} idiomas de audio en este video: pulsa ▼ para cambiar', { n }));
+  }
+
+  // cuántos audios hay; si nadie lo sabe y el reproductor informa uno solo, se lee la cabecera del archivo ya (con el
+  // video abierto, aunque todavía cargue) y se repite a los 3, 6 y 10 s y después cada 15 s hasta que salgan
+  private langCheck(): void {
+    if (this.live || this.langBusy) return;
+    this.langChecked = true;
+    this.langNotice();
+    if (this.shaka || (this.mse && !this.mp4Url)) return;
+    if (this.langNoticed || this.probe?.ok || this.remux) return;
+    this.langBusy = true;
+    this.langTries++;
+    const g = this.gen;
+    fileTracks(this.url, true).then(p => {
       if (g !== this.gen) return;
-      this.probe = p;
+      this.langBusy = false;
       if (p.ok) {
+        this.probe = p;
         if (!this.audioKey) this.audioApplied = false;
         else this.checkDecodable();
         if (!this.subKey) this.subApplied = false;
         this.applyPrefs();
-        if (p.audio.length > 1) this.hooks.toast(t('{n} idiomas de audio en este video: pulsa ▼ para cambiar', { n: p.audio.length }));
+        this.langNotice();
+        this.hooks.changed();
+        return;
       }
-      this.hooks.changed();
+      // el archivo contestó y no es MKV ni MP4 (AVI, TS): no hay pistas que leer
+      if (p.headOk && !p.container) return;
+      this.langWatch([3000, 6000, 10000][this.langTries - 1] ?? 15000);
     });
   }
 
@@ -253,21 +831,27 @@ export class Playback {
     const def = items[this.probeDefault()];
     if (def && def.probe !== undefined && !this.decodable(def)) {
       // el panel lo convierte a AAC: de una vez el idioma elegido para este título (o el predeterminado)
-      const want = this.preferredAudio(items) || def;
-      const label = want.label;
-      return this.toRemux(want.probe ?? def.probe, label, false, t('Cambiando a {x}…', { x: label }), Math.floor(this.resumeAt || this.realPos()));
+      const it = this.startAudio(items);
+      return this.toRemux(it.a, it.label, false, t('Cambiando a {x}…', { x: it.label }), Math.floor(this.resumeAt || this.realPos()));
     }
     return this.formatFallback(items);
   }
 
   // el equipo no abre el archivo (contenedor o códec que no reconoce, AVI, MKV raros…): el motor del panel lo
   // entrega como HLS (video sin cambios, audio en AAC) desde donde iba, antes de dar el error. Una vez por video.
+  // Con un MKV/MP4 cuyo audio el equipo sí decodifica no se intenta: el video del panel es el mismo (copiado) y si
+  // el equipo no lo abre directo tampoco lo abre por el panel (en el simulador eso cerraba la app).
+  // También con MKV / MP4 (Plataformas: videos que el equipo no abre tal cual); si el panel tampoco puede, se pide por
+  // http y después con el video convertido (remuxFailed).
   private async formatFallback(items: AudioItem[]): Promise<boolean> {
     if (this.formatTried || this.live) return false;
     this.formatTried = true;
     this.panelFallback = true;
-    const it = this.preferredAudio(items) || items[this.probeDefault()];
-    return this.toRemux(it?.probe ?? 0, it?.label || t('Audio {n}', { n: 1 }), false, t('Este equipo no abre el video directo: se prepara con el panel…'), Math.floor(this.resumeAt || this.realPos()));
+    this.resumePanel = false;
+    const it = this.startAudio(items);
+    const ok = await this.toRemux(it.a, it.label, false, t('Preparando el video en el panel…'), Math.floor(this.resumeAt || this.realPos()));
+    if (!ok) this.panelFallback = false;
+    return ok;
   }
 
   // ---------- listas ----------
@@ -302,6 +886,13 @@ export class Playback {
   }
 
   private audioItems(): AudioItem[] {
+    if (this.shaka) return this.shaka.audioTracks().map(tr => ({ key: 's:' + tr.id, label: tr.label, lang: tr.lang, codec: tr.codec, shaka: tr.id }));
+    if (this.mse?.tracks.length) return numbered(this.mse.tracks.map((tr, i) => ({
+      key: 'm:' + i, label: langName(tr.lang, '') || t('Audio {n}', { n: i + 1 }), lang: tr.lang, codec: tr.codec, mp4: i, probe: i,
+    })));
+    // canal con varios idiomas (lector propio): uno por audio del canal
+    const hl = this.live && this.liveHls ? this.liveHls.audioLangs() : [];
+    if (hl.length > 1) return numbered(hl.map((l, i) => ({ key: 'h:' + i, label: langName(l, '') || t('Audio {n}', { n: i + 1 }), lang: trackLang(l, ''), codec: '' })));
     const nat = this.nativeAudio();
     const pr = this.probe?.ok ? this.probe.audio : [];
     if (pr.length && pr.length >= nat.length) {
@@ -345,6 +936,12 @@ export class Playback {
   }
 
   private audioOn(items: AudioItem[]): AudioItem | undefined {
+    if (this.shaka) {
+      const active = this.shaka.audioTracks().find(tr => tr.active);
+      return items.find(it => it.shaka === active?.id);
+    }
+    if (this.mse) return items.find(it => it.mp4 === this.mse!.audioIdx);
+    if (this.liveHls && items[0]?.key.startsWith('h:')) return items.find(i => i.key === 'h:' + this.liveHls!.audioIdx);
     if (this.remux) return items.find(i => i.probe === this.remux!.a);
     const n = this.enabledNative();
     if (n >= 0) {
@@ -361,40 +958,115 @@ export class Playback {
     return items.find(i => i.probe === s.a && sameLang(i.lang, s.l)) || items.find(i => sameLang(i.lang, s.l));
   }
 
+  // pista con la que el panel abre el video cuando lo abre él (archivo que no abre directo, Continuar viendo): el idioma
+  // elegido para este título o, sin elegir, la marcada del archivo como «Audio predeterminado» (así queda marcado
+  // en el menú; antes salía marcado su idioma, p. ej. «Inglés»)
+  private startAudio(items: AudioItem[]): { a: number; label: string } {
+    const want = this.preferredAudio(items);
+    return { a: (want || items[this.probeDefault()])?.probe ?? 0, label: want ? want.label : t('Audio predeterminado') };
+  }
+
   private decodable(it: AudioItem): boolean {
     return it.probe === undefined || nativeAudioOk(it.codec, this.probe?.container || '');
+  }
+
+  // Menú remoto únicamente cuando no existe un lector local ni pistas nativas expuestas.
+  private panelMenu(): boolean {
+    return !this.live && !this.shaka && !this.mse && !this.nativeAudio().length && !!this.probe?.ok && this.probe.audio.length > 1;
   }
 
   // menú de audio y subtítulos
   menu(): MenuItem[] {
     const out: MenuItem[] = [];
     const a = this.audioItems();
-    const on = this.audioOn(a);
-    for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: it === on });
-    // como "Reabrir en modo compatible" de Roku: si el equipo no cambió el idioma, lo hace el panel
-    if (!this.live && !this.remux && this.probe?.ok && a.length > 1 && !engineDenied()) out.push({ kind: 'panel', key: 'panel', label: t('¿No cambia el idioma? Prepararlo con el panel'), on: false });
+    if (this.panelMenu()) {
+      const def = this.lunaAudio < 0 && (!this.remux || this.remux.label === t('Audio predeterminado'));
+      out.push({ kind: 'audio', key: 'def', label: t('Audio predeterminado'), on: def });
+      for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: !def && (this.lunaAudio >= 0 ? this.lunaAudio === it.probe : this.remux?.a === it.probe) });
+    } else {
+      const on = this.audioOn(a);
+      for (const it of a) out.push({ kind: 'audio', key: it.key, label: it.label, on: it === on });
+    }
+    if (this.shaka) {
+      const subs = this.shaka.textTracks();
+      out.push({ kind: 'text', key: 'off', label: t('Desactivados'), on: !subs.some(tr => tr.active) });
+      for (const tr of subs) out.push({ kind: 'text', key: 's:' + tr.id, label: tr.label, on: tr.active });
+      return out;
+    }
     const subs = this.subItems();
     const showing = this.nativeSubs().find(t => t.showing);
-    out.push({ kind: 'text', key: 'off', label: t('Desactivados'), on: this.subKey === 'off' || (!this.ext && !showing) });
+    out.push({ kind: 'text', key: 'off', label: t('Desactivados'), on: this.subKey === 'off' || (!this.ext && !showing && this.lunaSub < 0) });
     for (const it of subs) {
-      const isOn = this.ext ? it.probe === this.ext.s : this.subKey !== 'off' && !!showing && it.native === showing.index;
+      const isOn = this.ext ? it.probe === this.ext.s : this.lunaSub >= 0 ? it.probe === this.lunaSub : this.subKey !== 'off' && !!showing && it.native === showing.index;
       out.push({ kind: 'text', key: it.key, label: it.label + (this.subWait && this.subWait.s === it.probe && this.ext?.s !== it.probe ? ' (' + t('preparando…') + ')' : ''), on: isOn });
     }
     return out;
   }
 
   select(m: MenuItem): void {
+    if (this.shaka && m.kind === 'text') {
+      this.subApplied = true;
+      this.subKey = m.key;
+      this.shaka.selectText(m.key === 'off' ? null : m.key.slice(2));
+      return;
+    }
     if (m.kind === 'panel') {
       const a = this.audioItems();
       const it = a.find(i => i.key === this.audioKey) || this.audioOn(a);
-      if (it && it.probe !== undefined) {
-        setTitleLang(this.url, it);
-        this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
-      }
+      if (it && it.probe !== undefined) this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
       return;
     }
     if (m.kind === 'audio') {
+      if (m.key === 'def') {
+        // «Audio predeterminado»: el audio que el archivo trae marcado (este título vuelve a empezar así, directo)
+        this.audioKey = '';
+        setTitleLang(this.url, null);
+        // el televisor tenía otro idioma elegido con su servicio de medios: vuelve al del archivo
+        if (this.lunaAudio >= 0 && !this.remux) {
+          const sel = (this.v as any).tvSelectTrack;
+          this.lunaAudio = -1;
+          if (sel) Promise.resolve(sel('audio', this.probeDefault())).catch(() => false);
+          this.hooks.toast(t('Audio: {x}', { x: t('Audio predeterminado') }));
+          this.hooks.changed();
+          return;
+        }
+        if (this.remux) {
+          // al principio, otra vez el video directo; ya avanzado, el panel sigue con el audio marcado del archivo, sin
+          // cortar: volver al directo obliga al reproductor a saltar dentro del archivo y en Vega eso falla en algunos
+          // servidores (error 4: quedaba cargando sin fin y «Audio predeterminado» no se podía elegir)
+          const d = this.probeDefault();
+          if (this.realPos() < 5 && !this.panelFallback) this.leaveRemux();
+          else if (this.remux.a !== d) this.toRemux(d, t('Audio predeterminado'), true, t('Cambiando a {x}…', { x: t('Audio predeterminado') }));
+          else {
+            // ya suena esa misma pista: solo cambia lo marcado en el menú
+            this.remux = { a: d, label: t('Audio predeterminado') };
+            this.hooks.changed();
+          }
+          return;
+        }
+        this.hooks.toast(t('Audio: {x}', { x: t('Audio predeterminado') }));
+        return;
+      }
       const it = this.audioItems().find(i => i.key === m.key);
+      if (it && it.probe !== undefined && this.panelMenu()) {
+        // un idioma de la lista de abajo: lo prepara el panel (también el de por defecto)
+        if (this.remux?.a === it.probe) {
+          // el panel ya da esa pista (como «Audio predeterminado»): solo cambia lo marcado
+          setTitleLang(this.url, it);
+          this.remux = { a: it.probe, label: it.label };
+          this.hooks.changed();
+          return;
+        }
+        // televisor: su reproductor y el lector de la app antes que el servidor
+        if (this.tvNative()) {
+          this.tvAudio(it, true);
+          return;
+        }
+        // se recuerda solo si el panel lo prepara (sin el motor: el aviso y sigue «Audio predeterminado»)
+        const pick = it;
+        this.toRemux(pick.probe!, pick.label, true, t('Cambiando a {x}…', { x: pick.label })).then(ok => ok && setTitleLang(this.url, pick));
+        return;
+      }
       if (it) this.pickAudio(it, true);
     } else {
       this.pickSub(m.key === 'off' ? null : this.subItems().find(i => i.key === m.key) || null, true);
@@ -416,23 +1088,17 @@ export class Playback {
     this.hooks.changed();
   }
 
-  // Un título nuevo suena tal como viene del servidor IPTV (su audio predeterminado). Solo se cambia solo a: el idioma
-  // que el usuario eligió antes para este mismo título (Continuar viendo), o, si el equipo no puede decodificar el
-  // audio que suena (DTS…, quedaría sin sonido), el mismo idioma en un audio que sí decodifica o el panel.
+  // Recordar la elección local del título. Una preferencia nunca enciende por sí sola el panel.
   private autoAudio(): void {
-    if (this.audioApplied || this.audioKey || this.remux) return;
+    if (this.audioApplied || this.audioKey) return;
     const items = this.audioItems();
     if (!items.length) return;
-    const cur = this.audioOn(items);
-    const want = this.preferredAudio(items);
-    // el audio que suena el equipo no lo puede decodificar (DTS…): hace falta el panel
-    const stuck = cur && !this.decodable(cur);
-    if (!want && !stuck) return;
-    if (items.length < 2 && !stuck) return;
     this.audioApplied = true;
-    const pick = want && this.decodable(want) ? want : stuck ? items.find(i => this.decodable(i) && sameLang(i.lang, cur!.lang)) || want || cur : want;
-    if (pick && pick !== cur) this.pickAudio(pick, false, pick === want);
-    else if (stuck && cur) this.pickAudio(cur, false);
+    // solo el idioma que el usuario eligió antes para este título (Continuar viendo); un título nuevo empieza con el
+    // audio predeterminado, como Roku
+    const want = this.preferredAudio(items);
+    // Las preferencias automáticas solo se aplican a pistas disponibles localmente.
+    if (want && (want.shaka !== undefined || want.mp4 !== undefined || want.native !== undefined)) this.pickAudio(want, false);
   }
 
   // ya se eligió un audio antes de conocer los códecs: si el equipo no lo decodifica, otro del
@@ -448,11 +1114,20 @@ export class Playback {
 
   private autoSubs(): void {
     if (this.subApplied || this.subKey) return;
+    if (this.shaka) {
+      const tracks = this.shaka.textTracks();
+      if (!tracks.length) return;
+      this.subApplied = true;
+      const language = pref('subs_lang', 'off');
+      const want = language !== 'off' ? tracks.find(tr => sameLang(tr.lang, language)) : undefined;
+      this.shaka.selectText(want?.id || null);
+      return;
+    }
     const items = this.subItems();
     if (!items.length) return;
     this.subApplied = true;
     const p = pref('subs_lang', 'off');
-    const want = p !== 'off' ? items.find(i => sameLang(i.lang, p) && i.native !== undefined) : undefined;
+    const want = p !== 'off' ? items.find(i => sameLang(i.lang, p) && (i.native !== undefined || !!this.localCues(i))) : undefined;
     this.pickSub(want || null, false);
   }
 
@@ -468,18 +1143,71 @@ export class Playback {
     } catch {
       // el reproductor no permitió el cambio: lo detecta la comprobación
     }
-    // el búfer ya tenía el audio anterior: se vuelve al mismo punto
-    if (!this.live) {
-      const t = this.v.currentTime || 0;
-      if (t > 1) this.v.currentTime = t;
-    }
+    // El cambio de pista nativo no fuerza una búsqueda ni recarga del archivo.
   }
 
   // saved = el idioma que el usuario eligió antes para este título: puede usar el panel como si lo eligiera ahora
   private pickAudio(it: AudioItem, user: boolean, saved = false): void {
+    const choice = ++this.audioChange;
+    if (this.audioTimer) clearTimeout(this.audioTimer);
+    this.audioTimer = null;
+    if (it.shaka !== undefined && this.shaka) {
+      if (this.shaka.selectAudio(it.shaka)) {
+        this.audioKey = it.key;
+        if (user) {
+          setTitleLang(this.url, it);
+          this.hooks.toast(t('Audio: {x}', { x: it.label }));
+        }
+        this.hooks.changed();
+      }
+      return;
+    }
+    if (it.mp4 !== undefined && this.mse) {
+      if (this.mse.noAudio && this.mse.audioIdx === it.mp4) {
+        this.toRemux(it.mp4, it.label, user, t('Cambiando a {x}…', { x: it.label }));
+        return;
+      }
+      if (this.mse.audioIdx !== it.mp4 || this.mse.noAudio) {
+        if (!this.decodable(it)) {
+          this.toRemux(it.mp4, it.label, user, t('Cambiando a {x}…', { x: it.label }));
+          return;
+        }
+        const pos = this.realPos();
+        this.mp4Audio = it.mp4;
+        this.mp4Paused = this.v.paused;
+        this.direct(pos);
+      }
+      this.audioKey = it.key;
+      if (user) {
+        setTitleLang(this.url, it);
+        this.hooks.toast(t('Audio: {x}', { x: it.label }));
+      }
+      this.hooks.changed();
+      return;
+    }
+    if (it.key.startsWith('h:')) {
+      // otro idioma del canal: el lector vuelve a abrir el canal con ese audio
+      const i = Number(it.key.slice(2));
+      if (!user || !this.liveHls || this.liveHls.audioIdx === i) return;
+      this.liveAudio = i;
+      this.liveHls.destroy();
+      this.openLive(this.url);
+      this.hooks.toast(t('Audio: {x}', { x: it.label }));
+      this.hooks.changed();
+      return;
+    }
     this.audioKey = it.key;
-    // el audio predeterminado del archivo: este título vuelve a empezar así
-    if (user) setTitleLang(this.url, this.probe?.ok && it.probe === this.probeDefault() ? null : it);
+    if (user) setTitleLang(this.url, it.probe === this.probeDefault() && !this.panelMenu() ? null : it);
+    // el idioma elegido antes para este título (Continuar viendo): lo prepara el panel, como al elegirlo en el menú; en el
+    // televisor antes su propio reproductor y el lector de la app (el servidor es el último recurso)
+    if ((user || saved) && it.probe !== undefined && this.panelMenu()) {
+      if (this.tvNative()) {
+        this.tvAudio(it, user);
+        return;
+      }
+      this.toRemux(it.probe, it.label, user, t('Cambiando a {x}…', { x: it.label }));
+      return;
+    }
     const ok = this.decodable(it);
     if (it.native !== undefined && ok) {
       if (this.remux) {
@@ -496,13 +1224,15 @@ export class Playback {
       this.enableNative(it.native);
       const g = this.gen;
       const n = it.native;
-      setTimeout(() => {
-        if (g !== this.gen || this.remux) return;
+      this.audioTimer = setTimeout(() => {
+        this.audioTimer = null;
+        if (g !== this.gen || choice !== this.audioChange || this.remux) return;
         if (this.enabledNative() === n) {
           if (user) this.hooks.toast(t('Audio: {x}', { x: it.label }));
         } else if (it.probe !== undefined && !this.live && (user || saved)) {
-          // el equipo no tomó la pista: la prepara el panel
-          this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
+          // el equipo no tomó la pista: en el televisor su servicio de medios y el lector de la app; si no, el panel
+          if (this.tvNative()) this.tvAudio(it, user);
+          else this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label }));
         } else {
           this.audioKey = '';
           if (user) this.hooks.toast(t('Este equipo no pudo cambiar a {x}.', { x: it.label }));
@@ -527,17 +1257,23 @@ export class Playback {
   }
 
   // motor del panel; sin él, el texto del panel una sola vez por video y solo si lo pidió el usuario
-  private async getEngine(user: boolean): Promise<Engine | null> {
+  private async getEngine(user: boolean, what: 'audio' | 'sub' = 'audio'): Promise<Engine | null> {
     const r = await mediaEngine();
     if (r.ok) return (this.engine = r.engine);
-    this.denied(r.error, user);
+    this.denied(r.error, user, what);
     return null;
   }
 
-  private denied(msg: string, user: boolean): void {
-    if (!user || this.deniedShown) return;
+  // el equipo no puede solo y el servidor (FFmpeg del panel) está apagado o sin permiso: se dice claro que hace falta
+  // encenderlo y se avisa al panel (Reportes) con el motivo, el archivo y la pista
+  private denied(msg: string, user: boolean, what: 'audio' | 'sub' = 'audio'): void {
+    // cada vez que el usuario lo pide (antes una sola vez por video y después no pasaba nada)
+    if (!user) return;
     this.deniedShown = true;
-    this.hooks.toast(msg);
+    this.hooks.toast(what === 'sub' ? t('Subtítulo no compatible con este equipo: es necesario encender el servidor.') : t('Audio no compatible con este equipo: es necesario encender el servidor.'));
+    const ext = (this.url.match(/\.([A-Za-z0-9]{2,5})(\?|$)/) || [])[1] || '?';
+    reportError('playback', what === 'sub' ? 'Subtítulo no compatible sin servidor' : 'Audio no compatible sin servidor',
+      'motivo=' + msg + ' archivo=' + ext + ' lector=' + (this.shaka ? 'shaka' : this.mse ? (this.mse instanceof MkvMse ? 'mkv' : 'mp4') : 'directo') + (this.wantNote ? ' pedido=' + this.wantNote : ''), 'Reproductor');
   }
 
   // true = el panel empezó a preparar el video. note: aviso que se muestra solo si el motor está
@@ -545,8 +1281,11 @@ export class Playback {
   private async toRemux(a: number, label: string, user: boolean, note: string, at?: number): Promise<boolean> {
     if (this.live || this.remux?.a === a) return false;
     const g = this.gen;
+    const choice = this.audioChange;
+    const tr = this.probe?.audio[a];
+    this.wantNote = label + (tr ? ' (' + (tr.codec || '?') + ')' : '');
     const e = await this.getEngine(user);
-    if (g !== this.gen) return false;
+    if (g !== this.gen || choice !== this.audioChange) return false;
     if (!e || !PanelHls.supported()) {
       if (e && user) this.hooks.toast(t('Este equipo no puede reproducir el audio que prepara el panel.'));
       this.audioKey = '';
@@ -555,25 +1294,58 @@ export class Playback {
     }
     const pos = at ?? this.realPos();
     this.duration();
+    const before = this.remux;
     this.remux = { a, label };
     this.audioKey = 'p:' + a;
     if (note) this.hooks.toast(note);
-    this.startRemux(pos);
+    this.startRemux(pos, before);
     return true;
   }
 
-  private async startRemux(pos: number): Promise<void> {
+  // before: el audio del panel que sonaba (cambio de idioma con el video ya por el panel)
+  private async startRemux(pos: number, before: { a: number; label: string } | null = null): Promise<void> {
     if (!this.remux || !this.engine) return;
     const { a, label } = this.remux;
-    // mientras se prepara sigue lo que suena (video directo o el HLS anterior hasta donde llegó)
-    this.stopHls();
+    // mientras se prepara sigue sonando lo de ahora: el HLS anterior del panel sigue bajando hasta que el nuevo está
+    // listo (antes se cortaba al pedir otro idioma y, si el nuevo tardaba o fallaba, el video quedaba sin nada)
+    const prev = before && this.hls?.attached && this.played ? this.hls : null;
+    if (!prev) {
+      this.stopHls();
+      if (this.shakaRelease) {
+        const g = this.gen;
+        await this.shakaRelease;
+        if (g !== this.gen || !this.remux || !this.engine) return;
+      }
+    }
+    else {
+      this.prevHls?.destroy();
+      this.prevHls = prev;
+    }
     this.remuxFrom = Math.floor(pos);
     const h = new PanelHls(this.v, hlsLink(this.engine, this.url, a, pos, { video: this.panelVideo, plain: this.panelPlain }));
     this.hls = h;
     h.onError = msg => this.hls === h && this.remuxFailed(msg);
-    this.hooks.status(this.panelVideo ? t('Convirtiendo el video en el panel…') : t('Cambiando idioma…'));
+    this.hooks.status(this.panelVideo ? t('Convirtiendo el video en el panel…') : this.panelFallback ? (this.wantAt > 0 && !this.played ? t('Preparando desde donde quedó…') : t('Preparando el video en el panel…')) : t('Cambiando idioma…'));
     const err = await h.start();
-    if (this.hls !== h) return;
+    if (this.prevHls === prev) this.prevHls = null;
+    if (this.hls !== h) {
+      h.destroy();
+      if (prev && this.hls !== prev) prev.destroy();
+      return;
+    }
+    if (err && prev && before) {
+      // el otro idioma no se pudo: sigue el que sonaba, sin cortar
+      h.destroy();
+      this.hls = prev;
+      this.remux = before;
+      this.audioKey = 'p:' + before.a;
+      this.hooks.status('');
+      this.hooks.toast(t('No se pudo cambiar a {x} ({msg}). Se sigue con el audio original.', { x: label, msg: err }));
+      reportError('playback', 'No se pudo cambiar el audio', 'audio=' + label + ' a=' + a + ' video=' + this.panelVideo + ' plain=' + this.panelPlain + ' motivo=' + err, 'Reproductor');
+      this.hooks.changed();
+      return;
+    }
+    prev?.destroy();
     if (err) {
       this.remuxFailed(err);
       return;
@@ -589,9 +1361,9 @@ export class Playback {
 
   // el panel no pudo (sin ffmpeg, servidor caído…): se vuelve al video directo
   private remuxFailed(msg: string): void {
-    // un video que el equipo no abrió y la copia del panel tampoco: por http si no se pudo conectar con la VPS / VDS,
-    // después con el video también convertido (último recurso); si tampoco, el error de siempre
-    if (this.panelFallback && this.remux && !this.played && !engineDenied()) {
+    // el video que el equipo no abrió (o Continuar viendo): por http si no se pudo conectar con la VPS / VDS (su
+    // certificado), después con el video también convertido; si tampoco, el reproductor sigue con sus otros pasos
+    if (this.panelFallback && !this.played && this.remux && !engineDenied()) {
       const pos = this.remuxFrom;
       if (!this.panelPlain && msg === t('No se pudo conectar con el panel.')) {
         this.panelPlain = true;
@@ -603,6 +1375,15 @@ export class Playback {
         this.startRemux(pos);
         return;
       }
+      this.remux = null;
+      this.audioKey = '';
+      this.panelFallback = false;
+      this.stopHls();
+      this.hooks.status('');
+      this.hooks.changed();
+      if (this.hooks.panelFailed) this.hooks.panelFailed();
+      else this.hooks.fatal(t('No se pudo reproducir este contenido.'));
+      return;
     }
     const label = this.remux?.label || '';
     const attached = !!this.hls?.attached;
@@ -661,6 +1442,10 @@ export class Playback {
       this.subWait = null;
       this.setExt(null);
       this.setNativeSub(-1);
+      if (this.lunaSub >= 0) {
+        this.lunaSub = -1;
+        Promise.resolve((this.v as any).tvSubtitleOff?.()).catch(() => false);
+      }
       if (user) {
         setPref('subs_lang', 'off');
         this.hooks.toast(t('Subtítulos desactivados'));
@@ -679,12 +1464,35 @@ export class Playback {
       return;
     }
     if (it.probe === undefined || this.live) return;
+    // subtítulo de texto del MKV: lo lee la app junto con el video (como Android), sin servidor
+    const local = this.localCues(it);
+    if (local) {
+      this.subWait = null;
+      this.setNativeSub(-1);
+      if (this.ext?.s !== it.probe || this.ext.cues !== local) this.setExt({ s: it.probe, cues: local });
+      if (user) this.hooks.toast(t('Subtítulos: {x}', { x: it.label }));
+      this.hooks.changed();
+      return;
+    }
     if (this.ext?.s === it.probe) return;
-    // el panel solo trabaja cuando el usuario elige (nunca por el idioma de Ajustes)
+    // el servidor solo trabaja cuando el usuario elige (nunca por el idioma de Ajustes) y solo si el equipo no puede
     if (!user) {
       this.subKey = '';
       return;
     }
+    // televisor: su reproductor (también los de imagen) y el lector de la app antes que el servidor
+    if (this.tvNative()) {
+      const g = this.gen;
+      const pick = it;
+      this.tvSub(it).then(done => !done && g === this.gen && this.subLast(pick));
+      return;
+    }
+    this.subLast(it);
+  }
+
+  // último recurso para un subtítulo: el servidor lo convierte a texto (los de imagen no se pueden)
+  private subLast(it: SubItem): void {
+    if (it.probe === undefined) return;
     if (it.image) {
       this.subKey = 'off';
       this.hooks.toast(t('Este subtítulo es de imagen y no se puede mostrar en este equipo.'));
@@ -694,9 +1502,15 @@ export class Playback {
     this.extSub(it.probe, it.label);
   }
 
+  // textos de un subtítulo que la app lee del MKV (null = de imagen, otro formato o sin lector propio)
+  private localCues(it: SubItem): Cue[] | null {
+    return it.probe !== undefined && this.mse instanceof MkvMse && !this.mp4Url ? this.mse.subCues(it.probe) : null;
+  }
+
   private async extSub(s: number, label: string): Promise<void> {
     const g = this.gen;
-    const e = await this.getEngine(true);
+    this.wantNote = label;
+    const e = await this.getEngine(true, 'sub');
     if (g !== this.gen) return;
     if (!e) {
       this.subKey = 'off';
@@ -748,7 +1562,7 @@ export class Playback {
         // ya se ve una parte: se queda con lo que hay
         if (this.ext?.s === s) return;
         this.subKey = 'off';
-        if (r.denied) this.denied(r.denied, true);
+        if (r.denied) this.denied(r.denied, true, 'sub');
         else this.hooks.toast(t('Este subtítulo no se puede mostrar (es de imagen o el servidor no respondió).'));
         this.hooks.changed();
         return;

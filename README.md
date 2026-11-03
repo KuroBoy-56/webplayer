@@ -10,6 +10,53 @@ Windows, Roku y Vega OS. Un cambio en `src/` de la rama `vega-os` se trae aquí 
 compila sola en cada cambio de la rama `tizenOS` (workflow `App Tizen OS (Samsung)`), con la llave del panel
 del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
+## Novedades de la 1.1.0 (traídas de Vega OS 1.0.25 a 1.0.55 por la rama `webOS`, más lo propio de Samsung)
+
+**Reproducción: el servidor es el último recurso.** Todo lo abre primero **AVPlay** (el reproductor por hardware del
+televisor: MP4, MKV, AVI, MOV, TS y HLS; Dolby y DTS los decodifica la tele). Para cambiar de idioma o de subtítulo,
+en este orden y solo si el paso anterior no puede:
+
+1. **Las pistas de AVPlay** (`audioTracks` / `textTracks` del adaptador, con `setSelectTrack`): el cambio se comprueba
+   a los 1,5 s.
+2. **`tvSelectTrack`** (`web/shims/w3cmedia.tsx`): la pista *n* del archivo (el orden de la cabecera que lee la app) se
+   busca en `getTotalTrackInfo()` y se elige con `setSelectTrack('AUDIO' | 'TEXT', índice de AVPlay)`; los subtítulos
+   se encienden con `setSilentSubtitle(false)` y se apagan con `tvSubtitleOff`. AVPlay también dibuja los de imagen (PGS).
+3. **El servidor** (VPS / VDS, `media_tizen.php`); si está apagado o sin permiso: «Audio no compatible con este
+   equipo: es necesario encender el servidor.» (y lo mismo para subtítulos y video), con el reporte al panel.
+
+A diferencia de LG, aquí no hay paso del lector propio de la app (`mp4mse.ts` / `mkvmse.ts`): AVPlay no recibe un
+MediaSource, así que el adaptador anuncia `noMse` y `playback.ts` lo salta (`readerCan()`).
+
+Cómo se decide (sin `if` de plataforma en `src/`): el adaptador de AVPlay anuncia `nativeFiles`, `nativeHls` y `noMse`;
+`src/player/playback.ts` con `nativeFiles` no usa los lectores de Vega para abrir (`tvNative()`), deja los canales a
+AVPlay (no `livehls.ts`) y sigue la cadena de arriba (`tvAudio`, `tvSub`). En Vega esos campos no existen y todo sigue
+igual que allá. Pruebas: `npm run test:player` (casos «Samsung:») y `tools/avplay.test.js` (el adaptador con un AVPlay
+simulado: la pista 2 del archivo es el índice correcto de AVPlay).
+
+**Más de Vega (1.0.25 a 1.0.55):**
+- **Controles del reproductor**: sin botones de adelantar, atrasar ni pausa en pantalla (◀ ▶ y OK del control siguen
+  funcionando); en series solo capítulo anterior |◀ y siguiente ▶| (▲ los elige). Sin el botón «Audio» de arriba:
+  ▼ o TOOLS abren idiomas y subtítulos.
+- **Top 10 de la semana** (`api/top10.php`: lo más popular de la semana en TMDB cruzado con el catálogo; lo que falte,
+  de lo mejor calificado, distinto cada semana).
+- **Lista negra del panel**: un televisor bloqueado ve «Este equipo está bloqueado…», no entra ni vincula cuenta y la
+  sesión abierta se cierra.
+- **Interruptor de la conversión de audio del distribuidor** (`features.ffmpeg`): apagado, solo el audio que reproduce
+  la tele.
+- **Deportes nuevo**: agenda con canales del cliente, Tablas, Equipos y Selecciones (`SportsTables.tsx`,
+  `SportsTeams.tsx`); carátulas por la caché del panel (`img.php` / `imgc`), vista previa del canal en TV en vivo,
+  Cuenta nueva, teclado de la app, idiomas de cada video recordados por el panel (`tracks.php`).
+- Avisos claros cuando hace falta el servidor; filas de Inicio sin animación; el foco crece al instante y el círculo de
+  carga gira con CSS (`src/components/ui.tsx`, `Platform.OS === 'web'`); reportes de error con la versión real
+  (`src/version.ts`).
+- Lo que es solo de Vega queda fuera: **Shaka** (`tools/build-tizen.js` pone `web/shims/shaka.ts`: AVPlay abre HLS /
+  DASH solo), el lector de canales (`livehls.ts`), los lectores MP4 / MKV y el pedido adelantado del video
+  (`prefetch.ts`: en la tele sería una conexión de más).
+- **Tema de prueba del dueño** (estilo IBO Player, con Omitir, cuando el panel lo ofrece): ya estaba desde la 1.0.2; el
+  panel lo da para `tizen` (`includes/review_theme.php`).
+- Se queda lo de Samsung: `APP_ID` `tizen`, `media_tizen.php`, id del televisor (DUID, `src/lib/platform.ts`), teclas
+  registradas con `tizen.tvinputdevice`, Atrás 10009, `tizen/config.xml` y la firma `.wgt`.
+
 ## Qué trae
 
 - **Inicio de sesión** solo con usuario y contraseña: se prueba a la vez en todos los DNS
@@ -86,7 +133,7 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 - **Ficha** con sinopsis, reparto, temporadas, episodios con su avance y "Más títulos como este".
 - **Actores**: en la ficha, el reparto (fotos de TMDB) abre la página del actor con su filmografía, solo los títulos que el servidor tiene (título normalizado y año ±1, como la app de Windows y la web). Clave TMDB del panel o la incorporada.
 - **Reproductor del televisor (AVPlay de Samsung)**: MP4, MKV, AVI, MOV, MPEG-TS y HLS sin límite de
-  resolución ni de bitrate (4K si el televisor y el archivo lo tienen): continuar donde quedó, ◀▶ 10 s, OK pausa,
+  resolución ni de bitrate (4K si el televisor y el archivo lo tienen): continuar donde quedó, ◀▶ del control 10 s, OK pausa,
   ▼ o MENÚ para audio y subtítulos, siguiente episodio solo. Audio como Roku: todo título empieza con su audio predeterminado, directo
   del servidor IPTV; el panel prepara otro idioma solo cuando el usuario lo elige, y esa elección se recuerda
   para ese título (Continuar viendo). La barra de avance se pinta en píxeles.
@@ -181,7 +228,7 @@ siempre (línea IPTV).
 | Pieza de Vega | En Tizen (`web/`) |
 | --- | --- |
 | `react-native` | `react-native-web` + `BackHandler` con el botón Atrás del control (keyCode 10009) y `hasTVPreferredFocus` |
-| `@amazon-devices/react-native-w3cmedia` (`VideoPlayer`) | `web/shims/w3cmedia.tsx`: el mismo `VideoPlayer` sobre **AVPlay** (`webapis.avplay`): pistas de audio y subtítulos del archivo (`getTotalTrackInfo` / `setSelectTrack`), subtítulos dibujados encima, `suspend`/`restore` al pasar a segundo plano y la página transparente sobre el video. En un navegador usa `<video>` |
+| `@amazon-devices/react-native-w3cmedia` (`VideoPlayer`) | `web/shims/w3cmedia.tsx`: el mismo `VideoPlayer` sobre **AVPlay** (`webapis.avplay`): anuncia `nativeFiles` / `nativeHls` / `noMse`, pistas de audio y subtítulos del archivo (`getTotalTrackInfo` / `setSelectTrack`, también `tvSelectTrack` / `tvSubtitleOff`), subtítulos dibujados encima, `suspend`/`restore` al pasar a segundo plano y la página transparente sobre el video. En un navegador usa `<video>` |
 | `@amazon-devices/react-native-kepler` | `useTVEventHandler` con las teclas del control (flechas, OK, ▶❚❚, ⏪⏩, CH+/CH−, INFO, TOOLS y colores, registradas con `tizen.tvinputdevice.registerKey`) |
 | Foco del control (nativo en Vega) | `web/spatial.ts`: las flechas van al botón más cercano en esa dirección (misma fila o columna, sin saltos en diagonal), siempre hay algo con foco y al volver a una pantalla se vuelve al último botón |
 | AsyncStorage | `localStorage` del televisor (se borra al desinstalar la app) |
@@ -224,7 +271,7 @@ para el emulador de Tizen o para volver a firmar).
 
 ```sh
 npm ci
-npm run typecheck && npm test
+npm run typecheck && npm test && npm run test:player && npm run test:interface
 npm run build            # dist/ (con config/panel.key incluye Autodemo, DNS y registro del equipo)
 ```
 

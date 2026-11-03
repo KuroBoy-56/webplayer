@@ -1,15 +1,18 @@
 // HLS del motor del panel (video copiado + audio AAC en MPEG-TS). En el televisor Samsung, AVPlay lo abre
-// directo; sin AVPlay (navegador) va por Media Source Extensions: la lista y los segmentos se bajan aquí y
+// directo; si el reproductor no abre HLS (Chrome de escritorio) va por Media Source Extensions: la lista y los segmentos se bajan aquí y
 // se entregan al SourceBuffer en orden. La lista es de tipo "event": crece mientras ffmpeg convierte.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { http, UA } from '../lib/http';
 import { engineError, markDenied } from '../api/media';
 import { t } from '../lib/i18n';
+import { MuxResult, TsMux } from '../lib/tsmux';
 
 type Seg = { url: string; start: number; dur: number };
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const AHEAD = 45; // segundos que se bajan por adelantado
+// el reproductor rechazó el MP4 propio: el resto de la sesión, el MPEG-TS del panel tal cual
+let mp4Off = false;
 
 export class PanelHls {
   private ms: any = null;
@@ -20,6 +23,12 @@ export class PanelHls {
   private gen = 0;
   private alive = true;
   private running = false;
+  // Vega: su lector MPEG-TS no toma bien el video del panel (Continuar viendo quedaba en «Preparando desde donde
+  // quedó…»): cada segmento se convierte a MP4 fragmentado, como los canales (tsmux.ts). Sin H.264 + AAC (HEVC
+  // copiado…), el MPEG-TS tal cual. tsOff: dónde va el primer segmento (seekTo)
+  private mux: TsMux | null = null;
+  private mp4 = false;
+  private tsOff = 0;
   private dir: string;
   // el reproductor ya tiene esta fuente (el video directo se dejó)
   attached = false;
@@ -36,9 +45,15 @@ export class PanelHls {
     return !!(this.v as any).nativeHls;
   }
 
-  // ¿AVPlay o el equipo acepta MPEG-TS por MSE?
+  // ¿el equipo abre HLS solo o acepta MPEG-TS por MSE?
   static supported(): boolean {
     if ((globalThis as any).webapis?.avplay) return true;
+    try {
+      const v = document.createElement('video');
+      if (v.canPlayType('application/vnd.apple.mpegurl') || v.canPlayType('application/x-mpegURL')) return true;
+    } catch {
+      // sin DOM
+    }
     try {
       return MediaSource.isTypeSupported('video/mp2t', true);
     } catch {
@@ -69,19 +84,9 @@ export class PanelHls {
     }
     await Promise.race([opened, sleep(10000)]);
     if (ms.readyState !== 'open') return t('El reproductor no aceptó el audio del panel');
-    try {
-      this.sb = ms.addSourceBuffer('video/mp2t');
-    } catch {
-      return t('Este equipo no acepta el video que prepara el panel');
-    }
-    // en orden desde 0 (el HLS empieza en el segundo pedido)
-    try {
-      this.sb.mode = 'sequence';
-      this.sb.timestampOffset = 0;
-    } catch {
-      // modo por defecto
-    }
+    // el SourceBuffer se crea con el primer segmento (MP4 convertido o MPEG-TS: deliver)
     this.pump();
+    this.gapTimer = setInterval(() => this.alive && this.unstick(), 300);
     return '';
   }
 
@@ -98,6 +103,8 @@ export class PanelHls {
   destroy(): void {
     this.alive = false;
     this.gen++;
+    if (this.gapTimer) clearInterval(this.gapTimer);
+    this.gapTimer = null;
     try {
       if (this.sb?.updating) this.sb.abort();
     } catch {
@@ -122,7 +129,7 @@ export class PanelHls {
     this.gen++;
     await this.idle();
     try {
-      this.sb.abort();
+      this.sb?.abort();
       const end = this.bufEnd();
       if (end > 0) {
         this.sb.remove(0, end + 1);
@@ -133,6 +140,9 @@ export class PanelHls {
       // se sigue igual
     }
     this.next = k;
+    this.tsOff = this.segs[k].start;
+    // MP4 convertido: otra línea de tiempo desde 0, puesta en el segundo del segmento
+    if (this.mp4) this.mux = new TsMux(0, true);
     this.v.currentTime = t;
     if (!this.running) this.pump();
     return true;
@@ -157,7 +167,7 @@ export class PanelHls {
     }
   }
 
-  // AVPlay: la lista se sigue leyendo hasta que termina (duración y hasta dónde se puede adelantar)
+  // HLS directo: la lista se sigue leyendo hasta que termina (duración y hasta dónde se puede adelantar)
   private async watch(): Promise<void> {
     while (this.alive && !this.ended) {
       await sleep(5000);
@@ -222,6 +232,91 @@ export class PanelHls {
     return true;
   }
 
+  // El reproductor de Vega no empieza si lo bajado no arranca justo en el segundo actual (el video del panel empieza en
+  // ~1,4 s) y se queda quieto para siempre en un hueco entre segmentos: el cambio de idioma y Continuar viendo quedaban
+  // cargando sin fin. Como el lector de canales (livehls.ts unstick), cada 300 ms se salta al tramo con datos; quieto
+  // 3 s con video por delante, se empuja.
+  // (gapTimer: «watch» es el que sigue la lista del HLS directo de AVPlay)
+  private gapTimer: ReturnType<typeof setInterval> | null = null;
+  private lastT = -1;
+  private lastMove = Date.now();
+  private unstick(): void {
+    try {
+      const b = this.sb.buffered;
+      const t = this.v.currentTime || 0;
+      if (t !== this.lastT) {
+        this.lastT = t;
+        this.lastMove = Date.now();
+      }
+      const stalled = !this.v.paused && Date.now() - this.lastMove > 3000;
+      for (let i = 0; i < b.length; i++) {
+        const st = b.start(i);
+        const en = b.end(i);
+        const next = i + 1 < b.length ? b.start(i + 1) : -1;
+        if (t < st - 0.3) {
+          if (en - st > 0.5) this.jump(st + 0.1);
+          return;
+        }
+        if (t <= en) {
+          if (next > 0 && (en - t < 0.5 || stalled)) this.jump(next + 0.1);
+          else if (stalled && en - t > 1) this.jump(t + 0.5);
+          return;
+        }
+      }
+    } catch {
+      // sin datos todavía
+    }
+  }
+
+  private jump(to: number): void {
+    this.v.currentTime = to;
+    this.lastMove = Date.now();
+    if (this.v.paused) this.v.play();
+  }
+
+  // un segmento al reproductor: convertido a MP4 o, si no se puede, el MPEG-TS tal cual. false = no lo aceptó
+  private async deliver(data: Uint8Array): Promise<boolean> {
+    if (!mp4Off && (!this.sb || this.mp4)) {
+      let r: MuxResult;
+      try {
+        r = (this.mux = this.mux || new TsMux(0, true)).push(data);
+      } catch {
+        r = { ok: false, why: 'mux' };
+      }
+      if (r.ok && !r.data) return true; // todavía sin cuadro clave o sin la configuración: con el siguiente
+      if (r.ok && r.data) {
+        if (!this.sb) {
+          try {
+            if (MediaSource.isTypeSupported(r.mime)) {
+              this.sb = this.ms.addSourceBuffer(r.mime);
+              this.mp4 = true;
+              this.sb.timestampOffset = this.tsOff;
+            }
+          } catch {
+            this.sb = null;
+          }
+        }
+        if (this.mp4) return this.append(r.data);
+      }
+      if (this.mp4) return false; // ya iba en MP4 y el video dejó de poder convertirse
+    }
+    if (!this.sb) {
+      try {
+        this.sb = this.ms.addSourceBuffer('video/mp2t');
+      } catch {
+        return false;
+      }
+      // en orden desde el segundo pedido (el HLS empieza ahí)
+      try {
+        this.sb.mode = 'sequence';
+        this.sb.timestampOffset = this.tsOff;
+      } catch {
+        // modo por defecto
+      }
+    }
+    return this.append(data);
+  }
+
   // lo ya visto se borra para no llenar la memoria
   private async trim(): Promise<void> {
     try {
@@ -273,7 +368,8 @@ export class PanelHls {
         fails = 0;
         await this.trim();
         if (g !== this.gen) continue;
-        if (!(await this.append(data))) {
+        if (!(await this.deliver(data))) {
+          if (this.mp4) mp4Off = true;
           this.onError(t('El reproductor no aceptó el audio del panel'));
           return;
         }

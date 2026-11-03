@@ -163,7 +163,11 @@ export function imgPath(u: any, size: string): string {
 
 // formatos de TV en vivo en orden: si uno falla se prueba el siguiente. LG (webOS) reproduce HLS
 // directo en <video>; Vega y Tizen entran mejor por MPEG-TS
-export const LIVE_FORMATS = (globalThis as any).PalmSystem ? ['m3u8', 'ts', 'direct'] : ['ts', 'm3u8', 'direct'];
+// primero .m3u8: en Vega el modo directo no abre MPEG-TS (lo lee la app por MSE, src/player/livehls.ts) y en LG lo abre
+// su propio <video>; después .ts y la dirección corta por si algún equipo sí los abre. En Vega (sin navegador:
+// no hay document) solo .m3u8: el .ts y la dirección corta siempre daban «error 4» y los intentos de más hacen que el
+// servidor bloquee el equipo un rato
+export const LIVE_FORMATS = typeof (globalThis as any).document === 'undefined' ? ['m3u8'] : ['m3u8', 'ts', 'direct'];
 
 export type VodInfo = {
   tmdb: string;
@@ -257,8 +261,29 @@ export async function seriesInfo(s: Session, id: string): Promise<SeriesInfo | n
 
 export type EpgEntry = { t: string; d: string; s: number; e: number };
 
+// La guía de la vista previa y la del reproductor comparten una petición.
+// Solo memoria, separada por sesión y limitada a 64 canales / 60 segundos.
+const epgCache = new Map<string, { until: number; entries: EpgEntry[] }>();
+const epgPending = new Map<string, Promise<EpgEntry[]>>();
+
 // guía: primero get_short_epg del proveedor y, si no trae nada, epg.php del panel
-export async function channelEpg(s: Session, ch: { id: string; epg: string; name: string }): Promise<EpgEntry[]> {
+export function channelEpg(s: Session, ch: { id: string; epg: string; name: string }): Promise<EpgEntry[]> {
+  const key = JSON.stringify([s.base, s.user, s.pass, ch.id, ch.epg, ch.name]);
+  const cached = epgCache.get(key);
+  if (cached && cached.until > Date.now()) return Promise.resolve(cached.entries.filter(e => e.e > nowSec()));
+  const pending = epgPending.get(key);
+  if (pending) return pending;
+  const request = fetchChannelEpg(s, ch).then(entries => {
+    epgCache.delete(key);
+    epgCache.set(key, { entries, until: Date.now() + (entries.length ? 60000 : 5000) });
+    while (epgCache.size > 64) epgCache.delete(epgCache.keys().next().value!);
+    return entries;
+  }).finally(() => epgPending.delete(key));
+  epgPending.set(key, request);
+  return request;
+}
+
+async function fetchChannelEpg(s: Session, ch: { id: string; epg: string; name: string }): Promise<EpgEntry[]> {
   const now = nowSec();
   let out: EpgEntry[] = [];
   const j = json(await http(api(s, 'get_short_epg', '&stream_id=' + enc(ch.id) + '&limit=8'), { timeout: 10000 }));

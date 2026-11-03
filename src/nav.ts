@@ -16,7 +16,7 @@ export type Route =
   | { name: 'main' }
   | { name: 'detail'; item: Item }
   | { name: 'actor'; personId: number; actorName: string }
-  | { name: 'grid'; title: string; mode: 'cat' | 'platform' | 'genre' | 'recent'; key: string; kind?: 'vod' | 'series' }
+  | { name: 'grid'; title: string; mode: 'cat' | 'platform' | 'genre' | 'recent' | 'continue' | 'mylist'; key: string; kind?: 'vod' | 'series' }
   | { name: 'player'; params: PlayParams }
   // tema de prueba del panel (Pantalla Falsa, solo con Omitir)
   | { name: 'review'; data: Review };

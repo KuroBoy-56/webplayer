@@ -1,8 +1,15 @@
 import { Dimensions } from 'react-native';
 
-// el diseño está hecho para 1920x1080 y se escala al tamaño real de la pantalla
-const { width } = Dimensions.get('window');
-const k = width > 0 ? width / 1920 : 1;
+// El diseño está hecho para 1920x1080 y se escala al tamaño real de la pantalla (lo que cabe a lo ancho y a lo
+// alto). El tamaño que vale es el que mide la vista raíz de la app (setLayoutSize, App.tsx): al volver a abrir
+// la app el equipo puede informar mal Dimensions (0 o en píxeles físicos) y todo se veía enorme. Hasta medirla
+// no se dibuja ninguna pantalla.
+function fit(W: number, H: number): number {
+  if (!(W > 0)) return 1;
+  return H > 0 ? Math.min(W / 1920, H / 1080) : W / 1920;
+}
+const win = Dimensions.get('window');
+let k = fit(win.width, win.height);
 export const px = (n: number) => Math.round(n * k);
 
 const BASE = {
@@ -24,7 +31,7 @@ const BASE = {
 // setPalette() antes de la primera pantalla.
 export const C = { ...BASE };
 
-export const SIDE = px(80);
+export let SIDE = px(80);
 
 // Colores del distribuidor (hex #RRGGBB). null = los de la app.
 export type Palette = { accent: string; bg: string; surface: string; text: string };
@@ -121,5 +128,22 @@ export function setPalette(p: Palette | null): boolean {
   applied = sig;
   Object.assign(C, paletteColors(p));
   for (const sh of sheets) Object.assign(sh.obj, sh.make());
+  return true;
+}
+
+// la ventana cambió de tamaño (o se midió por primera vez): nueva escala, estilos rehechos y la app vuelve a dibujarse
+let scaleListener: () => void = () => {};
+export function onScaleChange(fn: () => void): void {
+  scaleListener = fn;
+}
+
+// tamaño medido de la vista raíz; devuelve true si cambió la escala
+export function setLayoutSize(w: number, h: number): boolean {
+  const nk = fit(w, h);
+  if (!(w > 0) || Math.abs(nk - k) < 0.002) return false;
+  k = nk;
+  SIDE = px(80);
+  for (const sh of sheets) Object.assign(sh.obj, sh.make());
+  scaleListener();
   return true;
 }

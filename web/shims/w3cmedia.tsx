@@ -72,6 +72,11 @@ class AvPlayer implements VideoPlayer {
   error: any = null;
   // HLS del motor del panel: AVPlay lo abre directo (sin Media Source Extensions)
   readonly nativeHls = true;
+  // MP4 / MKV / TS los abre AVPlay por hardware (playback.ts no usa sus lectores propios, que necesitan MSE: AVPlay no
+  // recibe un MediaSource) y cambia el audio y los subtítulos del archivo él mismo (tvSelectTrack): el servidor del
+  // panel queda como último recurso, igual que en LG
+  readonly nativeFiles = true;
+  readonly noMse = true;
   readonly audioTracks = trackList();
   readonly textTracks = trackList();
   private url = '';
@@ -301,6 +306,34 @@ class AvPlayer implements VideoPlayer {
     this.audioTracks.fire();
     this.textTracks.fire();
   }
+
+  // pista n (orden en el archivo, como la lee probe.ts) del tipo pedido; true = AVPlay la tomó. Funciones flecha:
+  // playback.ts las llama sueltas (const sel = v.tvSelectTrack; sel('audio', n))
+  readonly tvSelectTrack = (type: 'audio' | 'text', n: number): boolean => {
+    const want = type === 'audio' ? 'AUDIO' : 'TEXT';
+    try {
+      const tr = (this.av.getTotalTrackInfo() || []).filter((t: any) => t.type === want)[n];
+      if (!tr) return false;
+      this.av.setSelectTrack(want, tr.index);
+      if (want === 'TEXT') this.av.setSilentSubtitle(false);
+    } catch {
+      return false;
+    }
+    // el menú de audio queda marcado igual que si se hubiera elegido en audioTracks
+    if (want === 'AUDIO') this.audioTracks.forEach((o: any, i: number) => (i === n ? (o.enabled = true) : o.setOff()));
+    return true;
+  };
+
+  // apaga los subtítulos que dibuja AVPlay
+  readonly tvSubtitleOff = (): boolean => {
+    try {
+      this.av.setSilentSubtitle(true);
+    } catch {
+      return false;
+    }
+    this.showSub('', 0);
+    return true;
+  };
 
   private showSub(text: string, ms: number) {
     if (this.subTimer) clearTimeout(this.subTimer);

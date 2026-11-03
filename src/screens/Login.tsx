@@ -1,10 +1,11 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, BackHandler, Easing, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelReview, panelSubmit, resellerCode } from '../api/panel';
+import { Animated, BackHandler, Easing, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { deviceBlocked, FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelReview, panelSubmit, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
+import KeyboardModal from '../components/KeyboardModal';
 import { loginAll, sessionFrom } from '../api/xtream';
-import { Button, Focusable, Logo } from '../components/ui';
+import { Button, Focusable, Loader, Logo } from '../components/ui';
 import { json } from '../lib/http';
 import { hasMasterKey } from '../lib/aes';
 import { t, tmdbLang } from '../lib/i18n';
@@ -15,6 +16,7 @@ import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
 import { deviceId, resetTenant, setSession } from '../state';
 import { alpha, C, px, themed } from '../theme';
+import { APP_VERSION } from '../version';
 
 // fondo: carátulas de TMDB con la clave del panel (la del distribuidor o la del dueño) por
 // api/tmdb.php (en el idioma de la app); sin clave el panel responde tmdb_key_not_set y no hay carrusel
@@ -37,6 +39,8 @@ export default function Login() {
   const [pass, setPass] = useState('');
   // ojito: ver la contraseña en texto o volver a ocultarla
   const [showPass, setShowPass] = useState(false);
+  // campo que se está escribiendo con el teclado de la app
+  const [typing, setTyping] = useState<'user' | 'pass' | null>(null);
   const [dnsOpen, setDnsOpen] = useState(false);
   const [busy, setBusy] = useState(() => t('Comprobando el equipo en el panel…'));
   const [error, setError] = useState('');
@@ -73,6 +77,16 @@ export default function Login() {
       if (hasMasterKey()) {
         const ln = await panelCheckMac(dev);
         if (ln) lines = [ln];
+      }
+      // equipo en la lista negra del panel (de este distribuidor o del dueño con Omitir): solo el aviso, sin
+      // líneas guardadas ni pantalla falsa
+      if (deviceBlocked()) {
+        await feat;
+        if (!alive) return;
+        setChecking(false);
+        setBusy('');
+        setError(deviceBlocked());
+        return;
       }
       if (!lines.length) {
         const r = await panelPlaylists(dev);
@@ -176,7 +190,7 @@ export default function Login() {
     if (!d.ok) {
       setBusy('');
       // 404 (código de revendedor que no existe): la demo sigue disponible
-      if (d.code === 403) write(scoped('demo_used'), '1');
+      if (d.code === 403 && !deviceBlocked()) write(scoped('demo_used'), '1');
       setError(d.error || t('No se pudo crear la demo'));
       return;
     }
@@ -218,7 +232,7 @@ export default function Login() {
   if (checking && !fake) {
     return (
       <View style={s.checking}>
-        <ActivityIndicator size="large" color={C.red} />
+        <Loader />
       </View>
     );
   }
@@ -243,58 +257,64 @@ export default function Login() {
       <View style={s.top}>
         <Logo size={110} />
       </View>
-      <View style={s.box}>
-        <Text style={s.title}>{t('Iniciar sesión')}</Text>
-        <TextInput
-          style={s.input}
-          value={user}
-          onChangeText={setUser}
-          placeholder={t('Usuario')}
-          placeholderTextColor={C.dim}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="next"
-          onSubmitEditing={() => passRef.current?.focus()}
-          hasTVPreferredFocus
-        />
-        <View style={s.passRow}>
-          <TextInput
-            ref={passRef}
-            style={[s.input, s.passInput]}
-            value={pass}
-            onChangeText={setPass}
-            placeholder={t('Contraseña')}
-            placeholderTextColor={C.dim}
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry={!showPass}
-            returnKeyType="go"
-            onSubmitEditing={() => enter(user, pass)}
-          />
-          <Focusable onPress={() => setShowPass(v => !v)} style={f => [s.eye, f && s.eyeF]}>
-            <Eye open={showPass} />
+      <View style={s.center}>
+        <View style={s.box}>
+          <Text style={s.title}>{t('Iniciar sesión')}</Text>
+          {/* usuario y contraseña con el teclado de la app (como Roku): un TextInput enfocado se quedaba con las flechas
+              en algunos Fire TV y el foco no llegaba a Ingresar, DNS ni Cambiar distribuidor */}
+          <Focusable preferred onPress={() => setTyping('user')} style={f => [s.input, s.field, f && s.fieldF]}>
+            <Text style={[s.fieldText, !user && s.fieldPh]} numberOfLines={1}>
+              {user || t('Usuario')}
+            </Text>
           </Focusable>
-        </View>
-        {error ? <Text style={s.error}>{error}</Text> : null}
-        {busy ? <Text style={s.busy}>{busy}</Text> : null}
-        <View style={s.btns}>
-          <Button label={busy ? t('Entrando…') : t('Ingresar')} primary onPress={() => !busy && enter(user, pass)} />
-          {review ? <Button label="Autodemo" last onPress={() => !busy && reviewDemo()} /> : null}
-          {review ? null : <Button label="DNS" last={!canDemo} onPress={() => setDnsOpen(true)} />}
-          {canDemo && !review ? <Button label="Autodemo" last onPress={() => !busy && demo()} /> : null}
-        </View>
-        {canDemo && !review ? <Text style={s.tip}>{t('¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.')}</Text> : null}
-        {assigned.length && !review ? (
-          <View style={s.btns}>
-            <Button label={t('Entrar con la cuenta de este equipo ({x})', { x: assigned[0].demo ? 'DEMO' : assigned[0].user })} small last onPress={() => !busy && enterAssigned()} />
+          <View style={s.passRow}>
+            <Focusable onPress={() => setTyping('pass')} style={f => [s.input, s.passInput, s.field, f && s.fieldF]}>
+              <Text style={[s.fieldText, !pass && s.fieldPh]} numberOfLines={1}>
+                {pass ? (showPass ? pass : '•'.repeat(pass.length)) : t('Contraseña')}
+              </Text>
+            </Focusable>
+            <Focusable onPress={() => setShowPass(v => !v)} style={f => [s.eye, f && s.eyeF]}>
+              <Eye open={showPass} />
+            </Focusable>
           </View>
-        ) : null}
-        {review ? null : <Text style={s.device}>{t('Código del equipo:')} {dev}</Text>}
-      </View>
-      <View style={s.dist}>
-        <Button label={t('Cambiar distribuidor')} small last onPress={changeDist} />
+          {error ? <Text style={s.error}>{error}</Text> : null}
+          {busy ? <Text style={s.busy}>{busy}</Text> : null}
+          <View style={s.btns}>
+            <Button label={busy ? t('Entrando…') : t('Ingresar')} primary onPress={() => !busy && enter(user, pass)} />
+            {review ? <Button label="Autodemo" last onPress={() => !busy && reviewDemo()} /> : null}
+            {review ? null : <Button label="DNS" last={!canDemo} onPress={() => setDnsOpen(true)} />}
+            {canDemo && !review ? <Button label="Autodemo" last onPress={() => !busy && demo()} /> : null}
+          </View>
+          {canDemo && !review ? <Text style={s.tip}>{t('¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.')}</Text> : null}
+          {assigned.length && !review ? (
+            <View style={s.btns}>
+              <Button label={t('Entrar con la cuenta de este equipo ({x})', { x: assigned[0].demo ? 'DEMO' : assigned[0].user })} small last onPress={() => !busy && enterAssigned()} />
+            </View>
+          ) : null}
+          {review ? null : (
+            <Text style={s.device}>
+              {t('Código del equipo:')} {dev}   ·   {t('Versión:')} {APP_VERSION}
+            </Text>
+          )}
+        </View>
+        <View style={s.dist}>
+          <Button label={t('Cambiar distribuidor')} small last onPress={changeDist} />
+        </View>
       </View>
       {dnsOpen ? <DnsPicker onClose={() => setDnsOpen(false)} /> : null}
+      {typing ? (
+        <KeyboardModal
+          title={typing === 'user' ? t('Usuario') : t('Contraseña')}
+          value={typing === 'user' ? user : pass}
+          secret={typing === 'pass' && !showPass}
+          onClose={() => setTyping(null)}
+          onDone={v => {
+            if (typing === 'user') setUser(v.trim());
+            else setPass(v);
+            setTyping(null);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -362,12 +382,20 @@ const s = themed(() =>
     mosaicImg: { width: px(192), height: px(288), margin: px(4), borderRadius: px(6) },
     shade: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha(C.bg, 0.72) },
     top: { position: 'absolute', left: px(80), top: px(40) },
-    box: { alignSelf: 'center', marginTop: px(150), width: px(760), backgroundColor: alpha(C.bg2, 0.9), borderRadius: px(12), padding: px(60) },
+    // la caja queda en el centro de la pantalla (a lo alto y a lo ancho)
+    center: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+    box: { width: px(760), backgroundColor: alpha(C.bg2, 0.9), borderRadius: px(12), padding: px(60) },
     title: { color: C.text, fontSize: px(52), fontWeight: '800', marginBottom: px(30) },
-    input: { height: px(84), backgroundColor: C.card, borderRadius: px(8), color: C.text, fontSize: px(32), paddingHorizontal: px(24), marginBottom: px(22) },
-    passRow: { position: 'relative' },
-    passInput: { paddingRight: px(120) },
-    eye: { position: 'absolute', right: px(10), top: px(8), width: px(96), height: px(68), borderRadius: px(8), alignItems: 'center', justifyContent: 'center' },
+    // texto y ayuda («Usuario», «Contraseña») centrados a lo alto del campo
+    input: { height: px(84), backgroundColor: C.card, borderRadius: px(8), color: C.text, fontSize: px(32), paddingHorizontal: px(24), paddingVertical: 0, textAlignVertical: 'center', marginBottom: px(22) },
+    // el ojito al lado del campo (no encima): el foco del control llega a los dos sin confundirse
+    passRow: { flexDirection: 'row', alignItems: 'flex-start' },
+    passInput: { flex: 1 },
+    field: { justifyContent: 'center', borderWidth: px(3), borderColor: 'transparent' },
+    fieldF: { borderColor: C.text, backgroundColor: alpha(C.text, 0.12) },
+    fieldText: { color: C.text, fontSize: px(32) },
+    fieldPh: { color: C.dim },
+    eye: { width: px(96), height: px(84), marginLeft: px(12), borderRadius: px(8), alignItems: 'center', justifyContent: 'center', backgroundColor: C.card, borderWidth: px(3), borderColor: 'transparent' },
     eyeF: { backgroundColor: alpha(C.text, 0.2), borderWidth: px(3), borderColor: C.text },
     eyeIcon: { width: px(52), height: px(34), alignItems: 'center', justifyContent: 'center' },
     eyeLid: { width: px(48), height: px(30), borderRadius: px(24), borderWidth: px(4), borderColor: C.text, alignItems: 'center', justifyContent: 'center' },

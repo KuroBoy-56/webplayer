@@ -1,9 +1,11 @@
 {
   "name": "mpx-tizen",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "private": true,
   "description": "MPX Player para Samsung Smart TV (Tizen OS): la app de Vega OS con react-native-web",
   "scripts": {
+    "test:player": "node tools/test-player.cjs",
+    "test:interface": "node tools/test-interface.cjs",
     "prepare:key": "node tools/prepare-key.js",
     "pretypecheck": "node tools/prepare-key.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

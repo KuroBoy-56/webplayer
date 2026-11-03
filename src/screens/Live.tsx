@@ -1,26 +1,44 @@
 // TV en vivo: categorías, canales y guía (EPG) del canal enfocado.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem } from '../actions';
 import { channelEpg, EpgEntry } from '../api/xtream';
 import PinDialog from '../components/PinDialog';
+import LivePreview, { stopLivePreview } from '../components/LivePreview';
 import { Button, Focusable, Message, Spinner } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
 import { clock, digits, nowSec } from '../lib/util';
 import { useNav } from '../nav';
-import { getState, isFav, toggleFav, useAppState } from '../state';
+import { getState, isFav, toggleFav, useAppSelector } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
 
-export default function Live() {
+const ChannelRow = memo(function ChannelRow({ channel: c, index, favorite, open, focus }: {
+  channel: Item; index: number; favorite: boolean; open: (channel: Item) => void; focus: (channel: Item) => void;
+}) {
+  return (
+    <Focusable onPress={() => open(c)} onFocus={() => focus(c)} style={f => [s.ch, f && s.chF]}>
+      {f => <>
+        <Text style={[s.chNum, f && { color: C.onFocus }]}>{c.num || index + 1}</Text>
+        <View style={s.logoBox}>{c.poster ? <Image source={{ uri: c.poster }} style={s.logo} resizeMode="contain" /> : null}</View>
+        <Text style={[s.chName, f && { color: C.onFocus }]} numberOfLines={1}>{c.name}</Text>
+        {favorite ? <Text style={s.star}>★</Text> : null}
+      </>}
+    </Focusable>
+  );
+});
+
+// active: la pantalla está a la vista (con el reproductor encima, la vista previa se apaga)
+export default function Live({ active = true }: { active?: boolean }) {
   const nav = useNav();
-  const st = useAppState();
+  const loaded = useAppSelector(st => st.loaded.live);
+  const catalogRev = useAppSelector(st => st.catalogRev);
+  const favorites = useAppSelector(st => st.favorites);
   const [cat, setCat] = useState('all');
   const [pinFor, setPinFor] = useState('');
   const [focused, setFocused] = useState<Item | null>(null);
   const [epg, setEpg] = useState<EpgEntry[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const focusedId = useRef('');
   // al bajar por las categorías la lista de canales se arma cuando el foco se queda quieto (no en cada paso)
   const catTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusCat = (id: string) => {
@@ -32,44 +50,37 @@ export default function Live() {
     if (timer.current) clearTimeout(timer.current);
   }, []);
 
-  const cats = useMemo(() => (st.loaded.live ? catalog.liveCats() : []), [st.loaded.live, st.catalogRev, pinFor]);
-  const favIds = st.favorites.filter(f => f.type === 'live').map(f => digits(f.id));
-  const channels = useMemo(() => (st.loaded.live ? catalog.liveChannels(cat, favIds) : []), [st.loaded.live, st.catalogRev, cat, cat === 'fav' ? favIds.join(',') : '']);
+  const cats = useMemo(() => (loaded ? catalog.liveCats() : []), [loaded, catalogRev, pinFor]);
+  const favIds = useMemo(() => favorites.filter(f => f.type === 'live').map(f => digits(f.id)), [favorites]);
+  const channels = useMemo(() => (loaded ? catalog.liveChannels(cat, favIds) : []), [loaded, catalogRev, cat, cat === 'fav' ? favIds.join(',') : '']);
 
   // guía del canal enfocado (espera un momento para no pedirla en cada paso)
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
-    setEpg([]);
+    if (!active) return;
+    setEpg(previous => previous.length ? [] : previous);
     if (!focused) return;
     const ch = focused;
-    focusedId.current = ch.id;
+    let alive = true;
     timer.current = setTimeout(() => {
       const s = getState().session;
-      if (s) channelEpg(s, { id: ch.id, epg: ch.epg, name: ch.name }).then(list => focusedId.current === ch.id && setEpg(list));
+      if (s) channelEpg(s, { id: ch.id, epg: ch.epg, name: ch.name }).then(list => alive && setEpg(list)).catch(() => {});
     }, 600);
-  }, [focused]);
+    return () => { alive = false; if (timer.current) clearTimeout(timer.current); };
+  }, [focused, active]);
 
   // favoritos en un Set y la fila memorizada: enfocar un canal no vuelve a dibujar toda la lista
-  const favSet = useMemo(() => new Set(favIds), [favIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  const favSet = useMemo(() => new Set(favIds), [favIds]);
+  const openChannel = useCallback((channel: Item) => {
+    void stopLivePreview();
+    openItem(nav, channel, channels);
+  }, [nav, channels]);
   const renderCh = useCallback(
-    ({ item: c, index }: { item: Item; index: number }) => (
-      <Focusable onPress={() => openItem(nav, c, channels)} onFocus={() => setFocused(c)} style={f => [s.ch, f && s.chF]}>
-        {f => (
-          <>
-            <Text style={[s.chNum, f && { color: C.onFocus }]}>{c.num || index + 1}</Text>
-            <View style={s.logoBox}>{c.poster ? <Image source={{ uri: c.poster }} style={s.logo} resizeMode="contain" /> : null}</View>
-            <Text style={[s.chName, f && { color: C.onFocus }]} numberOfLines={1}>
-              {c.name}
-            </Text>
-            {favSet.has(c.id) ? <Text style={s.star}>★</Text> : null}
-          </>
-        )}
-      </Focusable>
-    ),
-    [nav, channels, favSet],
+    ({ item, index }: { item: Item; index: number }) => <ChannelRow channel={item} index={index} favorite={favSet.has(item.id)} open={openChannel} focus={setFocused} />,
+    [openChannel, favSet],
   );
 
-  if (!st.loaded.live) return <Spinner label={t('Cargando los canales…')} />;
+  if (!loaded) return <Spinner label={t('Cargando los canales…')} />;
 
   const now = nowSec();
   const cur = epg.find(e => e.s <= now && now < e.e);
@@ -79,6 +90,9 @@ export default function Live() {
       <FlatList
         style={s.cats}
         data={cats}
+        initialNumToRender={12}
+        windowSize={5}
+        maxToRenderPerBatch={8}
         keyExtractor={c => c.id}
         renderItem={({ item: c }) => (
           <Focusable
@@ -103,6 +117,8 @@ export default function Live() {
             data={channels}
             keyExtractor={c => c.id}
             initialNumToRender={12}
+            windowSize={5}
+            maxToRenderPerBatch={8}
             getItemLayout={(_, i) => ({ length: px(96), offset: px(96) * i, index: i })}
             renderItem={renderCh}
           />
@@ -113,7 +129,8 @@ export default function Live() {
       <View style={s.guide}>
         {focused ? (
           <>
-            <View style={s.guideLogo}>{focused.poster ? <Image source={{ uri: focused.poster }} style={s.logo} resizeMode="contain" /> : null}</View>
+            {/* vista previa del canal (como Roku): empieza a sonar si el foco se queda 2,5 s en el canal */}
+            <LivePreview channel={focused} active={active} />
             <Text style={s.guideName}>{focused.name}</Text>
             {cur ? (
               <>

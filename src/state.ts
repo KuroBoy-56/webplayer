@@ -1,5 +1,6 @@
 // Estado global: sesión, carga del catálogo, progreso ("Continuar viendo") y Mi lista,
 // sincronizados con api/progress.php del panel igual que la web, Android y Roku.
+import { loadWeekTop } from './data/top10';
 import { useSyncExternalStore } from 'react';
 import { bindSession, cloud, forgetCloud, onPanelDemo, panelTenantConfig, Session } from './api/panel';
 import { Kind, loadKind, setStreamFlip } from './api/xtream';
@@ -9,6 +10,7 @@ import { read, readJson, remove, write, writeJson } from './lib/storage';
 import { tvMac } from './lib/platform';
 import { APP_ID, brand, clearTenant, expiredMessage, locallyExpired, OFFLINE_GRACE, saveBrand, scoped, TENANT_FATAL, tenantCode } from './lib/tenant';
 import { digits, nowSec, parseIso, str } from './lib/util';
+import { setImgCache } from './lib/images';
 import { Key, t } from './lib/i18n';
 
 export type Progress = {
@@ -60,6 +62,10 @@ let state: State = {
 };
 
 const listeners = new Set<() => void>();
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+};
 function set(patch: Partial<State>) {
   state = { ...state, ...patch, rev: state.rev + 1 };
   listeners.forEach(l => l());
@@ -71,12 +77,15 @@ export function getState(): State {
 
 export function useAppState(): State {
   return useSyncExternalStore(
-    l => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
+    subscribe,
     () => state,
   );
+}
+
+// Seleccionar valores estables (primitivas o referencias del estado) evita
+// redibujar listas por avisos, progreso u otros cambios que no utilizan.
+export function useAppSelector<T>(select: (snapshot: State) => T): T {
+  return useSyncExternalStore(subscribe, () => select(state));
 }
 
 bindSession(() => state.session);
@@ -136,6 +145,8 @@ export async function loadCatalog(force = false) {
     catalog.clear();
     set({ loaded: { vod: false, series: false, live: false }, error: '' });
   }
+  // Top 10 de la semana del panel: si llega una lista nueva, se rehacen las filas (sin volver a descargar)
+  loadWeekTop().then(changed => changed && state.session === s && refreshCatalog()).catch(() => {});
   // las tres listas a la vez; cada una se muestra en cuanto llega
   const kinds = (['vod', 'series', 'live'] as Kind[]).filter(k => !state.loaded[k]);
   set({ loading: kinds[0] || '' });
@@ -176,6 +187,8 @@ export async function loadCloud() {
   // la DEMO no tiene Continuar viendo ni Mi lista
   if (state.demo) return;
   const j = json(await cloud('progress.php', 'GET', { v: '2' }));
+  // caché de carátulas del panel (el dueño la puede apagar): apagada, imágenes directo a los servidores
+  if (j && typeof j === 'object' && typeof j.img === 'boolean') setImgCache(j.img);
   if (!j || typeof j !== 'object' || state.demo) return;
   const prog = j.progress && typeof j.progress === 'object' && !Array.isArray(j.progress) ? j.progress : {};
   const list: Progress[] = [];
@@ -289,7 +302,7 @@ export function removeProgress(title: string) {
 export function deviceId(): string {
   const saved = read('device_id');
   if (saved) return saved;
-  // Tizen: MAC armada con el id del televisor (no cambia al reinstalar la app)
+  // Tizen: MAC armada con el id del televisor (DUID, no cambia al reinstalar la app)
   const tv = tvMac();
   if (tv) {
     write('device_id', tv);
