@@ -373,6 +373,8 @@ export class LiveHls {
     }
   }
 
+  // último segmento que llegó del servidor (el vigilante de Player espera más si el canal sigue bajando)
+  lastData = 0;
   private lastJump = 0;
   private jump(to: number): void {
     if (this.started) this.gapJumps++;
@@ -545,6 +547,7 @@ export class LiveHls {
         if (this.next !== seg.seq) segFails = 0;
         continue;
       }
+      this.lastData = Date.now();
       // mientras este se descifra y se entrega, los siguientes ya se bajan
       this.prefetch(seg.seq);
       let data: Uint8Array = r.data;
@@ -657,7 +660,7 @@ export class LiveHls {
   // 1 = entregado, 2 = nada que entregar todavía
   private async deliver(data: Uint8Array): Promise<0 | 1 | 2> {
     if (this.mode !== 'ts' && !mp4Off) {
-      if (!this.mux) this.mux = new TsMux(this.audioIdx);
+      if (!this.mux) this.mux = new TsMux(this.audioIdx, false, this.target >= 8 ? 2 : 3);
       await sleep(0);
       let r;
       try {

@@ -18,6 +18,8 @@ import { pref, readJson, setPref, writeJson } from '../lib/storage';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
 import { Mp4Mse } from './mp4mse';
+import { MkvMse } from './mkvmse';
+import { Mkv } from './mkvparse';
 import { reportError } from '../api/report';
 import { ShakaPlayback } from './shaka';
 
@@ -133,7 +135,11 @@ export class Playback {
   private remux: { a: number; label: string } | null = null;
   private hls: PanelHls | null = null;
   // MP4 leído por la app del servidor IPTV (mp4mse.ts); mp4Url: no se pudo, este video va con el modo directo de siempre
-  private mse: Mp4Mse | null = null;
+  // MKV: también leído por la app (mkvmse.ts) para cambiar el audio en el equipo, sin servidor (como ExoPlayer en Android)
+  private mse: Mp4Mse | MkvMse | null = null;
+  private mkvIndex: Mkv | null = null;
+  // lo que se pidió al servidor (para el aviso y el reporte cuando está apagado)
+  private wantNote = '';
   private mp4Url = false;
   // por qué la lectura propia del MP4 no siguió (va al reporte)
   private mp4Why = '';
@@ -227,6 +233,7 @@ export class Playback {
     this.liveAudio = 0;
     this.mp4Audio = -1;
     this.mp4Index = null;
+    this.mkvIndex = null;
     this.mp4Paused = false;
     this.adaptiveTried = false;
     this.probe = null;
@@ -288,6 +295,11 @@ export class Playback {
     return true;
   }
 
+  // el canal todavía no se ve pero sigue llegando video (segmentos largos o servidor lento)
+  liveBusy(): boolean {
+    return !!this.liveHls && Date.now() - this.liveHls.lastData < 8000;
+  }
+
   liveDiag(): string {
     return this.liveHls ? this.liveHls.diag() : '';
   }
@@ -316,14 +328,20 @@ export class Playback {
     }
     // MP4: la app lo lee del servidor IPTV y lo entrega al reproductor (el modo directo de Vega da error 4 con los MP4
     // de índice al final, los de casi todos los servidores IPTV). Empieza ya en el segundo pedido (sin el salto)
-    if (!this.live && !this.mp4Url && /\.(mp4|m4v|mov)(\?|$)/i.test(this.url)) {
+    if (!this.live && !this.mp4Url && /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(this.url)) {
       this.resumeAt = 0;
       const g = this.gen;
-      const m = new Mp4Mse(this.v, this.url, this.mp4Audio, this.mp4Index);
+      const mkv = /\.mkv(\?|$)/i.test(this.url);
+      const want = this.mp4Audio;
+      const m = mkv ? new MkvMse(this.v, this.url, this.mp4Audio, this.mkvIndex) : new Mp4Mse(this.v, this.url, this.mp4Audio, this.mp4Index);
       this.mse = m;
       m.onTracks = () => {
         if (g !== this.gen || this.mse !== m) return;
-        this.mp4Index = m.index;
+        if (m instanceof MkvMse) {
+          this.mkvIndex = m.index;
+          // las pistas del MKV ya leídas: el menú (audio y subtítulos) sin leer otra vez la cabecera
+          if (!this.probe?.ok) this.probe = m.probe();
+        } else this.mp4Index = m.index;
         if (this.mp4Paused) { this.mp4Paused = false; this.v.pause(); }
         this.applyPrefs();
         this.hooks.changed();
@@ -333,9 +351,16 @@ export class Playback {
         .catch((e: any) => 'excepción: ' + String(e?.message || e).slice(0, 80))
         .then(err => {
           if (g !== this.gen || this.mse !== m) return;
-          if (err) this.mp4Failed(at, err);
-          // sin sonido: se dice una vez y los idiomas quedan en el menú (con FFmpeg, el panel los convierte)
-          else if (m.noAudio) this.hooks.toast(t('El audio de este video no es compatible con este equipo: elige un idioma con ▼.'));
+          if (err) {
+            this.mp4Failed(at, err);
+            return;
+          }
+          // el equipo no tomó el audio pedido (o ninguno del archivo): el servidor lo prepara; apagado, el aviso
+          const lost = m.noAudio ? (want >= 0 ? want : Math.max(0, this.probeDefault())) : want >= 0 && m.audioIdx !== want ? want : -1;
+          if (lost >= 0) {
+            const label = this.audioItems().find(i => i.mp4 === lost)?.label || t('Audio predeterminado');
+            this.toRemux(lost, label, true, t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: label }));
+          }
         });
       return;
     }
@@ -513,6 +538,7 @@ export class Playback {
 
   // segundo real del contenido (el HLS del panel empieza en offset)
   realPos(): number {
+    if (this.mse instanceof MkvMse) return this.mse.timeOf(this.v.currentTime || 0);
     return this.offset + (this.v.currentTime || 0);
   }
 
@@ -1089,18 +1115,23 @@ export class Playback {
   }
 
   // motor del panel; sin él, el texto del panel una sola vez por video y solo si lo pidió el usuario
-  private async getEngine(user: boolean): Promise<Engine | null> {
+  private async getEngine(user: boolean, what: 'audio' | 'sub' = 'audio'): Promise<Engine | null> {
     const r = await mediaEngine();
     if (r.ok) return (this.engine = r.engine);
-    this.denied(r.error, user);
+    this.denied(r.error, user, what);
     return null;
   }
 
-  private denied(msg: string, user: boolean): void {
+  // el equipo no puede solo y el servidor (FFmpeg del panel) está apagado o sin permiso: se dice claro que hace falta
+  // encenderlo y se avisa al panel (Reportes) con el motivo, el archivo y la pista
+  private denied(msg: string, user: boolean, what: 'audio' | 'sub' = 'audio'): void {
     // cada vez que el usuario lo pide (antes una sola vez por video y después no pasaba nada)
     if (!user) return;
     this.deniedShown = true;
-    this.hooks.toast(msg);
+    this.hooks.toast(what === 'sub' ? t('Subtítulo no compatible con este equipo: es necesario encender el servidor.') : t('Audio no compatible con este equipo: es necesario encender el servidor.'));
+    const ext = (this.url.match(/\.([A-Za-z0-9]{2,5})(\?|$)/) || [])[1] || '?';
+    reportError('playback', what === 'sub' ? 'Subtítulo no compatible sin servidor' : 'Audio no compatible sin servidor',
+      'motivo=' + msg + ' archivo=' + ext + ' lector=' + (this.shaka ? 'shaka' : this.mse ? (this.mse instanceof MkvMse ? 'mkv' : 'mp4') : 'directo') + (this.wantNote ? ' pedido=' + this.wantNote : ''), 'Reproductor');
   }
 
   // true = el panel empezó a preparar el video. note: aviso que se muestra solo si el motor está
@@ -1109,6 +1140,8 @@ export class Playback {
     if (this.live || this.remux?.a === a) return false;
     const g = this.gen;
     const choice = this.audioChange;
+    const tr = this.probe?.audio[a];
+    this.wantNote = label + (tr ? ' (' + (tr.codec || '?') + ')' : '');
     const e = await this.getEngine(user);
     if (g !== this.gen || choice !== this.audioChange) return false;
     if (!e || !PanelHls.supported()) {
@@ -1302,7 +1335,8 @@ export class Playback {
 
   private async extSub(s: number, label: string): Promise<void> {
     const g = this.gen;
-    const e = await this.getEngine(true);
+    this.wantNote = label;
+    const e = await this.getEngine(true, 'sub');
     if (g !== this.gen) return;
     if (!e) {
       this.subKey = 'off';
@@ -1354,7 +1388,7 @@ export class Playback {
         // ya se ve una parte: se queda con lo que hay
         if (this.ext?.s === s) return;
         this.subKey = 'off';
-        if (r.denied) this.denied(r.denied, true);
+        if (r.denied) this.denied(r.denied, true, 'sub');
         else this.hooks.toast(t('Este subtítulo no se puede mostrar (es de imagen o el servidor no respondió).'));
         this.hooks.changed();
         return;

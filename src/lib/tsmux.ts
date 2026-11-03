@@ -59,7 +59,9 @@ export class TsMux {
   // padStart (video del panel, hls.ts): el panel corta el video en el cuadro clave anterior al segundo pedido y el audio
   // empieza justo en ese segundo (0,5-1 s después); el reproductor de Vega no respeta ese hueco inicial y el audio quedaba
   // atrasado. Con padStart el audio empieza con el video, con silencio hasta su primer cuadro
-  constructor(readonly audioIdx = 0, readonly padStart = false) {}
+  // maxWaits: segmentos sin poder empezar antes de entregar el MPEG-TS como antes (2 con segmentos largos: con 3 de 11 s
+  // el canal no se veía en 25 s)
+  constructor(readonly audioIdx = 0, readonly padStart = false, readonly maxWaits = 3) {}
 
   private fix(v: number): number {
     if (this.ref === null) return v;
@@ -132,7 +134,7 @@ export class TsMux {
 
   // nada que entregar todavía; 3 segmentos sin poder empezar: el lector entrega el MPEG-TS como antes
   private wait(why: string): MuxResult {
-    if (!this.started && ++this.waits >= 3) return { ok: false, why };
+    if (!this.started && ++this.waits >= this.maxWaits) return { ok: false, why };
     return { ok: true, mime: this.mime, data: null };
   }
 

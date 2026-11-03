@@ -124,6 +124,8 @@ export default function Player({ params }: { params: PlayParams }) {
   const vod = useRef({ idx: -1, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, format: false, srv: 0, acct: '', attempts: [] as string[], live: null as StreamCheck | null, xui: null as StreamCheck | null });
   // vigilante: si el video no empieza a sonar a tiempo, se prueba otra forma (antes podía quedar cargando para siempre)
   const startDog = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ya se le dieron 15 s más a este canal porque seguía bajando video
+  const liveWait = useRef(false);
   const onErrorRef = useRef<() => void>(() => {});
   // canal: motivo del último intento que no salió del reproductor (lector HLS, vigilante)
   const liveNote = useRef('');
@@ -217,6 +219,7 @@ export default function Player({ params }: { params: PlayParams }) {
       c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
+      liveWait.current = false;
       // 20 s para empezar a sonar (15 s en Continuar viendo; 25 s en los canales: la app baja la lista y los primeros
       // segmentos); con el panel, sus propios plazos
       startDog.current = setTimeout(() => {
@@ -232,6 +235,18 @@ export default function Player({ params }: { params: PlayParams }) {
             c2.panelStop();
             onErrorRef.current();
           }, 45000);
+          return;
+        }
+        // el canal sigue bajando (segmentos largos, servidor lento): 15 s más una vez antes de probar otra forma
+        if (live && ctl.current.liveBusy() && !liveWait.current) {
+          liveWait.current = true;
+          startDog.current = setTimeout(() => {
+            startDog.current = null;
+            const c2 = ctl.current;
+            if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
+            liveNote.current = 'sin imagen en 40 s';
+            onErrorRef.current();
+          }, 15000);
           return;
         }
         if (live) liveNote.current = 'sin imagen en 25 s';
@@ -956,7 +971,7 @@ export default function Player({ params }: { params: PlayParams }) {
       case 'up':
       case 'channel_up':
         if (live) zap(-1);
-        else { showOverlay(); setControlsFocused(true); }
+        else showOverlay();
         break;
       case 'channel_down':
         zap(1);
@@ -1061,14 +1076,7 @@ export default function Player({ params }: { params: PlayParams }) {
               {title}
             </Text>
             {live && channel && isFav('live', channel.id) ? <Text style={s.star}>★</Text> : null}
-            {/* en vivo no hay botón de audio arriba: los idiomas del canal salen con MENÚ (▲▼ cambian de canal) */}
-            {!live && !menu && !askExit && !chList && !nextSecs ? (
-              <View style={s.audioButton}>
-                <Button label={t('Audio') + (audioLabel ? ' · ' + audioLabel : '')} preferred={controlsFocused} last
-                  onFocus={() => { setControlsFocused(true); showOverlay(); }}
-                  onPress={() => openMenu('audio')} />
-              </View>
-            ) : null}
+            {/* sin botón de audio arriba: los idiomas salen con ▼ (películas y series) o MENÚ (canales) */}
           </View>
           <View style={s.bottom}>
             {live ? (

@@ -163,6 +163,16 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   dos listos (`livehls.ts`); Shaka arranca con 1 s bajado; los idiomas del archivo se leen a los 1,5 s o apenas suena.
   Si el distribuidor apaga el motor del panel para Vega (su Guía EPG), `features.ffmpeg` llega en false y la app usa
   solo los audios que el equipo lee.
+- **MKV leído por la app, audio cambiado en el equipo (1.0.49)**: el modo directo de Vega abre el MKV pero no informa sus
+  pistas, así que todo cambio de idioma iba al servidor. Ahora la app lee el MKV como ExoPlayer en Android
+  (`src/player/mkvmse.ts` + `mkvparse.ts`: cabecera, índice Cues y Cluster con pedidos Range al servidor IPTV) y entrega
+  video H.264 / H.265 y el audio elegido (AAC, AC-3, E-AC-3, MP3) como MP4 fragmentado al reproductor nativo por MSE:
+  ▼ abre los idiomas y el cambio es local, desde el mismo segundo. Solo si el equipo no decodifica ese audio (DTS,
+  TrueHD, o E-AC-3 en algunos Fire TV) se usa el servidor; apagado, la app dice «Audio no compatible con este equipo: es
+  necesario encender el servidor.» y lo reporta al panel (Reportes, «Audio no compatible sin servidor»). Si el lector
+  propio no puede con el archivo, sigue el modo directo de siempre. Ya no hay botón «Audio» arriba (▲ solo muestra la
+  barra). Canales: con segmentos largos (≥ 8 s) el convertidor a MP4 espera 2 segmentos (antes 3) antes de entregar el
+  MPEG-TS, y el vigilante da 15 s más si el canal sigue bajando video.
 - **Motor Shaka, teclado y fluidez (1.0.46)**: películas y series en HLS / DASH con Shaka Player 4.16.13 con los parches
   de Amazon para Vega (`src/player/shaka.ts`, `vendor/`); MP4 por el lector MSE propio con cambio de audio local; MKV con
   las pistas del equipo y el panel solo como respaldo. Botón «Audio · idioma» en el reproductor. Teclado con teclas

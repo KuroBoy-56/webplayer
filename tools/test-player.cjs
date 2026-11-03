@@ -15,6 +15,9 @@ let calls = [];
 let shakas = [];
 let release = null;
 let mp4s = [];
+let mkvs = [];
+let toasts = [];
+let mkvTracks = [{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_AAC'}];
 const noTracks = {ok:false,container:'',audio:[],subs:[]};
 const store = {
   pref:(key,def)=>memory['pref_'+key] ?? def,
@@ -36,6 +39,13 @@ class Mp4 {
   async start(at){this.v.currentTime=at;this.onTracks();return '';}
   destroy(){}
 }
+class Mkv {
+  constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||{cached:true};this.noAudio=false;this.tracks=mkvTracks;mkvs.push(this);}
+  probe(){return {ok:true,headOk:true,container:'mkv',audio:this.tracks.map((t,i)=>({id:String(i),lang:t.lang,codec:t.codec,name:'',def:i===0,forced:false})),subs:[]};}
+  async start(at){this.v.currentTime=at;this.onTracks();return '';}
+  timeOf(t){return t;}
+  destroy(){}
+}
 class PanelHls {static supported(){return true;}}
 class LiveHls {static supported(){return true;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
 const media = {
@@ -51,6 +61,7 @@ Module._load = function(request,parent,isMain){
   if(request==='../api/report') return {reportError:()=>{}};
   if(request==='./shaka') return {ShakaPlayback:Shaka};
   if(request==='./mp4mse') return {Mp4Mse:Mp4};
+  if(request==='./mkvmse') return {MkvMse:Mkv};
   if(request==='./hls') return {PanelHls};
   if(request==='./livehls') return {LiveHls,disableMp4:()=>{}};
   return originalLoad.call(this,request,parent,isMain);
@@ -58,9 +69,9 @@ Module._load = function(request,parent,isMain){
 const {Playback} = require('../src/player/playback.ts');
 after(()=>{Module._load=originalLoad;if(previousTs)require.extensions['.ts']=previousTs;else delete require.extensions['.ts'];});
 function setup({tracks=[],cached=null}={}){
-  memory={};calls=[];probe=cached;shakas=[];mp4s=[];release=null;
+  memory={};calls=[];probe=cached;shakas=[];mp4s=[];mkvs=[];toasts=[];release=null;mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_AAC'}];
   const video={src:'',currentTime:0,duration:600,paused:false,audioTracks:tracks,textTracks:[],play(){this.paused=false;return Promise.resolve();},pause(){this.paused=true;}};
-  const c=new Playback(video,{toast:()=>{},status:()=>{},changed:()=>{},subText:()=>{},fatal:()=>{}});
+  const c=new Playback(video,{toast:m=>toasts.push(m),status:()=>{},changed:()=>{},subText:()=>{},fatal:()=>{}});
   return {c,video};
 }
 const dual = {ok:true,container:'mkv',audio:[{lang:'es',name:'',codec:'aac',def:true},{lang:'en',name:'',codec:'aac',def:false}],subs:[]};
@@ -80,34 +91,45 @@ test('audio Shaka conserva posición y pausa sin recargar la fuente',async()=>{
 test('canales en vivo .m3u8 van por el lector propio sin huecos (no por Shaka)',async()=>{
   const {c}=setup();c.load('https://fixture.invalid/canal.m3u8',0,true);assert.equal(shakas.length,0);await c.destroy();
 });
-test('MKV dual con pistas nativas utiliza el equipo antes del panel',async()=>{
+test('archivo con pistas nativas (AVI) utiliza el equipo antes del panel',async()=>{
   const tracks=[{language:'es',enabled:true},{language:'en',enabled:false}];
-  const {c,video}=setup({tracks,cached:dual});c.load('https://fixture.invalid/video.mkv',0,false);video.currentTime=155;choose(c,'Inglés');
+  const {c,video}=setup({tracks,cached:dual});c.load('https://fixture.invalid/video.avi',0,false);video.currentTime=155;choose(c,'Inglés');
   assert.equal(tracks[1].enabled,true);assert.equal(tracks[0].enabled,false);assert.equal(video.currentTime,155);assert.deepEqual(calls,[]);await c.destroy();
 });
 test('pista no expuesta localmente consulta el panel solo al seleccionarla',async()=>{
-  const {c}=setup({tracks:[{language:'es',enabled:true}],cached:dual});c.load('https://fixture.invalid/video.mkv',0,false);assert.deepEqual(calls,[]);
+  const {c}=setup({tracks:[{language:'es',enabled:true}],cached:dual});c.load('https://fixture.invalid/video.avi',0,false);assert.deepEqual(calls,[]);
   choose(c,'Inglés');await tick();assert.deepEqual(calls,['mediaEngine']);await c.destroy();
 });
 test('una ruta remota guardada no evita el intento local',async()=>{
-  const {c,video}=setup();memory.panel_route_3={'fixture.invalid/video.mkv':{r:'v',t:Date.now()}};
-  c.load('https://fixture.invalid/video.mkv',0,false);assert.equal(video.src,'https://fixture.invalid/video.mkv');assert.deepEqual(calls,[]);await c.destroy();
+  const {c,video}=setup();memory.panel_route_3={'fixture.invalid/video.avi':{r:'v',t:Date.now()}};
+  c.load('https://fixture.invalid/video.avi',0,false);assert.equal(video.src,'https://fixture.invalid/video.avi');assert.deepEqual(calls,[]);await c.destroy();
 });
 test('MSE MP4 selecciona la segunda pista sin motor y reutiliza el índice',async()=>{
   const {c,video}=setup();c.load('https://fixture.invalid/video.mp4',0,false);await tick();video.currentTime=180;choose(c,'Inglés');await tick();
   assert.equal(mp4s.length,2);assert.equal(mp4s[1].audioIdx,1);assert.equal(mp4s[1].index,mp4s[0].index);assert.equal(video.currentTime,180);assert.deepEqual(calls,[]);await c.destroy();
 });
+test('MKV: la app lo lee y cambia el audio en el equipo, sin servidor (como Android)',async()=>{
+  const {c,video}=setup();c.load('https://fixture.invalid/video.mkv',0,false);await tick();
+  assert.equal(mkvs.length,1);assert.equal(c.menu().filter(m=>m.kind==='audio').length,2);
+  video.currentTime=240;choose(c,'Inglés');await tick();
+  assert.equal(mkvs.length,2);assert.equal(mkvs[1].audioIdx,1);assert.equal(mkvs[1].index,mkvs[0].index);assert.equal(video.currentTime,240);assert.deepEqual(calls,[]);await c.destroy();
+});
+test('audio que el equipo no decodifica con el servidor apagado: aviso de encender el servidor',async()=>{
+  const {c}=setup();mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_TRUEHD'}];c.load('https://fixture.invalid/video.mkv',0,false);await tick();
+  choose(c,'Inglés');await tick();await tick();
+  assert.deepEqual(calls,['mediaEngine']);assert.ok(toasts.some(m=>m.includes('es necesario encender el servidor')),toasts.join(' | '));await c.destroy();
+});
 test('cambios nativos rápidos cancelan la comprobación de la selección anterior',async()=>{
-  const {c}=setup({tracks:[{language:'es',enabled:true},{language:'en',enabled:false}],cached:dual});c.load('https://fixture.invalid/video.mkv',0,false);
+  const {c}=setup({tracks:[{language:'es',enabled:true},{language:'en',enabled:false}],cached:dual});c.load('https://fixture.invalid/video.avi',0,false);
   choose(c,'Inglés');choose(c,'Español');await new Promise(r=>setTimeout(r,1550));assert.deepEqual(calls,[]);await c.destroy();
 });
 test('destrucción de Shaka termina antes de adjuntar la fuente siguiente',async()=>{
   const {c,video}=setup();c.load('https://fixture.invalid/video.m3u8',0,false);
-  let finish;release=new Promise(r=>{finish=r;});c.load('https://fixture.invalid/next.mkv',0,false);
-  assert.equal(video.src,'https://fixture.invalid/video.m3u8');finish();await tick();assert.equal(video.src,'https://fixture.invalid/next.mkv');await c.destroy();
+  let finish;release=new Promise(r=>{finish=r;});c.load('https://fixture.invalid/next.avi',0,false);
+  assert.equal(video.src,'https://fixture.invalid/video.m3u8');finish();await tick();assert.equal(video.src,'https://fixture.invalid/next.avi');await c.destroy();
 });
 test('pista única no provoca una petición al panel',async()=>{
-  const {c}=setup({tracks:[{language:'es',enabled:true}]});c.load('https://fixture.invalid/video.mkv',0,false);choose(c,'Español');assert.deepEqual(calls,[]);await c.destroy();
+  const {c}=setup({tracks:[{language:'es',enabled:true}]});c.load('https://fixture.invalid/video.avi',0,false);choose(c,'Español');assert.deepEqual(calls,[]);await c.destroy();
 });
 test('Shaka 4.16: audios sin id mantienen identidad distinta y seleccionan el idioma correcto',()=>{
   const {ShakaPlayback}=require('../src/player/shaka.ts');

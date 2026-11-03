@@ -132,6 +132,8 @@ const fr: Record<Key, string> = {
   "Este contenido tiene una sola pista de audio.": "Ce contenu n'a qu'une seule piste audio.",
   "Este distribuidor está suspendido. Contacta a tu distribuidor.": "Ce distributeur est suspendu. Contactez votre distributeur.",
   "Este equipo no acepta el video que prepara el panel": "Cet appareil n'accepte pas la vidéo préparée par le panneau",
+  "Audio no compatible con este equipo: es necesario encender el servidor.": "Audio non compatible avec cet appareil : il faut activer le serveur.",
+  "Subtítulo no compatible con este equipo: es necesario encender el servidor.": "Sous-titre non compatible avec cet appareil : il faut activer le serveur.",
   "Este equipo no pudo cambiar a {x}.": "Cet appareil n'a pas pu passer à {x}.",
   "Este equipo no puede reproducir el audio que prepara el panel.": "Cet appareil ne peut pas lire l'audio préparé par le panneau.",
   "Este equipo no reproduce el audio {x}: se prepara con el panel…": "Cet appareil ne lit pas l'audio {x} : le panneau le prépare…",
