@@ -201,16 +201,21 @@ struct LoginView: View {
     /** líneas del equipo en el panel; con una sola se entra (después de comprobarla en el servidor) */
     @MainActor private func resolve() async -> Bool {
         busy = true; status = tr("Comprobando el equipo en el panel…")
-        let a = await Panel.playlists()
-        var found = a.value ?? []
-        var problem = a.error
-        if found.isEmpty {
-            let c = await Panel.checkMac()
-            if let l = c.value { found = [l] }
-            if problem == nil { problem = c.error }
+        // manda el panel: check_mac primero (la línea que el panel le da hoy a este equipo y la orden de borrado de
+        // caché); auth.php solo si check_mac no da línea
+        let c = await Panel.checkMac()
+        // equipo en la lista negra del panel: solo el aviso, sin líneas guardadas ni pantalla falsa
+        if let b = Panel.blocked {
+            lines = []; err = b; busy = false
+            return false
         }
-        // con las listas de auth.php no se pidió check_mac: se pide aparte por la orden de borrado de caché
-        if a.value?.isEmpty == false { Task { _ = await Panel.checkMac() } }
+        var found: [Panel.Line] = []
+        var problem = c.error
+        if let l = c.value { found = [l] } else {
+            let a = await Panel.playlists()
+            found = a.value ?? []
+            if problem == nil { problem = a.error }
+        }
         lines = found
         if !found.isEmpty { await connectFirst(found) }
         else if let p = problem, PanelCrypto.hasKey { err = p } // sin llave ya lo dice el aviso de arriba
@@ -251,7 +256,7 @@ struct LoginView: View {
         let r = await Panel.autoDemo(reseller: pass)
         guard let demo = r.value else {
             err = r.error
-            if r.code == 403 { Store.demoUsed = true }
+            if r.code == 403 && Panel.blocked == nil { Store.demoUsed = true }
             return
         }
         Store.demoUsed = false
@@ -292,6 +297,7 @@ struct LoginView: View {
             let c = await Panel.checkMac()
             if let line = c.value { fake = nil; busy = true; await connect(line); busy = false; return }
             if c.error == nil && Panel.fakeScreen == nil { fake = nil }
+            if let b = Panel.blocked { fake = nil; err = b; return }
         }
     }
 }

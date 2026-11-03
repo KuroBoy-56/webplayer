@@ -7,6 +7,7 @@ import SwiftUI
 struct CatalogView: View {
     @EnvironmentObject var state: AppState
     let kind: Kind
+    @ObservedObject private var week = WeekTop.shared
     /** la barra se oscurece al bajar (solo cambia al cruzar el límite: no redibuja en cada paso del scroll) */
     @State private var solid = false
 
@@ -27,7 +28,8 @@ struct CatalogView: View {
     private func content(_ size: CGSize, _ all: [Item]) -> some View {
         let pad = sidePad(size), pw = posterWidth(size)
         let recent = Array(all.prefix(20))
-        let top10 = Array(all.prefix(300).sorted { $0.rating > $1.rating }.prefix(10))
+        _ = week.rev
+        let top10 = week.top10(all, series: kind == .series)
         let hero = Array(all.prefix(40).sorted { $0.rating > $1.rating }.prefix(6))
         let cats = state.visible(kind == .movie ? state.movieCats : state.seriesCats)
         let groups = state.grouped(kind)
@@ -45,7 +47,7 @@ struct CatalogView: View {
                     ShelfRow(title: tr("Agregadas recientemente"), items: recent, pad: pad, onViewAll: { state.push(.browse(tr("Agregadas recientemente"), kind, [])) }) { _, it in
                         PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                     }
-                    ShelfRow(title: tr("Top 10"), items: top10, pad: pad) { i, it in
+                    ShelfRow(title: tr("Top 10 de la semana"), items: top10, pad: pad) { i, it in
                         Top10Card(rank: i + 1, item: it, width: pw * 1.15) { state.push(.detail(it)) }
                     }
                     ForEach(rows) { row in

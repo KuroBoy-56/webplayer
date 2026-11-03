@@ -55,6 +55,37 @@ enum SportsPanel {
         await Cloud.shared.call({ t in await Net.get(PanelUrl.api(file) + "?token=" + urlEnc(t) + extra) })?.json()
     }
 
+    /* ---------- canal del partido por la guía del panel (api/sports_epg.php) ---------- */
+
+    /** canales deportivos (nombre del canal o de su carpeta), sin las carpetas de eventos; primero los que tienen guía */
+    private static let sportRe = "sport|deport|espn|fox|tnt|tudn|dazn|bein|sky|movistar|futbol|soccer|nba|nfl|mlb|nhl|ufc|liga|win |directv|dsports|claro|vix|paramount|peacock|tyc|gol|telemundo|univision|azteca|canal 5|caracol|rcn|tsn|eurosport|teledeporte|cbs|nbc|usa network|f1|golf|tenis|tennis|box|universo|sportsnet|telefe|tv publica|teletica|tigo|max|apple tv"
+    private static var epgCache: (sig: String, at: Date, map: [String: [String]])?
+
+    /**
+     * partido -> ids de los canales que lo tienen en su programación a esa hora (como Vega y Roku). Se pide una vez
+     * cada 10 min por lista de canales; vacío si el panel no contesta.
+     */
+    static func epgMap(_ channels: [Item], _ cats: [Category], eventCats: Set<String>) async -> [String: [String]] {
+        let sig = "\(channels.count)|\(channels.first?.id ?? 0)|\(channels.last?.id ?? 0)"
+        if let c = epgCache, c.sig == sig, Date().timeIntervalSince(c.at) < 600 { return c.map }
+        let sportCats = Set(cats.filter { $0.name.folded.range(of: sportRe, options: .regularExpression) != nil }.map { $0.id })
+        var withEpg: [JObj] = [], noEpg: [JObj] = []
+        for it in channels where !eventCats.contains(it.categoryId) {
+            if !sportCats.contains(it.categoryId) && it.name.folded.range(of: sportRe, options: .regularExpression) == nil { continue }
+            let o: JObj = ["id": String(it.id), "epg": it.epgId, "name": it.name]
+            if it.epgId.isEmpty { noEpg.append(o) } else { withEpg.append(o) }
+            if withEpg.count >= 600 { break }
+        }
+        let list = Array((withEpg + noEpg).prefix(600))
+        if list.isEmpty { return [:] }
+        guard let j = await Cloud.shared.call({ t in await Net.postJson(PanelUrl.api("sports_epg.php"), ["token": t, "channels": list]) })?.json(),
+              let m = j.o("map") else { return [:] }
+        var out: [String: [String]] = [:]
+        for (k, v) in m { if let a = v as? [Any] { out[k] = a.map { "\($0)" } } }
+        epgCache = (sig, Date(), out)
+        return out
+    }
+
     /* ---------- tablas ---------- */
 
     struct TablesResult { let on: Bool; let ok: Bool; let leagues: [League]; var partial = false; var fresh = false }

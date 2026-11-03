@@ -169,6 +169,18 @@ struct SportsView: View {
             let blocked = Store.blockedCats
             let usable = channels.filter { !blocked.contains($0.categoryId) }
             let rules = d.rules
+            // la guía del panel (api/sports_epg.php): los canales que tienen el partido en su programación a esa hora;
+            // se usa cuando ninguno de los canales que lo transmiten está en la lista del cliente (como Vega)
+            var byGuide: Item?
+            if channel == nil && !byEvent {
+                let ix0 = await Task.detached { Sports.index(usable, cats, rules) }.value
+                if !e.tv.contains(where: { !Sports.findByChannel($0.name, ix0).isEmpty }) {
+                    let evCats = Set(ix0.chans.filter { $0.isEvent }.map { $0.item.categoryId })
+                    let ids = await SportsPanel.epgMap(usable, cats, eventCats: evCats)[e.id] ?? []
+                    byGuide = ids.lazy.compactMap { id in usable.first { String($0.id) == id } }.first
+                }
+            }
+            if let g = byGuide { state.playChannel(g); return }
             let (match, viaTv, firstEvent) = await Task.detached { () -> (Item?, Bool, Item?) in
                 // índice de canales: una vez por catálogo (como Android, Vega y Roku), no en cada toque
                 let ix = Sports.index(usable, cats, rules)

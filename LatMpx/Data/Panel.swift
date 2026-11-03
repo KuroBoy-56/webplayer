@@ -89,6 +89,22 @@ enum Panel {
         }
     }
 
+    /**
+     * Lista negra del panel (blacklist.php): el distribuidor (o el dueño con Omitir) bloqueó este equipo. login.php
+     * responde 403 {"code": "device_blocked"} a check_mac, submit_url, auto_demo y set_pin: la app muestra el aviso,
+     * cierra la sesión y no usa ninguna línea guardada (como Vega, Roku y Android). nil = no está bloqueado (según la
+     * última respuesta del panel).
+     */
+    private(set) static var blocked: String?
+
+    private static func noteBlocked(_ r: Resp) {
+        if r.code == 403, let j = r.json(), j.s("code") == "device_blocked" {
+            blocked = j.s("error").ifEmpty(tr("Este equipo está bloqueado. Contacta a tu proveedor."))
+        } else if r.code == 200 {
+            blocked = nil
+        }
+    }
+
     /** pantalla falsa que mandó el último check_mac (nil = ninguna) */
     private(set) static var fakeScreen: FakeScreen?
 
@@ -101,6 +117,8 @@ enum Panel {
         if poll { p["poll"] = 1 }
         let a = await login("check_mac", p)
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
+        noteBlocked(r)
+        if let b = blocked { fakeScreen = nil; return Answer(value: nil, error: b, code: r.code) }
         if Tenant.active && (400..<500).contains(r.code) { return Answer(value: nil, error: errorOf(r, tr("El panel rechazó la solicitud"))) }
         guard let j = r.json() else { return Answer(value: nil, error: errorOf(r, tr("Respuesta no válida del panel"))) }
         fakeScreen = FakeScreen.parse(j)
@@ -137,6 +155,7 @@ enum Panel {
         p["username"] = user; p["password"] = pass; p["url"] = dns
         let a = await login("submit_url", p)
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
+        noteBlocked(r)
         if r.ok && r.json()?.s("status") == "ok" { return Answer(value: true) }
         return Answer(value: nil, error: errorOf(r, tr("No se pudo activar el equipo")))
     }
@@ -150,6 +169,7 @@ enum Panel {
         if isResellerCode(reseller) { p["reseller"] = reseller.trimmed.uppercased() }
         let a = await login("auto_demo", p)
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
+        noteBlocked(r)
         let j = r.json()
         if r.ok, let j = j, j.s("status") == "ok", !j.s("username").isEmpty {
             return Answer(value: Demo(user: j.s("username"), pass: j.s("password"), url: j.s("url"), expires: j.i("demo_expires"), duration: j.i("demo_duration")), code: r.code)
@@ -171,6 +191,7 @@ enum Panel {
         p["old_pin"] = old; p["pin"] = new
         let a = await login("set_pin", p)
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
+        noteBlocked(r)
         if r.ok && r.json()?.b("ok") == true {
             Store.parentalPin = new
             return Answer(value: true)

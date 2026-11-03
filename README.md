@@ -4,6 +4,21 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.0.4 (como Vega, Roku, Android y las TV)
+
+- **Lista negra del panel:** si el distribuidor (o el dueño con Omitir) bloqueó este equipo, `login.php` responde
+  `403 {"code": "device_blocked"}` a `check_mac`, `submit_url`, `auto_demo` y `set_pin`. La app muestra el aviso del panel
+  («Este equipo está bloqueado…»), no usa ninguna línea guardada (`auth.php`) ni la pantalla falsa, no marca la demo como
+  usada y, con la app abierta, la consulta de cada 10 min (o al volver) cierra la sesión. Al abrir ahora se pregunta
+  primero `check_mac` y `auth.php` solo si no da línea (como Vega). `Data/Panel.swift` (`blocked`), `UI/LoginView.swift`,
+  `App/RootView.swift`.
+- **Top 10 de la semana** (`api/top10.php`): lo más popular de la semana en TMDB cruzado con el catálogo por título y
+  año (±1); lo que falte, de lo mejor calificado, distinto cada semana. Inicio (películas y series alternadas), Películas
+  y Series. Se guarda por distribuidor y se pide cada 12 h (`Data/WeekTop.swift`).
+- **Deportes, canal por la guía del panel** (`api/sports_epg.php`): si ninguno de los canales que transmiten el partido
+  está en la lista del cliente, se busca el canal que lo tiene en su programación a esa hora antes de buscar por
+  equipos (`SportsPanel.epgMap`, una consulta cada 10 min).
+
 ## Qué hace
 
 - **Registro por MAC.** Cada equipo tiene un código con formato MAC (`A1:B2:C3:D4:E5:F6:07:18`) que se crea la primera vez y se guarda en el llavero de iOS (se conserva aunque se borre la app). Es el que se registra en el panel (Clientes MAC; el dispositivo aparece como **iPhone / iPad**).
@@ -27,7 +42,7 @@ La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funcion
 - **Fondo del inicio de sesión:** carátulas de TMDB pedidas por `api/tmdb.php` del panel (clave del distribuidor o del dueño); sin clave (`tmdb_key_not_set`) o con error no hay carrusel (fondo negro; no se guardan carátulas de antes). Se inclinan -8° y suben sin fin (120 s por vuelta), como la web player y Android.
 - **Aviso del panel** (bienvenida / vencimiento): tarjeta del alto de su contenido, como Android; solo se desplaza si no cabe en la pantalla. Con varias imágenes en **Alertas** del panel (`images` de `alerta.php`) cambian cada `interval` segundos (3) en el mismo lugar con un fundido; el encabezado no cambia.
 - **Carátulas por la caché del panel** (como Roku, Vega y Android, `Data/PanelImg.swift`): la copia del panel `api/imgc/<sha1>.jpg`, después `api/img.php` (con el título y el id de TMDB del servidor busca el póster si el servidor IPTV no tiene) y la original; si todo falla, TMDB desde el equipo. Los fondos de TMDB de la ficha llegan en Full HD por `img.php?w=1920`. Con `"img": false` de `progress.php ?v=2` todo va directo.
-- **Borrado de caché desde el panel:** `check_mac` lleva `"cc"` (última orden aplicada, guardada por distribuidor en `cache_clear_seen`) y la respuesta trae `"cache_clear"` y `"cache_clear_at"`. La primera vez solo se guarda, salvo una orden de los últimos 3 días (app instalada de nuevo), que se aplica; viendo un video, la orden espera a que se cierre el reproductor; con la app abierta el panel se vuelve a consultar cada 10 min con `"poll": 1` (no cuenta como otra apertura); con un número mayor se guarda, se avisa 3 s, se borra lo que se vuelve a descargar (caché HTTP e imágenes, catálogo, detalles, TMDB, carátulas, guía) y la raíz se vuelve a crear (iOS no deja relanzar la app): entra sola como al abrirla. No se tocan la sesión del panel, el distribuidor, los ajustes ni las descargas. Con las listas de `auth.php` (Omitir) se pide además `check_mac` en segundo plano para recibir la orden (`Data/CacheClear.swift`).
+- **Borrado de caché desde el panel:** `check_mac` lleva `"cc"` (última orden aplicada, guardada por distribuidor en `cache_clear_seen`) y la respuesta trae `"cache_clear"` y `"cache_clear_at"`. La primera vez solo se guarda, salvo una orden de los últimos 3 días (app instalada de nuevo), que se aplica; viendo un video, la orden espera a que se cierre el reproductor; con la app abierta el panel se vuelve a consultar cada 10 min con `"poll": 1` (no cuenta como otra apertura); con un número mayor se guarda, se avisa 3 s, se borra lo que se vuelve a descargar (caché HTTP e imágenes, catálogo, detalles, TMDB, carátulas, guía) y la raíz se vuelve a crear (iOS no deja relanzar la app): entra sola como al abrirla. No se tocan la sesión del panel, el distribuidor, los ajustes ni las descargas. Al abrir siempre se pregunta `check_mac` primero, así la orden llega también con Omitir (`Data/CacheClear.swift`).
 - **Varias líneas para el equipo:** se entra solo con la primera que funciona (ya no aparece "Elige tu servicio").
 - **Inicio de sesión centrado** con la firma del distribuidor abajo.
 - **Misma interfaz que Android celular:** barra superior con Series / Películas / Deportes / Mi lista y perfil (Mi cuenta, Ajustes, Deportes, Mi lista); Películas y Series con destacados, recientes, Top 10 y una fila por categoría.

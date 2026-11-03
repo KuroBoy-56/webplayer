@@ -174,7 +174,8 @@ struct RootView: View {
         Task { @MainActor in
             let c = await Panel.checkMac(poll: true)
             guard state.session == s else { return }
-            if c.error == nil && c.value == nil { clearAll(); return }
+            // sin línea o equipo bloqueado en la lista negra del panel: vuelve al inicio de sesión (que muestra el aviso)
+            if (c.error == nil && c.value == nil) || Panel.blocked != nil { clearAll(); return }
             guard iptv, let line = c.value else { return }
             if case .fail(let m) = await Xtream.login([(line.name, line.base)], user: line.user, pass: line.pass), m != Xtream.noServer {
                 if state.session == s { clearAll() }

@@ -4,6 +4,7 @@ struct HomeView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var cloud: Cloud
     @EnvironmentObject var tenant: Tenant
+    @ObservedObject private var week = WeekTop.shared
     /** la barra se oscurece al bajar (solo cambia al cruzar el límite: no redibuja en cada paso del scroll) */
     @State private var solid = false
 
@@ -17,6 +18,7 @@ struct HomeView: View {
         }
         .background(Theme.bg.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        .task { await week.load() }
     }
 
     private func content(_ size: CGSize) -> some View {
@@ -25,7 +27,8 @@ struct HomeView: View {
         let movies = state.visibleItems(state.recent(.movie)), series = state.visibleItems(state.recent(.series))
         let recentM = Array(movies.prefix(40))
         let recentS = Array(series.prefix(40))
-        let top10 = Array(recentM.prefix(300).sorted { $0.rating > $1.rating }.prefix(10))
+        // Top 10 de la semana del panel (TMDB) cruzado con el catálogo; lo que falte, lo mejor calificado de la semana
+        let top10 = week.top10Home(movies: movies, series: series)
         let mcats = state.visible(state.movieCats)
         let safe = mcats + state.visible(state.seriesCats)
         // el distribuidor puede no separar su contenido por plataformas (features.platforms = false)
@@ -44,6 +47,7 @@ struct HomeView: View {
         for i in 0..<max(m.count, se.count) { if i < m.count { hero.append(m[i]) }; if i < se.count { hero.append(se[i]) } }
         _ = cloud.rev
         _ = state.refresh
+        _ = week.rev
 
         return ZStack(alignment: .top) {
           ScrollView {
@@ -57,7 +61,7 @@ struct HomeView: View {
                 ShelfRow(title: tr("Mi lista"), items: favs, pad: pad, onViewAll: { state.push(.saved(false)) }) { _, it in
                     PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                 }
-                ShelfRow(title: tr("Top 10 de hoy"), items: top10, pad: pad) { i, it in
+                ShelfRow(title: tr("Top 10 de la semana"), items: top10, pad: pad) { i, it in
                     Top10Card(rank: i + 1, item: it, width: pw * 1.15) { state.push(.detail(it)) }
                 }
                 ShelfRow(title: tr("Plataformas"), items: platforms, pad: pad) { _, p in

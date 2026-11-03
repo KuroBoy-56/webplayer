@@ -5,6 +5,8 @@ import Foundation
 
 extension L10n {
     static let en: [String: String] = [
+        "Top 10 de la semana": "Top 10 this week",
+        "Este equipo está bloqueado. Contacta a tu proveedor.": "This device is blocked. Contact your provider.",
         "Agenda": "Schedule",
         "Tablas": "Standings",
         "Selecciones": "National teams",
@@ -354,6 +356,8 @@ extension L10n {
     ]
 
     static let pt: [String: String] = [
+        "Top 10 de la semana": "Top 10 da semana",
+        "Este equipo está bloqueado. Contacta a tu proveedor.": "Este aparelho está bloqueado. Fale com o seu provedor.",
         "Agenda": "Agenda",
         "Tablas": "Tabelas",
         "Selecciones": "Seleções",
@@ -671,6 +675,8 @@ extension L10n {
     ]
 
     static let fr: [String: String] = [
+        "Top 10 de la semana": "Top 10 de la semaine",
+        "Este equipo está bloqueado. Contacta a tu proveedor.": "Cet appareil est bloqué. Contactez votre fournisseur.",
         "Agenda": "Programme",
         "Tablas": "Classements",
         "Selecciones": "Sélections",
