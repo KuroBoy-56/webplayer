@@ -23,6 +23,7 @@
     <string name="err_demo_too_many">Trop de démos depuis cette connexion. Réessayez demain.</string>
     <string name="err_demo_unavailable">La démo n\'est pas disponible pour le moment. Réessayez plus tard.</string>
     <string name="err_demo_create">Impossible de créer la démo</string>
+    <string name="err_device_blocked">Cet appareil est bloqué. Contactez votre fournisseur.</string>
     <string name="err_pin_not_saved_code">Le panneau n\'a pas enregistré le PIN (%1$d)</string>
     <string name="server">Serveur</string>
     <string name="tenant_invalid">Numéro de distributeur non valide</string>
