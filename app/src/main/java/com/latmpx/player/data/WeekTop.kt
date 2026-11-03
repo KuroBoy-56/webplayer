@@ -31,9 +31,11 @@ object WeekTop {
         private set
 
     fun init(ctx: Context) {
-        prefs = ctx.getSharedPreferences("week_top", Context.MODE_PRIVATE)
-        runCatching { parse(JSONObject(prefs?.getString("data", null) ?: return)) }
-        at = prefs?.getLong("at", 0L) ?: 0L
+        runCatching {
+            prefs = ctx.getSharedPreferences("week_top", Context.MODE_PRIVATE)
+            prefs?.getString("data", null)?.let { parse(JSONObject(it)) }
+            at = prefs?.getLong("at", 0L) ?: 0L
+        }
     }
 
     private fun list(a: JSONArray?): List<Entry> = if (a == null) emptyList() else (0 until minOf(a.length(), 80)).mapNotNull { i ->
@@ -50,6 +52,10 @@ object WeekTop {
 
     /** Pide la lista si la guardada tiene más de 12 h (no hace nada si es reciente). */
     suspend fun load() {
+        runCatching { fetch() }
+    }
+
+    private suspend fun fetch() {
         if (System.currentTimeMillis() - at < AGE) return
         val url = PanelUrl.api("top10.php").toHttpUrlOrNull()?.newBuilder()?.let { Tenant.tag(it) }?.build()?.toString() ?: return
         val r = runCatching { Net.get(url) }.getOrNull() ?: return
@@ -65,21 +71,25 @@ object WeekTop {
     // ---------- títulos comparables (como Roku: sin "| LAT", (2019), [4K], acentos, signos ni etiquetas) ----------
     private val TAGS = setOf("4k", "uhd", "fhd", "hd", "sd", "lat", "latino", "sub", "subt", "esp", "castellano", "dual", "spa", "eng",
         "1080p", "720p", "2160p", "hdr", "cam", "ts", "multi", "vose", "subtitulado", "hevc", "x264", "x265")
-    private val BR = Regex("\\([^)]*\\)|\\[[^]]*]|\\{[^}]*}")
-    private val PREFIX = Regex("^[A-Z]{2,3}\\s*[-|:]\\s+")
-    private val YEAR_IN = Regex("[(\\[]((?:19|20)\\d\\d)[)\\]]")
+    // patrones válidos también para el motor ICU de Android (estricto con «]» y «}» sin escapar: con «[^]]» la app se
+    // cerraba al abrir); se arman la primera vez que se usan y un error nunca cierra la app
+    private val BR by lazy { Regex("\\([^)]*\\)|\\[[^\\]]*\\]|\\{[^}]*\\}") }
+    private val PREFIX by lazy { Regex("^[A-Z]{2,3}\\s*[-|:]\\s+") }
+    private val YEAR_IN by lazy { Regex("[(\\[]((?:19|20)[0-9][0-9])[)\\]]") }
+    private val NON_ALNUM by lazy { Regex("[^a-z0-9]+") }
+    private val MARKS by lazy { Regex("\\p{M}+") }
 
-    fun key(name: String): String {
+    fun key(name: String): String = runCatching {
         var t = PREFIX.replace(name.trim(), "")
         for (sep in listOf("|", " - ", " – ")) { val p = t.indexOf(sep); if (p > 0) t = t.substring(0, p) }
-        t = Normalizer.normalize(BR.replace(t, " "), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase()
-        return t.split(Regex("[^a-z0-9]+")).filter { w ->
+        t = Normalizer.normalize(BR.replace(t, " "), Normalizer.Form.NFD).replace(MARKS, "").lowercase()
+        t.split(NON_ALNUM).filter { w ->
             w.isNotEmpty() && w !in TAGS && !(w.length == 4 && (w.startsWith("19") || w.startsWith("20")) && w.all { it.isDigit() })
         }.joinToString(" ")
-    }
+    }.getOrDefault("")
 
     private fun yearOf(it: Item): Int =
-        it.year.take(4).toIntOrNull()?.takeIf { y -> y > 1900 } ?: YEAR_IN.find(it.name)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        it.year.take(4).toIntOrNull()?.takeIf { y -> y > 1900 } ?: runCatching { YEAR_IN.find(it.name)?.groupValues?.get(1)?.toIntOrNull() }.getOrNull() ?: 0
 
     private fun matches(list: List<Entry>, items: List<Item>, n: Int): List<Item> {
         if (list.isEmpty() || items.isEmpty()) return emptyList()
@@ -107,13 +117,16 @@ object WeekTop {
     }
 
     /** Top 10 de Películas o de Series: lo de la semana que está en el catálogo y el relleno de la semana. */
-    fun top10(items: List<Item>, kind: Kind): List<Item> {
+    fun top10(items: List<Item>, kind: Kind): List<Item> = runCatching {
         val got = matches(if (kind == Kind.SERIES) series else movies, items, 10)
-        return got + fill(items, got, 10 - got.size, if (kind == Kind.SERIES) 2 else 1)
-    }
+        got + fill(items, got, 10 - got.size, if (kind == Kind.SERIES) 2 else 1)
+    }.getOrElse { items.sortedByDescending { it.rating }.take(10) }
 
     /** Top 10 de Inicio: películas y series juntas, alternadas en el orden de la semana. */
-    fun top10Home(movieItems: List<Item>, seriesItems: List<Item>): List<Item> {
+    fun top10Home(movieItems: List<Item>, seriesItems: List<Item>): List<Item> = runCatching { home(movieItems, seriesItems) }
+        .getOrElse { movieItems.sortedByDescending { it.rating }.take(10) }
+
+    private fun home(movieItems: List<Item>, seriesItems: List<Item>): List<Item> {
         val mv = matches(all.filter { it.series != true }, movieItems, 10)
         val sv = matches(all.filter { it.series == true }, seriesItems, 10)
         val out = ArrayList<Item>()
