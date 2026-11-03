@@ -118,6 +118,8 @@ class PlayerUiModel(val player: ExoPlayer, val live: Boolean, val tv: Boolean) {
     var nextDismissedFor by mutableIntStateOf(-1)
     /** «¿Salir del video?» abierto */
     var askExit by mutableStateOf(false)
+    /** canal en la TV: con la información a la vista, también la lista de canales de la carpeta (izquierda) */
+    var liveList by mutableStateOf(false)
     var episodes by mutableStateOf<List<String>>(emptyList())
     /** canal en vivo: los canales de la carpeta y la guía del que suena (panel de la TV, PlayerLiveTv.kt) */
     var channels by mutableStateOf<List<String>>(emptyList())
@@ -259,6 +261,8 @@ fun PlayerOverlay(m: PlayerUiModel, a: PlayerActions) {
         val wait = if (m.live && m.tv) 8000L else 4000L
         if (m.visible && m.playing && m.panel == null) { delay(wait); if (System.currentTimeMillis() - m.lastTouch >= wait - 100) m.visible = false }
     }
+    // al esconderse la información del canal también se cierra la lista de canales
+    LaunchedEffect(m.visible) { if (!m.visible) m.liveList = false }
     LaunchedEffect(m.toast) { if (m.toast != null) { delay(2600); m.toast = null } }
     LaunchedEffect(m.seekHint) { if (m.seekHint != null) { delay(700); m.seekHint = null } }
 

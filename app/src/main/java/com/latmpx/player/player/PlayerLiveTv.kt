@@ -51,10 +51,10 @@ import java.util.Locale
 private fun hm(t: Long): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(t))
 
 /**
- * Canal en vivo en la TV, como Roku y Vega: sin botones de pausa ni flechas en pantalla. OK muestra este panel
- * transparente: a la izquierda los canales de la carpeta (el que suena marcado; se elige con el control) y abajo el
- * canal, la hora y la guía (lo que se ve ahora con su avance y sinopsis, y lo que sigue). Arriba / abajo con el panel
- * cerrado cambian de canal (PlayerActivity); izquierda / derecha no hacen nada.
+ * Canal en vivo en la TV, como Roku y Vega: sin botones de pausa ni flechas en pantalla. OK muestra solo la información
+ * abajo: el canal, la hora y la guía (lo que se ve ahora con su avance y sinopsis, y lo que sigue). Izquierda abre además
+ * la lista de canales de la carpeta (el que suena marcado; se elige con el control). Arriba / abajo cambian de canal y
+ * Atrás esconde lo que esté abierto (PlayerActivity).
  */
 @Composable
 fun LiveTvOverlay(m: PlayerUiModel, a: PlayerActions) {
@@ -62,14 +62,15 @@ fun LiveTvOverlay(m: PlayerUiModel, a: PlayerActions) {
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(15_000) } }
     val current = remember { FocusRequester() }
     val list = rememberLazyListState()
-    LaunchedEffect(m.focusTick) {
+    LaunchedEffect(m.focusTick, m.liveList) {
+        if (!m.liveList) return@LaunchedEffect
         list.scrollToItem((m.index - 3).coerceAtLeast(0))
         delay(60)
         runCatching { current.requestFocus() }
     }
     Box(Modifier.fillMaxSize()) {
-        // lista de canales de la carpeta
-        Column(
+        // lista de canales de la carpeta (izquierda)
+        if (m.liveList) Column(
             Modifier.fillMaxHeight().width(330.dp).background(Brush.horizontalGradient(listOf(Color(0xE6000000), Color(0x99000000)))).padding(vertical = 20.dp),
         ) {
             Text(stringResource(R.string.channels), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 20.dp, bottom = 10.dp))
@@ -77,6 +78,7 @@ fun LiveTvOverlay(m: PlayerUiModel, a: PlayerActions) {
                 itemsIndexed(m.channels) { i, name ->
                     ChannelRow(i + 1, name, i == m.index, if (i == m.index) Modifier.focusRequester(current) else Modifier, onFocus = { m.poke() }) {
                         if (i != m.index) a.pickEpisode(i)
+                        m.liveList = false
                         m.visible = false
                     }
                 }
@@ -84,7 +86,7 @@ fun LiveTvOverlay(m: PlayerUiModel, a: PlayerActions) {
         }
         // abajo: canal, hora y guía
         Column(
-            Modifier.align(Alignment.BottomEnd).padding(start = 330.dp).fillMaxWidth()
+            Modifier.align(Alignment.BottomEnd).padding(start = if (m.liveList) 330.dp else 0.dp).fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000)))).padding(start = 28.dp, end = 32.dp, top = 40.dp, bottom = 24.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

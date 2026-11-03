@@ -64,6 +64,7 @@ object Panel {
             break
         }
         if (r.code == 0) return Answer(null, NO_PANEL)
+        noteBlocked(action, r)
         // respuesta cifrada (panel nuevo) -> JSON; un panel viejo la manda en JSON y queda igual. Los errores siempre llegan en JSON.
         if (encReply && r.code == 200 && r.body.isNotBlank() && !r.body.trimStart().startsWith("{")) {
             val dec = runCatching { PanelCrypto.decrypt(r.body) }.getOrNull()
@@ -71,6 +72,22 @@ object Panel {
             return Answer(r.copy(body = dec))
         }
         return Answer(r)
+    }
+
+    /**
+     * Lista negra del panel (blacklist.php): el distribuidor (o el dueño con Omitir) bloqueó este equipo y login.php
+     * responde 403 {"code": "device_blocked"} a check_mac, submit_url, auto_demo y set_pin. Aquí queda el aviso del
+     * panel (null = no está bloqueado, según la última respuesta): la app no entra, no usa líneas guardadas
+     * (auth.php) ni vincula la cuenta, y una sesión abierta se cierra.
+     */
+    @Volatile var blocked: String? = null
+        private set
+
+    private fun noteBlocked(action: String, r: Net.Resp) {
+        if (action !in setOf("check_mac", "submit_url", "auto_demo", "set_pin")) return
+        val j = if (r.code == 403) r.json() else null
+        if (j != null && j.s("code") == "device_blocked") blocked = j.s("error").ifEmpty { tr(R.string.err_device_blocked) }
+        else if (r.code == 200) blocked = null
     }
 
     /** código de demo de un revendedor: 6 letras y números con al menos una letra (nunca solo números: eso es un distribuidor) */
@@ -102,6 +119,8 @@ object Panel {
         // cc: última orden de borrado de caché que esta app ya aplicó (0 = ninguna)
         val a = login("check_mac", device(deviceId).put("cc", CacheClear.seen).apply { if (poll) put("poll", 1) })
         val r = a.value ?: return Answer(null, a.error)
+        // equipo en la lista negra de este ID: solo el aviso (ni línea ni pantalla falsa)
+        blocked?.let { fakeScreen = null; return Answer(null, it) }
         // con distribuidor: un error del panel (vencido, suspendido…) se muestra en vez de "no hay línea"
         if (Tenant.active && r.code in 400..499) return Answer(null, errorOf(r, tr(R.string.err_panel_rejected)))
         val j = r.json() ?: return Answer(null, errorOf(r, tr(R.string.err_panel_bad_response)))

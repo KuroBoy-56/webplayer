@@ -150,11 +150,13 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
 
     suspend fun resolve(): Boolean {
         busy = true; status = tr(R.string.login_checking_device)
+        // lista negra del panel: lo primero (con el equipo bloqueado tampoco valen las líneas guardadas de auth.php)
+        val c = if (PanelCrypto.hasKey()) Panel.checkMac(deviceId) else null
+        Panel.blocked?.let { lines = emptyList(); err = it; busy = false; return false }
         val a = Panel.playlists(deviceId)
         var found = a.value.orEmpty()
         var problem = a.error
-        if (found.isEmpty()) {
-            val c = Panel.checkMac(deviceId)
+        if (found.isEmpty() && c != null) {
             c.value?.let { found = listOf(it) }
             if (problem == null) problem = c.error
         }
@@ -328,7 +330,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                                 val demo = r.value
                                 if (demo == null) {
                                     err = r.error
-                                    if (r.code == 403) { demoUsed = true; Store.demoUsed = true }
+                                    if (r.code == 403 && Panel.blocked == null) { demoUsed = true; Store.demoUsed = true }
                                     return@act
                                 }
                                 Store.demoUsed = false; demoUsed = false

@@ -200,6 +200,8 @@ class PlayerActivity : ComponentActivity() {
                 when {
                     ui2.panel != null -> { ui2.panel = null; ui2.poke() }
                     ui2.locked -> { ui2.poke() }
+                    // canal en la TV: Atrás primero esconde la lista y la información; sin nada a la vista, sale del canal
+                    tv && ui2.live && ui2.visible -> { ui2.visible = false; ui2.liveList = false }
                     // TV: el primer Atrás solo oculta los controles si el video se está viendo y el usuario los
                     // estaba usando. Con el canal cargando, reconectando o con error, sale directo: antes los
                     // controles volvían a aparecer con cada reintento y Atrás nunca salía del canal (deportes).
@@ -523,18 +525,26 @@ class PlayerActivity : ComponentActivity() {
         if (!::ui2.isInitialized) return super.dispatchKeyEvent(event)
         val k = event.keyCode
         if (event.action == KeyEvent.ACTION_DOWN && k != KeyEvent.KEYCODE_BACK) lastUserKey = System.currentTimeMillis()
-        // canal en la TV (como Roku y Vega): sin pausa; con el panel cerrado arriba / abajo cambian de canal, izquierda /
-        // derecha no hacen nada y OK abre el panel (canales de la carpeta, canal, hora y guía)
+        // canal en la TV (como Roku y Vega): sin pausa. OK muestra solo la información del canal (canal, hora y guía);
+        // izquierda, la lista de canales de la carpeta; arriba / abajo cambian de canal; Atrás oculta lo que esté abierto
+        // y, sin nada abierto, sale del canal (handleOnBackPressed)
         if (tv && kind == Kind.LIVE && event.action == KeyEvent.ACTION_DOWN) {
             when (k) {
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> return true
             }
-            if (!ui2.visible && ui2.panel == null) {
+            // con la lista de canales abierta, las flechas y OK recorren y eligen en la lista
+            if (ui2.panel == null && !(ui2.visible && ui2.liveList)) {
                 when (k) {
-                    KeyEvent.KEYCODE_DPAD_UP -> { zap(-1); return true }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> { zap(1); return true }
-                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> return true
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> { ui2.poke(); ui2.focusTick++; return true }
+                    KeyEvent.KEYCODE_DPAD_UP -> { zap(-1); if (ui2.visible) ui2.poke(); return true }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> { zap(1); if (ui2.visible) ui2.poke(); return true }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> { ui2.liveList = true; ui2.poke(); ui2.focusTick++; return true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> { if (ui2.visible) ui2.poke(); return true }
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                        // OK: solo la información del canal (sin la lista); se esconde con Atrás o sola a los 8 s
+                        if (!ui2.visible) ui2.liveList = false
+                        ui2.poke()
+                        return true
+                    }
                 }
             }
         }
