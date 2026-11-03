@@ -224,6 +224,15 @@ export class Mp4Mse {
   get indexed(): boolean {
     return !!this.vt;
   }
+  // la primera entrega después de abrir o saltar es corta (1,5 s): la imagen sale antes
+  private firstOut = true;
+  // MP4 con el índice al final: el principio del video (2 MB) se pide a la vez que el índice
+  private head: { off: number; p: Promise<Uint8Array | null> } | null = null;
+  private headBusy = false;
+  private headReqs = new Set<AbortController>();
+  private headOff = false;
+  // la línea no admite pedidos a la vez: todo de a uno
+  private oneConn = false;
   // por qué no siguió (para el reporte del panel)
   why = '';
   // el reproductor no acepta el audio del archivo (Dolby en Vega): suena solo el video; los idiomas quedan en el menú
@@ -322,6 +331,8 @@ export class Mp4Mse {
     this.gen++;
     for (const request of this.requests) request.abort();
     this.requests.clear();
+    for (const request of this.headReqs) request.abort();
+    this.headReqs.clear();
     if (this.watch) clearInterval(this.watch);
     this.watch = null;
     try {
@@ -359,12 +370,31 @@ export class Mp4Mse {
     if (!this.running) this.pump();
   }
 
+  // tiempo de presentación de la muestra i del video (decodificación + desfase de los cuadros B)
+  private ptsU(i: number): number {
+    const vt = this.vt!;
+    return vt.dts[i] + (vt.cts.length ? vt.cts[i] : 0);
+  }
+
+  // [lo, hi) del principio del video si ya llegó con el índice; si no, null (se pide como siempre)
+  private async fromHead(lo: number, hi: number): Promise<Uint8Array | null> {
+    const h = this.head;
+    if (!h || lo < h.off) return null;
+    const d = await h.p;
+    if (!d || hi > h.off + d.length) {
+      if (!d || lo >= h.off + d.length) this.head = null;
+      return null;
+    }
+    return d.subarray(lo - h.off, hi - h.off);
+  }
+
   private secs(tk: Trk, units: number): number {
     return units / tk.ts + tk.shift;
   }
 
   // muestras desde el cuadro clave en o antes de t
   private place(t: number): void {
+    this.firstOut = true;
     const vt = this.vt!;
     let lo = 0;
     let hi = vt.dts.length - 1;
@@ -408,6 +438,14 @@ export class Mp4Mse {
         return rest ? kidsBody(concat([have, rest])) : null;
       }
       if (size < 8) return null;
+      // el video (mdat) va antes del índice: su principio se pide ya, a la vez que el índice (lo primero que se va a ver)
+      if (typ(h, 4) === 'mdat' && !this.head && size > 4194304) {
+        const at = off + (u32(h, 0) === 1 ? 16 : 8);
+        this.headBusy = true;
+        const p = this.get(at, 2097152, true);
+        this.head = { off: at, p };
+        p.then(() => (this.headBusy = false), () => (this.headBusy = false));
+      }
       off += size;
       if (this.size && off >= this.size) return null;
     }
@@ -421,14 +459,27 @@ export class Mp4Mse {
     const n = Math.ceil(len / PART);
     const parts: (Uint8Array | null)[] = new Array(n).fill(null);
     let next = 0;
+    let running = 0;
     const worker = async () => {
+      running++;
+      try {
+        await work();
+      } finally {
+        running--;
+      }
+    };
+    const work = async () => {
       while (this.alive && next < n) {
+        // un pedido rechazado por pedir a la vez: solo sigue un trabajador
+        if (this.oneConn && running > 1) break;
         const i = next++;
         const o = off + i * PART;
         parts[i] = await this.get(o, Math.min(PART, off + len - o));
       }
     };
-    await Promise.all([worker(), worker(), worker()].slice(0, Math.min(3, n)));
+    // 3 a la vez (más el principio del video, si se está bajando); de a uno si la línea rechaza pedidos a la vez
+    const k = this.oneConn ? 1 : Math.min(3, n);
+    await Promise.all(Array.from({ length: k }, () => worker()));
     for (let i = 0; i < n && this.alive; i++) {
       if (!parts[i] || parts[i]!.length < Math.min(PART, len - i * PART)) {
         const o = off + i * PART;
@@ -441,14 +492,38 @@ export class Mp4Mse {
     return out.length >= len ? out.subarray(0, len) : null;
   }
 
+  // espera a que terminen los pedidos en curso (antes de pedir otra vez en una línea de una sola conexión)
+  private async idleRequests(): Promise<void> {
+    for (let i = 0; i < 100 && this.requests.size > 0 && this.alive; i++) await sleep(100);
+  }
+
   // el servidor sigue entregando (hay pedidos en curso o llegó algo hace poco): vale la pena esperar
   busy(): boolean {
     return this.requests.size > 0 || Date.now() - (this.rs.lastData || 0) < 10000;
   }
 
   // [off, off + len) del archivo en el servidor IPTV
-  private async get(off: number, len: number): Promise<Uint8Array | null> {
-    const d = await rangeGet(this.url, off, len, this.rs, this.requests, () => this.alive);
+  private async get(off: number, len: number, head = false): Promise<Uint8Array | null> {
+    // el adelanto cancelado no se vuelve a pedir (rangeGet reintenta mientras alive)
+    let d = await rangeGet(this.url, off, len, this.rs, head ? this.headReqs : this.requests, head ? () => this.alive && !this.headOff : () => this.alive);
+    // rechazado mientras se baja el principio del video: la línea admite una sola conexión. Se cancela ese adelanto (el
+    // índice va primero), todo sigue de a un pedido y se pide otra vez
+    if (!d && !head && this.alive && !this.rs.unbounded && (this.headBusy || this.requests.size > 0)) {
+      this.oneConn = true;
+      this.headOff = true;
+      const hp = this.head?.p;
+      for (const c of this.headReqs) c.abort();
+      this.headReqs.clear();
+      this.head = null;
+      this.headBusy = false;
+      // que la conexión cancelada termine de cerrarse (como mucho 3 s) y lo demás en curso
+      if (hp) await Promise.race([hp, sleep(3000)]);
+      await this.idleRequests();
+      for (let i = 0; i < 2 && !d && this.alive && !this.rs.unbounded; i++) {
+        if (i) await sleep(700);
+        d = await rangeGet(this.url, off, len, this.rs, this.requests, () => this.alive);
+      }
+    }
     if (this.rs.size > 0) this.size = this.rs.size;
     if (!d) this.why = this.rs.why || this.why;
     return d;
@@ -536,13 +611,29 @@ export class Mp4Mse {
           await sleep(1000);
           continue;
         }
-        // ~4 s de video y el audio de ese mismo tramo
+        // ~4 s de video (el primero 1,5 s: empieza a verse apenas llega lo mínimo) y el audio de ese mismo tramo
         const t0 = this.secs(vt, vt.dts[Math.min(this.vi, vt.dts.length - 1)]);
-        let vj = this.vi;
-        // hasta el cuadro clave siguiente (como mucho 15 s): cortar a mitad de un grupo con cuadros B dejaba huecos de
-        // milésimas entre tramos y el reproductor se frenaba en cada uno (micro cortes del audio)
-        while (vj < vt.dts.length && (vj === this.vi || this.secs(vt, vt.dts[vj]) < t0 + CHUNK || (vt.key && !vt.key.has(vj) && this.secs(vt, vt.dts[vj]) < t0 + 15))) vj++;
-        const tEnd = vj < vt.dts.length ? this.secs(vt, vt.dts[vj]) : Infinity;
+        const n = vt.dts.length;
+        const target = this.firstOut ? 1.5 : CHUNK;
+        // el corte va donde todo lo anterior se muestra antes que todo lo siguiente (no parte un grupo de cuadros B: eso
+        // dejaba huecos de milésimas entre tramos y micro cortes); antes se esperaba al cuadro clave siguiente (hasta 15 s
+        // de video, varios MB antes de la primera imagen)
+        let vj = this.vi + 1;
+        let maxP = this.ptsU(this.vi);
+        const closed = (j: number) => {
+          for (let k = j; k < Math.min(n, j + 16); k++) if (this.ptsU(k) <= maxP) return false;
+          return true;
+        };
+        while (vj < n) {
+          const t = this.secs(vt, vt.dts[vj]);
+          if (t >= t0 + target && closed(vj)) break;
+          if (t >= t0 + 15 && (!vt.key || vt.key.has(vj))) break;
+          maxP = Math.max(maxP, this.ptsU(vj));
+          vj++;
+        }
+        let nextP = Infinity;
+        for (let k = vj; k < Math.min(n, vj + 16); k++) nextP = Math.min(nextP, this.ptsU(k));
+        const tEnd = vj < n ? this.secs(vt, nextP) : Infinity;
         let aj = this.ai;
         if (a) while (aj < a.dts.length && this.secs(a, a.dts[aj]) < tEnd) aj++;
         const vs = this.vi < vj ? this.span(vt, this.vi, vj) : null;
@@ -556,7 +647,8 @@ export class Mp4Mse {
         let vbase = 0;
         let abase = 0;
         if (hi - lo <= need * 1.5 + 2097152) {
-          const all = await this.get(lo, hi - lo);
+          // el principio del video ya pedido junto con el índice (MP4 con el índice al final)
+          const all = (await this.fromHead(lo, hi)) || (await this.get(lo, hi - lo));
           vb = ab = all;
           vbase = abase = lo;
         } else {
@@ -577,6 +669,7 @@ export class Mp4Mse {
         if (a && as) out.push(this.frag(a, AUDIO_ID, this.arate, this.ai, aj, ab!, abase));
         await this.trim();
         if (g !== this.gen) continue;
+        this.firstOut = false;
         if (!(await this.append(concat(out)))) {
           this.onError();
           return;
