@@ -192,6 +192,15 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   ignora el final del Range (manda el resto del archivo) se pasa enseguida al modo directo (`src/player/rangeget.ts`);
   sin el índice en 20 s también (antes 45 s cargando). Si nada abre y el servidor está apagado: «Este video no se puede
   abrir en este equipo: es necesario encender el servidor.»
+- **MP4 con el índice al final en servidores lentos y audio de canales sin grumos (1.0.53)**: XUI entrega las películas a
+  la velocidad del video y el índice (`moov`) de muchos MP4 está al final y pesa varios MB (3 audios en 2 h: ~5 MB);
+  el corte de 20 s de 1.0.52 lo interrumpía. Ahora el índice se pide en partes de 1 MB, de a 3 a la vez (una que el
+  servidor rechaza se pide otra vez sola), sin volver a bajar lo ya leído; Player espera mientras el servidor siga
+  entregando (hasta ~2 min, `mp4Busy`) y el índice queda guardado para Continuar viendo y el cambio de audio (los 3
+  últimos MP4). Plazo de bajada de cada pedido: 15 s + 40 KB/s. Probado con un MP4 de 1 h (índice de 4,7 MB, 3
+  audios): 7,4 s a 400 KB/s, 12,8 s con una sola conexión; reabrirlo 0,1 s. Canales: el convertidor a MP4 tolera
+  4 cuadros de audio (~85 ms) de desfase antes de corregir con silencio o descartes (antes 1,5: los canales con marcas
+  irregulares tenían microcortes).
 - **Motor Shaka, teclado y fluidez (1.0.46)**: películas y series en HLS / DASH con Shaka Player 4.16.13 con los parches
   de Amazon para Vega (`src/player/shaka.ts`, `vendor/`); MP4 por el lector MSE propio con cambio de audio local; MKV con
   las pistas del equipo y el panel solo como respaldo. Botón «Audio · idioma» en el reproductor. Teclado con teclas

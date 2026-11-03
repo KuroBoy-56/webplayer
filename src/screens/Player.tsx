@@ -254,8 +254,32 @@ export default function Player({ params }: { params: PlayParams }) {
         // el MP4 que lee la app (índice al final del archivo) puede tardar más en empezar: 25 s más
         // el lector propio sin el índice del archivo en 20 s: el servidor no lo entrega así; se sigue ya con lo demás
         // (antes se esperaban 25 s más: 45 s con la pantalla cargando)
+        // si el servidor sigue entregando (XUI da las películas a la velocidad del video y el índice de muchos MP4 está
+        // al final y pesa varios MB) se espera mientras llegue algo, hasta 2 min; sin nada llegando, se sigue ya
         if (!live && ctl.current.mp4Starting() && !ctl.current.mp4Indexed()) {
-          if (!ctl.current.mp4Fallback('sin índice en 20 s')) onErrorRef.current();
+          const t0 = Date.now();
+          const waitIndex = () => {
+            startDog.current = null;
+            const c2 = ctl.current;
+            if (!c2 || c2.hasPlayed() || indexRef.current !== i || !c2.mp4Starting()) return;
+            if (c2.mp4Indexed()) {
+              // ya tiene el índice: 25 s más para empezar a sonar
+              startDog.current = setTimeout(() => {
+                startDog.current = null;
+                const c3 = ctl.current;
+                if (!c3 || c3.hasPlayed() || indexRef.current !== i) return;
+                if (!c3.mp4Fallback('sin empezar tras leer el índice')) onErrorRef.current();
+              }, 25000);
+              return;
+            }
+            if (c2.mp4Busy() && Date.now() - t0 < 100000) {
+              setStatus(t('Cargando…'));
+              startDog.current = setTimeout(waitIndex, 5000);
+              return;
+            }
+            if (!c2.mp4Fallback('sin índice en ' + Math.round(20 + (Date.now() - t0) / 1000) + ' s')) onErrorRef.current();
+          };
+          waitIndex();
           return;
         }
         if (!live && ctl.current.mp4Starting()) {

@@ -234,8 +234,11 @@ export class TsMux {
         this.aNext = this.padStart && this.vPid >= 0 && silent ? 0 : Math.max(0, Math.round((at * au.rate) / HZ));
       }
       if (at >= 0) {
+        // margen de 4 cuadros (~85 ms, no se nota en la sincronía): con 1,5 cuadros, los canales con marcas de tiempo
+        // irregulares recibían silencio y descartes a cada rato (microcortes, «grumos» en el audio)
+        const tol = 4 * step;
         const drift = at - (this.aNext * HZ) / au.rate;
-        if (drift < -1.5 * step) {
+        if (drift < -tol) {
           if (drift > -2 * HZ) {
             this.dropped++;
             continue;
@@ -243,7 +246,7 @@ export class TsMux {
           // salto grande hacia atrás: se sigue desde ahí
           flush();
           this.aNext = Math.max(0, Math.round((at * au.rate) / HZ));
-        } else if (drift > 1.5 * step) {
+        } else if (drift > tol) {
           // el hueco del principio (padStart) se rellena aunque sea largo (un grupo de cuadros, hasta 15 s)
           if (drift < (this.padStart && !this.aLast && silent ? 15 : 2) * HZ) {
             for (let k = Math.round(drift / step); k > 0; k--) {

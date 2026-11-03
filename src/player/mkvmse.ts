@@ -308,6 +308,11 @@ export class MkvMse {
     return null;
   }
 
+  // el servidor sigue entregando (hay pedidos en curso o llegó algo hace poco): vale la pena esperar
+  busy(): boolean {
+    return this.requests.size > 0 || Date.now() - (this.rs.lastData || 0) < 10000;
+  }
+
   // [off, off + len) del archivo
   private async get(off: number, len: number): Promise<Uint8Array | null> {
     const g = this.gen;

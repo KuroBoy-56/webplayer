@@ -186,6 +186,16 @@ function audioCfg(tk: Trk): AudioCfg | null {
   return { config: b.slice(o, o + len), channels: u16(b, 8 + 16) || 2, rate };
 }
 
+// índices de los últimos MP4 abiertos (pueden ser varios MB: bajarlos de nuevo tarda en servidores lentos)
+const MOOV_CACHE = new Map<string, Uint8Array>();
+const cacheKey = (u: string) => u.replace(/^https?:\/\//i, '');
+function rememberMoov(url: string, moov: Uint8Array): void {
+  const k = cacheKey(url);
+  MOOV_CACHE.delete(k);
+  MOOV_CACHE.set(k, moov);
+  while (MOOV_CACHE.size > 3) MOOV_CACHE.delete(MOOV_CACHE.keys().next().value as string);
+}
+
 export class Mp4Mse {
   tracks: { lang: string; codec: string }[] = [];
   audioIdx = -1;
@@ -226,7 +236,9 @@ export class Mp4Mse {
 
   // '' = empezó en el segundo pedido; si no, el motivo (el que llama sigue con el modo directo de siempre)
   async start(at: number): Promise<string> {
-    const moov = this.index || await this.readMoov();
+    // el índice ya leído de este archivo (volver a abrirlo, Continuar viendo, cambiar de audio): sin pedirlo otra vez
+    const moov = this.index || MOOV_CACHE.get(cacheKey(this.url)) || await this.readMoov();
+    if (moov) rememberMoov(this.url, moov);
     if (!moov) return 'índice: ' + (this.why || 'no encontrado');
     if (!this.alive) return '';
     this.index = moov;
@@ -389,15 +401,49 @@ export class Mp4Mse {
       else if (size === 0) size = this.size - off;
       if (typ(h, 4) === 'moov') {
         if (size > MOOV_MAX) return null;
-        if (off - wOff + size <= win.length) return kidsBody(win.slice(off - wOff, off - wOff + size));
-        const m = await this.get(off, size);
-        return m && m.length === size ? kidsBody(m) : null;
+        // lo ya leído del índice y el resto en partes a la vez (cada conexión la limita el servidor por separado)
+        const have = win.slice(off - wOff, Math.min(win.length, off - wOff + size));
+        if (have.length >= size) return kidsBody(have);
+        const rest = await this.getParts(off + have.length, size - have.length);
+        return rest ? kidsBody(concat([have, rest])) : null;
       }
       if (size < 8) return null;
       off += size;
       if (this.size && off >= this.size) return null;
     }
     return null;
+  }
+
+  // un tramo grande (el índice al final del archivo) en partes de 1 MB, de a 3 a la vez; una parte que falla se pide
+  // otra vez sola (líneas de una sola conexión)
+  private async getParts(off: number, len: number): Promise<Uint8Array | null> {
+    const PART = 1048576;
+    const n = Math.ceil(len / PART);
+    const parts: (Uint8Array | null)[] = new Array(n).fill(null);
+    let next = 0;
+    const worker = async () => {
+      while (this.alive && next < n) {
+        const i = next++;
+        const o = off + i * PART;
+        parts[i] = await this.get(o, Math.min(PART, off + len - o));
+      }
+    };
+    await Promise.all([worker(), worker(), worker()].slice(0, Math.min(3, n)));
+    for (let i = 0; i < n && this.alive; i++) {
+      if (!parts[i] || parts[i]!.length < Math.min(PART, len - i * PART)) {
+        const o = off + i * PART;
+        parts[i] = await this.get(o, Math.min(PART, off + len - o));
+        if (!parts[i]) return null;
+      }
+    }
+    if (!this.alive) return null;
+    const out = concat(parts as Uint8Array[]);
+    return out.length >= len ? out.subarray(0, len) : null;
+  }
+
+  // el servidor sigue entregando (hay pedidos en curso o llegó algo hace poco): vale la pena esperar
+  busy(): boolean {
+    return this.requests.size > 0 || Date.now() - (this.rs.lastData || 0) < 10000;
   }
 
   // [off, off + len) del archivo en el servidor IPTV

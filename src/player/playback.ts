@@ -427,6 +427,11 @@ export class Playback {
     return !!this.mse?.indexed;
   }
 
+  // el lector propio todavía está bajando el índice (servidor lento pero entregando)
+  mp4Busy(): boolean {
+    return !!this.mse && !this.mp4Url && this.mse.busy();
+  }
+
   mp4Note(): string {
     return this.mp4Why;
   }

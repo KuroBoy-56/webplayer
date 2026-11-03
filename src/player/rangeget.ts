@@ -7,7 +7,8 @@
 import { UA } from '../lib/http';
 import { takeRange } from './prefetch';
 
-export type RangeState = { close: boolean; unbounded: boolean; size: number; why: string };
+// lastData: cuándo llegó el último tramo (Player espera más mientras el servidor sigue entregando)
+export type RangeState = { close: boolean; unbounded: boolean; size: number; why: string; lastData?: number };
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -48,12 +49,15 @@ export async function rangeGet(url: string, off: number, len: number, st: RangeS
         ctrl.abort();
         return null;
       }
-      // bajar: 10 s más lo que tarda a 150 KB/s
+      // bajar: 15 s más lo que tarda a 40 KB/s (XUI entrega las películas a la velocidad del video, sobre todo el final
+      // del archivo, donde está el índice de muchos MP4: con 150 KB/s se cortaba un pedido que sí estaba llegando)
       clearTimeout(timer);
       phase = 'bajar';
-      limit = 10000 + Math.round((len / (150 * 1024)) * 1000);
+      limit = 15000 + Math.round((len / (40 * 1024)) * 1000);
       timer = setTimeout(() => ctrl.abort(), limit);
-      return new Uint8Array(await r.arrayBuffer());
+      const out = new Uint8Array(await r.arrayBuffer());
+      st.lastData = Date.now();
+      return out;
     } catch (e: any) {
       if (!alive()) return null;
       st.why = ctrl.signal.aborted
