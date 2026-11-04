@@ -207,6 +207,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canal que se ve en la miniatura y fallaba en pantalla grande (1.0.56)**: al abrir el canal en pantalla completa la
+  lista se pide justo cuando se cierra la miniatura y muchos XUI contestan esa vez 200 con una página vacía
+  (`text/html`) en lugar de la lista. `LiveHls.start` vuelve a pedirla hasta 3 veces (1 s, 2 s y 3 s) antes de dar el
+  canal por perdido; un motivo claro de XUI (canal inexistente, vencida…) no se reintenta. El reporte dice qué llegó
+  (tipo, tamaño y comienzo) y cuántos `reintentos` hubo.
 - **Reproductor más limpio (1.0.55)**: sin los botones ◀◀ / pausa / ▶▶ en pantalla (◀ ▶ y OK del control lo hacen
   directo, sin redibujar nada); en series quedan solo capítulo anterior |◀ y siguiente ▶| (▲ los elige).
 - **Motor Shaka, teclado y fluidez (1.0.46)**: películas y series en HLS / DASH con Shaka Player 4.16.13 con los parches

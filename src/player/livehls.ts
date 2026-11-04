@@ -82,6 +82,8 @@ export class LiveHls {
   // veces que se pidió la lista otra vez desde la dirección del canal (token vencido) y páginas seguidas en lugar de
   // un segmento
   private renews = 0;
+  // veces que se volvió a pedir la lista al empezar (el servidor no la dio a la primera)
+  private retries = 0;
   private pageRetries = 0;
   // desplazamiento de las marcas de tiempo del canal (null = aún no puesto), cuántas veces se reacomodó (cambio de
   // numeración del servidor, segmento saltado) y huecos que hubo que saltar (deberían ser 0)
@@ -147,12 +149,23 @@ export class LiveHls {
     const how = ' modo=' + (this.mode || '?') + (this.mode === 'mp4' && m ? ' silencio=' + m.filled + ' descartados=' + m.dropped + ' cosidos=' + m.joins : this.muxWhy ? ' (' + this.muxWhy + ')' : '');
     return 'hls host=' + host + how + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
-      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + (this.retries ? ' reintentos=' + this.retries : '') + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
   async start(): Promise<string> {
-    const err = await this.refresh();
+    // Al pasar de la vista previa a pantalla completa (o al cambiar de canal) la lista se pide en el mismo momento en
+    // que se cierra la conexión anterior: muchos servidores XUI contestan esa vez 200 con una página vacía o sin lista
+    // (text/html) y un momento después sí la dan. Se espera y se vuelve a pedir (hasta 3 veces, 1 s, 2 s y 3 s) antes de
+    // dar el canal por perdido; un motivo claro de XUI (canal inexistente, vencida…) no se reintenta.
+    let err = await this.refresh();
+    for (let i = 0; err && i < 3 && this.alive && this.retryable(); i++) {
+      this.retries++;
+      await sleep(1000 * (i + 1));
+      if (!this.alive) return '';
+      this.list = this.first;
+      err = await this.refresh();
+    }
     if (err) return err;
     if (!this.segs.length) return 'lista sin segmentos';
     if (!this.alive) return '';
@@ -296,10 +309,17 @@ export class LiveHls {
     }
   }
 
+  // ¿vale la pena volver a pedir la lista? Página sin lista, vacía, sin motivo de XUI o con uno de conexiones /
+  // demasiados pedidos (la conexión anterior todavía se está cerrando), o un 429 / 503 / 509 del servidor
+  private retryable(): boolean {
+    const p = this.lastProblem;
+    return /^lista no es HLS|^página html|^lista HTTP (429|503|509)\b/.test(p) || /^xui .*(CONNECT|LIMIT|FLOOD|BLOCKED_IP|SESSION)/i.test(p);
+  }
+
   // motivo de una página en lugar de la lista o del video (XUI «Debug Mode»: INVALID_STREAM_ID…)
   private pageProblem(text: string): string {
     const x = xuiError(text);
-    this.lastProblem = x ? 'xui ' + x.code : 'página html';
+    this.lastProblem = x ? 'xui ' + x.code : 'página html (' + text.length + ' bytes)';
     return x ? 'XUI ' + x.code + (x.text ? ' (' + x.text + ')' : '') : 'el servidor devolvió una página en lugar del canal';
   }
 
@@ -315,7 +335,13 @@ export class LiveHls {
         this.lastProblem = 'lista HTTP ' + r.code;
         return r.code ? 'el servidor contestó ' + r.code + ' a la lista HLS' : 'sin conexión con el servidor (lista HLS)';
       }
-      if (!r.text.trim().startsWith('#EXTM3U')) return /<html|<!doctype/i.test(r.text) ? this.pageProblem(r.text) : ((this.lastProblem = 'lista no es HLS'), 'el servidor no devolvió una lista HLS');
+      if (!r.text.trim().startsWith('#EXTM3U')) {
+        if (/<html|<!doctype/i.test(r.text)) return this.pageProblem(r.text);
+        // lo que llegó en lugar de la lista (para el reporte): tipo, tamaño y el comienzo
+        const head = r.text.replace(/\s+/g, ' ').trim().slice(0, 60);
+        this.lastProblem = 'lista no es HLS (' + (r.type || '?') + ', ' + r.text.length + ' bytes' + (head ? ': ' + head : '') + ')';
+        return 'el servidor no devolvió una lista HLS';
+      }
       const p = parseList(r.text, r.url);
       if (p.master) {
         this.list = p.master;

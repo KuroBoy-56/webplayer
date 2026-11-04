@@ -124,6 +124,29 @@ test('salir del HLS anterior cancela las descargas de lista y segmentos', async 
     assert.equal(aborted, 2);
   } finally { global.fetch = realFetch; }
 });
+test('canal: si el servidor no da la lista a la primera (página vacía al salir de la vista previa) se vuelve a pedir', async () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  const realFetch = global.fetch;
+  const bodies = ['', '#EXTM3U\n#EXT-X-TARGETDURATION:6\n'];
+  let calls = 0;
+  const reply = (text, type) => ({ status: 200, url: 'http://fixture.invalid/live.m3u8', headers: { get: k => (k === 'content-type' ? type : null) }, text: async () => text });
+  global.fetch = async () => { const b = bodies[Math.min(calls, bodies.length - 1)]; calls++; return reply(b, b ? 'application/vnd.apple.mpegurl' : 'text/html; charset=UTF-8'); };
+  try {
+    const reader = new LiveHls({ removeEventListener() {}, addEventListener() {} }, 'http://fixture.invalid/live.m3u8');
+    // la segunda vez llega la lista (aquí sin segmentos): ya no es «el servidor no devolvió una lista HLS»
+    assert.equal(await reader.start(), 'lista sin segmentos');
+    assert.equal(calls, 2);
+    assert.match(reader.diag(), /reintentos=1/);
+    reader.destroy();
+    // un motivo claro de XUI (canal que no existe) no se reintenta
+    calls = 0;
+    global.fetch = async () => { calls++; return reply('<html><body>XUI.ONE INVALID_STREAM_ID Stream ID doesn\'t exist.</body></html>', 'text/html'); };
+    const bad = new LiveHls({ removeEventListener() {}, addEventListener() {} }, 'http://fixture.invalid/live.m3u8');
+    assert.match(await bad.start(), /INVALID_STREAM_ID/);
+    assert.equal(calls, 1);
+    bad.destroy();
+  } finally { global.fetch = realFetch; }
+});
 test('HLS libera la URL MSE al cerrar', () => {
   const { LiveHls } = require('../src/player/livehls.ts');
   const realRevoke = URL.revokeObjectURL;
