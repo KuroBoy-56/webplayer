@@ -353,9 +353,14 @@ private fun PreviewBox(preview: LivePreview, ch: Item?, number: Int, modifier: M
     val shape = RoundedCornerShape(10.dp)
     Box(modifier.clip(shape).background(Color.Black).border(1.dp, Color(0x22FFFFFF), shape)) {
         val player = preview.player
-        if (player != null) AndroidView(
+        // la vista queda siempre puesta (solo cambia su reproductor): en Android 9 quitarla y volver a ponerla al recorrer
+        // los canales podía cerrar la app al dibujar (NullPointerException mViewFlags). Ahí además va con TextureView
+        AndroidView(
             factory = { c ->
-                PlayerView(c).apply {
+                val pv = if (android.os.Build.VERSION.SDK_INT < 29) {
+                    android.view.LayoutInflater.from(c).inflate(R.layout.preview_player_texture, null) as PlayerView
+                } else PlayerView(c)
+                pv.apply {
                     useController = false
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     setShutterBackgroundColor(android.graphics.Color.BLACK)

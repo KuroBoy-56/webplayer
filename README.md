@@ -173,6 +173,10 @@ Como Roku y Vega (`ui/screens/AccountTv.kt`): a la izquierda la tarjeta de la l�
 
 **1.3.8 (canales en la TV, como Roku y Vega, `player/PlayerLiveTv.kt`):** sin pausa ni flechas en pantalla. Con el panel cerrado, **arriba / abajo** cambian de canal (con el número y el nombre un momento arriba) e izquierda / derecha no hacen nada; **OK** abre el panel transparente: a la izquierda los canales de la carpeta (el que suena marcado, se elige con el control) y abajo el número y nombre del canal, la hora y la guía (en sintonía con su avance, minutos que quedan y sinopsis, y lo que sigue). Se cierra solo a los 8 s o con Atrás. En TV en vivo, la sinopsis del programa ya no queda cortada (más alto para el bloque de información). Las horas de la guía son las que manda el servidor IPTV (o el panel); si un canal tiene la guía de otra región, sus horarios no coinciden con lo que se ve.
 
+## Android 9 (Fire TV viejos)
+
+**1.3.12:** la miniatura de TV en vivo queda siempre puesta (solo cambia su reproductor) y, en Android 9 o anterior, se dibuja con TextureView (`res/layout/preview_player_texture.xml`) en vez de SurfaceView: ahí quitar y volver a poner la superficie de video dentro de la pantalla de Compose cerraba la app al dibujar (`NullPointerException … View.mViewFlags` en `ViewGroup.dispatchGetDisplayList`, Fire TV AFTR). En Android 10 o más nuevo no cambia nada.
+
 ## DNS
 
 Botón **DNS** en el inicio de sesión y en **Cuenta**: Automático (por defecto), Cloudflare, Google, Quad9, AdGuard (sin rastreo ni anuncios), NextDNS (anti-bloqueo geográfico) y OpenDNS.
