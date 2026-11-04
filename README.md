@@ -207,6 +207,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Imagen trabada: salto al cuadro clave siguiente (1.0.60)**: HBO OPC.2 se congelaba igual en MP4 propio y en
+  MPEG-TS (`problema=imagen congelada con 33 s por delante`): empujar 0,5-2 s hacía que Vega decodificara otra vez
+  desde el mismo cuadro clave y se trabara en el mismo cuadro. Ahora el lector salta al cuadro clave siguiente (MP4
+  propio: `TsMux.keys`, todos los entregados; MPEG-TS: el comienzo de cada segmento) y deja atrás el tramo que lo
+  trababa. Si aun así se congela 3 veces en 30 s, el canal se vuelve a abrir alternando MP4 propio y MPEG-TS hasta 6
+  veces, sin ir a la pantalla de error (antes, a la tercera, probaba https y terminaba en error). La superficie de video
+  solo se suelta si es la que está en uso.
 - **Canales que se congelaban en pantalla grande con el audio sonando (1.0.59)**: HBO FAMILY OPC.2, WARNER TV… se veían
   bien en la miniatura y en pantalla grande la imagen quedaba quieta (`buf=[0.0-40.0] t=8.6 huecos=2`). La pantalla
   grande era la única con la capa de subtítulos de Vega y esos canales traen subtítulos ocultos (CC) dentro del video.

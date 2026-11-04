@@ -90,6 +90,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
             video.current?.setSurfaceHandle(h);
           }}
           onSurfaceViewDestroyed={(h: string) => {
+            if (h !== surface.current) return;
             video.current?.clearSurfaceHandle(h);
             surface.current = '';
           }}

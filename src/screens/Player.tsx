@@ -1055,6 +1055,8 @@ export default function Player({ params }: { params: PlayParams }) {
           if (ready.current) video.current?.setSurfaceHandle(h);
         }}
         onSurfaceViewDestroyed={(h: string) => {
+          // solo si es la superficie que usa el video (si ya se creó otra, no se le quita)
+          if (h !== surface.current) return;
           video.current?.clearSurfaceHandle(h);
           surface.current = '';
         }}

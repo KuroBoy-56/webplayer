@@ -205,3 +205,15 @@ test('canal en vivo: imagen congelada con video por delante (3 veces en 30 s) se
   assert.deepEqual(errors, ['la imagen se congeló']);
   reader.destroy();
 });
+
+test('canal en vivo: imagen trabada con video por delante salta al cuadro clave siguiente (no unas décimas)', () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  const v = { paused: false, currentTime: 8, addEventListener() {}, removeEventListener() {}, play() {}, pause() {} };
+  const reader = new LiveHls(v, 'http://fixture.invalid/live.m3u8');
+  Object.assign(reader, { started: true, mode: 'mp4', mux: { keys: [0, 4, 12, 20], otherAudio: () => false }, sb: { buffered: { length: 1, start: () => 0, end: () => 40 } } });
+  reader.lastT = 8;
+  reader.lastMove = Date.now() - 4000;
+  reader.unstick();
+  assert.equal(v.currentTime, 12.15);
+  reader.destroy();
+});

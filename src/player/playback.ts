@@ -159,7 +159,7 @@ export class Playback {
   private liveAudio = 0;
   // el reproductor falló con el audio MP2 / AC-3 del canal convertido: el canal otra vez, solo con el video
   private liveNoAudio = false;
-  // el canal se congeló (LiveHls.frozen): 1 = se abrió otra vez igual; 2 = se abrió en MPEG-TS
+  // veces que el canal se congeló (LiveHls.frozen): se vuelve a abrir alternando MP4 propio (impar) y MPEG-TS (par)
   private liveFrozen = 0;
   // el HLS del panel que sigue sonando mientras se prepara otro idioma
   private prevHls: PanelHls | null = null;
@@ -279,7 +279,7 @@ export class Playback {
   // canal en vivo por HLS con el lector propio
   private openLive(url: string): void {
     const g = this.gen;
-    const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, this.liveFrozen >= 2);
+    const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, this.liveFrozen > 0 && this.liveFrozen % 2 === 0);
     this.liveHls = h;
     h.onError = why => g === this.gen && this.liveHls === h && this.hooks.liveFailed?.(why);
     h.onStalls = () => g === this.gen && this.liveHls === h && this.hooks.liveStalls?.(h.diag());
@@ -300,10 +300,10 @@ export class Playback {
   liveRetryTs(): boolean {
     const h = this.liveHls;
     if (!this.live || !h) return false;
-    // imagen congelada con video por delante: el canal otra vez con un reproductor nuevo y, si vuelve a pasar, en
-    // MPEG-TS (solo este canal)
+    // imagen congelada con video por delante: el canal otra vez, alternando MP4 propio y MPEG-TS (solo este canal),
+    // hasta 6 veces; nunca la pantalla de error por esto (antes, a la tercera, probaba https y terminaba en error)
     if (h.frozen) {
-      if (this.liveFrozen >= 2) return false;
+      if (this.liveFrozen >= 6) return false;
       this.liveFrozen++;
       h.destroy();
       this.openLive(this.url);

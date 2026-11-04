@@ -182,10 +182,11 @@ test('MKV con audio que no entra por MSE (E-AC-3): primero el lector nativo; si 
   assert.equal(c.mp4Fallback(),true);await tick();
   assert.equal(mkvs.length,2);assert.equal(c.mp4Fallback('x'),true);await c.destroy();
 });
-test('canal congelado: se abre otra vez igual y, si vuelve a pasar, en MPEG-TS solo ese canal',async()=>{
+test('canal congelado: se abre otra vez alternando MP4 y MPEG-TS (solo ese canal) hasta 6 veces',async()=>{
   lives=[];const {c}=setup();c.load('http://fixture.invalid/live/u/p/1.m3u8',0,true);await tick();
   assert.equal(lives.length,1);lives[0].frozen=true;assert.equal(c.liveRetryTs(),true);
   assert.equal(lives.length,2);assert.equal(lives[1].tsOnly,false);lives[1].frozen=true;assert.equal(c.liveRetryTs(),true);
-  assert.equal(lives[2].tsOnly,true);lives[2].frozen=true;assert.equal(c.liveRetryTs(),false);
-  c.load('http://fixture.invalid/live/u/p/2.m3u8',0,true);await tick();assert.equal(lives[3].tsOnly,false);await c.destroy();
+  assert.equal(lives[2].tsOnly,true);for(let k=2;k<6;k++){lives[k].frozen=true;assert.equal(c.liveRetryTs(),true);}
+  assert.equal(lives[6].tsOnly,true);lives[6].frozen=true;assert.equal(c.liveRetryTs(),false);
+  c.load('http://fixture.invalid/live/u/p/2.m3u8',0,true);await tick();assert.equal(lives[7].tsOnly,false);await c.destroy();
 });

@@ -77,6 +77,9 @@ export class TsMux {
   mime = '';
   // para el reporte: por qué va sin audio
   why = '';
+  // dónde quedan los cuadros clave entregados (segundos de la línea entregada): si la imagen se traba, el lector salta
+  // al siguiente (empujar unas décimas hacía decodificar otra vez desde el mismo cuadro clave y se volvía a trabar)
+  keys: number[] = [];
   // idiomas de los audios AAC del canal (en orden) y el que suena
   langs: string[] = [];
   // padStart (video del panel, hls.ts): el panel corta el video en el cuadro clave anterior al segundo pedido y el audio
@@ -262,6 +265,10 @@ export class TsMux {
         }
       }
       if (base < 0) base = dts;
+      if (au.key) {
+        this.keys.push((dts + Math.max(0, au.pts - au.dts)) / HZ);
+        if (this.keys.length > 300) this.keys.shift();
+      }
       let size = 0;
       for (const n of au.nals) {
         if (ccSei(n)) continue;

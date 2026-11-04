@@ -411,9 +411,11 @@ export class LiveHls {
         if (t <= en) {
           // al final de este tramo (o quieto) y hay otro después: al siguiente
           if (next > 0 && (en - t < 0.5 || stalled)) this.jump(next + 0.1);
-          // quieto otra vez justo después de empujarlo (el decodificador sigue trabado): más adelante, 2 s
+          // trabado con video por delante: al cuadro clave siguiente (el decodificador empieza limpio y deja atrás el
+          // tramo que lo trababa); sin uno conocido, unas décimas más adelante
           else if (stalled && en - t > 1) {
-            this.jump(t + (Date.now() - this.lastJump < 8000 && en - t > 3 ? 2 : 0.5));
+            const k = this.nextKey(t, en);
+            this.jump(k > 0 ? k + 0.15 : t + (Date.now() - this.lastJump < 8000 && en - t > 3 ? 2 : 0.5));
             this.froze();
           }
           return;
@@ -422,6 +424,13 @@ export class LiveHls {
     } catch {
       // sin datos todavía
     }
+  }
+
+  // cuadro clave entregado después de t (MP4 propio: todos; MPEG-TS: el comienzo de cada segmento)
+  private segStarts: number[] = [];
+  private nextKey(t: number, end: number): number {
+    const list = this.mode === 'mp4' && this.mux ? this.mux.keys : this.segStarts;
+    return list.find(k => k > t + 0.3 && k < end - 0.5) ?? 0;
   }
 
   // Imagen congelada con video de sobra por delante (el audio puede seguir sonando): 3 veces en 30 s y empujarla no
@@ -732,6 +741,8 @@ export class LiveHls {
         }
       }
     }
+    this.segStarts.push(pts.min + off);
+    if (this.segStarts.length > 60) this.segStarts.shift();
     if (off === this.tsOff) return;
     await this.idle();
     try {
