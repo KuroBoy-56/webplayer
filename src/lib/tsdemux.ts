@@ -321,3 +321,87 @@ export function spsSize(sps: Uint8Array): { width: number; height: number } {
     return { width: 1920, height: 1080 };
   }
 }
+
+// Audio MPEG (MP3 / MP2, tipos 0x03 / 0x04) y AC-3 (0x81 / 0x06) en cuadros, como aacFrames: cada cuadro con su marca
+// y lo que queda partido al final pasa al siguiente PES. info: lo que el MP4 necesita para describirlo (frecuencia,
+// canales, muestras por cuadro y la primera cabecera, de donde tsmux.ts arma la descripción)
+export type OtherInfo = { rate: number; channels: number; samples: number; head: Uint8Array };
+
+const MPA_KBPS = [
+  [32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448], // MPEG-1 capa I
+  [32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384], // MPEG-1 capa II
+  [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320], // MPEG-1 capa III
+  [32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256], // MPEG-2 capa I
+  [8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160], // MPEG-2 capas II y III
+];
+const AC3_KBPS = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640];
+
+// cabecera de un cuadro en d[i]: largo, frecuencia, canales y muestras; null = no es una cabecera válida
+export function mpaHead(d: Uint8Array, i: number): { len: number; rate: number; channels: number; samples: number } | null {
+  if (d[i] !== 0xff || (d[i + 1] & 0xe0) !== 0xe0) return null;
+  const ver = (d[i + 1] >> 3) & 3; // 3 MPEG-1, 2 MPEG-2, 0 MPEG-2.5
+  const layer = (d[i + 1] >> 1) & 3; // 3 = I, 2 = II, 1 = III
+  const bi = d[i + 2] >> 4;
+  const si = (d[i + 2] >> 2) & 3;
+  if (ver === 1 || layer === 0 || bi === 0 || bi === 15 || si === 3) return null;
+  const rate = (ver === 3 ? [44100, 48000, 32000] : ver === 2 ? [22050, 24000, 16000] : [11025, 12000, 8000])[si];
+  const v1 = ver === 3;
+  const kbps = MPA_KBPS[v1 ? 3 - layer : layer === 3 ? 3 : 4][bi - 1];
+  const pad = (d[i + 2] >> 1) & 1;
+  const channels = d[i + 3] >> 6 === 3 ? 1 : 2;
+  if (layer === 3) return { len: (Math.floor((12000 * kbps) / rate) + pad) * 4, rate, channels, samples: 384 };
+  const samples = layer === 1 && !v1 ? 576 : 1152;
+  return { len: Math.floor(((samples / 8) * 1000 * kbps) / rate) + pad, rate, channels, samples };
+}
+
+export function ac3Head(d: Uint8Array, i: number): { len: number; rate: number; channels: number; samples: number } | null {
+  if (d[i] !== 0x0b || d[i + 1] !== 0x77 || d[i + 5] >> 3 > 10) return null; // E-AC-3 (bsid > 10): el equipo no lo toma
+  const fscod = d[i + 4] >> 6;
+  const code = d[i + 4] & 0x3f;
+  if (fscod > 2 || code > 37) return null;
+  const rate = [48000, 44100, 32000][fscod];
+  const words = Math.floor((AC3_KBPS[code >> 1] * 96000) / rate) + (fscod === 1 ? code & 1 : 0);
+  return { len: words * 2, rate, channels: 2, samples: 1536 };
+}
+
+export function otherFrames(kind: 'mpa' | 'ac3', list: Pes[], rest: { data: Uint8Array; pts: number } | null): { frames: AacFrame[]; info: OtherInfo | null; rest: { data: Uint8Array; pts: number } | null } {
+  const head = kind === 'mpa' ? mpaHead : ac3Head;
+  const frames: AacFrame[] = [];
+  let info: OtherInfo | null = null;
+  let left = rest;
+  for (const p of list) {
+    let d = p.data;
+    let pts = p.pts;
+    if (left) {
+      const j = new Uint8Array(left.data.length + d.length);
+      j.set(left.data, 0);
+      j.set(d, left.data.length);
+      d = j;
+      if (left.pts >= 0) pts = left.pts;
+      left = null;
+    }
+    let i = 0;
+    let at = 0; // muestras desde la marca del PES
+    let rate = info ? info.rate : 48000;
+    while (i + 7 <= d.length) {
+      const h = head(d, i);
+      if (!h || h.len < 7) {
+        i++;
+        continue;
+      }
+      if (i + h.len > d.length) break;
+      // el formato no cambia a mitad del canal: un «cuadro» con otra frecuencia es basura que parecía cabecera
+      if (info && h.rate !== info.rate) {
+        i++;
+        continue;
+      }
+      if (!info) info = { rate: h.rate, channels: h.channels, samples: h.samples, head: d.slice(i, i + Math.min(h.len, 16)) };
+      rate = h.rate;
+      frames.push({ pts: pts < 0 ? -1 : pts + Math.round((at * 90000) / rate), data: d.subarray(i, i + h.len) });
+      at += h.samples;
+      i += h.len;
+    }
+    if (i < d.length && d.length - i < 16384) left = { data: d.slice(i), pts: pts < 0 ? -1 : pts + Math.round((at * 90000) / rate) };
+  }
+  return { frames, info, rest: left };
+}

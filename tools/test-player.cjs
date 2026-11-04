@@ -40,7 +40,7 @@ class Mp4 {
   destroy(){}
 }
 class Mkv {
-  constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||{cached:true};this.noAudio=false;this.tracks=mkvTracks;mkvs.push(this);}
+  constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||{cached:true};this.noAudio=mkvTracks.every(t=>t.codec==='A_EAC3');this.tracks=mkvTracks;mkvs.push(this);}
   probe(){return {ok:true,headOk:true,container:'mkv',audio:this.tracks.map((t,i)=>({id:String(i),lang:t.lang,codec:t.codec,name:'',def:i===0,forced:false})),subs:[{id:'0',lang:'spa',codec:'S_TEXT/UTF8',name:'',def:false,forced:false},{id:'1',lang:'eng',codec:'S_HDMV/PGS',name:'',def:false,forced:false}]};}
   subCues(n){return n===0?(this.cuesList||(this.cuesList=[{s:0,e:5,text:'hola'}])):null;}
   async start(at){this.v.currentTime=at;this.onTracks();return '';}
@@ -162,4 +162,22 @@ test('el lector MSE cancela peticiones del contenido que se cierra',async()=>{
     const pending=reader.get(0,16);reader.destroy();
     assert.equal(await pending,null);assert.equal(aborted,true);
   } finally {global.fetch=originalFetch;}
+});
+test('canales con audio MP2 (CINEMAX, tipo 0x03): los cuadros se leen para el MP4 propio aunque vengan partidos',()=>{
+  const {otherFrames,mpaHead}=require('../src/lib/tsdemux.ts');
+  // MPEG-1 capa II, 256 kb/s, 48 kHz: cuadros de 768 bytes y 1152 muestras
+  const frame=()=>{const f=new Uint8Array(768);f.set([0xff,0xfd,0xc4,0x00]);return f;};
+  assert.deepEqual(mpaHead(frame(),0),{len:768,rate:48000,channels:2,samples:1152});
+  const all=new Uint8Array(768*3);for(let i=0;i<3;i++) all.set(frame(),i*768);
+  const a=otherFrames('mpa',[{pts:9000,dts:9000,data:all.subarray(0,1000)}],null);
+  assert.equal(a.frames.length,1);assert.equal(a.info.rate,48000);
+  const b=otherFrames('mpa',[{pts:-1,dts:-1,data:all.subarray(1000)}],a.rest);
+  assert.deepEqual(b.frames.map(f=>f.pts),[9000+2160,9000+4320]);
+  assert.equal(b.rest,null);
+});
+test('MKV con audio que no entra por MSE (E-AC-3): primero el lector nativo; si falla, el de la app como antes',async()=>{
+  const {c,video}=setup();mkvTracks=[{lang:'spa',codec:'A_EAC3'}];c.load('https://fixture.invalid/video.mkv',0,false);await tick();await tick();
+  assert.equal(mkvs.length,1);assert.equal(video.src,'https://fixture.invalid/video.mkv');assert.deepEqual(calls,[]);
+  assert.equal(c.mp4Fallback(),true);await tick();
+  assert.equal(mkvs.length,2);assert.equal(c.mp4Fallback('x'),true);await c.destroy();
 });

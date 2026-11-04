@@ -207,6 +207,16 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canales con audio MP2 / MP3 / AC-3 (1.0.57)**: el lector de canales (`tsmux.ts`) solo convertía AAC; con otro
+  audio (CINEMAX trae MP2, tipo 0x03) entregaba el MPEG-TS y Vega no mostraba imagen (`modo=ts`, `buf=[]`) ni en la
+  miniatura ni en pantalla grande. Ahora convierte también MPEG audio (`mp4a.6B` / `mp4a.69`) y AC-3 (`ac-3`). Si el
+  equipo no acepta el MP3 / MP2, el mismo canal va solo con el video; si lo acepta pero no hay imagen (en 15 s en la
+  miniatura, al fallar en pantalla grande), se vuelve a abrir solo con el video (`liveRetryTs`). Un AC-3 que el equipo
+  no acepta sigue en MPEG-TS como antes; E-AC-3 / LATM van solo con el video. Nunca se apaga el MP4 de toda la sesión
+  por el audio de un canal. El reporte muestra los códecs entregados (`modo=mp4 "avc1…,mp4a.6B"`) y si va sin audio.
+- **MKV con audio que no entra por MSE (1.0.57)**: E-AC-3, DTS, TrueHD… (sin elección del usuario) se abren primero con
+  el lector nativo de Vega (la guía de Amazon da los archivos por URL y decodifica eAC-3 en MKV); si falla, vuelve el
+  lector de la app con el video y el audio por el panel / aviso, como antes.
 - **Canal que se ve en la miniatura y fallaba en pantalla grande (1.0.56)**: al abrir el canal en pantalla completa la
   lista se pide justo cuando se cierra la miniatura y muchos XUI contestan esa vez 200 con una página vacía
   (`text/html`) en lugar de la lista. `LiveHls.start` vuelve a pedirla hasta 3 veces (1 s, 2 s y 3 s) antes de dar el

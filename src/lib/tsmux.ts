@@ -4,9 +4,11 @@
 // siguiente, aunque esté en el segmento que viene) y el audio también (cuadros AAC de 1024 muestras uno tras otro;
 // si al canal le falta audio se rellena con silencio y si le sobra se descarta, así nunca se desincroniza). Un salto
 // de marcas de tiempo (el servidor reinició, se saltó un segmento) se cose: lo nuevo sigue justo donde iba.
-// Solo H.264 + AAC; con otro códec el lector entrega el MPEG-TS como antes.
-import { AudioCfg, AUDIO_ID, concat, fragment, initSegment, mp4Mime, Sample, VideoCfg, VIDEO_ID } from './mp4box';
-import { aacFrames, AacFrame, Au, demux, Pmt, spsSize, videoAus } from './tsdemux';
+// Video H.264; audio AAC, MPEG (MP3 / MP2) o AC-3. Otro audio (E-AC-3, LATM) o audioIdx < 0: solo el video (se ve
+// sin sonido en vez de quedar en negro). Con otro video el lector entrega el MPEG-TS como antes.
+import { ac3Info } from '../player/mkvparse';
+import { AudioCfg, AUDIO_ID, audioEntry, concat, esdsFor, fragment, initSegment, mp4Mime, rawBox, Sample, VideoCfg, VIDEO_ID } from './mp4box';
+import { aacFrames, AacFrame, Au, demux, otherFrames, OtherInfo, Pmt, spsSize, videoAus } from './tsdemux';
 
 const HZ = 90000;
 const WRAP = 8589934592;
@@ -41,6 +43,11 @@ export class TsMux {
   private video: VideoCfg | null = null;
   private audio: AudioCfg | null = null;
   private obj = 2;
+  // audio que no es AAC: tipo, descripción para el MP4, códec y muestras por cuadro
+  private kind: 'aac' | 'mpa' | 'ac3' = 'aac';
+  private aEntry: Uint8Array | undefined;
+  private aCodec = '';
+  private aSamples = 1024;
   // siguiente muestra de audio (en muestras) y el último cuadro (relleno si no hay silencio para ese formato)
   private aNext: number | null = null;
   private aLast: Uint8Array | null = null;
@@ -54,6 +61,8 @@ export class TsMux {
   dropped = 0;
   joins = 0;
   mime = '';
+  // para el reporte: por qué va sin audio
+  why = '';
   // idiomas de los audios AAC del canal (en orden) y el que suena
   langs: string[] = [];
   // padStart (video del panel, hls.ts): el panel corta el video en el cuadro clave anterior al segundo pedido y el audio
@@ -73,12 +82,18 @@ export class TsMux {
   private choose(): string {
     const p = this.pmt!;
     if (p.video >= 0 && p.videoType !== 0x1b) return 'video ' + hex(p.videoType);
+    // AAC primero; si el canal no trae AAC, MPEG (MP3 / MP2) y después AC-3
     const aac = p.audio.filter(a => a.type === 0x0f);
-    if (p.audio.length && !aac.length) return 'audio ' + hex(p.audio[0].type);
-    if (p.video < 0 && !aac.length) return 'sin video ni audio';
+    const mpa = p.audio.filter(a => a.type === 0x03 || a.type === 0x04);
+    const ac3 = p.audio.filter(a => a.type === 0x81 || a.type === 0x06);
+    const list = aac.length ? aac : mpa.length ? mpa : ac3;
+    this.kind = aac.length ? 'aac' : mpa.length ? 'mpa' : 'ac3';
+    if (p.video < 0 && !list.length) return p.audio.length ? 'audio ' + hex(p.audio[0].type) : 'sin video ni audio';
+    if (p.video < 0 && this.audioIdx < 0) return 'sin video';
     this.vPid = p.video;
-    this.langs = aac.map(a => a.lang);
-    this.aPid = aac.length ? aac[Math.min(this.audioIdx, aac.length - 1)].pid : -1;
+    this.langs = this.audioIdx < 0 ? [] : list.map(a => a.lang);
+    this.aPid = list.length && this.audioIdx >= 0 ? list[Math.min(this.audioIdx, list.length - 1)].pid : -1;
+    if (this.aPid < 0 && p.audio.length) this.why = 'solo video, audio ' + hex(p.audio[0].type);
     return '';
   }
 
@@ -93,13 +108,21 @@ export class TsMux {
     const { pes } = demux(seg, pids, this.pmt);
     const v = this.vPid >= 0 ? videoAus(pes.get(this.vPid) || [], this.carry) : { aus: [] as Au[], carry: null };
     this.carry = v.carry;
-    const a = this.aPid >= 0 ? aacFrames(pes.get(this.aPid) || [], this.aRest) : { frames: [] as AacFrame[], info: null, rest: null };
+    const list = pes.get(this.aPid) || [];
+    const none = { frames: [] as AacFrame[], info: null, rest: null };
+    const a = this.aPid < 0 ? none : this.kind === 'aac' ? aacFrames(list, this.aRest) : otherFrames(this.kind, list, this.aRest);
     this.aRest = a.rest;
-    this.config(v.aus, a);
+    if (this.kind === 'aac') this.config(v.aus, a as { info: { obj: number; channels: number; rate: number; sfi: number } | null });
+    else {
+      this.config(v.aus, { info: null });
+      if (a.info) this.otherConfig(a.info as OtherInfo);
+    }
     // todavía sin la configuración del video (SPS/PPS) o del audio: se espera (sin audio en 2 segmentos: solo video)
     if ((this.vPid >= 0 && !this.video) || (this.aPid >= 0 && !this.audio)) {
-      if (this.waits >= 1 && this.video && !this.audio && !this.started) this.aPid = -1;
-      else return this.wait(this.video ? 'sin audio AAC' : 'sin SPS/PPS');
+      if (this.waits >= 1 && this.video && !this.audio && !this.started) {
+        this.aPid = -1;
+        this.why = 'solo video, sin audio legible';
+      } else return this.wait(this.video ? 'sin audio' : 'sin SPS/PPS');
     }
     let aus = v.aus;
     let frames = a.frames;
@@ -123,8 +146,10 @@ export class TsMux {
     }
     const parts: Uint8Array[] = [];
     if (this.dirty) {
-      parts.push(initSegment(this.vPid >= 0 ? this.video : null, this.aPid >= 0 ? this.audio : null));
-      this.mime = mp4Mime(this.vPid >= 0 ? this.video : null, this.aPid >= 0 ? this.audio : null);
+      const au = this.aPid >= 0 ? this.audio : null;
+      parts.push(initSegment(this.vPid >= 0 ? this.video : null, au, this.kind === 'aac' ? undefined : this.aEntry));
+      this.mime = mp4Mime(this.vPid >= 0 ? this.video : null, this.kind === 'aac' ? au : null);
+      if (au && this.kind !== 'aac') this.mime = this.mime.replace(/"$/, (this.vPid >= 0 ? ',' : '') + this.aCodec + '"').replace(/codecs="",?/, 'codecs="');
       this.dirty = false;
     }
     if (aus.length) parts.push(this.videoFrag(aus));
@@ -164,6 +189,37 @@ export class TsMux {
       this.aNext = null;
       this.dirty = true;
     }
+  }
+
+  // tiene audio que no es AAC (si el equipo no lo acepta, el lector abre el canal solo con el video)
+  otherAudio(): boolean {
+    return this.aPid >= 0 && this.kind !== 'aac';
+  }
+
+  // MP3 / MP2: en MPEG-TS Vega tampoco lo mostraba (sin imagen); AC-3 sí iba así antes
+  mpegAudio(): boolean {
+    return this.aPid >= 0 && this.kind === 'mpa';
+  }
+
+  // MP3 / MP2 (esds con objeto 0x6B / 0x69) o AC-3 (dac3); si cambia el formato, otro inicio
+  private otherConfig(i: OtherInfo): void {
+    if (this.audio && this.audio.rate === i.rate && this.audio.channels === i.channels) return;
+    let ch = i.channels;
+    if (this.kind === 'mpa') {
+      const v1 = (i.head[1] >> 3) & 1;
+      this.aEntry = audioEntry('mp4a', ch, i.rate, esdsFor(v1 ? 0x6b : 0x69, null));
+      this.aCodec = v1 ? 'mp4a.6B' : 'mp4a.69';
+    } else {
+      const d = ac3Info(i.head);
+      if (!d) return;
+      ch = d.channels;
+      this.aEntry = audioEntry('ac-3', ch, i.rate, rawBox('dac3', d.box));
+      this.aCodec = 'ac-3';
+    }
+    this.aSamples = i.samples;
+    this.audio = { config: new Uint8Array(0), channels: i.channels, rate: i.rate };
+    this.aNext = null;
+    this.dirty = true;
   }
 
   // Cada cuadro dura hasta el siguiente (el último del segmento, hasta el primero del que viene: queda guardado en
@@ -207,8 +263,9 @@ export class TsMux {
   // se monta se descartan los cuadros de más (la diferencia nunca pasa de medio cuadro)
   private audioFrags(frames: AacFrame[]): Uint8Array[] {
     const au = this.audio!;
-    const step = (1024 * HZ) / au.rate;
-    const silent = this.obj === 2 && SILENCE[au.channels] ? new Uint8Array(SILENCE[au.channels]) : null;
+    const n = this.kind === 'aac' ? 1024 : this.aSamples;
+    const step = (n * HZ) / au.rate;
+    const silent = this.kind === 'aac' && this.obj === 2 && SILENCE[au.channels] ? new Uint8Array(SILENCE[au.channels]) : null;
     const out: Uint8Array[] = [];
     let samples: Sample[] = [];
     let data: Uint8Array[] = [];
@@ -220,9 +277,9 @@ export class TsMux {
     };
     const put = (d: Uint8Array) => {
       if (!samples.length) base = this.aNext!;
-      samples.push({ size: d.length, duration: 1024, cts: 0, key: true });
+      samples.push({ size: d.length, duration: n, cts: 0, key: true });
       data.push(d);
-      this.aNext! += 1024;
+      this.aNext! += n;
     };
     let last = -1;
     for (const f of frames) {

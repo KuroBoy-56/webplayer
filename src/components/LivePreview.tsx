@@ -27,11 +27,13 @@ export default memo(function LivePreview({ channel, active }: { channel: Item | 
     let c: Playback | null = null;
     let initializing: Promise<void> | null = null;
     let closed: Promise<void> | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
     const onPlaying = () => alive && setPlaying(true);
     const stop = (): Promise<void> => {
       if (closed) return closed;
       alive = false;
       clearTimeout(timer);
+      if (retry) clearTimeout(retry);
       setPlaying(false);
       video.current = null;
       const player = v;
@@ -63,6 +65,11 @@ export default memo(function LivePreview({ channel, active }: { channel: Item | 
         c = new Playback(v, { toast: () => {}, status: () => {}, changed: () => {}, subText: () => {}, fatal: () => {} });
         const u = liveUrl(s, channel.id, LIVE_FORMATS[0]);
         c.load(streamFlip() ? otherScheme(u) : u, 0, true);
+        // sin imagen en 15 s con audio MP2 / AC-3 que el equipo no decodifica: el canal otra vez solo con el video
+        // (como en pantalla grande, Player)
+        retry = setTimeout(() => {
+          if (alive && c && !c.hasPlayed()) c.liveRetryTs();
+        }, 15000);
       } catch { void stop(); }
     }, 2500);
     const unregister = registerLivePreview(stop);

@@ -141,6 +141,9 @@ export class Playback {
   // lo que se pidió al servidor (para el aviso y el reporte cuando está apagado)
   private wantNote = '';
   private mp4Url = false;
+  // MKV cuyo audio no entra por MSE (E-AC-3, DTS, TrueHD…): primero el lector nativo de Vega (decodifica eAC-3 en MKV,
+  // guía de Amazon: archivos por URL); si falla, de nuevo el lector de la app solo con el video, como antes
+  private mkvNative: '' | 'trying' | 'failed' = '';
   // por qué la lectura propia del MP4 no siguió (va al reporte)
   private mp4Why = '';
   private liveHls: LiveHls | null = null;
@@ -154,6 +157,8 @@ export class Playback {
   private audioTimer: ReturnType<typeof setTimeout> | null = null;
   // audio del canal elegido en el menú (canales con varios idiomas)
   private liveAudio = 0;
+  // el reproductor falló con el audio MP2 / AC-3 del canal convertido: el canal otra vez, solo con el video
+  private liveNoAudio = false;
   // el HLS del panel que sigue sonando mientras se prepara otro idioma
   private prevHls: PanelHls | null = null;
   private offset = 0;
@@ -231,6 +236,7 @@ export class Playback {
     this.url = url;
     this.live = live;
     this.liveAudio = 0;
+    this.liveNoAudio = false;
     this.mp4Audio = -1;
     this.mp4Index = null;
     this.mkvIndex = null;
@@ -251,6 +257,7 @@ export class Playback {
     this.formatTried = false;
     this.resumePanel = false;
     this.mp4Url = false;
+    this.mkvNative = '';
     this.mp4Why = '';
     this.deniedShown = false;
     if (live) {
@@ -269,7 +276,7 @@ export class Playback {
   // canal en vivo por HLS con el lector propio
   private openLive(url: string): void {
     const g = this.gen;
-    const h = new LiveHls(this.v, url, this.liveAudio);
+    const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio);
     this.liveHls = h;
     h.onError = why => g === this.gen && this.liveHls === h && this.hooks.liveFailed?.(why);
     h.onStalls = () => g === this.gen && this.liveHls === h && this.hooks.liveStalls?.(h.diag());
@@ -289,8 +296,15 @@ export class Playback {
   // de la sesión), sin pasar por otro formato ni protocolo. false = no era eso
   liveRetryTs(): boolean {
     const h = this.liveHls;
-    if (!this.live || !h || !h.isMp4() || !(h.mediaFailed() || (this.v as any).error)) return false;
-    disableMp4();
+    if (!this.live || !h) return false;
+    // con audio MP2 / AC-3 lo que falló (error o sin imagen) es ese audio: el mismo canal en MP4 sin él (en MPEG-TS
+    // Vega no mostraba imagen)
+    // (si ya se veía, se reconecta igual: nunca se apaga el MP4 de toda la sesión por el audio de un canal)
+    if (h.otherAudio()) {
+      if (this.liveNoAudio || this.hasPlayed()) return false;
+      this.liveNoAudio = true;
+    } else if (h.isMp4() && (h.mediaFailed() || (this.v as any).error)) disableMp4();
+    else return false;
     h.destroy();
     this.openLive(this.url);
     return true;
@@ -356,6 +370,11 @@ export class Playback {
             this.mp4Failed(at, err);
             return;
           }
+          if (m instanceof MkvMse && m.noAudio && want < 0 && !this.mkvNative) {
+            this.mkvNative = 'trying';
+            this.mp4Failed(at, 'MKV con audio que no entra por MSE: lector nativo');
+            return;
+          }
           // el equipo no tomó el audio pedido (o ninguno del archivo): el servidor lo prepara; apagado, el aviso
           const lost = m.noAudio ? (want >= 0 ? want : Math.max(0, this.probeDefault())) : want >= 0 && m.audioIdx !== want ? want : -1;
           if (lost >= 0) {
@@ -411,6 +430,13 @@ export class Playback {
 
   // error del reproductor con el MP4 leído por la app: true = se sigue con el modo directo de siempre
   mp4Fallback(why = 'error del reproductor'): boolean {
+    if (this.mkvNative === 'trying' && !this.mse && !this.played) {
+      // el lector nativo tampoco pudo con el MKV: el de la app con el video (y el audio por el panel / aviso)
+      this.mkvNative = 'failed';
+      this.mp4Url = false;
+      this.direct(this.wantAt);
+      return true;
+    }
     if (!this.mse || this.mp4Url) return false;
     const e: any = (this.v as any).error;
     this.mp4Failed(this.played ? this.realPos() : this.wantAt, why + (e?.code ? ' ' + e.code : '') + (this.mse.why ? ' · ' + this.mse.why : ''));

@@ -653,7 +653,7 @@ export default function Player({ params }: { params: PlayParams }) {
         const before = c.liveDiag();
         if (c.liveRetryTs()) {
           const ch = params.channels[indexRef.current] || params.channel;
-          reportError('warning', 'Canal en vivo: el equipo no aceptó el MP4 del lector (sigue en MPEG-TS)', 'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' motivo=' + (liveNote.current || 'error del reproductor') + ' · ' + before, 'Reproductor');
+          reportError('warning', 'Canal en vivo: el equipo no aceptó el MP4 del lector (se vuelve a abrir en MPEG-TS o solo con el video)', 'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' motivo=' + (liveNote.current || 'error del reproductor') + ' · ' + before, 'Reproductor');
           liveNote.current = '';
           setStatus(t('Reconectando…'));
           setBuffering(true);

@@ -108,7 +108,8 @@ export class LiveHls {
   lastProblem = '';
   onError: (msg: string) => void = () => {};
 
-  constructor(private v: VideoPlayer, url: string, readonly audioIdx = 0) {
+  // noAudio: el equipo no tomó el audio del canal (MP2 / AC-3 en MP4): solo el video
+  constructor(private v: VideoPlayer, url: string, readonly audioIdx = 0, private noAudio = false) {
     this.first = url;
     this.list = url;
   }
@@ -119,6 +120,12 @@ export class LiveHls {
 
   mediaFailed(): boolean {
     return this.mediaFail;
+  }
+
+  // el canal trae audio MP3 / MP2 / AC-3 (en MP4 propio o, si el equipo no lo tomó, en MPEG-TS): si no se ve, se
+  // prueba solo con el video
+  otherAudio(): boolean {
+    return !!this.mux && this.mux.otherAudio();
   }
 
   // idiomas de los audios del canal (MP4 propio; el que suena es audioIdx)
@@ -146,7 +153,7 @@ export class LiveHls {
     const host = (this.list.match(/^https?:\/\/([^/?#]+)/i) || [])[1] || '';
     const n = Math.max(1, this.appended);
     const m = this.mux;
-    const how = ' modo=' + (this.mode || '?') + (this.mode === 'mp4' && m ? ' silencio=' + m.filled + ' descartados=' + m.dropped + ' cosidos=' + m.joins : this.muxWhy ? ' (' + this.muxWhy + ')' : '');
+    const how = ' modo=' + (this.mode || '?') + (this.mode === 'mp4' && m ? ' ' + m.mime.replace(/^.*codecs=/, '') + (m.why ? ' (' + m.why + ')' : '') + ' silencio=' + m.filled + ' descartados=' + m.dropped + ' cosidos=' + m.joins : '') + (this.muxWhy ? ' (' + this.muxWhy + ')' : '');
     return 'hls host=' + host + how + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
       's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + (this.retries ? ' reintentos=' + this.retries : '') + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
@@ -697,7 +704,7 @@ export class LiveHls {
   // 1 = entregado, 2 = nada que entregar todavía
   private async deliver(data: Uint8Array): Promise<0 | 1 | 2> {
     if (this.mode !== 'ts' && !mp4Off) {
-      if (!this.mux) this.mux = new TsMux(this.audioIdx, false, this.target >= 8 ? 2 : 3);
+      if (!this.mux) this.mux = new TsMux(this.noAudio ? -1 : this.audioIdx, false, this.target >= 8 ? 2 : 3);
       await sleep(0);
       let r;
       try {
@@ -722,6 +729,13 @@ export class LiveHls {
               this.muxWhy = 'addSourceBuffer mp4: ' + String(e?.message || e).slice(0, 40);
             }
           } else this.muxWhy = 'no acepta ' + r.mime;
+          // el equipo no toma el audio MP3 / MP2: el mismo segmento otra vez, solo con el video (en MPEG-TS Vega
+          // tampoco mostraba nada: buf vacío); AC-3 sigue en MPEG-TS como antes
+          if (!this.sb && this.mux.mpegAudio()) {
+            this.noAudio = true;
+            this.mux = null;
+            return this.deliver(data);
+          }
         }
         if (this.mode === 'mp4') return (await this.append(r.data)) ? 1 : 0;
       } else if (this.mode === 'mp4') {
