@@ -102,6 +102,7 @@ const fr: Record<Key, string> = {
   "El servidor no aceptó la conexión (código {code})": "Le serveur a refusé la connexion (code {code})",
   "El servidor no reconoce el usuario o la contraseña": "Le serveur ne reconnaît pas l'identifiant ou le mot de passe",
   "El servidor rechazó la cuenta ({code})": "Le serveur a refusé le compte ({code})",
+  "Pulsa OK en un canal para verlo aquí; OK otra vez lo abre en pantalla grande.": "Appuyez sur OK sur une chaîne pour la voir ici ; OK à nouveau l'ouvre en plein écran.",
   "Elige un canal para ver la guía.": "Choisissez une chaîne pour voir le guide.",
   "En las carpetas de eventos de tu lista": "Dans les dossiers d'événements de votre liste",
   "En mi lista": "Dans ma liste",

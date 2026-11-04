@@ -207,6 +207,15 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **TV en vivo con OK (1.0.58)**: pasar por los canales y las carpetas ya no cambia nada (antes cada paso abría la
+  miniatura y pedía la guía: lag). OK en una carpeta muestra sus canales; OK en un canal lo pone en la miniatura con su
+  guía y un punto rojo en su fila (sigue viéndose al cambiar de carpeta); OK otra vez en el canal del punto rojo lo abre
+  en pantalla grande. Al cerrar el canal el foco vuelve a esa fila (antes caía en el menú de arriba). La miniatura
+  conecta enseguida (antes esperaba 2,5 s quieto).
+- **Canal que quedaba en pausa al pasar a pantalla grande (1.0.58)**: Vega a veces pausa el reproductor solo; el lector
+  del canal solo vigilaba el video andando y quedaba en pausa para siempre. Ahora, si no fue el lector, sigue a los
+  1,5 s (con video por delante; sin él espera margen). Si el video se queda quieto otra vez justo después de empujarlo,
+  se adelanta 2 s en lugar de 0,5. El reporte dice `reanudados=`.
 - **Canales con audio MP2 / MP3 / AC-3 (1.0.57)**: el lector de canales (`tsmux.ts`) solo convertía AAC; con otro
   audio (CINEMAX trae MP2, tipo 0x03) entregaba el MPEG-TS y Vega no mostraba imagen (`modo=ts`, `buf=[]`) ni en la
   miniatura ni en pantalla grande. Ahora convierte también MPEG audio (`mp4a.6B` / `mp4a.69`) y AC-3 (`ac-3`). Si el

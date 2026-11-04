@@ -29,6 +29,7 @@ Module._load = function(request, parent, isMain) {
   if (request === './panel') return { cloud: async () => { panelRequests++; return {}; } };
   if (request === '../lib/i18n' || request === './i18n') return { t: key => key };
   if (request === '@amazon-devices/react-native-w3cmedia') return { MediaSource: { isTypeSupported: () => true } };
+  if (request === 'react-native') return { AppState: { currentState: 'active' } };
   if (request === './shaka-env') return { installShakaEnvironment() {} };
   if (request === './vendor/shaka-player.compiled') return { Player: TestShaka, polyfill: { installAll() {} }, net: { NetworkingEngine: { unregisterScheme() {}, registerScheme() {}, PluginPriority: { APPLICATION: 1 } }, HttpFetchPlugin: { parse() {} } } };
   return originalLoad.call(this, request, parent, isMain);
@@ -171,4 +172,19 @@ test('Shaka arranca con 1 s bajado (canales, películas y series) y guarda más 
     assert.equal(configured.abr.enabled, true);
     await adapter.destroy();
   }
+});
+
+test('canal en vivo: si el equipo lo pausa solo (al pasar de la miniatura a pantalla grande) sigue reproduciendo', () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  let plays = 0;
+  const v = { paused: true, currentTime: 5, addEventListener() {}, removeEventListener() {}, play() { plays++; this.paused = false; }, pause() { this.paused = true; } };
+  const reader = new LiveHls(v, 'http://fixture.invalid/live.m3u8');
+  Object.assign(reader, { started: true, lastAppend: Date.now(), sb: { buffered: { length: 1, start: () => 0, end: () => 30 } } });
+  reader.tick();
+  assert.equal(plays, 0); // un momento de gracia (salir del canal también pausa)
+  reader.pausedAt = Date.now() - 2000;
+  reader.tick();
+  assert.equal(plays, 1);
+  assert.equal(v.paused, false);
+  reader.destroy();
 });

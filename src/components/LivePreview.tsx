@@ -13,7 +13,8 @@ import { px, themed } from '../theme';
 
 export { stopLivePreview } from '../player/preview-session';
 
-export default memo(function LivePreview({ channel, active }: { channel: Item | null; active: boolean }) {
+// delay: espera antes de conectar (la pantalla de canales la pone con OK: casi enseguida)
+export default memo(function LivePreview({ channel, active, delay = 2500 }: { channel: Item | null; active: boolean; delay?: number }) {
   const surface = useRef('');
   const video = useRef<VideoPlayer | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -71,7 +72,7 @@ export default memo(function LivePreview({ channel, active }: { channel: Item | 
           if (alive && c && !c.hasPlayed()) c.liveRetryTs();
         }, 15000);
       } catch { void stop(); }
-    }, 2500);
+    }, delay);
     const unregister = registerLivePreview(stop);
     return () => {
       clearTimeout(timer);

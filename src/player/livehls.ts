@@ -13,6 +13,7 @@
 // tener unos segundos de margen en lugar de detenerse y seguir; un segmento que no llega se reintenta y, a la tercera,
 // se salta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
+import { AppState } from 'react-native';
 import { UA } from '../lib/http';
 import { takeList } from './prefetch';
 import { xuiError } from '../lib/xui';
@@ -77,6 +78,9 @@ export class LiveHls {
   // en pausa a propósito hasta tener margen: Player muestra «cargando», no «en pausa»
   holding = false;
   private holdAt = 0;
+  // pausa que no puso el lector (la puso el equipo): desde cuándo y cuántas veces se siguió
+  private pausedAt = 0;
+  private resumed = 0;
   private holds: number[] = [];
   private skipped = 0;
   // veces que se pidió la lista otra vez desde la dirección del canal (token vencido) y páginas seguidas en lugar de
@@ -156,7 +160,7 @@ export class LiveHls {
     const how = ' modo=' + (this.mode || '?') + (this.mode === 'mp4' && m ? ' ' + m.mime.replace(/^.*codecs=/, '') + (m.why ? ' (' + m.why + ')' : '') + ' silencio=' + m.filled + ' descartados=' + m.dropped + ' cosidos=' + m.joins : '') + (this.muxWhy ? ' (' + this.muxWhy + ')' : '');
     return 'hls host=' + host + how + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
-      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + (this.retries ? ' reintentos=' + this.retries : '') + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + (this.resumed ? ' reanudados=' + this.resumed : '') + (this.retries ? ' reintentos=' + this.retries : '') + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
@@ -406,7 +410,8 @@ export class LiveHls {
         if (t <= en) {
           // al final de este tramo (o quieto) y hay otro después: al siguiente
           if (next > 0 && (en - t < 0.5 || stalled)) this.jump(next + 0.1);
-          else if (stalled && en - t > 1) this.jump(t + 0.5);
+          // quieto otra vez justo después de empujarlo (el decodificador sigue trabado): más adelante, 2 s
+          else if (stalled && en - t > 1) this.jump(t + (Date.now() - this.lastJump < 8000 && en - t > 3 ? 2 : 0.5));
           return;
         }
       }
@@ -465,6 +470,25 @@ export class LiveHls {
     }
     this.unstick();
     const ahead = this.aheadSec();
+    // Vega pausa el reproductor por su cuenta a veces (al soltarse el audio de la miniatura al pasar a pantalla grande):
+    // el canal quedaba en pausa para siempre, porque el vigilante solo mira el video andando. En vivo nadie pausa a
+    // propósito (Player no deja pausar un canal): con video por delante sigue; sin él, espera margen como siempre
+    if (this.v.paused && !this.holding) {
+      if (!this.pausedAt) this.pausedAt = Date.now();
+      else if (Date.now() - this.pausedAt > 1500 && AppState.currentState === 'active') {
+        this.pausedAt = 0;
+        if (this.aheadSec() >= 1) {
+          this.resumed++;
+          this.lastMove = Date.now();
+          this.v.play();
+        } else {
+          this.holding = true;
+          this.holdAt = Date.now();
+        }
+      }
+      return;
+    }
+    this.pausedAt = 0;
     if (this.holding) {
       // con margen (o con algo después de 8 s esperando) sigue
       if (ahead >= this.margin() || (ahead >= 1.5 && Date.now() - this.holdAt > 8000)) {
