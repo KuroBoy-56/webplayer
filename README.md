@@ -207,6 +207,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canales que se congelaban en pantalla grande con el audio sonando (1.0.59)**: HBO FAMILY OPC.2, WARNER TV… se veían
+  bien en la miniatura y en pantalla grande la imagen quedaba quieta (`buf=[0.0-40.0] t=8.6 huecos=2`). La pantalla
+  grande era la única con la capa de subtítulos de Vega y esos canales traen subtítulos ocultos (CC) dentro del video.
+  Ahora, en vivo: sin capa de subtítulos, sin tocar las pistas de texto del equipo y el lector quita del video los SEI
+  de CC (tipo 4). Si aun así la imagen se congela 3 veces en 30 s con video por delante, el canal se vuelve a abrir
+  con un reproductor nuevo y, si vuelve a pasar, en MPEG-TS (solo ese canal; `problema=imagen congelada…`).
+- **Foco al salir del canal (1.0.59)**: vuelve al canal que estaba sonando (aunque se haya cambiado con ▲▼ en pantalla
+  grande), que pasa a la miniatura con el punto rojo; la lista va hasta él si quedó lejos.
 - **TV en vivo con OK (1.0.58)**: pasar por los canales y las carpetas ya no cambia nada (antes cada paso abría la
   miniatura y pedía la guía: lag). OK en una carpeta muestra sus canales; OK en un canal lo pone en la miniatura con su
   guía y un punto rojo en su fila (sigue viéndose al cambiar de carpeta); OK otra vez en el canal del punto rojo lo abre

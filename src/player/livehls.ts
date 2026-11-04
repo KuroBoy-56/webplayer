@@ -113,7 +113,8 @@ export class LiveHls {
   onError: (msg: string) => void = () => {};
 
   // noAudio: el equipo no tomó el audio del canal (MP2 / AC-3 en MP4): solo el video
-  constructor(private v: VideoPlayer, url: string, readonly audioIdx = 0, private noAudio = false) {
+  // tsOnly: este canal se congeló en MP4 propio: se prueba con el MPEG-TS al reproductor de Vega
+  constructor(private v: VideoPlayer, url: string, readonly audioIdx = 0, private noAudio = false, private tsOnly = false) {
     this.first = url;
     this.list = url;
   }
@@ -411,13 +412,30 @@ export class LiveHls {
           // al final de este tramo (o quieto) y hay otro después: al siguiente
           if (next > 0 && (en - t < 0.5 || stalled)) this.jump(next + 0.1);
           // quieto otra vez justo después de empujarlo (el decodificador sigue trabado): más adelante, 2 s
-          else if (stalled && en - t > 1) this.jump(t + (Date.now() - this.lastJump < 8000 && en - t > 3 ? 2 : 0.5));
+          else if (stalled && en - t > 1) {
+            this.jump(t + (Date.now() - this.lastJump < 8000 && en - t > 3 ? 2 : 0.5));
+            this.froze();
+          }
           return;
         }
       }
     } catch {
       // sin datos todavía
     }
+  }
+
+  // Imagen congelada con video de sobra por delante (el audio puede seguir sonando): 3 veces en 30 s y empujarla no
+  // sirve. Player vuelve a abrir el canal (playback.liveRetryTs): primero igual (reproductor nuevo) y después en MPEG-TS
+  frozen = false;
+  private freezes: number[] = [];
+  private froze(): void {
+    const now = Date.now();
+    this.freezes = this.freezes.filter(x => now - x < 30000);
+    this.freezes.push(now);
+    if (this.freezes.length < 3 || this.frozen || !this.alive) return;
+    this.frozen = true;
+    this.lastProblem = 'imagen congelada con ' + this.aheadSec().toFixed(0) + ' s por delante';
+    this.onError('la imagen se congeló');
   }
 
   // último segmento que llegó del servidor (el vigilante de Player espera más si el canal sigue bajando)
@@ -727,7 +745,7 @@ export class LiveHls {
   // Entrega un segmento: convertido a MP4 (de corrido) o, si no se puede, el MPEG-TS tal cual. 0 = error (ya avisado),
   // 1 = entregado, 2 = nada que entregar todavía
   private async deliver(data: Uint8Array): Promise<0 | 1 | 2> {
-    if (this.mode !== 'ts' && !mp4Off) {
+    if (this.mode !== 'ts' && !mp4Off && !this.tsOnly) {
       if (!this.mux) this.mux = new TsMux(this.noAudio ? -1 : this.audioIdx, false, this.target >= 8 ? 2 : 3);
       await sleep(0);
       let r;

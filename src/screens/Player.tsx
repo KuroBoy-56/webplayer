@@ -17,7 +17,7 @@ import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { MenuItem, Playback } from '../player/playback';
-import { stopLivePreview } from '../player/preview-session';
+import { setLastLive, stopLivePreview } from '../player/preview-session';
 import { prefetchList, prefetchRange } from '../player/prefetch';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
@@ -792,6 +792,7 @@ export default function Player({ params }: { params: PlayParams }) {
     return () => {
       alive = false;
       loadRev.current++;
+      if (params.kind === 'live') setLastLive((params.channels[indexRef.current] || params.channel)?.id || '');
       try {
         save(true);
         released = c.destroy();
@@ -1058,13 +1059,17 @@ export default function Player({ params }: { params: PlayParams }) {
           surface.current = '';
         }}
       />
-      <KeplerCaptionsView
-        style={s.captions}
-        onCaptionViewCreated={(h: string) => {
-          captions.current = h;
-          if (ready.current) video.current?.setCaptionViewHandle(h);
-        }}
-      />
+      {/* en vivo sin capa de subtítulos: con ella, los canales que traen subtítulos ocultos (CC) en el video (HBO,
+          Warner…) se congelaban en pantalla grande con el audio sonando; la miniatura, sin esa capa, iba bien */}
+      {live ? null : (
+        <KeplerCaptionsView
+          style={s.captions}
+          onCaptionViewCreated={(h: string) => {
+            captions.current = h;
+            if (ready.current) video.current?.setCaptionViewHandle(h);
+          }}
+        />
+      )}
 
       {/* subtítulos que prepara el panel (WebVTT) */}
       {sub ? (

@@ -159,6 +159,8 @@ export class Playback {
   private liveAudio = 0;
   // el reproductor falló con el audio MP2 / AC-3 del canal convertido: el canal otra vez, solo con el video
   private liveNoAudio = false;
+  // el canal se congeló (LiveHls.frozen): 1 = se abrió otra vez igual; 2 = se abrió en MPEG-TS
+  private liveFrozen = 0;
   // el HLS del panel que sigue sonando mientras se prepara otro idioma
   private prevHls: PanelHls | null = null;
   private offset = 0;
@@ -237,6 +239,7 @@ export class Playback {
     this.live = live;
     this.liveAudio = 0;
     this.liveNoAudio = false;
+    this.liveFrozen = 0;
     this.mp4Audio = -1;
     this.mp4Index = null;
     this.mkvIndex = null;
@@ -276,7 +279,7 @@ export class Playback {
   // canal en vivo por HLS con el lector propio
   private openLive(url: string): void {
     const g = this.gen;
-    const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio);
+    const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, this.liveFrozen >= 2);
     this.liveHls = h;
     h.onError = why => g === this.gen && this.liveHls === h && this.hooks.liveFailed?.(why);
     h.onStalls = () => g === this.gen && this.liveHls === h && this.hooks.liveStalls?.(h.diag());
@@ -297,6 +300,15 @@ export class Playback {
   liveRetryTs(): boolean {
     const h = this.liveHls;
     if (!this.live || !h) return false;
+    // imagen congelada con video por delante: el canal otra vez con un reproductor nuevo y, si vuelve a pasar, en
+    // MPEG-TS (solo este canal)
+    if (h.frozen) {
+      if (this.liveFrozen >= 2) return false;
+      this.liveFrozen++;
+      h.destroy();
+      this.openLive(this.url);
+      return true;
+    }
     // con audio MP2 / AC-3 lo que falló (error o sin imagen) es ese audio: el mismo canal en MP4 sin él (en MPEG-TS
     // Vega no mostraba imagen)
     // (si ya se veía, se reconecta igual: nunca se apaga el MP4 de toda la sesión por el audio de un canal)
@@ -985,7 +997,8 @@ export class Playback {
 
   private applyPrefs(): void {
     this.autoAudio();
-    this.autoSubs();
+    // en vivo no se tocan las pistas de texto del equipo (los subtítulos ocultos CC de algunos canales)
+    if (!this.live) this.autoSubs();
     this.hooks.changed();
   }
 

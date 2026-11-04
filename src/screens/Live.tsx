@@ -7,6 +7,7 @@ import { openItem } from '../actions';
 import { channelEpg, EpgEntry } from '../api/xtream';
 import PinDialog from '../components/PinDialog';
 import LivePreview, { stopLivePreview } from '../components/LivePreview';
+import { takeLastLive } from '../player/preview-session';
 import { Button, Focusable, Message, Spinner } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
 import { clock, digits, nowSec } from '../lib/util';
@@ -57,7 +58,24 @@ export default function Live({ active = true }: { active?: boolean }) {
     lastId.current = id;
   }, []);
   useEffect(() => {
-    if (!active || !lastId.current) return;
+    if (!active) return;
+    // el canal que quedó sonando en pantalla grande (con ▲▼ se pudo cambiar): ahí el foco, el punto rojo y la miniatura
+    const played = takeLastLive();
+    const ch = played ? chRef.current.find(c => c.id === played) : undefined;
+    if (ch) {
+      lastId.current = ch.id;
+      setFocused(ch);
+    }
+    if (!lastId.current) return;
+    // si el canal quedó lejos (cambiado con ▲▼), la lista va hasta él para que su fila exista y reciba el foco
+    const at = chRef.current.findIndex(c => c.id === lastId.current);
+    if (at >= 0) {
+      try {
+        listRef.current?.scrollToIndex({ index: at, viewPosition: 0.4, animated: false });
+      } catch {
+        // lista todavía sin medir
+      }
+    }
     setTarget(x => ({ id: lastId.current, n: x.n + 1 }));
     setPref(lastId.current);
     const id = setTimeout(() => setPref(''), 1000);
@@ -67,6 +85,9 @@ export default function Live({ active = true }: { active?: boolean }) {
   const cats = useMemo(() => (loaded ? catalog.liveCats() : []), [loaded, catalogRev, pinFor]);
   const favIds = useMemo(() => favorites.filter(f => f.type === 'live').map(f => digits(f.id)), [favorites]);
   const channels = useMemo(() => (loaded ? catalog.liveChannels(cat, favIds) : []), [loaded, catalogRev, cat, cat === 'fav' ? favIds.join(',') : '']);
+  const listRef = useRef<FlatList<Item>>(null);
+  const chRef = useRef(channels);
+  chRef.current = channels;
 
   // guía del canal enfocado (espera un momento para no pedirla en cada paso)
   useEffect(() => {
@@ -139,6 +160,7 @@ export default function Live({ active = true }: { active?: boolean }) {
       <View style={s.list}>
         {channels.length ? (
           <FlatList
+            ref={listRef}
             // otra carpeta: la lista empieza arriba
             key={cat}
             data={channels}

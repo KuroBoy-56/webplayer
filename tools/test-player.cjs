@@ -48,7 +48,8 @@ class Mkv {
   destroy(){}
 }
 class PanelHls {static supported(){return true;}}
-class LiveHls {static supported(){return true;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
+let lives = [];
+class LiveHls {static supported(){return true;}constructor(v,url,audio,noAudio,tsOnly){this.tsOnly=tsOnly;this.frozen=false;lives.push(this);}isMp4(){return !this.tsOnly;}otherAudio(){return false;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
 const media = {
   engineDenied:()=>'',knownNow:()=>probe,knownTracks:async()=>probe||noTracks,
   fileTracks:async()=>probe||noTracks,
@@ -180,4 +181,11 @@ test('MKV con audio que no entra por MSE (E-AC-3): primero el lector nativo; si 
   assert.equal(mkvs.length,1);assert.equal(video.src,'https://fixture.invalid/video.mkv');assert.deepEqual(calls,[]);
   assert.equal(c.mp4Fallback(),true);await tick();
   assert.equal(mkvs.length,2);assert.equal(c.mp4Fallback('x'),true);await c.destroy();
+});
+test('canal congelado: se abre otra vez igual y, si vuelve a pasar, en MPEG-TS solo ese canal',async()=>{
+  lives=[];const {c}=setup();c.load('http://fixture.invalid/live/u/p/1.m3u8',0,true);await tick();
+  assert.equal(lives.length,1);lives[0].frozen=true;assert.equal(c.liveRetryTs(),true);
+  assert.equal(lives.length,2);assert.equal(lives[1].tsOnly,false);lives[1].frozen=true;assert.equal(c.liveRetryTs(),true);
+  assert.equal(lives[2].tsOnly,true);lives[2].frozen=true;assert.equal(c.liveRetryTs(),false);
+  c.load('http://fixture.invalid/live/u/p/2.m3u8',0,true);await tick();assert.equal(lives[3].tsOnly,false);await c.destroy();
 });

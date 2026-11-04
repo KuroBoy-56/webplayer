@@ -25,6 +25,20 @@ const SILENCE: Record<number, number[]> = {
   6: [0x00, 0xc8, 0x00, 0x80, 0x20, 0x84, 0x01, 0x26, 0x40, 0x08, 0x64, 0x00, 0x82, 0x30, 0x04, 0x99, 0x00, 0x21, 0x90, 0x02, 0x00, 0xb2, 0x00, 0x20, 0x08, 0xe0],
 };
 
+// SEI con subtítulos ocultos (CC, CEA-608/708: tipo 4): no se entregan. Con ellos Vega mostraba una pista de
+// subtítulos y algunos canales (HBO, Warner…) se congelaban en pantalla grande con el audio sonando; el video no los
+// necesita para decodificarse
+function ccSei(n: Uint8Array): boolean {
+  if ((n[0] & 0x1f) !== 6) return false;
+  let p = 1;
+  let type = 0;
+  while (p < n.length && n[p] === 0xff) {
+    type += 255;
+    p++;
+  }
+  return type + (n[p] ?? 0) === 4;
+}
+
 const same = (a: Uint8Array | null, b: Uint8Array | null) => !!a && !!b && a.length === b.length && a.every((x, i) => x === b[i]);
 const hex = (n: number) => '0x' + n.toString(16);
 
@@ -250,6 +264,7 @@ export class TsMux {
       if (base < 0) base = dts;
       let size = 0;
       for (const n of au.nals) {
+        if (ccSei(n)) continue;
         const len = new Uint8Array([(n.length >>> 24) & 255, (n.length >>> 16) & 255, (n.length >>> 8) & 255, n.length & 255]);
         data.push(len, n);
         size += 4 + n.length;

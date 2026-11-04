@@ -188,3 +188,20 @@ test('canal en vivo: si el equipo lo pausa solo (al pasar de la miniatura a pant
   assert.equal(v.paused, false);
   reader.destroy();
 });
+
+test('canal en vivo: imagen congelada con video por delante (3 veces en 30 s) se avisa para volver a abrirlo', () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  const v = { paused: false, currentTime: 8, addEventListener() {}, removeEventListener() {}, play() {}, pause() {} };
+  const reader = new LiveHls(v, 'http://fixture.invalid/live.m3u8');
+  const errors = [];
+  reader.onError = why => errors.push(why);
+  Object.assign(reader, { started: true, sb: { buffered: { length: 1, start: () => 0, end: () => 40 } } });
+  for (let i = 0; i < 3; i++) {
+    reader.lastT = v.currentTime;
+    reader.lastMove = Date.now() - 4000;
+    reader.unstick();
+  }
+  assert.equal(reader.frozen, true);
+  assert.deepEqual(errors, ['la imagen se congeló']);
+  reader.destroy();
+});
