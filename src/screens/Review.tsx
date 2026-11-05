@@ -8,6 +8,7 @@ import { panelScheme, type Review as ReviewData, type ReviewVideo } from '../api
 import { Focusable, Logo } from '../components/ui';
 import { t } from '../lib/i18n';
 import { probeTracks } from '../lib/probe';
+import { reportError } from '../api/report';
 import { useNav } from '../nav';
 import { alpha, px } from '../theme';
 
@@ -118,7 +119,11 @@ function ReviewPlayer({ video, onClose }: { video: ReviewVideo; onClose: () => v
         const w = (p as any).videoWidth;
         if (!alive || typeof w !== 'number' || w > 0 || p.paused) return;
         const pr = await probeTracks(p.src || first).catch(() => null);
-        if (alive) setState(t('Se oye, pero este equipo no muestra la imagen de este video ({x}).', { x: videoCodec(pr?.video || '') }));
+        if (!alive) return;
+        const codec = videoCodec(pr?.video || '');
+        // el panel prepara una copia en H.264 de las muestras que no lo son (includes/review_theme.php)
+        setState(t('Se oye, pero este equipo no muestra la imagen de este video ({x}). El panel prepara una copia compatible: en unos minutos vuelve a entrar al tema de prueba.', { x: codec }));
+        reportError('playback', 'Video de muestra sin imagen', 'códec=' + codec + ' archivo=' + (p.src || first).replace(/^.*\//, ''), 'Tema de prueba');
       }, 3000);
     };
     const onPause = () => alive && setState(t('En pausa'));

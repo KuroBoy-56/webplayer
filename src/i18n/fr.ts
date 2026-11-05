@@ -205,7 +205,7 @@ const fr: Record<Key, string> = {
   "No se pudo guardar el PIN en el panel": "Impossible d'enregistrer le code PIN sur le panneau",
   "No se pudo iniciar el reproductor.": "Impossible de démarrer le lecteur.",
   "No se pudo iniciar sesión": "Connexion impossible",
-  "Se oye, pero este equipo no muestra la imagen de este video ({x}).": "On l’entend, mais cet appareil n’affiche pas l’image de cette vidéo ({x}).",
+  "Se oye, pero este equipo no muestra la imagen de este video ({x}). El panel prepara una copia compatible: en unos minutos vuelve a entrar al tema de prueba.": "On l’entend, mais cet appareil n’affiche pas l’image de cette vidéo ({x}). Le panneau prépare une copie compatible : dans quelques minutes, rouvrez le thème de test.",
   "códec no compatible": "codec non compatible",
   "No compatible con el dispositivo": "Non compatible avec l’appareil",
   "No se pudo registrar": "Enregistrement impossible",

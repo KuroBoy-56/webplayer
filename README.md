@@ -11,6 +11,14 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+## Novedades de la 1.3.6
+
+**Video de muestra del tema de prueba:** el que se oía sin imagen venía en un códec que el equipo no decodifica (H.265 /
+HEVC de los celulares: el simulador de LG no lo trae; los televisores LG sí). El panel ahora prepara solo una copia en
+H.264 de esas muestras y la entrega en su lugar (`includes/review_theme.php` del panel, `review_playable()`). Mientras
+tanto la app avisa con el códec y que en unos minutos se vuelva a entrar al tema, y lo reporta al panel («Video de
+muestra sin imagen»).
+
 ## Novedades de la 1.3.5
 
 **MKV con la extensión .mp4** (servidores IPTV que los etiquetan mal; el reporte lo delata con códecs de Matroska como
