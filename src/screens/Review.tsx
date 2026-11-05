@@ -4,7 +4,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BackHandler, FlatList, StyleSheet, Text, View } from 'react-native';
 import { KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import type { Review as ReviewData, ReviewVideo } from '../api/panel';
+import { panelScheme, type Review as ReviewData, type ReviewVideo } from '../api/panel';
 import { Focusable, Logo } from '../components/ui';
 import { t } from '../lib/i18n';
 import { useNav } from '../nav';
@@ -92,9 +92,23 @@ function ReviewPlayer({ video, onClose }: { video: ReviewVideo; onClose: () => v
     const p = new VideoPlayer();
     v.current = p;
     let alive = true;
+    // el video con el protocolo con el que este equipo llega al panel (televisores viejos: https con certificado que no
+    // aceptan); si no abre, una vez con el otro antes del aviso
+    const first = panelScheme() === 'http' ? video.url.replace(/^https:/i, 'http:') : video.url;
+    let other = false;
     const onPlaying = () => alive && setState('');
     const onPause = () => alive && setState(t('En pausa'));
-    const onError = () => alive && setState(t('No se pudo reproducir este contenido.'));
+    const onError = () => {
+      if (!alive) return;
+      if (!other) {
+        other = true;
+        setState(t('Cargando…'));
+        p.src = /^https:/i.test(first) ? first.replace(/^https:/i, 'http:') : first.replace(/^http:/i, 'https:');
+        p.play();
+        return;
+      }
+      setState(t('No se pudo reproducir este contenido.'));
+    };
     const onEnded = () => alive && onClose();
     p.initialize()
       .then(() => {
@@ -105,7 +119,7 @@ function ReviewPlayer({ video, onClose }: { video: ReviewVideo; onClose: () => v
         p.addEventListener('error', onError);
         p.addEventListener('ended', onEnded);
         if (surface.current) p.setSurfaceHandle(surface.current);
-        p.src = video.url;
+        p.src = first;
         p.play();
       })
       .catch(onError);

@@ -24,12 +24,14 @@ class TestShaka {
   async load() {}
   async destroy() {}
 }
+// Vega ('kepler') o el televisor LG ('web')
+const rnPlatform = { OS: 'kepler' };
 Module._load = function(request, parent, isMain) {
   if (request === '../lib/http') return { UA: 'fixture', json: body => typeof body === 'string' ? JSON.parse(body) : body, http: async () => { requests++; return respond ? respond() : fixture(); } };
   if (request === './panel') return { cloud: async () => { panelRequests++; return {}; } };
   if (request === '../lib/i18n' || request === './i18n') return { t: key => key };
   if (request === '@amazon-devices/react-native-w3cmedia') return { MediaSource: { isTypeSupported: () => true } };
-  if (request === 'react-native') return { AppState: { currentState: 'active' } };
+  if (request === 'react-native') return { AppState: { currentState: 'active' }, Platform: rnPlatform };
   if (request === './shaka-env') return { installShakaEnvironment() {} };
   if (request === './vendor/shaka-player.compiled') return { Player: TestShaka, polyfill: { installAll() {} }, net: { NetworkingEngine: { unregisterScheme() {}, registerScheme() {}, PluginPriority: { APPLICATION: 1 } }, HttpFetchPlugin: { parse() {} } } };
   return originalLoad.call(this, request, parent, isMain);
@@ -147,6 +149,23 @@ test('canal: si el servidor no da la lista a la primera (página vacía al salir
     assert.equal(calls, 1);
     bad.destroy();
   } finally { global.fetch = realFetch; }
+});
+test('LG: el lector del canal deja que el navegador siga la redirección (manual llega vacía); Vega la sigue a mano', async () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  const realFetch = global.fetch;
+  const seen = [];
+  global.fetch = async (_url, opts) => { seen.push(opts.redirect); return { status: 200, url: 'http://lb.invalid/live.m3u8?token=1', headers: { get: k => (k === 'content-type' ? 'application/vnd.apple.mpegurl' : null) }, text: async () => '#EXTM3U' }; };
+  try {
+    for (const os of ['kepler', 'web']) {
+      rnPlatform.OS = os;
+      const reader = new LiveHls({ removeEventListener() {}, addEventListener() {} }, 'http://fixture.invalid/live.m3u8');
+      const r = await reader.get('http://fixture.invalid/live.m3u8', 5000, 'list');
+      assert.equal(r.code, 200);
+      assert.equal(r.url, 'http://lb.invalid/live.m3u8?token=1');
+      reader.destroy();
+    }
+    assert.deepEqual(seen, ['manual', 'follow']);
+  } finally { global.fetch = realFetch; rnPlatform.OS = 'kepler'; }
 });
 test('HLS libera la URL MSE al cerrar', () => {
   const { LiveHls } = require('../src/player/livehls.ts');

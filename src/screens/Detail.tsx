@@ -8,6 +8,7 @@ import { warmTracks } from '../api/media';
 import { Button, Focusable } from '../components/ui';
 import { RowView } from '../components/Tiles';
 import { ChainImage } from '../components/ChainImage';
+import { Shade } from '../components/Shade';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, Item } from '../data/catalog';
 import { savedArt } from '../data/heroart';
@@ -136,9 +137,9 @@ export default function Detail({ item }: { item: Item }) {
       {/* como Roku: la imagen arriba a la derecha (1440×810), color liso a la izquierda con degradado sobre la imagen,
           degradado abajo y color liso debajo; los textos se leen sobre cualquier imagen */}
       {backdrop || bdSrc.length ? <ChainImage sources={bdSrc} style={s.bg} resizeMode="cover" blurRadius={wide ? undefined : 18} /> : null}
-      <Image source={require('../../assets/image/grad_left.png')} style={[s.bgLeft, { tintColor: C.bg }]} resizeMode="stretch" />
+      <Shade side="left" style={s.bgLeft} />
       <View style={s.bgSolidLeft} />
-      <Image source={require('../../assets/image/grad_bottom.png')} style={[s.bgBottom, { tintColor: C.bg }]} resizeMode="stretch" />
+      <Shade side="bottom" style={s.bgBottom} />
       <View style={s.bgSolidBottom} />
       <ScrollView contentContainerStyle={{ paddingBottom: px(80) }}>
         <View style={s.head}>

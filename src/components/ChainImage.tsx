@@ -2,7 +2,7 @@
 // Además del error, un tiempo límite: en Vega una imagen que no existe a veces no avisa el error y la tarjeta quedaba
 // en blanco para siempre; si en 6 s no cargó, se pasa a la siguiente dirección.
 import React, { memo, useEffect, useRef, useState } from 'react';
-import { Image, ImageResizeMode, ImageStyle, StyleProp } from 'react-native';
+import { Image, ImageResizeMode, ImageStyle, Platform, StyleProp, View } from 'react-native';
 
 export const ChainImage = memo(function ChainImage({ sources, style, resizeMode, blurRadius }: { sources: string[]; style: StyleProp<ImageStyle>; resizeMode?: ImageResizeMode; blurRadius?: number }) {
   const [i, setI] = useState(0);
@@ -18,14 +18,21 @@ export const ChainImage = memo(function ChainImage({ sources, style, resizeMode,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uri, i]);
   if (!uri) return null;
-  return (
+  const img = (st: StyleProp<ImageStyle>) => (
     <Image
       source={{ uri }}
-      style={style}
+      style={st}
       resizeMode={resizeMode}
       blurRadius={blurRadius}
       onLoad={() => (loaded.current = true)}
       onError={() => setI(n => n + 1)}
     />
   );
+  // televisores con la app web: el desenfoque CSS deja los bordes de la imagen transparentes (un marco oscuro
+  // alrededor); la imagen va más grande que su lugar y se recorta, así el borde borroso queda afuera
+  if (blurRadius && Platform.OS === 'web') {
+    const e = -blurRadius * 3;
+    return <View style={[style as any, { overflow: 'hidden' }]}>{img({ position: 'absolute', left: e, top: e, right: e, bottom: e })}</View>;
+  }
+  return img(style);
 });

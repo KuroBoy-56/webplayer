@@ -49,7 +49,7 @@ class Mkv {
 }
 class PanelHls {static supported(){return true;}}
 let lives = [];
-class LiveHls {static supported(){return true;}constructor(v,url,audio,noAudio,tsOnly){this.tsOnly=tsOnly;this.frozen=false;lives.push(this);}isMp4(){return !this.tsOnly;}otherAudio(){return false;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
+class LiveHls {static supported(){return true;}constructor(v,url,audio,noAudio,tsOnly){this.url=url;this.tsOnly=tsOnly;this.frozen=false;lives.push(this);}isMp4(){return !this.tsOnly;}otherAudio(){return false;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
 const media = {
   engineDenied:()=>'',knownNow:()=>probe,knownTracks:async()=>probe||noTracks,
   fileTracks:async()=>probe||noTracks,
@@ -146,6 +146,33 @@ test('LG: si el televisor no cambia el idioma, lo cambia el lector de la app (si
 });
 test('LG: los canales HLS los abre el televisor (no el lector de Vega)',async()=>{
   const {c,video}=setup();tvVideo(video,true);c.load('https://fixture.invalid/canal.m3u8',0,true);assert.equal(video.src,'https://fixture.invalid/canal.m3u8');await c.destroy();
+});
+test('LG: si el televisor no abre el canal, el mismo .m3u8 con el lector de la app (una vez)',async()=>{
+  lives=[];const {c,video}=setup();tvVideo(video,true);c.load('https://lg1.invalid/live/u/p/1.m3u8',0,true);
+  assert.equal(lives.length,0);assert.equal(c.liveReader(),true);assert.equal(lives.length,1);assert.equal(c.liveReader(),false);
+  // el .ts del televisor tampoco abrió: el lector con la dirección .m3u8 del mismo canal
+  c.load('https://lg1.invalid/live/u/p/1.ts',0,true);assert.equal(video.src,'https://lg1.invalid/live/u/p/1.ts');assert.equal(c.liveReader(),false);
+  assert.equal(c.liveReader('https://lg1.invalid/live/u/p/1.m3u8'),true);assert.equal(lives.length,2);assert.equal(lives[1].url,'https://lg1.invalid/live/u/p/1.m3u8');await c.destroy();
+});
+test('LG: el servidor que solo se vio con el lector va directo a él (zapping y reconexión)',async()=>{
+  lives=[];const {c,video}=setup();tvVideo(video,true);c.load('https://lg2.invalid/live/u/p/1.m3u8',0,true);c.liveReader();c.onPlaying();
+  c.load('https://lg2.invalid/live/u/p/2.m3u8',0,true);assert.equal(lives.length,2);assert.equal(c.liveReader(),false);
+  // otro servidor: primero el reproductor del televisor
+  c.load('https://lg3.invalid/live/u/p/1.m3u8',0,true);assert.equal(lives.length,2);assert.equal(video.src,'https://lg3.invalid/live/u/p/1.m3u8');await c.destroy();
+});
+test('Vega: liveReader no hace nada (los canales ya van por el lector)',async()=>{
+  lives=[];const {c}=setup();c.load('https://fixture.invalid/canal.m3u8',0,true);assert.equal(lives.length,1);assert.equal(c.liveReader(),false);assert.equal(lives.length,1);await c.destroy();
+});
+test('LG: un MP4 que el televisor no abre pasa por el lector de la app antes del servidor',async()=>{
+  const {c,video}=setup();tvVideo(video,true);c.load('https://fixture.invalid/video.mp4',0,false);assert.equal(mp4s.length,0);
+  assert.equal(await c.onError(),true);assert.equal(mp4s.length,1);assert.deepEqual(calls,[]);
+  // ya probado: sigue lo de siempre (el servidor)
+  assert.equal(await c.onError(),false);await c.destroy();
+});
+test('LG: pistas del televisor en otro orden que el archivo: se elige por idioma',async()=>{
+  const tracks=[{language:'en',enabled:false},{language:'es',enabled:true}];
+  const {c,video}=setup({tracks,cached:dual});tvVideo(video,true);c.load('https://fixture.invalid/video.avi',0,false);choose(c,'Inglés');
+  assert.equal(tracks[0].enabled,true);assert.equal(tracks[1].enabled,false);assert.deepEqual(calls,[]);await c.destroy();
 });
 test('cambios nativos rápidos cancelan la comprobación de la selección anterior',async()=>{
   const {c}=setup({tracks:[{language:'es',enabled:true},{language:'en',enabled:false}],cached:dual});c.load('https://fixture.invalid/video.avi',0,false);

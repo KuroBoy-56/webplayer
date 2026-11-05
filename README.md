@@ -11,6 +11,49 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+## Novedades de la 1.3.1
+
+**El reproductor de LG de verdad.** webOS solo usa su reproductor por hardware (HLS, MPEG-TS, MKV, Dolby, DTS donde
+la tele lo trae, varias pistas de audio en `audioTracks`, `mediaId` para `com.webos.media`) si el `<video>` lleva el
+tipo del archivo en un `<source>`. Con solo `src`, el webOS 7 abría los videos con el motor de Chromium: los canales
+fallaban con «DEMUXER_ERROR_COULD_NOT_OPEN: FFmpegDemuxer: open context failed» y el cambio de idioma de un MP4 caía al
+lector de la app y al servidor («No compatible con el dispositivo»). Ahora `web/shims/w3cmedia.tsx` (`tvType`,
+`tvSource`) pone en la tele el `<source>` con su tipo y su `mediaOption` (`mediaTransportType` HLS para el `.m3u8` y el
+HLS del panel, URI para lo demás). Si la tele no reconoce el tipo, va el genérico `video/mp4`. El error de un `<source>`
+(que no llega al `<video>`) se pasa al `<video>` con su motivo. Un archivo (MP4, MKV…) que no abre así se prueba una vez
+como antes, sin tipo.
+
+**TV en vivo en la tele, en este orden:** `.m3u8` con el reproductor de LG, `.ts` con el reproductor de LG, el lector
+de la app (el de Vega con el `.m3u8`: descarga, descifra AES y entrega MP4 por MSE; `Playback.liveReader`), la dirección
+corta y después el otro protocolo y el DNS. El reproductor de LG tiene 12 s (10 s más si ya está cargando) y el lector
+25 s (15 s más si sigue llegando video). Al cambiar de canal se empieza por el formato que funcionó
+(`liveFormatStart`). Un servidor que solo se vio con el lector va directo a él en esta sesión (`readerHosts`). La
+miniatura hace lo mismo a los 12 s. En el navegador de la tele el lector deja que el navegador siga la redirección de
+Xtream (`redirect: 'manual'` llega vacía en un navegador). El reporte dice en cada intento si fue «(reproductor LG)» o
+«(lector de la app)».
+
+**Películas y series:** primero la tele (audio y subtítulos con `audioTracks` y `com.webos.media`). Si la tele no abre el
+MP4 / MKV por ningún camino, va el lector de la app antes del servidor. Un audio que el equipo no decodifica deja el video
+sin ese audio, con «Audio no compatible con este equipo: es necesario encender el servidor.» (una vez por video). Si la
+tele ordena sus pistas distinto que el archivo, el idioma se elige por su nombre.
+
+**Diseño:** los degradados de la portada, la ficha y «Ver todo» son degradados CSS con curva suave
+(`src/components/Shade.tsx`). La imagen teñida de react-native-web es un filtro SVG que la tele dibujaba con líneas
+rectas y recuadros sombreados. Las carátulas desenfocadas se recortan por fuera (`ChainImage`), así el borde borroso no
+deja un marco oscuro. En Vega todo queda igual.
+
+**Círculo de carga que gira:** la animación iba como estilo en línea y react-native-web la descartaba. Ahora va en
+`StyleSheet.create` con el giro como texto (`src/components/ui.tsx`).
+
+**Tema de prueba del dueño:** el video de muestra va por el reproductor de LG, con el protocolo con el que la tele llega
+al panel. Si no abre, se prueba una vez con el otro (`src/screens/Review.tsx`).
+
+**De Vega (1.0.56 a 1.0.60):** TV en vivo con OK (miniatura con punto rojo, pantalla grande con OK otra vez y el foco
+vuelve al canal que sonaba), canales con audio MP2 / MP3 / AC-3 en el lector, imagen trabada que salta al siguiente
+cuadro clave y canal congelado que se reabre sin pantalla de error.
+
+Pruebas: `npm run test:player` (casos «LG:»), `npm run test:interface` y `npm test`.
+
 ## Novedades de la 1.3.0 (traídas de Vega OS 1.0.29 a 1.0.55, más lo propio de LG)
 
 **Reproducción en el televisor: el servidor es el último recurso.** Todo lo abre primero el reproductor por hardware
@@ -48,8 +91,9 @@ existen y todo sigue igual que allá. Pruebas: `npm run test:player` (casos «LG
 - **Fluidez en la tele**: el foco crece al instante (sin animación cuadro por cuadro en JavaScript) y el círculo de
   carga gira con CSS (`src/components/ui.tsx`, `Platform.OS === 'web'`).
 - Lo que es solo de Vega queda fuera en LG: **Shaka** (motor HLS / DASH con parches de Amazon; no corre en webOS 4.x y
-  la tele abre HLS sola: `tools/build-webos.js` pone `web/shims/shaka.ts`), el **lector de canales** (`livehls.ts`) y
-  el pedido adelantado del video (`prefetch.ts`: en la tele sería una conexión de más).
+  la tele abre HLS sola: `tools/build-webos.js` pone `web/shims/shaka.ts`), el **lector de canales** (`livehls.ts`; desde
+  la 1.3.1 es el respaldo cuando el reproductor de LG no abre el canal) y el pedido adelantado del video (`prefetch.ts`:
+  en la tele sería una conexión de más).
 - **Tema de prueba del dueño** (estilo IBO Player, con Omitir, cuando el panel lo ofrece): ya estaba desde la 1.2.4; el
   panel lo da también para `webos` (`includes/review_theme.php`).
 

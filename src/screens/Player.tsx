@@ -10,7 +10,7 @@ import { engineDenied, warmTracks } from '../api/media';
 import { viaDns } from '../lib/securedns';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
-import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
+import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveFormatStart, liveUrl, movieUrl, otherScheme, setLiveFormat, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
 import { Button, Focusable, Loader } from '../components/ui';
 import { Item } from '../data/catalog';
@@ -112,7 +112,7 @@ export default function Player({ params }: { params: PlayParams }) {
   // botón DNS: si tampoco abre, una vez por la IP que da el DNS elegido (solo ese video)
   const triedDns = useRef(false);
   // TV en vivo: formato que se está probando (LIVE_FORMATS)
-  const fmtAt = useRef(0);
+  const fmtAt = useRef(liveFormatStart());
   const dnsUrl = useRef<{ i: number; url: string } | null>(null);
   // película o episodio que todavía no sonó: ya se le preguntó al servidor (checked), se esperaron 10 s tras un 403
   // (waited), se corrigió la extensión (extFixed); Continuar viendo: 0 = directo, 1 = el panel, 2 = otra vez directo
@@ -149,6 +149,9 @@ export default function Player({ params }: { params: PlayParams }) {
     },
     [params],
   );
+
+  // canal abierto por el reproductor del televisor (LG: el <video> anuncia nativeFiles), no por el lector de la app
+  const tvLive = () => !!(video.current as any)?.nativeFiles && !ctl.current?.liveDiag();
 
   const showOverlay = useCallback(() => {
     setOverlay(true);
@@ -245,7 +248,20 @@ export default function Player({ params }: { params: PlayParams }) {
           }, 15000);
           return;
         }
-        if (live) liveNote.current = 'sin imagen en 25 s';
+        // televisor (reproductor de LG): ya tiene el video y todavía no suena: 10 s más una vez
+        const tv = video.current as any;
+        if (live && tvLive() && !liveWait.current && tv && (tv.readyState >= 1 || (tv.buffered && tv.buffered.length > 0))) {
+          liveWait.current = true;
+          startDog.current = setTimeout(() => {
+            startDog.current = null;
+            const c2 = ctl.current;
+            if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
+            liveNote.current = 'sin imagen en 22 s';
+            onErrorRef.current();
+          }, 10000);
+          return;
+        }
+        if (live) liveNote.current = 'sin imagen en ' + (tvLive() ? 12 : 25) + ' s';
         // el MP4 que lee la app (índice al final del archivo) puede tardar más en empezar: 25 s más
         // el lector propio sin el índice del archivo en 20 s: el servidor no lo entrega así; se sigue ya con lo demás
         // (antes se esperaban 25 s más: 45 s con la pantalla cargando)
@@ -287,7 +303,7 @@ export default function Player({ params }: { params: PlayParams }) {
           return;
         }
         onErrorRef.current();
-      }, live ? 25000 : resume > 0 ? 15000 : 20000);
+      }, live ? (tvLive() ? 12000 : 25000) : resume > 0 ? 15000 : 20000);
     },
     [urlFor, live],
   );
@@ -319,7 +335,7 @@ export default function Player({ params }: { params: PlayParams }) {
       retried.current = false;
       triedDns.current = false;
       triedOther.current = false;
-      fmtAt.current = 0;
+      fmtAt.current = liveFormatStart();
       rounds.current = 0;
       liveRecon.current = { n: 0, ok: 0, since: 0 };
       // El índice cambia ya, incluso si llegan varias flechas antes del render.
@@ -393,6 +409,27 @@ export default function Player({ params }: { params: PlayParams }) {
 
     // Los reintentos pertenecen al intento que los creó; otro canal o una
     // conexión más reciente invalida el temporizador y sus respuestas.
+    // el lector de la app abrió el canal sin load() (respaldo del televisor o reabierto por congelado): su propio plazo,
+    // 25 s y 15 s más si sigue llegando video
+    const readerDog = (i: number) => {
+      if (startDog.current) clearTimeout(startDog.current);
+      liveWait.current = false;
+      const revision = loadRev.current;
+      const fire = () => {
+        startDog.current = null;
+        const c2 = ctl.current;
+        if (!alive || !c2 || c2.hasPlayed() || indexRef.current !== i || loadRev.current !== revision) return;
+        if (c2.liveBusy() && !liveWait.current) {
+          liveWait.current = true;
+          startDog.current = setTimeout(fire, 15000);
+          return;
+        }
+        liveNote.current = 'lector de la app: sin imagen';
+        onErrorRef.current();
+      };
+      startDog.current = setTimeout(fire, 25000);
+    };
+
     const retryLive = (i: number, delay: number) => {
       const revision = loadRev.current;
       setTimeout(() => {
@@ -429,6 +466,8 @@ export default function Player({ params }: { params: PlayParams }) {
       c.onPlaying();
       // por este protocolo entrega el video el servidor: los siguientes videos van primero por él
       setStreamFlip(flipped.current);
+      // y por este formato los canales (con el lector de la app, el .m3u8)
+      if (live) setLiveFormat(c.liveDiag() ? 0 : fmtAt.current);
       // los idiomas del episodio siguiente, para que también empiece con el idioma elegido
       if (params.kind === 'episode' && indexRef.current + 1 < params.queue.length) warmTracks(urlFor(indexRef.current + 1));
     };
@@ -615,6 +654,15 @@ export default function Player({ params }: { params: PlayParams }) {
     // (XUI) bloquee el equipo un rato y luego tampoco abren las películas
     const nextLive = () => {
       const i = indexRef.current;
+      // televisor: su reproductor no abrió el .m3u8 ni el .ts; el mismo canal (.m3u8) con el lector de la app antes de la
+      // dirección corta. En los demás equipos no hace nada
+      const cur = dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i);
+      if (LIVE_FORMATS[fmtAt.current] === 'ts' && c.liveReader(cur.replace(/\.ts(\?|$)/i, '.m3u8$1'))) {
+        setStatus(t('Reintentando…'));
+        setBuffering(true);
+        readerDog(i);
+        return;
+      }
       if (fmtAt.current < LIVE_FORMATS.length - 1) {
         fmtAt.current++;
         setStatus(t('Reintentando…'));
@@ -657,6 +705,8 @@ export default function Player({ params }: { params: PlayParams }) {
           liveNote.current = '';
           setStatus(t('Reconectando…'));
           setBuffering(true);
+          // reabierto antes de que se viera: con plazo (antes podía quedar «Reconectando…» sin fin)
+          if (!c.hasPlayed()) readerDog(indexRef.current);
           return;
         }
         // qué pasó en este intento (formato, protocolo, código del reproductor o motivo del lector HLS)
@@ -683,7 +733,7 @@ export default function Player({ params }: { params: PlayParams }) {
           retryLive(i, [300, 1000, 2000, 4000, 8000][rc.n - 1]);
           return;
         }
-        if (vs.attempts.length < 16) vs.attempts.push(LIVE_FORMATS[fmtAt.current] + (flipped.current ? ' (otro protocolo)' : '') + (dnsUrl.current ? ' (DNS)' : '') + ': ' + why);
+        if (vs.attempts.length < 16) vs.attempts.push(LIVE_FORMATS[fmtAt.current] + (diag ? ' (lector de la app)' : (v as any).nativeFiles ? ' (reproductor LG)' : '') + (flipped.current ? ' (otro protocolo)' : '') + (dnsUrl.current ? ' (DNS)' : '') + ': ' + why);
         // al primer fallo se le pregunta una vez al servidor: si contesta con un error (página de XUI, 4xx, cuenta no
         // activa) no se insiste, se dice el motivo
         if (!vs.checked) {

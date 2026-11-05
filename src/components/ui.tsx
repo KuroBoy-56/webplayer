@@ -126,15 +126,23 @@ export function Loader({ size = 90 }: { size?: number }) {
   return <NativeLoader size={size} />;
 }
 
-// react-native-web: animación CSS (animationKeyframes), la gira el navegador del televisor sin JavaScript
+// react-native-web: animación CSS, la gira el navegador del televisor sin JavaScript. Va en StyleSheet.create: como
+// estilo en línea react-native-web descarta animationKeyframes y el círculo quedaba quieto
+const spin = StyleSheet.create({
+  turn: {
+    // con el giro como texto: con la forma de lista ([{ rotate }]) react-native-web deja los cuadros clave vacíos
+    animationKeyframes: [{ '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } }],
+    animationDuration: '800ms', animationIterationCount: 'infinite', animationTimingFunction: 'linear',
+  } as any,
+});
+
 function WebLoader({ size }: { size: number }) {
   return (
     <View
-      style={{
-        width: px(size), height: px(size), borderRadius: px(size / 2), borderWidth: px(Math.max(6, size / 11)), borderColor: 'rgba(255,255,255,0.22)', borderTopColor: C.red,
-        animationKeyframes: [{ '0%': { transform: [{ rotate: '0deg' }] }, '100%': { transform: [{ rotate: '360deg' }] } }],
-        animationDuration: '800ms', animationIterationCount: 'infinite', animationTimingFunction: 'linear',
-      } as any}
+      style={[
+        { width: px(size), height: px(size), borderRadius: px(size / 2), borderWidth: px(Math.max(6, size / 11)), borderColor: 'rgba(255,255,255,0.22)', borderTopColor: C.red },
+        spin.turn,
+      ]}
     />
   );
 }

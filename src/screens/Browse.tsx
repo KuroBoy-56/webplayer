@@ -8,6 +8,7 @@ import { openItem, openSpecial, playMovie } from '../actions';
 import { Button, Message, Spinner } from '../components/ui';
 import { RowView, rowHeight } from '../components/Tiles';
 import { ChainImage } from '../components/ChainImage';
+import { Shade } from '../components/Shade';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, isItem, Item, Row, Special } from '../data/catalog';
 import { continueItems, favItems } from '../data/personal';
@@ -64,8 +65,8 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
         </View>
       ) : null}
       {art ? <ChainImage sources={artSrc} style={s.heroImg} resizeMode="cover" /> : null}
-      <Image source={require('../../assets/image/grad_bottom.png')} style={[s.heroGrad, { tintColor: C.bg }]} resizeMode="stretch" />
-      <Image source={require('../../assets/image/grad_left.png')} style={[s.heroShade, { tintColor: C.bg }]} resizeMode="stretch" />
+      <Shade side="bottom" style={s.heroGrad} />
+      <Shade side="left" style={s.heroShade} />
       {sideSrc.length ? <ChainImage sources={sideSrc} style={[s.side, compact && s.sideCompact]} resizeMode="cover" /> : null}
       <View style={[s.heroText, compact && s.heroTextCompact]}>
         {it ? (

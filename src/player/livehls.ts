@@ -13,7 +13,7 @@
 // tener unos segundos de margen en lugar de detenerse y seguir; un segmento que no llega se reintenta y, a la tercera,
 // se salta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { UA } from '../lib/http';
 import { takeList } from './prefetch';
 import { xuiError } from '../lib/xui';
@@ -260,7 +260,9 @@ export class LiveHls {
     try {
       for (let hop = 0; hop < 6; hop++) {
         if (!this.alive) return { code: 0, url: at };
-        const res = await fetch(at, { headers: { 'User-Agent': UA }, signal: ctrl.signal, redirect: 'manual' } as any);
+        // en el navegador del televisor (LG) una redirección «manual» llega vacía (opaqueredirect, código 0): ahí la sigue
+        // el navegador y la dirección final queda en res.url
+        const res = await fetch(at, { headers: { 'User-Agent': UA }, signal: ctrl.signal, redirect: Platform.OS === 'web' ? 'follow' : 'manual' } as any);
         const loc = res.headers.get('location');
         if (res.status >= 300 && res.status < 400 && loc) {
           at = resolveUrl(at, loc);
