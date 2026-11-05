@@ -405,6 +405,7 @@ const fr: Record<Key, string> = {
   "Mostrar": "Afficher",
   "Canales": "Chaînes",
   "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ changer de chaîne ({x}/{y}) · OK liste des chaînes · MENU audio et sous-titres",
+  "▲▼ cambiar canal ({x}/{y}) · ◀ lista de canales · MENÚ audio y subtítulos": "▲▼ changer de chaîne ({x}/{y}) · ◀ liste des chaînes · MENU audio et sous-titres",
   "Todavía no hay videos de prueba.": "Aucune vidéo de test pour l'instant.",
 };
 

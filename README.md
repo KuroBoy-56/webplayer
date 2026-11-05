@@ -11,6 +11,14 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+## Novedades de la 1.3.2
+
+**TV en vivo como en Vega y Roku.** En la lista, pasar por las carpetas y los canales no abre nada. OK en una carpeta
+muestra sus canales. OK en un canal lo pone en la miniatura (punto rojo) y OK otra vez lo abre en pantalla grande. En
+pantalla grande: OK o ▶ muestran la información del canal, ◀ abre la lista de canales de la carpeta (▶ o Atrás la
+cierran) y Atrás oculta lo que está a la vista; con todo oculto, Atrás sale del canal. Al salir, el foco vuelve al canal
+que sonaba, también si se cambió con ▲▼ (`src/screens/Player.tsx`, `src/screens/Live.tsx`).
+
 ## Novedades de la 1.3.1
 
 **El reproductor de LG de verdad.** webOS solo usa su reproductor por hardware (HLS, MPEG-TS, MKV, Dolby, DTS donde

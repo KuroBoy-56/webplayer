@@ -404,6 +404,7 @@ const en = {
   "Mostrar": "Show",
   "Canales": "Channels",
   "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ change channel ({x}/{y}) · OK channel list · MENU audio and subtitles",
+  "▲▼ cambiar canal ({x}/{y}) · ◀ lista de canales · MENÚ audio y subtítulos": "▲▼ change channel ({x}/{y}) · ◀ channel list · MENU audio and subtitles",
   "Todavía no hay videos de prueba.": "No test videos yet.",
 };
 

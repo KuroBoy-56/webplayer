@@ -938,10 +938,16 @@ export default function Player({ params }: { params: PlayParams }) {
         setAskExit(false);
         return true;
       }
-      // película o capítulo: se pregunta antes de salir; en vivo sale directo
+      // película o capítulo: se pregunta antes de salir; en vivo, Atrás oculta la información del canal y, con todo
+      // oculto, sale
       if (!live) {
         askRef.current = true;
         setAskExit(true);
+        return true;
+      }
+      if (overlayVisible.current) {
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+        setOverlay(false);
         return true;
       }
       leave();
@@ -1015,31 +1021,38 @@ export default function Player({ params }: { params: PlayParams }) {
     showOverlay();
   };
 
-  // OK: reintentar tras un error; en vivo, la barra del canal (nombre y guía) y la lista de canales a la izquierda;
-  // en películas y capítulos, pausa
+  // OK: reintentar tras un error; en vivo, la información del canal (nombre y guía); en películas y capítulos, pausa
   const onSelect = () => {
     if (error) {
       retried.current = false;
       load(indexRef.current, Math.floor(pos));
-    } else if (live) {
-      showOverlay();
-      if (params.kind === 'live' && params.channels.length > 1) setChList(true);
-    } else togglePause();
+    } else if (live) showOverlay();
+    else togglePause();
+  };
+  // en vivo, ◀: la lista de canales de la carpeta a la izquierda (como Roku)
+  const openChList = () => {
+    if (params.kind === 'live' && params.channels.length > 1) setChList(true);
+    else showOverlay();
   };
   // ancla de foco: un botón invisible a pantalla completa que tiene el foco mientras no hay menú ni aviso. Sin él, al
   // abrir un canal desde la lista el foco se quedaba en la lista de abajo (oculta) y OK, ▲ y ▼ no llegaban al reproductor
   const anchorOn = !menu && !askExit && !chList && !(nextSecs > 0) && !controlsFocused;
   useTVEventHandler((evt: HWEvent) => {
     if (evt.eventKeyAction !== undefined && evt.eventKeyAction !== 0) return;
+    // lista de canales abierta: ▶ la cierra (Atrás también)
+    if (chList && !menu && !askExit && evt.eventType === 'right') {
+      setChList(false);
+      return;
+    }
     if (menu || askExit || nextSecs > 0 || chList) return; // menú, lista de canales, aviso del siguiente y «¿Salir?» usan el foco normal
     if (controlsFocused) {
       if (evt.eventType === 'down') { setControlsFocused(false); showOverlay(); }
       if (['menu', 'info', 'more', 'context_menu'].includes(evt.eventType)) openMenu();
       return;
     }
-    // en vivo solo OK (lista de canales), ▲▼ (cambiar de canal) y MENÚ: pausa, ◀▶ y adelantar no hacen nada (pausar un
-    // canal en vivo lo dejaba trabado)
-    if (live && !['select', 'up', 'down', 'channel_up', 'channel_down', 'menu', 'info', 'more', 'context_menu'].includes(evt.eventType)) return;
+    // en vivo solo OK y ▶ (información del canal), ◀ (lista de canales), ▲▼ (cambiar de canal) y MENÚ: pausa y adelantar
+    // no hacen nada (pausar un canal en vivo lo dejaba trabado)
+    if (live && !['select', 'left', 'right', 'up', 'down', 'channel_up', 'channel_down', 'menu', 'info', 'more', 'context_menu'].includes(evt.eventType)) return;
     switch (evt.eventType) {
       case 'select':
         // OK lo atiende el ancla de foco (onSelect); aquí solo si no está (no se hace dos veces)
@@ -1051,7 +1064,7 @@ export default function Player({ params }: { params: PlayParams }) {
         togglePause();
         break;
       case 'left':
-        live ? showOverlay() : seek(-10);
+        live ? openChList() : seek(-10);
         break;
       case 'right':
         live ? showOverlay() : seek(10);
@@ -1192,7 +1205,7 @@ export default function Player({ params }: { params: PlayParams }) {
                   </>
                 ) : null}
                 <Text style={s.hint}>
-                  {t('▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos', { x: index + 1, y: params.kind === 'live' ? params.channels.length : 1 })}
+                  {t('▲▼ cambiar canal ({x}/{y}) · ◀ lista de canales · MENÚ audio y subtítulos', { x: index + 1, y: params.kind === 'live' ? params.channels.length : 1 })}
                 </Text>
               </>
             ) : (
