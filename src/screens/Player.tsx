@@ -17,7 +17,7 @@ import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { MenuItem, Playback } from '../player/playback';
-import { stopLivePreview } from '../player/preview-session';
+import { setLastLive, stopLivePreview } from '../player/preview-session';
 import { prefetchList, prefetchRange } from '../player/prefetch';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
@@ -653,7 +653,7 @@ export default function Player({ params }: { params: PlayParams }) {
         const before = c.liveDiag();
         if (c.liveRetryTs()) {
           const ch = params.channels[indexRef.current] || params.channel;
-          reportError('warning', 'Canal en vivo: el equipo no aceptó el MP4 del lector (sigue en MPEG-TS)', 'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' motivo=' + (liveNote.current || 'error del reproductor') + ' · ' + before, 'Reproductor');
+          reportError('warning', 'Canal en vivo: el equipo no aceptó el MP4 del lector (se vuelve a abrir en MPEG-TS o solo con el video)', 'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' motivo=' + (liveNote.current || 'error del reproductor') + ' · ' + before, 'Reproductor');
           liveNote.current = '';
           setStatus(t('Reconectando…'));
           setBuffering(true);
@@ -795,6 +795,7 @@ export default function Player({ params }: { params: PlayParams }) {
     return () => {
       alive = false;
       loadRev.current++;
+      if (params.kind === 'live') setLastLive((params.channels[indexRef.current] || params.channel)?.id || '');
       try {
         save(true);
         released = c.destroy();
@@ -1057,17 +1058,23 @@ export default function Player({ params }: { params: PlayParams }) {
           if (ready.current) video.current?.setSurfaceHandle(h);
         }}
         onSurfaceViewDestroyed={(h: string) => {
+          // solo si es la superficie que usa el video (si ya se creó otra, no se le quita)
+          if (h !== surface.current) return;
           video.current?.clearSurfaceHandle(h);
           surface.current = '';
         }}
       />
-      <KeplerCaptionsView
-        style={s.captions}
-        onCaptionViewCreated={(h: string) => {
-          captions.current = h;
-          if (ready.current) video.current?.setCaptionViewHandle(h);
-        }}
-      />
+      {/* en vivo sin capa de subtítulos: con ella, los canales que traen subtítulos ocultos (CC) en el video (HBO,
+          Warner…) se congelaban en pantalla grande con el audio sonando; la miniatura, sin esa capa, iba bien */}
+      {live ? null : (
+        <KeplerCaptionsView
+          style={s.captions}
+          onCaptionViewCreated={(h: string) => {
+            captions.current = h;
+            if (ready.current) video.current?.setCaptionViewHandle(h);
+          }}
+        />
+      )}
 
       {/* subtítulos que prepara el panel (WebVTT) */}
       {sub ? (

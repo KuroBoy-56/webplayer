@@ -13,6 +13,7 @@
 // tener unos segundos de margen en lugar de detenerse y seguir; un segmento que no llega se reintenta y, a la tercera,
 // se salta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
+import { AppState } from 'react-native';
 import { UA } from '../lib/http';
 import { takeList } from './prefetch';
 import { xuiError } from '../lib/xui';
@@ -77,11 +78,16 @@ export class LiveHls {
   // en pausa a propósito hasta tener margen: Player muestra «cargando», no «en pausa»
   holding = false;
   private holdAt = 0;
+  // pausa que no puso el lector (la puso el equipo): desde cuándo y cuántas veces se siguió
+  private pausedAt = 0;
+  private resumed = 0;
   private holds: number[] = [];
   private skipped = 0;
   // veces que se pidió la lista otra vez desde la dirección del canal (token vencido) y páginas seguidas en lugar de
   // un segmento
   private renews = 0;
+  // veces que se volvió a pedir la lista al empezar (el servidor no la dio a la primera)
+  private retries = 0;
   private pageRetries = 0;
   // desplazamiento de las marcas de tiempo del canal (null = aún no puesto), cuántas veces se reacomodó (cambio de
   // numeración del servidor, segmento saltado) y huecos que hubo que saltar (deberían ser 0)
@@ -106,7 +112,9 @@ export class LiveHls {
   lastProblem = '';
   onError: (msg: string) => void = () => {};
 
-  constructor(private v: VideoPlayer, url: string, readonly audioIdx = 0) {
+  // noAudio: el equipo no tomó el audio del canal (MP2 / AC-3 en MP4): solo el video
+  // tsOnly: este canal se congeló en MP4 propio: se prueba con el MPEG-TS al reproductor de Vega
+  constructor(private v: VideoPlayer, url: string, readonly audioIdx = 0, private noAudio = false, private tsOnly = false) {
     this.first = url;
     this.list = url;
   }
@@ -117,6 +125,12 @@ export class LiveHls {
 
   mediaFailed(): boolean {
     return this.mediaFail;
+  }
+
+  // el canal trae audio MP3 / MP2 / AC-3 (en MP4 propio o, si el equipo no lo tomó, en MPEG-TS): si no se ve, se
+  // prueba solo con el video
+  otherAudio(): boolean {
+    return !!this.mux && this.mux.otherAudio();
   }
 
   // idiomas de los audios del canal (MP4 propio; el que suena es audioIdx)
@@ -144,15 +158,26 @@ export class LiveHls {
     const host = (this.list.match(/^https?:\/\/([^/?#]+)/i) || [])[1] || '';
     const n = Math.max(1, this.appended);
     const m = this.mux;
-    const how = ' modo=' + (this.mode || '?') + (this.mode === 'mp4' && m ? ' silencio=' + m.filled + ' descartados=' + m.dropped + ' cosidos=' + m.joins : this.muxWhy ? ' (' + this.muxWhy + ')' : '');
+    const how = ' modo=' + (this.mode || '?') + (this.mode === 'mp4' && m ? ' ' + m.mime.replace(/^.*codecs=/, '') + (m.why ? ' (' + m.why + ')' : '') + ' silencio=' + m.filled + ' descartados=' + m.dropped + ' cosidos=' + m.joins : '') + (this.muxWhy ? ' (' + this.muxWhy + ')' : '');
     return 'hls host=' + host + how + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
-      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + (this.resumed ? ' reanudados=' + this.resumed : '') + (this.retries ? ' reintentos=' + this.retries : '') + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
   async start(): Promise<string> {
-    const err = await this.refresh();
+    // Al pasar de la vista previa a pantalla completa (o al cambiar de canal) la lista se pide en el mismo momento en
+    // que se cierra la conexión anterior: muchos servidores XUI contestan esa vez 200 con una página vacía o sin lista
+    // (text/html) y un momento después sí la dan. Se espera y se vuelve a pedir (hasta 3 veces, 1 s, 2 s y 3 s) antes de
+    // dar el canal por perdido; un motivo claro de XUI (canal inexistente, vencida…) no se reintenta.
+    let err = await this.refresh();
+    for (let i = 0; err && i < 3 && this.alive && this.retryable(); i++) {
+      this.retries++;
+      await sleep(1000 * (i + 1));
+      if (!this.alive) return '';
+      this.list = this.first;
+      err = await this.refresh();
+    }
     if (err) return err;
     if (!this.segs.length) return 'lista sin segmentos';
     if (!this.alive) return '';
@@ -296,10 +321,17 @@ export class LiveHls {
     }
   }
 
+  // ¿vale la pena volver a pedir la lista? Página sin lista, vacía, sin motivo de XUI o con uno de conexiones /
+  // demasiados pedidos (la conexión anterior todavía se está cerrando), o un 429 / 503 / 509 del servidor
+  private retryable(): boolean {
+    const p = this.lastProblem;
+    return /^lista no es HLS|^página html|^lista HTTP (429|503|509)\b/.test(p) || /^xui .*(CONNECT|LIMIT|FLOOD|BLOCKED_IP|SESSION)/i.test(p);
+  }
+
   // motivo de una página en lugar de la lista o del video (XUI «Debug Mode»: INVALID_STREAM_ID…)
   private pageProblem(text: string): string {
     const x = xuiError(text);
-    this.lastProblem = x ? 'xui ' + x.code : 'página html';
+    this.lastProblem = x ? 'xui ' + x.code : 'página html (' + text.length + ' bytes)';
     return x ? 'XUI ' + x.code + (x.text ? ' (' + x.text + ')' : '') : 'el servidor devolvió una página en lugar del canal';
   }
 
@@ -315,7 +347,13 @@ export class LiveHls {
         this.lastProblem = 'lista HTTP ' + r.code;
         return r.code ? 'el servidor contestó ' + r.code + ' a la lista HLS' : 'sin conexión con el servidor (lista HLS)';
       }
-      if (!r.text.trim().startsWith('#EXTM3U')) return /<html|<!doctype/i.test(r.text) ? this.pageProblem(r.text) : ((this.lastProblem = 'lista no es HLS'), 'el servidor no devolvió una lista HLS');
+      if (!r.text.trim().startsWith('#EXTM3U')) {
+        if (/<html|<!doctype/i.test(r.text)) return this.pageProblem(r.text);
+        // lo que llegó en lugar de la lista (para el reporte): tipo, tamaño y el comienzo
+        const head = r.text.replace(/\s+/g, ' ').trim().slice(0, 60);
+        this.lastProblem = 'lista no es HLS (' + (r.type || '?') + ', ' + r.text.length + ' bytes' + (head ? ': ' + head : '') + ')';
+        return 'el servidor no devolvió una lista HLS';
+      }
       const p = parseList(r.text, r.url);
       if (p.master) {
         this.list = p.master;
@@ -373,13 +411,40 @@ export class LiveHls {
         if (t <= en) {
           // al final de este tramo (o quieto) y hay otro después: al siguiente
           if (next > 0 && (en - t < 0.5 || stalled)) this.jump(next + 0.1);
-          else if (stalled && en - t > 1) this.jump(t + 0.5);
+          // trabado con video por delante: al cuadro clave siguiente (el decodificador empieza limpio y deja atrás el
+          // tramo que lo trababa); sin uno conocido, unas décimas más adelante
+          else if (stalled && en - t > 1) {
+            const k = this.nextKey(t, en);
+            this.jump(k > 0 ? k + 0.15 : t + (Date.now() - this.lastJump < 8000 && en - t > 3 ? 2 : 0.5));
+            this.froze();
+          }
           return;
         }
       }
     } catch {
       // sin datos todavía
     }
+  }
+
+  // cuadro clave entregado después de t (MP4 propio: todos; MPEG-TS: el comienzo de cada segmento)
+  private segStarts: number[] = [];
+  private nextKey(t: number, end: number): number {
+    const list = this.mode === 'mp4' && this.mux ? this.mux.keys : this.segStarts;
+    return list.find(k => k > t + 0.3 && k < end - 0.5) ?? 0;
+  }
+
+  // Imagen congelada con video de sobra por delante (el audio puede seguir sonando): 3 veces en 30 s y empujarla no
+  // sirve. Player vuelve a abrir el canal (playback.liveRetryTs): primero igual (reproductor nuevo) y después en MPEG-TS
+  frozen = false;
+  private freezes: number[] = [];
+  private froze(): void {
+    const now = Date.now();
+    this.freezes = this.freezes.filter(x => now - x < 30000);
+    this.freezes.push(now);
+    if (this.freezes.length < 3 || this.frozen || !this.alive) return;
+    this.frozen = true;
+    this.lastProblem = 'imagen congelada con ' + this.aheadSec().toFixed(0) + ' s por delante';
+    this.onError('la imagen se congeló');
   }
 
   // último segmento que llegó del servidor (el vigilante de Player espera más si el canal sigue bajando)
@@ -432,6 +497,25 @@ export class LiveHls {
     }
     this.unstick();
     const ahead = this.aheadSec();
+    // Vega pausa el reproductor por su cuenta a veces (al soltarse el audio de la miniatura al pasar a pantalla grande):
+    // el canal quedaba en pausa para siempre, porque el vigilante solo mira el video andando. En vivo nadie pausa a
+    // propósito (Player no deja pausar un canal): con video por delante sigue; sin él, espera margen como siempre
+    if (this.v.paused && !this.holding) {
+      if (!this.pausedAt) this.pausedAt = Date.now();
+      else if (Date.now() - this.pausedAt > 1500 && AppState.currentState === 'active') {
+        this.pausedAt = 0;
+        if (this.aheadSec() >= 1) {
+          this.resumed++;
+          this.lastMove = Date.now();
+          this.v.play();
+        } else {
+          this.holding = true;
+          this.holdAt = Date.now();
+        }
+      }
+      return;
+    }
+    this.pausedAt = 0;
     if (this.holding) {
       // con margen (o con algo después de 8 s esperando) sigue
       if (ahead >= this.margin() || (ahead >= 1.5 && Date.now() - this.holdAt > 8000)) {
@@ -657,6 +741,8 @@ export class LiveHls {
         }
       }
     }
+    this.segStarts.push(pts.min + off);
+    if (this.segStarts.length > 60) this.segStarts.shift();
     if (off === this.tsOff) return;
     await this.idle();
     try {
@@ -670,8 +756,8 @@ export class LiveHls {
   // Entrega un segmento: convertido a MP4 (de corrido) o, si no se puede, el MPEG-TS tal cual. 0 = error (ya avisado),
   // 1 = entregado, 2 = nada que entregar todavía
   private async deliver(data: Uint8Array): Promise<0 | 1 | 2> {
-    if (this.mode !== 'ts' && !mp4Off) {
-      if (!this.mux) this.mux = new TsMux(this.audioIdx, false, this.target >= 8 ? 2 : 3);
+    if (this.mode !== 'ts' && !mp4Off && !this.tsOnly) {
+      if (!this.mux) this.mux = new TsMux(this.noAudio ? -1 : this.audioIdx, false, this.target >= 8 ? 2 : 3);
       await sleep(0);
       let r;
       try {
@@ -696,6 +782,13 @@ export class LiveHls {
               this.muxWhy = 'addSourceBuffer mp4: ' + String(e?.message || e).slice(0, 40);
             }
           } else this.muxWhy = 'no acepta ' + r.mime;
+          // el equipo no toma el audio MP3 / MP2: el mismo segmento otra vez, solo con el video (en MPEG-TS Vega
+          // tampoco mostraba nada: buf vacío); AC-3 sigue en MPEG-TS como antes
+          if (!this.sb && this.mux.mpegAudio()) {
+            this.noAudio = true;
+            this.mux = null;
+            return this.deliver(data);
+          }
         }
         if (this.mode === 'mp4') return (await this.append(r.data)) ? 1 : 0;
       } else if (this.mode === 'mp4') {

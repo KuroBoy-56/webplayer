@@ -29,6 +29,7 @@ Module._load = function(request, parent, isMain) {
   if (request === './panel') return { cloud: async () => { panelRequests++; return {}; } };
   if (request === '../lib/i18n' || request === './i18n') return { t: key => key };
   if (request === '@amazon-devices/react-native-w3cmedia') return { MediaSource: { isTypeSupported: () => true } };
+  if (request === 'react-native') return { AppState: { currentState: 'active' } };
   if (request === './shaka-env') return { installShakaEnvironment() {} };
   if (request === './vendor/shaka-player.compiled') return { Player: TestShaka, polyfill: { installAll() {} }, net: { NetworkingEngine: { unregisterScheme() {}, registerScheme() {}, PluginPriority: { APPLICATION: 1 } }, HttpFetchPlugin: { parse() {} } } };
   return originalLoad.call(this, request, parent, isMain);
@@ -124,6 +125,29 @@ test('salir del HLS anterior cancela las descargas de lista y segmentos', async 
     assert.equal(aborted, 2);
   } finally { global.fetch = realFetch; }
 });
+test('canal: si el servidor no da la lista a la primera (página vacía al salir de la vista previa) se vuelve a pedir', async () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  const realFetch = global.fetch;
+  const bodies = ['', '#EXTM3U\n#EXT-X-TARGETDURATION:6\n'];
+  let calls = 0;
+  const reply = (text, type) => ({ status: 200, url: 'http://fixture.invalid/live.m3u8', headers: { get: k => (k === 'content-type' ? type : null) }, text: async () => text });
+  global.fetch = async () => { const b = bodies[Math.min(calls, bodies.length - 1)]; calls++; return reply(b, b ? 'application/vnd.apple.mpegurl' : 'text/html; charset=UTF-8'); };
+  try {
+    const reader = new LiveHls({ removeEventListener() {}, addEventListener() {} }, 'http://fixture.invalid/live.m3u8');
+    // la segunda vez llega la lista (aquí sin segmentos): ya no es «el servidor no devolvió una lista HLS»
+    assert.equal(await reader.start(), 'lista sin segmentos');
+    assert.equal(calls, 2);
+    assert.match(reader.diag(), /reintentos=1/);
+    reader.destroy();
+    // un motivo claro de XUI (canal que no existe) no se reintenta
+    calls = 0;
+    global.fetch = async () => { calls++; return reply('<html><body>XUI.ONE INVALID_STREAM_ID Stream ID doesn\'t exist.</body></html>', 'text/html'); };
+    const bad = new LiveHls({ removeEventListener() {}, addEventListener() {} }, 'http://fixture.invalid/live.m3u8');
+    assert.match(await bad.start(), /INVALID_STREAM_ID/);
+    assert.equal(calls, 1);
+    bad.destroy();
+  } finally { global.fetch = realFetch; }
+});
 test('HLS libera la URL MSE al cerrar', () => {
   const { LiveHls } = require('../src/player/livehls.ts');
   const realRevoke = URL.revokeObjectURL;
@@ -148,4 +172,48 @@ test('Shaka arranca con 1 s bajado (canales, películas y series) y guarda más 
     assert.equal(configured.abr.enabled, true);
     await adapter.destroy();
   }
+});
+
+test('canal en vivo: si el equipo lo pausa solo (al pasar de la miniatura a pantalla grande) sigue reproduciendo', () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  let plays = 0;
+  const v = { paused: true, currentTime: 5, addEventListener() {}, removeEventListener() {}, play() { plays++; this.paused = false; }, pause() { this.paused = true; } };
+  const reader = new LiveHls(v, 'http://fixture.invalid/live.m3u8');
+  Object.assign(reader, { started: true, lastAppend: Date.now(), sb: { buffered: { length: 1, start: () => 0, end: () => 30 } } });
+  reader.tick();
+  assert.equal(plays, 0); // un momento de gracia (salir del canal también pausa)
+  reader.pausedAt = Date.now() - 2000;
+  reader.tick();
+  assert.equal(plays, 1);
+  assert.equal(v.paused, false);
+  reader.destroy();
+});
+
+test('canal en vivo: imagen congelada con video por delante (3 veces en 30 s) se avisa para volver a abrirlo', () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  const v = { paused: false, currentTime: 8, addEventListener() {}, removeEventListener() {}, play() {}, pause() {} };
+  const reader = new LiveHls(v, 'http://fixture.invalid/live.m3u8');
+  const errors = [];
+  reader.onError = why => errors.push(why);
+  Object.assign(reader, { started: true, sb: { buffered: { length: 1, start: () => 0, end: () => 40 } } });
+  for (let i = 0; i < 3; i++) {
+    reader.lastT = v.currentTime;
+    reader.lastMove = Date.now() - 4000;
+    reader.unstick();
+  }
+  assert.equal(reader.frozen, true);
+  assert.deepEqual(errors, ['la imagen se congeló']);
+  reader.destroy();
+});
+
+test('canal en vivo: imagen trabada con video por delante salta al cuadro clave siguiente (no unas décimas)', () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  const v = { paused: false, currentTime: 8, addEventListener() {}, removeEventListener() {}, play() {}, pause() {} };
+  const reader = new LiveHls(v, 'http://fixture.invalid/live.m3u8');
+  Object.assign(reader, { started: true, mode: 'mp4', mux: { keys: [0, 4, 12, 20], otherAudio: () => false }, sb: { buffered: { length: 1, start: () => 0, end: () => 40 } } });
+  reader.lastT = 8;
+  reader.lastMove = Date.now() - 4000;
+  reader.unstick();
+  assert.equal(v.currentTime, 12.15);
+  reader.destroy();
 });

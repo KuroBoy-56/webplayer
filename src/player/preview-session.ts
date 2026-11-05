@@ -15,6 +15,17 @@ export function waitForLivePreview(): Promise<void> {
   return released;
 }
 
+// el canal que sonaba al cerrar la pantalla grande (se pudo cambiar con ▲▼): TV en vivo pone ahí el foco y la miniatura
+let lastLive = '';
+export function setLastLive(id: string): void {
+  lastLive = id;
+}
+export function takeLastLive(): string {
+  const id = lastLive;
+  lastLive = '';
+  return id;
+}
+
 export function registerLivePreview(stop: Stop): () => void {
   void stopLivePreview();
   current = stop;
