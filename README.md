@@ -11,6 +11,18 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+## Novedades de la 1.3.5
+
+**MKV con la extensión .mp4** (servidores IPTV que los etiquetan mal; el reporte lo delata con códecs de Matroska como
+`A_AC3`): si el lector de MP4 no encuentra el índice, se mira la cabecera del archivo y, si es MKV, lo abre el lector de
+MKV (`asMkv`, `isMkv()` en `src/player/playback.ts`). Así los idiomas y los subtítulos de texto (también los forzados)
+salen del archivo en el equipo, sin servidor. Antes iba «directo» y todo cambio pasaba al servidor. El audio Dolby
+(AC-3) sigue sin poder decodificarse en el simulador de LG (el Chrome de la computadora no lo trae); en la tele sí.
+
+**Tema de prueba del dueño:** si el video se oye pero no muestra imagen (códec de video que el equipo no decodifica,
+p. ej. H.265 / HEVC en el simulador), el reproductor lo dice con el códec en vez de quedar en negro
+(`src/screens/Review.tsx`). Para el simulador conviene subir las muestras en H.264.
+
 ## Novedades de la 1.3.4
 
 **El simulador de LG como Vega.** Ahí el `<video>` no anuncia `nativeFiles`: MP4 y MKV los lee la app desde el

@@ -214,6 +214,19 @@ test('LG: Continuar viendo empieza en el segundo guardado con el reproductor del
   // no lo tomó: salta en loadedmetadata
   c.load('https://fixture.invalid/otro.mp4',900,false);video.currentTime=0;c.onMeta();assert.equal(video.currentTime,900);await c.destroy();
 });
+test('un MKV con la extensión .mp4 lo lee el lector de MKV (idiomas y subtítulos en el equipo)',async()=>{
+  const {c}=setup();const orig=Mp4.prototype.start;
+  Mp4.prototype.start=async function(){return 'índice: no encontrado';};
+  try {
+    c.load('https://fixture.invalid/movie/u/p/7.mp4',0,false);
+    probe={ok:true,container:'mkv',audio:[{lang:'spa',name:'',codec:'A_AC3',def:true},{lang:'eng',name:'',codec:'A_AAC',def:false}],subs:[{lang:'spa',name:'',codec:'S_TEXT/UTF8',def:false,forced:true}]};
+    for(let i=0;i<6;i++) await tick();
+    assert.equal(mp4s.length,1);assert.equal(mkvs.length,1);assert.equal(mkvs[0].url,'https://fixture.invalid/movie/u/p/7.mp4');
+    // la próxima vez (cabecera ya leída) directo al lector de MKV
+    c.load('https://fixture.invalid/movie/u/p/7.mp4',0,false);await tick();assert.equal(mp4s.length,1);assert.equal(mkvs.length,2);
+  } finally {Mp4.prototype.start=orig;}
+  await c.destroy();
+});
 test('cambios nativos rápidos cancelan la comprobación de la selección anterior',async()=>{
   const {c}=setup({tracks:[{language:'es',enabled:true},{language:'en',enabled:false}],cached:dual});c.load('https://fixture.invalid/video.avi',0,false);
   choose(c,'Inglés');choose(c,'Español');await new Promise(r=>setTimeout(r,1550));assert.deepEqual(calls,[]);await c.destroy();

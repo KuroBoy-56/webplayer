@@ -180,6 +180,8 @@ export class Playback {
   private liveReaderTried = false;
   // televisor: el idioma que el lector de la app está preparando (aviso al empezar a sonar con él)
   private switchNote = '';
+  // el archivo es un MKV aunque la dirección diga .mp4 (pasa en servidores IPTV): lo lee el lector de MKV
+  private asMkv = false;
   // el HLS del panel que sigue sonando mientras se prepara otro idioma
   private prevHls: PanelHls | null = null;
   private offset = 0;
@@ -287,6 +289,7 @@ export class Playback {
     this.resumePanel = false;
     this.mp4Url = false;
     this.mkvNative = '';
+    if (!sameFile) this.asMkv = false;
     this.mp4Why = '';
     this.deniedShown = false;
     if (live) {
@@ -407,7 +410,7 @@ export class Playback {
     if (!this.live && !this.mp4Url && (!this.tvNative() || this.readerWanted) && /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(this.url)) {
       this.resumeAt = 0;
       const g = this.gen;
-      const mkv = /\.mkv(\?|$)/i.test(this.url);
+      const mkv = this.isMkv();
       const want = this.mp4Audio;
       const m = mkv ? new MkvMse(this.v, this.url, this.mp4Audio, this.mkvIndex) : new Mp4Mse(this.v, this.url, this.mp4Audio, this.mp4Index);
       this.mse = m;
@@ -439,6 +442,18 @@ export class Playback {
         .then(err => {
           if (g !== this.gen || this.mse !== m) return;
           if (err) {
+            // sin índice MP4: puede ser un MKV con la extensión .mp4; si la cabecera lo dice, el lector de MKV (idiomas y
+            // subtítulos de texto en el equipo, sin servidor)
+            if (!mkv && /^índice/.test(err)) {
+              fileTracks(this.url).then(p => {
+                if (g !== this.gen || this.mse !== m) return;
+                if (p.container !== 'mkv') return this.mp4Failed(at, err);
+                this.asMkv = true;
+                if (p.ok) this.probe = p;
+                this.direct(at);
+              });
+              return;
+            }
             this.mp4Failed(at, err);
             return;
           }
@@ -537,6 +552,11 @@ export class Playback {
     return !!this.mse && !this.mp4Url && !this.played;
   }
 
+  // MKV por la dirección o por lo que trae el archivo (servidores que entregan MKV con la extensión .mp4)
+  private isMkv(): boolean {
+    return /\.mkv(\?|$)/i.test(this.url) || this.asMkv || this.probe?.container === 'mkv';
+  }
+
   // el reproductor es el del televisor (LG webOS): abre MP4 / MKV / HLS solo
   private tvNative(): boolean {
     return !!(this.v as any).nativeFiles;
@@ -633,7 +653,7 @@ export class Playback {
       }
       this.tvLunaSubFailed = true;
     }
-    if (!it.image && !this.readerWanted && !this.mse && /\.mkv(\?|$)/i.test(this.url) && this.readerCan()) {
+    if (!it.image && !this.readerWanted && !this.mse && this.isMkv() && this.readerCan()) {
       this.readerWanted = true;
       this.pendingSub = it.probe;
       this.subKey = it.key;

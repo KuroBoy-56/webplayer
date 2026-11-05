@@ -7,6 +7,7 @@ import { KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-nativ
 import { panelScheme, type Review as ReviewData, type ReviewVideo } from '../api/panel';
 import { Focusable, Logo } from '../components/ui';
 import { t } from '../lib/i18n';
+import { probeTracks } from '../lib/probe';
 import { useNav } from '../nav';
 import { alpha, px } from '../theme';
 
@@ -82,6 +83,15 @@ function Videos({ list, onPlay }: { list: ReviewVideo[]; onPlay: (v: ReviewVideo
   );
 }
 
+// nombre del códec de video para el aviso (MP4: hvc1, avc1…; MKV: V_MPEGH/ISO/HEVC…)
+function videoCodec(c: string): string {
+  if (/hvc1|hev1|hevc|mpegh/i.test(c)) return 'H.265 / HEVC';
+  if (/avc|h264/i.test(c)) return 'H.264';
+  if (/av01|av1/i.test(c)) return 'AV1';
+  if (/vp9|vp09/i.test(c)) return 'VP9';
+  return c || t('códec no compatible');
+}
+
 // reproductor sencillo para un video del panel (sin sesión ni progreso): OK pausa / sigue, Atrás cierra
 function ReviewPlayer({ video, onClose }: { video: ReviewVideo; onClose: () => void }) {
   const v = useRef<VideoPlayer | null>(null);
@@ -96,7 +106,21 @@ function ReviewPlayer({ video, onClose }: { video: ReviewVideo; onClose: () => v
     // aceptan); si no abre, una vez con el otro antes del aviso
     const first = panelScheme() === 'http' ? video.url.replace(/^https:/i, 'http:') : video.url;
     let other = false;
-    const onPlaying = () => alive && setState('');
+    let looked = false;
+    // se oye pero no se ve (códec de video que el equipo no decodifica: p. ej. H.265 en el simulador de LG): se dice cuál,
+    // en vez de dejar la pantalla negra sin explicación
+    const onPlaying = () => {
+      if (!alive) return;
+      setState('');
+      if (looked) return;
+      looked = true;
+      setTimeout(async () => {
+        const w = (p as any).videoWidth;
+        if (!alive || typeof w !== 'number' || w > 0 || p.paused) return;
+        const pr = await probeTracks(p.src || first).catch(() => null);
+        if (alive) setState(t('Se oye, pero este equipo no muestra la imagen de este video ({x}).', { x: videoCodec(pr?.video || '') }));
+      }, 3000);
+    };
     const onPause = () => alive && setState(t('En pausa'));
     const onError = () => {
       if (!alive) return;

@@ -204,6 +204,8 @@ const en = {
   "No se pudo guardar el PIN en el panel": "Couldn't save the PIN to the panel",
   "No se pudo iniciar el reproductor.": "Couldn't start the player.",
   "No se pudo iniciar sesión": "Couldn't sign in",
+  "Se oye, pero este equipo no muestra la imagen de este video ({x}).": "You can hear it, but this device does not show the picture of this video ({x}).",
+  "códec no compatible": "unsupported codec",
   "No compatible con el dispositivo": "Not compatible with this device",
   "No se pudo registrar": "Couldn't register",
   "No se pudo registrar el equipo": "Couldn't register the device",
