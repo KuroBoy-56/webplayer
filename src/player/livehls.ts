@@ -45,6 +45,14 @@ function keyBytes(d: Uint8Array): Uint8Array | null {
 }
 
 // el reproductor falló con el MP4 propio: el resto de la sesión, MPEG-TS
+const ok = (mime: string): boolean => {
+  try {
+    return (MediaSource as any).isTypeSupported(mime, true);
+  } catch {
+    return false;
+  }
+};
+
 let mp4Off = false;
 export function disableMp4(): void {
   mp4Off = true;
@@ -138,12 +146,14 @@ export class LiveHls {
     return this.mode === 'mp4' && this.mux ? this.mux.langs : [];
   }
 
+  // el lector convierte los segmentos a MP4 (fMP4) y solo si no puede los entrega en MPEG-TS: basta con uno de los dos
+  // (Chrome, el simulador de LG y algunos televisores no aceptan MPEG-TS por MSE)
   static supported(): boolean {
-    try {
-      return MediaSource.isTypeSupported('video/mp2t', true);
-    } catch {
-      return false;
-    }
+    return LiveHls.tsSupported() || ok('video/mp4; codecs="avc1.42E01E"');
+  }
+
+  static tsSupported(): boolean {
+    return ok('video/mp2t');
   }
 
   // estado para el reporte: lista, segmentos entregados, lo que tiene el reproductor y dónde está

@@ -224,6 +224,12 @@ export class Mp4Mse {
   get indexed(): boolean {
     return !!this.vt;
   }
+  // otro idioma elegido mientras todavía lee el índice: se usa ese al empezar (sin volver a pedir nada). false = ya empezó
+  want(audio: number): boolean {
+    if (this.vt) return false;
+    this.selectedAudio = audio;
+    return true;
+  }
   // la primera entrega después de abrir o saltar es corta (1,5 s): la imagen sale antes
   private firstOut = true;
   // MP4 con el índice al final: el principio del video (2 MB) se pide a la vez que el índice

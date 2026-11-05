@@ -11,6 +11,32 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+## Novedades de la 1.3.3
+
+**Simulador de webOS (en la computadora).** El simulador de LG tiene `PalmSystem` pero reproduce con el Chrome de la
+computadora: no tiene el reproductor por hardware (no abre HLS ni MPEG-TS, no cambia pistas, sin `com.webos.media`). Se
+reconoce por el modelo (`tvSimulator()` en `src/lib/platform.ts`: «WEBOS22_SIMULATOR»). Ahí el `<video>` anuncia
+`nativeFiles` pero no `nativeLive`: los canales van directo al lector de la app (como en Vega) y las películas abren
+como siempre, con el lector de la app para cambiar de idioma. En la tele no cambia nada: primero el reproductor de LG.
+
+**Lector de canales sin MPEG-TS por MSE.** `LiveHls.supported()` pedía `video/mp2t` por MSE, que Chrome, el simulador y
+algunas teles no tienen, aunque el lector convierte cada segmento a MP4. Ahora basta con MP4 (`avc1`); el MPEG-TS queda
+como respaldo solo donde existe (`LiveHls.tsSupported()`; los reintentos de congelado y de MP4 rechazado no lo usan si no
+está).
+
+**Cambio de idioma con el lector de la app:** «Cambiando a …» queda a la vista mientras lee el índice (un MP4 con el
+índice al final puede tardar) y el idioma pedido queda marcado. Otro idioma elegido mientras tanto cambia el pedido sin
+empezar de nuevo (`Mp4Mse.want` / `MkvMse.want`; antes iba al servidor y salía «encender el servidor»). Al sonar,
+«Audio: …». Si el servidor no entrega el índice (20 s sin datos o 2 min), vuelve el video como estaba y ese idioma queda
+para el servidor (apagado: el aviso).
+
+**Interfaz:** en TV en vivo la descripción del programa va en su propio lugar (`src/components/ScrollingText.tsx`). Si no
+cabe, sube sola hasta la última línea y vuelve a empezar, en líneas enteras, sin tapar lo que sigue ni «Agregar a
+favoritos» (los textos de la guía ya no se encogen). En la ficha, volver con ▲ a Reproducir / Mi lista sube la ficha
+entera otra vez. Sin barras de desplazamiento en la tele (`webos/index.html`; la barra gris bajo el Reparto). Al volver
+del reproductor, el foco llega al canal aunque esté lejos en la lista: se vuelve a ir a él hasta que su fila tiene el foco
+y `web/spatial.ts` espera dos vueltas sin foco antes de ponerlo en otro lado.
+
 ## Novedades de la 1.3.2
 
 **TV en vivo como en Vega y Roku.** En la lista, pasar por las carpetas y los canales no abre nada. OK en una carpeta

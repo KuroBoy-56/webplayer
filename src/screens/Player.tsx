@@ -150,8 +150,8 @@ export default function Player({ params }: { params: PlayParams }) {
     [params],
   );
 
-  // canal abierto por el reproductor del televisor (LG: el <video> anuncia nativeFiles), no por el lector de la app
-  const tvLive = () => !!(video.current as any)?.nativeFiles && !ctl.current?.liveDiag();
+  // canal abierto por el reproductor del televisor (LG: el <video> anuncia nativeLive), no por el lector de la app
+  const tvLive = () => !!(video.current as any)?.nativeLive && !ctl.current?.liveDiag();
 
   const showOverlay = useCallback(() => {
     setOverlay(true);
@@ -733,7 +733,7 @@ export default function Player({ params }: { params: PlayParams }) {
           retryLive(i, [300, 1000, 2000, 4000, 8000][rc.n - 1]);
           return;
         }
-        if (vs.attempts.length < 16) vs.attempts.push(LIVE_FORMATS[fmtAt.current] + (diag ? ' (lector de la app)' : (v as any).nativeFiles ? ' (reproductor LG)' : '') + (flipped.current ? ' (otro protocolo)' : '') + (dnsUrl.current ? ' (DNS)' : '') + ': ' + why);
+        if (vs.attempts.length < 16) vs.attempts.push(LIVE_FORMATS[fmtAt.current] + (diag ? ' (lector de la app)' : (v as any).nativeLive ? ' (reproductor LG)' : '') + (flipped.current ? ' (otro protocolo)' : '') + (dnsUrl.current ? ' (DNS)' : '') + ': ' + why);
         // al primer fallo se le pregunta una vez al servidor: si contesta con un error (página de XUI, 4xx, cuenta no
         // activa) no se insiste, se dice el motivo
         if (!vs.checked) {

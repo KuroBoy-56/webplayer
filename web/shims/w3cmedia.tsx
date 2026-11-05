@@ -3,7 +3,7 @@
 // 4K / HDR, varias pistas de audio con audioTracks); en un navegador (pruebas) es el <video> de Chrome.
 import React, { useEffect, useRef } from 'react';
 import { View } from 'react-native-web';
-import { luna } from '../../src/lib/platform';
+import { luna, tvSimulator } from '../../src/lib/platform';
 
 type Listener = (e?: any) => void;
 
@@ -38,8 +38,9 @@ function hlsByItself(v: HTMLVideoElement): boolean {
   }
 }
 
-// ¿es el televisor LG? (PalmSystem solo existe en webOS; en un navegador de pruebas no)
-const onTv = () => !!g.PalmSystem;
+// ¿el reproductor por hardware del televisor LG? (PalmSystem solo existe en webOS; en un navegador de pruebas no). El
+// simulador de LG también tiene PalmSystem pero reproduce con el Chrome de la computadora: ahí no (lectores de la app)
+const onTv = () => !!g.PalmSystem && !tvSimulator();
 
 // id del video en el reproductor del televisor (webOS lo pone en el <video> al cargar: mediaId)
 function mediaIdOf(v: any): string {
@@ -146,7 +147,10 @@ function htmlPlayer(): VideoPlayer {
   // en el televisor, MP4 / MKV / MOV / TS los abre su reproductor por hardware (todos los audios, Dolby y DTS incluidos):
   // src/player/playback.ts no usa los lectores propios de Vega salvo para cambiar de audio o subtítulos si el televisor
   // no puede
-  Object.defineProperty(v, 'nativeFiles', { value: onTv() });
+  Object.defineProperty(v, 'nativeFiles', { value: !!g.PalmSystem });
+  // canales con el reproductor del televisor (HLS / MPEG-TS por hardware): solo en el televisor; en el simulador de LG
+  // los abre el lector de la app (como en Vega)
+  Object.defineProperty(v, 'nativeLive', { value: onTv() });
   // Cambio de pista con el servicio de medios del televisor (com.webos.media, el mismo reproductor por hardware), para
   // cuando el <video> no informa sus pistas (audioTracks / textTracks vacíos): index = orden de la pista en el archivo
   // (el mismo de la cabecera leída: 0:a:N / 0:s:N). true = el televisor aceptó el cambio

@@ -35,21 +35,28 @@ class Shaka {
   async destroy(){this.stopped=true;if(release) await release;}
 }
 class Mp4 {
-  constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||new Uint8Array([1]);this.noAudio=false;this.tracks=[{lang:'spa',codec:'mp4a'},{lang:'eng',codec:'mp4a'}];mp4s.push(this);}
-  async start(at){this.v.currentTime=at;this.onTracks();return '';}
+  constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||new Uint8Array([1]);this.noAudio=false;this.tracks=[];mp4s.push(this);}
+  get indexed(){return !!this.started;}
+  want(i){if(this.started)return false;this.audioIdx=i;return true;}
+  busy(){return true;}
+  // como el lector real: las pistas salen del índice, al empezar
+  async start(at){this.started=true;this.tracks=[{lang:'spa',codec:'mp4a'},{lang:'eng',codec:'mp4a'}];this.v.currentTime=at;this.onTracks();return '';}
   destroy(){}
 }
 class Mkv {
   constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||{cached:true};this.noAudio=mkvTracks.every(t=>t.codec==='A_EAC3');this.tracks=mkvTracks;mkvs.push(this);}
   probe(){return {ok:true,headOk:true,container:'mkv',audio:this.tracks.map((t,i)=>({id:String(i),lang:t.lang,codec:t.codec,name:'',def:i===0,forced:false})),subs:[{id:'0',lang:'spa',codec:'S_TEXT/UTF8',name:'',def:false,forced:false},{id:'1',lang:'eng',codec:'S_HDMV/PGS',name:'',def:false,forced:false}]};}
   subCues(n){return n===0?(this.cuesList||(this.cuesList=[{s:0,e:5,text:'hola'}])):null;}
-  async start(at){this.v.currentTime=at;this.onTracks();return '';}
+  get indexed(){return !!this.started;}
+  want(i){if(this.started)return false;this.audioIdx=i;return true;}
+  busy(){return true;}
+  async start(at){this.started=true;this.v.currentTime=at;this.onTracks();return '';}
   timeOf(t){return t;}
   destroy(){}
 }
 class PanelHls {static supported(){return true;}}
 let lives = [];
-class LiveHls {static supported(){return true;}constructor(v,url,audio,noAudio,tsOnly){this.url=url;this.tsOnly=tsOnly;this.frozen=false;lives.push(this);}isMp4(){return !this.tsOnly;}otherAudio(){return false;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
+class LiveHls {static supported(){return true;}static tsSupported(){return true;}constructor(v,url,audio,noAudio,tsOnly){this.url=url;this.tsOnly=tsOnly;this.frozen=false;lives.push(this);}isMp4(){return !this.tsOnly;}otherAudio(){return false;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
 const media = {
   engineDenied:()=>'',knownNow:()=>probe,knownTracks:async()=>probe||noTracks,
   fileTracks:async()=>probe||noTracks,
@@ -130,7 +137,7 @@ test('MKV: subtítulos de texto leídos por la app, sin servidor',async()=>{
   c.select(sub);await tick();assert.deepEqual(calls,[]);assert.ok(c.menu().find(m=>m.kind==='text' && m.label.includes('Español')).on);await c.destroy();
 });
 // ---------- LG webOS: el reproductor del televisor primero, el servidor al final ----------
-const tvVideo=(video,ok)=>{const sel=[];video.nativeFiles=true;video.tvSelectTrack=async(type,i)=>{sel.push([type,i]);return ok;};video.tvSubtitleOff=async()=>true;return sel;};
+const tvVideo=(video,ok)=>{const sel=[];video.nativeFiles=true;video.nativeLive=true;video.tvSelectTrack=async(type,i)=>{sel.push([type,i]);return ok;};video.tvSubtitleOff=async()=>true;return sel;};
 test('LG: el MKV lo abre el televisor y el idioma cambia con su servicio de medios, sin servidor',async()=>{
   const {c,video}=setup({cached:dual});const sel=tvVideo(video,true);
   c.load('https://fixture.invalid/video.mkv',0,false);await tick();
@@ -173,6 +180,29 @@ test('LG: pistas del televisor en otro orden que el archivo: se elige por idioma
   const tracks=[{language:'en',enabled:false},{language:'es',enabled:true}];
   const {c,video}=setup({tracks,cached:dual});tvVideo(video,true);c.load('https://fixture.invalid/video.avi',0,false);choose(c,'Inglés');
   assert.equal(tracks[0].enabled,true);assert.equal(tracks[1].enabled,false);assert.deepEqual(calls,[]);await c.destroy();
+});
+test('simulador de LG (sin el reproductor del televisor): los canales van directo al lector de la app',async()=>{
+  lives=[];const {c,video}=setup();video.nativeFiles=true;video.tvSelectTrack=async()=>false;
+  c.load('https://sim.invalid/live/u/p/1.m3u8',0,true);assert.equal(lives.length,1);assert.equal(c.liveReader(),false);await c.destroy();
+});
+test('simulador de LG: cambiar de idioma lo hace el lector de la app; otro idioma mientras lee el índice no va al servidor',async()=>{
+  const {c,video}=setup({cached:{ok:true,container:'mp4',audio:[{lang:'en',name:'',codec:'mp4a',def:true},{lang:'es',name:'',codec:'mp4a',def:false},{lang:'fr',name:'',codec:'mp4a',def:false}],subs:[]}});
+  video.nativeFiles=true;video.tvSelectTrack=async()=>false;
+  const status=[];c.hooks.status=m=>status.push(m);
+  let go;const wait=new Promise(r=>{go=r;});const orig=Mp4.prototype.start;
+  Mp4.prototype.start=async function(at){await wait;return orig.call(this,at);};
+  try {
+    c.load('https://sim.invalid/movie/u/p/1.mp4',0,false);await tick();assert.equal(mp4s.length,0);
+    choose(c,'Español');await tick();await tick();await tick();
+    assert.equal(mp4s.length,1);assert.equal(mp4s[0].audioIdx,1);assert.ok(status.some(m=>m.includes('Cambiando a')),status.join('|'));
+    // el idioma pedido queda marcado mientras prepara
+    assert.ok(c.menu().find(m=>m.kind==='audio'&&m.on).label.includes('Español'));
+    choose(c,'Francés');await tick();
+    assert.equal(mp4s.length,1);assert.equal(mp4s[0].audioIdx,2);assert.deepEqual(calls,[]);
+    go();await tick();await tick();
+    assert.equal(status[status.length-1],'');assert.ok(toasts.some(m=>m.startsWith('Audio:')),toasts.join('|'));
+  } finally {Mp4.prototype.start=orig;}
+  await c.destroy();
 });
 test('cambios nativos rápidos cancelan la comprobación de la selección anterior',async()=>{
   const {c}=setup({tracks:[{language:'es',enabled:true},{language:'en',enabled:false}],cached:dual});c.load('https://fixture.invalid/video.avi',0,false);

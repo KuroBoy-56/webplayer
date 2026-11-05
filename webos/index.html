@@ -8,6 +8,9 @@
     html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
     #root { position: relative; z-index: 1; display: flex; flex-direction: column; width: 100%; height: 100%; }
     :focus { outline: none; }
+    /* sin barras de desplazamiento (en la tele se mueve con el foco; la barra gris de las filas como el Reparto sobraba) */
+    * { scrollbar-width: none; }
+    ::-webkit-scrollbar { display: none; width: 0; height: 0; }
   </style>
 </head>
 <body>

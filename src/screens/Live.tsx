@@ -7,6 +7,7 @@ import { openItem } from '../actions';
 import { channelEpg, EpgEntry } from '../api/xtream';
 import PinDialog from '../components/PinDialog';
 import LivePreview, { stopLivePreview } from '../components/LivePreview';
+import { ScrollingText } from '../components/ScrollingText';
 import { takeLastLive } from '../player/preview-session';
 import { Button, Focusable, Message, Spinner } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
@@ -54,8 +55,12 @@ export default function Live({ active = true }: { active?: boolean }) {
   const [target, setTarget] = useState({ id: '', n: 0 });
   // «preferred» solo un momento: si la fila se volviera a montar al desplazarse no debe robar el foco
   const [pref, setPref] = useState('');
+  const prefRef = useRef('');
+  prefRef.current = pref;
   const focusId = useCallback((id: string) => {
     lastId.current = id;
+    // ya llegó el foco al canal: «preferred» se apaga (si no, al desplazarse la fila volvería a robar el foco)
+    if (id === prefRef.current) setPref('');
   }, []);
   useEffect(() => {
     if (!active) return;
@@ -69,17 +74,27 @@ export default function Live({ active = true }: { active?: boolean }) {
     if (!lastId.current) return;
     // si el canal quedó lejos (cambiado con ▲▼), la lista va hasta él para que su fila exista y reciba el foco
     const at = chRef.current.findIndex(c => c.id === lastId.current);
-    if (at >= 0) {
+    const want = lastId.current;
+    const go = () => {
+      if (at < 0 || prefRef.current !== want) return;
       try {
         listRef.current?.scrollToIndex({ index: at, viewPosition: 0.4, animated: false });
       } catch {
         // lista todavía sin medir
       }
-    }
-    setTarget(x => ({ id: lastId.current, n: x.n + 1 }));
-    setPref(lastId.current);
-    const id = setTimeout(() => setPref(''), 1000);
-    return () => clearTimeout(id);
+    };
+    setTarget(x => ({ id: want, n: x.n + 1 }));
+    setPref(want);
+    prefRef.current = want;
+    go();
+    // la lista dibuja las filas lejanas un momento después (y en la tele algo pudo tomar el foco y desplazarla): se
+    // vuelve a ir al canal hasta que su fila tenga el foco
+    const ids = [150, 450, 900].map(ms => setTimeout(go, ms));
+    const id = setTimeout(() => setPref(''), 3000);
+    return () => {
+      ids.forEach(clearTimeout);
+      clearTimeout(id);
+    };
   }, [active]);
 
   const cats = useMemo(() => (loaded ? catalog.liveCats() : []), [loaded, catalogRev, pinFor]);
@@ -190,11 +205,8 @@ export default function Live({ active = true }: { active?: boolean }) {
                 <View style={s.bar}>
                   <View style={[s.barFill, { width: `${Math.min(100, ((now - cur.s) / Math.max(1, cur.e - cur.s)) * 100)}%` }]} />
                 </View>
-                {cur.d ? (
-                  <Text style={s.desc} numberOfLines={5}>
-                    {cur.d}
-                  </Text>
-                ) : null}
+                {/* la descripción larga sube sola dentro de su lugar: nunca tapa lo que sigue ni «Agregar a favoritos» */}
+                {cur.d ? <ScrollingText text={cur.d} style={s.descText} box={s.descBox} line={px(34)} /> : null}
               </>
             ) : (
               <Text style={s.desc}>{t('Sin información de la guía.')}</Text>
@@ -250,15 +262,18 @@ const s = themed(() =>
     logo: { width: '100%', height: '100%' },
     chName: { color: C.text, fontSize: px(28), flex: 1 },
     star: { color: '#f5c518', fontSize: px(28), marginLeft: px(10) },
-    guide: { flex: 1, marginLeft: px(30), marginRight: px(60), backgroundColor: C.bg2, borderRadius: px(10), padding: px(30), marginBottom: px(40) },
+    guide: { flex: 1, marginLeft: px(30), marginRight: px(60), backgroundColor: C.bg2, borderRadius: px(10), padding: px(30), marginBottom: px(40), overflow: 'hidden' },
     guideLogo: { width: px(200), height: px(110), marginBottom: px(14) },
-    guideName: { color: C.text, fontSize: px(36), fontWeight: '800' },
-    live: { color: C.red, fontSize: px(24), fontWeight: '800', marginTop: px(16) },
-    prog: { color: C.text, fontSize: px(30), fontWeight: '700', marginTop: px(6) },
+    // los textos de la guía no se encogen (en la tele se encogían y la descripción quedaba encima de lo demás)
+    guideName: { color: C.text, fontSize: px(36), fontWeight: '800', flexShrink: 0 },
+    live: { color: C.red, fontSize: px(24), fontWeight: '800', marginTop: px(16), flexShrink: 0 },
+    prog: { color: C.text, fontSize: px(30), fontWeight: '700', marginTop: px(6), flexShrink: 0 },
     bar: { height: px(6), backgroundColor: alpha(C.text, 0.25), marginTop: px(12), borderRadius: px(3) },
     barFill: { height: '100%', backgroundColor: C.red, borderRadius: px(3) },
-    desc: { color: C.sub, fontSize: px(24), marginTop: px(14), lineHeight: px(34) },
-    next: { color: C.sub, fontSize: px(24), marginTop: px(10) },
-    favBtn: { marginTop: px(24), flexDirection: 'row' },
+    desc: { color: C.sub, fontSize: px(24), marginTop: px(14), lineHeight: px(34), flexShrink: 0 },
+    descBox: { marginTop: px(14) },
+    descText: { color: C.sub, fontSize: px(24), lineHeight: px(34) },
+    next: { color: C.sub, fontSize: px(24), marginTop: px(10), flexShrink: 0 },
+    favBtn: { marginTop: px(24), flexDirection: 'row', flexShrink: 0 },
   }),
 );

@@ -33,9 +33,17 @@ export function keepFocus(): void {
     history.push(el);
     if (history.length > 30) history.shift();
   });
+  // sin foco dos vueltas seguidas (≥ 250 ms): así el elemento con hasTVPreferredFocus que todavía se está dibujando
+  // (p. ej. el canal al volver del reproductor) llega antes y no se le roba el foco
+  let lost = 0;
   setInterval(() => {
     const a = document.activeElement as HTMLElement | null;
-    if (a && a !== document.body && a.isConnected && visible(a)) return;
+    if (a && a !== document.body && a.isConnected && visible(a)) {
+      lost = 0;
+      return;
+    }
+    if (++lost < 2) return;
+    lost = 0;
     (remembered() || first())?.focus();
   }, 250);
 }

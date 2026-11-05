@@ -26,11 +26,13 @@ class TestShaka {
 }
 // Vega ('kepler') o el televisor LG ('web')
 const rnPlatform = { OS: 'kepler' };
+// tipos que acepta el MSE del equipo (todos, salvo en la prueba del simulador de LG)
+let mse = () => true;
 Module._load = function(request, parent, isMain) {
   if (request === '../lib/http') return { UA: 'fixture', json: body => typeof body === 'string' ? JSON.parse(body) : body, http: async () => { requests++; return respond ? respond() : fixture(); } };
   if (request === './panel') return { cloud: async () => { panelRequests++; return {}; } };
   if (request === '../lib/i18n' || request === './i18n') return { t: key => key };
-  if (request === '@amazon-devices/react-native-w3cmedia') return { MediaSource: { isTypeSupported: () => true } };
+  if (request === '@amazon-devices/react-native-w3cmedia') return { MediaSource: { isTypeSupported: mime => mse(mime) } };
   if (request === 'react-native') return { AppState: { currentState: 'active' }, Platform: rnPlatform };
   if (request === './shaka-env') return { installShakaEnvironment() {} };
   if (request === './vendor/shaka-player.compiled') return { Player: TestShaka, polyfill: { installAll() {} }, net: { NetworkingEngine: { unregisterScheme() {}, registerScheme() {}, PluginPriority: { APPLICATION: 1 } }, HttpFetchPlugin: { parse() {} } } };
@@ -166,6 +168,16 @@ test('LG: el lector del canal deja que el navegador siga la redirección (manual
     }
     assert.deepEqual(seen, ['manual', 'follow']);
   } finally { global.fetch = realFetch; rnPlatform.OS = 'kepler'; }
+});
+test('lector de canales: basta con MP4 por MSE (Chrome y el simulador de LG no aceptan MPEG-TS)', () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  try {
+    mse = mime => mime.startsWith('video/mp4');
+    assert.equal(LiveHls.supported(), true);
+    assert.equal(LiveHls.tsSupported(), false);
+    mse = () => false;
+    assert.equal(LiveHls.supported(), false);
+  } finally { mse = () => true; }
 });
 test('HLS libera la URL MSE al cerrar', () => {
   const { LiveHls } = require('../src/player/livehls.ts');

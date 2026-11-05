@@ -178,6 +178,8 @@ export class Playback {
   private liveFrozen = 0;
   // televisor: este canal ya se probó con el lector de la app (después de su propio reproductor)
   private liveReaderTried = false;
+  // televisor: el idioma que el lector de la app está preparando (aviso al empezar a sonar con él)
+  private switchNote = '';
   // el HLS del panel que sigue sonando mientras se prepara otro idioma
   private prevHls: PanelHls | null = null;
   private offset = 0;
@@ -303,7 +305,8 @@ export class Playback {
   // canal en vivo por HLS con el lector propio
   private openLive(url: string): void {
     const g = this.gen;
-    const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, this.liveFrozen > 0 && this.liveFrozen % 2 === 0);
+    // congelado: se alterna MP4 propio y MPEG-TS (solo si el equipo acepta MPEG-TS por MSE; si no, siempre MP4)
+    const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, this.liveFrozen > 0 && this.liveFrozen % 2 === 0 && LiveHls.tsSupported());
     this.liveHls = h;
     h.onError = why => g === this.gen && this.liveHls === h && this.hooks.liveFailed?.(why);
     h.onStalls = () => g === this.gen && this.liveHls === h && this.hooks.liveStalls?.(h.diag());
@@ -339,7 +342,7 @@ export class Playback {
     if (h.otherAudio()) {
       if (this.liveNoAudio || this.hasPlayed()) return false;
       this.liveNoAudio = true;
-    } else if (h.isMp4() && (h.mediaFailed() || (this.v as any).error)) disableMp4();
+    } else if (h.isMp4() && (h.mediaFailed() || (this.v as any).error) && LiveHls.tsSupported()) disableMp4();
     else return false;
     h.destroy();
     this.openLive(this.url);
@@ -356,7 +359,7 @@ export class Playback {
   // false = no aplica (otro equipo, no es .m3u8, sin MSE) o ya se probó
   // url: la dirección .m3u8 del canal (si lo que falló fue el .ts)
   liveReader(url = this.url): boolean {
-    if (!this.live || !this.tvNative() || this.liveHls || this.liveReaderTried || !/\.m3u8(\?|$)/i.test(url) || !LiveHls.supported()) return false;
+    if (!this.live || !this.tvLivePlayer() || this.liveHls || this.liveReaderTried || !/\.m3u8(\?|$)/i.test(url) || !LiveHls.supported()) return false;
     this.liveReaderTried = true;
     this.url = url;
     // primero se suelta la conexión del reproductor del televisor (muchas líneas permiten una sola a la vez)
@@ -389,9 +392,9 @@ export class Playback {
     // de Vega, que deja micro-huecos entre segmentos (los cortes de 1.0.20-1.0.25). Shaka queda para HLS/DASH de
     // películas y series, y para canales si el equipo no tiene MSE para el lector propio.
     // el televisor (LG) abre los canales HLS con su propio reproductor (como siempre en webOS)
-    const readerFirst = this.live && this.tvNative() && readerHosts.has(hostOf(this.url));
+    const readerFirst = this.live && this.tvLivePlayer() && readerHosts.has(hostOf(this.url));
     if (readerFirst) this.liveReaderTried = true;
-    if (this.live && /\.m3u8(\?|$)/i.test(this.url) && (!this.tvNative() || readerFirst) && LiveHls.supported()) {
+    if (this.live && /\.m3u8(\?|$)/i.test(this.url) && (!this.tvLivePlayer() || readerFirst) && LiveHls.supported()) {
       this.openLive(this.url);
       return;
     }
@@ -422,6 +425,11 @@ export class Playback {
           if (ps) setTimeout(() => g === this.gen && this.pickSub(ps, true), 0);
         }
         if (this.mp4Paused) { this.mp4Paused = false; this.v.pause(); }
+        if (this.switchNote) {
+          this.hooks.status('');
+          this.hooks.toast(t('Audio: {x}', { x: this.audioItems().find(i => i.mp4 === m.audioIdx)?.label || this.switchNote }));
+          this.switchNote = '';
+        }
         this.applyPrefs();
         this.hooks.changed();
       };
@@ -487,6 +495,10 @@ export class Playback {
   // la lectura propia del MP4 no pudo (códec raro, el servidor cortó): el modo directo de siempre desde donde iba
   private mp4Failed(at: number, why: string): void {
     const pos = this.played ? this.realPos() : at;
+    if (this.switchNote) {
+      this.switchNote = '';
+      this.hooks.status('');
+    }
     this.mp4Why = why;
     this.mp4Url = true;
     // televisor: el lector se abrió para cambiar de audio y no pudo; vuelve el reproductor del televisor y ese audio lo
@@ -524,6 +536,11 @@ export class Playback {
     return !!(this.v as any).nativeFiles;
   }
 
+  // canales con el reproductor por hardware del televisor (no en el simulador de LG: ahí el lector de la app)
+  private tvLivePlayer(): boolean {
+    return !!(this.v as any).nativeLive;
+  }
+
   // el lector propio puede leer este archivo (MP4 / MKV con MSE en el equipo)
   private readerCan(): boolean {
     try {
@@ -559,15 +576,36 @@ export class Playback {
       this.readerWanted = true;
       this.mp4Audio = it.probe;
       this.audioKey = it.key;
-      if (user) {
-        setTitleLang(this.url, it);
-        this.hooks.toast(t('Cambiando a {x}…', { x: it.label }));
-      }
+      if (user) setTitleLang(this.url, it);
+      // a la vista mientras el lector lee el índice (en un MP4 con el índice al final puede tardar): antes solo un aviso
+      // corto y después nada, sin el idioma marcado
+      this.switchNote = it.label;
+      this.hooks.status(t('Cambiando a {x}…', { x: it.label }));
       this.direct(this.realPos());
+      this.readerDog();
       return;
     }
     const pick = it;
     this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label })).then(ok => ok && user && setTitleLang(this.url, pick));
+  }
+
+  // el lector abierto para cambiar de idioma no consigue el índice (el servidor no entrega): vuelve el video como estaba y
+  // ese idioma queda para el servidor (apagado: el aviso de encenderlo). Mientras siga llegando algo, hasta 2 min
+  private readerDog(): void {
+    const g = this.gen;
+    const t0 = Date.now();
+    let idle = 0;
+    const check = () => {
+      const m = this.mse;
+      if (g !== this.gen || !m || this.mp4Url || m.indexed) return;
+      idle = m.busy() ? 0 : idle + 5;
+      if (idle < 20 && Date.now() - t0 < 120000) {
+        setTimeout(check, 5000);
+        return;
+      }
+      this.mp4Fallback('sin el índice para cambiar el idioma');
+    };
+    setTimeout(check, 5000);
   }
 
   // Televisor: un subtítulo que el <video> no muestra. 1) el servicio de medios del televisor (también los de imagen,
@@ -811,7 +849,7 @@ export class Playback {
     if (this.seekTo > 0 && !this.remux) return;
     this.clearSeek();
     this.played = true;
-    if (this.live && this.liveHls && this.tvNative()) readerHosts.add(hostOf(this.url));
+    if (this.live && this.liveHls && this.tvLivePlayer()) readerHosts.add(hostOf(this.url));
     // cómo se pudo ver este archivo: por el panel (se recuerda) o directo (se olvida lo anterior)
     if (!this.live) setPanelRoute(this.url, this.remux && this.panelFallback && !this.resumePanel ? (this.panelVideo ? 'v' : 'p') : this.remux ? panelRoute(this.url) : '');
     if (this.live || this.probing) return;
@@ -1025,7 +1063,12 @@ export class Playback {
       const active = this.shaka.audioTracks().find(tr => tr.active);
       return items.find(it => it.shaka === active?.id);
     }
-    if (this.mse) return items.find(it => it.mp4 === this.mse!.audioIdx);
+    if (this.mse) {
+      if (this.mse.indexed) return items.find(it => it.mp4 === this.mse!.audioIdx);
+      // todavía leyendo el índice: el idioma pedido (o el predeterminado)
+      const want = this.mp4Audio >= 0 ? this.mp4Audio : this.probeDefault();
+      return items.find(it => it.mp4 === want || it.probe === want);
+    }
     if (this.liveHls && items[0]?.key.startsWith('h:')) return items.find(i => i.key === 'h:' + this.liveHls!.audioIdx);
     if (this.remux) return items.find(i => i.probe === this.remux!.a);
     const n = this.enabledNative();
@@ -1246,6 +1289,22 @@ export class Playback {
         }
         this.hooks.changed();
       }
+      return;
+    }
+    // el lector todavía lee el índice: ahora este otro idioma, sin empezar de nuevo (antes iba al servidor: «encender el
+    // servidor»)
+    const pi = it.mp4 ?? it.probe;
+    if (this.mse && !this.mse.indexed && !this.mp4Url && pi !== undefined && this.decodable(it) && this.mse.want(pi)) {
+      this.mp4Audio = pi;
+      this.audioKey = it.key;
+      if (user) {
+        setTitleLang(this.url, it);
+        if (this.switchNote) {
+          this.switchNote = it.label;
+          this.hooks.status(t('Cambiando a {x}…', { x: it.label }));
+        }
+      }
+      this.hooks.changed();
       return;
     }
     if (it.mp4 !== undefined && this.mse) {

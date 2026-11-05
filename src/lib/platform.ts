@@ -65,6 +65,12 @@ export function tvModel(): string {
   return 'LG ' + (model || 'Smart TV');
 }
 
+// el simulador de webOS (en la computadora): es el Chrome de escritorio, sin el reproductor por hardware de LG (no abre
+// HLS ni MPEG-TS, no cambia pistas, sin com.webos.media). Ahí la app usa sus propios lectores, como en Vega
+export function tvSimulator(): boolean {
+  return /simulator/i.test(model);
+}
+
 export function tvOs(): string {
   return ('webOS ' + os).trim();
 }
