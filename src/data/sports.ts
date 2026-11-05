@@ -176,9 +176,11 @@ function teamCandidates(ev: any, ix: Index, r: Rules): Chan[] {
     if (!team) continue;
     const n = norm(team);
     for (const nm of r.alias[n] ? [n, r.alias[n]] : [n]) {
+      // como Roku (nfPrepTeam): todas sus palabras de 3 letras o más; si ninguna tiene 4 (las que puntúan), también las
+      // palabras comunes del nombre («Real Bay» busca también «real»)
       const tk = tokens(nm, r);
-      if (tk.length) tk.forEach(t => want.add(t));
-      else nm.split(' ').filter(w => w.length >= 3).forEach(w => want.add(w));
+      tk.forEach(t => want.add(t));
+      if (!tk.some(t => t.length >= 4)) nm.split(' ').filter(w => w.length >= 3).forEach(w => want.add(w));
     }
   }
   if (!h && !a) tokens(str(ev.ev), r).forEach(t => want.add(t));

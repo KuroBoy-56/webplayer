@@ -154,10 +154,20 @@ function dolbyCfg(tk: Trk): AudioCfg | null {
 }
 
 // AudioSpecificConfig del esds (solo AAC)
-function audioCfg(tk: Trk): AudioCfg | null {
+// dónde empiezan las cajas hijas de una descripción de audio: versión 0 (ISO) 28 bytes, versión 1 de QuickTime 16 más y
+// versión 2 36 más (archivos que salen de editores tipo QuickTime: antes no se encontraba su esds y el idioma no cambiaba)
+function soundKids(b: Uint8Array): number {
+  const ver = u16(b, 16);
+  return 8 + 28 + (ver === 1 ? 16 : ver === 2 ? 36 : 0);
+}
+
+export function audioCfg(tk: Trk): AudioCfg | null {
   const b = tk.entry;
   if (!b || typ(b, 4) !== 'mp4a') return null;
-  const esds = kid(b, 8 + 28, b.length, 'esds');
+  const at = soundKids(b);
+  // QuickTime también lo guarda dentro de una caja wave
+  const wave = kid(b, at, b.length, 'wave');
+  const esds = kid(b, at, b.length, 'esds') || (wave ? kid(b, wave.s, wave.e, 'esds') : null) || kid(b, 8 + 28, b.length, 'esds');
   if (!esds) return null;
   let o = esds.s + 4;
   const desc = (): [number, number] => {

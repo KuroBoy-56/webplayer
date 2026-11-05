@@ -28,7 +28,11 @@ class TestShaka {
 const rnPlatform = { OS: 'kepler' };
 // tipos que acepta el MSE del equipo (todos, salvo en la prueba del simulador de LG)
 let mse = () => true;
+// almacenamiento de Vega (AsyncStorage) en memoria
+const memStore = { getItem: async () => null, setItem: async () => {}, removeItem: async () => {}, getAllKeys: async () => [], multiGet: async () => [], multiSet: async () => {}, multiRemove: async () => {}, clear: async () => {} };
 Module._load = function(request, parent, isMain) {
+  if (request === '@react-native-async-storage/async-storage') return { default: memStore, ...memStore };
+  if (request === '../api/media') return { engineError: (_b, d) => d, markDenied() {} };
   if (request === '../lib/http') return { UA: 'fixture', json: body => typeof body === 'string' ? JSON.parse(body) : body, http: async () => { requests++; return respond ? respond() : fixture(); } };
   if (request === './panel') return { cloud: async () => { panelRequests++; return {}; } };
   if (request === '../lib/i18n' || request === './i18n') return { t: key => key };
@@ -175,6 +179,9 @@ test('lector de canales: basta con MP4 por MSE (Chrome y el simulador de LG no a
     mse = mime => mime.startsWith('video/mp4');
     assert.equal(LiveHls.supported(), true);
     assert.equal(LiveHls.tsSupported(), false);
+    // el HLS que prepara el panel (audio o video convertido) también se convierte a MP4
+    const { PanelHls } = require('../src/player/hls.ts');
+    assert.equal(PanelHls.supported(), true);
     mse = () => false;
     assert.equal(LiveHls.supported(), false);
   } finally { mse = () => true; }

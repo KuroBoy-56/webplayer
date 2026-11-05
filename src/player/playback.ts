@@ -456,7 +456,13 @@ export class Playback {
         });
       return;
     }
-    if (at > 5 && !this.live && !this.played) {
+    if (at > 5 && !this.live && !this.played && this.tvNative()) {
+      // televisor LG: su reproductor empieza ya en el segundo guardado (mediaOption playTime) y, si no lo tomó, salta en
+      // loadedmetadata, antes de sonar; cuenta como «ya suena» cuando avanza pasado ese segundo (seekTo, con plazo)
+      this.resumeAt = at;
+      this.seekTo = at;
+      (this.v as any).startAt = at;
+    } else if (at > 5 && !this.live && !this.played) {
       // Continuar viendo: se abre y se salta apenas suena (onPlaying)
       this.resumeAt = 0;
       this.seekAfter = at;
@@ -802,8 +808,10 @@ export class Playback {
   // loadedmetadata
   onMeta(): void {
     if (this.resumeAt > 0) {
-      this.v.currentTime = this.resumeAt;
+      // el televisor ya empezó ahí (mediaOption): sin saltar otra vez
+      if (!this.tvNative() || Math.abs((this.v.currentTime || 0) - this.resumeAt) > 3) this.v.currentTime = this.resumeAt;
       this.resumeAt = 0;
+      if (this.tvNative() && this.seekTo > 0 && !this.seekTimer) this.resumeDog();
     }
     if (this.pendingNative >= 0) {
       const i = this.pendingNative;
@@ -811,6 +819,18 @@ export class Playback {
       setTimeout(() => this.enableNative(i), 300);
     }
     this.schedulePrefs();
+  }
+
+  // Continuar viendo en el televisor: si en 15 s no avanza pasado el segundo guardado, siguen los pasos de siempre (el
+  // panel desde ese segundo; Player)
+  private resumeDog(): void {
+    const g = this.gen;
+    this.seekTimer = setTimeout(() => {
+      this.seekTimer = null;
+      if (g !== this.gen || this.played || !this.seekTo) return;
+      this.v.pause();
+      this.hooks.resumeFailed?.();
+    }, 15000);
   }
 
   // "playing": se aplican los idiomas ya sabidos y, apenas suena, se mira cuántos audios hay (langCheck)

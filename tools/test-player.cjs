@@ -181,11 +181,11 @@ test('LG: pistas del televisor en otro orden que el archivo: se elige por idioma
   const {c,video}=setup({tracks,cached:dual});tvVideo(video,true);c.load('https://fixture.invalid/video.avi',0,false);choose(c,'Inglés');
   assert.equal(tracks[0].enabled,true);assert.equal(tracks[1].enabled,false);assert.deepEqual(calls,[]);await c.destroy();
 });
-test('simulador de LG (sin el reproductor del televisor): los canales van directo al lector de la app',async()=>{
+test('LG sin los canales por el televisor (nativeLive): van directo al lector de la app',async()=>{
   lives=[];const {c,video}=setup();video.nativeFiles=true;video.tvSelectTrack=async()=>false;
   c.load('https://sim.invalid/live/u/p/1.m3u8',0,true);assert.equal(lives.length,1);assert.equal(c.liveReader(),false);await c.destroy();
 });
-test('simulador de LG: cambiar de idioma lo hace el lector de la app; otro idioma mientras lee el índice no va al servidor',async()=>{
+test('LG: si el televisor no cambia el idioma lo hace el lector de la app; otro idioma mientras lee el índice no va al servidor',async()=>{
   const {c,video}=setup({cached:{ok:true,container:'mp4',audio:[{lang:'en',name:'',codec:'mp4a',def:true},{lang:'es',name:'',codec:'mp4a',def:false},{lang:'fr',name:'',codec:'mp4a',def:false}],subs:[]}});
   video.nativeFiles=true;video.tvSelectTrack=async()=>false;
   const status=[];c.hooks.status=m=>status.push(m);
@@ -203,6 +203,16 @@ test('simulador de LG: cambiar de idioma lo hace el lector de la app; otro idiom
     assert.equal(status[status.length-1],'');assert.ok(toasts.some(m=>m.startsWith('Audio:')),toasts.join('|'));
   } finally {Mp4.prototype.start=orig;}
   await c.destroy();
+});
+test('LG: Continuar viendo empieza en el segundo guardado con el reproductor del televisor (sin abrir desde el principio)',async()=>{
+  const {c,video}=setup();tvVideo(video,true);c.load('https://fixture.invalid/video.mp4',1200,false);
+  assert.equal(video.startAt,1200);assert.equal(c.seeking(),true);
+  // el televisor ya empezó ahí: no se salta otra vez
+  video.currentTime=1200.4;c.onMeta();assert.equal(video.currentTime,1200.4);
+  c.onPlaying();assert.equal(c.hasPlayed(),false);
+  video.currentTime=1202;c.onTime();assert.equal(c.hasPlayed(),true);assert.equal(c.seeking(),false);
+  // no lo tomó: salta en loadedmetadata
+  c.load('https://fixture.invalid/otro.mp4',900,false);video.currentTime=0;c.onMeta();assert.equal(video.currentTime,900);await c.destroy();
 });
 test('cambios nativos rápidos cancelan la comprobación de la selección anterior',async()=>{
   const {c}=setup({tracks:[{language:'es',enabled:true},{language:'en',enabled:false}],cached:dual});c.load('https://fixture.invalid/video.avi',0,false);
@@ -243,6 +253,15 @@ test('el lector MSE cancela peticiones del contenido que se cierra',async()=>{
     const pending=reader.get(0,16);reader.destroy();
     assert.equal(await pending,null);assert.equal(aborted,true);
   } finally {global.fetch=originalFetch;}
+});
+test('MP4: el AAC de una descripción de audio de QuickTime (versión 1 y dentro de wave) también se lee',()=>{
+  const {audioCfg}=require('../src/player/mp4mse.ts');
+  const box=(t,body)=>{const b=new Uint8Array(8+body.length);new DataView(b.buffer).setUint32(0,b.length);b.set([...t].map(c=>c.charCodeAt(0)),4);b.set(body,8);return b;};
+  const esds=box('esds',[0,0,0,0, 3,25, 0,1, 0, 4,17, 0x40,0x15, 0,0,0, 0,0,0,0, 0,0,0,0, 5,2, 0x12,0x10]);
+  const entry=(ver,kids)=>{const base=[0,0,0,0,0,0, 0,1, 0,ver, 0,0, 0,0,0,0, 0,2, 0,16, 0,0, 0,0, 0xac,0x44,0,0];const ext=ver===1?new Array(16).fill(0):[];return box('mp4a',[...base,...ext,...kids]);};
+  for(const e of [entry(0,[...esds]),entry(1,[...esds]),entry(1,[...box('wave',[...box('frma',[0x6d,0x70,0x34,0x61]),...esds])])]){
+    const c=audioCfg({entry:e,ts:44100});assert.ok(c,'sin configuración AAC');assert.deepEqual([...c.config],[0x12,0x10]);
+  }
 });
 test('canales con audio MP2 (CINEMAX, tipo 0x03): los cuadros se leen para el MP4 propio aunque vengan partidos',()=>{
   const {otherFrames,mpaHead}=require('../src/lib/tsdemux.ts');

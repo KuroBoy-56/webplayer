@@ -11,13 +11,38 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+## Novedades de la 1.3.4
+
+**El simulador de LG como Vega.** Ahí el `<video>` no anuncia `nativeFiles`: MP4 y MKV los lee la app desde el
+principio (`mp4mse.ts`, `mkvmse.ts`). El cambio de idioma es en el equipo, con el índice ya leído, y Continuar viendo
+empieza directo en el segundo guardado (antes se abría desde el principio y se saltaba, y ese salto fallaba). Los
+subtítulos de texto del MKV los lee la app; los del MP4 los prepara el servidor.
+
+**Continuar viendo en la tele:** el reproductor de LG empieza en el segundo guardado con `mediaOption`
+`option.transmission.playTime.start` (`startAt` en el `<video>`, `web/shims/w3cmedia.tsx`). Si no lo tomó, salta en
+`loadedmetadata`, antes de sonar. Cuenta como «ya suena» cuando avanza pasado ese segundo, con 15 s de plazo
+(`resumeDog`); si no, siguen los pasos de siempre.
+
+**Audio que prepara el panel:** `PanelHls.supported()` pedía MPEG-TS por MSE (o HLS de la tele) aunque el lector
+convierte los segmentos del panel a MP4. En el simulador el idioma Dolby (AC-3) que el equipo no decodifica salía como
+«el equipo no puede reproducir el audio que prepara el panel». Ahora basta con MP4. **MP4 de editores tipo QuickTime:**
+el AAC de una descripción de audio versión 1 / 2 o dentro de una caja `wave` también se lee (`soundKids`, `audioCfg`).
+Antes ese idioma no cambiaba. La redirección de `prefetch.ts` en el navegador también se sigue (como `livehls.ts`).
+
+**Deportes:** el canal de cada partido ya era igual a Roku (`source/Sports.brs`: mismas reglas, índice y puntuación;
+el buscador de canales igual a `sportsChans`). Ahora también las palabras candidatas de un equipo son las de Roku
+(`nfPrepTeam`: las palabras comunes se usan cuando ninguna tiene 4 letras).
+
+**Portada:** la descripción del destacado va en su lugar (3 líneas; 2 con el foco en las filas), en un bloque de alto
+fijo, y si no cabe sube sola como la de TV en vivo (`ScrollingText`). Ya no baja hasta las filas.
+
 ## Novedades de la 1.3.3
 
 **Simulador de webOS (en la computadora).** El simulador de LG tiene `PalmSystem` pero reproduce con el Chrome de la
 computadora: no tiene el reproductor por hardware (no abre HLS ni MPEG-TS, no cambia pistas, sin `com.webos.media`). Se
-reconoce por el modelo (`tvSimulator()` en `src/lib/platform.ts`: «WEBOS22_SIMULATOR»). Ahí el `<video>` anuncia
-`nativeFiles` pero no `nativeLive`: los canales van directo al lector de la app (como en Vega) y las películas abren
-como siempre, con el lector de la app para cambiar de idioma. En la tele no cambia nada: primero el reproductor de LG.
+reconoce por el modelo (`tvSimulator()` en `src/lib/platform.ts`: «WEBOS22_SIMULATOR»). Ahí el `<video>` no anuncia
+`nativeLive` (desde la 1.3.4 tampoco `nativeFiles`): todo va con los lectores de la app, como en Vega. En la tele no
+cambia nada: primero el reproductor de LG.
 
 **Lector de canales sin MPEG-TS por MSE.** `LiveHls.supported()` pedía `video/mp2t` por MSE, que Chrome, el simulador y
 algunas teles no tienen, aunque el lector convierte cada segmento a MP4. Ahora basta con MP4 (`avc1`); el MPEG-TS queda

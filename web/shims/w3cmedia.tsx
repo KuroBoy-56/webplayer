@@ -81,7 +81,13 @@ function typed(v: HTMLVideoElement, url: string): string {
   };
   if (!can(type)) type = k.hls ? (can('application/x-mpegURL') ? 'application/x-mpegURL' : '') : can('video/mp4') ? 'video/mp4' : '';
   if (!type) return '';
-  return type + ';mediaOption=' + encodeURIComponent(JSON.stringify({ mediaTransportType: k.hls ? 'HLS' : 'URI' }));
+  const opt: any = { mediaTransportType: k.hls ? 'HLS' : 'URI' };
+  // Continuar viendo: el reproductor de LG empieza ya en ese segundo (option.transmission.playTime.start, en ms), sin
+  // abrir desde el principio para saltar después (una vez por video: lo pone playback.ts antes de src)
+  const at = Number((v as any).startAt) || 0;
+  (v as any).startAt = 0;
+  if (at > 0 && k.file) opt.option = { transmission: { playTime: { start: Math.floor(at * 1000) } } };
+  return type + ';mediaOption=' + encodeURIComponent(JSON.stringify(opt));
 }
 
 // en el televisor, src pone un <source> con el tipo (el reproductor de LG). Un <source> que no abre avisa el error en
@@ -147,9 +153,10 @@ function htmlPlayer(): VideoPlayer {
   // en el televisor, MP4 / MKV / MOV / TS los abre su reproductor por hardware (todos los audios, Dolby y DTS incluidos):
   // src/player/playback.ts no usa los lectores propios de Vega salvo para cambiar de audio o subtítulos si el televisor
   // no puede
-  Object.defineProperty(v, 'nativeFiles', { value: !!g.PalmSystem });
-  // canales con el reproductor del televisor (HLS / MPEG-TS por hardware): solo en el televisor; en el simulador de LG
-  // los abre el lector de la app (como en Vega)
+  // en el simulador de LG no: ahí todo va con los lectores de la app, como en Vega (MP4 / MKV leídos por la app: cambio de
+  // idioma en el equipo y Continuar viendo que empieza directo en el segundo guardado)
+  Object.defineProperty(v, 'nativeFiles', { value: onTv() });
+  // canales con el reproductor del televisor (HLS / MPEG-TS por hardware): solo en el televisor
   Object.defineProperty(v, 'nativeLive', { value: onTv() });
   // Cambio de pista con el servicio de medios del televisor (com.webos.media, el mismo reproductor por hardware), para
   // cuando el <video> no informa sus pistas (audioTracks / textTracks vacíos): index = orden de la pista en el archivo
