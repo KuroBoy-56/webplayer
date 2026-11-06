@@ -11,6 +11,18 @@ se trae aquí con un `git merge`.
 compila sola en cada cambio de la rama `webOS` (workflow `App webOS (LG)`), con la llave del panel del secreto
 `PANEL_KEY` (la misma de Vega OS, Tizen e iOS).
 
+**Dos versiones para la tienda de LG** (LG pide subir la Full HD y la HD), las dos de la misma rama y en el mismo
+workflow, con la misma app (`com.mpxplayer.app`) y la misma versión:
+
+| Versión | Release | Archivo | `resolution` en `appinfo.json` |
+|---|---|---|---|
+| Full HD | `webos-latest` | `MPXPlayer.ipk` | `1920x1080` |
+| HD | `webos-hd-latest` | `MPXPlayer-HD.ipk` | `1280x720` |
+
+La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla (`src/theme.ts`). Solo cambian
+`appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
+`dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
+
 ## Novedades de la 1.3.7
 
 El reproductor del tema de prueba del dueño vuelve a ser el de la 1.3.4 (sin aviso de códec ni copia en el panel): el

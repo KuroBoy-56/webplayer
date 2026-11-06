@@ -10,6 +10,7 @@
     "pretypecheck": "node tools/prepare-key.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "node tools/build-webos.js",
+    "build:hd": "node tools/build-webos.js --hd",
     "package": "node tools/build-webos.js && ares-package -o out dist",
     "test": "node --test tools/*.test.js"
   },

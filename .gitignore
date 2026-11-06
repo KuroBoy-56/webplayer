@@ -1,6 +1,7 @@
 node_modules/
 build/
 dist/
+dist-hd/
 generated/
 *.vpkg
 .DS_Store

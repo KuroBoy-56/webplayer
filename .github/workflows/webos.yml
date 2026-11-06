@@ -37,22 +37,34 @@ jobs:
           npm run typecheck
           npm test
 
-      - name: Compilar la app (dist/)
-        run: npm run build
+      - name: Compilar la app (dist/ Full HD 1920x1080 y dist-hd/ HD 1280x720)
+        run: |
+          npm run build
+          npm run build:hd
 
       # CLI oficial de LG (ares-package): arma el .ipk que se instala con Developer Mode o ares-install
       - name: Empaquetar .ipk
         run: |
           npm i -g --no-audit --no-fund @webos-tools/cli@3.2.6
-          mkdir -p out
-          ares-package -o out dist
-          cp out/*.ipk out/MPXPlayer.ipk
-          cd dist && zip -qr ../out/MPXPlayer-web.zip .
+          mkdir -p out out-hd pkg pkg-hd
+          ares-package -o pkg dist
+          cp pkg/*.ipk out/MPXPlayer.ipk
+          (cd dist && zip -qr ../out/MPXPlayer-web.zip .)
+          # versión HD (1280x720): mismo id y versión, appinfo.json con "resolution": "1280x720"
+          ares-package -o pkg-hd dist-hd
+          cp pkg-hd/*.ipk out-hd/MPXPlayer-HD.ipk
+          (cd dist-hd && zip -qr ../out-hd/MPXPlayer-HD-web.zip .)
+          grep -q '"resolution": "1280x720"' dist-hd/appinfo.json
 
       - uses: actions/upload-artifact@v4
         with:
           name: MPXPlayer-webOS
           path: out/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MPXPlayer-webOS-HD-1280x720
+          path: out-hd/*
 
       # publica siempre la última versión en la misma dirección de descarga (Releases > webos-latest)
       - name: Publicar descarga
@@ -63,5 +75,11 @@ jobs:
           sha256sum MPXPlayer.ipk MPXPlayer-web.zip > SHA256SUMS.txt
           gh release delete webos-latest --yes --cleanup-tag || true
           gh release create webos-latest MPXPlayer.ipk MPXPlayer-web.zip SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease \
-            --title "MPX Player LG Smart TV · webOS (última versión)" \
+            --title "MPX Player LG Smart TV · webOS Full HD 1920x1080 (última versión)" \
             --notes "Compilado automáticamente desde la rama webOS ($GITHUB_SHA). Se instala con la app Developer Mode de LG y ares-install (ver el README de la rama webOS)."
+          cd ../out-hd
+          sha256sum MPXPlayer-HD.ipk MPXPlayer-HD-web.zip > SHA256SUMS.txt
+          gh release delete webos-hd-latest --yes --cleanup-tag || true
+          gh release create webos-hd-latest MPXPlayer-HD.ipk MPXPlayer-HD-web.zip SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease \
+            --title "MPX Player LG Smart TV · webOS HD 1280x720 (última versión)" \
+            --notes "Versión HD (resolución 1280x720) para los televisores LG HD. Compilada automáticamente desde la rama webOS ($GITHUB_SHA), junto con la Full HD (Releases > webos-latest). Misma app (com.mpxplayer.app) y misma versión."

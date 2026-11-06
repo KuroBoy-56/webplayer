@@ -5,15 +5,17 @@ const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
 
+// --hd: versión HD (1280x720) para los televisores LG HD; sin --hd, Full HD (1920x1080). Misma app y mismo id.
+const hd = process.argv.includes('--hd');
 const root = path.join(__dirname, '..');
-const dist = path.join(root, 'dist');
+const dist = path.join(root, hd ? 'dist-hd' : 'dist');
 fs.rmSync(dist, { recursive: true, force: true });
 
 esbuild
   .build({
     absWorkingDir: root,
     entryPoints: ['web/index.tsx'],
-    outfile: 'dist/app.js',
+    outfile: path.join(dist, 'app.js'),
     bundle: true,
     minify: true,
     format: 'iife',
@@ -44,6 +46,17 @@ esbuild
   })
   .then(() => {
     for (const f of ['index.html', 'appinfo.json', 'icon.png', 'largeIcon.png']) fs.copyFileSync(path.join(root, 'webos', f), path.join(dist, f));
+    if (hd) {
+      const info = JSON.parse(fs.readFileSync(path.join(dist, 'appinfo.json'), 'utf8'));
+      info.resolution = '1280x720';
+      fs.writeFileSync(path.join(dist, 'appinfo.json'), JSON.stringify(info, null, 2) + '\n');
+      const html = path.join(dist, 'index.html');
+      const page = fs.readFileSync(html, 'utf8');
+      if (!page.includes('width=1920')) throw new Error('index.html sin viewport width=1920');
+      fs.writeFileSync(html, page.replace('width=1920', 'width=1280'));
+      console.log('Listo: dist-hd/ (versión HD 1280x720)');
+      return;
+    }
     // también en webos/ (sin subir a git): el simulador de LG abierto en esa carpeta quedaba en negro sin app.js
     fs.copyFileSync(path.join(dist, 'app.js'), path.join(root, 'webos', 'app.js'));
     fs.rmSync(path.join(root, 'webos', 'img'), { recursive: true, force: true });
