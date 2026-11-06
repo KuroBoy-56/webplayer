@@ -517,3 +517,116 @@ test('canal cifrado: se descifra con el AES nativo de Vega y, si no da MPEG-TS, 
     reader.destroy();
   } finally { delete global.__webcrypto; }
 });
+
+test('películas: empiezan a sonar con 5 s bajados (o el archivo entero, o a los 6 s con 1,5 s); al cambiar de idioma, 2 s', () => {
+  const { StartGate, SWITCH_SEC } = require('../src/player/startgate.ts');
+  const t0 = Date.now();
+  let g = new StartGate();
+  assert.equal(g.check(1.5, false, t0 + 100), false);
+  assert.equal(g.check(4.9, false, t0 + 2000), false);
+  assert.equal(g.started, false);
+  assert.equal(g.check(5.2, false, t0 + 2500), true);
+  assert.equal(g.started, true);
+  assert.equal(g.check(9, false, t0 + 3000), false, 'una sola vez');
+  // un video corto ya bajado entero
+  g = new StartGate();
+  assert.equal(g.check(3, true, t0), true);
+  // servidor lento: a los 6 s con al menos 1,5 s (sin 1,5 s sigue esperando)
+  g = new StartGate();
+  assert.equal(g.check(1.2, false, t0 + 7000), false);
+  assert.equal(g.check(1.6, false, t0 + 7000), true);
+  // cambio de idioma con el video en pausa: queda listo sin darle play
+  g = new StartGate(SWITCH_SEC, true);
+  assert.equal(g.check(2.1, false, t0), false);
+  assert.equal(g.started, true);
+});
+
+test('películas: el principio del archivo se pide en dos partes (cabecera y video) y cualquier lectura dentro sale de ahí', async () => {
+  const { prefetchRange, takeRange, takeRangeFrom } = require('../src/player/prefetch.ts');
+  const realFetch = global.fetch;
+  const asked = [];
+  const file = new Uint8Array(1000).map((_, i) => i & 255);
+  const gates = [];
+  global.fetch = (url, { headers }) => {
+    const m = /bytes=(\d+)-(\d+)/.exec(headers.Range);
+    const a = +m[1];
+    const b = +m[2] + 1;
+    asked.push(a + '-' + b);
+    return new Promise(res => gates.push(() => res({ status: 206, headers: { get: k => (k === 'content-range' ? 'bytes ' + a + '-' + (b - 1) + '/1000' : k === 'content-length' ? String(b - a) : null) }, arrayBuffer: async () => file.slice(a, b).buffer })));
+  };
+  try {
+    prefetchRange('http://fixture.invalid/m.mkv', 0, 100, 300);
+    await tick();
+    // de a un pedido: la segunda parte recién cuando llega la primera
+    assert.deepEqual(asked, ['0-100']);
+    const head = takeRange('http://fixture.invalid/m.mkv', 0, 100);
+    gates.shift()();
+    assert.deepEqual(Array.from((await head).data.slice(0, 3)), [0, 1, 2]);
+    await tick();
+    assert.deepEqual(asked, ['0-100', '100-400']);
+    gates.shift()();
+    // una lectura que cruza las dos partes, sin pedir nada más
+    const mid = await takeRange('http://fixture.invalid/m.mkv', 50, 200);
+    assert.equal(mid.data.length, 200);
+    assert.equal(mid.data[0], 50);
+    assert.equal(mid.size, 1000);
+    // fuera de lo pedido: no
+    assert.equal(takeRange('http://fixture.invalid/m.mkv', 350, 100), null);
+    assert.equal(takeRange('http://fixture.invalid/otro.mkv', 0, 10), null);
+    // el lector de MKV toma lo que haya desde un punto aunque no llegue al final que pidió
+    const part = await takeRangeFrom('http://fixture.invalid/m.mkv', 380, 1000);
+    assert.equal(part.data.length, 20);
+    assert.equal(part.data[0], 380 & 255);
+    assert.deepEqual(asked, ['0-100', '100-400']);
+  } finally { global.fetch = realFetch; }
+});
+
+test('películas: al cerrar el reproductor se corta lo que se estaba bajando del principio del archivo', async () => {
+  const { prefetchRange, takeRange, dropPrefetch } = require('../src/player/prefetch.ts');
+  const realFetch = global.fetch;
+  let aborted = 0;
+  global.fetch = (_url, { signal }) => new Promise((_res, rej) => signal.addEventListener('abort', () => { aborted++; rej(new Error('cancelado')); }, { once: true }));
+  try {
+    prefetchRange('http://fixture.invalid/p.mp4', 0, 100, 900);
+    const p = takeRange('http://fixture.invalid/p.mp4', 0, 100);
+    dropPrefetch('http://fixture.invalid/otra.mp4');
+    await tick();
+    assert.equal(aborted, 0);
+    dropPrefetch('http://fixture.invalid/p.mp4');
+    assert.equal(await p, null);
+    assert.equal(aborted, 1);
+    assert.equal(takeRange('http://fixture.invalid/p.mp4', 0, 100), null);
+  } finally { global.fetch = realFetch; }
+});
+
+test('películas MKV: la cabecera y el principio del video salen de lo pedido al abrir (sin pedirlos otra vez)', async () => {
+  const { prefetchRange } = require('../src/player/prefetch.ts');
+  const { MkvMse } = require('../src/player/mkvmse.ts');
+  const realFetch = global.fetch;
+  const asked = [];
+  const file = new Uint8Array(2000).map((_, i) => (i * 3) & 255);
+  global.fetch = async (url, { headers }) => {
+    const m = /bytes=(\d+)-(\d+)/.exec(headers.Range);
+    const a = +m[1];
+    const b = Math.min(file.length, +m[2] + 1);
+    asked.push(a + '-' + b);
+    return { status: 206, headers: { get: k => (k === 'content-range' ? 'bytes ' + a + '-' + (b - 1) + '/2000' : k === 'content-length' ? String(b - a) : null) }, arrayBuffer: async () => file.slice(a, b).buffer };
+  };
+  try {
+    const url = 'http://fixture.invalid/serie.mkv';
+    prefetchRange(url, 0, 256, 744);
+    const r = new MkvMse({ removeEventListener() {} }, url);
+    const head = await r.get(0, 256);
+    assert.equal(head.length, 256);
+    // el primer tramo de los Cluster: lo que haya hasta donde se pidió al abrir (el resto lo pide ensure)
+    const first = await r.get(300, 4194304, true);
+    assert.equal(first.length, 700);
+    assert.equal(first[0], (300 * 3) & 255);
+    assert.deepEqual(asked, ['0-256', '256-1000']);
+    // lo que sigue, ya del servidor
+    const more = await r.get(1000, 500, true);
+    assert.equal(more.length, 500);
+    assert.deepEqual(asked, ['0-256', '256-1000', '1000-1500']);
+    r.destroy();
+  } finally { global.fetch = realFetch; }
+});

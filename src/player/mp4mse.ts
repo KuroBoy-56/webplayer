@@ -5,6 +5,7 @@
 // No pasa por la VPS: solo el cambio de idioma la usa. Saltos (◀▶, Continuar viendo) desde el cuadro clave anterior.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
+import { StartGate } from './startgate';
 import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VIDEO_ID, VideoCfg } from '../lib/mp4box';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -200,6 +201,10 @@ export class Mp4Mse {
   tracks: { lang: string; codec: string }[] = [];
   audioIdx = -1;
   onTracks: () => void = () => {};
+  // las pistas apenas se lee el índice (el menú de idiomas sin esperar al reproductor)
+  onHeader: () => void = () => {};
+  // cuándo empieza a sonar (startgate.ts): con 5 s bajados; Playback lo cambia al cambiar de idioma
+  gate = new StartGate();
   index: Uint8Array | null = null;
   private ms: any = null;
   private objectUrl = '';
@@ -257,6 +262,7 @@ export class Mp4Mse {
     this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '' }));
     const at0 = auds[this.selectedAudio] || auds.find(x => x.enabled) || auds[0] || null;
     this.audioIdx = at0 ? auds.indexOf(at0) : -1;
+    this.onHeader();
     const vc = vt ? videoCfg(vt) : null;
     const aac = at0 ? audioCfg(at0) : null;
     const dolby = at0 && !aac ? dolbyCfg(at0) : null;
@@ -320,8 +326,11 @@ export class Mp4Mse {
     this.place(at);
     if (at > 0) this.v.currentTime = at;
     this.pump();
-    this.watch = setInterval(() => this.alive && this.unstick(), 300);
-    this.v.play();
+    this.watch = setInterval(() => {
+      if (!this.alive) return;
+      this.unstick();
+      this.kick(false);
+    }, 300);
     this.onTracks();
     return '';
   }
@@ -600,6 +609,7 @@ export class Mp4Mse {
         const a = this.at;
         if (this.vi >= vt.dts.length && (!a || this.ai >= a.dts.length)) {
           await this.idle();
+          this.kick(true);
           try {
             if (this.ms.readyState === 'open') this.ms.endOfStream();
           } catch {
@@ -676,6 +686,7 @@ export class Mp4Mse {
         }
         this.vi = vj;
         this.ai = aj;
+        this.kick(false);
       }
     } finally {
       this.running = false;
@@ -732,7 +743,12 @@ export class Mp4Mse {
   private jump(to: number): void {
     this.v.currentTime = to;
     this.lastMove = Date.now();
-    if (this.v.paused) this.v.play();
+    if (this.v.paused && this.gate.started) this.v.play();
+  }
+
+  // empieza a sonar cuando hay lo suficiente bajado (done: ya está todo el archivo)
+  private kick(done: boolean): void {
+    if (this.gate.check(this.bufEnd() - (this.v.currentTime || 0), done)) this.v.play();
   }
 }
 

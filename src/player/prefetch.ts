@@ -13,7 +13,6 @@ export type RangeGot = { data: Uint8Array; size: number } | null;
 
 const TTL = 10000;
 let list: { url: string; p: Promise<ListGot>; at: number } | null = null;
-let range: { url: string; off: number; len: number; p: Promise<RangeGot>; at: number } | null = null;
 // el segmento tarda más que la lista en llegar: se guarda más tiempo
 const SEG_TTL = 30000;
 let seg: { url: string; p: Promise<SegGot>; at: number; ctrl: AbortController; owner: string } | null = null;
@@ -115,6 +114,11 @@ export function takeSeg(url: string): { p: Promise<SegGot>; ctrl: AbortControlle
 export function dropPrefetch(owner: string): void {
   if (job && job.url === owner) job = null;
   if (seg && seg.owner === owner) abortSeg();
+  // el principio de una película o capítulo que ya nadie va a leer
+  if (win && win.url === owner) {
+    win.stop.abort();
+    win = null;
+  }
 }
 
 function abortSeg(): void {
@@ -130,14 +134,17 @@ export function takeList(url: string): Promise<ListGot> | null {
   return p;
 }
 
-// [off, off + len) del archivo (cabecera del MKV, principio del MP4)
-export function prefetchRange(url: string, off: number, len: number): void {
-  const p = (async (): Promise<RangeGot> => {
+// [off, off + len) del archivo
+function fetchRange(url: string, off: number, len: number, stop: AbortSignal): Promise<RangeGot> {
+  return (async (): Promise<RangeGot> => {
+    if (stop.aborted) return null;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 30000);
+    stop.addEventListener('abort', () => ctrl.abort(), { once: true } as any);
     try {
       const r = await fetch(url, { headers: { 'User-Agent': UA, Range: 'bytes=' + off + '-' + (off + len - 1) }, signal: ctrl.signal });
-      if (r.status !== 206) {
+      // sin partes (200) o mandaría el resto del archivo: lo pide el lector, que lo detecta y sigue por otro camino
+      if (r.status !== 206 || Number(r.headers.get('content-length') || 0) > len + 65536) {
         ctrl.abort();
         return null;
       }
@@ -149,12 +156,68 @@ export function prefetchRange(url: string, off: number, len: number): void {
       clearTimeout(timer);
     }
   })();
-  range = { url, off, len, p, at: Date.now() };
 }
 
+// El principio del archivo, mientras el reproductor se inicia: la cabecera (len: los idiomas y el índice del MP4 al
+// principio) y, apenas llega, el principio del video (more), de a un pedido (líneas de una sola conexión). Cualquier
+// lectura del lector que caiga dentro sale de aquí sin volver a pedirla (cabecera, primer tramo del video, principio del
+// mdat). Se guarda 20 s.
+const RANGE_TTL = 20000;
+type Part = { off: number; len: number; p: Promise<RangeGot> };
+let win: { url: string; at: number; parts: Part[]; stop: AbortController } | null = null;
+
+export function prefetchRange(url: string, off: number, len: number, more = 0): void {
+  win?.stop.abort();
+  const stop = new AbortController();
+  const first = fetchRange(url, off, len, stop.signal);
+  const w = { url, at: Date.now(), parts: [{ off, len, p: first }] as Part[], stop };
+  if (more > 0) w.parts.push({ off: off + len, len: more, p: first.then(got => (got && win === w ? fetchRange(url, off + len, more, stop.signal) : null)) });
+  win = w;
+}
+
+function parts(url: string): Part[] | null {
+  return win && win.url === url && Date.now() - win.at < RANGE_TTL ? win.parts : null;
+}
+
+// trozo [from, to) de lo que llegó en cada parte (null si una parte no llegó entera)
+async function slice(list: Part[], from: number, to: number): Promise<Uint8Array | null> {
+  const got = await Promise.all(list.map(x => x.p));
+  const out: Uint8Array[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const g = got[i];
+    const a = Math.max(from, list[i].off) - list[i].off;
+    const b = Math.min(to, list[i].off + list[i].len) - list[i].off;
+    if (!g || g.data.length < b) return out.length ? concat(out) : null;
+    out.push(g.data.subarray(a, b));
+  }
+  return out.length === 1 ? out[0] : concat(out);
+}
+
+function concat(list: Uint8Array[]): Uint8Array {
+  if (list.length === 1) return list[0];
+  const out = new Uint8Array(list.reduce((n, x) => n + x.length, 0));
+  let o = 0;
+  for (const x of list) {
+    out.set(x, o);
+    o += x.length;
+  }
+  return out;
+}
+
+// [off, off + len) entero, si cae dentro de lo pedido (el resto de los pedidos, rangeGet)
 export function takeRange(url: string, off: number, len: number): Promise<RangeGot> | null {
-  if (!range || range.url !== url || range.off !== off || range.len !== len || Date.now() - range.at > TTL) return null;
-  const p = range.p;
-  range = null;
-  return p;
+  const list = parts(url);
+  const end = off + len;
+  const need = list ? list.filter(x => x.off < end && x.off + x.len > off) : [];
+  if (!need.length || need[0].off > off || need[need.length - 1].off + need[need.length - 1].len < end) return null;
+  return Promise.all([slice(need, off, end), need[0].p]).then(([d, g]) => (d && d.length === len ? { data: d, size: g?.size || 0 } : null));
+}
+
+// lo que haya desde off (hasta len bytes) aunque no llegue al final: el lector de MKV junta el resto con otro pedido
+export function takeRangeFrom(url: string, off: number, len: number): Promise<RangeGot> | null {
+  const list = parts(url);
+  const at = list ? list.findIndex(x => x.off <= off && off < x.off + x.len) : -1;
+  if (at < 0) return null;
+  const need = list!.slice(at);
+  return Promise.all([slice(need, off, off + len), need[0].p]).then(([d, g]) => (d && d.length ? { data: d, size: g?.size || 0 } : null));
 }

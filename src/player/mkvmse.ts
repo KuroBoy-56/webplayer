@@ -6,6 +6,8 @@
 // algunos Fire TV) no se puede así: Playback pide entonces el servidor o avisa que hace falta.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
+import { takeRangeFrom } from './prefetch';
+import { StartGate } from './startgate';
 import { AUDIO_ID, audioEntry, concat, esdsFor, fragment, initSegment, rawBox, Sample, VIDEO_ID, videoEntry } from '../lib/mp4box';
 import { Probe } from '../lib/probe';
 import { Cue } from '../lib/vtt';
@@ -34,6 +36,12 @@ export class MkvMse {
   tracks: { lang: string; codec: string }[] = [];
   audioIdx = -1;
   onTracks: () => void = () => {};
+  // las pistas apenas se lee la cabecera (el menú de idiomas sin esperar al reproductor)
+  onHeader: () => void = () => {};
+  // cuándo empieza a sonar (startgate.ts): con 5 s bajados; Playback lo cambia al cambiar de idioma
+  gate = new StartGate();
+  // índice Cues pedido mientras se abre el reproductor (Continuar viendo)
+  private cuesP: Promise<unknown> | null = null;
   // la cabecera ya leída (se reusa al cambiar de idioma o al volver a abrir)
   index: Mkv | null = null;
   why = '';
@@ -115,6 +123,9 @@ export class MkvMse {
     const vt = m.tracks.find(x => x.type === 1) || null;
     const auds = m.tracks.filter(x => x.type === 2);
     this.tracks = auds.map(x => ({ lang: x.lang, codec: x.codec }));
+    this.onHeader();
+    // Continuar viendo: el índice (al final del archivo) se pide ya, mientras se abre el reproductor
+    if (at > 0.5 && !m.cues && m.cuesPos > 0) this.cuesP = readCues((o, l) => this.get(o, l), m).then(c => (m.cues = c));
     if (!vt) return 'sin video';
     if (vt.compressed) return 'video con compresión de cabecera';
     const ve = videoOf(vt);
@@ -173,8 +184,11 @@ export class MkvMse {
     await this.place(this.startAt);
     if (this.startAt > 0) this.v.currentTime = this.startAt + SHIFT;
     this.pump();
-    this.watch = setInterval(() => this.alive && this.unstick(), 300);
-    this.v.play();
+    this.watch = setInterval(() => {
+      if (!this.alive) return;
+      this.unstick();
+      this.kick(false);
+    }, 300);
     this.onTracks();
     return '';
   }
@@ -240,6 +254,7 @@ export class MkvMse {
     this.buf = new Uint8Array(0);
     let at = m.firstCluster;
     if (t > 0.5) {
+      if (!m.cues && this.cuesP) await this.cuesP.catch(() => null);
       if (!m.cues && m.cuesPos > 0) m.cues = await readCues((o, l) => this.get(o, l), m);
       const cues = m.cues || [];
       let best = -1;
@@ -282,6 +297,8 @@ export class MkvMse {
   // primer cuadro de una pista (para leer la cabecera AC-3 / MP3): se buscan los bloques del primer Cluster
   private async firstAudioFrame(num: number): Promise<Uint8Array | null> {
     const m = this.index!;
+    // de a un pedido: primero termina el índice (Continuar viendo), por las líneas de una sola conexión
+    if (this.cuesP) await this.cuesP.catch(() => null);
     const data = this.pre?.off === m.firstCluster ? this.pre.data : await this.get(m.firstCluster, 1048576);
     if (!data) return null;
     this.pre = { off: m.firstCluster, data };
@@ -313,9 +330,15 @@ export class MkvMse {
     return this.requests.size > 0 || Date.now() - (this.rs.lastData || 0) < 10000;
   }
 
-  // [off, off + len) del archivo
-  private async get(off: number, len: number): Promise<Uint8Array | null> {
+  // [off, off + len) del archivo; partial: vale lo que haya desde off en lo ya pedido al abrir (ensure junta el resto)
+  private async get(off: number, len: number, partial = false): Promise<Uint8Array | null> {
     const g = this.gen;
+    const pre = partial ? takeRangeFrom(this.url, off, len) : null;
+    const got = pre ? await pre : null;
+    if (got) {
+      if (got.size > 0) this.size = this.rs.size = got.size;
+      return got.data;
+    }
     const d = await rangeGet(this.url, off, len, this.rs, this.requests, () => this.alive && g === this.gen);
     if (this.rs.size > 0) this.size = this.rs.size;
     if (!d) this.why = this.rs.why || this.why;
@@ -338,7 +361,7 @@ export class MkvMse {
         return false;
       }
       const g = this.gen;
-      const d = await this.get(from, this.firstOut ? FIRST_READ : READ);
+      const d = await this.get(from, this.firstOut ? FIRST_READ : READ, true);
       if (g !== this.gen || !this.alive) return false;
       if (!d) {
         if (this.size > 0 && from >= this.size - 1) this.eof = true;
@@ -565,9 +588,11 @@ export class MkvMse {
             this.onError();
             return;
           }
+          this.kick(false);
         }
         if (this.eof && !this.vq.length) {
           await this.idle();
+          this.kick(true);
           try {
             if (this.ms.readyState === 'open') this.ms.endOfStream();
           } catch {
@@ -671,7 +696,12 @@ export class MkvMse {
   private jump(to: number): void {
     this.v.currentTime = to;
     this.lastMove = Date.now();
-    if (this.v.paused) this.v.play();
+    if (this.v.paused && this.gate.started) this.v.play();
+  }
+
+  // empieza a sonar cuando hay lo suficiente bajado (done: ya está todo el archivo)
+  private kick(done: boolean): void {
+    if (this.gate.check(this.bufEnd() - (this.v.currentTime || 0), done)) this.v.play();
   }
 }
 

@@ -19,6 +19,7 @@ import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
 import { Mp4Mse } from './mp4mse';
 import { MkvMse } from './mkvmse';
+import { START_SEC, StartGate, SWITCH_SEC } from './startgate';
 import { Mkv } from './mkvparse';
 import { reportError } from '../api/report';
 import { ShakaPlayback } from './shaka';
@@ -155,6 +156,8 @@ export class Playback {
   private mp4Audio = -1;
   private mp4Index: Uint8Array | null = null;
   private mp4Paused = false;
+  // el lector propio se vuelve a abrir por un cambio de idioma: empieza con 2 s bajados (no 5) y, si estaba en pausa, en pausa
+  private mseSwitch = false;
   private audioChange = 0;
   private audioTimer: ReturnType<typeof setTimeout> | null = null;
   // audio del canal elegido en el menú (canales con varios idiomas)
@@ -246,6 +249,7 @@ export class Playback {
     this.mp4Index = null;
     this.mkvIndex = null;
     this.mp4Paused = false;
+    this.mseSwitch = false;
     this.adaptiveTried = false;
     this.probe = null;
     this.probing = false;
@@ -370,6 +374,14 @@ export class Playback {
       const want = this.mp4Audio;
       const m = mkv ? new MkvMse(this.v, this.url, this.mp4Audio, this.mkvIndex) : new Mp4Mse(this.v, this.url, this.mp4Audio, this.mp4Index);
       this.mse = m;
+      m.gate = new StartGate(this.mseSwitch ? SWITCH_SEC : START_SEC, this.mseSwitch && this.mp4Paused);
+      this.mseSwitch = false;
+      // los idiomas al menú apenas se lee la cabecera del archivo
+      m.onHeader = () => {
+        if (g !== this.gen || this.mse !== m) return;
+        if (m instanceof MkvMse && !this.probe?.ok) this.probe = m.probe();
+        this.hooks.changed();
+      };
       m.onTracks = () => {
         if (g !== this.gen || this.mse !== m) return;
         if (m instanceof MkvMse) {
@@ -1097,6 +1109,7 @@ export class Playback {
         const pos = this.realPos();
         this.mp4Audio = it.mp4;
         this.mp4Paused = this.v.paused;
+        this.mseSwitch = true;
         this.direct(pos);
       }
       this.audioKey = it.key;

@@ -391,7 +391,7 @@ export default function Player({ params }: { params: PlayParams }) {
     let initialized = false;
     let initializing: Promise<void> | null = null;
     let released: Promise<void> = Promise.resolve();
-    // canal cuya lista (y primer segmento) se pidió por adelantado: si se cierra antes de usarlo, se corta
+    // canal (lista y primer segmento) o película (su principio) pedidos por adelantado: si se cierra antes, se corta
     let preUrl = '';
 
     // Los reintentos pertenecen al intento que los creó; otro canal o una
@@ -771,8 +771,15 @@ export default function Player({ params }: { params: PlayParams }) {
           preUrl = first;
           prefetchList(first);
         }
-        else if (!live && /\.mkv(\?|$)/i.test(first)) prefetchRange(first, 0, 262144);
-        else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) prefetchRange(first, 0, 65536);
+        // películas y series: la cabecera (los idiomas) y, desde el principio, también los primeros segundos del video en un
+        // segundo pedido apenas llega la cabecera (MKV hasta 4 MB; MP4 hasta 2,25 MB: cubre el principio del mdat)
+        else if (!live && /\.mkv(\?|$)/i.test(first)) {
+          preUrl = first;
+          prefetchRange(first, 0, 262144, firstResume.current > 5 ? 0 : 4194304 - 262144);
+        } else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) {
+          preUrl = first;
+          prefetchRange(first, 0, 65536, firstResume.current > 5 ? 0 : 2359296 - 65536);
+        }
         initializing = v.initialize().then(() => { initialized = true; });
         return initializing;
       })

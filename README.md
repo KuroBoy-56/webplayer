@@ -207,6 +207,17 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Películas y series: arranque estable e idiomas antes (1.0.64)**: **con 5 s bajados**: los lectores propios (MP4 y MKV)
+  empezaban a sonar con 1,5 s y se detenían enseguida si el tramo siguiente tardaba. Ahora esperan 5 s bajados (o el
+  archivo entero si dura menos; con un servidor lento, a los 6 s con al menos 1,5 s) y siguen bajando por delante (40 s)
+  sin cortar lo que suena (`src/player/startgate.ts`). Al cambiar de idioma alcanzan 2 s, y si el video estaba en pausa
+  sigue en pausa. **Un pedido menos al abrir**: mientras el reproductor de Vega se inicia se pide la cabecera (256 KB MKV /
+  64 KB MP4: los idiomas) y, apenas llega, el principio del video (hasta 4 MB MKV / 2,25 MB MP4), de a un pedido;
+  cualquier lectura que caiga dentro sale de ahí (`prefetchRange` / `takeRange` / `takeRangeFrom` en
+  `src/player/prefetch.ts`; el MKV toma lo que haya desde un punto y pide solo lo que falta). Al cerrar el reproductor
+  se corta. Con Continuar viendo solo la cabecera, y el índice del MKV (Cues, al final del archivo) se pide mientras se
+  abre el reproductor. **Idiomas al menú apenas se lee la cabecera** (`onHeader`), sin esperar a que el reproductor
+  esté listo.
 - **Canales cifrados y con saltos de marcas sin cortes (1.0.63)**, por dos reportes «Canal en vivo se detiene seguido»:
   **descifrado nativo**: LAS ESTRELLAS (AES-128, segmentos de 13 s) tardaba `descifrado=8991ms` por segmento con el AES en
   JavaScript (@noble) y el canal se quedaba sin datos. Ahora se descifra con el módulo nativo de Vega (`WebCrypto` de
