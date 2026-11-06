@@ -20,6 +20,8 @@ let toasts = [];
 let mkvTracks = [{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_AAC'}];
 const noTracks = {ok:false,container:'',audio:[],subs:[]};
 const store = {
+  read:(key,def='')=>memory[key] ?? def,
+  write:(key,value)=>{memory[key]=value;},
   pref:(key,def)=>memory['pref_'+key] ?? def,
   readJson:key=>memory[key] || null,
   writeJson:(key,value)=>{memory[key]=value;},
@@ -69,9 +71,12 @@ Module._load = function(request,parent,isMain){
   return originalLoad.call(this,request,parent,isMain);
 };
 const {Playback} = require('../src/player/playback.ts');
+const {APP_VERSION} = require('../src/version.ts');
+// equipo donde el reproductor nativo de Vega no abre (lo que probaban estas pruebas antes de la 1.0.66): el lector de la app
+const noNative = () => { memory['native_live_'+APP_VERSION]='no'; memory['native_vod_'+APP_VERSION]='no'; };
 after(()=>{Module._load=originalLoad;if(previousTs)require.extensions['.ts']=previousTs;else delete require.extensions['.ts'];});
 function setup({tracks=[],cached=null}={}){
-  memory={};calls=[];probe=cached;shakas=[];mp4s=[];mkvs=[];toasts=[];release=null;mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_AAC'}];
+  memory={};noNative();calls=[];probe=cached;shakas=[];mp4s=[];mkvs=[];toasts=[];release=null;mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_AAC'}];
   const video={src:'',currentTime:0,duration:600,paused:false,audioTracks:tracks,textTracks:[],play(){this.paused=false;return Promise.resolve();},pause(){this.paused=true;}};
   const c=new Playback(video,{toast:m=>toasts.push(m),status:()=>{},changed:()=>{},subText:()=>{},fatal:()=>{}});
   return {c,video};
@@ -183,14 +188,74 @@ test('MKV con audio que no entra por MSE (E-AC-3): primero el lector nativo; si 
   assert.equal(mkvs.length,2);assert.equal(c.mp4Fallback('x'),true);await c.destroy();
 });
 test('canal congelado: primero el reproductor nativo de Vega (.ts directo, una vez por canal) y después alternando MP4 y MPEG-TS hasta 6 veces',async()=>{
+  // un equipo que todavía no sabe si el nativo abre, con un canal que el nativo ya no pudo abrir: el lector propio
+  lives=[];const {c,video}=setup();delete memory['native_live_'+APP_VERSION];
+  c.load('http://fixture.invalid/live/u/p/1.m3u8',0,true);await tick();
+  assert.equal(lives.length,0);assert.equal(video.src,'http://fixture.invalid/live/u/p/1.ts');
+  assert.equal(c.liveRetryTs(),true);assert.equal(lives.length,1);
+  // ese canal se congela con el lector propio: el nativo ya falló con él, así que sigue alternando el lector
+  lives[0].frozen=true;assert.equal(c.liveRetryTs(),true);assert.equal(lives.length,2);assert.equal(lives[1].tsOnly,false);
+  c.load('http://fixture.invalid/live/u/p/9.m3u8',0,true);await tick();lives=[];
+  memory['native_live_'+APP_VERSION]='no';
+});
+
+test('canales: el reproductor nativo primero; si abre, el equipo lo recuerda; si falla 2 veces sin abrir nunca, el lector propio',async()=>{
+  lives=[];let {c,video}=setup();delete memory['native_live_'+APP_VERSION];
+  c.load('http://fixture.invalid/live/u/p/7.m3u8',0,true);await tick();
+  assert.equal(lives.length,0);assert.equal(video.src,'http://fixture.invalid/live/u/p/7.ts');assert.match(c.liveDiag(),/modo=nativo/);
+  c.onPlaying();assert.equal(memory['native_live_'+APP_VERSION],'ok');await c.destroy();
+  // otro equipo donde el nativo nunca abre: 2 canales fallan y desde ahí todo por el lector propio
+  ({c,video}=setup());delete memory['native_live_'+APP_VERSION];
+  for(const n of [21,22]){c.load('http://fixture.invalid/live/u/p/'+n+'.m3u8',0,true);await tick();assert.equal(c.liveRetryTs(),true);}
+  assert.equal(memory['native_live_'+APP_VERSION],'no');
+  const before=lives.length;c.load('http://fixture.invalid/live/u/p/23.m3u8',0,true);await tick();assert.equal(lives.length,before+1);
+  await c.destroy();
+});
+
+test('canal congelado: alternando MP4 y MPEG-TS hasta 6 veces (equipo sin reproductor nativo)',async()=>{
   lives=[];const {c,video}=setup();c.load('http://fixture.invalid/live/u/p/1.m3u8',0,true);await tick();
   assert.equal(lives.length,1);lives[0].frozen=true;assert.equal(c.liveRetryTs(),true);
-  // el reproductor nativo con el MPEG-TS del canal, sin otro lector propio
-  assert.equal(lives.length,1);assert.equal(video.src,'http://fixture.invalid/live/u/p/1.ts');assert.match(c.liveDiag(),/modo=nativo/);
-  // tampoco así (error o imagen quieta): de vuelta al lector propio
-  assert.equal(c.liveRetryTs(),true);
   assert.equal(lives.length,2);assert.equal(lives[1].tsOnly,false);lives[1].frozen=true;assert.equal(c.liveRetryTs(),true);
   assert.equal(lives[2].tsOnly,true);for(let k=2;k<6;k++){lives[k].frozen=true;assert.equal(c.liveRetryTs(),true);}
   assert.equal(lives[6].tsOnly,true);lives[6].frozen=true;assert.equal(c.liveRetryTs(),false);
   c.load('http://fixture.invalid/live/u/p/2.m3u8',0,true);await tick();assert.equal(lives[7].tsOnly,false);await c.destroy();
+});
+
+test('películas desde el principio: reproductor nativo primero; otro idioma pasa al lector de la app desde el mismo segundo',async()=>{
+  const {c,video}=setup({cached:dual});delete memory['native_vod_'+APP_VERSION];
+  c.load('https://fixture.invalid/nat1.mkv',0,false);await tick();
+  assert.equal(mkvs.length,0);assert.equal(video.src,'https://fixture.invalid/nat1.mkv');
+  c.onPlaying();assert.equal(memory['native_vod_'+APP_VERSION],'ok');
+  // el menú con los idiomas del archivo (sin «Audio predeterminado» del panel)
+  const audios=c.menu().filter(m=>m.kind==='audio');assert.equal(audios.length,2);assert.ok(!audios.some(m=>m.key==='def'));
+  video.currentTime=120;choose(c,'Inglés');await tick();
+  assert.equal(mkvs.length,1);assert.equal(mkvs[0].audioIdx,1);assert.equal(video.currentTime,120);assert.deepEqual(calls,[]);
+  await c.destroy();
+});
+
+test('películas: si el reproductor nativo no abre, el lector de la app al momento; 2 fallos sin abrir nunca = lector siempre',async()=>{
+  let {c,video}=setup();delete memory['native_vod_'+APP_VERSION];
+  for(const n of [2,3]){
+    c.load('https://fixture.invalid/nat'+n+'.mp4',0,false);await tick();
+    assert.equal(video.src,'https://fixture.invalid/nat'+n+'.mp4');const before=mp4s.length;
+    assert.equal(c.mp4Fallback(),true);await tick();assert.equal(mp4s.length,before+1);
+  }
+  assert.equal(memory['native_vod_'+APP_VERSION],'no');
+  const before=mp4s.length;c.load('https://fixture.invalid/nat4.mp4',0,false);await tick();assert.equal(mp4s.length,before+1);
+  await c.destroy();
+  // Continuar viendo: siempre el lector de la app (empieza en el segundo exacto)
+  ({c,video}=setup());delete memory['native_vod_'+APP_VERSION];
+  c.load('https://fixture.invalid/nat5.mkv',300,false);await tick();assert.equal(mkvs.length,1);assert.equal(video.currentTime,300);
+  await c.destroy();
+});
+
+test('películas MKV con el reproductor nativo: un subtítulo de texto pasa al lector de la app (sin servidor)',async()=>{
+  const {c,video}=setup();delete memory['native_vod_'+APP_VERSION];
+  c.load('https://fixture.invalid/nat6.mkv',0,false);await tick();assert.equal(mkvs.length,0);
+  // los idiomas y subtítulos del archivo, leídos ya sonando
+  probe=new Mkv(video,'x').probe();mkvs.length=0;c.onPlaying();await new Promise(r=>setTimeout(r,200));
+  const sub=c.menu().find(m=>m.kind==='text'&&m.key!=='off');assert.ok(sub,'hay subtítulos');
+  video.currentTime=60;c.select(sub);await tick();
+  assert.equal(mkvs.length,1);assert.equal(video.currentTime,60);assert.deepEqual(calls,[]);
+  await c.destroy();
 });

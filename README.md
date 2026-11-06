@@ -207,6 +207,21 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Reproductor nativo de Vega primero y pantalla grande sin reabrir (1.0.66)**: **canales**: se abren primero con el
+  reproductor nativo de Vega en modo directo con su `.ts` (Vega OS 2.0, como Roku y LG): sin trabajo de la app, así no se
+  entrecorta al recorrer la lista rápido ni tarda en convertir. Si ese canal no abre en 10 s, da error o la imagen queda
+  quieta 8 s, sigue con el lector propio (solo ese canal). **Pantalla grande = el mismo reproductor de la miniatura**: OK
+  otra vez en el canal que suena le entrega su reproductor (`handPreview` / `offerPreview` / `takePreview` en
+  `src/player/preview-session.ts`; `Playback.setHooks`): solo cambia la superficie, sin cerrar, pedir ni convertir nada
+  (antes se cerraba y se abría otra vez: tardaba y CINEMAX / HBO se congelaban a los pocos segundos). Si la miniatura
+  todavía no sonaba, se abre como siempre. La miniatura también vuelve a abrir el canal por el otro camino si da error.
+  **Películas y series desde el principio**: el archivo va directo al reproductor nativo (como Android y LG, Amazon lo
+  recomienda para MP4 / MKV); los idiomas se leen de la cabecera ya sonando. Elegir otro idioma (o un subtítulo de texto
+  del MKV) pasa al lector de la app desde el mismo segundo, sin servidor; si el nativo no abre en 10 s o da error, el
+  lector de la app al momento. Continuar viendo, un idioma ya elegido para el título o subtítulos automáticos siguen con
+  el lector de la app. **Aprende por equipo** (`src/player/nativemode.ts`, `native_live_<versión>` /
+  `native_vod_<versión>`): si el nativo abre una vez se sigue usando; si falla 2 veces sin abrir nunca, todo por el lector
+  de la app. Los reportes dicen `modo=nativo` o `nativo: …`.
 - **Lo que dice Amazon para Vega (1.0.65)**, por reportes de canales congelados, capítulos que no abrían y el «jale» al bajar:
   **filas sin doble desplazamiento**: como el ejemplo oficial de Amazon (AmazonAppDev/vega-scrolling-sample), la lista de
   Inicio, Series y Películas tiene `scrollEnabled={false}` y la app la lleva a la fila enfocada con `scrollTo` animado

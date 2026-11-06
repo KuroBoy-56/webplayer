@@ -229,6 +229,13 @@ export class LiveHls {
     this.destroy();
   }
 
+  // la pantalla grande se quedó con este lector: ya no hace falta guardar segmentos
+  stopKeeping(): void {
+    this.keep = false;
+    this.kept.clear();
+    this.keptBytes = 0;
+  }
+
   // segmento ya entregado (texto plano): los KEEP_SEGS más nuevos, con tope de memoria
   private remember(seq: number, data: Uint8Array): void {
     this.kept.set(seq, data);

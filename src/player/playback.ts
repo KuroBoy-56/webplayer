@@ -15,6 +15,7 @@ import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
 import { Probe } from '../lib/probe';
 import { pref, readJson, setPref, writeJson } from '../lib/storage';
+import { nativeAllowed, nativeFailedOnce, nativeWorked } from './nativemode';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
 import { Mp4Mse } from './mp4mse';
@@ -127,6 +128,13 @@ function setPanelRoute(url: string, r: 'p' | 'v' | ''): void {
 
 // canales que tampoco se vieron con el reproductor nativo de Vega (no se vuelve a probar en la sesión)
 const nativeFailed = new Set<string>();
+// el canal va a abrir con el reproductor nativo (entonces no hace falta pedir su lista HLS por adelantado)
+export function nativeLivePlanned(url: string): boolean {
+  return nativeAllowed('live') && !nativeFailed.has(url) && /\.m3u8(\?|$)/i.test(url);
+}
+// películas y capítulos ya probados con el reproductor nativo en esta sesión (sin http/https: el mismo archivo)
+const vodNativeTried = new Set<string>();
+const fileKey = (u: string) => u.replace(/^https?:\/\//i, '');
 
 export class Playback {
   private url = '';
@@ -219,7 +227,20 @@ export class Playback {
   private panelPlain = false;
   private panelVideo = false;
 
+  // película o capítulo con el reproductor nativo de Vega (modo directo, como Android y LG); idioma o subtítulo elegidos
+  // (y si falla) → el lector de la app desde el mismo segundo
+  private vodNative = false;
+  private nativeTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingSub = '';
+
   constructor(private v: VideoPlayer, private hooks: Hooks) {}
+
+  // la pantalla grande se queda con el reproductor de la miniatura: desde ahora avisa a Player
+  setHooks(h: Hooks): void {
+    this.hooks = h;
+    this.liveKeep = false;
+    this.liveHls?.stopKeeping();
+  }
 
   // ---------- fuente ----------
 
@@ -253,6 +274,7 @@ export class Playback {
     this.mp4Index = null;
     this.mkvIndex = null;
     this.mp4Paused = false;
+    this.pendingSub = '';
     this.adaptiveTried = false;
     this.probe = null;
     this.probing = false;
@@ -290,6 +312,12 @@ export class Playback {
     const g = this.gen;
     this.liveNative = false;
     this.stopNative();
+    // primero el reproductor nativo de Vega con el .ts del canal (como Roku y LG: rápido y sin trabajo de la app, no se
+    // entrecorta al recorrer la lista); si en este equipo no abre o ese canal falla, el lector propio
+    if (nativeLivePlanned(url)) {
+      this.openNative();
+      return;
+    }
     const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, this.liveFrozen > 0 && this.liveFrozen % 2 === 0);
     h.keep = this.liveKeep;
     this.liveHls = h;
@@ -316,8 +344,9 @@ export class Playback {
   // de la sesión), sin pasar por otro formato ni protocolo. false = no era eso
   liveRetryTs(): boolean {
     if (!this.live) return false;
-    // el reproductor nativo tampoco pudo (error, sin imagen o imagen quieta): de vuelta al lector propio
+    // el reproductor nativo no pudo (error, sin imagen o imagen quieta): el lector propio
     if (this.liveNative) {
+      if (!this.played) nativeFailedOnce('live');
       nativeFailed.add(this.url);
       this.stopNative();
       this.openLive(this.url);
@@ -332,7 +361,7 @@ export class Playback {
       if (this.liveFrozen >= 6) return false;
       this.liveFrozen++;
       h.destroy();
-      if (!nativeFailed.has(this.url)) {
+      if (nativeLivePlanned(this.url)) {
         this.liveHls = null;
         this.openNative();
         return true;
@@ -384,7 +413,7 @@ export class Playback {
         last = t;
         still = Date.now();
       }
-      if (!this.v.paused && Date.now() - still > 8000 && (t > 0 || Date.now() - began > 20000)) {
+      if (!this.v.paused && Date.now() - still > 8000 && (t > 0 || Date.now() - began > 10000)) {
         this.stopNative();
         this.hooks.liveFailed?.(t > 0 ? 'nativo: imagen quieta' : 'nativo: no empezó');
       }
@@ -421,6 +450,10 @@ export class Playback {
     // MP4: la app lo lee del servidor IPTV y lo entrega al reproductor (el modo directo de Vega da error 4 con los MP4
     // de índice al final, los de casi todos los servidores IPTV). Empieza ya en el segundo pedido (sin el salto)
     if (!this.live && !this.mp4Url && /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(this.url)) {
+      if (this.mp4Audio < 0 && !this.mkvNative && this.nativeVodPlanned(this.url, at)) {
+        this.openNativeVod();
+        return;
+      }
       this.resumeAt = 0;
       const g = this.gen;
       const mkv = /\.mkv(\?|$)/i.test(this.url);
@@ -442,6 +475,11 @@ export class Playback {
         } else this.mp4Index = m.index;
         if (this.mp4Paused) { this.mp4Paused = false; this.v.pause(); }
         this.applyPrefs();
+        if (this.pendingSub) {
+          const sub = this.subItems().find(i => i.key === this.pendingSub);
+          this.pendingSub = '';
+          if (sub) this.pickSub(sub, true);
+        }
         this.hooks.changed();
       };
       m.onError = () => g === this.gen && this.mse === m && this.mp4Failed(at, m.why);
@@ -474,6 +512,37 @@ export class Playback {
     } else this.resumeAt = at;
     this.v.src = this.url;
     this.v.play();
+  }
+
+  // ¿se abre con el reproductor nativo de Vega? Desde el principio (Continuar viendo lo abre el lector de la app, que
+  // empieza en el segundo exacto), sin idioma elegido antes para el título ni subtítulos automáticos (eso lo hace el
+  // lector), una vez por archivo en la sesión y si el reproductor nativo no falló antes en este equipo
+  nativeVodPlanned(url: string, at: number): boolean {
+    return /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url) && at <= 5 && !titleLang(url) && pref('subs_lang', 'off') === 'off' && nativeAllowed('vod') && !vodNativeTried.has(fileKey(url));
+  }
+
+  // el archivo directo al reproductor de Vega (lo lee y decodifica él, como Android y LG). Los idiomas se leen de la
+  // cabecera cuando ya suena (onPlaying → langWatch). Si en 10 s no empieza o da error, el lector de la app (mp4Fallback)
+  private openNativeVod(): void {
+    const g = this.gen;
+    vodNativeTried.add(fileKey(this.url));
+    this.vodNative = true;
+    this.resumeAt = 0;
+    this.v.src = this.url;
+    this.v.play();
+    this.nativeTimer = setTimeout(() => {
+      this.nativeTimer = null;
+      if (g === this.gen && this.vodNative && !this.played) this.hooks.panelFailed?.();
+    }, 10000);
+  }
+
+  // del reproductor nativo al lector de la app (failed: no llegó a sonar), desde pos
+  private leaveNativeVod(failed: boolean, pos: number): void {
+    if (this.nativeTimer) clearTimeout(this.nativeTimer);
+    this.nativeTimer = null;
+    this.vodNative = false;
+    if (failed) nativeFailedOnce('vod');
+    this.direct(pos);
   }
 
   private openAdaptive(at: number): void {
@@ -513,6 +582,12 @@ export class Playback {
 
   // error del reproductor con el MP4 leído por la app: true = se sigue con el modo directo de siempre
   mp4Fallback(why = 'error del reproductor'): boolean {
+    // el reproductor nativo no pudo con la película (o se cortó): el lector de la app desde donde iba
+    if (this.vodNative) {
+      this.mp4Why = 'nativo: ' + why;
+      this.leaveNativeVod(!this.played, this.played ? this.realPos() : this.wantAt);
+      return true;
+    }
     if (this.mkvNative === 'trying' && !this.mse && !this.played) {
       // el lector nativo tampoco pudo con el MKV: el de la app con el video (y el audio por el panel / aviso)
       this.mkvNative = 'failed';
@@ -630,6 +705,9 @@ export class Playback {
     this.liveHls = null;
     this.stopNative();
     this.liveNative = false;
+    this.vodNative = false;
+    if (this.nativeTimer) clearTimeout(this.nativeTimer);
+    this.nativeTimer = null;
     this.remuxLive = false;
   }
 
@@ -745,6 +823,12 @@ export class Playback {
     if (this.seekTo > 0 && !this.remux) return;
     this.clearSeek();
     this.played = true;
+    if (this.live && this.liveNative) nativeWorked('live');
+    if (this.vodNative) {
+      nativeWorked('vod');
+      if (this.nativeTimer) clearTimeout(this.nativeTimer);
+      this.nativeTimer = null;
+    }
     // cómo se pudo ver este archivo: por el panel (se recuerda) o directo (se olvida lo anterior)
     if (!this.live) setPanelRoute(this.url, this.remux && this.panelFallback && !this.resumePanel ? (this.panelVideo ? 'v' : 'p') : this.remux ? panelRoute(this.url) : '');
     if (this.live || this.probing) return;
@@ -972,7 +1056,7 @@ export class Playback {
 
   // Menú remoto únicamente cuando no existe un lector local ni pistas nativas expuestas.
   private panelMenu(): boolean {
-    return !this.live && !this.shaka && !this.mse && !this.nativeAudio().length && !!this.probe?.ok && this.probe.audio.length > 1;
+    return !this.live && !this.vodNative && !this.shaka && !this.mse && !this.nativeAudio().length && !!this.probe?.ok && this.probe.audio.length > 1;
   }
 
   // menú de audio y subtítulos
@@ -1039,6 +1123,15 @@ export class Playback {
         return;
       }
       const it = this.audioItems().find(i => i.key === m.key);
+      if (it && it.probe !== undefined && this.vodNative) {
+        // el reproductor nativo no cambia de idioma: el lector de la app con ese audio, desde el mismo segundo (local)
+        this.mp4Audio = it.probe;
+        this.mp4Paused = this.v.paused;
+        setTitleLang(this.url, it);
+        this.hooks.toast(t('Audio: {x}', { x: it.label }));
+        this.leaveNativeVod(false, this.realPos());
+        return;
+      }
       if (it && it.probe !== undefined && this.panelMenu()) {
         // un idioma de la lista de abajo: lo prepara el panel (también el de por defecto)
         if (this.remux?.a === it.probe) {
@@ -1055,7 +1148,15 @@ export class Playback {
       }
       if (it) this.pickAudio(it, true);
     } else {
-      this.pickSub(m.key === 'off' ? null : this.subItems().find(i => i.key === m.key) || null, true);
+      const s = m.key === 'off' ? null : this.subItems().find(i => i.key === m.key) || null;
+      if (s && !s.image && this.vodNative && /\.mkv(\?|$)/i.test(this.url)) {
+        // subtítulo de texto del MKV: lo lee el lector de la app (sin servidor); se pone apenas abre
+        this.pendingSub = s.key;
+        this.mp4Paused = this.v.paused;
+        this.leaveNativeVod(false, this.realPos());
+        return;
+      }
+      this.pickSub(s, true);
     }
   }
 

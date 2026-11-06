@@ -16,8 +16,8 @@ import { Button, Focusable, Loader } from '../components/ui';
 import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
-import { MenuItem, Playback } from '../player/playback';
-import { setLastLive, stopLivePreview } from '../player/preview-session';
+import { Hooks, MenuItem, nativeLivePlanned, Playback } from '../player/playback';
+import { setLastLive, stopLivePreview, takePreview } from '../player/preview-session';
 import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
 import { hasHandoff } from '../player/livehls';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
@@ -356,9 +356,12 @@ export default function Player({ params }: { params: PlayParams }) {
   chListRef.current = chList;
 
   useEffect(() => {
-    const v = new VideoPlayer();
+    // el canal que ya suena en la miniatura: la pantalla grande se queda con ese reproductor (sin cerrarlo ni abrir el
+    // canal de nuevo; solo cambia la superficie), como Roku
+    const inherited = params.kind === 'live' ? takePreview(urlFor(indexRef.current)) : null;
+    const v = inherited ? inherited.v : new VideoPlayer();
     video.current = v;
-    const c = new Playback(v, {
+    const hooks: Hooks = {
       toast: showToast,
       status: setWork,
       changed: () => {
@@ -385,7 +388,9 @@ export default function Player({ params }: { params: PlayParams }) {
         liveNote.current = 'HLS: ' + why;
         onErrorRef.current();
       },
-    });
+    };
+    const c = inherited ? inherited.c : new Playback(v, hooks);
+    if (inherited) c.setHooks(hooks);
     ctl.current = c;
     let alive = true;
     let initialized = false;
@@ -761,19 +766,25 @@ export default function Player({ params }: { params: PlayParams }) {
       if (menuOpen.current) showMenu(c.menu());
     };
 
-    stopLivePreview()
-      .then(() => {
+    // heredado de la miniatura: ya iniciado y sonando (sin cerrar la miniatura, pedir nada ni iniciar otro reproductor)
+    if (inherited) initialized = true;
+    const begin: Promise<void> = inherited
+      ? Promise.resolve()
+      : stopLivePreview().then(() => {
         if (!alive) return;
         // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
         const first = dnsUrl.current && dnsUrl.current.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
-        // con lo que dejó la miniatura de este canal no hace falta pedir nada por adelantado
-        if (live && /\.m3u8(\?|$)/i.test(first) && !hasHandoff(first)) {
+        // con lo que dejó la miniatura de este canal (o con el reproductor nativo) no hace falta pedir nada por adelantado
+        if (live && /\.m3u8(\?|$)/i.test(first) && !hasHandoff(first) && !nativeLivePlanned(first)) {
           preUrl = first;
           prefetchList(first);
         }
         // películas y series: la cabecera (los idiomas). MKV desde el principio: también su primer tramo del video (1 MB) en un
         // segundo pedido apenas llega la cabecera; el MP4 ya pide el principio del video a la vez que su índice
-        else if (!live && /\.mkv(\?|$)/i.test(first)) {
+        // con el reproductor nativo el archivo lo pide él: nada por adelantado (sería otra conexión a la vez)
+        else if (!live && c.nativeVodPlanned(first, firstResume.current)) {
+          // nada
+        } else if (!live && /\.mkv(\?|$)/i.test(first)) {
           preUrl = first;
           prefetchRange(first, 0, 262144, firstResume.current > 5 ? 0 : 1048576);
         } else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) {
@@ -782,7 +793,8 @@ export default function Player({ params }: { params: PlayParams }) {
         }
         initializing = v.initialize().then(() => { initialized = true; });
         return initializing;
-      })
+      });
+    begin
       .then(async () => {
         if (!alive) return;
         // la superficie del video antes de darle el video (Amazon: sin ella, error 4 en modo directo); como mucho 3 s
@@ -802,6 +814,12 @@ export default function Player({ params }: { params: PlayParams }) {
         (v as any).textTracks?.addEventListener?.('addtrack', onTrack);
         if (surface.current) v.setSurfaceHandle(surface.current);
         if (captions.current) v.setCaptionViewHandle(captions.current);
+        if (inherited) {
+          // ya suena: se quita el «cargando» y sigue igual; si la miniatura se había detenido, se abre como siempre
+          if (!v.paused) onPlaying();
+          else load(indexRef.current);
+          return;
+        }
         load(indexRef.current, firstResume.current);
       })
       .catch(() => alive && setError(t('No se pudo iniciar el reproductor.')));

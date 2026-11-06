@@ -625,3 +625,29 @@ test('películas MP4 en H.265 (hev1 / hvc1): el lector de la app las abre (antes
   }
   assert.equal(hevcCfg({ entry: videoEntry('avc1', new Uint8Array(8), 1280, 720) }), null);
 });
+
+test('pantalla grande: se queda con el reproductor de la miniatura si ya suena (sin cerrarlo); si no, se cierra como siempre', async () => {
+  const s = require('../src/player/preview-session.ts');
+  let stops = 0;
+  const player = { id: 'v' };
+  const pb = { id: 'c' };
+  s.registerLivePreview(async () => { stops++; }, () => { s.offerPreview({ url: 'http://fixture.invalid/live/u/p/5.m3u8', v: player, c: pb, at: Date.now() }); return true; });
+  assert.equal(s.handPreview(), true);
+  await tick();
+  assert.equal(stops, 0);
+  // otro canal no se la lleva; el mismo sí, una sola vez
+  assert.equal(s.takePreview('http://fixture.invalid/live/u/p/6.m3u8'), null);
+  s.offerPreview({ url: 'http://fixture.invalid/live/u/p/5.m3u8', v: player, c: pb, at: Date.now() });
+  const got = s.takePreview('http://fixture.invalid/live/u/p/5.m3u8');
+  assert.equal(got.v, player);
+  assert.equal(got.c, pb);
+  assert.equal(s.takePreview('http://fixture.invalid/live/u/p/5.m3u8'), null);
+  // la miniatura todavía no suena: se cierra (la pantalla grande abre el canal)
+  s.registerLivePreview(async () => { stops++; }, () => false);
+  assert.equal(s.handPreview(), false);
+  await tick();
+  assert.equal(stops, 1);
+  // una entrega vieja (más de 5 s) no vale
+  s.offerPreview({ url: 'http://fixture.invalid/live/u/p/7.m3u8', v: player, c: pb, at: Date.now() - 6000 });
+  assert.equal(s.takePreview('http://fixture.invalid/live/u/p/7.m3u8'), null);
+});
