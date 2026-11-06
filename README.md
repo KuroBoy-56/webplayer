@@ -207,6 +207,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Versión 2.0.0: cambio de canal en pantalla grande como antes**: con ▲▼ (o la lista de canales) en pantalla grande el
+  canal nuevo va por el lector de la app, como antes de la 1.0.66: el reproductor nativo de Vega da error al cambiarle la
+  dirección a un reproductor ya usado y cada cambio terminaba en «Reconectando…» (`reused` en `src/player/playback.ts`).
+  La miniatura y la primera apertura de un canal siguen con el nativo. El lector reemplaza el video del canal anterior
+  apenas se cambia, antes de pedir la lista del nuevo (`LiveHls.start`): el anterior seguía sonando con su conexión
+  abierta (el servidor contaba una conexión más y contestaba una página vacía en lugar de la lista) y el aviso de error
+  quedaba encima de ese canal. El aviso de error del reproductor va sobre negro. El aviso de película lenta dice además a
+  los cuántos segundos falló el reproductor nativo.
 - **Miniatura sin microcortes al recorrer las listas y películas que abren antes (1.0.69)**: la lista de canales, la de
   carpetas y la lista de canales de pantalla grande ya no se desplazan solas: la app las mueve al cambiar el foco, sin
   animación y solo cuando la fila enfocada queda a menos de una fila del borde (`src/lib/listscroll.ts`, como Inicio y el

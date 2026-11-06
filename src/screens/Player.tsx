@@ -1181,8 +1181,9 @@ export default function Player({ params }: { params: PlayParams }) {
         </View>
       ) : null}
 
+      {/* sobre negro: la imagen de lo anterior (otro canal, el video que falló) no queda detrás de las letras */}
       {error && !askExit ? (
-        <View style={s.center}>
+        <View style={[s.center, s.errorShade]}>
           <Text style={s.error}>{error}</Text>
           <Text style={s.hint}>{t('Atrás para salir')}</Text>
         </View>
@@ -1370,6 +1371,7 @@ const s = themed(() =>
     center: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 5 },
     status: { color: C.green, fontSize: px(28), marginTop: px(20) },
     error: { color: '#fff', fontSize: px(38), fontWeight: '700', textAlign: 'center' },
+    errorShade: { backgroundColor: '#000' },
     overlay: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, justifyContent: 'space-between', zIndex: 6 },
     topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: px(80), paddingTop: px(50), paddingBottom: px(40), backgroundColor: alpha(C.bg, 0.6) },
     chLogo: { width: px(130), height: px(74), marginRight: px(24) },

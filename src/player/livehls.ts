@@ -254,21 +254,9 @@ export class LiveHls {
     // (text/html) y un momento después sí la dan. Se espera y se vuelve a pedir (hasta 3 veces, 1 s, 2 s y 3 s) antes de
     // dar el canal por perdido; un motivo claro de XUI (canal inexistente, vencida…) no se reintenta.
     const h = this.adopt();
-    let err = h ? '' : await this.refresh();
-    for (let i = 0; err && i < 3 && this.alive && this.retryable(); i++) {
-      this.retries++;
-      await sleep(1000 * (i + 1));
-      if (!this.alive) return '';
-      this.list = this.first;
-      err = await this.refresh();
-    }
-    if (err) return err;
-    if (!this.segs.length) return 'lista sin segmentos';
-    if (!this.alive) return '';
-    // en vivo: 5 segmentos antes del final (unos 25-30 s de margen): con los últimos 3 cualquier demora del servidor o
-    // del descifrado dejaba el canal sin datos y se detenía y seguía una y otra vez
-    this.next = this.handed ? this.handedStart() : liveStartSeg(this.segs).seq;
-    this.v.addEventListener('waiting', this.onWaiting);
+    // el video del canal anterior se reemplaza ya, antes de pedir la lista: al cambiar de canal en pantalla grande el
+    // anterior seguía sonando (y con su conexión abierta: el servidor contaba una conexión más y devolvía una página vacía
+    // en lugar de la lista del nuevo); el aviso de error quedaba encima de ese canal. Además se abre mientras llega la lista
     const ms: any = new MediaSource();
     this.ms = ms;
     const opened = new Promise<void>(res => ms.addEventListener('sourceopen', () => res()));
@@ -289,6 +277,21 @@ export class LiveHls {
     } catch {
       (this.v as any).srcObject = ms;
     }
+    let err = h ? '' : await this.refresh();
+    for (let i = 0; err && i < 3 && this.alive && this.retryable(); i++) {
+      this.retries++;
+      await sleep(1000 * (i + 1));
+      if (!this.alive) return '';
+      this.list = this.first;
+      err = await this.refresh();
+    }
+    if (err) return err;
+    if (!this.segs.length) return 'lista sin segmentos';
+    if (!this.alive) return '';
+    // en vivo: 5 segmentos antes del final (unos 25-30 s de margen): con los últimos 3 cualquier demora del servidor o
+    // del descifrado dejaba el canal sin datos y se detenía y seguía una y otra vez
+    this.next = this.handed ? this.handedStart() : liveStartSeg(this.segs).seq;
+    this.v.addEventListener('waiting', this.onWaiting);
     await Promise.race([opened, sleep(10000)]);
     if (!this.alive) return '';
     if (ms.readyState !== 'open') return 'el reproductor no abrió MediaSource';

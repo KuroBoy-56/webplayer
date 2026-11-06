@@ -164,6 +164,9 @@ export class Playback {
   private nativeDog: ReturnType<typeof setInterval> | null = null;
   // la miniatura (LivePreview): el lector del canal guarda los últimos segmentos para la pantalla grande
   liveKeep = false;
+  // ya se le dio un canal a este reproductor / el canal actual va en un reproductor ya usado
+  private hadLive = false;
+  private reused = false;
   private shaka: ShakaPlayback | null = null;
   private shakaRelease: Promise<void> | null = null;
   private adaptiveTried = false;
@@ -232,6 +235,7 @@ export class Playback {
   private vodNative = false;
   // el reproductor nativo ya leyó la cabecera de la película (loadedmetadata)
   private nativeMeta = false;
+  private nativeAt = 0;
   private nativeTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingSub = '';
 
@@ -267,6 +271,11 @@ export class Playback {
     this.langTimer = null;
     this.langBusy = false;
     this.panelFallback = false;
+    // este reproductor ya tuvo un canal (cambio de canal en pantalla grande, reconexión): el nativo de Vega da error al
+    // cambiarle la dirección a un reproductor ya usado (cada cambio terminaba en «Reconectando…»); va el lector de la app,
+    // como antes de la 1.0.66, que cambiaba de canal al instante. La miniatura y la primera apertura siguen con el nativo
+    this.reused = live && this.hadLive;
+    if (live) this.hadLive = true;
     this.url = url;
     this.live = live;
     this.liveAudio = 0;
@@ -316,7 +325,7 @@ export class Playback {
     this.stopNative();
     // primero el reproductor nativo de Vega con el .ts del canal (como Roku y LG: rápido y sin trabajo de la app, no se
     // entrecorta al recorrer la lista); si en este equipo no abre o ese canal falla, el lector propio
-    if (nativeLivePlanned(url)) {
+    if (!this.reused && nativeLivePlanned(url)) {
       this.openNative();
       return;
     }
@@ -363,7 +372,7 @@ export class Playback {
       if (this.liveFrozen >= 6) return false;
       this.liveFrozen++;
       h.destroy();
-      if (nativeLivePlanned(this.url)) {
+      if (!this.reused && nativeLivePlanned(this.url)) {
         this.liveHls = null;
         this.openNative();
         return true;
@@ -531,6 +540,7 @@ export class Playback {
     vodNativeTried.add(fileKey(this.url));
     this.vodNative = true;
     this.nativeMeta = false;
+    this.nativeAt = Date.now();
     this.resumeAt = 0;
     this.v.src = this.url;
     this.v.play();
@@ -593,7 +603,7 @@ export class Playback {
   mp4Fallback(why = 'error del reproductor'): boolean {
     // el reproductor nativo no pudo con la película (o se cortó): el lector de la app desde donde iba
     if (this.vodNative) {
-      this.mp4Why = 'nativo: ' + why;
+      this.mp4Why = 'nativo: ' + why + ' a los ' + ((Date.now() - this.nativeAt) / 1000).toFixed(1) + ' s';
       this.leaveNativeVod(!this.played, this.played ? this.realPos() : this.wantAt);
       return true;
     }

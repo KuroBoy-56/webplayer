@@ -24,11 +24,16 @@ class TestShaka {
   async load() {}
   async destroy() {}
 }
+class TestMediaSource {
+  static isTypeSupported() { return true; }
+  constructor() { this.readyState = 'closed'; }
+  addEventListener() {}
+}
 Module._load = function(request, parent, isMain) {
   if (request === '../lib/http') return { UA: 'fixture', json: body => typeof body === 'string' ? JSON.parse(body) : body, http: async () => { requests++; return respond ? respond() : fixture(); } };
   if (request === './panel') return { cloud: async () => { panelRequests++; return {}; } };
   if (request === '../lib/i18n' || request === './i18n') return { t: key => key };
-  if (request === '@amazon-devices/react-native-w3cmedia') return { MediaSource: { isTypeSupported: () => true }, get WebCrypto() { return global.__webcrypto; } };
+  if (request === '@amazon-devices/react-native-w3cmedia') return { MediaSource: TestMediaSource, get WebCrypto() { return global.__webcrypto; } };
   if (request === 'react-native') return { AppState: { currentState: 'active' } };
   if (request === './shaka-env') return { installShakaEnvironment() {} };
   if (request === './vendor/shaka-player.compiled') return { Player: TestShaka, polyfill: { installAll() {} }, net: { NetworkingEngine: { unregisterScheme() {}, registerScheme() {}, PluginPriority: { APPLICATION: 1 } }, HttpFetchPlugin: { parse() {} } } };

@@ -205,9 +205,12 @@ test('canales: el reproductor nativo primero; si abre, el equipo lo recuerda; si
   assert.equal(lives.length,0);assert.equal(video.src,'http://fixture.invalid/live/u/p/7.ts');assert.match(c.liveDiag(),/modo=nativo/);
   c.onPlaying();assert.equal(memory['native_live_'+APP_VERSION],'ok');await c.destroy();
   // otro equipo donde el nativo nunca abre: 2 canales fallan y desde ahí todo por el lector propio
+  // (cada canal con su reproductor, como la miniatura)
   ({c,video}=setup());delete memory['native_live_'+APP_VERSION];
-  for(const n of [21,22]){c.load('http://fixture.invalid/live/u/p/'+n+'.m3u8',0,true);await tick();assert.equal(c.liveRetryTs(),true);}
+  const hooks={toast(){},status(){},changed(){},subText(){},fatal(){}};
+  for(const n of [21,22]){c=new Playback({...video,src:''},hooks);c.load('http://fixture.invalid/live/u/p/'+n+'.m3u8',0,true);await tick();assert.equal(c.liveRetryTs(),true);await c.destroy();}
   assert.equal(memory['native_live_'+APP_VERSION],'no');
+  c=new Playback({...video,src:''},hooks);
   const before=lives.length;c.load('http://fixture.invalid/live/u/p/23.m3u8',0,true);await tick();assert.equal(lives.length,before+1);
   await c.destroy();
 });
@@ -276,4 +279,15 @@ test('películas: en un equipo donde el nativo ya abrió, 2 títulos seguidos qu
   ({c,video}=setup());memory['native_vod_'+APP_VERSION]='ok';
   c.load('https://fixture.invalid/nat14.mp4',0,false);await tick();assert.equal(video.src,'https://fixture.invalid/nat14.mp4');
   await c.destroy();
+});
+
+test('pantalla grande: cambiar de canal en el mismo reproductor va por el lector de la app (el nativo daba error y «Reconectando…»)',async()=>{
+  lives=[];const {c,video}=setup();memory['native_live_'+APP_VERSION]='ok';
+  c.load('http://fixture.invalid/live/u/p/31.m3u8',0,true);await tick();
+  assert.equal(video.src,'http://fixture.invalid/live/u/p/31.ts');assert.equal(lives.length,0);
+  c.onPlaying();
+  // ▲▼ al canal siguiente: el lector de la app, sin pasar por el nativo
+  c.load('http://fixture.invalid/live/u/p/32.m3u8',0,true);await tick();
+  assert.equal(lives.length,1);assert.notEqual(video.src,'http://fixture.invalid/live/u/p/32.ts');assert.doesNotMatch(c.liveDiag(),/modo=nativo/);
+  await c.destroy();memory['native_live_'+APP_VERSION]='no';
 });
