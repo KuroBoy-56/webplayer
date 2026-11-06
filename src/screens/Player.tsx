@@ -8,12 +8,13 @@ import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon
 import { reportError } from '../api/report';
 import { engineDenied, warmTracks } from '../api/media';
 import { viaDns } from '../lib/securedns';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
 import { Button, Focusable, Loader } from '../components/ui';
 import { Item } from '../data/catalog';
+import { useListScroll } from '../lib/listscroll';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { Hooks, MenuItem, nativeLivePlanned, Playback } from '../player/playback';
@@ -38,8 +39,28 @@ function serverText(r: StreamCheck, live: boolean): string {
   return t('El servidor no entregó el video ({x})', { x: x || 'HTML' });
 }
 
+// películas y episodios que ya avisaron al panel que tardaron en empezar (una vez por archivo mientras la app está abierta)
+const slowSent = new Set<string>();
+
 // alto de cada canal de la lista (fijo: la lista abre ya en el canal que suena)
 const CH_ROW = 76;
+
+// canal de la lista de pantalla grande (memorizado: recorrerla solo redibuja la fila que pierde y la que gana el foco)
+const ChRow = memo(function ChRow({ c, i, on, pick, focus }: { c: Item; i: number; on: boolean; pick: (i: number) => void; focus: (i: number) => void }) {
+  return (
+    <Focusable preferred={on} onPress={() => pick(i)} onFocus={() => focus(i)} style={f => [s.chRow, on && s.chRowOn, f && s.chRowF]}>
+      {f => (
+        <>
+          <Text style={[s.chNum, f && s.chTextF]}>{i + 1}</Text>
+          {c.poster ? <Image source={{ uri: c.poster }} style={s.chRowLogo} resizeMode="contain" /> : <View style={s.chRowLogo} />}
+          <Text style={[s.chName, f && s.chTextF]} numberOfLines={1}>
+            {c.name}
+          </Text>
+        </>
+      )}
+    </Focusable>
+  );
+});
 
 export default function Player({ params }: { params: PlayParams }) {
   const nav = useNav();
@@ -129,6 +150,9 @@ export default function Player({ params }: { params: PlayParams }) {
   // canal que ya se estaba viendo y se cortó: reconexiones seguidas (n), cuándo sonó la última vez (ok) y desde cuándo
   // se ve el canal (since, para el reporte)
   const liveRecon = useRef({ n: 0, ok: 0, since: 0 });
+  // película o episodio: desde cuándo se abre (t: al entrar al reproductor o al pasar a otro episodio) y cuándo se le dio
+  // el video al reproductor (load); i = -1 antes del primero
+  const openAt = useRef({ i: -1, t: Date.now(), load: 0 });
   // la orden de borrar la caché del panel espera a que se cierre el reproductor
   useEffect(() => {
     setPlayerOpen(true);
@@ -204,6 +228,8 @@ export default function Player({ params }: { params: PlayParams }) {
       const c = ctl.current;
       if (!c || !ready.current) return;
       loadRev.current++;
+      const op = openAt.current;
+      if (op.i !== i || !op.t) openAt.current = { i, t: op.i < 0 ? op.t : Date.now(), load: Date.now() };
       setError('');
       setBuffering(true);
       setPos(0);
@@ -354,6 +380,14 @@ export default function Player({ params }: { params: PlayParams }) {
   const [chList, setChList] = useState(false);
   const chListRef = useRef(false);
   chListRef.current = chList;
+  const chScroll = useListScroll<Item>(px(CH_ROW), params.kind === 'live' ? params.channels.length : 0);
+  const pickCh = useCallback(
+    (i: number) => {
+      setChList(false);
+      goTo(i);
+    },
+    [goTo],
+  );
 
   useEffect(() => {
     // el canal que ya suena en la miniatura: la pantalla grande se queda con ese reproductor (sin cerrarlo ni abrir el
@@ -434,6 +468,16 @@ export default function Player({ params }: { params: PlayParams }) {
       rounds.current = 0;
       liveRecon.current.ok = Date.now();
       if (!liveRecon.current.since) liveRecon.current.since = Date.now();
+      // película o episodio que tardó más de 8 s en empezar: al panel con los tiempos y el camino que siguió (sin esto no
+      // había cómo saber qué demora en cada equipo y servidor)
+      const op = openAt.current;
+      const url = urlFor(indexRef.current);
+      if (!live && op.i === indexRef.current && op.t && Date.now() - op.t > 8000 && !slowSent.has(url)) {
+        slowSent.add(url);
+        const e = 'queue' in params ? params.queue[indexRef.current] : null;
+        reportError('warning', 'Película o serie tardó en empezar', 'kind=' + params.kind + ' ext=' + (e?.ext || '') + ' total=' + ((Date.now() - op.t) / 1000).toFixed(1) + 's hasta_cargar=' + ((op.load - op.t) / 1000).toFixed(1) + 's continuar=' + Math.round(firstResume.current) + ' modo=' + c.vodMode(), 'Reproductor');
+      }
+      op.t = 0;
       c.onPlaying();
       // por este protocolo entrega el video el servidor: los siguientes videos van primero por él
       setStreamFlip(flipped.current);
@@ -1006,7 +1050,10 @@ export default function Player({ params }: { params: PlayParams }) {
       load(indexRef.current, Math.floor(pos));
     } else if (live) {
       showOverlay();
-      if (params.kind === 'live' && params.channels.length > 1) setChList(true);
+      if (params.kind === 'live' && params.channels.length > 1) {
+        chScroll.reset(Math.max(0, indexRef.current - 3) * px(CH_ROW));
+        setChList(true);
+      }
     } else togglePause();
   };
   // ancla de foco: un botón invisible a pantalla completa que tiene el foco mientras no hay menú ni aviso. Sin él, al
@@ -1220,31 +1267,19 @@ export default function Player({ params }: { params: PlayParams }) {
             {t('Canales')} · {index + 1}/{params.channels.length}
           </Text>
           <FlatList
+            ref={chScroll.ref}
             data={params.channels}
             keyExtractor={(c, i) => c.id + ':' + i}
             initialScrollIndex={Math.max(0, index - 3)}
             getItemLayout={(_, i) => ({ length: px(CH_ROW), offset: px(CH_ROW) * i, index: i })}
             initialNumToRender={14}
             windowSize={7}
-            renderItem={({ item: c, index: i }) => (
-              <Focusable
-                preferred={i === index}
-                onPress={() => {
-                  setChList(false);
-                  goTo(i);
-                }}
-                style={f => [s.chRow, i === index && s.chRowOn, f && s.chRowF]}>
-                {f => (
-                  <>
-                    <Text style={[s.chNum, f && s.chTextF]}>{i + 1}</Text>
-                    {c.poster ? <Image source={{ uri: c.poster }} style={s.chRowLogo} resizeMode="contain" /> : <View style={s.chRowLogo} />}
-                    <Text style={[s.chName, f && s.chTextF]} numberOfLines={1}>
-                      {c.name}
-                    </Text>
-                  </>
-                )}
-              </Focusable>
-            )}
+            // la mueve la app al cambiar el foco (src/lib/listscroll.ts)
+            scrollEnabled={false}
+            onLayout={chScroll.onLayout}
+            onScroll={chScroll.onScroll}
+            extraData={index}
+            renderItem={({ item: c, index: i }) => <ChRow c={c} i={i} on={i === index} pick={pickCh} focus={chScroll.show} />}
           />
         </View>
       ) : null}

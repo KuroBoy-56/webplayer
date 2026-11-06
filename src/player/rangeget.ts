@@ -12,6 +12,11 @@ export type RangeState = { close: boolean; unbounded: boolean; size: number; why
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
+// Dirección final de cada archivo (la del balanceador de XUI, con su token): los pedidos siguientes del mismo archivo van
+// directo ahí, sin pasar otra vez por la redirección (un viaje menos por pedido al abrir y al saltar). Si falla, se
+// olvida y se vuelve a la original.
+const finalUrl = new Map<string, string>();
+
 export async function rangeGet(url: string, off: number, len: number, st: RangeState, requests: Set<AbortController>, alive: () => boolean): Promise<Uint8Array | null> {
   // el primer pedido ya lanzado por Player mientras se iniciaba el reproductor (prefetch.ts)
   const pre = takeRange(url, off, len);
@@ -32,7 +37,18 @@ export async function rangeGet(url: string, off: number, len: number, st: RangeS
     try {
       const headers: Record<string, string> = { 'User-Agent': UA, Range: 'bytes=' + off + '-' + (off + len - 1) };
       if (st.close) headers.Connection = 'close';
-      const r = await fetch(url, { headers, signal: ctrl.signal });
+      const target = finalUrl.get(url) || url;
+      const r = await fetch(target, { headers, signal: ctrl.signal });
+      if (r.status !== 206 && target !== url) {
+        // el token del balanceador venció o no admite otro pedido: otra vez por la dirección original
+        finalUrl.delete(url);
+        ctrl.abort();
+        continue;
+      }
+      if (r.status === 206 && r.url && r.url !== target) {
+        if (finalUrl.size > 30) finalUrl.clear();
+        finalUrl.set(url, r.url);
+      }
       if (r.status !== 206) {
         st.why = r.status === 200 ? 'el servidor no entrega por partes (200)' : 'pedido ' + r.status;
         if (r.status === 200) st.unbounded = true;
@@ -60,6 +76,7 @@ export async function rangeGet(url: string, off: number, len: number, st: RangeS
       return out;
     } catch (e: any) {
       if (!alive()) return null;
+      finalUrl.delete(url);
       st.why = ctrl.signal.aborted
         ? 'sin ' + phase + ' en ' + Math.round((Date.now() - t0) / 1000) + ' s (' + Math.round(len / 1024) + ' KB en ' + Math.round(off / 1048576) + ' MB)'
         : 'red: ' + String(e?.message || e).slice(0, 60);

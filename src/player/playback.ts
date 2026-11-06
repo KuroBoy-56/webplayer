@@ -230,6 +230,8 @@ export class Playback {
   // película o capítulo con el reproductor nativo de Vega (modo directo, como Android y LG); idioma o subtítulo elegidos
   // (y si falla) → el lector de la app desde el mismo segundo
   private vodNative = false;
+  // el reproductor nativo ya leyó la cabecera de la película (loadedmetadata)
+  private nativeMeta = false;
   private nativeTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingSub = '';
 
@@ -522,18 +524,25 @@ export class Playback {
   }
 
   // el archivo directo al reproductor de Vega (lo lee y decodifica él, como Android y LG). Los idiomas se leen de la
-  // cabecera cuando ya suena (onPlaying → langWatch). Si en 10 s no empieza o da error, el lector de la app (mp4Fallback)
+  // cabecera cuando ya suena (onPlaying → langWatch). Si en 4 s ni leyó la cabecera del archivo (índice al final, servidor
+  // lento), en 10 s no empieza o da error, el lector de la app (mp4Fallback): antes se esperaban siempre 10 s
   private openNativeVod(): void {
     const g = this.gen;
     vodNativeTried.add(fileKey(this.url));
     this.vodNative = true;
+    this.nativeMeta = false;
     this.resumeAt = 0;
     this.v.src = this.url;
     this.v.play();
+    const give = () => g === this.gen && this.vodNative && !this.played && this.hooks.panelFailed?.();
     this.nativeTimer = setTimeout(() => {
       this.nativeTimer = null;
-      if (g === this.gen && this.vodNative && !this.played) this.hooks.panelFailed?.();
-    }, 10000);
+      if (!this.nativeMeta && !((this.v as any).readyState >= 1) && !((this.v.duration || 0) > 0)) return give();
+      this.nativeTimer = setTimeout(() => {
+        this.nativeTimer = null;
+        give();
+      }, 6000);
+    }, 4000);
   }
 
   // del reproductor nativo al lector de la app (failed: no llegó a sonar), desde pos
@@ -618,6 +627,12 @@ export class Playback {
 
   mp4Note(): string {
     return this.mp4Why;
+  }
+
+  // con qué se está viendo la película (para el aviso de apertura lenta)
+  vodMode(): string {
+    const m = this.vodNative ? 'nativo' : this.mse ? 'lector ' + (this.mse instanceof MkvMse ? 'mkv' : 'mp4') : this.shaka ? 'shaka' : this.remux ? 'panel' : 'directo';
+    return m + (this.mp4Why ? ' (' + this.mp4Why + ')' : '');
   }
 
   private clearSeek(): void {
@@ -775,6 +790,7 @@ export class Playback {
 
   // loadedmetadata
   onMeta(): void {
+    if (this.vodNative) this.nativeMeta = true;
     if (this.resumeAt > 0) {
       this.v.currentTime = this.resumeAt;
       this.resumeAt = 0;

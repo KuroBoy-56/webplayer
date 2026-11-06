@@ -11,16 +11,17 @@ import { handPreview, takeLastLive } from '../player/preview-session';
 import { Button, Focusable, Message, Spinner } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
 import { clock, digits, nowSec } from '../lib/util';
+import { useListScroll } from '../lib/listscroll';
 import { useNav } from '../nav';
 import { getState, isFav, toggleFav, useAppSelector } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
 
 const ChannelRow = memo(function ChannelRow({ channel: c, index, favorite, live, preferred, open, focus }: {
-  channel: Item; index: number; favorite: boolean; live: boolean; preferred: boolean; open: (channel: Item) => void; focus: (id: string) => void;
+  channel: Item; index: number; favorite: boolean; live: boolean; preferred: boolean; open: (channel: Item) => void; focus: (id: string, index: number) => void;
 }) {
   return (
-    <Focusable preferred={preferred} onPress={() => open(c)} onFocus={() => focus(c.id)} style={f => [s.ch, f && s.chF]}>
+    <Focusable preferred={preferred} onPress={() => open(c)} onFocus={() => focus(c.id, index)} style={f => [s.ch, f && s.chF]}>
       {f => <>
         {/* el canal que está en la miniatura */}
         <View style={[s.dot, !live && s.dotOff]} />
@@ -36,9 +37,9 @@ const ChannelRow = memo(function ChannelRow({ channel: c, index, favorite, live,
 // Carpeta de la lista (memorizada): al recorrer las carpetas solo se vuelven a dibujar la que pierde el foco y la que lo
 // gana
 type Cat = { id: string; name: string; count: number; locked: boolean };
-const CatRow = memo(function CatRow({ c, on, pick }: { c: Cat; on: boolean; pick: (c: Cat) => void }) {
+const CatRow = memo(function CatRow({ c, i, on, pick, focus }: { c: Cat; i: number; on: boolean; pick: (c: Cat) => void; focus: (i: number) => void }) {
   return (
-    <Focusable onPress={() => pick(c)} style={f => [s.cat, on && s.catOn, f && s.catF]}>
+    <Focusable onPress={() => pick(c)} onFocus={() => focus(i)} style={f => [s.cat, on && s.catOn, f && s.catF]}>
       {f => (
         <>
           <Text style={[s.catText, f && { color: C.onFocus }]} numberOfLines={1}>
@@ -75,9 +76,17 @@ export default function Live({ active = true }: { active?: boolean }) {
   const [target, setTarget] = useState({ id: '', n: 0 });
   // «preferred» solo un momento: si la fila se volviera a montar al desplazarse no debe robar el foco
   const [pref, setPref] = useState('');
-  const focusId = useCallback((id: string) => {
+  const cats = useMemo(() => (loaded ? catalog.liveCats() : []), [loaded, catalogRev, pinFor]);
+  const favIds = useMemo(() => favorites.filter(f => f.type === 'live').map(f => digits(f.id)), [favorites]);
+  const channels = useMemo(() => (loaded ? catalog.liveChannels(cat, favIds) : []), [loaded, catalogRev, cat, cat === 'fav' ? favIds.join(',') : '']);
+  // las dos listas las mueve la app al cambiar el foco (src/lib/listscroll.ts)
+  const chScroll = useListScroll<Item>(px(96), channels.length);
+  const catScroll = useListScroll<Cat>(catH(), cats.length);
+  const showCh = chScroll.show;
+  const focusId = useCallback((id: string, i: number) => {
     lastId.current = id;
-  }, []);
+    showCh(i);
+  }, [showCh]);
   useEffect(() => {
     if (!active) return;
     // el canal que quedó sonando en pantalla grande (con ▲▼ se pudo cambiar): ahí el foco, el punto rojo y la miniatura
@@ -90,23 +99,13 @@ export default function Live({ active = true }: { active?: boolean }) {
     if (!lastId.current) return;
     // si el canal quedó lejos (cambiado con ▲▼), la lista va hasta él para que su fila exista y reciba el foco
     const at = chRef.current.findIndex(c => c.id === lastId.current);
-    if (at >= 0) {
-      try {
-        listRef.current?.scrollToIndex({ index: at, viewPosition: 0.4, animated: false });
-      } catch {
-        // lista todavía sin medir
-      }
-    }
+    if (at >= 0) chScroll.place(at);
     setTarget(x => ({ id: lastId.current, n: x.n + 1 }));
     setPref(lastId.current);
     const id = setTimeout(() => setPref(''), 1000);
     return () => clearTimeout(id);
   }, [active]);
 
-  const cats = useMemo(() => (loaded ? catalog.liveCats() : []), [loaded, catalogRev, pinFor]);
-  const favIds = useMemo(() => favorites.filter(f => f.type === 'live').map(f => digits(f.id)), [favorites]);
-  const channels = useMemo(() => (loaded ? catalog.liveChannels(cat, favIds) : []), [loaded, catalogRev, cat, cat === 'fav' ? favIds.join(',') : '']);
-  const listRef = useRef<FlatList<Item>>(null);
   const chRef = useRef(channels);
   chRef.current = channels;
 
@@ -127,6 +126,9 @@ export default function Live({ active = true }: { active?: boolean }) {
 
   // OK en una carpeta: sus canales (o el PIN si está bloqueada)
   const pickCat = useCallback((c: Cat) => (c.locked ? setPinFor(c.id) : setCat(c.id)), []);
+  // otra carpeta: su lista empieza arriba
+  const resetCh = chScroll.reset;
+  useEffect(() => resetCh(0), [cat, resetCh]);
 
   // favoritos en un Set y la fila memorizada: enfocar un canal no vuelve a dibujar toda la lista
   const favSet = useMemo(() => new Set(favIds), [favIds]);
@@ -162,23 +164,30 @@ export default function Live({ active = true }: { active?: boolean }) {
       {/* todas las carpetas se dibujan una vez al entrar (son pocas y livianas) y con su alto fijo: recorrerlas rápido no
           arma ni desarma filas a cada paso (ese trabajo frenaba y entrecortaba la miniatura del canal) */}
       <FlatList
+        ref={catScroll.ref}
         style={s.cats}
         data={cats}
+        scrollEnabled={false}
+        onLayout={catScroll.onLayout}
+        onScroll={catScroll.onScroll}
         initialNumToRender={Math.min(cats.length, 300)}
         maxToRenderPerBatch={Math.min(cats.length, 300)}
         windowSize={101}
         getItemLayout={(_, i) => ({ length: catH(), offset: catH() * i, index: i })}
         keyExtractor={c => c.id}
         extraData={cat}
-        renderItem={({ item: c }) => <CatRow c={c} on={c.id === cat} pick={pickCat} />}
+        renderItem={({ item: c, index }) => <CatRow c={c} i={index} on={c.id === cat} pick={pickCat} focus={catScroll.show} />}
       />
       <View style={s.list}>
         {channels.length ? (
           <FlatList
-            ref={listRef}
+            ref={chScroll.ref}
             // otra carpeta: la lista empieza arriba
             key={cat}
             data={channels}
+            scrollEnabled={false}
+            onLayout={chScroll.onLayout}
+            onScroll={chScroll.onScroll}
             // el canal al que vuelve el foco se monta otra vez con «preferred» (así el foco llega a él)
             keyExtractor={c => (c.id === target.id ? c.id + ':' + target.n : c.id)}
             extraData={liveId + '|' + pref}
@@ -257,7 +266,8 @@ const s = themed(() =>
     catCount: { color: C.dim, fontSize: px(22), marginLeft: px(10) },
     list: { width: px(760), marginLeft: px(24) },
     ch: { height: px(88), flexDirection: 'row', alignItems: 'center', paddingHorizontal: px(18), borderRadius: px(6), marginBottom: px(8), backgroundColor: alpha(C.text, 0.05) },
-    chF: { backgroundColor: C.focus, transform: [{ scale: 1.03 }] },
+    // sin agrandar la fila con el foco: menos trabajo de dibujo a cada paso (la miniatura sigue de corrido)
+    chF: { backgroundColor: C.focus },
     chNum: { color: C.dim, fontSize: px(24), width: px(70) },
     dot: { width: px(14), height: px(14), borderRadius: px(7), backgroundColor: C.red, marginRight: px(12) },
     dotOff: { backgroundColor: 'transparent' },

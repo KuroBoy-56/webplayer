@@ -207,6 +207,17 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Miniatura sin microcortes al recorrer las listas y películas que abren antes (1.0.69)**: la lista de canales, la de
+  carpetas y la lista de canales de pantalla grande ya no se desplazan solas: la app las mueve al cambiar el foco, sin
+  animación y solo cuando la fila enfocada queda a menos de una fila del borde (`src/lib/listscroll.ts`, como Inicio y el
+  ejemplo de Amazon). Antes cada paso movía la lista dos veces (el sistema y la lista) y el canal de la miniatura se
+  entrecortaba al recorrerla rápido. Las filas del menú de pantalla grande están memorizadas y la fila enfocada ya no se
+  agranda (menos dibujo a cada paso). **Películas**: si el reproductor nativo de Vega ni leyó la cabecera del archivo en
+  4 s, pasa ya al lector de la app (antes se esperaban siempre 10 s); en un equipo donde el nativo abre, 2 títulos seguidos
+  que no arrancan con él hacen que el resto de la sesión vaya directo al lector. Los pedidos por partes van a la dirección
+  final del balanceador del servidor (sin repetir la redirección en cada pedido; si falla, la original). Una película o
+  episodio que tarda más de 8 s en empezar avisa al panel («Película o serie tardó en empezar») con los tiempos y el
+  camino que siguió.
 - **Buscar (1.0.68)**: el recuadro abre el teclado de la app (como Usuario y Contraseña) y el texto queda centrado; el
   campo de texto del sistema se quedaba con las flechas y al bajar abría el teclado en vez de pasar a los resultados.
   Se busca al pulsar «Listo» (antes, a cada letra se armaba otra cuadrícula y se pedían carátulas que ya no se veían).

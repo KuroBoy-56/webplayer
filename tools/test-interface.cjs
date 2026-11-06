@@ -651,3 +651,46 @@ test('pantalla grande: se queda con el reproductor de la miniatura si ya suena (
   s.offerPreview({ url: 'http://fixture.invalid/live/u/p/7.m3u8', v: player, c: pb, at: Date.now() - 6000 });
   assert.equal(s.takePreview('http://fixture.invalid/live/u/p/7.m3u8'), null);
 });
+
+test('películas: los pedidos siguientes van a la dirección final del balanceador y, si falla, a la original', async () => {
+  const { rangeGet } = require('../src/player/rangeget.ts');
+  const realFetch = global.fetch;
+  const asked = [];
+  let tokenOk = true;
+  global.fetch = async (url, { headers }) => {
+    asked.push(url);
+    const m = /bytes=(\d+)-(\d+)/.exec(headers.Range);
+    const a = +m[1];
+    const b = +m[2] + 1;
+    if (url.includes('token') && !tokenOk) return { status: 403, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(0) };
+    return { status: 206, url: 'http://lb.invalid/m.mp4?token=1', headers: { get: k => (k === 'content-range' ? 'bytes ' + a + '-' + (b - 1) + '/1000' : k === 'content-length' ? String(b - a) : null) }, arrayBuffer: async () => new ArrayBuffer(b - a) };
+  };
+  try {
+    const st = { close: false, unbounded: false, size: 0, why: '' };
+    const u = 'http://fixture.invalid/redir.mp4';
+    assert.equal((await rangeGet(u, 0, 10, st, new Set(), () => true)).length, 10);
+    assert.equal((await rangeGet(u, 10, 10, st, new Set(), () => true)).length, 10);
+    assert.deepEqual(asked, [u, 'http://lb.invalid/m.mp4?token=1']);
+    // el token venció: el mismo pedido otra vez por la dirección original
+    tokenOk = false;
+    asked.length = 0;
+    assert.equal((await rangeGet(u, 20, 10, st, new Set(), () => true)).length, 10);
+    assert.deepEqual(asked, ['http://lb.invalid/m.mp4?token=1', u]);
+    assert.equal(st.unbounded, false);
+  } finally { global.fetch = realFetch; }
+});
+
+test('listas con el control: la app las mueve solo si la fila enfocada queda a menos de una fila del borde', () => {
+  const { scrollFor } = require('../src/lib/listscroll.ts');
+  // filas de 100 y 500 de alto a la vista (5 filas)
+  assert.equal(scrollFor(0, 100, 0, 500), 0);
+  assert.equal(scrollFor(3, 100, 0, 500), 0);
+  // la quinta fila ya no deja una de margen abajo: baja una
+  assert.equal(scrollFor(4, 100, 0, 500), 100);
+  assert.equal(scrollFor(9, 100, 100, 500), 600);
+  // subiendo: una fila de margen arriba
+  assert.equal(scrollFor(6, 100, 600, 500), 500);
+  assert.equal(scrollFor(1, 100, 600, 500), 0);
+  // nunca más allá del final de la lista (12 filas: hasta 700)
+  assert.equal(scrollFor(11, 100, 600, 500, 12), 700);
+});

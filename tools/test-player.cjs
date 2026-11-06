@@ -259,3 +259,21 @@ test('películas MKV con el reproductor nativo: un subtítulo de texto pasa al l
   assert.equal(mkvs.length,1);assert.equal(video.currentTime,60);assert.deepEqual(calls,[]);
   await c.destroy();
 });
+
+test('películas: en un equipo donde el nativo ya abrió, 2 títulos seguidos que no arrancan con él = el resto de la sesión con el lector',async()=>{
+  const {nativeWorked}=require('../src/player/nativemode.ts');
+  let {c,video}=setup();memory['native_vod_'+APP_VERSION]='ok';
+  for(const n of [11,12]){
+    c.load('https://fixture.invalid/nat'+n+'.mp4',0,false);await tick();
+    assert.equal(video.src,'https://fixture.invalid/nat'+n+'.mp4');
+    assert.equal(c.mp4Fallback(),true);await tick();
+  }
+  // el tercero ya no espera al nativo; el equipo sigue recordando que el nativo abre
+  const before=mp4s.length;c.load('https://fixture.invalid/nat13.mp4',0,false);await tick();assert.equal(mp4s.length,before+1);
+  assert.equal(memory['native_vod_'+APP_VERSION],'ok');
+  await c.destroy();
+  nativeWorked('vod');
+  ({c,video}=setup());memory['native_vod_'+APP_VERSION]='ok';
+  c.load('https://fixture.invalid/nat14.mp4',0,false);await tick();assert.equal(video.src,'https://fixture.invalid/nat14.mp4');
+  await c.destroy();
+});
