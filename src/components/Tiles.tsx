@@ -90,6 +90,7 @@ export const RowView = memo(function RowView({
   rowIndex,
   onFocusRow,
   progressOf,
+  live = true,
 }: {
   row: Row;
   onItem: (it: Item) => void;
@@ -100,6 +101,8 @@ export const RowView = memo(function RowView({
   rowIndex?: number;
   onFocusRow?: (index: number, x: Item | Special) => void;
   progressOf?: (it: Item) => number | undefined;
+  // false: fila lejos del foco, solo su título y su alto (Inicio la monta antes de llegar, src/lib/rowwindow.ts)
+  live?: boolean;
 }) {
   const height = cardsHeight(row);
   const focus = useCallback((x: Item | Special) => {
@@ -110,7 +113,7 @@ export const RowView = memo(function RowView({
   return (
     <View style={[s.row, { height: rowHeight(row) - px(18) }]}>
       {row.title ? <Text style={s.rowTitle} numberOfLines={1}>{row.title}</Text> : <View style={{ height: px(4) }} />}
-      <FlatList
+      {live ? <FlatList
         horizontal
         data={row.items}
         style={{ height }}
@@ -134,7 +137,7 @@ export const RowView = memo(function RowView({
             <SpecialTile sp={x} onPress={() => onSpecial(x)} onFocus={onFocusAny || onFocusRow ? () => focus(x) : undefined} />
           )
         }
-      />
+      /> : null}
     </View>
   );
 });

@@ -19,6 +19,7 @@ import { PlayParams, useNav } from '../nav';
 import { MenuItem, Playback } from '../player/playback';
 import { setLastLive, stopLivePreview } from '../player/preview-session';
 import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
+import { hasHandoff } from '../player/livehls';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
 import { probeTracks } from '../lib/probe';
@@ -765,7 +766,8 @@ export default function Player({ params }: { params: PlayParams }) {
         if (!alive) return;
         // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
         const first = dnsUrl.current && dnsUrl.current.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
-        if (live && /\.m3u8(\?|$)/i.test(first)) {
+        // con lo que dejó la miniatura de este canal no hace falta pedir nada por adelantado
+        if (live && /\.m3u8(\?|$)/i.test(first) && !hasHandoff(first)) {
           preUrl = first;
           prefetchList(first);
         }

@@ -207,6 +207,17 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Pantalla grande al instante y filas fluidas (1.0.62)**: **de la miniatura a la pantalla grande** el canal ya no empieza
+  de cero: la miniatura deja su lista (con el token del balanceador), sus últimos 6 segmentos ya descifrados (tope 24 MB)
+  y sus llaves, y suelta la conexión en el momento (`LiveHls.handOff` / `adopt`, `Playback.handOffLive`, 15 s para
+  tomarlos). La pantalla grande arranca con ellos sin pedir la lista (la que muchos XUI contestaban vacía justo al
+  cerrarse la miniatura: 1-3 s de reintentos) ni volver a bajar nada; sigue bajando lo nuevo como siempre. El reporte del
+  canal dice `miniatura=` (segmentos que llegaron de ella). **Bajar por Inicio, Series y Películas** ya no traba: la lista
+  armaba la fila nueva justo al apretar ▼ (al subir no, porque ya estaban). Ahora todas las filas están (las lejanas solo
+  con su título y su alto) y sus carátulas se montan antes de llegar, de a una en los momentos quietos: 5 abajo y 3
+  arriba, máximo 12 (`src/lib/rowwindow.ts`). **Carátulas**: la copia del panel que no responde se deja a los 3 s (antes
+  6) y la app recuerda, mientras está abierta, qué dirección cargó cada imagen y cuál dio error
+  (`src/lib/imagememory.ts`): al volver a una fila la carátula sale de una vez de la caché del equipo.
 - **Más rápido y fluido (1.0.61)**: en Vega el HLS de los canales solo entra por MSE (Roku y LG le dan el `.m3u8` a su
   reproductor; aquí la app baja, convierte y entrega cada segmento), así que se aligeró ese camino. **Canales:** el
   primer segmento se pide apenas llega la lista, mientras el reproductor de Vega se inicia (`src/player/prefetch.ts`,

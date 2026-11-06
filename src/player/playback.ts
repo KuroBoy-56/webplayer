@@ -147,6 +147,8 @@ export class Playback {
   // por qué la lectura propia del MP4 no siguió (va al reporte)
   private mp4Why = '';
   private liveHls: LiveHls | null = null;
+  // la miniatura (LivePreview): el lector del canal guarda los últimos segmentos para la pantalla grande
+  liveKeep = false;
   private shaka: ShakaPlayback | null = null;
   private shakaRelease: Promise<void> | null = null;
   private adaptiveTried = false;
@@ -280,6 +282,7 @@ export class Playback {
   private openLive(url: string): void {
     const g = this.gen;
     const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, this.liveFrozen > 0 && this.liveFrozen % 2 === 0);
+    h.keep = this.liveKeep;
     this.liveHls = h;
     h.onError = why => g === this.gen && this.liveHls === h && this.hooks.liveFailed?.(why);
     h.onStalls = () => g === this.gen && this.liveHls === h && this.hooks.liveStalls?.(h.diag());
@@ -287,6 +290,11 @@ export class Playback {
     h.start().then(err => {
       if (err && g === this.gen && this.liveHls === h) this.hooks.liveFailed?.(err);
     });
+  }
+
+  // la miniatura se cierra para abrir el canal en pantalla grande: el lector deja lista y segmentos y suelta la conexión
+  handOffLive(): void {
+    this.liveHls?.handOff();
   }
 
   // el lector del canal pausó a propósito para juntar margen (Player muestra «cargando», no «en pausa»)

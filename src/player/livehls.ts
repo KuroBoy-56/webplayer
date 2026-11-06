@@ -23,7 +23,29 @@ import { TsMux } from '../lib/tsmux';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-type Got = { code: number; url: string; text?: string; data?: Uint8Array; type?: string };
+// plain: el segmento ya descifrado (lo dejó la miniatura)
+type Got = { code: number; url: string; text?: string; data?: Uint8Array; type?: string; plain?: boolean };
+
+// De la miniatura a la pantalla grande sin empezar de cero: la miniatura deja la lista (con el token del balanceador),
+// los últimos segmentos ya bajados (descifrados) y las llaves. Antes la pantalla grande pedía otra vez la lista justo al
+// cerrarse la miniatura (muchos XUI contestan esa vez una página vacía: 1-3 s de reintentos) y volvía a bajar los
+// segmentos que la miniatura ya tenía. Vale 15 s; la toma solo el mismo canal.
+const HANDOFF_TTL = 15000;
+// segmentos que guarda la miniatura (los más nuevos) y tope de memoria
+const KEEP_SEGS = 6;
+const KEEP_BYTES = 24 * 1048576;
+type Handoff = { first: string; list: string; segs: Seg[]; target: number; keys: Map<string, Uint8Array>; data: Map<number, Uint8Array>; at: number };
+let handoff: Handoff | null = null;
+
+export function hasHandoff(url: string): boolean {
+  return !!handoff && handoff.first === url && Date.now() - handoff.at < HANDOFF_TTL && handoff.data.size > 0;
+}
+
+function takeHandoff(url: string): Handoff | null {
+  const h = handoff;
+  handoff = null;
+  return h && h.first === url && Date.now() - h.at < HANDOFF_TTL && h.data.size ? h : null;
+}
 
 // segmentos que se bajan por adelantado mientras se entrega el actual
 const PREFETCH = 2;
@@ -100,6 +122,13 @@ export class LiveHls {
   private bytes = 0;
   // llaves AES-128 ya bajadas (por dirección) y si el canal viene cifrado (para el reporte)
   private keys = new Map<string, Uint8Array>();
+  // keep: guarda los últimos segmentos para pasarlos a la pantalla grande (solo la miniatura)
+  keep = false;
+  private kept = new Map<number, Uint8Array>();
+  private keptBytes = 0;
+  // segmentos que llegaron de la miniatura (para el reporte) y los que quedan por usar
+  private fromPreview = 0;
+  private handed: Map<number, Uint8Array> | null = null;
   private encrypted = false;
   private head = '';
   // 'mp4' = segmentos convertidos aquí (tsmux); 'ts' = MPEG-TS al reproductor; '' = aún sin el primer segmento
@@ -161,7 +190,53 @@ export class LiveHls {
     const how = ' modo=' + (this.mode || '?') + (this.mode === 'mp4' && m ? ' ' + m.mime.replace(/^.*codecs=/, '') + (m.why ? ' (' + m.why + ')' : '') + ' silencio=' + m.filled + ' descartados=' + m.dropped + ' cosidos=' + m.joins : '') + (this.muxWhy ? ' (' + this.muxWhy + ')' : '');
     return 'hls host=' + host + how + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
-      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + (this.resumed ? ' reanudados=' + this.resumed : '') + (this.retries ? ' reintentos=' + this.retries : '') + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + (this.resumed ? ' reanudados=' + this.resumed : '') + (this.retries ? ' reintentos=' + this.retries : '') + (this.fromPreview ? ' miniatura=' + this.fromPreview : '') + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+  }
+
+  // Con los segmentos de la miniatura: se empieza en uno de ellos (el primero desde donde empezaría siempre, 5 antes del
+  // final; si la miniatura solo tiene anteriores, el más cercano), así la primera imagen sale sin bajar nada
+  private handedStart(): number {
+    const want = liveStartSeg(this.segs).seq;
+    const have = Array.from(this.handed!.keys()).filter(q => this.segs.some(sg => sg.seq === q)).sort((a, b) => a - b);
+    if (!have.length) return want;
+    return have.find(q => q >= want) ?? have[have.length - 1];
+  }
+
+  // la miniatura ya tenía este canal: su lista, sus segmentos y sus llaves, sin pedir nada
+  adopt(): boolean {
+    const h = takeHandoff(this.first);
+    if (!h) return false;
+    this.list = h.list;
+    this.segs = h.segs;
+    this.target = h.target;
+    this.keys = h.keys;
+    this.handed = h.data;
+    return true;
+  }
+
+  // La miniatura se cierra para abrir el canal en pantalla grande: deja lo que tiene y se apaga (suelta la conexión).
+  // Si nadie lo toma en 15 s, se suelta la memoria
+  handOff(): void {
+    if (this.alive && this.kept.size && this.segs.length) {
+      const h: Handoff = { first: this.first, list: this.list, segs: this.segs.slice(), target: this.target, keys: new Map(this.keys), data: new Map(this.kept), at: Date.now() };
+      handoff = h;
+      const t: any = setTimeout(() => {
+        if (handoff === h) handoff = null;
+      }, HANDOFF_TTL);
+      t?.unref?.();
+    }
+    this.destroy();
+  }
+
+  // segmento ya entregado (texto plano): los KEEP_SEGS más nuevos, con tope de memoria
+  private remember(seq: number, data: Uint8Array): void {
+    this.kept.set(seq, data);
+    this.keptBytes += data.length;
+    for (const q of this.kept.keys()) {
+      if (this.kept.size <= KEEP_SEGS && this.keptBytes <= KEEP_BYTES) break;
+      this.keptBytes -= this.kept.get(q)!.length;
+      this.kept.delete(q);
+    }
   }
 
   // '' = empezó; si no, el motivo (lista que no llega, página de error de XUI, vacía, en fMP4…)
@@ -170,7 +245,8 @@ export class LiveHls {
     // que se cierra la conexión anterior: muchos servidores XUI contestan esa vez 200 con una página vacía o sin lista
     // (text/html) y un momento después sí la dan. Se espera y se vuelve a pedir (hasta 3 veces, 1 s, 2 s y 3 s) antes de
     // dar el canal por perdido; un motivo claro de XUI (canal inexistente, vencida…) no se reintenta.
-    let err = await this.refresh();
+    const h = this.adopt();
+    let err = h ? '' : await this.refresh();
     for (let i = 0; err && i < 3 && this.alive && this.retryable(); i++) {
       this.retries++;
       await sleep(1000 * (i + 1));
@@ -183,7 +259,7 @@ export class LiveHls {
     if (!this.alive) return '';
     // en vivo: 5 segmentos antes del final (unos 25-30 s de margen): con los últimos 3 cualquier demora del servidor o
     // del descifrado dejaba el canal sin datos y se detenía y seguía una y otra vez
-    this.next = liveStartSeg(this.segs).seq;
+    this.next = this.handed ? this.handedStart() : liveStartSeg(this.segs).seq;
     this.v.addEventListener('waiting', this.onWaiting);
     const ms: any = new MediaSource();
     this.ms = ms;
@@ -217,6 +293,9 @@ export class LiveHls {
   destroy(): void {
     this.alive = false;
     this.holding = false;
+    this.kept.clear();
+    this.keptBytes = 0;
+    this.handed = null;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     for (const request of this.requests) request.abort();
@@ -569,6 +648,12 @@ export class LiveHls {
 
   // el segmento (el que ya se estaba bajando o uno nuevo)
   private fetchSeg(seg: Seg): Promise<Got> {
+    const mine = this.handed?.get(seg.seq);
+    if (mine) {
+      this.handed!.delete(seg.seq);
+      this.fromPreview++;
+      return Promise.resolve({ code: 200, url: seg.url, data: mine, type: 'video/mp2t', plain: true });
+    }
     let p = this.inflight.get(seg.seq);
     if (!p) {
       p = this.get(seg.url, this.segTimeout(), 'seg');
@@ -582,7 +667,7 @@ export class LiveHls {
     for (const k of Array.from(this.inflight.keys())) if (k <= from) this.inflight.delete(k);
     if (this.bufEnd() - (this.v.currentTime || 0) > 30) return;
     for (const sg of this.segs) {
-      if (sg.seq > from && sg.seq <= from + PREFETCH && !this.inflight.has(sg.seq)) this.inflight.set(sg.seq, this.get(sg.url, this.segTimeout(), 'seg'));
+      if (sg.seq > from && sg.seq <= from + PREFETCH && !this.inflight.has(sg.seq) && !this.handed?.has(sg.seq)) this.inflight.set(sg.seq, this.get(sg.url, this.segTimeout(), 'seg'));
     }
   }
 
@@ -660,7 +745,7 @@ export class LiveHls {
       // mientras este se descifra y se entrega, los siguientes ya se bajan
       this.prefetch(seg.seq);
       let data: Uint8Array = r.data;
-      if (seg.key) {
+      if (seg.key && !r.plain) {
         // segmento cifrado (AES-128): se descifra con la llave de la lista
         this.encrypted = true;
         const t1 = Date.now();
@@ -693,6 +778,9 @@ export class LiveHls {
       await this.trim();
       const got = await this.deliver(data);
       if (!got) return;
+      if (seg.key) this.encrypted = true;
+      // la miniatura guarda lo entregado para la pantalla grande
+      if (this.keep) this.remember(seg.seq, data);
       this.next = seg.seq + 1;
       // nada entregado todavía (el MP4 espera el primer cuadro clave)
       if (got === 2) continue;

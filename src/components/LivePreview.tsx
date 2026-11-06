@@ -41,6 +41,8 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
       setPlaying(false);
       video.current = null;
       if (url) dropPrefetch(url);
+      // lo que ya tiene el canal pasa a la pantalla grande (si se abre ese canal) y la conexión se suelta ya
+      try { c?.handOffLive(); } catch { /* sin lector */ }
       const player = v;
       closed = (async () => {
         if (!player) return;
@@ -71,6 +73,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
         v.addEventListener('playing', onPlaying);
         if (surface.current) v.setSurfaceHandle(surface.current);
         c = new Playback(v, { toast: () => {}, status: () => {}, changed: () => {}, subText: () => {}, fatal: () => {} });
+        c.liveKeep = true;
         c.load(url, 0, true);
         // sin imagen en 15 s con audio MP2 / AC-3 que el equipo no decodifica: el canal otra vez solo con el video
         // (como en pantalla grande, Player)

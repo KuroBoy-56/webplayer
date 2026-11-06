@@ -338,3 +338,102 @@ test('canal: si el reproductor se cierra antes de que llegue la lista, no se pid
     assert.deepEqual(asked, ['http://fixture.invalid/late.m3u8']);
   } finally { global.fetch = realFetch; }
 });
+
+test('canal: la pantalla grande arranca con la lista y los segmentos de la miniatura, sin pedir nada', async () => {
+  const { LiveHls, hasHandoff } = require('../src/player/livehls.ts');
+  const realFetch = global.fetch;
+  let calls = 0;
+  global.fetch = () => { calls++; return new Promise(() => {}); };
+  try {
+    const url = 'http://fixture.invalid/live/u/p/7.m3u8';
+    const segs = [30, 31, 32, 33, 34, 35, 36, 37].map(seq => ({ seq, url: 'http://lb.invalid/hls/tok/' + seq + '.ts', dur: 6, key: { uri: 'http://lb.invalid/key', iv: '' } }));
+    const mini = new LiveHls({ removeEventListener() {} }, url);
+    mini.keep = true;
+    Object.assign(mini, { segs, list: 'http://lb.invalid/hls/tok/index.m3u8', target: 6 });
+    mini.keys.set('http://lb.invalid/key', new Uint8Array(16));
+    // guarda solo los 6 más nuevos
+    for (const seq of [30, 31, 32, 33, 34, 35, 36]) mini.remember(seq, new Uint8Array([0x47, seq]));
+    assert.deepEqual([...mini.kept.keys()], [31, 32, 33, 34, 35, 36]);
+    mini.handOff();
+    assert.equal(mini.kept.size, 0);
+    assert.equal(hasHandoff(url), true);
+    assert.equal(hasHandoff('http://fixture.invalid/live/u/p/8.m3u8'), false);
+    const big = new LiveHls({ removeEventListener() {} }, url);
+    assert.equal(big.adopt(), true);
+    assert.equal(big.list, 'http://lb.invalid/hls/tok/index.m3u8');
+    assert.equal(big.keys.size, 1);
+    // empieza donde siempre (5 antes del final: 33) con lo que ya tiene; el segmento sale sin red y ya descifrado
+    assert.equal(big.handedStart(), 33);
+    const got = await big.fetchSeg(segs[3]);
+    assert.equal(got.plain, true);
+    assert.deepEqual(Array.from(got.data), [0x47, 33]);
+    big.prefetch(33);
+    assert.equal(big.inflight.size, 0);
+    assert.equal(calls, 0);
+    assert.match(big.diag(), /miniatura=1/);
+    // se usa una sola vez; otro canal no la toma
+    assert.equal(hasHandoff(url), false);
+    assert.equal(new LiveHls({ removeEventListener() {} }, url).adopt(), false);
+    big.destroy();
+  } finally { global.fetch = realFetch; }
+});
+
+test('canal: una miniatura sin segmentos entregados no deja nada para la pantalla grande', () => {
+  const { LiveHls, hasHandoff } = require('../src/player/livehls.ts');
+  const mini = new LiveHls({ removeEventListener() {} }, 'http://fixture.invalid/empty.m3u8');
+  mini.keep = true;
+  Object.assign(mini, { segs: [{ seq: 1, url: 'http://fixture.invalid/1.ts', dur: 6 }] });
+  mini.handOff();
+  assert.equal(hasHandoff('http://fixture.invalid/empty.m3u8'), false);
+});
+
+test('inicio: al bajar las filas de abajo ya están montadas (se montan quieto, nunca al apretar)', () => {
+  const { onFocusWin, idleStep, MAX_ROWS } = require('../src/lib/rowwindow.ts');
+  const n = 30;
+  // quieto en la fila 0: se van montando de a una hasta 5 abajo y nada más
+  let w = { lo: 0, hi: 3 };
+  const settle = r => { for (let k = 0; k < 40; k++) { const x = idleStep(w, r, n); if (!x) return; w = x; } };
+  settle(0);
+  assert.deepEqual(w, { lo: 0, hi: 5 });
+  // bajar fila por fila con pausas: la fila a la que se llega y la siguiente ya estaban montadas antes de apretar
+  for (let r = 1; r < 20; r++) {
+    assert.ok(w.hi >= r + 1, 'fila ' + (r + 1) + ' montada antes de llegar a ' + r);
+    const after = onFocusWin(w, r, n);
+    assert.equal(after, w, 'apretar no monta nada si hubo pausa');
+    settle(r);
+    // quedan 3 arriba (más una de margen que se suelta después) y 5 abajo
+    assert.deepEqual(w, { lo: Math.max(0, r - 4), hi: Math.min(n - 1, r + 5) });
+  }
+  // subir con pausas: las de arriba también están antes de llegar
+  for (let r = 18; r > 0; r--) {
+    assert.ok(w.lo <= r - 1, 'fila ' + (r - 1) + ' montada antes de subir');
+    assert.equal(onFocusWin(w, r, n), w);
+    settle(r);
+  }
+  // recorriendo seguido sin pausas: las cercanas se montan al llegar y nunca más de MAX_ROWS a la vez
+  w = { lo: 0, hi: 5 };
+  for (let r = 1; r < n; r++) {
+    w = onFocusWin(w, r, n);
+    assert.ok(w.lo <= r - 2 || w.lo === 0);
+    assert.ok(w.hi >= Math.min(n - 1, r + 2));
+    assert.ok(w.hi - w.lo + 1 <= MAX_ROWS);
+  }
+  // al final de la lista no se pasa del último
+  settle(n - 1);
+  assert.equal(w.hi, n - 1);
+});
+
+test('carátulas: se recuerda la dirección que cargó y la que dio error (no la que solo tardó)', () => {
+  const { firstSource, sourceLoaded, sourceFailed } = require('../src/lib/imagememory.ts');
+  const a = ['https://panel/imgc/a.jpg', 'https://panel/img.php?a', 'http://iptv/a.jpg'];
+  assert.equal(firstSource(a), 0);
+  sourceLoaded(a, a[1]);
+  assert.equal(firstSource(a), 1);
+  const b = ['https://panel/imgc/b.jpg', 'https://panel/img.php?b', 'http://iptv/b.jpg'];
+  sourceFailed(b[0]);
+  assert.equal(firstSource(b), 1);
+  sourceFailed(b[1]);
+  sourceFailed(b[2]);
+  // todas fallaron: la última (la original) igual se intenta
+  assert.equal(firstSource(b), 2);
+});

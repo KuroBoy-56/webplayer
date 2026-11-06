@@ -3,7 +3,7 @@
 // a las filas, la portada muestra el título enfocado (fondo, nombre, año y sinopsis) y la fila enfocada queda
 // siempre en el mismo lugar, con las de abajo asomando. Arriba desde la primera fila vuelve a los botones.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem, openSpecial, playMovie } from '../actions';
 import { Button, Message, Spinner } from '../components/ui';
 import { RowView, rowHeight } from '../components/Tiles';
@@ -13,6 +13,7 @@ import { catalog, isItem, Item, Row, Special } from '../data/catalog';
 import { continueItems, favItems } from '../data/personal';
 import { Art, heroArt, heroArtList, savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
+import { idleStep, onFocusWin, Win } from '../lib/rowwindow';
 import { useNav } from '../nav';
 import { isFav, toggleFav, useAppState } from '../state';
 import { t } from '../lib/i18n';
@@ -191,7 +192,10 @@ export default function Browse({ section, active = true }: { section: 'home' | '
   useEffect(() => {
     if (!inRowsRef.current) setInfo({ item: hero });
   }, [hero]);
-  const list = useRef<FlatList<Row>>(null);
+  const list = useRef<ScrollView>(null);
+  // filas montadas (src/lib/rowwindow.ts): las de junto al foco al momento, las demás de a una en los momentos quietos
+  const [win, setWin] = useState<Win>({ lo: 0, hi: 3 });
+  const lastFocusAt = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const artTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // título enfocado (la respuesta del fondo solo se usa si sigue enfocado)
@@ -215,10 +219,12 @@ export default function Browse({ section, active = true }: { section: 'home' | '
   // foco en una tarjeta: su fila queda arriba y la portada muestra lo enfocado cuando el foco se detiene
   const onFocusAt = useCallback(
     (i: number, x: Item | Special) => {
+      lastFocusAt.current = Date.now();
       setInRows(true);
       setRowIdx(i);
+      setWin(w => onFocusWin(w, i, rows.length));
       // sin animación: al bajar o subir de fila el salto es inmediato (la animación hacía lenta la navegación)
-      list.current?.scrollToOffset({ offset: offsets[i] || 0, animated: false });
+      list.current?.scrollTo({ y: offsets[i] || 0, animated: false });
       if (timer.current) clearTimeout(timer.current);
       if (artTimer.current) clearTimeout(artTimer.current);
       focused.current = isItem(x) ? x : null;
@@ -249,17 +255,34 @@ export default function Browse({ section, active = true }: { section: 'home' | '
   // los botones de la portada: vuelve el destacado y las filas bajan
   const toHero = () => {
     if (timer.current) clearTimeout(timer.current);
+    lastFocusAt.current = Date.now();
     setInRows(false);
     setRowIdx(0);
+    setWin(w => onFocusWin(w, 0, rows.length));
     setInfo({ item: hero });
-    list.current?.scrollToOffset({ offset: 0, animated: false });
+    list.current?.scrollTo({ y: 0, animated: false });
   };
+
+  // un momento quieto (250 ms sin mover el foco, también de lado): la fila siguiente de la ventana, de a una cada 120 ms
+  useEffect(() => {
+    if (!active) return;
+    const next = idleStep(win, rowIdx, rows.length);
+    if (!next) return;
+    let id: ReturnType<typeof setTimeout>;
+    const run = () => {
+      const quiet = Date.now() - lastFocusAt.current;
+      if (quiet < 250) {
+        id = setTimeout(run, 250 - quiet);
+        return;
+      }
+      setWin(w => (w === win ? next : w));
+    };
+    id = setTimeout(run, 120);
+    return () => clearTimeout(id);
+  }, [win, rowIdx, rows.length, active]);
 
   const selectItem = useCallback((it: Item) => openItem(nav, it), [nav]);
   const selectSpecial = useCallback((sp: Special) => openSpecial(nav, sp), [nav]);
-  const renderRow = useCallback(({ item, index }: { item: Row; index: number }) => (
-    <RowView row={item} rowIndex={index} onItem={selectItem} onSpecial={selectSpecial} onFocusRow={onFocusAt} progressOf={progressOf} />
-  ), [selectItem, selectSpecial, onFocusAt, progressOf]);
 
   if (!ready) return <Spinner label={st.error || t('Cargando el catálogo…')} />;
   if (!rows.length) return <Message text={t('No hay contenido para mostrar.')} />;
@@ -301,17 +324,21 @@ export default function Browse({ section, active = true }: { section: 'home' | '
         </View>
       ) : null}
       <View style={[s.rowsBox, { top: px(inRows || !hero ? ROWS_IN : ROWS_HERO) }]}>
-        <FlatList
-          ref={list}
-          data={rows}
-          keyExtractor={(r, i) => r.title + i}
-          getItemLayout={(_, i) => ({ length: rowHeight(rows[i]), offset: offsets[i] || 0, index: i })}
-          initialNumToRender={4}
-          windowSize={5}
-          showsVerticalScrollIndicator={false}
-          renderItem={renderRow}
-          contentContainerStyle={{ paddingBottom: px(600) }}
-        />
+        {/* todas las filas están (las lejanas solo con su título y su alto): la lista nunca arma una fila al apretar */}
+        <ScrollView ref={list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: px(600) }}>
+          {rows.map((r, i) => (
+            <RowView
+              key={r.title + i}
+              row={r}
+              rowIndex={i}
+              live={i >= win.lo && i <= win.hi}
+              onItem={selectItem}
+              onSpecial={selectSpecial}
+              onFocusRow={onFocusAt}
+              progressOf={progressOf}
+            />
+          ))}
+        </ScrollView>
       </View>
     </View>
   );
