@@ -64,6 +64,8 @@ export class TsMux {
   private aSamples = 1024;
   // siguiente muestra de audio (en muestras) y el último cuadro (relleno si no hay silencio para ese formato)
   private aNext: number | null = null;
+  // corrección del audio cuando sus marcas saltan distinto que las del video (90 kHz): el audio sigue de corrido
+  private aShift = 0;
   private aLast: Uint8Array | null = null;
   private seq = 1;
   private dirty = true;
@@ -282,7 +284,11 @@ export class TsMux {
   }
 
   // Audio de corrido: cada cuadro en la siguiente muestra; si el canal deja un hueco se rellena con silencio y si
-  // se monta se descartan los cuadros de más (la diferencia nunca pasa de medio cuadro)
+  // se monta se descartan los cuadros de más (la diferencia nunca pasa de medio cuadro). AAC: nunca queda un hueco, se
+  // rellena con silencio hasta 30 s y se descartan hasta 10 s siguiendo las marcas (A/V igual de sincronizados); un salto
+  // mayor se cose (el audio sigue justo donde iba). Antes, desde 2 s, el audio saltaba y dejaba un hueco en lo
+  // entregado: canales que saltan sus marcas en cada segmento (HBO MUNDI: cosidos=5, buf con huecos) se detenían ahí.
+  // Sin cuadro de silencio para ese formato (MP2, AC-3…) sigue como antes: hasta 2 s y si no, desde la marca
   private audioFrags(frames: AacFrame[]): Uint8Array[] {
     const au = this.audio!;
     const n = this.kind === 'aac' ? 1024 : this.aSamples;
@@ -303,11 +309,14 @@ export class TsMux {
       data.push(d);
       this.aNext! += n;
     };
+    // hasta dónde se rellena con silencio o se descarta siguiendo las marcas
+    const fillMax = (silent ? 30 : 2) * HZ;
+    const dropMax = (silent ? 10 : 2) * HZ;
     let last = -1;
     for (const f of frames) {
       const src = f.pts >= 0 ? this.fix(f.pts) : last >= 0 ? last + step : -1;
       last = src;
-      const at = src >= 0 ? src + this.off! : -1;
+      let at = src >= 0 ? src + this.off! + this.aShift : -1;
       if (this.aNext === null) {
         if (at < 0) continue;
         this.aNext = this.padStart && this.vPid >= 0 && silent ? 0 : Math.max(0, Math.round((at * au.rate) / HZ));
@@ -316,26 +325,27 @@ export class TsMux {
         // margen de 4 cuadros (~85 ms, no se nota en la sincronía): con 1,5 cuadros, los canales con marcas de tiempo
         // irregulares recibían silencio y descartes a cada rato (microcortes, «grumos» en el audio)
         const tol = 4 * step;
-        const drift = at - (this.aNext * HZ) / au.rate;
-        if (drift < -tol) {
-          if (drift > -2 * HZ) {
-            this.dropped++;
-            continue;
+        const want = (this.aNext * HZ) / au.rate;
+        const drift = at - want;
+        if (drift < -tol && drift > -dropMax) {
+          this.dropped++;
+          continue;
+        }
+        // (con padStart el hueco del principio, un grupo de cuadros de hasta 15 s, también se rellena)
+        if (drift > tol && drift < fillMax) {
+          for (let k = Math.round(drift / step); k > 0; k--) {
+            put(silent || this.aLast || f.data);
+            this.filled++;
           }
-          // salto grande hacia atrás: se sigue desde ahí
+        } else if (Math.abs(drift) > tol && silent) {
+          // salto absurdo: se cose, el audio sigue justo donde iba (sin hueco ni encimarse)
+          this.aShift += want - at;
+          at = want;
+          this.joins++;
+        } else if (Math.abs(drift) > tol) {
+          // sin silencio para este formato: como antes, desde la marca
           flush();
           this.aNext = Math.max(0, Math.round((at * au.rate) / HZ));
-        } else if (drift > tol) {
-          // el hueco del principio (padStart) se rellena aunque sea largo (un grupo de cuadros, hasta 15 s)
-          if (drift < (this.padStart && !this.aLast && silent ? 15 : 2) * HZ) {
-            for (let k = Math.round(drift / step); k > 0; k--) {
-              put(silent || this.aLast || f.data);
-              this.filled++;
-            }
-          } else {
-            flush();
-            this.aNext = Math.round((at * au.rate) / HZ);
-          }
         }
       }
       put(f.data);

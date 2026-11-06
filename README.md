@@ -207,6 +207,17 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canales cifrados y con saltos de marcas sin cortes (1.0.63)**, por dos reportes «Canal en vivo se detiene seguido»:
+  **descifrado nativo**: LAS ESTRELLAS (AES-128, segmentos de 13 s) tardaba `descifrado=8991ms` por segmento con el AES en
+  JavaScript (@noble) y el canal se quedaba sin datos. Ahora se descifra con el módulo nativo de Vega (`WebCrypto` de
+  react-native-w3cmedia, el que usa Shaka; `src/lib/aesnative.ts`): milisegundos. Si el nativo falta o lo que devuelve no es
+  MPEG-TS y el de JavaScript sí, se usa el de JavaScript el resto de la sesión. El reporte dice `cifrado=aes128(nativo)` o
+  `(js)`. **Audio sin huecos**: HBO MUNDI salta sus marcas en cada segmento (`cosidos=5`) y su audio salta distinto que el
+  video; desde 2 s el convertidor dejaba un hueco en el audio y lo entregado quedaba partido (`buf=[0.2-3.6,4.8-12.1,…]`):
+  el canal se detenía en cada hueco. Ahora (AAC) se rellena con silencio hasta 30 s y se descartan hasta 10 s siguiendo las
+  marcas (audio y video igual de sincronizados); un salto mayor se cose (`TsMux.aShift`). Con MP2 / AC-3 (sin cuadro de
+  silencio) sigue como antes. Probado con canales generados con ffmpeg (saltos de +3 s, +12 s y -4 s): sin huecos; un
+  canal normal sale idéntico.
 - **Pantalla grande al instante y filas fluidas (1.0.62)**: **de la miniatura a la pantalla grande** el canal ya no empieza
   de cero: la miniatura deja su lista (con el token del balanceador), sus últimos 6 segmentos ya descifrados (tope 24 MB)
   y sus llaves, y suelta la conexión en el momento (`LiveHls.handOff` / `adopt`, `Playback.handOffLive`, 15 s para

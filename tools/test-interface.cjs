@@ -28,7 +28,7 @@ Module._load = function(request, parent, isMain) {
   if (request === '../lib/http') return { UA: 'fixture', json: body => typeof body === 'string' ? JSON.parse(body) : body, http: async () => { requests++; return respond ? respond() : fixture(); } };
   if (request === './panel') return { cloud: async () => { panelRequests++; return {}; } };
   if (request === '../lib/i18n' || request === './i18n') return { t: key => key };
-  if (request === '@amazon-devices/react-native-w3cmedia') return { MediaSource: { isTypeSupported: () => true } };
+  if (request === '@amazon-devices/react-native-w3cmedia') return { MediaSource: { isTypeSupported: () => true }, get WebCrypto() { return global.__webcrypto; } };
   if (request === 'react-native') return { AppState: { currentState: 'active' } };
   if (request === './shaka-env') return { installShakaEnvironment() {} };
   if (request === './vendor/shaka-player.compiled') return { Player: TestShaka, polyfill: { installAll() {} }, net: { NetworkingEngine: { unregisterScheme() {}, registerScheme() {}, PluginPriority: { APPLICATION: 1 } }, HttpFetchPlugin: { parse() {} } } };
@@ -436,4 +436,84 @@ test('carátulas: se recuerda la dirección que cargó y la que dio error (no la
   sourceFailed(b[2]);
   // todas fallaron: la última (la original) igual se intenta
   assert.equal(firstSource(b), 2);
+});
+
+// lo que cubre cada fragmento de audio convertido (en muestras): [inicio, fin]
+function audioCover(frags) {
+  const u32 = (d, p) => ((d[p] << 24) >>> 0) + (d[p + 1] << 16) + (d[p + 2] << 8) + d[p + 3];
+  const out = [];
+  for (const d of frags) {
+    // moof(8) mfhd(16) traf(8) tfhd(16) tfdt(20) trun
+    const base = u32(d, 8 + 16 + 8 + 16 + 12) * 4294967296 + u32(d, 8 + 16 + 8 + 16 + 16);
+    const trun = 8 + 16 + 8 + 16 + 20;
+    const n = u32(d, trun + 12);
+    let dur = 0;
+    for (let i = 0; i < n; i++) dur += u32(d, trun + 20 + i * 16);
+    out.push([base, base + dur]);
+  }
+  return out;
+}
+
+test('canal: el audio sigue de corrido aunque sus marcas salten distinto que las del video (sin huecos)', () => {
+  const { TsMux } = require('../src/lib/tsmux.ts');
+  const make = () => Object.assign(new TsMux(0), { audio: { config: new Uint8Array([0x11, 0x90]), channels: 2, rate: 48000 }, obj: 2, kind: 'aac', off: 0, ref: 0 });
+  const step = 1920; // 1024 muestras a 48 kHz en 90 kHz
+  const frames = (from, n, shift) => Array.from({ length: n }, (_, i) => ({ pts: (from + i) * step + shift, data: new Uint8Array([1, 2, 3]) }));
+  const contiguous = cover => cover.every((c, i) => !i || c[0] === cover[i - 1][1]);
+  // salto de 3 s hacia adelante (HBO MUNDI): se rellena con silencio, sin hueco
+  let m = make();
+  let cover = audioCover(m.audioFrags([...frames(0, 10, 0), ...frames(10, 10, 3 * 90000)]));
+  assert.ok(contiguous(cover), JSON.stringify(cover));
+  assert.ok(m.filled >= 140 && m.filled <= 141, 'silencio=' + m.filled);
+  // salto de 4 s hacia atrás: se descarta lo que sobra, sin encimarse
+  m = make();
+  cover = audioCover(m.audioFrags([...frames(0, 200, 0), ...frames(200, 300, -4 * 90000)]));
+  assert.ok(contiguous(cover), JSON.stringify(cover));
+  // 4 s = 187,5 cuadros, menos el margen de 4 cuadros
+  assert.ok(m.dropped >= 182 && m.dropped <= 188, 'descartados=' + m.dropped);
+  // salto absurdo (1 hora): se cose, el audio sigue justo donde iba
+  m = make();
+  cover = audioCover(m.audioFrags([...frames(0, 10, 0), ...frames(10, 10, 3600 * 90000)]));
+  assert.ok(contiguous(cover), JSON.stringify(cover));
+  assert.equal(cover[cover.length - 1][1], 20 * 1024);
+  assert.equal(m.joins, 1);
+});
+
+test('canal cifrado: se descifra con el AES nativo de Vega y, si no da MPEG-TS, con el de JavaScript', async () => {
+  const nodeCrypto = require('node:crypto');
+  const { LiveHls } = require('../src/player/livehls.ts');
+  const { nativeAesOn } = require('../src/lib/aesnative.ts');
+  const { segIv } = require('../src/lib/hlslist.ts');
+  let calls = 0;
+  let broken = false;
+  global.__webcrypto = { subtle: {
+    importKey: async (_f, raw, alg) => ({ raw: Buffer.from(raw), algorithm: alg }),
+    decrypt: async (alg, key, data) => {
+      calls++;
+      if (broken) return new Uint8Array(data.byteLength).buffer;
+      const d = nodeCrypto.createDecipheriv('aes-128-cbc', key.raw, Buffer.from(alg.iv));
+      return new Uint8Array(Buffer.concat([d.update(Buffer.from(data)), d.final()])).slice().buffer;
+    },
+  } };
+  try {
+    const plain = new Uint8Array(188 * 20);
+    for (let i = 0; i < plain.length; i++) plain[i] = i % 188 === 0 ? 0x47 : (i * 7) & 255;
+    const key = new Uint8Array(16).map((_, i) => i * 11);
+    const seg = { seq: 77, url: 'http://fixture.invalid/77.ts', dur: 6, key: { uri: 'http://fixture.invalid/key', iv: '' } };
+    const c = nodeCrypto.createCipheriv('aes-128-cbc', Buffer.from(key), Buffer.from(segIv(seg)));
+    const enc = new Uint8Array(Buffer.concat([c.update(Buffer.from(plain)), c.final()]));
+    const reader = new LiveHls({ removeEventListener() {} }, 'http://fixture.invalid/c.m3u8');
+    reader.keys.set(seg.key.uri, key);
+    assert.deepEqual(await reader.decrypt(seg, enc), plain);
+    assert.equal(calls, 1);
+    assert.equal(nativeAesOn(), true);
+    // el nativo devuelve otra cosa: vale el de JavaScript y el nativo no se vuelve a usar
+    broken = true;
+    assert.deepEqual(await reader.decrypt(seg, enc), plain);
+    assert.equal(nativeAesOn(), false);
+    broken = false;
+    assert.deepEqual(await reader.decrypt(seg, enc), plain);
+    assert.equal(calls, 2);
+    reader.destroy();
+  } finally { delete global.__webcrypto; }
 });

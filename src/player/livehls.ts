@@ -20,6 +20,7 @@ import { xuiError } from '../lib/xui';
 import { cbc } from '@noble/ciphers/aes';
 import { liveStartSeg, parseList, resolveUrl, Seg, segIv, tsStart, tsStartPts } from '../lib/hlslist';
 import { TsMux } from '../lib/tsmux';
+import { disableNativeAes, nativeAesOn, nativeCbc } from '../lib/aesnative';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -188,7 +189,7 @@ export class LiveHls {
     const n = Math.max(1, this.appended);
     const m = this.mux;
     const how = ' modo=' + (this.mode || '?') + (this.mode === 'mp4' && m ? ' ' + m.mime.replace(/^.*codecs=/, '') + (m.why ? ' (' + m.why + ')' : '') + ' silencio=' + m.filled + ' descartados=' + m.dropped + ' cosidos=' + m.joins : '') + (this.muxWhy ? ' (' + this.muxWhy + ')' : '');
-    return 'hls host=' + host + how + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
+    return 'hls host=' + host + how + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' + (nativeAesOn() ? '(nativo)' : '(js)') : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
       's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + (this.resumed ? ' reanudados=' + this.resumed : '') + (this.retries ? ' reintentos=' + this.retries : '') + (this.fromPreview ? ' miniatura=' + this.fromPreview : '') + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
@@ -388,8 +389,19 @@ export class LiveHls {
       }
       this.keys.set(k.uri, key);
     }
-    // por partes de 64 KB cediendo el turno entre una y otra: un segmento de varios MB descifrado de una vez trababa
-    // la app (y su vigilante) más de un segundo
+    // primero el descifrado nativo de Vega (milisegundos); si no da MPEG-TS, el de JavaScript y, si ese sí lo da, el
+    // nativo no se vuelve a usar en la sesión
+    const fast = await nativeCbc(key, segIv(seg), data);
+    if (!this.alive) return null;
+    if (fast && tsStart(fast) >= 0) return fast;
+    const slow = await this.slowDecrypt(seg, key, data);
+    if (fast && slow && tsStart(slow) >= 0) disableNativeAes();
+    return slow;
+  }
+
+  // AES-128 en JavaScript (@noble), por partes de 64 KB cediendo el turno entre una y otra: un segmento de varios MB
+  // descifrado de una vez trababa la app (y su vigilante) más de un segundo
+  private async slowDecrypt(seg: Seg, key: Uint8Array, data: Uint8Array): Promise<Uint8Array | null> {
     try {
       if (data.length % 16) throw new Error('largo ' + data.length);
       const out = new Uint8Array(data.length);
