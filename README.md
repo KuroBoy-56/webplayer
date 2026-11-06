@@ -207,6 +207,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Carpetas de TV en vivo sin frenar la miniatura (1.0.67)**: al bajar rápido por muchas carpetas (50) la miniatura del
+  canal se pausaba y se entrecortaba: la lista armaba y desarmaba filas a cada paso. Ahora todas las carpetas se dibujan una
+  vez al entrar (hasta 300 de una, son livianas), con su alto fijo (`getItemLayout`), y cada carpeta es una fila
+  memorizada (`CatRow`): cada paso solo redibuja la que pierde y la que gana el foco (`src/screens/Live.tsx`).
 - **Reproductor nativo de Vega primero y pantalla grande sin reabrir (1.0.66)**: **canales**: se abren primero con el
   reproductor nativo de Vega en modo directo con su `.ts` (Vega OS 2.0, como Roku y LG): sin trabajo de la app, así no se
   entrecorta al recorrer la lista rápido ni tarda en convertir. Si ese canal no abre en 10 s, da error o la imagen queda

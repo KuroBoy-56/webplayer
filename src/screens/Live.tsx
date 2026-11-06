@@ -33,6 +33,27 @@ const ChannelRow = memo(function ChannelRow({ channel: c, index, favorite, live,
   );
 });
 
+// Carpeta de la lista (memorizada): al recorrer las carpetas solo se vuelven a dibujar la que pierde el foco y la que lo
+// gana
+type Cat = { id: string; name: string; count: number; locked: boolean };
+const CatRow = memo(function CatRow({ c, on, pick }: { c: Cat; on: boolean; pick: (c: Cat) => void }) {
+  return (
+    <Focusable onPress={() => pick(c)} style={f => [s.cat, on && s.catOn, f && s.catF]}>
+      {f => (
+        <>
+          <Text style={[s.catText, f && { color: C.onFocus }]} numberOfLines={1}>
+            {c.locked ? '🔒 ' : ''}
+            {c.name}
+          </Text>
+          {c.id !== 'fav' ? <Text style={[s.catCount, f && { color: C.onFocus }]}>{c.count}</Text> : null}
+        </>
+      )}
+    </Focusable>
+  );
+});
+// alto de la fila (70) más su margen (6), redondeados por separado como en el estilo
+const catH = () => px(70) + px(6);
+
 // active: la pantalla está a la vista (con el reproductor encima, la vista previa se apaga)
 export default function Live({ active = true }: { active?: boolean }) {
   const nav = useNav();
@@ -104,6 +125,9 @@ export default function Live({ active = true }: { active?: boolean }) {
     return () => { alive = false; if (timer.current) clearTimeout(timer.current); };
   }, [focused, active]);
 
+  // OK en una carpeta: sus canales (o el PIN si está bloqueada)
+  const pickCat = useCallback((c: Cat) => (c.locked ? setPinFor(c.id) : setCat(c.id)), []);
+
   // favoritos en un Set y la fila memorizada: enfocar un canal no vuelve a dibujar toda la lista
   const favSet = useMemo(() => new Set(favIds), [favIds]);
   const liveId = focused?.id || '';
@@ -135,28 +159,18 @@ export default function Live({ active = true }: { active?: boolean }) {
 
   return (
     <View style={s.root}>
+      {/* todas las carpetas se dibujan una vez al entrar (son pocas y livianas) y con su alto fijo: recorrerlas rápido no
+          arma ni desarma filas a cada paso (ese trabajo frenaba y entrecortaba la miniatura del canal) */}
       <FlatList
         style={s.cats}
         data={cats}
-        initialNumToRender={12}
-        windowSize={5}
-        maxToRenderPerBatch={8}
+        initialNumToRender={Math.min(cats.length, 300)}
+        maxToRenderPerBatch={Math.min(cats.length, 300)}
+        windowSize={101}
+        getItemLayout={(_, i) => ({ length: catH(), offset: catH() * i, index: i })}
         keyExtractor={c => c.id}
-        renderItem={({ item: c }) => (
-          <Focusable
-            onPress={() => (c.locked ? setPinFor(c.id) : setCat(c.id))}
-            style={f => [s.cat, c.id === cat && s.catOn, f && s.catF]}>
-            {f => (
-              <>
-                <Text style={[s.catText, f && { color: C.onFocus }]} numberOfLines={1}>
-                  {c.locked ? '🔒 ' : ''}
-                  {c.name}
-                </Text>
-                {c.id !== 'fav' ? <Text style={[s.catCount, f && { color: C.onFocus }]}>{c.count}</Text> : null}
-              </>
-            )}
-          </Focusable>
-        )}
+        extraData={cat}
+        renderItem={({ item: c }) => <CatRow c={c} on={c.id === cat} pick={pickCat} />}
       />
       <View style={s.list}>
         {channels.length ? (
