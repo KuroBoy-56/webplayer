@@ -26,7 +26,8 @@ export function ItemGrid({ items, header, channels }: { items: Item[]; header?: 
       ListHeaderComponent={header}
       contentContainerStyle={{ paddingHorizontal: SIDE, paddingBottom: px(120) }}
       initialNumToRender={21}
-      windowSize={5}
+      // una pantalla por encima y otra por debajo de lo visible (antes dos): menos carátulas montadas a la vez
+      windowSize={3}
       getItemLayout={header ? undefined : (_, i) => ({ length: rowH, offset: rowH * i, index: i })}
       renderItem={({ item }) => <PosterTile item={item} onPress={() => openItem(nav, item, channels ? items.filter(x => x.kind === 'live') : undefined)} />}
     />

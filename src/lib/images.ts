@@ -63,10 +63,24 @@ function canonKey(poster: string, k: string, tm: string): string {
   return '500|' + (slash < 0 ? u.toLowerCase() : u.slice(0, slash).toLowerCase() + u.slice(slash));
 }
 
+// direcciones ya armadas (con el sha1 del nombre de la copia): las filas montan y desmontan tarjetas al recorrerlas y
+// cada una volvía a calcularlas
+const known = new Map<string, string[]>();
+
 /** direcciones de la carátula, en orden (la tarjeta pasa a la siguiente si una no carga) */
 export function posterSources(kind: string, poster: string, name: string, year: string, tm = ''): string[] {
-  const out: string[] = [];
   const b = apiBase();
+  const memo = b + '\n' + (b ? read(scoped('cloud_token2')) : '') + '\n' + kind + '\n' + poster + '\n' + name + '\n' + year + '\n' + tm;
+  const hit = known.get(memo);
+  if (hit) return hit;
+  const out = buildPoster(b, kind, poster, name, year, tm);
+  if (known.size >= 3000) known.clear();
+  known.set(memo, out);
+  return out;
+}
+
+function buildPoster(b: string, kind: string, poster: string, name: string, year: string, tm: string): string[] {
+  const out: string[] = [];
   const media = kind === 'vod' || kind === 'series' || kind === 'movie';
   // logos de canales y carátulas de TMDB: directo (ya son livianos)
   if (b && media && !isTmdb(poster) && (isHttp(poster) || name)) {

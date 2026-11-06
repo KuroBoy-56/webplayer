@@ -5,6 +5,11 @@
 export type SegKey = { uri: string; iv: string };
 export type Seg = { seq: number; url: string; dur: number; key?: SegKey };
 
+// en vivo el lector empieza este número de segmentos antes del final (unos 25-30 s de margen); la bajada adelantada
+// del primer segmento (prefetch.ts) elige el mismo
+export const LIVE_BACK = 5;
+export const liveStartSeg = (segs: Seg[]): Seg => segs[Math.max(0, segs.length - LIVE_BACK)];
+
 // dirección absoluta de una línea de la lista (relativa a la lista, a la raíz del servidor o completa)
 export function resolveUrl(base: string, ref: string): string {
   if (/^https?:\/\//i.test(ref)) return ref;

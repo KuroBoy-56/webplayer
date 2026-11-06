@@ -118,7 +118,9 @@ export const RowView = memo(function RowView({
         keyExtractor={(x, i) => (isItem(x) ? x.kind + x.id : x.kind + x.key) + ':' + i}
         showsHorizontalScrollIndicator={false}
         initialNumToRender={8}
-        windowSize={5}
+        // una pantalla de tarjetas a cada lado de lo visible (antes dos): con muchas filas montadas eran cientos de
+        // carátulas a la vez y el Fire TV se trababa al recorrerlas
+        windowSize={3}
         renderItem={({ item: x, index }) =>
           isItem(x) ? (
             <PosterTile

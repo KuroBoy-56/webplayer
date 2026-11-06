@@ -15,10 +15,10 @@
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { AppState } from 'react-native';
 import { UA } from '../lib/http';
-import { takeList } from './prefetch';
+import { takeList, takeSeg } from './prefetch';
 import { xuiError } from '../lib/xui';
 import { cbc } from '@noble/ciphers/aes';
-import { parseList, resolveUrl, Seg, segIv, tsStart, tsStartPts } from '../lib/hlslist';
+import { liveStartSeg, parseList, resolveUrl, Seg, segIv, tsStart, tsStartPts } from '../lib/hlslist';
 import { TsMux } from '../lib/tsmux';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -183,7 +183,7 @@ export class LiveHls {
     if (!this.alive) return '';
     // en vivo: 5 segmentos antes del final (unos 25-30 s de margen): con los últimos 3 cualquier demora del servidor o
     // del descifrado dejaba el canal sin datos y se detenía y seguía una y otra vez
-    this.next = this.segs[Math.max(0, this.segs.length - 5)].seq;
+    this.next = liveStartSeg(this.segs).seq;
     this.v.addEventListener('waiting', this.onWaiting);
     const ms: any = new MediaSource();
     this.ms = ms;
@@ -251,6 +251,19 @@ export class LiveHls {
       if (pre) {
         const got = await pre;
         if (got.code) return got;
+      }
+    }
+    // el primer segmento, pedido apenas llegó la lista mientras el reproductor se iniciaba (se corta al cerrar)
+    if (mode === 'seg') {
+      const pre = takeSeg(url);
+      if (pre) {
+        this.requests.add(pre.ctrl);
+        try {
+          const got = await pre.p;
+          if (got.code || !this.alive) return got;
+        } finally {
+          this.requests.delete(pre.ctrl);
+        }
       }
     }
     const ctrl = new AbortController();
@@ -616,8 +629,9 @@ export class LiveHls {
         continue;
       }
       const t0 = Date.now();
-      // al empezar, el siguiente se pide a la vez que el primero (el canal se ve antes)
-      if (!this.appended) this.prefetch(seg.seq);
+      // el primer segmento se baja solo, con toda la conexión: antes se pedían a la vez los dos siguientes y los tres se
+      // repartían la red, así que la primera imagen tardaba hasta tres veces más. Los siguientes empiezan apenas llega
+      // (prefetch de abajo), mientras este se convierte y se entrega
       const r = await this.fetchSeg(seg);
       this.inflight.delete(seg.seq);
       if (!this.alive) return;

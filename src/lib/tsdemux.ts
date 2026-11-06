@@ -105,6 +105,8 @@ export function demux(d: Uint8Array, pids: number[], known: Pmt | null): { pmt: 
     }
     if (pid === pmtPid) {
       if (unit) pmt = parsePmt(d, p, i + 188) || pmt;
+      // solo se buscaba la tabla de programas (primer segmento): no hace falta recorrer el resto
+      if (pmt && !pids.length) break;
       continue;
     }
     const o = open.get(pid);
@@ -119,27 +121,30 @@ export function demux(d: Uint8Array, pids: number[], known: Pmt | null): { pmt: 
   return { pmt, pes };
 }
 
-// NAL de un bloque Annex B (separados por 00 00 01 / 00 00 00 01)
+// NAL de un bloque Annex B (separados por 00 00 01 / 00 00 00 01). Los inicios se buscan saltando de un byte 0 al
+// siguiente con indexOf (nativo): recorrer cada byte en JavaScript era lo más lento de convertir un canal en Vega
 export function splitNals(d: Uint8Array): Uint8Array[] {
   const out: Uint8Array[] = [];
   const n = d.length;
   let start = -1;
   let i = 0;
-  while (i + 2 < n) {
-    const c = d[i + 2];
-    if (c > 1) {
-      i += 3;
-    } else if (c === 1 && d[i + 1] === 0 && d[i] === 0) {
+  for (;;) {
+    const z = d.indexOf(0, i);
+    if (z < 0 || z + 2 >= n) break;
+    if (d[z + 1] !== 0) {
+      i = z + 2;
+      continue;
+    }
+    const c = d[z + 2];
+    if (c === 1) {
       if (start >= 0) {
-        let e = i;
+        let e = z;
         while (e > start && d[e - 1] === 0) e--;
         if (e > start) out.push(d.subarray(start, e));
       }
-      i += 3;
+      i = z + 3;
       start = i;
-    } else {
-      i++;
-    }
+    } else i = c === 0 ? z + 1 : z + 3;
   }
   if (start >= 0 && start < n) out.push(d.subarray(start));
   return out;

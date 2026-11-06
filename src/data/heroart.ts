@@ -31,15 +31,22 @@ export function savedArt(it: Item): Art | null {
   return e && Date.now() - e.t < 7 * DAY ? e : null;
 }
 
+// Se guarda en el equipo 3 s después del último fondo encontrado (una vez por tanda): guardar los 400 títulos con su
+// sinopsis a cada título nuevo trababa un momento la app mientras se recorrían las filas
+let flush: ReturnType<typeof setTimeout> | null = null;
 function remember(it: Item, a: Art): void {
   const all = store();
   all[keyOf(it)] = { ...a, t: Date.now() };
-  const ks = Object.keys(all);
-  if (ks.length > 400) {
-    ks.sort((x, y) => all[x].t - all[y].t);
-    for (const k of ks.slice(0, ks.length - 400)) delete all[k];
-  }
-  writeJson(KEY, all);
+  if (flush) clearTimeout(flush);
+  flush = setTimeout(() => {
+    flush = null;
+    const ks = Object.keys(all);
+    if (ks.length > 400) {
+      ks.sort((x, y) => all[x].t - all[y].t);
+      for (const k of ks.slice(0, ks.length - 400)) delete all[k];
+    }
+    writeJson(KEY, all);
+  }, 3000);
 }
 
 async function ask(it: Item): Promise<Art | null> {

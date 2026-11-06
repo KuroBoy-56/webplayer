@@ -18,7 +18,7 @@ import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { MenuItem, Playback } from '../player/playback';
 import { setLastLive, stopLivePreview } from '../player/preview-session';
-import { prefetchList, prefetchRange } from '../player/prefetch';
+import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
 import { probeTracks } from '../lib/probe';
@@ -390,6 +390,8 @@ export default function Player({ params }: { params: PlayParams }) {
     let initialized = false;
     let initializing: Promise<void> | null = null;
     let released: Promise<void> = Promise.resolve();
+    // canal cuya lista (y primer segmento) se pidió por adelantado: si se cierra antes de usarlo, se corta
+    let preUrl = '';
 
     // Los reintentos pertenecen al intento que los creó; otro canal o una
     // conexión más reciente invalida el temporizador y sus respuestas.
@@ -763,7 +765,10 @@ export default function Player({ params }: { params: PlayParams }) {
         if (!alive) return;
         // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
         const first = dnsUrl.current && dnsUrl.current.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
-        if (live && /\.m3u8(\?|$)/i.test(first)) prefetchList(first);
+        if (live && /\.m3u8(\?|$)/i.test(first)) {
+          preUrl = first;
+          prefetchList(first);
+        }
         else if (!live && /\.mkv(\?|$)/i.test(first)) prefetchRange(first, 0, 262144);
         else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) prefetchRange(first, 0, 65536);
         initializing = v.initialize().then(() => { initialized = true; });
@@ -792,6 +797,7 @@ export default function Player({ params }: { params: PlayParams }) {
     return () => {
       alive = false;
       loadRev.current++;
+      if (preUrl) dropPrefetch(preUrl);
       if (params.kind === 'live') setLastLive((params.channels[indexRef.current] || params.channel)?.id || '');
       try {
         save(true);

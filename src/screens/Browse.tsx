@@ -96,6 +96,11 @@ export default function Browse({ section, active = true }: { section: 'home' | '
   const brandRev = useBrandRev();
   const platforms = features().platforms;
   const ready = section === 'home' ? st.loaded.vod || st.loaded.series : section === 'series' ? st.loaded.series : st.loaded.vod;
+  // con otra pantalla encima (ficha, reproductor) Continuar viendo y Mi lista quedan como estaban: el reproductor guarda
+  // el avance cada 30 s y cada guardado volvía a dibujar todas las filas de abajo; al volver se ponen al día
+  const kept = useRef({ progress: st.progress, favorites: st.favorites });
+  if (active) kept.current = { progress: st.progress, favorites: st.favorites };
+  const { progress, favorites } = kept.current;
 
   // las filas del catálogo solo se rehacen cuando llega una lista nueva
   const base = useMemo(() => {
@@ -108,27 +113,27 @@ export default function Browse({ section, active = true }: { section: 'home' | '
   const rows = useMemo(() => {
     const extra: Row[] = [];
     if (section === 'home') {
-      const cont = continueItems(st.progress);
+      const cont = continueItems(progress);
       if (cont.length) extra.push({ title: t('Continuar viendo'), type: 'poster', items: [...cont, { kind: 'more', key: 'continue', label: t('Ver todo'), color: '', extra: 'continue' }] });
-      const f = favItems(st.favorites);
+      const f = favItems(favorites);
       if (f.length) extra.push({ title: t('Mi lista'), type: 'poster', items: [...f, { kind: 'more', key: 'mylist', label: t('Ver todo'), color: '', extra: 'mylist' }] });
     }
     const out = [...base.rows];
     const at = out.length && out[0].type === 'platform' ? 1 : 0;
     out.splice(at, 0, ...extra);
     return out;
-  }, [base, st.progress, st.favorites, section]);
+  }, [base, progress, favorites, section]);
 
   const progressOf = useMemo(() => {
     const map = new Map<string, number>();
-    for (const p of st.progress) {
+    for (const p of progress) {
       if (p.duration > 0) {
         const key = p.type === 'movie' ? 'vod' + digits(p.id) : 'series' + digits(p.type === 'episode' ? p.seriesId : p.seriesId || p.id);
         if (!map.has(key)) map.set(key, p.position / p.duration);
       }
     }
     return (it: Item) => map.get(it.kind + it.id);
-  }, [st.progress]);
+  }, [progress]);
 
   // el destacado también busca su fondo (servidor y luego TMDB), como los títulos enfocados
   const [heroArtOf, setHeroArtOf] = useState<{ id: string; art: Art } | null>(null);

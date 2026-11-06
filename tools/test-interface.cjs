@@ -217,3 +217,124 @@ test('canal en vivo: imagen trabada con video por delante salta al cuadro clave 
   assert.equal(v.currentTime, 12.15);
   reader.destroy();
 });
+
+test('canal: los cortes del video (NAL) se encuentran igual que recorriendo byte por byte', () => {
+  const { splitNals } = require('../src/lib/tsdemux.ts');
+  // la forma anterior (byte por byte), de referencia
+  const slow = d => {
+    const out = []; let start = -1; let i = 0;
+    while (i + 2 < d.length) {
+      const c = d[i + 2];
+      if (c > 1) i += 3;
+      else if (c === 1 && d[i + 1] === 0 && d[i] === 0) {
+        if (start >= 0) { let e = i; while (e > start && d[e - 1] === 0) e--; if (e > start) out.push([start, e]); }
+        i += 3; start = i;
+      } else i++;
+    }
+    if (start >= 0 && start < d.length) out.push([start, d.length]);
+    return out;
+  };
+  const spans = d => splitNals(d).map(n => [n.byteOffset - d.byteOffset, n.byteOffset - d.byteOffset + n.length]);
+  const fixed = [[0, 0, 0, 1, 9, 0xf0, 0, 0, 1, 0x67, 1, 2, 0, 0, 0, 1, 0x65, 0, 0, 3, 1, 0, 0], [0, 0, 1], [1, 2, 3], [0, 0, 0, 0, 1, 5, 0, 0, 1]];
+  for (const f of fixed) assert.deepEqual(spans(new Uint8Array(f)), slow(new Uint8Array(f)));
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296;
+  for (let k = 0; k < 3000; k++) {
+    const d = new Uint8Array(Math.floor(rnd() * 80));
+    for (let i = 0; i < d.length; i++) { const x = rnd(); d[i] = x < 0.45 ? 0 : x < 0.65 ? 1 : x < 0.7 ? 3 : Math.floor(rnd() * 256); }
+    assert.deepEqual(spans(d), slow(d));
+  }
+});
+
+test('canal: el primer segmento se baja solo (sin repartir la red) y los dos siguientes empiezan apenas llega', async () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  const realFetch = global.fetch;
+  const asked = [];
+  let first;
+  global.fetch = (url, { signal }) => {
+    asked.push(url);
+    if (url.endsWith('/s10.ts')) return new Promise(res => { first = res; });
+    return new Promise((_res, rej) => signal.addEventListener('abort', () => rej(new Error('cancelado')), { once: true }));
+  };
+  try {
+    const reader = new LiveHls({ currentTime: 0, removeEventListener() {} }, 'http://fixture.invalid/live.m3u8');
+    reader.segs = [10, 11, 12, 13].map(seq => ({ seq, url: 'http://fixture.invalid/s' + seq + '.ts', dur: 6 }));
+    reader.next = 10;
+    const errors = [];
+    reader.onError = why => errors.push(why);
+    const run = reader.pump();
+    await tick();
+    assert.deepEqual(asked, ['http://fixture.invalid/s10.ts']);
+    // llega (aquí no es MPEG-TS: el lector se detiene), y ya se pidieron los dos siguientes
+    first({ status: 200, url: 'http://fixture.invalid/s10.ts', headers: { get: k => (k === 'content-type' ? 'video/mp2t' : null) }, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer });
+    await run;
+    assert.deepEqual(asked.slice(1).sort(), ['http://fixture.invalid/s11.ts', 'http://fixture.invalid/s12.ts']);
+    assert.deepEqual(errors, ['el canal no viene en MPEG-TS']);
+    reader.destroy();
+  } finally { global.fetch = realFetch; }
+});
+
+test('canal: el primer segmento se pide junto con la lista (mientras se inicia el reproductor) y se usa una sola vez', async () => {
+  const { prefetchList, takeList, takeSeg, dropPrefetch } = require('../src/player/prefetch.ts');
+  const { LiveHls } = require('../src/player/livehls.ts');
+  const realFetch = global.fetch;
+  const asked = [];
+  let aborted = 0;
+  const list = '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:20\n' + [20, 21, 22, 23, 24, 25, 26].map(n => '#EXTINF:6,\nseg' + n + '.ts\n').join('');
+  const head = type => ({ get: k => (k === 'content-type' ? type : null) });
+  global.fetch = (url, { signal }) => {
+    asked.push(url);
+    if (url.endsWith('.m3u8')) return Promise.resolve({ status: 200, url, headers: head('application/vnd.apple.mpegurl'), text: async () => list });
+    if (url.includes('seg22')) return Promise.resolve({ status: 200, url, headers: head('video/mp2t'), arrayBuffer: async () => new Uint8Array([0x47]).buffer });
+    return new Promise((_res, rej) => signal.addEventListener('abort', () => { aborted++; rej(new Error('cancelado')); }, { once: true }));
+  };
+  try {
+    // 7 segmentos: el lector empieza 5 antes del final (seg22) y ese es el que se pide con la lista
+    prefetchList('http://fixture.invalid/live.m3u8');
+    const reader = new LiveHls({ currentTime: 0, removeEventListener() {} }, 'http://fixture.invalid/live.m3u8');
+    assert.equal(await reader.refresh(), '');
+    assert.equal(require('../src/lib/hlslist.ts').liveStartSeg(reader.segs).url, 'http://fixture.invalid/seg22.ts');
+    const got = await reader.get('http://fixture.invalid/seg22.ts', 10000, 'seg');
+    assert.equal(got.data.length, 1);
+    assert.deepEqual(asked, ['http://fixture.invalid/live.m3u8', 'http://fixture.invalid/seg22.ts']);
+    assert.equal(takeSeg('http://fixture.invalid/seg22.ts'), null);
+    reader.destroy();
+    // sin usar: la miniatura de otro canal no lo corta; el que lo pidió, sí
+    const other = list.replace(/seg22/g, 'slow22');
+    global.fetch = (url, { signal }) => {
+      asked.push(url);
+      if (url.endsWith('.m3u8')) return Promise.resolve({ status: 200, url, headers: head('application/vnd.apple.mpegurl'), text: async () => other });
+      return new Promise((_res, rej) => signal.addEventListener('abort', () => { aborted++; rej(new Error('cancelado')); }, { once: true }));
+    };
+    prefetchList('http://fixture.invalid/b.m3u8');
+    await takeList('http://fixture.invalid/b.m3u8');
+    dropPrefetch('http://fixture.invalid/a.m3u8');
+    await tick();
+    assert.equal(aborted, 0);
+    dropPrefetch('http://fixture.invalid/b.m3u8');
+    await tick();
+    assert.equal(aborted, 1);
+    assert.equal(takeSeg('http://fixture.invalid/slow22.ts'), null);
+  } finally { global.fetch = realFetch; }
+});
+
+test('canal: si el reproductor se cierra antes de que llegue la lista, no se pide el primer segmento', async () => {
+  const { prefetchList, dropPrefetch, takeList } = require('../src/player/prefetch.ts');
+  const realFetch = global.fetch;
+  const asked = [];
+  let give;
+  const list = '#EXTM3U\n#EXT-X-TARGETDURATION:6\n' + [1, 2, 3].map(n => '#EXTINF:6,\nlate' + n + '.ts\n').join('');
+  global.fetch = url => {
+    asked.push(url);
+    return new Promise(res => { give = () => res({ status: 200, url, headers: { get: () => 'application/vnd.apple.mpegurl' }, text: async () => list }); });
+  };
+  try {
+    prefetchList('http://fixture.invalid/late.m3u8');
+    await tick();
+    dropPrefetch('http://fixture.invalid/late.m3u8');
+    give();
+    await takeList('http://fixture.invalid/late.m3u8');
+    await tick();
+    assert.deepEqual(asked, ['http://fixture.invalid/late.m3u8']);
+  } finally { global.fetch = realFetch; }
+});

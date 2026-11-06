@@ -207,6 +207,20 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Más rápido y fluido (1.0.61)**: en Vega el HLS de los canales solo entra por MSE (Roku y LG le dan el `.m3u8` a su
+  reproductor; aquí la app baja, convierte y entrega cada segmento), así que se aligeró ese camino. **Canales:** el
+  primer segmento se pide apenas llega la lista, mientras el reproductor de Vega se inicia (`src/player/prefetch.ts`,
+  `liveStartSeg`; también la miniatura), y se baja solo con toda la conexión: antes se pedían a la vez los dos siguientes
+  y los tres se repartían la red (la primera imagen tardaba hasta tres veces más); esos dos empiezan apenas llega el
+  primero. Si el reproductor se cierra antes de usarlo, se corta (`dropPrefetch`). La conversión a MP4 busca los cortes
+  del video con `indexOf` (nativo) en vez de byte por byte y la primera pasada del segmento se detiene al encontrar la
+  tabla de programas: el primer segmento se convierte unas 3 veces más rápido (medido sin JIT: 67 → 21 ms por 6 s a
+  6 Mb/s). **Navegación:** las filas montan una pantalla de carátulas a cada lado (antes dos) y la cuadrícula de «Ver
+  todo» también; las direcciones de cada carátula se calculan una vez; el fondo encontrado para la portada se guarda en
+  el equipo una vez por tanda (antes los 400 títulos a cada uno, y se trababa al recorrer las filas); Inicio, Series y
+  Películas no se vuelven a dibujar detrás del reproductor cada vez que se guarda el avance (se ponen al día al volver).
+  Pruebas: `npm run test:interface` (cortes del video iguales a los de antes, primer segmento solo, pedido adelantado
+  usado una vez o cortado).
 - **Imagen trabada: salto al cuadro clave siguiente (1.0.60)**: HBO OPC.2 se congelaba igual en MP4 propio y en
   MPEG-TS (`problema=imagen congelada con 33 s por delante`): empujar 0,5-2 s hacía que Vega decodificara otra vez
   desde el mismo cuadro clave y se trabara en el mismo cuadro. Ahora el lector salta al cuadro clave siguiente (MP4

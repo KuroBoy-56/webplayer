@@ -7,6 +7,7 @@ import { Image, StyleSheet, View } from 'react-native';
 import { LIVE_FORMATS, liveUrl, otherScheme, streamFlip } from '../api/xtream';
 import { Item } from '../data/catalog';
 import { Playback } from '../player/playback';
+import { dropPrefetch, prefetchList } from '../player/prefetch';
 import { registerLivePreview, waitForLivePreview } from '../player/preview-session';
 import { getState } from '../state';
 import { px, themed } from '../theme';
@@ -29,6 +30,8 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
     let initializing: Promise<void> | null = null;
     let closed: Promise<void> | null = null;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    // dirección del canal: su lista y su primer segmento se piden mientras el reproductor se inicia (como Player)
+    let url = '';
     const onPlaying = () => alive && setPlaying(true);
     const stop = (): Promise<void> => {
       if (closed) return closed;
@@ -37,6 +40,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
       if (retry) clearTimeout(retry);
       setPlaying(false);
       video.current = null;
+      if (url) dropPrefetch(url);
       const player = v;
       closed = (async () => {
         if (!player) return;
@@ -55,6 +59,9 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
       await waitForLivePreview();
       if (!alive) return;
       try {
+        const u = liveUrl(s, channel.id, LIVE_FORMATS[0]);
+        url = streamFlip() ? otherScheme(u) : u;
+        if (/\.m3u8(\?|$)/i.test(url)) prefetchList(url);
         v = new VideoPlayer();
         initializing = v.initialize();
         await initializing;
@@ -64,8 +71,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
         v.addEventListener('playing', onPlaying);
         if (surface.current) v.setSurfaceHandle(surface.current);
         c = new Playback(v, { toast: () => {}, status: () => {}, changed: () => {}, subText: () => {}, fatal: () => {} });
-        const u = liveUrl(s, channel.id, LIVE_FORMATS[0]);
-        c.load(streamFlip() ? otherScheme(u) : u, 0, true);
+        c.load(url, 0, true);
         // sin imagen en 15 s con audio MP2 / AC-3 que el equipo no decodifica: el canal otra vez solo con el video
         // (como en pantalla grande, Player)
         retry = setTimeout(() => {
