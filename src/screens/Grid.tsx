@@ -1,5 +1,5 @@
 // "Ver todo": cuadrícula de una plataforma, género, categoría o lo más reciente.
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { openItem } from '../actions';
 import { Focusable, Message } from '../components/ui';
@@ -14,22 +14,43 @@ import { alpha, C, px, SIDE, themed } from '../theme';
 
 export const COLS = 7;
 
-export function ItemGrid({ items, header, channels }: { items: Item[]; header?: React.ReactElement; channels?: boolean }) {
+export function ItemGrid({ items, header, channels, active }: { items: Item[]; header?: React.ReactElement; channels?: boolean; active?: boolean }) {
   const nav = useNav();
   const rowH = posterH() + px(40);
+  // la última ficha con el foco: al volver de la ficha o del canal el foco vuelve a ella (se monta otra vez con
+  // «preferred», como TV en vivo); sin esto caía en el buscador o en el menú de arriba
+  const last = useRef('');
+  const [target, setTarget] = useState({ k: '', n: 0 });
+  // «preferred» solo un momento: si la ficha se volviera a montar al desplazarse no debe robar el foco
+  const [pref, setPref] = useState('');
+  useEffect(() => {
+    if (!active || !last.current) return;
+    setTarget(x => ({ k: last.current, n: x.n + 1 }));
+    setPref(last.current);
+    const id = setTimeout(() => setPref(''), 1000);
+    return () => clearTimeout(id);
+  }, [active]);
   return (
     <FlatList
       data={items}
       numColumns={COLS}
       key={COLS}
-      keyExtractor={(it, i) => it.kind + it.id + ':' + i}
+      keyExtractor={(it, i) => it.kind + it.id + ':' + i + (it.kind + it.id === target.k ? ':' + target.n : '')}
+      extraData={pref}
       ListHeaderComponent={header}
       contentContainerStyle={{ paddingHorizontal: SIDE, paddingBottom: px(120) }}
       initialNumToRender={21}
       // una pantalla por encima y otra por debajo de lo visible (antes dos): menos carátulas montadas a la vez
       windowSize={3}
       getItemLayout={header ? undefined : (_, i) => ({ length: rowH, offset: rowH * i, index: i })}
-      renderItem={({ item }) => <PosterTile item={item} onPress={() => openItem(nav, item, channels ? items.filter(x => x.kind === 'live') : undefined)} />}
+      renderItem={({ item }) => (
+        <PosterTile
+          item={item}
+          preferred={item.kind + item.id === pref}
+          onFocus={() => (last.current = item.kind + item.id)}
+          onPress={() => openItem(nav, item, channels ? items.filter(x => x.kind === 'live') : undefined)}
+        />
+      )}
     />
   );
 }
@@ -44,7 +65,7 @@ function MagnifierIcon({ color }: { color: string }) {
   );
 }
 
-export default function Grid({ title, mode, keyName, kind }: { title: string; mode: 'cat' | 'platform' | 'genre' | 'recent' | 'continue' | 'mylist'; keyName: string; kind?: 'vod' | 'series' }) {
+export default function Grid({ title, mode, keyName, kind, active }: { title: string; mode: 'cat' | 'platform' | 'genre' | 'recent' | 'continue' | 'mylist'; keyName: string; kind?: 'vod' | 'series'; active: boolean }) {
   const st = useAppState();
   // «Ver todo» de Continuar viendo y de Mi lista: lo guardado en el panel, del más reciente al más antiguo
   const items = useMemo(
@@ -109,7 +130,7 @@ export default function Grid({ title, mode, keyName, kind }: { title: string; mo
         ) : null}
       </View>
       {shown.length ? (
-        <ItemGrid items={shown} />
+        <ItemGrid items={shown} active={active} />
       ) : (
         <Message text={needle ? t('No hay títulos que coincidan con «{q}».', { q: q.trim() }) : t('No hay títulos en esta sección.')} />
       )}

@@ -19,6 +19,7 @@ export const PosterTile = memo(function PosterTile({
   progress,
   rank,
   wide,
+  preferred,
 }: {
   item: Item;
   onPress: () => void;
@@ -26,6 +27,7 @@ export const PosterTile = memo(function PosterTile({
   progress?: number;
   rank?: number;
   wide?: boolean;
+  preferred?: boolean;
 }) {
   const w = wide ? px(300) : posterW();
   const h = wide ? px(169) : posterH();
@@ -34,7 +36,7 @@ export const PosterTile = memo(function PosterTile({
   return (
     <View style={rank ? s.rankWrap : undefined}>
       {rank ? <Text style={s.rank}>{rank}</Text> : null}
-      <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.tile, { width: w, height: h }, f && s.tileF]}>
+      <Focusable onPress={onPress} onFocus={onFocus} preferred={preferred} style={f => [s.tile, { width: w, height: h }, f && s.tileF]}>
         <View style={s.fill}>
           <Text style={s.fallback} numberOfLines={4}>
             {item.name}

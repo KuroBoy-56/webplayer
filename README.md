@@ -207,6 +207,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Buscar (1.0.68)**: el recuadro abre el teclado de la app (como Usuario y Contraseña) y el texto queda centrado; el
+  campo de texto del sistema se quedaba con las flechas y al bajar abría el teclado en vez de pasar a los resultados.
+  Se busca al pulsar «Listo» (antes, a cada letra se armaba otra cuadrícula y se pedían carátulas que ya no se veían).
+  Al volver de una ficha o de un canal el foco vuelve a la ficha elegida (también en «Ver todo»: `ItemGrid` de
+  `src/screens/Grid.tsx`, como TV en vivo). Una ficha sin fondo del servidor ni guardado por la portada de Inicio (p. ej.
+  abierta desde Buscar) busca el fondo en TMDB por el título (`searchArt`); antes quedaba la carátula borrosa.
 - **Carpetas de TV en vivo sin frenar la miniatura (1.0.67)**: al bajar rápido por muchas carpetas (50) la miniatura del
   canal se pausaba y se entrecortaba: la lista armaba y desarmaba filas a cada paso. Ahora todas las carpetas se dibujan una
   vez al entrar (hasta 300 de una, son livianas), con su alto fijo (`getItemLayout`), y cada carpeta es una fila
