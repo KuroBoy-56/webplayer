@@ -67,6 +67,8 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
         v = new VideoPlayer();
         initializing = v.initialize();
         await initializing;
+        // la superficie antes de darle el video (Amazon: sin ella, error 4); como mucho 3 s
+        for (let i = 0; i < 30 && alive && !surface.current; i++) await new Promise<void>(r => setTimeout(r, 100));
         if (!alive) return;
         video.current = v;
         v.autoplay = false;

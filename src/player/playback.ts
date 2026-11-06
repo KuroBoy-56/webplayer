@@ -19,7 +19,6 @@ import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
 import { Mp4Mse } from './mp4mse';
 import { MkvMse } from './mkvmse';
-import { START_SEC, StartGate, SWITCH_SEC } from './startgate';
 import { Mkv } from './mkvparse';
 import { reportError } from '../api/report';
 import { ShakaPlayback } from './shaka';
@@ -126,6 +125,9 @@ function setPanelRoute(url: string, r: 'p' | 'v' | ''): void {
   writeJson(ROUTE_KEY, all);
 }
 
+// canales que tampoco se vieron con el reproductor nativo de Vega (no se vuelve a probar en la sesión)
+const nativeFailed = new Set<string>();
+
 export class Playback {
   private url = '';
   private live = false;
@@ -148,6 +150,10 @@ export class Playback {
   // por qué la lectura propia del MP4 no siguió (va al reporte)
   private mp4Why = '';
   private liveHls: LiveHls | null = null;
+  // el canal en el reproductor nativo de Vega (modo directo con el .ts del canal, como Roku y LG): se usa cuando el
+  // lector propio se congela (Amazon: imagen quieta con el audio sonando suele ser video entrelazado, 1080i, como HBO)
+  private liveNative = false;
+  private nativeDog: ReturnType<typeof setInterval> | null = null;
   // la miniatura (LivePreview): el lector del canal guarda los últimos segmentos para la pantalla grande
   liveKeep = false;
   private shaka: ShakaPlayback | null = null;
@@ -156,8 +162,6 @@ export class Playback {
   private mp4Audio = -1;
   private mp4Index: Uint8Array | null = null;
   private mp4Paused = false;
-  // el lector propio se vuelve a abrir por un cambio de idioma: empieza con 2 s bajados (no 5) y, si estaba en pausa, en pausa
-  private mseSwitch = false;
   private audioChange = 0;
   private audioTimer: ReturnType<typeof setTimeout> | null = null;
   // audio del canal elegido en el menú (canales con varios idiomas)
@@ -249,7 +253,6 @@ export class Playback {
     this.mp4Index = null;
     this.mkvIndex = null;
     this.mp4Paused = false;
-    this.mseSwitch = false;
     this.adaptiveTried = false;
     this.probe = null;
     this.probing = false;
@@ -285,6 +288,8 @@ export class Playback {
   // canal en vivo por HLS con el lector propio
   private openLive(url: string): void {
     const g = this.gen;
+    this.liveNative = false;
+    this.stopNative();
     const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, this.liveFrozen > 0 && this.liveFrozen % 2 === 0);
     h.keep = this.liveKeep;
     this.liveHls = h;
@@ -310,14 +315,28 @@ export class Playback {
   // El canal iba en MP4 propio y el reproductor lo rechazó: otra vez el mismo canal entregando el MPEG-TS (el resto
   // de la sesión), sin pasar por otro formato ni protocolo. false = no era eso
   liveRetryTs(): boolean {
+    if (!this.live) return false;
+    // el reproductor nativo tampoco pudo (error, sin imagen o imagen quieta): de vuelta al lector propio
+    if (this.liveNative) {
+      nativeFailed.add(this.url);
+      this.stopNative();
+      this.openLive(this.url);
+      return true;
+    }
     const h = this.liveHls;
-    if (!this.live || !h) return false;
-    // imagen congelada con video por delante: el canal otra vez, alternando MP4 propio y MPEG-TS (solo este canal),
-    // hasta 6 veces; nunca la pantalla de error por esto (antes, a la tercera, probaba https y terminaba en error)
+    if (!h) return false;
+    // imagen congelada con video por delante: primero el reproductor nativo de Vega con el MPEG-TS del canal (una vez
+    // por canal); si no, el canal otra vez alternando MP4 propio y MPEG-TS (solo este canal), hasta 6 veces; nunca la
+    // pantalla de error por esto
     if (h.frozen) {
       if (this.liveFrozen >= 6) return false;
       this.liveFrozen++;
       h.destroy();
+      if (!nativeFailed.has(this.url)) {
+        this.liveHls = null;
+        this.openNative();
+        return true;
+      }
       this.openLive(this.url);
       return true;
     }
@@ -340,7 +359,41 @@ export class Playback {
   }
 
   liveDiag(): string {
+    if (this.liveNative) return 'modo=nativo (.ts directo) t=' + (this.v.currentTime || 0).toFixed(1);
     return this.liveHls ? this.liveHls.diag() : '';
+  }
+
+  // El canal con el reproductor de Vega en modo directo (.ts, Vega OS 2.0): lo que hacen Roku y LG. Si en 20 s no
+  // empieza, da error o la imagen queda quieta 8 s sonando, Player vuelve al lector propio (liveRetryTs)
+  private openNative(): void {
+    const g = this.gen;
+    this.stopNative();
+    this.liveNative = true;
+    this.v.src = this.url.replace(/\.m3u8(\?|$)/i, '.ts$1');
+    this.v.play();
+    const began = Date.now();
+    let last = -1;
+    let still = began;
+    this.nativeDog = setInterval(() => {
+      if (g !== this.gen || !this.liveNative) {
+        this.stopNative();
+        return;
+      }
+      const t = this.v.currentTime || 0;
+      if (t !== last) {
+        last = t;
+        still = Date.now();
+      }
+      if (!this.v.paused && Date.now() - still > 8000 && (t > 0 || Date.now() - began > 20000)) {
+        this.stopNative();
+        this.hooks.liveFailed?.(t > 0 ? 'nativo: imagen quieta' : 'nativo: no empezó');
+      }
+    }, 1000);
+  }
+
+  private stopNative(): void {
+    if (this.nativeDog) clearInterval(this.nativeDog);
+    this.nativeDog = null;
   }
 
   private direct(at: number): void {
@@ -374,8 +427,6 @@ export class Playback {
       const want = this.mp4Audio;
       const m = mkv ? new MkvMse(this.v, this.url, this.mp4Audio, this.mkvIndex) : new Mp4Mse(this.v, this.url, this.mp4Audio, this.mp4Index);
       this.mse = m;
-      m.gate = new StartGate(this.mseSwitch ? SWITCH_SEC : START_SEC, this.mseSwitch && this.mp4Paused);
-      this.mseSwitch = false;
       // los idiomas al menú apenas se lee la cabecera del archivo
       m.onHeader = () => {
         if (g !== this.gen || this.mse !== m) return;
@@ -577,6 +628,8 @@ export class Playback {
     this.prevHls = null;
     this.liveHls?.destroy();
     this.liveHls = null;
+    this.stopNative();
+    this.liveNative = false;
     this.remuxLive = false;
   }
 
@@ -1109,7 +1162,6 @@ export class Playback {
         const pos = this.realPos();
         this.mp4Audio = it.mp4;
         this.mp4Paused = this.v.paused;
-        this.mseSwitch = true;
         this.direct(pos);
       }
       this.audioKey = it.key;

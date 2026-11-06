@@ -5,8 +5,8 @@
 // No pasa por la VPS: solo el cambio de idioma la usa. Saltos (◀▶, Continuar viendo) desde el cuadro clave anterior.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
-import { StartGate } from './startgate';
-import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VIDEO_ID, VideoCfg } from '../lib/mp4box';
+import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VIDEO_ID, VideoCfg, videoEntry } from '../lib/mp4box';
+import { hevcCodec } from './mkvparse';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const AHEAD = 40; // segundos bajados por adelantado
@@ -147,6 +147,19 @@ function videoCfg(tk: Trk): VideoCfg | null {
   return { sps, pps: b.slice(p + 3, p + 3 + pl), width: u16(b, 8 + 24), height: u16(b, 8 + 26) };
 }
 
+// H.265 (hev1 / hvc1): su hvcC va al reproductor como hvc1 y el códec se lee de él (como el lector de MKV). Antes solo
+// H.264: un capítulo H.265 + AC-3 iba al modo directo y daba error 4 (lector MP4: códec v=hev1)
+export function hevcCfg(tk: Trk): { cfg: VideoCfg; entry: Uint8Array; codec: string } | null {
+  const b = tk.entry;
+  if (!b || (typ(b, 4) !== 'hev1' && typ(b, 4) !== 'hvc1')) return null;
+  const hv = kid(b, 8 + 78, b.length, 'hvcC');
+  if (!hv || hv.e - hv.s < 23) return null;
+  const p = b.slice(hv.s, hv.e);
+  const width = u16(b, 8 + 24);
+  const height = u16(b, 8 + 26);
+  return { cfg: { sps: new Uint8Array(4), pps: new Uint8Array(0), width, height }, entry: videoEntry('hvc1', p, width, height), codec: hevcCodec(p) };
+}
+
 // Dolby (ec-3 / ac-3): la descripción del archivo va tal cual al reproductor (con su dec3 / dac3)
 function dolbyCfg(tk: Trk): AudioCfg | null {
   const b = tk.entry;
@@ -203,8 +216,7 @@ export class Mp4Mse {
   onTracks: () => void = () => {};
   // las pistas apenas se lee el índice (el menú de idiomas sin esperar al reproductor)
   onHeader: () => void = () => {};
-  // cuándo empieza a sonar (startgate.ts): con 5 s bajados; Playback lo cambia al cambiar de idioma
-  gate = new StartGate();
+
   index: Uint8Array | null = null;
   private ms: any = null;
   private objectUrl = '';
@@ -263,12 +275,15 @@ export class Mp4Mse {
     const at0 = auds[this.selectedAudio] || auds.find(x => x.enabled) || auds[0] || null;
     this.audioIdx = at0 ? auds.indexOf(at0) : -1;
     this.onHeader();
-    const vc = vt ? videoCfg(vt) : null;
+    const hv = vt && !videoCfg(vt) ? hevcCfg(vt) : null;
+    const vc = vt ? videoCfg(vt) || hv?.cfg || null : null;
+    // con H.265 el códec del video es el de su hvcC (mp4Mime lo arma de H.264)
+    const vcodec = (m: string) => (hv ? m.replace(/avc1\.[0-9a-fA-F]{6}/, hv.codec) : m);
     const aac = at0 ? audioCfg(at0) : null;
     const dolby = at0 && !aac ? dolbyCfg(at0) : null;
     const ac = aac || dolby;
     if (!vt || !vc || (at0 && !ac)) return 'códec v=' + (vt?.entry ? typ(vt.entry, 4) : '-') + ' a=' + (at0?.entry ? typ(at0.entry, 4) : '-');
-    const mime = dolby ? mp4Mime(vc, null).replace(/"$/, ',' + typ(at0!.entry!, 4) + '"') : mp4Mime(vc, ac);
+    const mime = vcodec(dolby ? mp4Mime(vc, null).replace(/"$/, ',' + typ(at0!.entry!, 4) + '"') : mp4Mime(vc, ac));
     // la consulta no manda: algunos equipos dicen que no y lo aceptan; manda addSourceBuffer
     let typeOk = true;
     try {
@@ -302,14 +317,14 @@ export class Mp4Mse {
     let init: Uint8Array;
     try {
       this.sb = ms.addSourceBuffer(mime);
-      init = initSegment(vc, ac, dolby ? at0!.entry! : undefined, vt.ts);
+      init = initSegment(vc, ac, dolby ? at0!.entry! : undefined, vt.ts, hv?.entry);
     } catch (e: any) {
       // el audio no lo acepta (Vega no trae E-AC-3 por MSE): solo el video, sin sonido
-      const vOnly = mp4Mime(vc, null);
+      const vOnly = vcodec(mp4Mime(vc, null));
       try {
         if (!this.at) throw e;
         this.sb = ms.addSourceBuffer(vOnly);
-        init = initSegment(vc, null, undefined, vt.ts);
+        init = initSegment(vc, null, undefined, vt.ts, hv?.entry);
         this.at = null;
         this.noAudio = true;
       } catch {
@@ -326,11 +341,8 @@ export class Mp4Mse {
     this.place(at);
     if (at > 0) this.v.currentTime = at;
     this.pump();
-    this.watch = setInterval(() => {
-      if (!this.alive) return;
-      this.unstick();
-      this.kick(false);
-    }, 300);
+    this.watch = setInterval(() => this.alive && this.unstick(), 300);
+    this.v.play();
     this.onTracks();
     return '';
   }
@@ -609,7 +621,6 @@ export class Mp4Mse {
         const a = this.at;
         if (this.vi >= vt.dts.length && (!a || this.ai >= a.dts.length)) {
           await this.idle();
-          this.kick(true);
           try {
             if (this.ms.readyState === 'open') this.ms.endOfStream();
           } catch {
@@ -686,7 +697,6 @@ export class Mp4Mse {
         }
         this.vi = vj;
         this.ai = aj;
-        this.kick(false);
       }
     } finally {
       this.running = false;
@@ -743,12 +753,7 @@ export class Mp4Mse {
   private jump(to: number): void {
     this.v.currentTime = to;
     this.lastMove = Date.now();
-    if (this.v.paused && this.gate.started) this.v.play();
-  }
-
-  // empieza a sonar cuando hay lo suficiente bajado (done: ya está todo el archivo)
-  private kick(done: boolean): void {
-    if (this.gate.check(this.bufEnd() - (this.v.currentTime || 0), done)) this.v.play();
+    if (this.v.paused) this.v.play();
   }
 }
 

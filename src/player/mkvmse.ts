@@ -7,7 +7,6 @@
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
 import { takeRangeFrom } from './prefetch';
-import { StartGate } from './startgate';
 import { AUDIO_ID, audioEntry, concat, esdsFor, fragment, initSegment, rawBox, Sample, VIDEO_ID, videoEntry } from '../lib/mp4box';
 import { Probe } from '../lib/probe';
 import { Cue } from '../lib/vtt';
@@ -38,8 +37,6 @@ export class MkvMse {
   onTracks: () => void = () => {};
   // las pistas apenas se lee la cabecera (el menú de idiomas sin esperar al reproductor)
   onHeader: () => void = () => {};
-  // cuándo empieza a sonar (startgate.ts): con 5 s bajados; Playback lo cambia al cambiar de idioma
-  gate = new StartGate();
   // índice Cues pedido mientras se abre el reproductor (Continuar viendo)
   private cuesP: Promise<unknown> | null = null;
   // la cabecera ya leída (se reusa al cambiar de idioma o al volver a abrir)
@@ -184,11 +181,8 @@ export class MkvMse {
     await this.place(this.startAt);
     if (this.startAt > 0) this.v.currentTime = this.startAt + SHIFT;
     this.pump();
-    this.watch = setInterval(() => {
-      if (!this.alive) return;
-      this.unstick();
-      this.kick(false);
-    }, 300);
+    this.watch = setInterval(() => this.alive && this.unstick(), 300);
+    this.v.play();
     this.onTracks();
     return '';
   }
@@ -588,11 +582,9 @@ export class MkvMse {
             this.onError();
             return;
           }
-          this.kick(false);
         }
         if (this.eof && !this.vq.length) {
           await this.idle();
-          this.kick(true);
           try {
             if (this.ms.readyState === 'open') this.ms.endOfStream();
           } catch {
@@ -696,12 +688,7 @@ export class MkvMse {
   private jump(to: number): void {
     this.v.currentTime = to;
     this.lastMove = Date.now();
-    if (this.v.paused && this.gate.started) this.v.play();
-  }
-
-  // empieza a sonar cuando hay lo suficiente bajado (done: ya está todo el archivo)
-  private kick(done: boolean): void {
-    if (this.gate.check(this.bufEnd() - (this.v.currentTime || 0), done)) this.v.play();
+    if (this.v.paused) this.v.play();
   }
 }
 

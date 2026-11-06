@@ -223,8 +223,10 @@ export default function Browse({ section, active = true }: { section: 'home' | '
       setInRows(true);
       setRowIdx(i);
       setWin(w => onFocusWin(w, i, rows.length));
-      // sin animación: al bajar o subir de fila el salto es inmediato (la animación hacía lenta la navegación)
-      list.current?.scrollTo({ y: offsets[i] || 0, animated: false });
+      // como el ejemplo de Amazon (vega-scrolling-sample): la lista no se desplaza sola (scrollEnabled false) y la app la
+      // lleva a la fila enfocada con una animación nativa. Antes Vega desplazaba la lista por su cuenta al bajar y después
+      // la app la movía otra vez (doble desplazamiento: el «jale» al bajar; al subir no pasaba)
+      list.current?.scrollTo({ y: offsets[i] || 0, animated: true });
       if (timer.current) clearTimeout(timer.current);
       if (artTimer.current) clearTimeout(artTimer.current);
       focused.current = isItem(x) ? x : null;
@@ -260,7 +262,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     setRowIdx(0);
     setWin(w => onFocusWin(w, 0, rows.length));
     setInfo({ item: hero });
-    list.current?.scrollTo({ y: 0, animated: false });
+    list.current?.scrollTo({ y: 0, animated: true });
   };
 
   // un momento quieto (250 ms sin mover el foco, también de lado): la fila siguiente de la ventana, de a una cada 120 ms
@@ -325,7 +327,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
       ) : null}
       <View style={[s.rowsBox, { top: px(inRows || !hero ? ROWS_IN : ROWS_HERO) }]}>
         {/* todas las filas están (las lejanas solo con su título y su alto): la lista nunca arma una fila al apretar */}
-        <ScrollView ref={list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: px(600) }}>
+        <ScrollView ref={list} scrollEnabled={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: px(600) }}>
           {rows.map((r, i) => (
             <RowView
               key={r.title + i}

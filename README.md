@@ -207,7 +207,20 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
-- **Películas y series: arranque estable e idiomas antes (1.0.64)**: **con 5 s bajados**: los lectores propios (MP4 y MKV)
+- **Lo que dice Amazon para Vega (1.0.65)**, por reportes de canales congelados, capítulos que no abrían y el «jale» al bajar:
+  **filas sin doble desplazamiento**: como el ejemplo oficial de Amazon (AmazonAppDev/vega-scrolling-sample), la lista de
+  Inicio, Series y Películas tiene `scrollEnabled={false}` y la app la lleva a la fila enfocada con `scrollTo` animado
+  (nativo). Vega desplazaba la lista por su cuenta al bajar y después la app la movía otra vez (la documentación de
+  ScrollView de Vega lo llama «dual scrolling»). **Películas y series**: se quita la espera de 5 s de la 1.0.64 (empiezan
+  apenas hay imagen, como antes); el pedido adelantado del MKV es cabecera + 1 MB y el del MP4 solo la cabecera (el MP4
+  ya pide el principio del video con su índice). El lector de MP4 abre **H.265** (`hev1` / `hvc1`, con su hvcC, como el
+  de MKV): un capítulo H.265 + AC-3 iba al modo directo y daba error 4. **Modo directo**: el video se carga con la
+  superficie lista (Amazon: sin ella, error 4) y el manifiesto permite `http` (`[network-traffic-policy.cleartext]`,
+  Vega OS 2.0). **Canales congelados** (HBO: imagen quieta con el audio sonando y 37 s bajados; Amazon: suele ser el
+  video entrelazado, 1080i): a la primera congelada el canal pasa al reproductor nativo de Vega en modo directo con su
+  `.ts` (Vega OS 2.0 lo admite, como Roku y LG); si da error, no empieza en 20 s o la imagen queda quieta 8 s, vuelve al
+  lector propio y ese canal no lo vuelve a probar en la sesión. El reporte dice `modo=nativo`.
+- **Películas y series: arranque estable e idiomas antes (1.0.64; la espera de 5 s se quitó en la 1.0.65)**: **con 5 s bajados**: los lectores propios (MP4 y MKV)
   empezaban a sonar con 1,5 s y se detenían enseguida si el tramo siguiente tardaba. Ahora esperan 5 s bajados (o el
   archivo entero si dura menos; con un servidor lento, a los 6 s con al menos 1,5 s) y siguen bajando por delante (40 s)
   sin cortar lo que suena (`src/player/startgate.ts`). Al cambiar de idioma alcanzan 2 s, y si el video estaba en pausa

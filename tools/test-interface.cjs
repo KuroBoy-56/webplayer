@@ -518,29 +518,6 @@ test('canal cifrado: se descifra con el AES nativo de Vega y, si no da MPEG-TS, 
   } finally { delete global.__webcrypto; }
 });
 
-test('películas: empiezan a sonar con 5 s bajados (o el archivo entero, o a los 6 s con 1,5 s); al cambiar de idioma, 2 s', () => {
-  const { StartGate, SWITCH_SEC } = require('../src/player/startgate.ts');
-  const t0 = Date.now();
-  let g = new StartGate();
-  assert.equal(g.check(1.5, false, t0 + 100), false);
-  assert.equal(g.check(4.9, false, t0 + 2000), false);
-  assert.equal(g.started, false);
-  assert.equal(g.check(5.2, false, t0 + 2500), true);
-  assert.equal(g.started, true);
-  assert.equal(g.check(9, false, t0 + 3000), false, 'una sola vez');
-  // un video corto ya bajado entero
-  g = new StartGate();
-  assert.equal(g.check(3, true, t0), true);
-  // servidor lento: a los 6 s con al menos 1,5 s (sin 1,5 s sigue esperando)
-  g = new StartGate();
-  assert.equal(g.check(1.2, false, t0 + 7000), false);
-  assert.equal(g.check(1.6, false, t0 + 7000), true);
-  // cambio de idioma con el video en pausa: queda listo sin darle play
-  g = new StartGate(SWITCH_SEC, true);
-  assert.equal(g.check(2.1, false, t0), false);
-  assert.equal(g.started, true);
-});
-
 test('películas: el principio del archivo se pide en dos partes (cabecera y video) y cualquier lectura dentro sale de ahí', async () => {
   const { prefetchRange, takeRange, takeRangeFrom } = require('../src/player/prefetch.ts');
   const realFetch = global.fetch;
@@ -629,4 +606,22 @@ test('películas MKV: la cabecera y el principio del video salen de lo pedido al
     assert.deepEqual(asked, ['0-256', '256-1000', '1000-1500']);
     r.destroy();
   } finally { global.fetch = realFetch; }
+});
+
+test('películas MP4 en H.265 (hev1 / hvc1): el lector de la app las abre (antes iban al modo directo y daban error 4)', () => {
+  const { hevcCfg } = require('../src/player/mp4mse.ts');
+  const { videoEntry } = require('../src/lib/mp4box.ts');
+  // hvcC de un capítulo hev1 1280x720 Main 3.1 hecho con ffmpeg (solo la cabecera, sin VPS/SPS/PPS)
+  const hvcc = Uint8Array.from(Buffer.from('0101600000009000000000005df000fcfdf8f800000f00', 'hex'));
+  for (const type of ['hvc1', 'hev1']) {
+    const entry = videoEntry('hvc1', hvcc, 1280, 720);
+    entry.set(Buffer.from(type), 4);
+    const r = hevcCfg({ entry });
+    assert.equal(r.codec, 'hvc1.1.6.L93.90');
+    assert.equal(r.cfg.width, 1280);
+    assert.equal(r.cfg.height, 720);
+    // al reproductor va como hvc1 con el mismo hvcC
+    assert.equal(Buffer.from(r.entry.slice(4, 8)).toString(), 'hvc1');
+  }
+  assert.equal(hevcCfg({ entry: videoEntry('avc1', new Uint8Array(8), 1280, 720) }), null);
 });

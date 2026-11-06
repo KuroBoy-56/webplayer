@@ -3,7 +3,7 @@ schema-version = 1
 [package]
 id = "com.latmpx.player.tv"
 title = "MPX Player"
-version = "1.0.64"
+version = "1.0.65"
 icon = "@image/app_icon.png"
 
 [os.version]
@@ -72,3 +72,8 @@ includes-messages = ["pkg://com.latmpx.player.tv.main"]
 uri = "pkg://com.latmpx.player.tv.main"
 sender-privileges = ["*"]
 receiver-privileges = ["self"]
+
+# servidores IPTV por http en el modo directo del reproductor de Vega (Vega OS 2.0, según Amazon en su foro de
+# desarrolladores): sin esto el reproductor rechaza la dirección («insecure protocol/scheme http», error 4)
+[network-traffic-policy.cleartext]
+allowed-domains = ["*"]

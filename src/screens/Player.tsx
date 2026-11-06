@@ -771,19 +771,22 @@ export default function Player({ params }: { params: PlayParams }) {
           preUrl = first;
           prefetchList(first);
         }
-        // películas y series: la cabecera (los idiomas) y, desde el principio, también los primeros segundos del video en un
-        // segundo pedido apenas llega la cabecera (MKV hasta 4 MB; MP4 hasta 2,25 MB: cubre el principio del mdat)
+        // películas y series: la cabecera (los idiomas). MKV desde el principio: también su primer tramo del video (1 MB) en un
+        // segundo pedido apenas llega la cabecera; el MP4 ya pide el principio del video a la vez que su índice
         else if (!live && /\.mkv(\?|$)/i.test(first)) {
           preUrl = first;
-          prefetchRange(first, 0, 262144, firstResume.current > 5 ? 0 : 4194304 - 262144);
+          prefetchRange(first, 0, 262144, firstResume.current > 5 ? 0 : 1048576);
         } else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) {
           preUrl = first;
-          prefetchRange(first, 0, 65536, firstResume.current > 5 ? 0 : 2359296 - 65536);
+          prefetchRange(first, 0, 65536);
         }
         initializing = v.initialize().then(() => { initialized = true; });
         return initializing;
       })
-      .then(() => {
+      .then(async () => {
+        if (!alive) return;
+        // la superficie del video antes de darle el video (Amazon: sin ella, error 4 en modo directo); como mucho 3 s
+        for (let i = 0; i < 30 && alive && !surface.current; i++) await new Promise<void>(r => setTimeout(r, 100));
         if (!alive) return;
         ready.current = true;
         v.autoplay = false;
