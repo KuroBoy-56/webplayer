@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Inicio de sesión con servidores XUI en «Debug Mode» (7 de noviembre)
+- **Corregido: «No pudimos conectar con los servidores» con un usuario o contraseña mal escritos.** Los servidores XUI en «Debug Mode» no contestan `{"user_info":{"auth":0}}` sino una página HTML con el motivo («XUI.ONE INVALID_CREDENTIALS…»); la web no la leía y lo contaba como «ningún servidor contestó». Ahora lee el motivo (`wp_xui_error`, como las apps): usuario o contraseña incorrectos, cuenta vencida, cuenta deshabilitada, u otro motivo del servidor («El servidor rechazó el inicio de sesión (…)»). Igual con Omitir y con número de distribuidor (el mismo inicio de sesión con las DNS de cada uno).
+- Si ningún servidor contesta, o XUI da un motivo raro (IP del sitio bloqueada, demasiados intentos…), la web lo manda a **Errores de las apps** del panel con lo que pasó en cada DNS (error de conexión, código HTTP o motivo de XUI).
+- Archivos: `login.php`, `includes/core.php` (`wp_xui_error`, `wp_http_multi` con el motivo de cada fallo) e `includes/lang/en.php`, `pt.php`, `fr.php`.
+
 ## Verificador antihack del panel en los pedidos a login.php (28 de octubre, noche)
 - Los tres pedidos que la web hace a `login.php` del panel (lista de DNS, número de distribuidor y pantalla falsa) llevan `"ts"` (la hora) dentro del JSON cifrado, como las apps. Si el reloj del hosting está corrido, el panel responde con su hora y se reintenta una vez con la diferencia (se recuerda un día). Así la web sigue funcionando cuando el panel exija `ts` (`login_require_ts`). Nada cambia para el cliente. Archivos: `includes/panel.php` (`wp_panel_login`), `includes/tenant.php`, `includes/fake_screen.php`.
 

@@ -240,8 +240,10 @@ function wp_http_get($url, $timeout = 12, &$code = null)
  * Varias peticiones en paralelo. $urls = [key => url]. Devuelve [key => body|null].
  * $stopWhen(key, body) puede devolver true para cortar el resto (p. ej. login encontrado).
  */
-function wp_http_multi(array $urls, $timeout = 12, $stopWhen = null)
+// $fails (opcional): [key => motivo] de los que no dieron respuesta (error de conexión o código HTTP), para el reporte
+function wp_http_multi(array $urls, $timeout = 12, $stopWhen = null, &$fails = null)
 {
+    $fails = [];
     $out = array_fill_keys(array_keys($urls), null);
     if (!$urls) return $out;
     $mh = curl_multi_init();
@@ -259,6 +261,11 @@ function wp_http_multi(array $urls, $timeout = 12, $stopWhen = null)
             list($k) = $handles[(int)$ch];
             $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $body = curl_multi_getcontent($ch);
+            if ($info['result'] !== CURLE_OK) {
+                $fails[$k] = 'curl ' . $info['result'] . ' ' . curl_error($ch);
+            } elseif ($code < 200 || $code >= 400 || $body === '') {
+                $fails[$k] = 'HTTP ' . $code . ($body === '' ? ' vacío' : '');
+            }
             if ($info['result'] === CURLE_OK && $code >= 200 && $code < 400 && $body !== '') {
                 $out[$k] = $body;
                 if ($stopWhen && $stopWhen($k, $body)) {
@@ -1064,6 +1071,21 @@ function wp_available_genres($type = 'all')
         if ($found) $out[$k] = $g;
     }
     return $out;
+}
+
+/**
+ * Código del motivo en la página de error de XUI.one («Debug Mode»): en lugar de JSON el servidor contesta 200 con una
+ * página HTML («XUI.ONE INVALID_CREDENTIALS Username or password is invalid.», EXPIRED, BANNED…). null si no es una.
+ * Igual que Xtream.xuiError de Android y src/lib/xui.ts de Vega.
+ */
+function wp_xui_error($body)
+{
+    $body = (string)$body;
+    if ($body === '' || stripos($body, 'XUI') === false) return null;
+    $text = preg_replace('~<(style|script|title)[^>]*>.*?</\1>~is', ' ', $body);
+    // etiquetas por espacios: el código va en otro elemento («<h1>XUI.ONE</h1><h2>INVALID_CREDENTIALS</h2>»)
+    $text = preg_replace('~\s+~', ' ', (string)preg_replace('~<[^>]*>~', ' ', (string)$text));
+    return preg_match('~XUI\.(?:ONE|one)\s+([A-Z][A-Z0-9_]{2,})~', (string)$text, $m) ? $m[1] : null;
 }
 
 /** Protección básica contra fuerza bruta en el login. */

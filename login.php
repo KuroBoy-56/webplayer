@@ -104,19 +104,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
     }
 
     // Consulta paralela: se corta en cuanto un servidor acepta al usuario
+    $fails = [];
     $responses = wp_http_multi($urls, 10, function ($k, $body) {
         $j = json_decode($body, true);
         return isset($j['user_info']['auth']) && (int)$j['user_info']['auth'] === 1
             && strcasecmp((string)($j['user_info']['status'] ?? ''), 'Active') === 0;
-    });
+    }, $fails);
 
     $match = null;
     $anyReply = false;
     $states = [];
+    // servidores XUI en «Debug Mode»: con usuario o contraseña mal escritos (o la cuenta vencida, bloqueada…) contestan
+    // una página HTML con el motivo en lugar de JSON. Antes eso contaba como «ningún servidor contestó» y salía «No
+    // pudimos conectar con los servidores» aunque el servidor sí había contestado.
+    $xui = [];
+    $seen = [];
     foreach ($responses as $i => $body) {
-        if ($body === null) continue;
+        if ($body === null) {
+            $seen[] = $servers[$i]['url'] . '=' . ($fails[$i] ?? 'sin respuesta');
+            continue;
+        }
         $j = json_decode($body, true);
-        if (!is_array($j)) continue;
+        if (!is_array($j)) {
+            $code = wp_xui_error($body);
+            if ($code !== null) {
+                $xui[] = $code;
+                $anyReply = true;
+            }
+            $seen[] = $servers[$i]['url'] . '=' . ($code !== null ? 'xui ' . $code : 'no es JSON (' . strlen($body) . ' bytes)');
+            continue;
+        }
+        $seen[] = $servers[$i]['url'] . '=json';
         $anyReply = true;
         $ui = $j['user_info'] ?? [];
         if (isset($ui['auth']) && (int)$ui['auth'] === 1) {
@@ -162,7 +180,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         echo json_encode(['success' => false, 'message' => $msg]);
         exit;
     }
+    // motivo que dio XUI (el más útil primero): vencida o bloqueada antes que «usuario o contraseña incorrectos»
+    if ($xui) {
+        $x = in_array('EXPIRED', $xui, true) ? 'EXPIRED' : (count(array_intersect($xui, ['BANNED', 'DISABLED', 'BLOCKED'])) ? 'BANNED' : $xui[0]);
+        if ($x === 'EXPIRED') {
+            echo json_encode(['success' => false, 'message' => t('Tu cuenta está vencida. Renueva tu suscripción para seguir viendo.')]);
+            exit;
+        }
+        if ($x === 'BANNED') {
+            echo json_encode(['success' => false, 'message' => t('Tu cuenta está deshabilitada. Contacta a soporte.')]);
+            exit;
+        }
+        if ($x !== 'INVALID_CREDENTIALS') {
+            // otro motivo del servidor (IP del sitio bloqueada, demasiados intentos…): al panel para saber qué pasa
+            wp_panel_report('error', 'Login de la web player rechazado por XUI: ' . $x, implode(' | ', $seen), 'Login');
+            echo json_encode(['success' => false, 'message' => t('El servidor rechazó el inicio de sesión ({c}). Inténtalo de nuevo en unos minutos.', ['c' => $x])]);
+            exit;
+        }
+    }
     if (!$anyReply) {
+        // ningún servidor contestó: al panel con lo que pasó en cada uno (Errores de las apps)
+        wp_panel_report('error', 'Login de la web player: ningún servidor IPTV contestó', implode(' | ', $seen), 'Login');
         echo json_encode(['success' => false, 'message' => t('No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.')]);
         exit;
     }
