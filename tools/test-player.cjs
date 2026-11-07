@@ -199,7 +199,7 @@ test('canal congelado: primero el reproductor nativo de Vega (.ts directo, una v
   memory['native_live_'+APP_VERSION]='no';
 });
 
-test('canales: el reproductor nativo primero; si abre, el equipo lo recuerda; si falla 2 veces sin abrir nunca, el lector propio',async()=>{
+test('canales: el reproductor nativo primero; si abre, el equipo lo recuerda; 3 fallos seguidos sin abrir nunca = el lector propio hasta cerrar la app (no para siempre)',async()=>{
   lives=[];let {c,video}=setup();delete memory['native_live_'+APP_VERSION];
   c.load('http://fixture.invalid/live/u/p/7.m3u8',0,true);await tick();
   assert.equal(lives.length,0);assert.equal(video.src,'http://fixture.invalid/live/u/p/7.ts');assert.match(c.liveDiag(),/modo=nativo/);
@@ -208,8 +208,9 @@ test('canales: el reproductor nativo primero; si abre, el equipo lo recuerda; si
   // (cada canal con su reproductor, como la miniatura)
   ({c,video}=setup());delete memory['native_live_'+APP_VERSION];
   const hooks={toast(){},status(){},changed(){},subText(){},fatal(){}};
-  for(const n of [21,22]){c=new Playback({...video,src:''},hooks);c.load('http://fixture.invalid/live/u/p/'+n+'.m3u8',0,true);await tick();assert.equal(c.liveRetryTs(),true);await c.destroy();}
-  assert.equal(memory['native_live_'+APP_VERSION],'no');
+  for(const n of [21,22,24]){c=new Playback({...video,src:''},hooks);c.load('http://fixture.invalid/live/u/p/'+n+'.m3u8',0,true);await tick();assert.equal(c.liveDiag().includes('modo=nativo'),true);assert.equal(c.liveRetryTs(),true);await c.destroy();}
+  // nada guardado: la próxima vez que se abra la app se prueba otra vez el nativo
+  assert.equal(memory['native_live_'+APP_VERSION],undefined);
   c=new Playback({...video,src:''},hooks);
   const before=lives.length;c.load('http://fixture.invalid/live/u/p/23.m3u8',0,true);await tick();assert.equal(lives.length,before+1);
   await c.destroy();

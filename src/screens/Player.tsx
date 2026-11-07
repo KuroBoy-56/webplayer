@@ -456,6 +456,9 @@ export default function Player({ params }: { params: PlayParams }) {
     const onMeta = () => c.onMeta();
     const onTime = () => {
       c.onTime();
+      // en modo directo Vega puede avisar solo timeupdate y no «playing» (Amazon): el canal que ya avanza cuenta como
+      // sonando (si no, a los 25 s se daba por perdido y pasaba al lector de la app)
+      if (live && !c.hasPlayed() && !v.paused && (v.currentTime || 0) > 0.3) onPlaying();
       const now = Date.now();
       if (now - lastUi.current < 1000) return;
       lastUi.current = now;

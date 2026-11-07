@@ -1,7 +1,9 @@
 // ¿El reproductor nativo de Vega (modo directo, src = dirección) abre en este equipo? Amazon lo recomienda para MP4 / MKV
 // y, desde Vega OS 2.0, para canales MPEG-TS en vivo: es lo que hacen Android, LG y Roku (rápido y sin trabajo de la app).
 // Se aprende por equipo y versión de la app: si abre una vez, se sigue usando (un título o canal que falla vuelve al
-// lector de la app, solo ese); si falla 2 veces seguidas sin haber abierto nunca, el lector de la app para todo.
+// lector de la app, solo ese). Películas: si falla 2 veces seguidas sin haber abierto nunca, el lector de la app para
+// todo. Canales: con 3 seguidas sin abrir nunca, el lector solo hasta cerrar la app (antes quedaba apagado para siempre
+// por fallos pasajeros: canal caído, equipo ocupado, y los canales se quedaban en el lector de la app, con microcortes).
 import { read, write } from '../lib/storage';
 import { APP_VERSION } from '../version';
 
@@ -14,7 +16,9 @@ const fails: Record<NativeKind, number> = { live: 0, vod: 0 };
 let vodMisses = 0;
 
 export function nativeAllowed(k: NativeKind): boolean {
-  return read(key(k)) !== 'no' && (k !== 'vod' || vodMisses < 2);
+  const v = read(key(k));
+  if (v === 'no') return false;
+  return k === 'vod' ? vodMisses < 2 : v === 'ok' || fails.live < 3;
 }
 
 export function nativeWorked(k: NativeKind): void {
@@ -28,5 +32,6 @@ export function nativeFailedOnce(k: NativeKind): void {
     if (k === 'vod') vodMisses++;
     return;
   }
-  if (++fails[k] >= 2) write(key(k), 'no');
+  ++fails[k];
+  if (k === 'vod' && fails.vod >= 2) write(key(k), 'no');
 }

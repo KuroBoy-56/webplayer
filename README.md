@@ -207,6 +207,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canales con el reproductor de Vega aunque falle a veces (2.0.2)**: los reportes de microcortes y de imagen congelada
+  venían del lector de la app (`modo=mp4`); el reproductor nativo de Vega no se estaba usando. Antes, 2 fallos seguidos
+  sin haber abierto nunca (canal caído, equipo ocupado) lo apagaban para siempre en esa versión; ahora, con 3 seguidos
+  se usa el lector solo hasta cerrar la app y la próxima vez se prueba otra vez (`src/player/nativemode.ts`; si abrió una
+  vez, sigue siempre). Amazon: en modo directo Vega puede avisar solo `timeupdate` y no `playing`; un canal que ya avanza
+  cuenta como sonando (Player y miniatura). Antes se daba por perdido a los 15-25 s y pasaba al lector.
 - **Cambio de canal en pantalla grande igual que la miniatura (2.0.1)**: cada canal (▲▼, la lista de canales o una
   reconexión) abre con un reproductor nuevo, como la miniatura y como indica Amazon para pasar de un video a otro (cerrar
   el reproductor, crear otro, iniciarlo, ponerle la superficie y recién darle el video): el nativo de Vega vuelve a

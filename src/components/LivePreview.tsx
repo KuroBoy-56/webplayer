@@ -39,6 +39,10 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
       setPlaying(true);
       c?.onPlaying();
     };
+    // en modo directo Vega puede avisar solo timeupdate y no «playing» (Amazon): el canal que ya avanza cuenta como sonando
+    const onTick = () => {
+      if (!isPlaying && v && !v.paused && (v.currentTime || 0) > 0.3) onPlaying();
+    };
     // error del reproductor (nativo o lector propio): el canal sigue por el otro camino (como en pantalla grande)
     const onErr = () => {
       if (alive && c) c.liveRetryTs();
@@ -52,6 +56,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
       const player = v;
       try {
         player.removeEventListener('playing', onPlaying);
+        player.removeEventListener('timeupdate', onTick);
         player.removeEventListener('error', onErr);
         // se suelta la superficie de la miniatura; la pantalla grande pone la suya
         if (surface.current) player.clearSurfaceHandle(surface.current);
@@ -77,6 +82,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
         try { await initializing; } catch { /* inicialización interrumpida */ }
         try {
           player.removeEventListener('playing', onPlaying);
+          player.removeEventListener('timeupdate', onTick);
           player.removeEventListener('error', onErr);
           player.pause();
           if (surface.current) player.clearSurfaceHandle(surface.current);
@@ -103,6 +109,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
         video.current = v;
         v.autoplay = false;
         v.addEventListener('playing', onPlaying);
+        v.addEventListener('timeupdate', onTick);
         v.addEventListener('error', onErr);
         if (surface.current) v.setSurfaceHandle(surface.current);
         c = new Playback(v, { toast: () => {}, status: () => {}, changed: () => {}, subText: () => {}, fatal: () => {}, liveFailed: () => onErr() });
