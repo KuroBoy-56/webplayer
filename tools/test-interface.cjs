@@ -712,3 +712,40 @@ test('listas con el control: la app las mueve solo si la fila enfocada queda a m
   // nunca más allá del final de la lista (12 filas: hasta 700)
   assert.equal(scrollFor(11, 100, 600, 500, 12), 700);
 });
+
+test('películas MP4 con el índice al final: el índice se pide entero en una sola vuelta de 3 partes (antes 1 MB y después de a 1 MB)', async () => {
+  const { Mp4Mse } = require('../src/player/mp4mse.ts');
+  const realFetch = global.fetch;
+  const MB = 1048576;
+  const size = 100 * MB;
+  const moovSize = 5 * MB;
+  const moovAt = size - moovSize;
+  const box = (out, at, len, type) => {
+    out[at] = (len >>> 24) & 255; out[at + 1] = (len >>> 16) & 255; out[at + 2] = (len >>> 8) & 255; out[at + 3] = len & 255;
+    for (let i = 0; i < 4; i++) out[at + 4 + i] = type.charCodeAt(i);
+  };
+  const asked = [];
+  global.fetch = async (url, { headers }) => {
+    const m = /bytes=(\d+)-(\d+)/.exec(headers.Range);
+    const a = +m[1];
+    const b = Math.min(size, +m[2] + 1);
+    asked.push([a, b - a]);
+    const out = new Uint8Array(b - a);
+    // ftyp (24) + mdat (hasta el índice) + moov al final
+    const put = (at, len, type) => { if (at >= a && at + 8 <= b) box(out, at - a, len, type); };
+    put(0, 24, 'ftyp');
+    put(24, moovAt - 24, 'mdat');
+    put(moovAt, moovSize, 'moov');
+    return { status: 206, url, headers: { get: k => (k === 'content-range' ? 'bytes ' + a + '-' + (b - 1) + '/' + size : k === 'content-length' ? String(b - a) : null) }, arrayBuffer: async () => out.buffer };
+  };
+  try {
+    const r = new Mp4Mse({}, 'http://fixture.invalid/index-end.mp4');
+    const moov = await r.readMoov();
+    assert.equal(moov.length, moovSize - 8);
+    const tail = asked.filter(([a]) => a >= moovAt);
+    // 3 pedidos que cubren todo el índice, ninguno de 1 MB para leer primero su tamaño
+    assert.equal(tail.length, 3);
+    assert.equal(tail.reduce((n, [, len]) => n + len, 0), moovSize);
+    r.destroy();
+  } finally { global.fetch = realFetch; }
+});

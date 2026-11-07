@@ -454,7 +454,11 @@ export class Mp4Mse {
     for (let i = 0; i < 12 && win; i++) {
       if (off + 16 > wOff + win.length) {
         if (this.size && off >= this.size) return null;
-        win = await this.get(off, 1048576);
+        // después del video (mdat) solo queda el índice: todo de una vez, en 3 partes a la vez. Antes se pedía 1 MB para
+        // leer su tamaño y después el resto de a 1 MB (un índice de 9 MB eran 10 pedidos y tardaba 16 s; cada pedido al
+        // servidor IPTV tarda en contestar)
+        const tail = this.size - off;
+        win = this.size && tail > 1048576 && tail <= 24 * 1048576 ? await this.getParts(off, tail) : await this.get(off, 1048576);
         wOff = off;
         if (!win || win.length < 8) return null;
       }
@@ -485,10 +489,10 @@ export class Mp4Mse {
     return null;
   }
 
-  // un tramo grande (el índice al final del archivo) en partes de 1 MB, de a 3 a la vez; una parte que falla se pide
-  // otra vez sola (líneas de una sola conexión)
+  // un tramo grande (el índice al final del archivo) en 3 partes a la vez (de 1 MB como mínimo): una sola vuelta de
+  // pedidos; una parte que falla se pide otra vez sola (líneas de una sola conexión)
   private async getParts(off: number, len: number): Promise<Uint8Array | null> {
-    const PART = 1048576;
+    const PART = Math.max(1048576, Math.ceil(len / 3));
     const n = Math.ceil(len / PART);
     const parts: (Uint8Array | null)[] = new Array(n).fill(null);
     let next = 0;

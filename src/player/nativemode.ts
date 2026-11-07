@@ -35,3 +35,14 @@ export function nativeFailedOnce(k: NativeKind): void {
   ++fails[k];
   if (k === 'vod' && fails.vod >= 2) write(key(k), 'no');
 }
+
+// Vega OS anterior a 2.0 rechaza al instante las direcciones http en modo directo (error 4, Amazon: arreglado en 2.0).
+// Visto una vez, el resto de la sesión no se prueba el nativo con http (ni canales ni películas): sin el intento fallido
+// ni el «Reconectando…» de cada canal. Con https se sigue probando.
+let httpRejected = false;
+export function nativeRejectedHttp(): void {
+  httpRejected = true;
+}
+export function nativeHttpOk(url: string): boolean {
+  return !(httpRejected && /^http:/i.test(url));
+}

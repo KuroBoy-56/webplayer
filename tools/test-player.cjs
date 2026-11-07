@@ -292,3 +292,18 @@ test('pantalla grande: cambiar de canal en el mismo reproductor va por el lector
   assert.equal(lives.length,1);assert.notEqual(video.src,'http://fixture.invalid/live/u/p/32.ts');assert.doesNotMatch(c.liveDiag(),/modo=nativo/);
   await c.destroy();memory['native_live_'+APP_VERSION]='no';
 });
+
+test('error 4 al instante con http en el nativo (Vega OS antes de 2.0): el resto de la sesión, http va directo al lector; https sigue con el nativo',async()=>{
+  lives=[];const {c,video}=setup();memory['native_live_'+APP_VERSION]='ok';
+  c.load('http://fixture.invalid/live/u/p/41.m3u8',0,true);await tick();
+  assert.equal(video.src,'http://fixture.invalid/live/u/p/41.ts');
+  video.error={code:4};assert.equal(c.liveRetryTs(),true);await c.destroy();
+  const {c:c2,video:v2}=setup();memory['native_live_'+APP_VERSION]='ok';
+  c2.load('http://fixture.invalid/live/u/p/42.m3u8',0,true);await tick();
+  assert.notEqual(v2.src,'http://fixture.invalid/live/u/p/42.ts');assert.equal(lives.length,2);
+  await c2.destroy();
+  const {c:c3,video:v3}=setup();memory['native_live_'+APP_VERSION]='ok';
+  c3.load('https://fixture.invalid/live/u/p/43.m3u8',0,true);await tick();
+  assert.equal(v3.src,'https://fixture.invalid/live/u/p/43.ts');
+  await c3.destroy();memory['native_live_'+APP_VERSION]='no';
+});

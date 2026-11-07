@@ -207,6 +207,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Índice de las películas MP4 en una sola vuelta y http rechazado por el sistema (2.0.3)**: con el índice al final del
+  archivo (lo más común en los servidores IPTV), después del video solo queda el índice y se pide entero de una vez en 3
+  partes a la vez (`readMoov` / `getParts` en `src/player/mp4mse.ts`). Antes se pedía 1 MB para leer su tamaño y después
+  el resto de a 1 MB: un índice de 9,3 MB eran 10 pedidos y tardaba 16 s (aviso «Película o serie tardó en empezar»).
+  El mismo aviso mostró que el reproductor nativo da error 4 al instante con direcciones http: Vega OS anterior a 2.0 no
+  admite http en modo directo (Amazon: arreglado en 2.0). Visto una vez, el resto de la sesión no se prueba el nativo
+  con http (`nativeHttpOk` en `src/player/nativemode.ts`): sin el intento fallido ni el «Reconectando…» de cada canal.
+  Con el sistema del Fire TV actualizado a Vega OS 2.0 los canales y las películas vuelven al reproductor nativo.
 - **Canales con el reproductor de Vega aunque falle a veces (2.0.2)**: los reportes de microcortes y de imagen congelada
   venían del lector de la app (`modo=mp4`); el reproductor nativo de Vega no se estaba usando. Antes, 2 fallos seguidos
   sin haber abierto nunca (canal caído, equipo ocupado) lo apagaban para siempre en esa versión; ahora, con 3 seguidos

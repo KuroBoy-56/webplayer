@@ -15,7 +15,7 @@ import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
 import { Probe } from '../lib/probe';
 import { pref, readJson, setPref, writeJson } from '../lib/storage';
-import { nativeAllowed, nativeFailedOnce, nativeWorked } from './nativemode';
+import { nativeAllowed, nativeFailedOnce, nativeHttpOk, nativeRejectedHttp, nativeWorked } from './nativemode';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
 import { Mp4Mse } from './mp4mse';
@@ -130,7 +130,7 @@ function setPanelRoute(url: string, r: 'p' | 'v' | ''): void {
 const nativeFailed = new Set<string>();
 // el canal va a abrir con el reproductor nativo (entonces no hace falta pedir su lista HLS por adelantado)
 export function nativeLivePlanned(url: string): boolean {
-  return nativeAllowed('live') && !nativeFailed.has(url) && /\.m3u8(\?|$)/i.test(url);
+  return nativeAllowed('live') && nativeHttpOk(url) && !nativeFailed.has(url) && /\.m3u8(\?|$)/i.test(url);
 }
 // películas y capítulos ya probados con el reproductor nativo en esta sesión (sin http/https: el mismo archivo)
 const vodNativeTried = new Set<string>();
@@ -357,6 +357,7 @@ export class Playback {
     if (!this.live) return false;
     // el reproductor nativo no pudo (error, sin imagen o imagen quieta): el lector propio
     if (this.liveNative) {
+      this.httpCheck();
       if (!this.played) nativeFailedOnce('live');
       nativeFailed.add(this.url);
       this.stopNative();
@@ -409,6 +410,7 @@ export class Playback {
     const g = this.gen;
     this.stopNative();
     this.liveNative = true;
+    this.nativeAt = Date.now();
     this.v.src = this.url.replace(/\.m3u8(\?|$)/i, '.ts$1');
     this.v.play();
     const began = Date.now();
@@ -529,7 +531,7 @@ export class Playback {
   // empieza en el segundo exacto), sin idioma elegido antes para el título ni subtítulos automáticos (eso lo hace el
   // lector), una vez por archivo en la sesión y si el reproductor nativo no falló antes en este equipo
   nativeVodPlanned(url: string, at: number): boolean {
-    return /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url) && at <= 5 && !titleLang(url) && pref('subs_lang', 'off') === 'off' && nativeAllowed('vod') && !vodNativeTried.has(fileKey(url));
+    return /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url) && at <= 5 && !titleLang(url) && pref('subs_lang', 'off') === 'off' && nativeAllowed('vod') && nativeHttpOk(url) && !vodNativeTried.has(fileKey(url));
   }
 
   // el archivo directo al reproductor de Vega (lo lee y decodifica él, como Android y LG). Los idiomas se leen de la
@@ -604,6 +606,7 @@ export class Playback {
   mp4Fallback(why = 'error del reproductor'): boolean {
     // el reproductor nativo no pudo con la película (o se cortó): el lector de la app desde donde iba
     if (this.vodNative) {
+      this.httpCheck();
       const e: any = (this.v as any).error;
       this.mp4Why = 'nativo: ' + why + (e?.code ? ' ' + e.code + (e.message ? ' ' + String(e.message).slice(0, 60) : '') : '') + ' a los ' + ((Date.now() - this.nativeAt) / 1000).toFixed(1) + ' s';
       this.leaveNativeVod(!this.played, this.played ? this.realPos() : this.wantAt);
@@ -639,6 +642,12 @@ export class Playback {
 
   mp4Note(): string {
     return this.mp4Why;
+  }
+
+  // error 4 apenas se le dio una dirección http al nativo: el sistema no admite http en modo directo (Vega OS antes de 2.0)
+  private httpCheck(): void {
+    const e: any = (this.v as any).error;
+    if (e?.code === 4 && Date.now() - this.nativeAt < 300 && /^http:/i.test(this.url)) nativeRejectedHttp();
   }
 
   // con qué se está viendo la película (para el aviso de apertura lenta)
