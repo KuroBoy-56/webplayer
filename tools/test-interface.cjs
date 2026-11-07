@@ -749,3 +749,25 @@ test('películas MP4 con el índice al final: el índice se pide entero en una s
     r.destroy();
   } finally { global.fetch = realFetch; }
 });
+
+test('películas: un «.mp4» que es MKV (cabecera EBML) se reconoce con el primer pedido, sin buscar un índice MP4', async () => {
+  const { Mp4Mse, NOT_MP4_MKV } = require('../src/player/mp4mse.ts');
+  const realFetch = global.fetch;
+  const asked = [];
+  global.fetch = async (url, { headers }) => {
+    const m = /bytes=(\d+)-(\d+)/.exec(headers.Range);
+    const a = +m[1];
+    const b = +m[2] + 1;
+    asked.push(a);
+    const out = new Uint8Array(b - a);
+    if (a === 0) out.set([0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x00, 0x00, 0x00]);
+    return { status: 206, url, headers: { get: k => (k === 'content-range' ? 'bytes ' + a + '-' + (b - 1) + '/' + 10 * 1073741824 : k === 'content-length' ? String(b - a) : null) }, arrayBuffer: async () => out.buffer };
+  };
+  try {
+    const r = new Mp4Mse({}, 'http://fixture.invalid/remux.mp4');
+    assert.equal(await r.readMoov(), null);
+    assert.equal(r.why, NOT_MP4_MKV);
+    assert.deepEqual(asked, [0]);
+    r.destroy();
+  } finally { global.fetch = realFetch; }
+});

@@ -9,6 +9,7 @@ import { Item } from '../data/catalog';
 import { nativeLivePlanned, Playback } from '../player/playback';
 import { dropPrefetch, prefetchList } from '../player/prefetch';
 import { offerPreview, registerLivePreview, waitForLivePreview } from '../player/preview-session';
+import { reportError } from '../api/report';
 import { getState } from '../state';
 import { px, themed } from '../theme';
 
@@ -112,7 +113,16 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
         v.addEventListener('timeupdate', onTick);
         v.addEventListener('error', onErr);
         if (surface.current) v.setSurfaceHandle(surface.current);
-        c = new Playback(v, { toast: () => {}, status: () => {}, changed: () => {}, subText: () => {}, fatal: () => {}, liveFailed: () => onErr() });
+        c = new Playback(v, {
+          toast: () => {},
+          status: () => {},
+          changed: () => {},
+          subText: () => {},
+          fatal: () => {},
+          liveFailed: () => onErr(),
+          // microcortes o detenciones seguidas en la miniatura: al panel con el estado del lector (como pantalla grande)
+          liveStalls: diag => reportError('warning', 'Canal en vivo se detiene seguido', 'miniatura canal=' + channel.name + ' id=' + channel.id + ' ' + diag, 'TV en vivo'),
+        });
         c.liveKeep = true;
         c.load(url, 0, true);
         // sin imagen en 15 s con audio MP2 / AC-3 que el equipo no decodifica: el canal otra vez solo con el video

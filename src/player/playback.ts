@@ -18,7 +18,7 @@ import { pref, readJson, setPref, writeJson } from '../lib/storage';
 import { nativeAllowed, nativeFailedOnce, nativeHttpOk, nativeRejectedHttp, nativeWorked } from './nativemode';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
-import { Mp4Mse } from './mp4mse';
+import { Mp4Mse, NOT_MP4_MKV } from './mp4mse';
 import { MkvMse } from './mkvmse';
 import { Mkv } from './mkvparse';
 import { reportError } from '../api/report';
@@ -233,6 +233,8 @@ export class Playback {
   // película o capítulo con el reproductor nativo de Vega (modo directo, como Android y LG); idioma o subtítulo elegidos
   // (y si falla) → el lector de la app desde el mismo segundo
   private vodNative = false;
+  // el archivo dice .mp4 pero es un MKV (se lee con el lector de MKV)
+  private mkvBody = false;
   // el reproductor nativo ya leyó la cabecera de la película (loadedmetadata)
   private nativeMeta = false;
   private nativeAt = 0;
@@ -303,6 +305,7 @@ export class Playback {
     this.resumePanel = false;
     this.mp4Url = false;
     this.mkvNative = '';
+    this.mkvBody = false;
     this.mp4Why = '';
     this.deniedShown = false;
     if (live) {
@@ -469,7 +472,7 @@ export class Playback {
       }
       this.resumeAt = 0;
       const g = this.gen;
-      const mkv = /\.mkv(\?|$)/i.test(this.url);
+      const mkv = /\.mkv(\?|$)/i.test(this.url) || this.mkvBody;
       const want = this.mp4Audio;
       const m = mkv ? new MkvMse(this.v, this.url, this.mp4Audio, this.mkvIndex) : new Mp4Mse(this.v, this.url, this.mp4Audio, this.mp4Index);
       this.mse = m;
@@ -501,6 +504,14 @@ export class Playback {
         .then(err => {
           if (g !== this.gen || this.mse !== m) return;
           if (err) {
+            // el «.mp4» es un MKV: el lector de MKV con el mismo archivo (sin pasar por el modo directo)
+            if (!mkv && err.includes(NOT_MP4_MKV) && !this.mkvBody) {
+              this.mkvBody = true;
+              m.destroy();
+              this.mse = null;
+              this.direct(at);
+              return;
+            }
             this.mp4Failed(at, err);
             return;
           }

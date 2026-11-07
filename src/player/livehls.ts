@@ -565,7 +565,9 @@ export class LiveHls {
   lastData = 0;
   private lastJump = 0;
   private jump(to: number): void {
-    if (this.started) this.gapJumps++;
+    // cada salto se ve como un microcorte: al tercero también se avisa al panel (antes solo las detenciones; los
+    // microcortes no dejaban ningún registro)
+    if (this.started && ++this.gapJumps === 3 && this.stalls < 3) this.onStalls();
     this.v.currentTime = to;
     this.lastMove = Date.now();
     this.lastJump = this.lastMove;

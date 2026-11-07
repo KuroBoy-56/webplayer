@@ -207,6 +207,15 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Películas «.mp4» que son MKV y avisos de microcortes (2.0.4)**: hay servidores que entregan remuxes MKV (10 GB, audio
+  AC-3) con extensión mp4. El lector MP4 buscaba un índice que no existe (hasta 12 lecturas al azar del archivo) y
+  terminaba en el modo directo, que con http da error 4 en Vega OS anterior a 2.0: la película no abría, ni en Continuar
+  viendo. Ahora la cabecera se revisa con el primer pedido: si es MKV (EBML) va al lector de MKV con el mismo archivo
+  (`NOT_MP4_MKV` en `src/player/mp4mse.ts`, `mkvBody` en `src/player/playback.ts`); si no es ni MP4 ni MKV, al modo
+  directo sin buscar. Si el índice al final no se pudo pedir de una vez, se pide como antes. Al cambiar de canal en
+  pantalla grande, la lista y el primer segmento del canal nuevo se piden mientras se cierra el reproductor anterior.
+  Los microcortes del lector de la app (3 saltos de huecos) se avisan al panel («Canal en vivo se detiene seguido»),
+  también desde la miniatura; antes no dejaban registro.
 - **Índice de las películas MP4 en una sola vuelta y http rechazado por el sistema (2.0.3)**: con el índice al final del
   archivo (lo más común en los servidores IPTV), después del video solo queda el índice y se pide entero de una vez en 3
   partes a la vez (`readMoov` / `getParts` en `src/player/mp4mse.ts`). Antes se pedía 1 MB para leer su tamaño y después

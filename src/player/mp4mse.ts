@@ -12,6 +12,8 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const AHEAD = 40; // segundos bajados por adelantado
 const CHUNK = 4; // segundos de video por pedido
 const MOOV_MAX = 64 * 1048576;
+// motivo cuando el archivo «.mp4» es un MKV (playback lo pasa al lector de MKV)
+export const NOT_MP4_MKV = 'el archivo es MKV';
 
 type Trk = {
   // shift: segundos que se le suman a la pista para que video y audio queden como los muestra el archivo (lista de
@@ -451,6 +453,19 @@ export class Mp4Mse {
     let off = 0;
     let win = await this.get(0, 65536);
     let wOff = 0;
+    // no es MP4 aunque diga .mp4: un MKV (los servidores IPTV entregan remuxes MKV con extensión mp4) lo abre el lector
+    // de MKV; otra cosa (cabecera sin una caja MP4) al modo directo. Antes se hacían hasta 12 lecturas al azar del
+    // archivo buscando un índice que no existe (segundos perdidos) y la película no abría
+    if (win && win.length >= 8) {
+      if (win[0] === 0x1a && win[1] === 0x45 && win[2] === 0xdf && win[3] === 0xa3) {
+        this.why = NOT_MP4_MKV;
+        return null;
+      }
+      if (!/^[a-z0-9 ]{4}$/i.test(typ(win, 4))) {
+        this.why = 'no es MP4';
+        return null;
+      }
+    }
     for (let i = 0; i < 12 && win; i++) {
       if (off + 16 > wOff + win.length) {
         if (this.size && off >= this.size) return null;
@@ -458,7 +473,9 @@ export class Mp4Mse {
         // leer su tamaño y después el resto de a 1 MB (un índice de 9 MB eran 10 pedidos y tardaba 16 s; cada pedido al
         // servidor IPTV tarda en contestar)
         const tail = this.size - off;
-        win = this.size && tail > 1048576 && tail <= 24 * 1048576 ? await this.getParts(off, tail) : await this.get(off, 1048576);
+        win = this.size && tail > 1048576 && tail <= 24 * 1048576 ? await this.getParts(off, tail) : null;
+        // si no se pudo de una vez, como antes: 1 MB para leer su tamaño y el resto en partes
+        if (!win) win = await this.get(off, 1048576);
         wOff = off;
         if (!win || win.length < 8) return null;
       }

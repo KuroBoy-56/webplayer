@@ -826,14 +826,25 @@ export default function Player({ params }: { params: PlayParams }) {
 
     // heredado de la miniatura: ya iniciado y sonando (sin cerrar la miniatura, pedir nada ni iniciar otro reproductor)
     if (inherited) initialized = true;
+    // cambio de canal en pantalla grande: la lista y el primer segmento del canal nuevo se piden ya, mientras se cierra el
+    // reproductor anterior y se inicia el nuevo (la conexión del anterior ya se cortó). La primera vez no: la miniatura
+    // todavía tiene su conexión y puede dejarle lo que bajó a la pantalla grande
+    const zapFirst = session > 0 && live ? urlFor(indexRef.current) : '';
+    if (zapFirst && /\.m3u8(\?|$)/i.test(zapFirst) && !nativeLivePlanned(zapFirst)) {
+      preUrl = zapFirst;
+      prefetchList(zapFirst);
+    }
     const begin: Promise<void> = inherited
       ? Promise.resolve()
       : stopLivePreview().then(waitForLivePreview).then(() => {
         if (!alive) return;
         // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
         const first = dnsUrl.current && dnsUrl.current.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
-        // con lo que dejó la miniatura de este canal (o con el reproductor nativo) no hace falta pedir nada por adelantado
-        if (live && /\.m3u8(\?|$)/i.test(first) && !hasHandoff(first) && !nativeLivePlanned(first)) {
+        // con lo que dejó la miniatura de este canal (o con el reproductor nativo) no hace falta pedir nada por adelantado;
+        // en un cambio de canal ya se pidió (preUrl)
+        if (preUrl) {
+          // nada
+        } else if (live && /\.m3u8(\?|$)/i.test(first) && !hasHandoff(first) && !nativeLivePlanned(first)) {
           preUrl = first;
           prefetchList(first);
         }

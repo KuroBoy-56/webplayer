@@ -38,7 +38,7 @@ class Shaka {
 }
 class Mp4 {
   constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||new Uint8Array([1]);this.noAudio=false;this.tracks=[{lang:'spa',codec:'mp4a'},{lang:'eng',codec:'mp4a'}];mp4s.push(this);}
-  async start(at){this.v.currentTime=at;this.onTracks();return '';}
+  async start(at){if(this.url.includes('mkvbody'))return 'índice: el archivo es MKV';this.v.currentTime=at;this.onTracks();return '';}
   destroy(){}
 }
 class Mkv {
@@ -64,7 +64,7 @@ Module._load = function(request,parent,isMain){
   if(request==='../lib/i18n'||request==='./i18n') return {t:(key,vars)=>key.replace(/\{(\w+)\}/g,(m,k)=>vars?.[k]??m)};
   if(request==='../api/report') return {reportError:()=>{}};
   if(request==='./shaka') return {ShakaPlayback:Shaka};
-  if(request==='./mp4mse') return {Mp4Mse:Mp4};
+  if(request==='./mp4mse') return {Mp4Mse:Mp4,NOT_MP4_MKV:'el archivo es MKV'};
   if(request==='./mkvmse') return {MkvMse:Mkv};
   if(request==='./hls') return {PanelHls};
   if(request==='./livehls') return {LiveHls,disableMp4:()=>{}};
@@ -306,4 +306,14 @@ test('error 4 al instante con http en el nativo (Vega OS antes de 2.0): el resto
   c3.load('https://fixture.invalid/live/u/p/43.m3u8',0,true);await tick();
   assert.equal(v3.src,'https://fixture.invalid/live/u/p/43.ts');
   await c3.destroy();memory['native_live_'+APP_VERSION]='no';
+});
+
+test('película «.mp4» que en realidad es MKV (remux de 10 GB con AC-3): el lector de MKV con el mismo archivo, también en Continuar viendo',async()=>{
+  for(const at of [0,600]){
+    const {c,video}=setup();
+    c.load('http://fixture.invalid/movie/u/p/mkvbody'+at+'.mp4',at,false);await tick();await tick();
+    assert.equal(mp4s.length,1);assert.equal(mkvs.length,1);assert.equal(mkvs[0].url,'http://fixture.invalid/movie/u/p/mkvbody'+at+'.mp4');
+    assert.equal(video.currentTime,at);assert.notEqual(video.src,'http://fixture.invalid/movie/u/p/mkvbody'+at+'.mp4');
+    await c.destroy();
+  }
 });
