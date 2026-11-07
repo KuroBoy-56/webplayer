@@ -207,6 +207,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Buscar sin quedarse en el teclado (2.0.10)**: los resultados se arman mientras se escribe (como Android); al cerrar
+  el teclado con **Listo** o con **Atrás** (que ya no borra lo escrito) el foco baja a la primera carátula, así bajar
+  ya no vuelve a abrir el teclado. Al volver de la ficha el foco queda en la carátula que se abrió: la lista se desplaza
+  hasta su fila antes de devolverle el foco (antes, si esa fila no estaba montada, el foco subía al buscador). El texto
+  del recuadro va centrado a lo alto y a lo ancho. La búsqueda normaliza los títulos una sola vez por catálogo (antes
+  en cada tecla) y pone primero lo que empieza por lo buscado (`catalog.search`, `Search.tsx`, `ItemGrid`).
 - **Canales sin imagen fija ni pantalla verde al abrir (2.0.9)**: el lector de canales empezaba en el primer cuadro I del
   segmento aunque no fuera un IDR; los cuadros que siguen quedaban sin sus referencias y el decodificador mostraba la
   imagen quieta o verde con el audio sonando hasta el siguiente IDR. Ahora empieza en el primer IDR del segmento si hay

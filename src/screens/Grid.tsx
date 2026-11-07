@@ -14,24 +14,49 @@ import { alpha, C, px, SIDE, themed } from '../theme';
 
 export const COLS = 7;
 
-export function ItemGrid({ items, header, channels, active }: { items: Item[]; header?: React.ReactElement; channels?: boolean; active?: boolean }) {
+// focusFirst: cada vez que cambia, el foco va a la primera ficha (Buscar, al cerrar el teclado con resultados)
+export function ItemGrid({ items, header, channels, active, focusFirst }: { items: Item[]; header?: React.ReactElement; channels?: boolean; active?: boolean; focusFirst?: number }) {
   const nav = useNav();
   const rowH = posterH() + px(40);
+  const list = useRef<FlatList<Item>>(null);
   // la última ficha con el foco: al volver de la ficha o del canal el foco vuelve a ella (se monta otra vez con
   // «preferred», como TV en vivo); sin esto caía en el buscador o en el menú de arriba
   const last = useRef('');
   const [target, setTarget] = useState({ k: '', n: 0 });
   // «preferred» solo un momento: si la ficha se volviera a montar al desplazarse no debe robar el foco
   const [pref, setPref] = useState('');
-  useEffect(() => {
-    if (!active || !last.current) return;
-    setTarget(x => ({ k: last.current, n: x.n + 1 }));
-    setPref(last.current);
+  // lleva el foco a una ficha: primero se desplaza la lista hasta su fila (si no está montada el foco caía arriba, en el
+  // buscador o el menú) y se vuelve a montar con «preferred»
+  const focusKey = (k: string) => {
+    const i = items.findIndex(it => it.kind + it.id === k);
+    if (i < 0) return () => {};
+    if (!header) {
+      try {
+        list.current?.scrollToIndex({ index: Math.floor(i / COLS), animated: false, viewPosition: 0.3 });
+      } catch {
+        // fila todavía sin medir: se queda donde está
+      }
+    }
+    setTarget(x => ({ k, n: x.n + 1 }));
+    setPref(k);
     const id = setTimeout(() => setPref(''), 1000);
     return () => clearTimeout(id);
+  };
+  useEffect(() => {
+    if (!active || !last.current) return;
+    return focusKey(last.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
+  useEffect(() => {
+    if (!focusFirst || !items.length) return;
+    const k = items[0].kind + items[0].id;
+    last.current = k;
+    return focusKey(k);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusFirst, items.length > 0]);
   return (
     <FlatList
+      ref={list}
       data={items}
       numColumns={COLS}
       key={COLS}

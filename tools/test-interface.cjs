@@ -166,6 +166,30 @@ test('canal: si el servidor no da la lista a la primera (página vacía al salir
     bad.destroy();
   } finally { global.fetch = realFetch; }
 });
+test('Buscar: lo que empieza por lo buscado primero y los nombres normalizados una sola vez por catálogo', () => {
+  // el catálogo llega al tema de colores (react-native): aquí basta uno vacío
+  const load = Module._load;
+  Module._load = function(request, parent, isMain) {
+    if (/(^|\/)theme$/.test(request)) return { setPalette() {}, validPalette: () => null, C: {}, px: n => n };
+    if (/\.(png|jpe?g)$/.test(request)) return 1;
+    return load.call(this, request, parent, isMain);
+  };
+  let catalog;
+  try { ({ catalog } = require('../src/data/catalog.ts')); } finally { Module._load = load; }
+  catalog.unlocked = true;
+  const items = [
+    { stream_id: 1, name: 'La gran aventura', category_id: '1' },
+    { stream_id: 2, name: 'Aventura en el mar', category_id: '1' },
+    { stream_id: 3, name: 'Otra cosa', category_id: '1' },
+  ];
+  catalog.k = { vod: { items, cats: [{ id: '1', name: 'Películas' }] } };
+  assert.deepEqual(catalog.search('aventura').map(it => it.name), ['Aventura en el mar', 'La gran aventura']);
+  const names = catalog.folded.vod.names;
+  catalog.search('mar');
+  assert.equal(catalog.folded.vod.names, names);
+  catalog.clear();
+  catalog.unlocked = false;
+});
 test('HLS libera la URL MSE al cerrar', () => {
   const { LiveHls } = require('../src/player/livehls.ts');
   const realRevoke = URL.revokeObjectURL;
