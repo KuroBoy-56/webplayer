@@ -140,6 +140,8 @@ export default function Player({ params }: { params: PlayParams }) {
   const triedOther = useRef(false);
   // vueltas automáticas por todas las formas (http, https, DNS, motor) antes de rendirse: nada de «Reintentar»
   const rounds = useRef(0);
+  // canal con la línea llena: veces que se esperó una conexión libre (se reinicia al cambiar de canal o al sonar)
+  const lineWaits = useRef(0);
   // botón DNS: si tampoco abre, una vez por la IP que da el DNS elegido (solo ese video)
   const triedDns = useRef(false);
   // TV en vivo: formato que se está probando (LIVE_FORMATS)
@@ -357,6 +359,7 @@ export default function Player({ params }: { params: PlayParams }) {
       triedOther.current = false;
       fmtAt.current = 0;
       rounds.current = 0;
+      lineWaits.current = 0;
       liveRecon.current = { n: 0, ok: 0, since: 0 };
       // El índice cambia ya, incluso si llegan varias flechas antes del render.
       // Al mantener la tecla, solo abre el último canal elegido tras 120 ms.
@@ -507,6 +510,7 @@ export default function Player({ params }: { params: PlayParams }) {
       setPaused(false);
       setStatus('');
       rounds.current = 0;
+      lineWaits.current = 0;
       liveRecon.current.ok = Date.now();
       if (!liveRecon.current.since) liveRecon.current.since = Date.now();
       // película o episodio que tardó más de 8 s en empezar: al panel con los tiempos y el camino que siguió (sin esto no
@@ -677,7 +681,7 @@ export default function Player({ params }: { params: PlayParams }) {
       let text: string;
       if (r.xui) text = serverText(r, true);
       else if (r.status && r.status !== 'active') text = t('Línea no activa');
-      else if (r.code >= 400 && r.max && (r.active || 0) >= r.max) text = t('Línea en uso en otro equipo');
+      else if (r.max && (r.active || 0) >= r.max) text = t('Línea en uso en otro equipo');
       else if (r.code === 404 || r.code === 410) text = t('Canal no disponible en el servidor');
       else if (r.code === 401 || r.code === 403) text = t('El servidor rechazó el canal ({x})', { x: String(r.code) });
       else if (r.code >= 500) text = t('El servidor del canal tiene problemas ({x})', { x: String(r.code) });
@@ -787,8 +791,20 @@ export default function Player({ params }: { params: PlayParams }) {
           streamCheck(urlFor(i), getState().session!, '', true).then(r => {
             if (!alive || indexRef.current !== i || loadRev.current !== revision) return;
             vs.live = r;
+            // La línea tiene todas sus conexiones ocupadas (otros equipos, o canales recién dejados que el servidor sigue
+            // contando un rato): por eso contesta una página vacía. Se espera a que se libere una y se pide otra vez el
+            // mismo canal (hasta 2 veces), sin probar el otro protocolo ni el DNS; después, «Línea en uso en otro
+            // equipo». Antes terminaba en «el equipo no pudo abrir el video» con un canal que sí abre
+            const full = !!r.max && (r.active || 0) >= r.max;
+            if (full && !r.xui && lineWaits.current < 2) {
+              lineWaits.current++;
+              vs.checked = false;
+              setStatus(t('Línea ocupada ({a}/{m}): esperando una conexión libre…', { a: String(r.active), m: String(r.max) }));
+              retryLive(i, 8000);
+              return;
+            }
             // una página sin código de XUI no dice el motivo: se siguen probando las otras formas
-            if (r.xui || r.code >= 400 || (r.status && r.status !== 'active')) return showLive(r);
+            if (full || r.xui || r.code >= 400 || (r.status && r.status !== 'active')) return showLive(r);
             nextLive();
           });
           return;

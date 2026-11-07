@@ -406,6 +406,7 @@ const en = {
   "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ change channel ({x}/{y}) · OK channel list · MENU audio and subtitles",
   "Todavía no hay videos de prueba.": "No test videos yet.",
   "Este Fire TV tiene Vega OS {v}. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran al instante.": "This Fire TV has Vega OS {v}. Update it to Vega OS 2.0 (Settings › My Fire TV › About › Check for Updates) so movies and channels open instantly.",
+  "Línea ocupada ({a}/{m}): esperando una conexión libre…": "Line busy ({a}/{m}): waiting for a free connection…",
 };
 
 export default en;

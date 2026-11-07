@@ -553,8 +553,8 @@ export class LiveHls {
 
   // Imagen congelada con video de sobra por delante (el audio puede seguir sonando): 3 veces en 30 s y empujarla no
   // sirve. Player vuelve a abrir el canal (playback.liveRetryTs): primero igual (reproductor nuevo) y después en MPEG-TS.
-  // En los primeros 20 s del canal, a la primera: al abrir así, la segunda vez abre bien (antes se veía la imagen quieta
-  // varios segundos con el audio sonando y recién después se volvía a cargar)
+  // (La 2.0.9 lo volvía a abrir a la primera en los primeros 20 s: cada reapertura es otra conexión a la línea y con la
+  // línea llena el canal ya no abría; volvió a ser como antes: el salto al cuadro clave siguiente lo resuelve)
   frozen = false;
   private freezes: number[] = [];
   private startedAt = 0;
@@ -562,7 +562,7 @@ export class LiveHls {
     const now = Date.now();
     this.freezes = this.freezes.filter(x => now - x < 30000);
     this.freezes.push(now);
-    if ((this.freezes.length < 3 && now - this.startedAt > 20000) || this.frozen || !this.alive) return;
+    if (this.freezes.length < 3 || this.frozen || !this.alive) return;
     this.frozen = true;
     this.lastProblem = 'imagen congelada con ' + this.aheadSec().toFixed(0) + ' s por delante';
     this.onError('la imagen se congeló');

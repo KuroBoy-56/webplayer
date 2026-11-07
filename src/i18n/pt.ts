@@ -407,6 +407,7 @@ const pt: Record<Key, string> = {
   "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ mudar de canal ({x}/{y}) · OK lista de canais · MENU áudio e legendas",
   "Todavía no hay videos de prueba.": "Ainda não há vídeos de teste.",
   "Este Fire TV tiene Vega OS {v}. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran al instante.": "Este Fire TV tem o Vega OS {v}. Atualize para o Vega OS 2.0 (Configurações › Meu Fire TV › Sobre › Verificar atualizações) para que filmes e canais abram na hora.",
+  "Línea ocupada ({a}/{m}): esperando una conexión libre…": "Linha ocupada ({a}/{m}): aguardando uma conexão livre…",
 };
 
 export default pt;

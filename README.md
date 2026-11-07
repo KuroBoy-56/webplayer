@@ -207,6 +207,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Línea llena en pantalla grande y sin reaperturas de más (2.0.11)**: los avisos mostraron `conexiones=4/4` (la línea
+  sin conexiones libres: otros equipos y canales recién dejados, que XUI sigue contando un rato) y XUI contestaba una
+  página vacía; la pantalla grande terminaba en «el equipo no pudo abrir el video» con un canal que sí abre. Ahora, con
+  la línea llena, espera una conexión libre y pide otra vez el mismo canal (hasta 2 veces, «Línea ocupada (4/4):
+  esperando una conexión libre…»), sin probar el otro protocolo ni el DNS; si sigue llena, «Línea en uso en otro
+  equipo». La 2.0.9 volvía a abrir el canal a la primera imagen congelada de los primeros 20 s: cada reapertura es otra
+  conexión y llenaba la línea; volvió a ser como antes (3 veces en 30 s). Se mantienen el arranque en IDR y el
+  vigilante de cuadros de video (imagen verde o quieta con el audio sonando).
 - **Buscar sin quedarse en el teclado (2.0.10)**: los resultados se arman mientras se escribe (como Android); al cerrar
   el teclado con **Listo** o con **Atrás** (que ya no borra lo escrito) el foco baja a la primera carátula, así bajar
   ya no vuelve a abrir el teclado. Al volver de la ficha el foco queda en la carátula que se abrió: la lista se desplaza
