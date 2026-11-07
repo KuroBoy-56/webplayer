@@ -771,3 +771,26 @@ test('películas: un «.mp4» que es MKV (cabecera EBML) se reconoce con el prim
     r.destroy();
   } finally { global.fetch = realFetch; }
 });
+
+test('películas: con video bajado y la imagen sin avanzar nunca en 8 s se da por no decodificable (Vega no avisa el error)', () => {
+  const { StartWatch } = require('../src/player/startwatch.ts');
+  let w = new StartWatch();
+  // abre en 0, con 5 s por delante y quieto
+  assert.equal(w.stuck(0, 5, false, 1000), false);
+  assert.equal(w.stuck(0, 5, false, 8000), false);
+  assert.equal(w.stuck(0, 5, false, 9100), true);
+  assert.equal(w.stuck(0, 5, false, 20000), false); // una sola vez
+  // sin video por delante (bajando) o en pausa no cuenta
+  w = new StartWatch();
+  assert.equal(w.stuck(0, 1, false, 1000), false);
+  assert.equal(w.stuck(0, 1, false, 30000), false);
+  assert.equal(w.stuck(0, 5, true, 40000), false);
+  // un salto de la app no es «avanzar»; avanzar de verdad lo deja tranquilo
+  w = new StartWatch();
+  assert.equal(w.stuck(0, 5, false, 1000), false);
+  w.moved(1.2);
+  assert.equal(w.stuck(1.2, 5, false, 2000), false);
+  assert.equal(w.stuck(2, 5, false, 3000), false);
+  assert.equal(w.started, true);
+  assert.equal(w.stuck(2, 5, false, 60000), false);
+});

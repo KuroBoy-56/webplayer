@@ -7,6 +7,7 @@ import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia'
 import { rangeGet, RangeState } from './rangeget';
 import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VIDEO_ID, VideoCfg, videoEntry } from '../lib/mp4box';
 import { hevcCodec } from './mkvparse';
+import { StartWatch } from './startwatch';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const AHEAD = 40; // segundos bajados por adelantado
@@ -257,6 +258,8 @@ export class Mp4Mse {
   // el reproductor no acepta el audio del archivo (Dolby en Vega): suena solo el video; los idiomas quedan en el menú
   noAudio = false;
   onError: () => void = () => {};
+  // video que el equipo no decodifica (Vega no avisa el error)
+  private sw = new StartWatch();
 
   constructor(private v: VideoPlayer, private url: string, private selectedAudio = -1, index: Uint8Array | null = null) {
     this.index = index;
@@ -756,6 +759,11 @@ export class Mp4Mse {
     try {
       const b = this.sb.buffered;
       const t = this.v.currentTime || 0;
+      if (this.sw.stuck(t, this.bufEnd() - t, this.v.paused)) {
+        this.why = 'con video bajado y sin imagen en 8 s (el equipo no decodifica este video)';
+        this.onError();
+        return;
+      }
       if (t !== this.lastT) {
         this.lastT = t;
         this.lastMove = Date.now();
@@ -784,6 +792,7 @@ export class Mp4Mse {
   }
 
   private jump(to: number): void {
+    this.sw.moved(to);
     this.v.currentTime = to;
     this.lastMove = Date.now();
     if (this.v.paused) this.v.play();

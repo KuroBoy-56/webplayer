@@ -207,6 +207,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **SDK 2.0 / Vega OS 2.0 y películas que el equipo no decodifica (2.0.5)**: se compila con el SDK de Vega más nuevo (2.0)
+  y el manifest declara `target = "2.0"` (`min = "1.2"`, sigue instalándose en equipos sin actualizar; los módulos
+  `IVega_*` ya no van en el manifest: los arma la compilación). Amazon: el reproductor de Vega abre direcciones http en
+  modo directo solo en Vega OS 2.0; con 1.2 da error 4 al instante y todo va por el lector de la app (más lento, como
+  mostraban los avisos: índice de 5-9 MB a ~0,8 MB/s). En 2.0 las películas y canales van por el reproductor de Vega,
+  como en LG. Amazon también advierte que Vega no avisa ningún error cuando no puede decodificar un video («carga para
+  siempre»): los lectores MP4 y MKV, con 3 s bajados y la imagen sin avanzar nunca en 8 s, pasan al siguiente camino
+  (`src/player/startwatch.ts`); antes se esperaban 45 s. Los avisos al panel traen la versión del sistema.
 - **Películas «.mp4» que son MKV y avisos de microcortes (2.0.4)**: hay servidores que entregan remuxes MKV (10 GB, audio
   AC-3) con extensión mp4. El lector MP4 buscaba un índice que no existe (hasta 12 lecturas al azar del archivo) y
   terminaba en el modo directo, que con http da error 4 en Vega OS anterior a 2.0: la película no abría, ni en Continuar

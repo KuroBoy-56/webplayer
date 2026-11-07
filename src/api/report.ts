@@ -19,6 +19,19 @@ export function bindReportContext(fn: typeof ctx): void {
   ctx = fn;
 }
 
+// versión del sistema (de ella depende qué abre el reproductor de Vega: http en modo directo solo desde 2.0); si el equipo
+// no la da con un nombre conocido, lo que trae Platform.constants (para saber dónde está)
+function osVersion(): string {
+  const pc: any = (Platform as any).constants || {};
+  const v = (Platform as any).Version || pc.osVersion || pc.Release || pc.release || pc.systemVersion || '';
+  if (v) return String(v);
+  try {
+    return JSON.stringify(pc).slice(0, 160);
+  } catch {
+    return '';
+  }
+}
+
 export function reportError(kind: ErrorKind, message: string, detail = '', screen = ''): void {
   if (!message || !hasMasterKey()) return;
   // el mismo error seguido no se manda más de una vez por minuto
@@ -39,7 +52,7 @@ export function reportError(kind: ErrorKind, message: string, detail = '', scree
     screen,
     device: c.device,
     model: 'Fire TV Vega OS',
-    os: 'Vega OS ' + String((Platform as any).Version ?? ''),
+    os: 'Vega OS ' + osVersion(),
     user: c.user,
     server: c.server,
   };

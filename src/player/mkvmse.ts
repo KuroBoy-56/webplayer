@@ -11,6 +11,7 @@ import { AUDIO_ID, audioEntry, concat, esdsFor, fragment, initSegment, rawBox, S
 import { Probe } from '../lib/probe';
 import { Cue } from '../lib/vtt';
 import { str, ebmlId, ebmlSize, ebmlUint, ac3Info, aacRate, Mkv, MkvTrack, mpaInfo, readMkvHeader, readCues, hevcCodec } from './mkvparse';
+import { StartWatch } from './startwatch';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const AHEAD = 40; // segundos bajados por adelantado
@@ -44,6 +45,8 @@ export class MkvMse {
   why = '';
   noAudio = false;
   onError: () => void = () => {};
+  // video que el equipo no decodifica (Vega no avisa el error)
+  private sw = new StartWatch();
   private ms: any = null;
   private objectUrl = '';
   private requests = new Set<AbortController>();
@@ -660,6 +663,11 @@ export class MkvMse {
     try {
       const b = this.sb.buffered;
       const t = this.v.currentTime || 0;
+      if (this.sw.stuck(t, this.bufEnd() - t, this.v.paused)) {
+        this.why = 'con video bajado y sin imagen en 8 s (el equipo no decodifica este video)';
+        this.onError();
+        return;
+      }
       if (t !== this.lastT) {
         this.lastT = t;
         this.lastMove = Date.now();
@@ -686,6 +694,7 @@ export class MkvMse {
   }
 
   private jump(to: number): void {
+    this.sw.moved(to);
     this.v.currentTime = to;
     this.lastMove = Date.now();
     if (this.v.paused) this.v.play();
