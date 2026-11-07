@@ -72,7 +72,20 @@ function wp_file_tracks($url, $target = '', $read = true, $panelWait = 2)
     if (!$read) { $memo[$ck] = false; return null; }
     $r = new WpRangeReader($target, 10);
     $t = wp_read_tracks($r);
-    if (!$t || $r->failed || !$t['audio']) { $memo[$ck] = false; return null; }
+    if (!$t || $r->failed || !$t['audio']) {
+        $memo[$ck] = false;
+        // el hosting no pudo leer el archivo (servidor que rechaza al hosting, página de XUI en vez del video…): sin
+        // esto no hay idiomas ni motor de conversión. Al panel, como mucho una vez cada 30 min por motivo.
+        $why = $r->err !== '' ? $r->err : ($r->failed ? 'tiempo o límite de pedidos' : ($t ? 'sin pistas de audio en la cabecera' : 'no es MP4 ni MKV'));
+        $kind = preg_match('~^(curl \d+|HTTP \d+)~', $why, $m) ? $m[1] : $why;
+        if (function_exists('wp_panel_report') && !wp_cache_get('ftracks_rep|' . $kind, 1800)) {
+            wp_cache_set('ftracks_rep|' . $kind, 1);
+            $h = (string)parse_url($target, PHP_URL_HOST);
+            wp_panel_report('playback', 'Idiomas de la web player: el hosting no pudo leer el archivo (' . $why . ')',
+                'servidor ' . $h . ' → ' . (wp_resolve_ip($h) ?: 'sin IP') . ' · pedidos ' . $r->requests . ' · tamaño ' . $r->size, 'Idiomas');
+        }
+        return null;
+    }
     $t['from'] = 'file';
     wp_cache_set($ck, $t);
     wp_panel_tracks_post($url, $t);

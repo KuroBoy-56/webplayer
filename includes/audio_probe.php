@@ -14,6 +14,7 @@ final class WpRangeReader
     public $size = 0;
     public $requests = 0;
     public $failed = false; // alguna lectura no llegó (tiempo, límite o error): el conteo no es confiable
+    public $err = '';       // por qué falló la última lectura (para el reporte al panel)
     private $chunks = [];
     private $deadline;
 
@@ -76,6 +77,9 @@ final class WpRangeReader
         curl_exec($ch);
         $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $final = (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+        $errno = curl_errno($ch);
+        // 23 = cortado a propósito al tener lo pedido
+        $this->err = $errno && $errno !== 23 ? 'curl ' . $errno . ' ' . curl_error($ch) : ($code !== 206 ? 'HTTP ' . $code . ' ' . ($hdr['content-type'] ?? '') : '');
         curl_close($ch);
         if ($code === 206) {
             // cada lectura vuelve a pedir el enlace original: el destino temporal del servidor IPTV puede servir solo una vez

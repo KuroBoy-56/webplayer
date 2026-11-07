@@ -89,10 +89,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
 
     // Cuando el panel responde por HTTPS cambia http:// por https:// en las DNS.
     // Se prueba también la versión http:// (primero), porque muchos servidores IPTV no tienen HTTPS.
+    // «https://host:80» (paneles viejos cambiaban http por https sin quitar el puerto) nunca contesta: https va sin él.
     $cands = [];
     foreach ($servers as $srv) {
         if (stripos($srv['url'], 'https://') === 0) {
             $cands[] = ['url' => 'http://' . substr($srv['url'], 8)] + $srv;
+            $srv['url'] = preg_replace('~^(https://[^/:]+):80(?=/|$)~i', '$1', $srv['url']);
         }
         $cands[] = $srv;
     }
@@ -200,7 +202,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
     }
     if (!$anyReply) {
         // ningún servidor contestó: al panel con lo que pasó en cada uno (Errores de las apps)
-        wp_panel_report('error', 'Login de la web player: ningún servidor IPTV contestó', implode(' | ', $seen), 'Login');
+        // todos rechazaron la conexión al instante (curl 7): el servidor IPTV o su firewall no deja entrar al hosting
+        // (XUI bloquea la IP que junta intentos fallidos o demasiadas conexiones: todos los usuarios de la web salen
+        // con la IP del hosting). El panel agrega esa IP al reporte.
+        $refused = $fails && count(array_filter($fails, function ($f) { return strpos((string)$f, 'curl 7 ') === 0; })) === count($fails);
+        $ips = [];
+        foreach ($servers as $srv) {
+            $h = (string)parse_url($srv['url'], PHP_URL_HOST);
+            if ($h !== '' && !isset($ips[$h])) $ips[$h] = $h . ' → ' . (wp_resolve_ip($h) ?: 'sin IP');
+        }
+        wp_panel_report('error', $refused
+            ? 'Login de la web player: el servidor IPTV rechaza la conexión del hosting (¿IP del hosting bloqueada en XUI?)'
+            : 'Login de la web player: ningún servidor IPTV contestó',
+            implode(' | ', $seen) . "\nServidores: " . implode(', ', $ips)
+            . ($refused ? "\nRevisa en XUI «IPs bloqueadas» la IP del hosting de la web (abajo) y agrégala a las IP excluidas de la protección contra flood." : ''), 'Login');
         echo json_encode(['success' => false, 'message' => t('No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.')]);
         exit;
     }
