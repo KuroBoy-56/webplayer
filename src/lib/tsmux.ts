@@ -42,6 +42,14 @@ function ccSei(n: Uint8Array): boolean {
 const same = (a: Uint8Array | null, b: Uint8Array | null) => !!a && !!b && a.length === b.length && a.every((x, i) => x === b[i]);
 const hex = (n: number) => '0x' + n.toString(16);
 
+// Dónde empieza el canal: en el primer IDR (el cuadro clave de verdad) si el segmento trae uno. Empezar en un cuadro I
+// que no es IDR deja al decodificador sin las referencias de los cuadros que siguen: imagen verde o quieta con el audio
+// sonando hasta el siguiente IDR. Si el canal no manda IDR, como antes, en el primer cuadro I. -1 = ninguno
+export function startIndex(aus: Au[]): number {
+  const idr = aus.findIndex(x => x.pts >= 0 && x.nals.some(n => (n[0] & 0x1f) === 5));
+  return idr >= 0 ? idr : aus.findIndex(x => x.key && x.pts >= 0);
+}
+
 export class TsMux {
   private pmt: Pmt | null = null;
   private vPid = -1;
@@ -148,7 +156,7 @@ export class TsMux {
     if (!this.started) {
       // se empieza en un cuadro clave (y el audio desde ahí)
       if (this.vPid >= 0) {
-        const k = aus.findIndex(x => x.key && x.pts >= 0);
+        const k = startIndex(aus);
         if (k < 0) return this.wait('sin cuadro clave');
         aus = aus.slice(k);
         this.ref = aus[0].dts;
@@ -208,6 +216,11 @@ export class TsMux {
       this.aNext = null;
       this.dirty = true;
     }
+  }
+
+  // el canal trae video (los de solo audio no tienen cuadros que contar)
+  hasVideo(): boolean {
+    return this.vPid >= 0;
   }
 
   // tiene audio que no es AAC (si el equipo no lo acepta, el lector abre el canal solo con el video)

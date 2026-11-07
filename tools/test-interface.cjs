@@ -869,3 +869,40 @@ test('pantalla grande: cambiar rápido con ▲▼ espera todos los cierres pendi
   for (let i = 0; i < 5; i++) await tick();
   assert.equal(ready, true);
 });
+
+test('canal: empieza en el primer IDR del segmento (no en un cuadro I cualquiera: imagen verde o quieta al abrir)', () => {
+  const { startIndex } = require('../src/lib/tsmux.ts');
+  const au = (type, key, pts = 100) => ({ pts, dts: pts, key, nals: [new Uint8Array([type, 0x88])] });
+  // cuadro I sin IDR, dos P y después el IDR: se empieza en el IDR
+  assert.equal(startIndex([au(0x01, true), au(0x01, false), au(0x01, false), au(0x65, true)]), 3);
+  // canal que nunca manda IDR: en el primer cuadro I, como antes
+  assert.equal(startIndex([au(0x01, false), au(0x01, true), au(0x01, false)]), 1);
+  assert.equal(startIndex([au(0x01, false)]), -1);
+});
+
+test('canal: al abrir, video quieto con el audio sonando (cuadros sin sumar y reloj avanzando) se detecta en segundos', () => {
+  const { LiveHls } = require('../src/player/livehls.ts');
+  let frames = 10;
+  const v = { currentTime: 0, paused: false, removeEventListener() {}, getVideoPlaybackQuality: () => ({ totalVideoFrames: frames }) };
+  const r = new LiveHls(v, 'http://fixture.invalid/live.m3u8');
+  r.mode = 'mp4';
+  r.mux = { hasVideo: () => true };
+  r.startedAt = Date.now();
+  assert.equal(r.videoStuck(), false);
+  // 4 s sin cuadros nuevos y el reloj avanzó 3,5 s: quieto
+  r.vFramesAt = Date.now() - 4000;
+  v.currentTime = 3.5;
+  assert.equal(r.videoStuck(), true);
+  // sumando cuadros, bien
+  frames = 40;
+  assert.equal(r.videoStuck(), false);
+  // canal de solo audio, o pasados los primeros 20 s: no se mira
+  r.vFramesAt = Date.now() - 4000;
+  v.currentTime = 9;
+  r.mux = { hasVideo: () => false };
+  assert.equal(r.videoStuck(), false);
+  r.mux = { hasVideo: () => true };
+  r.startedAt = Date.now() - 25000;
+  assert.equal(r.videoStuck(), false);
+  r.destroy();
+});

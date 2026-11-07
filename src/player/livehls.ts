@@ -23,6 +23,8 @@ import { TsMux } from '../lib/tsmux';
 import { disableNativeAes, nativeAesOn, nativeCbc } from '../lib/aesnative';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+// el contador de cuadros de video del equipo (getVideoPlaybackQuality) sumó alguna vez en esta sesión: se puede confiar
+let framesWork = false;
 
 // plain: el segmento ya descifrado (lo dejó la miniatura)
 type Got = { code: number; url: string; text?: string; data?: Uint8Array; type?: string; plain?: boolean };
@@ -550,17 +552,46 @@ export class LiveHls {
   }
 
   // Imagen congelada con video de sobra por delante (el audio puede seguir sonando): 3 veces en 30 s y empujarla no
-  // sirve. Player vuelve a abrir el canal (playback.liveRetryTs): primero igual (reproductor nuevo) y después en MPEG-TS
+  // sirve. Player vuelve a abrir el canal (playback.liveRetryTs): primero igual (reproductor nuevo) y después en MPEG-TS.
+  // En los primeros 20 s del canal, a la primera: al abrir así, la segunda vez abre bien (antes se veía la imagen quieta
+  // varios segundos con el audio sonando y recién después se volvía a cargar)
   frozen = false;
   private freezes: number[] = [];
+  private startedAt = 0;
   private froze(): void {
     const now = Date.now();
     this.freezes = this.freezes.filter(x => now - x < 30000);
     this.freezes.push(now);
-    if (this.freezes.length < 3 || this.frozen || !this.alive) return;
+    if ((this.freezes.length < 3 && now - this.startedAt > 20000) || this.frozen || !this.alive) return;
     this.frozen = true;
     this.lastProblem = 'imagen congelada con ' + this.aheadSec().toFixed(0) + ' s por delante';
     this.onError('la imagen se congeló');
+  }
+
+  // Video quieto con el audio sonando (imagen fija o pantalla verde al abrir el canal): el reloj sigue con el audio, así
+  // que unstick no lo ve. Se miran los cuadros de video que el equipo decodificó (getVideoPlaybackQuality): en los primeros
+  // 20 s, si en 3,5 s no sumó ninguno mientras el reloj avanzó 3 s, Player vuelve a abrir el canal (la segunda vez abre
+  // bien). Solo en equipos donde el contador anda (sumó alguna vez) y en canales con video
+  private vFrames = -1;
+  private vFramesAt = 0;
+  private vFramesT = 0;
+  private videoStuck(): boolean {
+    if (this.frozen || this.mode !== 'mp4' || !this.mux?.hasVideo() || Date.now() - this.startedAt > 20000) return false;
+    let n = 0;
+    try {
+      n = Number((this.v as any).getVideoPlaybackQuality?.()?.totalVideoFrames) || 0;
+    } catch {
+      return false;
+    }
+    const t = this.v.currentTime || 0;
+    if (n > 0) framesWork = true;
+    if (n !== this.vFrames || this.v.paused) {
+      this.vFrames = n;
+      this.vFramesAt = Date.now();
+      this.vFramesT = t;
+      return false;
+    }
+    return framesWork && Date.now() - this.vFramesAt > 3500 && t - this.vFramesT > 3;
   }
 
   // último segmento que llegó del servidor (el vigilante de Player espera más si el canal sigue bajando)
@@ -614,6 +645,12 @@ export class LiveHls {
       return;
     }
     this.unstick();
+    if (this.videoStuck()) {
+      this.frozen = true;
+      this.lastProblem = 'video quieto con el audio sonando (' + this.vFrames + ' cuadros)';
+      this.onError('la imagen se congeló');
+      return;
+    }
     const ahead = this.aheadSec();
     // Vega pausa el reproductor por su cuenta a veces (al soltarse el audio de la miniatura al pasar a pantalla grande):
     // el canal quedaba en pausa para siempre, porque el vigilante solo mira el video andando. En vivo nadie pausa a
@@ -820,6 +857,7 @@ export class LiveHls {
       const backlog = this.segs.filter(sg => sg.seq >= this.next).length;
       if (!this.started && (this.appended >= 2 || !more || backlog >= 2)) {
         this.started = true;
+        this.startedAt = Date.now();
         this.unstick();
         if (this.v.paused) this.v.play();
       }

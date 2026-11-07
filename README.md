@@ -207,6 +207,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canales sin imagen fija ni pantalla verde al abrir (2.0.9)**: el lector de canales empezaba en el primer cuadro I del
+  segmento aunque no fuera un IDR; los cuadros que siguen quedaban sin sus referencias y el decodificador mostraba la
+  imagen quieta o verde con el audio sonando hasta el siguiente IDR. Ahora empieza en el primer IDR del segmento si hay
+  (`startIndex` en `src/lib/tsmux.ts`; sin IDR, como antes). Además, en los primeros 20 s del canal: el lector mira los
+  cuadros de video que decodificó el equipo (`getVideoPlaybackQuality`) y, si en 3,5 s no sumó ninguno mientras el
+  reloj avanzó con el audio, vuelve a abrir el canal (`videoStuck`); y la primera imagen congelada ya lo vuelve a abrir
+  (después de los 20 s, como antes: 3 veces en 30 s). Antes se veía varios segundos la imagen quieta, o la pantalla
+  verde sin salir nunca.
 - **Cambio rápido con ▲▼ sin pantalla negra (2.0.8)**: cada canal de pantalla grande abre con un reproductor nuevo y
   espera a que se cierre el anterior (un solo decodificador). Se esperaba solo el último cierre: al pasar rápido por
   varios canales, el de paso (que no llegó a iniciarse) se cerraba al instante y el siguiente arrancaba mientras el
