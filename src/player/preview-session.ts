@@ -45,8 +45,16 @@ export function stopLivePreview(): Promise<void> {
   return released;
 }
 
+// Cierre del reproductor de pantalla grande (se libera en segundo plano). Amazon: el equipo tiene un solo decodificador y
+// el reproductor anterior debe cerrarse antes de iniciar el siguiente (si no, el nuevo da error al darle el video). La
+// miniatura y el reproductor siguiente lo esperan, como mucho 3 s
+let playerReleased: Promise<void> = Promise.resolve();
+export function playerClosing(p: Promise<void>): void {
+  playerReleased = Promise.race([p.then(() => {}, () => {}), new Promise<void>(r => setTimeout(r, 3000))]);
+}
+
 export function waitForLivePreview(): Promise<void> {
-  return released;
+  return Promise.all([released, playerReleased]).then(() => {});
 }
 
 // el canal que sonaba al cerrar la pantalla grande (se pudo cambiar con ▲▼): TV en vivo pone ahí el foco y la miniatura

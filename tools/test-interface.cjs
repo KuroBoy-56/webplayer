@@ -97,8 +97,21 @@ test('un cierre pendiente de la vista previa bloquea el inicio siguiente', async
   assert.equal(previews.stopLivePreview(), stop);
   finish();
   await stop;
+  await tick();
   assert.equal(ready, true);
   unregister();
+});
+test('la miniatura y el reproductor siguiente esperan a que se cierre el de pantalla grande (un solo decodificador)', async () => {
+  let finish;
+  let ready = false;
+  previews.playerClosing(new Promise(resolve => { finish = resolve; }));
+  previews.waitForLivePreview().then(() => { ready = true; });
+  await tick();
+  assert.equal(ready, false);
+  finish();
+  await tick();
+  await tick();
+  assert.equal(ready, true);
 });
 test('limpiar una vista previa vieja no detiene la nueva', async () => {
   let old = 0;

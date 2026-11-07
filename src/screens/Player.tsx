@@ -18,7 +18,7 @@ import { useListScroll } from '../lib/listscroll';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { Hooks, MenuItem, nativeLivePlanned, Playback } from '../player/playback';
-import { setLastLive, stopLivePreview, takePreview } from '../player/preview-session';
+import { playerClosing, setLastLive, stopLivePreview, takePreview, waitForLivePreview } from '../player/preview-session';
 import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
 import { hasHandoff } from '../player/livehls';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
@@ -70,6 +70,12 @@ export default function Player({ params }: { params: PlayParams }) {
   const surface = useRef('');
   const captions = useRef('');
   const [index, setIndex] = useState(params.index);
+  // Cambio de canal en pantalla grande: un reproductor nuevo por canal, como la miniatura y como indica Amazon (cerrar el
+  // reproductor, crear otro, iniciarlo, ponerle la superficie y recién darle el canal). Al cambiarle la dirección a un
+  // reproductor ya usado, el nativo de Vega daba error («Reconectando…») y el lector de la app tardaba y se congelaba
+  const [session, setSession] = useState(0);
+  // el reproductor se cierra para abrir otro canal (no se sale de la pantalla)
+  const zapping = useRef(false);
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -363,7 +369,8 @@ export default function Player({ params }: { params: PlayParams }) {
       setStatus(t('Conectando con el canal…'));
       zapTimer.current = setTimeout(() => {
         zapTimer.current = null;
-        load(n);
+        zapping.current = true;
+        setSession(x => x + 1);
       }, 120);
       showOverlay();
     },
@@ -392,7 +399,8 @@ export default function Player({ params }: { params: PlayParams }) {
   useEffect(() => {
     // el canal que ya suena en la miniatura: la pantalla grande se queda con ese reproductor (sin cerrarlo ni abrir el
     // canal de nuevo; solo cambia la superficie), como Roku
-    const inherited = params.kind === 'live' ? takePreview(urlFor(indexRef.current)) : null;
+    const inherited = session === 0 && params.kind === 'live' ? takePreview(urlFor(indexRef.current)) : null;
+    zapping.current = false;
     const v = inherited ? inherited.v : new VideoPlayer();
     video.current = v;
     const hooks: Hooks = {
@@ -438,7 +446,10 @@ export default function Player({ params }: { params: PlayParams }) {
     const retryLive = (i: number, delay: number) => {
       const revision = loadRev.current;
       setTimeout(() => {
-        if (alive && !zapTimer.current && indexRef.current === i && loadRev.current === revision) load(i);
+        if (!alive || zapTimer.current || indexRef.current !== i || loadRev.current !== revision) return;
+        // con un reproductor nuevo (como un cambio de canal): el nativo de Vega no admite otra dirección en el mismo
+        zapping.current = true;
+        setSession(x => x + 1);
       }, delay);
     };
 
@@ -814,7 +825,7 @@ export default function Player({ params }: { params: PlayParams }) {
     if (inherited) initialized = true;
     const begin: Promise<void> = inherited
       ? Promise.resolve()
-      : stopLivePreview().then(() => {
+      : stopLivePreview().then(waitForLivePreview).then(() => {
         if (!alive) return;
         // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
         const first = dnsUrl.current && dnsUrl.current.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
@@ -869,20 +880,23 @@ export default function Player({ params }: { params: PlayParams }) {
       .catch(() => alive && setError(t('No se pudo iniciar el reproductor.')));
 
     return () => {
+      const zap = zapping.current;
       alive = false;
       loadRev.current++;
       if (preUrl) dropPrefetch(preUrl);
-      if (params.kind === 'live') setLastLive((params.channels[indexRef.current] || params.channel)?.id || '');
+      if (params.kind === 'live' && !zap) setLastLive((params.channels[indexRef.current] || params.channel)?.id || '');
       try {
         save(true);
         released = c.destroy();
       } catch {
         // nada que guardar o el motor ya estaba cerrado
       }
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-      if (zapTimer.current) clearTimeout(zapTimer.current);
-      zapTimer.current = null;
+      if (!zap) {
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+        if (toastTimer.current) clearTimeout(toastTimer.current);
+        if (zapTimer.current) clearTimeout(zapTimer.current);
+        zapTimer.current = null;
+      }
       try {
         if (initialized) {
           v.removeEventListener('loadedmetadata', onMeta);
@@ -904,7 +918,7 @@ export default function Player({ params }: { params: PlayParams }) {
       // se libera en segundo plano: deinitializeSync() bloqueaba la app hasta 3 s al salir de un canal que
       // todavía conectaba (deportes) y los Atrás que se apretaban mientras tanto llegaban después a la pantalla de abajo
       try {
-        Promise.all([released, initializing?.catch(() => {})]).then(() => initialized ? v.deinitialize() : undefined).catch(() => {});
+        playerClosing(Promise.all([released, initializing?.catch(() => {})]).then(() => (initialized ? v.deinitialize() : undefined)));
       } catch {
         // el reproductor ya estaba cerrado
       }
@@ -913,7 +927,7 @@ export default function Player({ params }: { params: PlayParams }) {
       ready.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session]);
 
   // guía del canal actual
   useEffect(() => {

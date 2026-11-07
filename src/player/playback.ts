@@ -533,8 +533,8 @@ export class Playback {
   }
 
   // el archivo directo al reproductor de Vega (lo lee y decodifica él, como Android y LG). Los idiomas se leen de la
-  // cabecera cuando ya suena (onPlaying → langWatch). Si en 4 s ni leyó la cabecera del archivo (índice al final, servidor
-  // lento), en 10 s no empieza o da error, el lector de la app (mp4Fallback): antes se esperaban siempre 10 s
+  // cabecera cuando ya suena (onPlaying → langWatch). Si en 6 s no dio ninguna señal de vida (índice al final, servidor
+  // lento), en 12 s no empieza o da error, el lector de la app (mp4Fallback)
   private openNativeVod(): void {
     const g = this.gen;
     vodNativeTried.add(fileKey(this.url));
@@ -545,6 +545,7 @@ export class Playback {
     this.v.src = this.url;
     this.v.play();
     const give = () => g === this.gen && this.vodNative && !this.played && this.hooks.panelFailed?.();
+    // en modo directo Vega no siempre avisa loadedmetadata (Amazon): también cuenta timeupdate, readyState o la duración
     this.nativeTimer = setTimeout(() => {
       this.nativeTimer = null;
       if (!this.nativeMeta && !((this.v as any).readyState >= 1) && !((this.v.duration || 0) > 0)) return give();
@@ -552,7 +553,7 @@ export class Playback {
         this.nativeTimer = null;
         give();
       }, 6000);
-    }, 4000);
+    }, 6000);
   }
 
   // del reproductor nativo al lector de la app (failed: no llegó a sonar), desde pos
@@ -603,7 +604,8 @@ export class Playback {
   mp4Fallback(why = 'error del reproductor'): boolean {
     // el reproductor nativo no pudo con la película (o se cortó): el lector de la app desde donde iba
     if (this.vodNative) {
-      this.mp4Why = 'nativo: ' + why + ' a los ' + ((Date.now() - this.nativeAt) / 1000).toFixed(1) + ' s';
+      const e: any = (this.v as any).error;
+      this.mp4Why = 'nativo: ' + why + (e?.code ? ' ' + e.code + (e.message ? ' ' + String(e.message).slice(0, 60) : '') : '') + ' a los ' + ((Date.now() - this.nativeAt) / 1000).toFixed(1) + ' s';
       this.leaveNativeVod(!this.played, this.played ? this.realPos() : this.wantAt);
       return true;
     }
@@ -641,7 +643,7 @@ export class Playback {
 
   // con qué se está viendo la película (para el aviso de apertura lenta)
   vodMode(): string {
-    const m = this.vodNative ? 'nativo' : this.mse ? 'lector ' + (this.mse instanceof MkvMse ? 'mkv' : 'mp4') : this.shaka ? 'shaka' : this.remux ? 'panel' : 'directo';
+    const m = this.vodNative ? 'nativo' : this.mse ? 'lector ' + (this.mse instanceof MkvMse ? 'mkv' : 'mp4 ' + this.mse.diag()) : this.shaka ? 'shaka' : this.remux ? 'panel' : 'directo';
     return m + (this.mp4Why ? ' (' + this.mp4Why + ')' : '');
   }
 
@@ -656,6 +658,7 @@ export class Playback {
   // saltar, el reproductor avisa timeupdate al instante con ese segundo aunque se quede cargando (1.0.27 lo tomaba como
   // «ya suena», apagaba el vigilante y quedaba cargando sin fin)
   onTime(): void {
+    if (this.vodNative) this.nativeMeta = true;
     if (this.seekTo > 0 && !this.remux && !this.v.paused && (this.v.currentTime || 0) >= this.seekTo + 1.5) this.arrived();
   }
 

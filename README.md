@@ -207,6 +207,17 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Cambio de canal en pantalla grande igual que la miniatura (2.0.1)**: cada canal (▲▼, la lista de canales o una
+  reconexión) abre con un reproductor nuevo, como la miniatura y como indica Amazon para pasar de un video a otro (cerrar
+  el reproductor, crear otro, iniciarlo, ponerle la superficie y recién darle el video): el nativo de Vega vuelve a
+  abrir los canales al cambiar en pantalla grande (`session` en `src/screens/Player.tsx`). Con el lector de la app en el
+  mismo reproductor (2.0.0) tardaba y se congelaba la imagen. Amazon: el equipo tiene un solo decodificador y el
+  reproductor anterior debe cerrarse antes de iniciar el siguiente; el de pantalla grande se cerraba en segundo plano
+  sin que nadie lo esperara (la película siguiente o la miniatura podían dar error al empezar). Ahora la miniatura, el
+  canal siguiente y la película siguiente esperan ese cierre, como mucho 3 s (`playerClosing` en
+  `src/player/preview-session.ts`). En modo directo Vega no siempre avisa `loadedmetadata`: la película con el nativo
+  espera 6 s una señal (también `timeupdate`) antes de pasar al lector. El aviso de película lenta trae el código de
+  error del nativo y los tiempos del lector MP4 (índice, inicio, tamaño, una conexión).
 - **Versión 2.0.0: cambio de canal en pantalla grande como antes**: con ▲▼ (o la lista de canales) en pantalla grande el
   canal nuevo va por el lector de la app, como antes de la 1.0.66: el reproductor nativo de Vega da error al cambiarle la
   dirección a un reproductor ya usado y cada cambio terminaba en «Reconectando…» (`reused` en `src/player/playback.ts`).

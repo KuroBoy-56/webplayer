@@ -261,9 +261,20 @@ export class Mp4Mse {
   }
 
   // '' = empezó en el segundo pedido; si no, el motivo (el que llama sigue con el modo directo de siempre)
+  // para el aviso de apertura lenta: cuándo empezó, cuándo tuvo el índice y cuándo entregó el inicio al reproductor
+  private t0 = 0;
+  private tIdx = 0;
+  private tInit = 0;
+  diag(): string {
+    const s = (t: number) => (t ? ((t - this.t0) / 1000).toFixed(1) + 's' : '-');
+    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB en ' + s(this.tIdx) : 'no') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + this.oneConn + (this.why ? ' motivo=' + this.why : '') + ']';
+  }
+
   async start(at: number): Promise<string> {
+    this.t0 = Date.now();
     // el índice ya leído de este archivo (volver a abrirlo, Continuar viendo, cambiar de audio): sin pedirlo otra vez
     const moov = this.index || MOOV_CACHE.get(cacheKey(this.url)) || await this.readMoov();
+    this.tIdx = Date.now();
     if (moov) rememberMoov(this.url, moov);
     if (!moov) return 'índice: ' + (this.why || 'no encontrado');
     if (!this.alive) return '';
@@ -338,6 +349,7 @@ export class Mp4Mse {
       // sin duración
     }
     if (!(await this.append(init))) return 'inicio no aceptado: ' + this.why;
+    this.tInit = Date.now();
     this.place(at);
     if (at > 0) this.v.currentTime = at;
     this.pump();
