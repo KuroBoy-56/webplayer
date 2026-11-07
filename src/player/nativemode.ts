@@ -40,8 +40,11 @@ export function nativeFailedOnce(k: NativeKind): void {
 // Visto una vez, el resto de la sesión no se prueba el nativo con http (ni canales ni películas): sin el intento fallido
 // ni el «Reconectando…» de cada canal. Con https se sigue probando.
 let httpRejected = false;
-export function nativeRejectedHttp(): void {
+// true = recién se supo (la primera vez en la sesión)
+export function nativeRejectedHttp(): boolean {
+  if (httpRejected) return false;
   httpRejected = true;
+  return true;
 }
 export function nativeHttpOk(url: string): boolean {
   return !(httpRejected && /^http:/i.test(url));

@@ -19,7 +19,8 @@ import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { Hooks, MenuItem, nativeLivePlanned, Playback } from '../player/playback';
 import { playerClosing, setLastLive, stopLivePreview, takePreview, waitForLivePreview } from '../player/preview-session';
-import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
+import { dropPrefetch, prefetchList, prefetchRange, prefetchTail } from '../player/prefetch';
+import { moovKnown } from '../player/mp4mse';
 import { hasHandoff } from '../player/livehls';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
@@ -859,6 +860,8 @@ export default function Player({ params }: { params: PlayParams }) {
         } else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) {
           preUrl = first;
           prefetchRange(first, 0, 65536);
+          // y el final (el índice de casi todos los MP4 de los servidores IPTV) a la vez: una espera al servidor menos
+          if (!moovKnown(first)) prefetchTail(first, 8 * 1048576);
         }
         initializing = v.initialize().then(() => { initialized = true; });
         return initializing;

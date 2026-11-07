@@ -13,6 +13,7 @@ import { disableMp4, LiveHls } from './livehls';
 import { Engine, engineDenied, fileTracks, knownNow, knownTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
+import { osBefore2, osVersion } from '../lib/osversion';
 import { Probe } from '../lib/probe';
 import { pref, readJson, setPref, writeJson } from '../lib/storage';
 import { nativeAllowed, nativeFailedOnce, nativeHttpOk, nativeRejectedHttp, nativeWorked } from './nativemode';
@@ -658,7 +659,11 @@ export class Playback {
   // error 4 apenas se le dio una dirección http al nativo: el sistema no admite http en modo directo (Vega OS antes de 2.0)
   private httpCheck(): void {
     const e: any = (this.v as any).error;
-    if (e?.code === 4 && Date.now() - this.nativeAt < 300 && /^http:/i.test(this.url)) nativeRejectedHttp();
+    if (e?.code === 4 && Date.now() - this.nativeAt < 300 && /^http:/i.test(this.url) && nativeRejectedHttp()) {
+      // una vez por sesión: con Vega OS anterior a 2.0, cómo hacer que todo abra al instante
+      const v = osVersion();
+      if (osBefore2(v)) this.hooks.toast(t('Este Fire TV tiene Vega OS {v}. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran al instante.', { v }));
+    }
   }
 
   // con qué se está viendo la película (para el aviso de apertura lenta)

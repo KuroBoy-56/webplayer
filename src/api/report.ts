@@ -3,6 +3,7 @@
 // de la línea (el panel además tapa usuario/contraseña de las direcciones).
 import { Platform } from 'react-native';
 import { APP_VERSION } from '../version';
+import { osVersion } from '../lib/osversion';
 import { hasMasterKey, panelEncrypt } from '../lib/aes';
 import { formBody } from '../lib/http';
 import { APP_ID, tenantCode } from '../lib/tenant';
@@ -19,14 +20,12 @@ export function bindReportContext(fn: typeof ctx): void {
   ctx = fn;
 }
 
-// versión del sistema (de ella depende qué abre el reproductor de Vega: http en modo directo solo desde 2.0); si el equipo
-// no la da con un nombre conocido, lo que trae Platform.constants (para saber dónde está)
-function osVersion(): string {
-  const pc: any = (Platform as any).constants || {};
-  const v = (Platform as any).Version || pc.osVersion || pc.Release || pc.release || pc.systemVersion || '';
-  if (v) return String(v);
+// versión del sistema; si el equipo no la da con un nombre conocido, lo que trae Platform.constants (para saber dónde está)
+function osText(): string {
+  const v = osVersion();
+  if (v) return v;
   try {
-    return JSON.stringify(pc).slice(0, 160);
+    return JSON.stringify((Platform as any).constants || {}).slice(0, 400);
   } catch {
     return '';
   }
@@ -52,7 +51,7 @@ export function reportError(kind: ErrorKind, message: string, detail = '', scree
     screen,
     device: c.device,
     model: 'Fire TV Vega OS',
-    os: 'Vega OS ' + osVersion(),
+    os: 'Vega OS ' + osText(),
     user: c.user,
     server: c.server,
   };

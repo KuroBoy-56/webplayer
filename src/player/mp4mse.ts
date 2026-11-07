@@ -5,6 +5,7 @@
 // No pasa por la VPS: solo el cambio de idioma la usa. Saltos (◀▶, Continuar viendo) desde el cuadro clave anterior.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
+import { dropTail, takeTail } from './prefetch';
 import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VIDEO_ID, VideoCfg, videoEntry } from '../lib/mp4box';
 import { hevcCodec } from './mkvparse';
 import { StartWatch } from './startwatch';
@@ -206,6 +207,8 @@ function audioCfg(tk: Trk): AudioCfg | null {
 // índices de los últimos MP4 abiertos (pueden ser varios MB: bajarlos de nuevo tarda en servidores lentos)
 const MOOV_CACHE = new Map<string, Uint8Array>();
 const cacheKey = (u: string) => u.replace(/^https?:\/\//i, '');
+// ya se tiene el índice de este archivo (Player no pide el final por adelantado)
+export const moovKnown = (url: string) => MOOV_CACHE.has(cacheKey(url));
 function rememberMoov(url: string, moov: Uint8Array): void {
   const k = cacheKey(url);
   MOOV_CACHE.delete(k);
@@ -270,9 +273,11 @@ export class Mp4Mse {
   private t0 = 0;
   private tIdx = 0;
   private tInit = 0;
+  private tailUsed = false;
   diag(): string {
     const s = (t: number) => (t ? ((t - this.t0) / 1000).toFixed(1) + 's' : '-');
-    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB en ' + s(this.tIdx) : 'no') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + this.oneConn + (this.why ? ' motivo=' + this.why : '') + ']';
+    const n = this.rs.reqs || 0;
+    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB en ' + s(this.tIdx) : 'no') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + this.oneConn + ' final_adelantado=' + this.tailUsed + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
   }
 
   async start(at: number): Promise<string> {
@@ -476,7 +481,20 @@ export class Mp4Mse {
         // leer su tamaño y después el resto de a 1 MB (un índice de 9 MB eran 10 pedidos y tardaba 16 s; cada pedido al
         // servidor IPTV tarda en contestar)
         const tail = this.size - off;
-        win = this.size && tail > 1048576 && tail <= 24 * 1048576 ? await this.getParts(off, tail) : null;
+        // el final del archivo ya pedido por Player a la vez que el principio (prefetchTail): sin otra espera al servidor;
+        // si el índice empieza antes de lo que llegó, solo se pide lo que falta
+        const tp = takeTail(this.url);
+        const t = tp ? await tp : null;
+        win = null;
+        if (t && t.size === this.size && t.off + t.data.length >= this.size) {
+          if (off >= t.off) win = t.data.subarray(off - t.off);
+          else if (t.off - off <= 24 * 1048576) {
+            const lead = await this.getParts(off, t.off - off);
+            win = lead ? concat([lead, t.data]) : null;
+          }
+          if (win) this.tailUsed = true;
+        }
+        if (!win) win = this.size && tail > 1048576 && tail <= 24 * 1048576 ? await this.getParts(off, tail) : null;
         // si no se pudo de una vez, como antes: 1 MB para leer su tamaño y el resto en partes
         if (!win) win = await this.get(off, 1048576);
         wOff = off;
@@ -487,6 +505,8 @@ export class Mp4Mse {
       if (size === 1) size = u64(h, 8);
       else if (size === 0) size = this.size - off;
       if (typ(h, 4) === 'moov') {
+        // índice al principio: el final pedido por adelantado no hace falta
+        dropTail(this.url);
         if (size > MOOV_MAX) return null;
         // lo ya leído del índice y el resto en partes a la vez (cada conexión la limita el servidor por separado)
         const have = win.slice(off - wOff, Math.min(win.length, off - wOff + size));

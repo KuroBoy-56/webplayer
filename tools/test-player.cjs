@@ -59,6 +59,7 @@ const media = {
 };
 Module._load = function(request,parent,isMain){
   if(request==='@amazon-devices/react-native-w3cmedia') return {MediaSource:{isTypeSupported:()=>true}};
+  if(request==='react-native') return {Platform:{constants:{uiMode:'tv',keplerOSVersion:'1.2.3'}}};
   if(request==='../api/media') return media;
   if(request==='../lib/storage') return store;
   if(request==='../lib/i18n'||request==='./i18n') return {t:(key,vars)=>key.replace(/\{(\w+)\}/g,(m,k)=>vars?.[k]??m)};
@@ -298,6 +299,8 @@ test('error 4 al instante con http en el nativo (Vega OS antes de 2.0): el resto
   c.load('http://fixture.invalid/live/u/p/41.m3u8',0,true);await tick();
   assert.equal(video.src,'http://fixture.invalid/live/u/p/41.ts');
   video.error={code:4};assert.equal(c.liveRetryTs(),true);await c.destroy();
+  // con Vega OS 1.2 se dice cómo arreglarlo (una vez)
+  assert.ok(toasts.some(m=>m.includes('Vega OS 1.2.3')&&m.includes('2.0')),toasts.join(' | '));
   const {c:c2,video:v2}=setup();memory['native_live_'+APP_VERSION]='ok';
   c2.load('http://fixture.invalid/live/u/p/42.m3u8',0,true);await tick();
   assert.notEqual(v2.src,'http://fixture.invalid/live/u/p/42.ts');assert.equal(lives.length,2);

@@ -8,7 +8,8 @@ import { UA } from '../lib/http';
 import { takeRange } from './prefetch';
 
 // lastData: cuándo llegó el último tramo (Player espera más mientras el servidor sigue entregando)
-export type RangeState = { close: boolean; unbounded: boolean; size: number; why: string; lastData?: number };
+// reqs / waitMs: pedidos hechos y lo que tardó el servidor en contestar cada uno (para el aviso de apertura lenta)
+export type RangeState = { close: boolean; unbounded: boolean; size: number; why: string; lastData?: number; reqs?: number; waitMs?: number };
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -39,6 +40,8 @@ export async function rangeGet(url: string, off: number, len: number, st: RangeS
       if (st.close) headers.Connection = 'close';
       const target = finalUrl.get(url) || url;
       const r = await fetch(target, { headers, signal: ctrl.signal });
+      st.reqs = (st.reqs || 0) + 1;
+      st.waitMs = (st.waitMs || 0) + (Date.now() - t0);
       if (r.status !== 206 && target !== url) {
         // el token del balanceador venció o no admite otro pedido: otra vez por la dirección original
         finalUrl.delete(url);

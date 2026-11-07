@@ -16,6 +16,7 @@ import { useNav } from '../nav';
 import { deviceId, loadCatalog, loadCloud, logout, refreshCatalog, resetTenant, useAppState } from '../state';
 import { C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
+import { osVersion } from '../lib/osversion';
 
 // los nombres se traducen al mostrarlos
 const SUBS: [string, Key][] = [
@@ -201,7 +202,7 @@ export default function Account() {
           nav.reset({ name: 'login' });
         }}
       />
-      <Text style={s.ver}>{t('{x} para {p} · versión {v}', { x: brandName(), p: 'Fire TV (Vega OS)', v: APP_VERSION })}</Text>
+      <Text style={s.ver}>{t('{x} para {p} · versión {v}', { x: brandName(), p: 'Fire TV (Vega OS ' + (osVersion() || '?') + ')', v: APP_VERSION })}</Text>
       </ScrollView>
       <ChangePinDialog
         visible={changePin}

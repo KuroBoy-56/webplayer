@@ -34,7 +34,7 @@ Module._load = function(request, parent, isMain) {
   if (request === './panel') return { cloud: async () => { panelRequests++; return {}; } };
   if (request === '../lib/i18n' || request === './i18n') return { t: key => key };
   if (request === '@amazon-devices/react-native-w3cmedia') return { MediaSource: TestMediaSource, get WebCrypto() { return global.__webcrypto; } };
-  if (request === 'react-native') return { AppState: { currentState: 'active' } };
+  if (request === 'react-native') return { AppState: { currentState: 'active' }, Platform: { get constants() { return global.__rnConstants || {}; } } };
   if (request === './shaka-env') return { installShakaEnvironment() {} };
   if (request === './vendor/shaka-player.compiled') return { Player: TestShaka, polyfill: { installAll() {} }, net: { NetworkingEngine: { unregisterScheme() {}, registerScheme() {}, PluginPriority: { APPLICATION: 1 } }, HttpFetchPlugin: { parse() {} } } };
   return originalLoad.call(this, request, parent, isMain);
@@ -793,4 +793,56 @@ test('películas: con video bajado y la imagen sin avanzar nunca en 8 s se da po
   assert.equal(w.stuck(2, 5, false, 3000), false);
   assert.equal(w.started, true);
   assert.equal(w.stuck(2, 5, false, 60000), false);
+});
+
+test('versión de Vega OS: se lee de keplerOSVersion (texto u objeto) y se sabe si es anterior a 2.0', () => {
+  const { osVersion, osBefore2 } = require('../src/lib/osversion.ts');
+  global.__rnConstants = { isTesting: false, uiMode: 'tv', keplerOSVersion: '1.2.0' };
+  assert.equal(osVersion(), '1.2.0');
+  assert.equal(osBefore2(), true);
+  global.__rnConstants = { keplerOSVersion: { major: 2, minor: 0, patch: 5 } };
+  assert.equal(osVersion(), '2.0.5');
+  assert.equal(osBefore2(), false);
+  global.__rnConstants = {};
+  assert.equal(osVersion(), '');
+  assert.equal(osBefore2(), false);
+});
+
+test('películas MP4 con el índice al final: si Player ya pidió el final del archivo, el índice sale de ahí sin otro pedido', async () => {
+  const { Mp4Mse } = require('../src/player/mp4mse.ts');
+  const { prefetchTail } = require('../src/player/prefetch.ts');
+  const realFetch = global.fetch;
+  const MB = 1048576;
+  const size = 100 * MB;
+  const moovSize = 5 * MB;
+  const moovAt = size - moovSize;
+  const box = (out, at, len, type) => {
+    out[at] = (len >>> 24) & 255; out[at + 1] = (len >>> 16) & 255; out[at + 2] = (len >>> 8) & 255; out[at + 3] = len & 255;
+    for (let i = 0; i < 4; i++) out[at + 4 + i] = type.charCodeAt(i);
+  };
+  const asked = [];
+  global.fetch = async (url, { headers }) => {
+    let a, b;
+    const suf = /bytes=-(\d+)/.exec(headers.Range);
+    if (suf) { a = size - Number(suf[1]); b = size; } else { const m = /bytes=(\d+)-(\d+)/.exec(headers.Range); a = +m[1]; b = Math.min(size, +m[2] + 1); }
+    asked.push(suf ? 'final' : a);
+    const out = new Uint8Array(b - a);
+    const put = (at, len, type) => { if (at >= a && at + 8 <= b) box(out, at - a, len, type); };
+    put(0, 24, 'ftyp');
+    put(24, moovAt - 24, 'mdat');
+    put(moovAt, moovSize, 'moov');
+    return { status: 206, url, headers: { get: k => (k === 'content-range' ? 'bytes ' + a + '-' + (b - 1) + '/' + size : k === 'content-length' ? String(b - a) : null) }, arrayBuffer: async () => out.buffer };
+  };
+  try {
+    const u = 'http://fixture.invalid/tail.mp4';
+    prefetchTail(u, 8 * MB);
+    const r = new Mp4Mse({}, u);
+    const moov = await r.readMoov();
+    assert.equal(moov.length, moovSize - 8);
+    // el principio (64 KB), el final adelantado y el principio del video (2 MB): ningún pedido del índice
+    assert.equal(asked.filter(x => typeof x === 'number' && x >= moovAt).length, 0);
+    assert.ok(asked.includes('final'));
+    assert.match(r.diag(), /final_adelantado=true/);
+    r.destroy();
+  } finally { global.fetch = realFetch; }
 });

@@ -207,6 +207,15 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Versión de Vega OS a la vista y el índice de las películas sin una espera (2.0.6)**: los avisos mostraban que el
+  reproductor de Vega sigue rechazando http al instante (error 4) y que el lector de la app baja el índice a ~0,6 MB/s
+  (en canales baja a ~2,7 MB/s: lo lento es la respuesta del servidor de películas a cada pedido). Player pide el final
+  del archivo (8 MB, por sufijo `bytes=-N`: el índice de casi todos los MP4) a la vez que el principio, mientras el
+  reproductor se inicia (`prefetchTail` en `src/player/prefetch.ts`); el lector lo toma de ahí sin otro pedido y, si
+  el índice está al principio, lo corta. La versión de Vega OS (`keplerOSVersion`, `src/lib/osversion.ts`) sale en
+  Cuenta y en los avisos al panel; con Vega OS anterior a 2.0, la primera vez que el reproductor de Vega rechaza http
+  se muestra cómo actualizar el Fire TV. Los avisos de apertura lenta traen cuántos pedidos hizo el lector y cuánto
+  tardó el servidor en contestar cada uno.
 - **SDK 2.0 / Vega OS 2.0 y películas que el equipo no decodifica (2.0.5)**: se compila con el SDK de Vega más nuevo (2.0)
   y el manifest declara `target = "2.0"` (`min = "1.2"`, sigue instalándose en equipos sin actualizar; los módulos
   `IVega_*` ya no van en el manifest: los arma la compilación). Amazon: el reproductor de Vega abre direcciones http en
