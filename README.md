@@ -182,6 +182,8 @@ Como Roku y Vega (`ui/screens/AccountTv.kt`): a la izquierda la tarjeta de la l�
 
 ## Android 9 (Fire TV viejos)
 
+**1.3.13 (errores del panel):** película o capítulo que el reproductor no puede leer («None of the available extractors could read the stream», `NoDeclaredBrand`): `player/StreamProbe.kt` pide los primeros 4 KB para ver qué mandó el servidor; un aviso de XUI (vencida, canal inexistente…) se muestra con su texto, una página vacía o pasajera (la conexión anterior todavía cuenta) se vuelve a pedir hasta 3 veces (2, 4 y 6 s) en el mismo punto y después el otro protocolo; el reporte al panel dice qué llegó (código, tipo, bytes, comienzo). Un canal que Media3 da por trabado («Player stuck playing… 60000 ms», `ERROR_CODE_TIMEOUT`) se reconecta al directo como un corte de red en lugar de cerrar el canal. Si el otro protocolo rechaza la conexión (https en el puerto 443 cerrado, `ECONNREFUSED`, o TLS no aceptado), los reintentos vuelven al protocolo del inicio en vez de insistir 6 veces por el que no contesta.
+
 **1.3.12:** la miniatura de TV en vivo queda siempre puesta (solo cambia su reproductor) y, en Android 9 o anterior, se dibuja con TextureView (`res/layout/preview_player_texture.xml`) en vez de SurfaceView: ahí quitar y volver a poner la superficie de video dentro de la pantalla de Compose cerraba la app al dibujar (`NullPointerException … View.mViewFlags` en `ViewGroup.dispatchGetDisplayList`, Fire TV AFTR). En Android 10 o más nuevo no cambia nada.
 
 ## DNS

@@ -103,6 +103,12 @@ class PlayerActivity : ComponentActivity() {
     private val liveAlt = HashMap<Int, Int>()
     private var retries = 0
     private var lastRetryAt = 0L
+    /** servidor del inicio (antes de probar el otro protocolo): se vuelve a él si el otro rechaza la conexión */
+    private var firstBase = ""
+    private var schemeReverted = false
+    /** película o capítulo que el reproductor no pudo leer: veces que se volvió a pedir y lo que mandó el servidor */
+    private var pageRetries = 0
+    private var lastProbe: StreamProbe.Result? = null
     private var userPickedTracks = false
     /** última tecla del control (que no sea Atrás): para saber si el usuario está usando los controles */
     private var lastUserKey = 0L
@@ -119,6 +125,7 @@ class PlayerActivity : ComponentActivity() {
         session = Store.session() ?: if (localFiles != null) Session("", "", "", "", "") else run { finish(); return }
         // el protocolo con el que este servidor ya entregó video (http / https) va primero
         if (localFiles == null && Store.streamFlip && session.base.isNotEmpty()) session = session.copy(base = Xtream.otherScheme(session.base))
+        firstBase = session.base
         kind = runCatching { Kind.valueOf(intent.getStringExtra(Play.X_KIND) ?: "") }.getOrDefault(Kind.MOVIE)
         val ids = intent.getIntArrayExtra(Play.X_IDS) ?: IntArray(0)
         val titles = intent.getStringArrayExtra(Play.X_TITLES) ?: emptyArray()
@@ -306,6 +313,8 @@ class PlayerActivity : ComponentActivity() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 applyTitle(player.currentMediaItemIndex)
                 retries = 0
+                pageRetries = 0
+                lastProbe = null
                 if (kind == Kind.LIVE) {
                     queue.getOrNull(player.currentMediaItemIndex)?.let { Store.setLastChannel(it.id) }
                     showToast(mediaItem?.mediaMetadata?.title?.toString() ?: "")
@@ -395,6 +404,33 @@ class PlayerActivity : ComponentActivity() {
         if (e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) { player.seekToDefaultPosition(); player.prepare(); return }
 
         val isNetwork = e.errorCode in 2000..2999
+        // película o capítulo que el reproductor no puede leer («None of the available extractors could read the stream»):
+        // casi siempre el servidor mandó una página (vacía mientras todavía cuenta la conexión anterior, o un aviso de XUI)
+        // en lugar del video. Se mira qué mandó: un aviso definitivo de XUI se muestra; una página vacía o pasajera se vuelve
+        // a pedir hasta 3 veces (2, 4 y 6 s) en el mismo punto; un video de verdad (formato que el equipo no abre) va al aviso.
+        val unreadable = kind != Kind.LIVE && files[q.key] == null &&
+            (e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED || e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED)
+        if (unreadable && pageRetries < 3) {
+            val url = player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
+            val pos = player.currentPosition
+            lifecycleScope.launch {
+                val p = if (url.startsWith("http", true)) StreamProbe.check(url) else null
+                lastProbe = p
+                if (isFinishing || player.currentMediaItemIndex != idx) return@launch
+                if (p != null && (p.video || !StreamProbe.transient(p.xui))) { showErrorDialog(q, e); return@launch }
+                pageRetries++
+                showToast(getString(R.string.reconnecting))
+                kotlinx.coroutines.delay(2000L * pageRetries)
+                if (isFinishing || player.currentMediaItemIndex != idx) return@launch
+                player.seekTo(idx, pos)
+                player.prepare()
+                player.play()
+            }
+            return
+        }
+        // el reproductor se quedó «reproduciendo» sin avanzar (Media3: «Player stuck playing… for 60000 ms», ERROR_CODE_TIMEOUT):
+        // se reconecta como un corte de red (en vivo, al directo), no se cierra el canal de una vez
+        val stuck = e.errorCode == PlaybackException.ERROR_CODE_TIMEOUT
         if (kind == Kind.LIVE && (isNetwork || e.errorCode in 3000..3999 || e.errorCode in 4000..4999)) {
             // se prueba la siguiente forma de pedir el canal (m3u8 → ts → sin extensión)
             val alt = (liveAlt[q.id] ?: 0) + 1
@@ -407,7 +443,7 @@ class PlayerActivity : ComponentActivity() {
         }
         // el servidor no entrega el video por este protocolo (la sesión quedó en https y el video solo va por
         // http, o al revés): una vez se prueba el otro, en el mismo punto, antes de reintentar o dar el error
-        if (isNetwork && !schemeFlipped && files[q.key] == null && session.base.isNotEmpty()) {
+        if ((isNetwork || unreadable) && !schemeFlipped && files[q.key] == null && session.base.isNotEmpty()) {
             schemeFlipped = true
             session = session.copy(base = Xtream.otherScheme(session.base))
             val pos = player.currentPosition
@@ -420,10 +456,17 @@ class PlayerActivity : ComponentActivity() {
         // corte de conexión o del servidor IPTV: se retoma donde iba (hasta 6 veces seguidas)
         val now = System.currentTimeMillis()
         if (now - lastRetryAt > 120_000) retries = 0
-        if ((isNetwork || e.errorCode == PlaybackException.ERROR_CODE_UNSPECIFIED) && retries < 6) {
+        if ((isNetwork || stuck || e.errorCode == PlaybackException.ERROR_CODE_UNSPECIFIED) && retries < 6) {
             retries++
             lastRetryAt = now
             val pos = player.currentPosition
+            // el otro protocolo rechaza la conexión (https en el puerto 443 cerrado, certificado no aceptado): los reintentos
+            // van por el del inicio, no 6 veces por uno que nunca va a contestar
+            if (schemeFlipped && !schemeReverted && refused(e) && firstBase.isNotEmpty() && session.base != firstBase) {
+                schemeReverted = true
+                session = session.copy(base = firstBase)
+                for (i in 0 until player.mediaItemCount) queue.getOrNull(i)?.let { player.replaceMediaItem(i, mediaItem(it)) }
+            }
             showToast(getString(R.string.reconnecting))
             ui.postDelayed({
                 if (kind == Kind.LIVE) player.seekToDefaultPosition() else player.seekTo(idx, pos)
@@ -435,17 +478,41 @@ class PlayerActivity : ComponentActivity() {
         showErrorDialog(q, e)
     }
 
+    /** conexión rechazada o TLS no aceptado: ese protocolo no lo atiende el servidor */
+    private fun refused(e: Throwable): Boolean {
+        var c: Throwable? = e
+        var depth = 0
+        while (c != null && depth++ < 12) {
+            if (c is javax.net.ssl.SSLException || (c is java.net.ConnectException && (c.message?.contains("ECONNREFUSED") == true || c.message?.contains("refused", true) == true))) return true
+            c = c.cause
+        }
+        return false
+    }
+
     private fun showErrorDialog(q: QueueEntry, e: PlaybackException) {
         // al panel (Errores de las apps): qué contenido, qué error y el detalle técnico
         com.latmpx.player.data.ErrorReport.report(
             "playback",
             "No se pudo reproducir (${e.errorCodeName}): ${q.title}".take(300),
-            "tipo=${kind.name} id=${q.id} ext=${q.ext}" + (if (kind == Kind.LIVE) " intentos=m3u8,ts,sin extensión (último: ${e.errorCodeName})" else "") + "\n" +
+            "tipo=${kind.name} id=${q.id} ext=${q.ext}" + (if (kind == Kind.LIVE) " intentos=m3u8,ts,sin extensión (último: ${e.errorCodeName})" else "") +
+                (lastProbe?.let { " · " + it.describe() } ?: "") + (if (pageRetries > 0) " reintentos=$pageRetries" else "") +
+                (if (schemeFlipped) " protocolo=${session.base.substringBefore(':')}" else "") + "\n" +
                 (e.cause?.toString().orEmpty()) + "\n" + e.stackTraceToString(),
             "Reproductor",
         )
         if (isFinishing) return
-        val decoding = e.errorCode in 4000..4999
+        // el servidor dijo por qué (XUI: vencida, conexiones, canal inexistente…): ese motivo, no el aviso genérico
+        lastProbe?.xui?.let { code ->
+            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(R.string.play_failed)
+                .setMessage(Xtream.xuiMessage(code))
+                .setNegativeButton(R.string.close) { _, _ -> finish() }
+                .setOnCancelListener { finish() }
+                .show()
+            return
+        }
+        // llegó un archivo de video que el equipo no lee (formato o códec): es aviso de formato, no del servidor
+        val decoding = e.errorCode in 4000..4999 || lastProbe?.video == true
         // canal: ya se probó .m3u8, .ts y sin extensión y en ninguna llegó video (el servidor manda una página o un aviso:
         // canal de evento fuera de su hora, caído): se dice eso, no «el archivo está dañado»
         val offAir = kind == Kind.LIVE && e.errorCode in 3000..3999
