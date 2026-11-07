@@ -47,10 +47,13 @@ export function stopLivePreview(): Promise<void> {
 
 // Cierre del reproductor de pantalla grande (se libera en segundo plano). Amazon: el equipo tiene un solo decodificador y
 // el reproductor anterior debe cerrarse antes de iniciar el siguiente (si no, el nuevo da error al darle el video). La
-// miniatura y el reproductor siguiente lo esperan, como mucho 3 s
+// miniatura y el reproductor siguiente esperan TODOS los cierres pendientes (cada uno como mucho 5 s). Antes se esperaba
+// solo el último: al cambiar rápido con ▲▼, el canal de paso (que no llegó a iniciarse) se cerraba al instante y el
+// siguiente arrancaba mientras el anterior todavía se cerraba: pantalla negra y el canal se volvía a cargar
 let playerReleased: Promise<void> = Promise.resolve();
 export function playerClosing(p: Promise<void>): void {
-  playerReleased = Promise.race([p.then(() => {}, () => {}), new Promise<void>(r => setTimeout(r, 3000))]);
+  const capped = Promise.race([p.then(() => {}, () => {}), new Promise<void>(r => setTimeout(r, 5000))]);
+  playerReleased = Promise.all([playerReleased, capped]).then(() => {});
 }
 
 export function waitForLivePreview(): Promise<void> {

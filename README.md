@@ -207,6 +207,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Cambio rápido con ▲▼ sin pantalla negra (2.0.8)**: cada canal de pantalla grande abre con un reproductor nuevo y
+  espera a que se cierre el anterior (un solo decodificador). Se esperaba solo el último cierre: al pasar rápido por
+  varios canales, el de paso (que no llegó a iniciarse) se cerraba al instante y el siguiente arrancaba mientras el
+  anterior todavía se cerraba; el canal quedaba en negro y se volvía a cargar. Ahora se esperan todos los cierres
+  pendientes, cada uno como mucho 5 s (`playerClosing` en `src/player/preview-session.ts`). Con la lista de canales no
+  pasaba (un solo cambio).
 - **Canal de la miniatura en pantalla grande, índice recordado y película quieta (2.0.7)**: los avisos mostraron que el
   servidor IPTV tarda ~6,6 s en contestar cada pedido de una película (`espera_media`): cada vuelta de pedidos cuesta eso.
   El final adelantado por sufijo de la 2.0.6 no se usó en ese servidor (`final_adelantado=false`) y se quitó. Ahora el

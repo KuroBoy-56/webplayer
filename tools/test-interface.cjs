@@ -855,3 +855,17 @@ test('películas MP4: la segunda vez que se abre (Continuar viendo) el índice s
     again.destroy();
   } finally { global.fetch = realFetch; }
 });
+
+test('pantalla grande: cambiar rápido con ▲▼ espera todos los cierres pendientes, no solo el último (sin pantalla negra)', async () => {
+  let slowDone;
+  let ready = false;
+  // el canal anterior todavía se cierra; el de paso (no llegó a iniciarse) se cierra al instante
+  previews.playerClosing(new Promise(resolve => { slowDone = resolve; }));
+  previews.playerClosing(Promise.resolve());
+  previews.waitForLivePreview().then(() => { ready = true; });
+  for (let i = 0; i < 5; i++) await tick();
+  assert.equal(ready, false);
+  slowDone();
+  for (let i = 0; i < 5; i++) await tick();
+  assert.equal(ready, true);
+});
