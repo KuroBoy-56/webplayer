@@ -25,7 +25,9 @@ function osText(): string {
   const v = osVersion();
   if (v) return v;
   try {
-    return JSON.stringify((Platform as any).constants || {}).slice(0, 400);
+    // sin lo que ya se sabe (el panel corta el campo: antes quedaba afuera justo la versión)
+    const { isTesting, reactNativeVersion, uiMode, ...rest } = (Platform as any).constants || {};
+    return JSON.stringify(rest).slice(0, 150);
   } catch {
     return '';
   }

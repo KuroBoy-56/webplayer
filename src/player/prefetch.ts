@@ -119,57 +119,6 @@ export function dropPrefetch(owner: string): void {
     win.stop.abort();
     win = null;
   }
-  dropTail(owner);
-}
-
-// El final del archivo (donde los servidores IPTV dejan el índice de casi todos los MP4), pedido a la vez que el
-// principio mientras el reproductor se inicia: el lector esperaba al servidor dos veces seguidas (el principio y recién
-// después el índice). Pedido por sufijo (bytes=-len): no hace falta saber antes el tamaño del archivo. Si el índice está
-// al principio, el lector lo corta (dropTail).
-export type TailGot = { off: number; data: Uint8Array; size: number } | null;
-let tail: { url: string; at: number; p: Promise<TailGot>; stop: AbortController } | null = null;
-const TAIL_TTL = 60000;
-
-export function prefetchTail(url: string, len: number): void {
-  tail?.stop.abort();
-  const stop = new AbortController();
-  tail = { url, at: Date.now(), stop, p: fetchTail(url, len, stop.signal) };
-}
-
-export function takeTail(url: string): Promise<TailGot> | null {
-  if (!tail || tail.url !== url || Date.now() - tail.at > TAIL_TTL) return null;
-  const p = tail.p;
-  tail = null;
-  return p;
-}
-
-export function dropTail(url: string): void {
-  if (!tail || tail.url !== url) return;
-  tail.stop.abort();
-  tail = null;
-}
-
-function fetchTail(url: string, len: number, stop: AbortSignal): Promise<TailGot> {
-  return (async (): Promise<TailGot> => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 60000);
-    stop.addEventListener('abort', () => ctrl.abort(), { once: true } as any);
-    try {
-      const r = await fetch(url, { headers: { 'User-Agent': UA, Range: 'bytes=-' + len }, signal: ctrl.signal });
-      const cr = /bytes (\d+)-(\d+)\/(\d+)/.exec(r.headers.get('content-range') || '');
-      // sin sufijos (200, 416) o mandaría más de lo pedido: el lector lo pide como siempre
-      if (r.status !== 206 || !cr || Number(r.headers.get('content-length') || 0) > len + 65536) {
-        ctrl.abort();
-        return null;
-      }
-      const data = new Uint8Array(await r.arrayBuffer());
-      return data.length === Number(cr[2]) - Number(cr[1]) + 1 ? { off: Number(cr[1]), data, size: Number(cr[3]) } : null;
-    } catch {
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
-  })();
 }
 
 function abortSeg(): void {

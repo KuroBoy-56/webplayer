@@ -207,6 +207,17 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canal de la miniatura en pantalla grande, índice recordado y película quieta (2.0.7)**: los avisos mostraron que el
+  servidor IPTV tarda ~6,6 s en contestar cada pedido de una película (`espera_media`): cada vuelta de pedidos cuesta eso.
+  El final adelantado por sufijo de la 2.0.6 no se usó en ese servidor (`final_adelantado=false`) y se quitó. Ahora el
+  lector MP4 recuerda en el equipo dónde está el índice de cada archivo (tamaño, posición y largo; `mp4_spots`, 300
+  archivos): al volver a abrirlo (Continuar viendo) lo pide a la vez que el principio, una vuelta menos. La pantalla
+  grande se queda con el reproductor de la miniatura también si todavía conecta (antes abría el canal otra vez y XUI,
+  que sigue contando la conexión de la miniatura unos segundos, contestaba una página vacía: «el equipo no pudo abrir el
+  video de este canal» con un canal que se veía en la miniatura); si la miniatura ya sonaba y Vega la pausó, sigue sin
+  abrirlo de nuevo. Con una página vacía el lector de canales reintenta hasta 15 s (antes 6 s). Una película o episodio
+  que ya sonaba y queda quieto 30 s sin pausa (p. ej. tras cambiar el idioma) se abre otra vez donde iba y se avisa al
+  panel. El campo del sistema en los avisos ya no trae lo conocido (el panel lo cortaba antes de la versión).
 - **Versión de Vega OS a la vista y el índice de las películas sin una espera (2.0.6)**: los avisos mostraban que el
   reproductor de Vega sigue rechazando http al instante (error 4) y que el lector de la app baja el índice a ~0,6 MB/s
   (en canales baja a ~2,7 MB/s: lo lento es la respuesta del servidor de películas a cada pedido). Player pide el final

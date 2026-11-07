@@ -278,9 +278,11 @@ export class LiveHls {
       (this.v as any).srcObject = ms;
     }
     let err = h ? '' : await this.refresh();
-    for (let i = 0; err && i < 3 && this.alive && this.retryable(); i++) {
+    // hasta 6 veces (1, 2, 3, 3, 3 y 3 s: 15 s): XUI sigue contando unos segundos la conexión que se acaba de cerrar
+    // (miniatura, canal anterior) y mientras tanto contesta vacío; con 6 s la pantalla grande daba el canal por perdido
+    for (let i = 0; err && i < 6 && this.alive && this.retryable(); i++) {
       this.retries++;
-      await sleep(1000 * (i + 1));
+      await sleep(1000 * Math.min(i + 1, 3));
       if (!this.alive) return '';
       this.list = this.first;
       err = await this.refresh();

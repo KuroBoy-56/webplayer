@@ -5,7 +5,7 @@
 // No pasa por la VPS: solo el cambio de idioma la usa. Saltos (◀▶, Continuar viendo) desde el cuadro clave anterior.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
-import { dropTail, takeTail } from './prefetch';
+import { readJson, writeJson } from '../lib/storage';
 import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VIDEO_ID, VideoCfg, videoEntry } from '../lib/mp4box';
 import { hevcCodec } from './mkvparse';
 import { StartWatch } from './startwatch';
@@ -207,8 +207,28 @@ function audioCfg(tk: Trk): AudioCfg | null {
 // índices de los últimos MP4 abiertos (pueden ser varios MB: bajarlos de nuevo tarda en servidores lentos)
 const MOOV_CACHE = new Map<string, Uint8Array>();
 const cacheKey = (u: string) => u.replace(/^https?:\/\//i, '');
-// ya se tiene el índice de este archivo (Player no pide el final por adelantado)
-export const moovKnown = (url: string) => MOOV_CACHE.has(cacheKey(url));
+// Dónde está el índice de los últimos archivos abiertos (tamaño del archivo, posición y largo: unos bytes por archivo),
+// guardado en el equipo: al volver a abrirlos se pide el índice sin buscarlo primero
+type Spot = { size: number; off: number; len: number };
+const SPOTS = 'mp4_spots';
+let spots: Record<string, Spot & { t: number }> | null = null;
+function spotOf(url: string): Spot | null {
+  if (!spots) spots = readJson<Record<string, Spot & { t: number }>>(SPOTS) || {};
+  return spots[cacheKey(url)] || null;
+}
+function rememberSpot(url: string, s: Spot): void {
+  if (!spots) spots = readJson<Record<string, Spot & { t: number }>>(SPOTS) || {};
+  const k = cacheKey(url);
+  const old = spots[k];
+  if (old && old.size === s.size && old.off === s.off && old.len === s.len) return;
+  spots[k] = { ...s, t: Date.now() };
+  const ks = Object.keys(spots);
+  if (ks.length > 300) {
+    ks.sort((a, b) => spots![a].t - spots![b].t);
+    for (const x of ks.slice(0, ks.length - 300)) delete spots[x];
+  }
+  writeJson(SPOTS, spots);
+}
 function rememberMoov(url: string, moov: Uint8Array): void {
   const k = cacheKey(url);
   MOOV_CACHE.delete(k);
@@ -273,11 +293,11 @@ export class Mp4Mse {
   private t0 = 0;
   private tIdx = 0;
   private tInit = 0;
-  private tailUsed = false;
+  private spotUsed = false;
   diag(): string {
     const s = (t: number) => (t ? ((t - this.t0) / 1000).toFixed(1) + 's' : '-');
     const n = this.rs.reqs || 0;
-    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB en ' + s(this.tIdx) : 'no') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + this.oneConn + ' final_adelantado=' + this.tailUsed + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
+    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB en ' + s(this.tIdx) : 'no') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + this.oneConn + ' indice_recordado=' + this.spotUsed + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
   }
 
   async start(at: number): Promise<string> {
@@ -458,9 +478,21 @@ export class Mp4Mse {
   // de una vez (64 KB: ftyp y, si está al principio, el moov) y, al saltar al final, 1 MB desde la cabecera del moov
   // (casi siempre entra entero); antes eran 16 bytes por caja y otro pedido para el moov
   private async readMoov(): Promise<Uint8Array | null> {
+    // índice de este archivo ya ubicado antes (otra vez la misma película o episodio, Continuar viendo): se pide ya, a la
+    // vez que el principio. El servidor IPTV tarda ~6 s en contestar cada pedido (avisos «tardó en empezar»): es una
+    // espera menos
+    const spot = spotOf(this.url);
+    const early = spot ? this.getParts(spot.off, spot.len) : null;
     let off = 0;
     let win = await this.get(0, 65536);
     let wOff = 0;
+    if (early && spot && win && this.size === spot.size) {
+      const m = await early;
+      if (m && m.length === spot.len && typ(m, 4) === 'moov') {
+        this.spotUsed = true;
+        return kidsBody(m);
+      }
+    }
     // no es MP4 aunque diga .mp4: un MKV (los servidores IPTV entregan remuxes MKV con extensión mp4) lo abre el lector
     // de MKV; otra cosa (cabecera sin una caja MP4) al modo directo. Antes se hacían hasta 12 lecturas al azar del
     // archivo buscando un índice que no existe (segundos perdidos) y la película no abría
@@ -481,20 +513,7 @@ export class Mp4Mse {
         // leer su tamaño y después el resto de a 1 MB (un índice de 9 MB eran 10 pedidos y tardaba 16 s; cada pedido al
         // servidor IPTV tarda en contestar)
         const tail = this.size - off;
-        // el final del archivo ya pedido por Player a la vez que el principio (prefetchTail): sin otra espera al servidor;
-        // si el índice empieza antes de lo que llegó, solo se pide lo que falta
-        const tp = takeTail(this.url);
-        const t = tp ? await tp : null;
-        win = null;
-        if (t && t.size === this.size && t.off + t.data.length >= this.size) {
-          if (off >= t.off) win = t.data.subarray(off - t.off);
-          else if (t.off - off <= 24 * 1048576) {
-            const lead = await this.getParts(off, t.off - off);
-            win = lead ? concat([lead, t.data]) : null;
-          }
-          if (win) this.tailUsed = true;
-        }
-        if (!win) win = this.size && tail > 1048576 && tail <= 24 * 1048576 ? await this.getParts(off, tail) : null;
+        win = this.size && tail > 1048576 && tail <= 24 * 1048576 ? await this.getParts(off, tail) : null;
         // si no se pudo de una vez, como antes: 1 MB para leer su tamaño y el resto en partes
         if (!win) win = await this.get(off, 1048576);
         wOff = off;
@@ -505,9 +524,9 @@ export class Mp4Mse {
       if (size === 1) size = u64(h, 8);
       else if (size === 0) size = this.size - off;
       if (typ(h, 4) === 'moov') {
-        // índice al principio: el final pedido por adelantado no hace falta
-        dropTail(this.url);
         if (size > MOOV_MAX) return null;
+        // dónde está, para la próxima vez (Continuar viendo): se pide junto con el principio
+        rememberSpot(this.url, { size: this.size, off, len: size });
         // lo ya leído del índice y el resto en partes a la vez (cada conexión la limita el servidor por separado)
         const have = win.slice(off - wOff, Math.min(win.length, off - wOff + size));
         if (have.length >= size) return kidsBody(have);

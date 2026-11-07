@@ -48,9 +48,11 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
     const onErr = () => {
       if (alive && c) c.liveRetryTs();
     };
-    // OK otra vez: la pantalla grande se queda con este reproductor ya sonando (sin cerrarlo ni abrir el canal de nuevo)
+    // OK otra vez: la pantalla grande se queda con este reproductor (sin cerrarlo ni abrir el canal de nuevo), también si
+    // todavía conecta: abrir el canal otra vez mientras el servidor sigue contando la conexión de la miniatura hacía que
+    // contestara una página vacía y la pantalla grande decía que el canal no abre (aunque en la miniatura se veía)
     const give = (): boolean => {
-      if (!alive || closed || !v || !c || !isPlaying) return false;
+      if (!alive || closed || !v || !c) return false;
       alive = false;
       clearTimeout(timer);
       if (retry) clearTimeout(retry);

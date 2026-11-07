@@ -19,8 +19,7 @@ import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { Hooks, MenuItem, nativeLivePlanned, Playback } from '../player/playback';
 import { playerClosing, setLastLive, stopLivePreview, takePreview, waitForLivePreview } from '../player/preview-session';
-import { dropPrefetch, prefetchList, prefetchRange, prefetchTail } from '../player/prefetch';
-import { moovKnown } from '../player/mp4mse';
+import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
 import { hasHandoff } from '../player/livehls';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
@@ -88,6 +87,9 @@ export default function Player({ params }: { params: PlayParams }) {
   const controlsFocus = useRef(false);
   controlsFocus.current = controlsFocused;
   const [error, setError] = useState('');
+  // el aviso de error a la vista (el vigilante de película quieta no la vuelve a abrir)
+  const errorRef = useRef('');
+  errorRef.current = error;
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [menuMode, setMenuMode] = useState<'audio' | 'all'>('all');
   const [audioLabel, setAudioLabel] = useState('');
@@ -444,6 +446,30 @@ export default function Player({ params }: { params: PlayParams }) {
 
     // Los reintentos pertenecen al intento que los creó; otro canal o una
     // conexión más reciente invalida el temporizador y sus respuestas.
+    // Película o episodio que ya sonaba y se quedó quieto 30 s sin pausa (p. ej. después de cambiar el idioma, con el
+    // servidor tardando ~6 s en cada pedido): se abre otra vez en el segundo donde iba. Antes la imagen quedaba quieta
+    // para siempre
+    let lastT = -1;
+    let lastMove = Date.now();
+    let goodPos = 0;
+    const stuckDog = live
+      ? null
+      : setInterval(() => {
+        if (!alive || !ready.current || startDog.current || errorRef.current) return;
+        const now = Date.now();
+        const tNow = v.currentTime || 0;
+        if (tNow !== lastT || v.paused || !c.hasPlayed() || c.panelActive()) {
+          if (tNow !== lastT && c.hasPlayed()) goodPos = c.realPos();
+          lastT = tNow;
+          lastMove = now;
+          return;
+        }
+        if (now - lastMove < 30000) return;
+        lastMove = now;
+        reportError('warning', 'Película o serie quieta 30 s (se abre otra vez donde iba)', 'kind=' + params.kind + ' pos=' + Math.round(goodPos) + ' modo=' + c.vodMode(), 'Reproductor');
+        load(indexRef.current, Math.floor(goodPos));
+      }, 5000);
+
     const retryLive = (i: number, delay: number) => {
       const revision = loadRev.current;
       setTimeout(() => {
@@ -860,8 +886,6 @@ export default function Player({ params }: { params: PlayParams }) {
         } else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) {
           preUrl = first;
           prefetchRange(first, 0, 65536);
-          // y el final (el índice de casi todos los MP4 de los servidores IPTV) a la vez: una espera al servidor menos
-          if (!moovKnown(first)) prefetchTail(first, 8 * 1048576);
         }
         initializing = v.initialize().then(() => { initialized = true; });
         return initializing;
@@ -887,9 +911,20 @@ export default function Player({ params }: { params: PlayParams }) {
         if (surface.current) v.setSurfaceHandle(surface.current);
         if (captions.current) v.setCaptionViewHandle(captions.current);
         if (inherited) {
-          // ya suena: se quita el «cargando» y sigue igual; si la miniatura se había detenido, se abre como siempre
-          if (!v.paused) onPlaying();
-          else load(indexRef.current);
+          // ya suena: se quita el «cargando» y sigue igual (si Vega lo pausó al cambiar de superficie, sigue: abrirlo otra
+          // vez pedía el canal con la conexión de la miniatura todavía contada)
+          if (c.hasPlayed()) {
+            if (v.paused) v.play();
+            onPlaying();
+            return;
+          }
+          // la miniatura todavía conectaba: sigue con esa misma conexión; si en 25 s no suena, los pasos de siempre
+          setBuffering(true);
+          setStatus(t('Conectando con el canal…'));
+          startDog.current = setTimeout(() => {
+            startDog.current = null;
+            if (alive && ctl.current && !ctl.current.hasPlayed()) onErrorRef.current();
+          }, 25000);
           return;
         }
         load(indexRef.current, firstResume.current);
@@ -908,6 +943,7 @@ export default function Player({ params }: { params: PlayParams }) {
       } catch {
         // nada que guardar o el motor ya estaba cerrado
       }
+      if (stuckDog) clearInterval(stuckDog);
       if (!zap) {
         if (hideTimer.current) clearTimeout(hideTimer.current);
         if (toastTimer.current) clearTimeout(toastTimer.current);

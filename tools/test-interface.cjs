@@ -808,9 +808,8 @@ test('versión de Vega OS: se lee de keplerOSVersion (texto u objeto) y se sabe 
   assert.equal(osBefore2(), false);
 });
 
-test('películas MP4 con el índice al final: si Player ya pidió el final del archivo, el índice sale de ahí sin otro pedido', async () => {
+test('películas MP4: la segunda vez que se abre (Continuar viendo) el índice se pide a la vez que el principio', async () => {
   const { Mp4Mse } = require('../src/player/mp4mse.ts');
-  const { prefetchTail } = require('../src/player/prefetch.ts');
   const realFetch = global.fetch;
   const MB = 1048576;
   const size = 100 * MB;
@@ -820,12 +819,15 @@ test('películas MP4 con el índice al final: si Player ya pidió el final del a
     out[at] = (len >>> 24) & 255; out[at + 1] = (len >>> 16) & 255; out[at + 2] = (len >>> 8) & 255; out[at + 3] = len & 255;
     for (let i = 0; i < 4; i++) out[at + 4 + i] = type.charCodeAt(i);
   };
-  const asked = [];
+  let asked = [];
+  let gate = null;
   global.fetch = async (url, { headers }) => {
-    let a, b;
-    const suf = /bytes=-(\d+)/.exec(headers.Range);
-    if (suf) { a = size - Number(suf[1]); b = size; } else { const m = /bytes=(\d+)-(\d+)/.exec(headers.Range); a = +m[1]; b = Math.min(size, +m[2] + 1); }
-    asked.push(suf ? 'final' : a);
+    const m = /bytes=(\d+)-(\d+)/.exec(headers.Range);
+    const a = +m[1];
+    const b = Math.min(size, +m[2] + 1);
+    asked.push(a);
+    // el principio tarda (como el servidor IPTV): con el índice recordado, sus partes ya se pidieron
+    if (a === 0 && gate) await gate;
     const out = new Uint8Array(b - a);
     const put = (at, len, type) => { if (at >= a && at + 8 <= b) box(out, at - a, len, type); };
     put(0, 24, 'ftyp');
@@ -834,15 +836,22 @@ test('películas MP4 con el índice al final: si Player ya pidió el final del a
     return { status: 206, url, headers: { get: k => (k === 'content-range' ? 'bytes ' + a + '-' + (b - 1) + '/' + size : k === 'content-length' ? String(b - a) : null) }, arrayBuffer: async () => out.buffer };
   };
   try {
-    const u = 'http://fixture.invalid/tail.mp4';
-    prefetchTail(u, 8 * MB);
-    const r = new Mp4Mse({}, u);
-    const moov = await r.readMoov();
-    assert.equal(moov.length, moovSize - 8);
-    // el principio (64 KB), el final adelantado y el principio del video (2 MB): ningún pedido del índice
-    assert.equal(asked.filter(x => typeof x === 'number' && x >= moovAt).length, 0);
-    assert.ok(asked.includes('final'));
-    assert.match(r.diag(), /final_adelantado=true/);
-    r.destroy();
+    const u = 'http://fixture.invalid/again.mp4';
+    const first = new Mp4Mse({}, u);
+    assert.equal((await first.readMoov()).length, moovSize - 8);
+    assert.match(first.diag(), /indice_recordado=false/);
+    first.destroy();
+    asked = [];
+    let open;
+    gate = new Promise(r => (open = r));
+    const again = new Mp4Mse({}, u);
+    const p = again.readMoov();
+    await new Promise(r => setTimeout(r, 0));
+    // antes de que conteste el principio, el índice ya se está pidiendo
+    assert.ok(asked.some(a => a >= moovAt), JSON.stringify(asked));
+    open();
+    assert.equal((await p).length, moovSize - 8);
+    assert.match(again.diag(), /indice_recordado=true/);
+    again.destroy();
   } finally { global.fetch = realFetch; }
 });
