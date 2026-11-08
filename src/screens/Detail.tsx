@@ -8,6 +8,7 @@ import { warmTracks } from '../api/media';
 import { Button, Focusable } from '../components/ui';
 import { RowView } from '../components/Tiles';
 import { ChainImage } from '../components/ChainImage';
+import { Shade } from '../components/Shade';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, Item } from '../data/catalog';
 import { savedArt } from '../data/heroart';
@@ -21,6 +22,10 @@ export default function Detail({ item }: { item: Item }) {
   const nav = useNav();
   const st = useAppState();
   const [vod, setVod] = useState<VodInfo | null>(null);
+  // al volver con ▲ a los botones de arriba la ficha sube entera otra vez (se ve la imagen como al entrar); antes quedaba
+  // corrida en el botón Reproducir
+  const scroll = useRef<ScrollView>(null);
+  const toTop = () => scroll.current?.scrollTo({ y: 0, animated: true });
   const [ser, setSer] = useState<SeriesInfo | null>(null);
   const [season, setSeason] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -136,11 +141,11 @@ export default function Detail({ item }: { item: Item }) {
       {/* como Roku: la imagen arriba a la derecha (1440×810), color liso a la izquierda con degradado sobre la imagen,
           degradado abajo y color liso debajo; los textos se leen sobre cualquier imagen */}
       {backdrop || bdSrc.length ? <ChainImage sources={bdSrc} style={s.bg} resizeMode="cover" blurRadius={wide ? undefined : 18} /> : null}
-      <Image source={require('../../assets/image/grad_left.png')} style={[s.bgLeft, { tintColor: C.bg }]} resizeMode="stretch" />
+      <Shade side="left" style={s.bgLeft} />
       <View style={s.bgSolidLeft} />
-      <Image source={require('../../assets/image/grad_bottom.png')} style={[s.bgBottom, { tintColor: C.bg }]} resizeMode="stretch" />
+      <Shade side="bottom" style={s.bgBottom} />
       <View style={s.bgSolidBottom} />
-      <ScrollView contentContainerStyle={{ paddingBottom: px(80) }}>
+      <ScrollView ref={scroll} contentContainerStyle={{ paddingBottom: px(80) }}>
         <View style={s.head}>
           <Text style={s.title} numberOfLines={2}>
             {item.name}
@@ -159,13 +164,13 @@ export default function Detail({ item }: { item: Item }) {
           <View style={s.btns}>
             {item.kind === 'vod' ? (
               <>
-                <Button label={canResume ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onPress={() => playMovie(nav, item, vod?.ext || item.ext, false, vod?.duration)} />
-                {canResume ? <Button label={t('Desde el inicio')} icon="↺" onPress={() => playMovie(nav, item, vod?.ext || item.ext, true, vod?.duration)} /> : null}
+                <Button label={canResume ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onFocus={toTop} onPress={() => playMovie(nav, item, vod?.ext || item.ext, false, vod?.duration)} />
+                {canResume ? <Button label={t('Desde el inicio')} icon="↺" onFocus={toTop} onPress={() => playMovie(nav, item, vod?.ext || item.ext, true, vod?.duration)} /> : null}
               </>
             ) : (
-              <Button label={resumeEp ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onPress={playSeries} />
+              <Button label={resumeEp ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onFocus={toTop} onPress={playSeries} />
             )}
-            <Button label={fav ? t('En mi lista') : t('Mi lista')} icon={fav ? '✓' : '+'} last onPress={() => toggleFav(item.kind, item.id, item.name, item.poster, item.cat)} />
+            <Button label={fav ? t('En mi lista') : t('Mi lista')} icon={fav ? '✓' : '+'} last onFocus={toTop} onPress={() => toggleFav(item.kind, item.id, item.name, item.poster, item.cat)} />
           </View>
         </View>
 

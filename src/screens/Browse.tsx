@@ -8,6 +8,8 @@ import { openItem, openSpecial, playMovie } from '../actions';
 import { Button, Message, Spinner } from '../components/ui';
 import { RowView, rowHeight } from '../components/Tiles';
 import { ChainImage } from '../components/ChainImage';
+import { Shade } from '../components/Shade';
+import { ScrollingText } from '../components/ScrollingText';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, isItem, Item, Row, Special } from '../data/catalog';
 import { continueItems, favItems } from '../data/personal';
@@ -64,8 +66,8 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
         </View>
       ) : null}
       {art ? <ChainImage sources={artSrc} style={s.heroImg} resizeMode="cover" /> : null}
-      <Image source={require('../../assets/image/grad_bottom.png')} style={[s.heroGrad, { tintColor: C.bg }]} resizeMode="stretch" />
-      <Image source={require('../../assets/image/grad_left.png')} style={[s.heroShade, { tintColor: C.bg }]} resizeMode="stretch" />
+      <Shade side="bottom" style={s.heroGrad} />
+      <Shade side="left" style={s.heroShade} />
       {sideSrc.length ? <ChainImage sources={sideSrc} style={[s.side, compact && s.sideCompact]} resizeMode="cover" /> : null}
       <View style={[s.heroText, compact && s.heroTextCompact]}>
         {it ? (
@@ -79,11 +81,8 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
           {title}
         </Text>
         {it ? <Text style={s.heroMeta}>{[it.year, it.rating > 0 ? '★ ' + it.rating.toFixed(1) : ''].filter(Boolean).join('   ')}</Text> : null}
-        {plot ? (
-          <Text style={s.heroPlot} numberOfLines={compact ? 2 : 3}>
-            {plot}
-          </Text>
-        ) : null}
+        {/* la descripción larga sube sola en su lugar (3 líneas; 2 con el foco en las filas): nunca baja hasta las filas */}
+        {plot ? <ScrollingText key={compact ? 'c' : 'h'} text={plot} style={s.heroPlot} box={[s.heroPlotBox, { maxHeight: px(38) * (compact ? 2 : 3) }]} line={px(38)} /> : null}
       </View>
     </View>
   );
@@ -328,14 +327,16 @@ const s = themed(() =>
     heroShade: { position: 'absolute', left: 0, top: 0, width: px(1500), height: px(1080), opacity: 0.92 },
     side: { position: 'absolute', right: SIDE, top: px(150), width: px(427), height: px(640), borderRadius: px(8) },
     sideCompact: { top: px(120), width: px(260), height: px(390) },
-    heroText: { position: 'absolute', left: SIDE, top: px(230), width: px(980) },
-    heroTextCompact: { top: px(140), width: px(1100) },
-    heroKind: { color: C.sub, fontSize: px(24), fontWeight: '800', marginBottom: px(8) },
+    // alto fijo: el texto nunca llega a los botones (700) ni a las filas (560 con el foco en ellas)
+    heroText: { position: 'absolute', left: SIDE, top: px(230), width: px(980), height: px(450), overflow: 'hidden' },
+    heroTextCompact: { top: px(140), width: px(1100), height: px(400) },
+    heroKind: { color: C.sub, fontSize: px(24), fontWeight: '800', marginBottom: px(8), flexShrink: 0 },
     heroMark: { color: C.red, fontSize: px(44), fontWeight: '900' },
-    heroTitle: { color: C.text, fontSize: px(76), fontWeight: '900', lineHeight: px(84) },
+    heroTitle: { color: C.text, fontSize: px(76), fontWeight: '900', lineHeight: px(84), flexShrink: 0 },
     heroTitleCompact: { fontSize: px(58), lineHeight: px(66) },
-    heroMeta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12) },
-    heroPlot: { color: C.text, fontSize: px(28), lineHeight: px(38), marginTop: px(16) },
+    heroMeta: { color: C.green, fontSize: px(28), fontWeight: '700', marginTop: px(12), flexShrink: 0 },
+    heroPlot: { color: C.text, fontSize: px(28), lineHeight: px(38) },
+    heroPlotBox: { marginTop: px(16) },
     btns: { position: 'absolute', left: SIDE, top: px(700), flexDirection: 'row' },
     // recorriendo las filas los botones no se ven (siguen arriba para volver a ellos desde la primera fila)
     btnsHidden: { top: px(440), opacity: 0 },

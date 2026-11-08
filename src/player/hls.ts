@@ -54,11 +54,17 @@ export class PanelHls {
     } catch {
       // sin DOM
     }
-    try {
-      return MediaSource.isTypeSupported('video/mp2t', true);
-    } catch {
-      return false;
-    }
+    // el lector convierte los segmentos del panel a MP4 (TsMux) y solo si no puede los entrega en MPEG-TS: basta con uno
+    // de los dos (Chrome y el simulador de LG no aceptan MPEG-TS por MSE: antes «el equipo no puede reproducir el audio
+    // que prepara el panel»)
+    const ok = (m: string) => {
+      try {
+        return (MediaSource as any).isTypeSupported(m, true);
+      } catch {
+        return false;
+      }
+    };
+    return ok('video/mp2t') || ok('video/mp4; codecs="avc1.42E01E"');
   }
 
   // '' = empezó; si no, el motivo

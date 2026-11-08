@@ -169,6 +169,16 @@ export function imgPath(u: any, size: string): string {
 // servidor bloquee el equipo un rato
 export const LIVE_FORMATS = typeof (globalThis as any).document === 'undefined' ? ['m3u8'] : ['m3u8', 'ts', 'direct'];
 
+// formato con el que se vio el último canal (esta sesión): los siguientes canales empiezan por él (en la tele LG, si el
+// .m3u8 no abre y el .ts sí, cada canal ya no espera al .m3u8)
+let liveFmt = 0;
+export function liveFormatStart(): number {
+  return liveFmt < LIVE_FORMATS.length ? liveFmt : 0;
+}
+export function setLiveFormat(i: number): void {
+  liveFmt = i >= 0 && i < LIVE_FORMATS.length ? i : 0;
+}
+
 export type VodInfo = {
   tmdb: string;
   plot: string;

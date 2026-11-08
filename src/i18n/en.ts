@@ -101,6 +101,7 @@ const en = {
   "El servidor no aceptó la conexión (código {code})": "The server refused the connection (code {code})",
   "El servidor no reconoce el usuario o la contraseña": "The server doesn't recognize the username or password",
   "El servidor rechazó la cuenta ({code})": "The server rejected the account ({code})",
+  "Pulsa OK en un canal para verlo aquí; OK otra vez lo abre en pantalla grande.": "Press OK on a channel to watch it here; OK again opens it full screen.",
   "Elige un canal para ver la guía.": "Pick a channel to see the guide.",
   "En las carpetas de eventos de tu lista": "In the event folders of your list",
   "En mi lista": "In my list",
@@ -403,6 +404,7 @@ const en = {
   "Mostrar": "Show",
   "Canales": "Channels",
   "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ change channel ({x}/{y}) · OK channel list · MENU audio and subtitles",
+  "▲▼ cambiar canal ({x}/{y}) · ◀ lista de canales · MENÚ audio y subtítulos": "▲▼ change channel ({x}/{y}) · ◀ channel list · MENU audio and subtitles",
   "Todavía no hay videos de prueba.": "No test videos yet.",
 };
 

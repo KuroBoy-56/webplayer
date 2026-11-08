@@ -125,6 +125,12 @@ function setPanelRoute(url: string, r: 'p' | 'v' | ''): void {
   writeJson(ROUTE_KEY, all);
 }
 
+// Televisor: servidores cuyos canales solo se vieron con el lector de la app (el reproductor del televisor no los abrió):
+// en esta sesión sus canales van directo al lector (sin esperar otra vez al del televisor al cambiar de canal ni al
+// reconectar)
+const readerHosts = new Set<string>();
+const hostOf = (u: string) => (u.match(/^https?:\/\/([^/?#]+)/i) || [])[1]?.toLowerCase() || '';
+
 export class Playback {
   private url = '';
   private live = false;
@@ -150,6 +156,9 @@ export class Playback {
   // lo que se pidió al servidor (para el aviso y el reporte cuando está apagado)
   private wantNote = '';
   private mp4Url = false;
+  // MKV cuyo audio no entra por MSE (E-AC-3, DTS, TrueHD…): primero el lector nativo de Vega (decodifica eAC-3 en MKV,
+  // guía de Amazon: archivos por URL); si falla, de nuevo el lector de la app solo con el video, como antes
+  private mkvNative: '' | 'trying' | 'failed' = '';
   // por qué la lectura propia del MP4 no siguió (va al reporte)
   private mp4Why = '';
   private liveHls: LiveHls | null = null;
@@ -163,6 +172,16 @@ export class Playback {
   private audioTimer: ReturnType<typeof setTimeout> | null = null;
   // audio del canal elegido en el menú (canales con varios idiomas)
   private liveAudio = 0;
+  // el reproductor falló con el audio MP2 / AC-3 del canal convertido: el canal otra vez, solo con el video
+  private liveNoAudio = false;
+  // veces que el canal se congeló (LiveHls.frozen): se vuelve a abrir alternando MP4 propio (impar) y MPEG-TS (par)
+  private liveFrozen = 0;
+  // televisor: este canal ya se probó con el lector de la app (después de su propio reproductor)
+  private liveReaderTried = false;
+  // televisor: el idioma que el lector de la app está preparando (aviso al empezar a sonar con él)
+  private switchNote = '';
+  // el archivo es un MKV aunque la dirección diga .mp4 (pasa en servidores IPTV): lo lee el lector de MKV
+  private asMkv = false;
   // el HLS del panel que sigue sonando mientras se prepara otro idioma
   private prevHls: PanelHls | null = null;
   private offset = 0;
@@ -246,6 +265,9 @@ export class Playback {
     this.url = url;
     this.live = live;
     this.liveAudio = 0;
+    this.liveNoAudio = false;
+    this.liveFrozen = 0;
+    this.liveReaderTried = false;
     this.mp4Audio = -1;
     this.mp4Index = null;
     this.mkvIndex = null;
@@ -266,6 +288,8 @@ export class Playback {
     this.formatTried = false;
     this.resumePanel = false;
     this.mp4Url = false;
+    this.mkvNative = '';
+    if (!sameFile) this.asMkv = false;
     this.mp4Why = '';
     this.deniedShown = false;
     if (live) {
@@ -284,7 +308,8 @@ export class Playback {
   // canal en vivo por HLS con el lector propio
   private openLive(url: string): void {
     const g = this.gen;
-    const h = new LiveHls(this.v, url, this.liveAudio);
+    // congelado: se alterna MP4 propio y MPEG-TS (solo si el equipo acepta MPEG-TS por MSE; si no, siempre MP4)
+    const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, this.liveFrozen > 0 && this.liveFrozen % 2 === 0 && LiveHls.tsSupported());
     this.liveHls = h;
     h.onError = why => g === this.gen && this.liveHls === h && this.hooks.liveFailed?.(why);
     h.onStalls = () => g === this.gen && this.liveHls === h && this.hooks.liveStalls?.(h.diag());
@@ -304,8 +329,24 @@ export class Playback {
   // de la sesión), sin pasar por otro formato ni protocolo. false = no era eso
   liveRetryTs(): boolean {
     const h = this.liveHls;
-    if (!this.live || !h || !h.isMp4() || !(h.mediaFailed() || (this.v as any).error)) return false;
-    disableMp4();
+    if (!this.live || !h) return false;
+    // imagen congelada con video por delante: el canal otra vez, alternando MP4 propio y MPEG-TS (solo este canal),
+    // hasta 6 veces; nunca la pantalla de error por esto (antes, a la tercera, probaba https y terminaba en error)
+    if (h.frozen) {
+      if (this.liveFrozen >= 6) return false;
+      this.liveFrozen++;
+      h.destroy();
+      this.openLive(this.url);
+      return true;
+    }
+    // con audio MP2 / AC-3 lo que falló (error o sin imagen) es ese audio: el mismo canal en MP4 sin él (en MPEG-TS
+    // Vega no mostraba imagen)
+    // (si ya se veía, se reconecta igual: nunca se apaga el MP4 de toda la sesión por el audio de un canal)
+    if (h.otherAudio()) {
+      if (this.liveNoAudio || this.hasPlayed()) return false;
+      this.liveNoAudio = true;
+    } else if (h.isMp4() && (h.mediaFailed() || (this.v as any).error) && LiveHls.tsSupported()) disableMp4();
+    else return false;
     h.destroy();
     this.openLive(this.url);
     return true;
@@ -314,6 +355,25 @@ export class Playback {
   // el canal todavía no se ve pero sigue llegando video (segmentos largos o servidor lento)
   liveBusy(): boolean {
     return !!this.liveHls && Date.now() - this.liveHls.lastData < 8000;
+  }
+
+  // Televisor (LG): el canal no abrió con su reproductor o no dio imagen a tiempo. El mismo .m3u8 con el lector de la app
+  // (el de Vega: baja la lista y los segmentos, descifra AES y entrega MP4 por MSE), antes de probar otro formato.
+  // false = no aplica (otro equipo, no es .m3u8, sin MSE) o ya se probó
+  // url: la dirección .m3u8 del canal (si lo que falló fue el .ts)
+  liveReader(url = this.url): boolean {
+    if (!this.live || !this.tvLivePlayer() || (this.v as any).noMse || this.liveHls || this.liveReaderTried || !/\.m3u8(\?|$)/i.test(url) || !LiveHls.supported()) return false;
+    this.liveReaderTried = true;
+    this.url = url;
+    // primero se suelta la conexión del reproductor del televisor (muchas líneas permiten una sola a la vez)
+    try {
+      this.v.pause();
+      this.v.src = '';
+    } catch {
+      // sin video todavía
+    }
+    this.openLive(this.url);
+    return true;
   }
 
   liveDiag(): string {
@@ -334,8 +394,11 @@ export class Playback {
     // Canales: el lector propio (livehls.ts) convierte cada segmento a MP4 de corrido; con Shaka el MPEG-TS va al lector
     // de Vega, que deja micro-huecos entre segmentos (los cortes de 1.0.20-1.0.25). Shaka queda para HLS/DASH de
     // películas y series, y para canales si el equipo no tiene MSE para el lector propio.
-    // el televisor (Samsung / LG) abre los canales HLS con su propio reproductor
-    if (this.live && /\.m3u8(\?|$)/i.test(this.url) && !this.tvNative() && LiveHls.supported()) {
+    // el televisor (Samsung AVPlay / LG) abre los canales HLS con su propio reproductor (en el simulador, el lector de la app)
+    // (Samsung: AVPlay no recibe un MediaSource, el lector de la app no sirve ahí)
+    const readerFirst = this.live && this.tvLivePlayer() && !(this.v as any).noMse && readerHosts.has(hostOf(this.url));
+    if (readerFirst) this.liveReaderTried = true;
+    if (this.live && /\.m3u8(\?|$)/i.test(this.url) && (!this.tvLivePlayer() || readerFirst) && LiveHls.supported()) {
       this.openLive(this.url);
       return;
     }
@@ -348,7 +411,7 @@ export class Playback {
     if (!this.live && !this.mp4Url && (!this.tvNative() || this.readerWanted) && /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(this.url)) {
       this.resumeAt = 0;
       const g = this.gen;
-      const mkv = /\.mkv(\?|$)/i.test(this.url);
+      const mkv = this.isMkv();
       const want = this.mp4Audio;
       const m = mkv ? new MkvMse(this.v, this.url, this.mp4Audio, this.mkvIndex) : new Mp4Mse(this.v, this.url, this.mp4Audio, this.mp4Index);
       this.mse = m;
@@ -366,6 +429,11 @@ export class Playback {
           if (ps) setTimeout(() => g === this.gen && this.pickSub(ps, true), 0);
         }
         if (this.mp4Paused) { this.mp4Paused = false; this.v.pause(); }
+        if (this.switchNote) {
+          this.hooks.status('');
+          this.hooks.toast(t('Audio: {x}', { x: this.audioItems().find(i => i.mp4 === m.audioIdx)?.label || this.switchNote }));
+          this.switchNote = '';
+        }
         this.applyPrefs();
         this.hooks.changed();
       };
@@ -375,7 +443,24 @@ export class Playback {
         .then(err => {
           if (g !== this.gen || this.mse !== m) return;
           if (err) {
+            // sin índice MP4: puede ser un MKV con la extensión .mp4; si la cabecera lo dice, el lector de MKV (idiomas y
+            // subtítulos de texto en el equipo, sin servidor)
+            if (!mkv && /^índice/.test(err)) {
+              fileTracks(this.url).then(p => {
+                if (g !== this.gen || this.mse !== m) return;
+                if (p.container !== 'mkv') return this.mp4Failed(at, err);
+                this.asMkv = true;
+                if (p.ok) this.probe = p;
+                this.direct(at);
+              });
+              return;
+            }
             this.mp4Failed(at, err);
+            return;
+          }
+          if (m instanceof MkvMse && m.noAudio && want < 0 && !this.mkvNative) {
+            this.mkvNative = 'trying';
+            this.mp4Failed(at, 'MKV con audio que no entra por MSE: lector nativo');
             return;
           }
           // el equipo no tomó el audio pedido (o ninguno del archivo): el servidor lo prepara; apagado, el aviso
@@ -387,7 +472,13 @@ export class Playback {
         });
       return;
     }
-    if (at > 5 && !this.live && !this.played) {
+    if (at > 5 && !this.live && !this.played && this.tvNative()) {
+      // televisor LG: su reproductor empieza ya en el segundo guardado (mediaOption playTime) y, si no lo tomó, salta en
+      // loadedmetadata, antes de sonar; cuenta como «ya suena» cuando avanza pasado ese segundo (seekTo, con plazo)
+      this.resumeAt = at;
+      this.seekTo = at;
+      (this.v as any).startAt = at;
+    } else if (at > 5 && !this.live && !this.played) {
       // Continuar viendo: se abre y se salta apenas suena (onPlaying)
       this.resumeAt = 0;
       this.seekAfter = at;
@@ -426,6 +517,10 @@ export class Playback {
   // la lectura propia del MP4 no pudo (códec raro, el servidor cortó): el modo directo de siempre desde donde iba
   private mp4Failed(at: number, why: string): void {
     const pos = this.played ? this.realPos() : at;
+    if (this.switchNote) {
+      this.switchNote = '';
+      this.hooks.status('');
+    }
     this.mp4Why = why;
     this.mp4Url = true;
     // televisor: el lector se abrió para cambiar de audio y no pudo; vuelve el reproductor del televisor y ese audio lo
@@ -440,6 +535,13 @@ export class Playback {
 
   // error del reproductor con el MP4 leído por la app: true = se sigue con el modo directo de siempre
   mp4Fallback(why = 'error del reproductor'): boolean {
+    if (this.mkvNative === 'trying' && !this.mse && !this.played) {
+      // el lector nativo tampoco pudo con el MKV: el de la app con el video (y el audio por el panel / aviso)
+      this.mkvNative = 'failed';
+      this.mp4Url = false;
+      this.direct(this.wantAt);
+      return true;
+    }
     if (!this.mse || this.mp4Url) return false;
     const e: any = (this.v as any).error;
     this.mp4Failed(this.played ? this.realPos() : this.wantAt, why + (e?.code ? ' ' + e.code : '') + (this.mse.why ? ' · ' + this.mse.why : ''));
@@ -451,9 +553,19 @@ export class Playback {
     return !!this.mse && !this.mp4Url && !this.played;
   }
 
+  // MKV por la dirección o por lo que trae el archivo (servidores que entregan MKV con la extensión .mp4)
+  private isMkv(): boolean {
+    return /\.mkv(\?|$)/i.test(this.url) || this.asMkv || this.probe?.container === 'mkv';
+  }
+
   // el reproductor es el del televisor (Samsung AVPlay / LG webOS): abre MP4 / MKV / HLS solo
   private tvNative(): boolean {
     return !!(this.v as any).nativeFiles;
+  }
+
+  // canales con el reproductor por hardware del televisor (no en el simulador de LG: ahí el lector de la app)
+  private tvLivePlayer(): boolean {
+    return !!(this.v as any).nativeLive;
   }
 
   // el lector propio puede leer este archivo (MP4 / MKV con MSE en el equipo)
@@ -493,15 +605,36 @@ export class Playback {
       this.readerWanted = true;
       this.mp4Audio = it.probe;
       this.audioKey = it.key;
-      if (user) {
-        setTitleLang(this.url, it);
-        this.hooks.toast(t('Cambiando a {x}…', { x: it.label }));
-      }
+      if (user) setTitleLang(this.url, it);
+      // a la vista mientras el lector lee el índice (en un MP4 con el índice al final puede tardar): antes solo un aviso
+      // corto y después nada, sin el idioma marcado
+      this.switchNote = it.label;
+      this.hooks.status(t('Cambiando a {x}…', { x: it.label }));
       this.direct(this.realPos());
+      this.readerDog();
       return;
     }
     const pick = it;
     this.toRemux(it.probe, it.label, true, t('Cambiando a {x}…', { x: it.label })).then(ok => ok && user && setTitleLang(this.url, pick));
+  }
+
+  // el lector abierto para cambiar de idioma no consigue el índice (el servidor no entrega): vuelve el video como estaba y
+  // ese idioma queda para el servidor (apagado: el aviso de encenderlo). Mientras siga llegando algo, hasta 2 min
+  private readerDog(): void {
+    const g = this.gen;
+    const t0 = Date.now();
+    let idle = 0;
+    const check = () => {
+      const m = this.mse;
+      if (g !== this.gen || !m || this.mp4Url || m.indexed) return;
+      idle = m.busy() ? 0 : idle + 5;
+      if (idle < 20 && Date.now() - t0 < 120000) {
+        setTimeout(check, 5000);
+        return;
+      }
+      this.mp4Fallback('sin el índice para cambiar el idioma');
+    };
+    setTimeout(check, 5000);
   }
 
   // Televisor: un subtítulo que el <video> no muestra. 1) el servicio de medios del televisor (también los de imagen,
@@ -523,7 +656,7 @@ export class Playback {
       }
       this.tvLunaSubFailed = true;
     }
-    if (!it.image && !this.readerWanted && !this.mse && /\.mkv(\?|$)/i.test(this.url) && this.readerCan()) {
+    if (!it.image && !this.readerWanted && !this.mse && this.isMkv() && this.readerCan()) {
       this.readerWanted = true;
       this.pendingSub = it.probe;
       this.subKey = it.key;
@@ -698,8 +831,10 @@ export class Playback {
   // loadedmetadata
   onMeta(): void {
     if (this.resumeAt > 0) {
-      this.v.currentTime = this.resumeAt;
+      // el televisor ya empezó ahí (mediaOption): sin saltar otra vez
+      if (!this.tvNative() || Math.abs((this.v.currentTime || 0) - this.resumeAt) > 3) this.v.currentTime = this.resumeAt;
       this.resumeAt = 0;
+      if (this.tvNative() && this.seekTo > 0 && !this.seekTimer) this.resumeDog();
     }
     if (this.pendingNative >= 0) {
       const i = this.pendingNative;
@@ -707,6 +842,18 @@ export class Playback {
       setTimeout(() => this.enableNative(i), 300);
     }
     this.schedulePrefs();
+  }
+
+  // Continuar viendo en el televisor: si en 15 s no avanza pasado el segundo guardado, siguen los pasos de siempre (el
+  // panel desde ese segundo; Player)
+  private resumeDog(): void {
+    const g = this.gen;
+    this.seekTimer = setTimeout(() => {
+      this.seekTimer = null;
+      if (g !== this.gen || this.played || !this.seekTo) return;
+      this.v.pause();
+      this.hooks.resumeFailed?.();
+    }, 15000);
   }
 
   // "playing": se aplican los idiomas ya sabidos y, apenas suena, se mira cuántos audios hay (langCheck)
@@ -745,6 +892,7 @@ export class Playback {
     if (this.seekTo > 0 && !this.remux) return;
     this.clearSeek();
     this.played = true;
+    if (this.live && this.liveHls && this.tvLivePlayer()) readerHosts.add(hostOf(this.url));
     // cómo se pudo ver este archivo: por el panel (se recuerda) o directo (se olvida lo anterior)
     if (!this.live) setPanelRoute(this.url, this.remux && this.panelFallback && !this.resumePanel ? (this.panelVideo ? 'v' : 'p') : this.remux ? panelRoute(this.url) : '');
     if (this.live || this.probing) return;
@@ -822,6 +970,20 @@ export class Playback {
       this.remuxFailed(t('el reproductor no pudo abrirlo'));
       return true;
     }
+    // televisor: su reproductor no abrió el MP4 / MKV (ni por los otros caminos): antes del servidor, el lector de la app
+    // (como en Vega); un audio que el equipo no decodifica queda fuera y el video se ve sin él, con el aviso de encender
+    // el servidor
+    if (this.tvNative() && !this.readerWanted && !this.mse && !this.played && this.readerCan()) {
+      const g0 = this.gen;
+      if (!this.probe) this.probe = await fileTracks(this.url);
+      if (g0 !== this.gen) return false;
+      const all = this.probe.ok ? this.audioItems() : [];
+      this.readerWanted = true;
+      this.mp4Url = false;
+      this.mp4Audio = this.preferredAudio(all)?.probe ?? -1;
+      this.direct(this.resumeAt || this.wantAt);
+      return true;
+    }
     // sin motor: el error normal, sin pasar por el panel
     if (engineDenied()) return false;
     const g = this.gen;
@@ -897,7 +1059,11 @@ export class Playback {
     const pr = this.probe?.ok ? this.probe.audio : [];
     if (pr.length && pr.length >= nat.length) {
       return numbered(pr.map((tr, i) => {
-        const n = nat.length === pr.length ? i : this.byLang(nat, pr, i);
+        // mismo orden que el archivo, salvo que el reproductor diga otro idioma en ese lugar (el televisor LG puede
+        // ordenar sus pistas de otra forma): entonces por idioma
+        const nl = nat.length === pr.length ? trackLang(nat[i].language, nat[i].label) : '';
+        const pl = trackLang(tr.lang, tr.name);
+        const n = nat.length === pr.length && (!nl || !pl || nl === pl) ? i : this.byLang(nat, pr, i);
         return {
           key: 'p:' + i,
           label: langName(tr.lang, tr.name) || t('Audio {n}', { n: i + 1 }),
@@ -940,7 +1106,12 @@ export class Playback {
       const active = this.shaka.audioTracks().find(tr => tr.active);
       return items.find(it => it.shaka === active?.id);
     }
-    if (this.mse) return items.find(it => it.mp4 === this.mse!.audioIdx);
+    if (this.mse) {
+      if (this.mse.indexed) return items.find(it => it.mp4 === this.mse!.audioIdx);
+      // todavía leyendo el índice: el idioma pedido (o el predeterminado)
+      const want = this.mp4Audio >= 0 ? this.mp4Audio : this.probeDefault();
+      return items.find(it => it.mp4 === want || it.probe === want);
+    }
     if (this.liveHls && items[0]?.key.startsWith('h:')) return items.find(i => i.key === 'h:' + this.liveHls!.audioIdx);
     if (this.remux) return items.find(i => i.probe === this.remux!.a);
     const n = this.enabledNative();
@@ -1084,7 +1255,8 @@ export class Playback {
 
   private applyPrefs(): void {
     this.autoAudio();
-    this.autoSubs();
+    // en vivo no se tocan las pistas de texto del equipo (los subtítulos ocultos CC de algunos canales)
+    if (!this.live) this.autoSubs();
     this.hooks.changed();
   }
 
@@ -1160,6 +1332,22 @@ export class Playback {
         }
         this.hooks.changed();
       }
+      return;
+    }
+    // el lector todavía lee el índice: ahora este otro idioma, sin empezar de nuevo (antes iba al servidor: «encender el
+    // servidor»)
+    const pi = it.mp4 ?? it.probe;
+    if (this.mse && !this.mse.indexed && !this.mp4Url && pi !== undefined && this.decodable(it) && this.mse.want(pi)) {
+      this.mp4Audio = pi;
+      this.audioKey = it.key;
+      if (user) {
+        setTitleLang(this.url, it);
+        if (this.switchNote) {
+          this.switchNote = it.label;
+          this.hooks.status(t('Cambiando a {x}…', { x: it.label }));
+        }
+      }
+      this.hooks.changed();
       return;
     }
     if (it.mp4 !== undefined && this.mse) {
@@ -1253,7 +1441,8 @@ export class Playback {
       this.audioKey = '';
       return;
     }
-    this.toRemux(it.probe, it.label, user, user || saved ? t('Cambiando a {x}…', { x: it.label }) : t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: codecName(it.codec) }));
+    // un audio que el equipo no decodifica: con el servidor apagado se avisa una vez (el video sigue sin ese audio)
+    this.toRemux(it.probe, it.label, user || (!ok && !this.deniedShown), user || saved ? t('Cambiando a {x}…', { x: it.label }) : t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: codecName(it.codec) }));
   }
 
   // motor del panel; sin él, el texto del panel una sola vez por video y solo si lo pidió el usuario

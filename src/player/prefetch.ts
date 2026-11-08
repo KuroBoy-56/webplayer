@@ -3,6 +3,9 @@
 // lector iba a hacer (no suma conexiones a la línea); si no se usa en 10 s se descarta.
 import { UA } from '../lib/http';
 
+// navegador (la app de LG): ahí no hay document en Vega
+const WEB = typeof (globalThis as any).document !== 'undefined';
+
 export type ListGot = { code: number; url: string; text?: string; type?: string };
 export type RangeGot = { data: Uint8Array; size: number } | null;
 
@@ -24,7 +27,8 @@ export function prefetchList(url: string): void {
     let at = url;
     try {
       for (let hop = 0; hop < 6; hop++) {
-        const res = await fetch(at, { headers: { 'User-Agent': UA }, signal: ctrl.signal, redirect: 'manual' } as any);
+        // en un navegador (LG) la redirección «manual» llega vacía: ahí la sigue el navegador (como livehls.ts)
+        const res = await fetch(at, { headers: { 'User-Agent': UA }, signal: ctrl.signal, redirect: WEB ? 'follow' : 'manual' } as any);
         const loc = res.headers.get('location');
         if (res.status >= 300 && res.status < 400 && loc) {
           at = resolve(at, loc);

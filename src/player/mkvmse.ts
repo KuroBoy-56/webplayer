@@ -97,6 +97,12 @@ export class MkvMse {
   get indexed(): boolean {
     return !!this.vt;
   }
+  // otro idioma elegido mientras todavía lee el índice: se usa ese al empezar (sin volver a pedir nada). false = ya empezó
+  want(audio: number): boolean {
+    if (this.vt) return false;
+    this.selectedAudio = audio;
+    return true;
+  }
 
   // pistas como las lee probe.ts (el panel usa el mismo orden: 0:a:N y 0:s:N), para el menú y los subtítulos
   probe(): Probe | null {

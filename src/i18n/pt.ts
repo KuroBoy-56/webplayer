@@ -102,6 +102,7 @@ const pt: Record<Key, string> = {
   "El servidor no aceptó la conexión (código {code})": "O servidor não aceitou a conexão (código {code})",
   "El servidor no reconoce el usuario o la contraseña": "O servidor não reconhece o usuário ou a senha",
   "El servidor rechazó la cuenta ({code})": "O servidor recusou a conta ({code})",
+  "Pulsa OK en un canal para verlo aquí; OK otra vez lo abre en pantalla grande.": "Pressione OK em um canal para vê-lo aqui; OK de novo abre em tela cheia.",
   "Elige un canal para ver la guía.": "Escolha um canal para ver o guia.",
   "En las carpetas de eventos de tu lista": "Nas pastas de eventos da sua lista",
   "En mi lista": "Na minha lista",
@@ -404,6 +405,7 @@ const pt: Record<Key, string> = {
   "Mostrar": "Mostrar",
   "Canales": "Canais",
   "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ mudar de canal ({x}/{y}) · OK lista de canais · MENU áudio e legendas",
+  "▲▼ cambiar canal ({x}/{y}) · ◀ lista de canales · MENÚ audio y subtítulos": "▲▼ mudar de canal ({x}/{y}) · ◀ lista de canais · MENU áudio e legendas",
   "Todavía no hay videos de prueba.": "Ainda não há vídeos de teste.",
 };
 

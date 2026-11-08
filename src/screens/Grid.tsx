@@ -3,6 +3,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { openItem } from '../actions';
 import { Focusable, Message } from '../components/ui';
+import { Shade } from '../components/Shade';
 import { posterH, PosterTile } from '../components/Tiles';
 import { catalog, Item } from '../data/catalog';
 import { continueItems, favItems } from '../data/personal';
@@ -79,7 +80,7 @@ export default function Grid({ title, mode, keyName, kind }: { title: string; mo
       {banner ? (
         <View style={s.banner} pointerEvents="none">
           <Image source={{ uri: banner }} style={s.bannerImg} resizeMode="cover" />
-          <Image source={require('../../assets/image/grad_bottom.png')} style={[s.bannerGrad, { tintColor: C.bg }]} resizeMode="stretch" />
+          <Shade side="bottom" style={s.bannerGrad} />
         </View>
       ) : null}
       <View style={s.head}>

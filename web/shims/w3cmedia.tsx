@@ -77,6 +77,8 @@ class AvPlayer implements VideoPlayer {
   // panel queda como último recurso, igual que en LG
   readonly nativeFiles = true;
   readonly noMse = true;
+  // los canales (HLS y MPEG-TS) también los abre AVPlay (playback.ts: tvLivePlayer)
+  readonly nativeLive = true;
   readonly audioTracks = trackList();
   readonly textTracks = trackList();
   private url = '';
