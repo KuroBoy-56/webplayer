@@ -19,6 +19,7 @@ export const PosterTile = memo(function PosterTile({
   progress,
   rank,
   wide,
+  preferred,
 }: {
   item: Item;
   onPress: () => void;
@@ -26,6 +27,7 @@ export const PosterTile = memo(function PosterTile({
   progress?: number;
   rank?: number;
   wide?: boolean;
+  preferred?: boolean;
 }) {
   const w = wide ? px(300) : posterW();
   const h = wide ? px(169) : posterH();
@@ -34,7 +36,7 @@ export const PosterTile = memo(function PosterTile({
   return (
     <View style={rank ? s.rankWrap : undefined}>
       {rank ? <Text style={s.rank}>{rank}</Text> : null}
-      <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.tile, { width: w, height: h }, f && s.tileF]}>
+      <Focusable onPress={onPress} onFocus={onFocus} preferred={preferred} style={f => [s.tile, { width: w, height: h }, f && s.tileF]}>
         <View style={s.fill}>
           <Text style={s.fallback} numberOfLines={4}>
             {item.name}
@@ -90,6 +92,7 @@ export const RowView = memo(function RowView({
   rowIndex,
   onFocusRow,
   progressOf,
+  live = true,
 }: {
   row: Row;
   onItem: (it: Item) => void;
@@ -100,6 +103,8 @@ export const RowView = memo(function RowView({
   rowIndex?: number;
   onFocusRow?: (index: number, x: Item | Special) => void;
   progressOf?: (it: Item) => number | undefined;
+  // false: fila lejos del foco, solo su título y su alto (Inicio la monta antes de llegar, src/lib/rowwindow.ts)
+  live?: boolean;
 }) {
   const height = cardsHeight(row);
   const focus = useCallback((x: Item | Special) => {
@@ -110,7 +115,7 @@ export const RowView = memo(function RowView({
   return (
     <View style={[s.row, { height: rowHeight(row) - px(18) }]}>
       {row.title ? <Text style={s.rowTitle} numberOfLines={1}>{row.title}</Text> : <View style={{ height: px(4) }} />}
-      <FlatList
+      {live ? <FlatList
         horizontal
         data={row.items}
         style={{ height }}
@@ -118,7 +123,9 @@ export const RowView = memo(function RowView({
         keyExtractor={(x, i) => (isItem(x) ? x.kind + x.id : x.kind + x.key) + ':' + i}
         showsHorizontalScrollIndicator={false}
         initialNumToRender={8}
-        windowSize={5}
+        // una pantalla de tarjetas a cada lado de lo visible (antes dos): con muchas filas montadas eran cientos de
+        // carátulas a la vez y el Fire TV se trababa al recorrerlas
+        windowSize={3}
         renderItem={({ item: x, index }) =>
           isItem(x) ? (
             <PosterTile
@@ -132,7 +139,7 @@ export const RowView = memo(function RowView({
             <SpecialTile sp={x} onPress={() => onSpecial(x)} onFocus={onFocusAny || onFocusRow ? () => focus(x) : undefined} />
           )
         }
-      />
+      /> : null}
     </View>
   );
 });

@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem, playEpisodes, playMovie } from '../actions';
-import { CastMember, castFor, overviewFor } from '../api/tmdb';
+import { CastMember, castFor, overviewFor, searchArt } from '../api/tmdb';
 import { episodeUrl, movieUrl, SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
 import { warmTracks } from '../api/media';
 import { Button, Focusable } from '../components/ui';
@@ -97,8 +97,23 @@ export default function Detail({ item }: { item: Item }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, loading]);
-  // fondo horizontal: el del servidor, el que ya encontró la portada (servidor o TMDB) o, si no hay, la carátula
-  const wide = info?.backdrop || item.backdrop || savedArt(item)?.backdrop || '';
+  // sin fondo del servidor ni guardado (p. ej. abierta desde Buscar, sin pasar por la portada de Inicio): el de TMDB
+  // por el título, como hace la portada; antes quedaba la carátula borrosa de fondo
+  const [tmdbWide, setTmdbWide] = useState('');
+  useEffect(() => {
+    setTmdbWide('');
+    if (loading || info?.backdrop || item.backdrop || savedArt(item)?.backdrop) return;
+    let alive = true;
+    searchArt(item, info?.year || item.year)
+      .then(a => alive && a?.backdrop && setTmdbWide(a.backdrop))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, loading]);
+  // fondo horizontal: el del servidor, el que ya encontró la portada (servidor o TMDB), el de TMDB o, si no hay, la carátula
+  const wide = info?.backdrop || item.backdrop || savedArt(item)?.backdrop || tmdbWide;
   const backdrop = wide || info?.poster || item.poster;
   const bdSrc = useMemo(
     () => (wide ? backdropSources(wide) : posterSources(item.kind, info?.poster || item.poster, item.name, item.year, item.tm)),

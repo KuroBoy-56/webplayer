@@ -406,6 +406,9 @@ const en = {
   "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ change channel ({x}/{y}) · OK channel list · MENU audio and subtitles",
   "▲▼ cambiar canal ({x}/{y}) · ◀ lista de canales · MENÚ audio y subtítulos": "▲▼ change channel ({x}/{y}) · ◀ channel list · MENU audio and subtitles",
   "Todavía no hay videos de prueba.": "No test videos yet.",
+  "Contenido no compatible con este equipo.": "Content not supported on this device.",
+  "Audio no compatible con este equipo.": "Audio not supported on this device.",
+  "Subtítulo no compatible con este equipo.": "Subtitle not supported on this device.",
 };
 
 export default en;

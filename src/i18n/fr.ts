@@ -407,6 +407,9 @@ const fr: Record<Key, string> = {
   "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ changer de chaîne ({x}/{y}) · OK liste des chaînes · MENU audio et sous-titres",
   "▲▼ cambiar canal ({x}/{y}) · ◀ lista de canales · MENÚ audio y subtítulos": "▲▼ changer de chaîne ({x}/{y}) · ◀ liste des chaînes · MENU audio et sous-titres",
   "Todavía no hay videos de prueba.": "Aucune vidéo de test pour l'instant.",
+  "Contenido no compatible con este equipo.": "Contenu non compatible avec cet appareil.",
+  "Audio no compatible con este equipo.": "Audio non compatible avec cet appareil.",
+  "Subtítulo no compatible con este equipo.": "Sous-titre non compatible avec cet appareil.",
 };
 
 export default fr;

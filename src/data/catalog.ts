@@ -119,6 +119,7 @@ class Catalog {
   clear() {
     this.k = {};
     this.tIdx = {};
+    this.folded = {};
   }
 
   // ---------- Top 10 de la semana ----------
@@ -421,23 +422,38 @@ class Catalog {
   }
 
   // ---------- búsqueda ----------
+  // nombres normalizados una vez por catálogo (Buscar arma los resultados mientras se escribe: antes se normalizaban
+  // todos los títulos en cada tecla y el Fire TV se trababa), como Android
+  private folded: Partial<Record<Kind, { items: any[]; names: string[] }>> = {};
+  private foldedNames(kind: Kind): string[] {
+    const d = this.k[kind]!;
+    const c = this.folded[kind];
+    if (c && c.items === d.items) return c.names;
+    const names = d.items.map(it => fold(str(it.name)));
+    this.folded[kind] = { items: d.items, names };
+    return names;
+  }
+
   search(q: string): Item[] {
     const words = fold(q).split(' ').filter(Boolean);
     if (!words.length) return [];
+    const first = words.join(' ');
     const out: Item[] = [];
     for (const kind of ['vod', 'series', 'live'] as Kind[]) {
       const d = this.k[kind];
       if (!d) continue;
       const vis = new Set(this.visibleCats(kind).map(c => c.id));
-      let found = 0;
-      for (const it of d.items) {
-        if (!vis.has(str(it.category_id))) continue;
-        const n = fold(str(it.name));
-        if (words.every(w => n.includes(w))) {
-          out.push(toItem(kind, it));
-          if (++found >= 80) break;
-        }
+      const names = this.foldedNames(kind);
+      // lo que empieza por lo buscado va primero (como Android), después el resto; hasta 80 por tipo
+      const starts: number[] = [];
+      const rest: number[] = [];
+      for (let i = 0; i < d.items.length && starts.length < 80; i++) {
+        const n = names[i];
+        if (!words.every(w => n.includes(w)) || !vis.has(str(d.items[i].category_id))) continue;
+        if (n.startsWith(first)) starts.push(i);
+        else if (rest.length < 80) rest.push(i);
       }
+      for (const i of starts.concat(rest).slice(0, 80)) out.push(toItem(kind, d.items[i]));
     }
     return out;
   }

@@ -525,7 +525,8 @@ export default function Player({ params }: { params: PlayParams }) {
       if (vs.stage >= 2) return t('No se pudo continuar donde quedó');
       if (vs.srv >= 400) return t('Error de comunicación con el servidor');
       // el equipo no lo abre de ninguna forma y el servidor (VPS / VDS) está apagado o sin permiso: se dice qué falta
-      if (engineDenied()) return t('Este video no se puede abrir en este equipo: es necesario encender el servidor.');
+      // con la conversión del servidor apagada: «Contenido no compatible» (el detalle va en el reporte al panel)
+      if (engineDenied()) return t('Contenido no compatible con este equipo.');
       return t('No se pudo reproducir este contenido.');
     };
     // película o episodio que todavía no sonó (Roku: onError → streamCheck, Continuar viendo por pasos)

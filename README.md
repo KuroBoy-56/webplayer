@@ -10,6 +10,30 @@ Windows, Roku y Vega OS. Un cambio en `src/` de la rama `vega-os` se trae aquí 
 compila sola en cada cambio de la rama `tizenOS` (workflow `App Tizen OS (Samsung)`), con la llave del panel
 del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
+## Novedades de la 1.2.0 (webOS 1.3.1 a 1.3.7, Vega OS 1.0.56 a 1.0.60 y los arreglos de interfaz de Vega hasta la 2.0.11)
+
+- **Todo lo de webOS hasta la 1.3.7** (merge de la rama `webOS`): TV en vivo como Vega y Roku (OK miniatura y punto
+  rojo, OK otra vez pantalla grande, el foco vuelve al canal que sonaba), canales con audio MP2 / MP3 / AC-3, imagen
+  trabada que salta al cuadro clave siguiente, Deportes igual a Roku (filtro de canales por los canales que pasan el
+  partido, por las reglas del panel y por los equipos; Tablas, Selecciones y Equipos; el foco vuelve al evento al
+  cerrar el canal), descripción de la portada que sube sola, ficha que vuelve arriba, MKV con extensión .mp4.
+- **AVPlay sigue siendo el reproductor** (`web/shims/w3cmedia.tsx`): abre MP4, MKV, TS y HLS por hardware, con los
+  idiomas y subtítulos del archivo (`tvSelectTrack`). Ahora anuncia `nativeLive`: los canales también los abre el
+  televisor; los caminos del lector de canales de LG no se usan en Samsung (`noMse`).
+- **Último recurso, en este orden**: el televisor (AVPlay) → el servidor convierte solo el audio → el video copiado
+  como HLS → el video convertido. Con la conversión del servidor apagada (`features.ffmpeg` / motor sin permiso): «Audio
+  no compatible con este equipo», «Subtítulo no compatible…» o «Contenido no compatible con este equipo» (sin pedir
+  encender el servidor); el detalle completo va en el reporte al panel.
+- **Buscar como Vega**: el recuadro abre el teclado de la app (texto centrado), los resultados se arman mientras se
+  escribe (primero los títulos que empiezan por lo buscado), al cerrar el teclado (Listo o Atrás) el foco baja a la
+  primera carátula y al volver de una ficha o de un canal el foco vuelve a la carátula elegida (`ItemGrid`,
+  `src/screens/Grid.tsx`; también en «Ver todo»).
+- **El foco vuelve a donde estaba** al cerrar una pantalla (`web/spatial.ts` recuerda lo último con foco), en
+  Inicio, Películas, Series, TV en vivo, Deportes, Buscar y «Ver todo». La portada de Inicio, Películas y Series queda
+  fija: solo se mueven las filas de abajo.
+- **Carátulas**: se recuerda qué dirección cargó cada imagen (`src/lib/imagememory.ts`), la ficha sin fondo lo busca
+  en TMDB por el título, y Continuar viendo / Mi lista no redibujan todas las filas mientras suena un video.
+
 ## Novedades de la 1.1.0 (traídas de Vega OS 1.0.25 a 1.0.55 por la rama `webOS`, más lo propio de Samsung)
 
 **Reproducción: el servidor es el último recurso.** Todo lo abre primero **AVPlay** (el reproductor por hardware del

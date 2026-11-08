@@ -126,10 +126,10 @@ test('MKV: la app lo lee y cambia el audio en el equipo, sin servidor (como Andr
   video.currentTime=240;choose(c,'Inglés');await tick();
   assert.equal(mkvs.length,2);assert.equal(mkvs[1].audioIdx,1);assert.equal(mkvs[1].index,mkvs[0].index);assert.equal(video.currentTime,240);assert.deepEqual(calls,[]);await c.destroy();
 });
-test('audio que el equipo no decodifica con el servidor apagado: aviso de encender el servidor',async()=>{
+test('audio que el equipo no decodifica con el servidor apagado: aviso «no compatible» (sin pedir encender el servidor)',async()=>{
   const {c}=setup();mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_TRUEHD'}];c.load('https://fixture.invalid/video.mkv',0,false);await tick();
   choose(c,'Inglés');await tick();await tick();
-  assert.deepEqual(calls,['mediaEngine']);assert.ok(toasts.some(m=>m.includes('es necesario encender el servidor')),toasts.join(' | '));await c.destroy();
+  assert.deepEqual(calls,['mediaEngine']);assert.ok(toasts.some(m=>m.includes('no compatible con este equipo')),toasts.join(' | '));await c.destroy();
 });
 test('MKV: subtítulos de texto leídos por la app, sin servidor',async()=>{
   const {c}=setup();c.load('https://fixture.invalid/video.mkv',0,false);await tick();

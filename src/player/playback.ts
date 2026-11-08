@@ -1459,7 +1459,8 @@ export class Playback {
     // cada vez que el usuario lo pide (antes una sola vez por video y después no pasaba nada)
     if (!user) return;
     this.deniedShown = true;
-    this.hooks.toast(what === 'sub' ? t('Subtítulo no compatible con este equipo: es necesario encender el servidor.') : t('Audio no compatible con este equipo: es necesario encender el servidor.'));
+    // con la conversión del servidor apagada: el aviso corto, sin pedir nada al usuario (el motivo va en el reporte)
+    this.hooks.toast(what === 'sub' ? t('Subtítulo no compatible con este equipo.') : t('Audio no compatible con este equipo.'));
     const ext = (this.url.match(/\.([A-Za-z0-9]{2,5})(\?|$)/) || [])[1] || '?';
     reportError('playback', what === 'sub' ? 'Subtítulo no compatible sin servidor' : 'Audio no compatible sin servidor',
       'motivo=' + msg + ' archivo=' + ext + ' lector=' + (this.shaka ? 'shaka' : this.mse ? (this.mse instanceof MkvMse ? 'mkv' : 'mp4') : 'directo') + (this.wantNote ? ' pedido=' + this.wantNote : ''), 'Reproductor');
