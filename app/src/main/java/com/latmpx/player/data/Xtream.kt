@@ -133,9 +133,9 @@ object Xtream {
 
     private suspend fun fetchItems(s: Session, kind: Kind): List<Item> {
         val action = when (kind) { Kind.MOVIE -> "get_vod_streams"; Kind.SERIES -> "get_series"; Kind.LIVE -> "get_live_streams" }
-        return withContext(Dispatchers.Default) {
-            Net.arr(api(s, action)).mapObj { o -> parseItem(o, kind) }.distinctBy { it.id }
-        }
+        // leído por partes mientras llega (Net.streamArray): sin el texto completo ni el árbol JSON en memoria
+        val list = Net.streamArray(api(s, action)) { m -> parseItem(m, kind) }.orEmpty()
+        return withContext(Dispatchers.Default) { list.distinctBy { it.id } }
     }
 
     /** Solo lo guardado en el equipo (sin red); también queda en memoria. null si no hay copia. */
@@ -169,26 +169,30 @@ object Xtream {
         finalCats to items
     }
 
-    private fun parseItem(o: org.json.JSONObject, kind: Kind): Item? {
-        val id = if (kind == Kind.SERIES) o.i("series_id") else o.i("stream_id")
+    /** un elemento de la lista del servidor (mapa de textos de Net.streamArray), con las mismas reglas que JSONObject.s/i/d */
+    private fun parseItem(o: Map<String, String>, kind: Kind): Item? {
+        fun s(k: String): String = o[k]?.trim()?.let { if (it == "null") "" else it }.orEmpty()
+        fun i(k: String): Int = s(k).toDoubleOrNull()?.toInt() ?: 0
+        fun d(k: String): Double = s(k).replace(',', '.').toDoubleOrNull() ?: 0.0
+        val id = if (kind == Kind.SERIES) i("series_id") else i("stream_id")
         if (id <= 0) return null
-        val poster = Posters.clean(when (kind) { Kind.SERIES -> o.s("cover"); Kind.LIVE -> o.s("stream_icon"); else -> o.s("stream_icon") })
-        val year = o.s("year").ifEmpty { o.s("releaseDate").take(4) }.ifEmpty { o.s("release_date").take(4) }
+        val poster = Posters.clean(when (kind) { Kind.SERIES -> s("cover"); Kind.LIVE -> s("stream_icon"); else -> s("stream_icon") })
+        val year = s("year").ifEmpty { s("releaseDate").take(4) }.ifEmpty { s("release_date").take(4) }
         return Item(
             id = id,
-            name = o.s("name"),
+            name = s("name"),
             poster = poster,
             kind = kind,
-            categoryId = o.s("category_id"),
-            ext = o.s("container_extension"),
-            rating = o.d("rating").let { if (it > 10) it / 10 else it },
+            categoryId = s("category_id"),
+            ext = s("container_extension"),
+            rating = d("rating").let { if (it > 10) it / 10 else it },
             year = year,
-            added = (if (kind == Kind.SERIES) o.s("last_modified") else o.s("added")).toLongOrNull() ?: 0,
-            plot = o.s("plot"),
-            epgId = o.s("epg_channel_id"),
-            backdrop = Posters.clean(o.optJSONArray("backdrop_path")?.optString(0).orEmpty()),
-            cast = if (kind == Kind.LIVE) "" else o.s("cast").ifEmpty { o.s("actors") },
-            tm = if (kind == Kind.LIVE) "" else o.s("tmdb").ifEmpty { o.s("tmdb_id") }.filter(Char::isDigit).takeIf { it.isNotEmpty() && it != "0" }.orEmpty(),
+            added = (if (kind == Kind.SERIES) s("last_modified") else s("added")).toLongOrNull() ?: 0,
+            plot = s("plot"),
+            epgId = s("epg_channel_id"),
+            backdrop = Posters.clean(s("backdrop_path")),
+            cast = if (kind == Kind.LIVE) "" else s("cast").ifEmpty { s("actors") },
+            tm = if (kind == Kind.LIVE) "" else s("tmdb").ifEmpty { s("tmdb_id") }.filter(Char::isDigit).takeIf { it.isNotEmpty() && it != "0" }.orEmpty(),
         )
     }
 
