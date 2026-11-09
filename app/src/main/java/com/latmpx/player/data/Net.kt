@@ -1,6 +1,8 @@
 package com.latmpx.player.data
 import com.latmpx.player.Lang
 
+import android.util.JsonReader
+import android.util.JsonToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -89,6 +91,62 @@ object Net {
     suspend fun obj(url: String): JSONObject? = text(url)?.trim()?.let { t -> if (t.startsWith("{")) runCatching { JSONObject(t) }.getOrNull() else null }
 
     suspend fun arr(url: String): JSONArray? = text(url)?.trim()?.let { t -> if (t.startsWith("[")) runCatching { JSONArray(t) }.getOrNull() else null }
+
+    /**
+     * Lista JSON grande (catálogo de películas, series o canales) leída por partes mientras llega: cada objeto queda como
+     * un mapa de textos (números y textos tal cual; de una lista interna solo el primer texto, p. ej. backdrop_path) y
+     * pasa por [f]. Nunca se tiene el texto completo ni el árbol JSON en memoria: con un proveedor grande eso eran
+     * decenas de MB a la vez (el texto, su copia y el árbol) y en equipos con poca memoria (Fire TV Stick con Android 7,
+     * donde además las carátulas usan esa misma memoria) la app se cerraba con OutOfMemoryError.
+     * null si no contesta, no es una lista o llega cortada (como [arr]).
+     */
+    suspend fun <T> streamArray(url: String, f: (Map<String, String>) -> T?): List<T>? = withContext(Dispatchers.IO) {
+        try {
+            client.newCall(Request.Builder().url(url).build()).execute().use { r ->
+                val body = r.body
+                if (!r.isSuccessful || body == null) return@use null
+                JsonReader(body.charStream()).use { jr ->
+                    jr.isLenient = true
+                    if (jr.peek() != JsonToken.BEGIN_ARRAY) return@use null
+                    val out = ArrayList<T>()
+                    val m = HashMap<String, String>(32)
+                    jr.beginArray()
+                    while (jr.hasNext()) {
+                        if (jr.peek() != JsonToken.BEGIN_OBJECT) {
+                            jr.skipValue()
+                            continue
+                        }
+                        m.clear()
+                        jr.beginObject()
+                        while (jr.hasNext()) {
+                            val k = jr.nextName()
+                            when (jr.peek()) {
+                                JsonToken.STRING, JsonToken.NUMBER -> m[k] = jr.nextString()
+                                JsonToken.BOOLEAN -> m[k] = jr.nextBoolean().toString()
+                                JsonToken.NULL -> jr.nextNull()
+                                JsonToken.BEGIN_ARRAY -> {
+                                    var first: String? = null
+                                    jr.beginArray()
+                                    while (jr.hasNext()) {
+                                        if (first == null && jr.peek() == JsonToken.STRING) first = jr.nextString() else jr.skipValue()
+                                    }
+                                    jr.endArray()
+                                    if (first != null) m[k] = first
+                                }
+                                else -> jr.skipValue()
+                            }
+                        }
+                        jr.endObject()
+                        f(m)?.let(out::add)
+                    }
+                    jr.endArray()
+                    out
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
 
 /* utilidades JSON tolerantes: los paneles Xtream mezclan números, textos y null */
