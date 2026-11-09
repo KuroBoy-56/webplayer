@@ -23,6 +23,12 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 `appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
 `dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
 
+## Novedades de la 1.3.9
+
+Los dos defectos de la revisión previa de LG (Seller Lounge, QA202611090926466 y QA202611090926467): el icono tenía degradado y su fondo
+no era del color de la tarjeta. Ahora `webos/icon.png` y `largeIcon.png` llevan solo colores planos (rojo, amarillo,
+azul y blanco, sin sombras ni degradados) sobre negro exacto (#000000), el mismo `iconColor` de `appinfo.json`.
+
 ## Novedades de la 1.3.8
 
 Imágenes nuevas para la revisión de LG (Seller Lounge rechazó la 1.3.7 en la prueba previa): icono del menú
