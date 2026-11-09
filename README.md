@@ -23,6 +23,13 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 `appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
 `dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
 
+## Novedades de la 1.3.8
+
+Imágenes nuevas para la revisión de LG (Seller Lounge rechazó la 1.3.7 en la prueba previa): icono del menú
+(`webos/icon.png` 80x80 y `largeIcon.png` 130x130) con el logo y el nombre «MPX Player» sobre negro (`iconColor`
+#000000), y pantalla de carga de LG (`splashBackground`: `webos/splash.png` 1920x1080; la HD lleva
+`splash-hd.png` 1280x720). El resto de la app no cambia.
+
 ## Novedades de la 1.3.7
 
 El reproductor del tema de prueba del dueño vuelve a ser el de la 1.3.4 (sin aviso de códec ni copia en el panel): el
@@ -450,10 +457,11 @@ también el arreglo de Continuar viendo de la 1.0.27).
 
 El build también copia `app.js` e `img/` a `webos/` (sin subir a git): el simulador de LG abierto en `webos/`
 quedaba en negro porque ahí no estaba `app.js`. Si algo falla al arrancar, `index.html` muestra el error en
-pantalla en lugar de dejarla negra. No hay pantalla de carga fija (`splashBackground`): la primera pantalla
-es el número de distribuidor y el logo de inicio es el del distribuidor (solo el icono y el nombre son fijos).
-El icono del menú de LG (`webos/icon.png`, `largeIcon.png`) es solo el logo sin fondo: el color de la tarjeta lo
-pone webOS con `iconColor` de `appinfo.json` (#141414), así no queda un cuadrado pegado encima.
+pantalla en lugar de dejarla negra. La pantalla de carga de LG (`splashBackground`, `webos/splash.png`; en la HD
+`splash-hd.png`) es la de MPX Player y solo se ve mientras abre la app; después, la primera pantalla es el número de
+distribuidor y el logo de inicio es el del distribuidor (solo el icono, el nombre y la carga son fijos).
+El icono del menú de LG (`webos/icon.png`, `largeIcon.png`) es el logo con el nombre sobre negro, y `iconColor` de
+`appinfo.json` también es negro (#000000).
 
 ## Instalarla en tu televisor LG
 

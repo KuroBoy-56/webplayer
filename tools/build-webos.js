@@ -45,7 +45,9 @@ esbuild
     logLevel: 'info',
   })
   .then(() => {
-    for (const f of ['index.html', 'appinfo.json', 'icon.png', 'largeIcon.png']) fs.copyFileSync(path.join(root, 'webos', f), path.join(dist, f));
+    for (const f of ['index.html', 'appinfo.json', 'icon.png', 'largeIcon.png', 'splash.png']) fs.copyFileSync(path.join(root, 'webos', f), path.join(dist, f));
+    // pantalla de carga de LG (splashBackground): 1920x1080, o 1280x720 en la versión HD
+    if (hd) fs.copyFileSync(path.join(root, 'webos', 'splash-hd.png'), path.join(dist, 'splash.png'));
     if (hd) {
       const info = JSON.parse(fs.readFileSync(path.join(dist, 'appinfo.json'), 'utf8'));
       info.resolution = '1280x720';
