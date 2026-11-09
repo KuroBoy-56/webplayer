@@ -23,6 +23,12 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 `appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
 `dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
 
+## Novedades de la 1.3.10
+
+Sin la pantalla de carga fija de LG (`splashBackground`) que puso la 1.3.8: mostraba el logo del dueño a todos los
+distribuidores. Al abrir, la pantalla de inicio vuelve a ser la de la app, con el logo y los colores que cada
+distribuidor configura en el panel.
+
 ## Novedades de la 1.3.9
 
 Los dos defectos de la revisión previa de LG (Seller Lounge, QA202611090926466 y QA202611090926467): el icono tenía degradado y su fondo
@@ -33,8 +39,7 @@ azul y blanco, sin sombras ni degradados) sobre negro exacto (#000000), el mismo
 
 Imágenes nuevas para la revisión de LG (Seller Lounge rechazó la 1.3.7 en la prueba previa): icono del menú
 (`webos/icon.png` 80x80 y `largeIcon.png` 130x130) con el logo y el nombre «MPX Player» sobre negro (`iconColor`
-#000000), y pantalla de carga de LG (`splashBackground`: `webos/splash.png` 1920x1080; la HD lleva
-`splash-hd.png` 1280x720). El resto de la app no cambia.
+#000000). También traía una pantalla de carga fija de LG con el logo del dueño; la 1.3.10 la quita.
 
 ## Novedades de la 1.3.7
 
@@ -463,9 +468,9 @@ también el arreglo de Continuar viendo de la 1.0.27).
 
 El build también copia `app.js` e `img/` a `webos/` (sin subir a git): el simulador de LG abierto en `webos/`
 quedaba en negro porque ahí no estaba `app.js`. Si algo falla al arrancar, `index.html` muestra el error en
-pantalla en lugar de dejarla negra. La pantalla de carga de LG (`splashBackground`, `webos/splash.png`; en la HD
-`splash-hd.png`) es la de MPX Player y solo se ve mientras abre la app; después, la primera pantalla es el número de
-distribuidor y el logo de inicio es el del distribuidor (solo el icono, el nombre y la carga son fijos).
+pantalla en lugar de dejarla negra. No hay pantalla de carga fija de LG (`splashBackground`): la de inicio la arma la
+app con el logo y los colores que el distribuidor configura en el panel (o los de MPX Player con Omitir), y sin
+distribuidor elegido lo primero es el número de distribuidor. Solo el icono y el nombre son fijos.
 El icono del menú de LG (`webos/icon.png`, `largeIcon.png`) es el logo con el nombre sobre negro, y `iconColor` de
 `appinfo.json` también es negro (#000000).
 
