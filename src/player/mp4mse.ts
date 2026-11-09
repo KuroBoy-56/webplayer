@@ -22,8 +22,14 @@ type Trk = {
   // edición: el video suele empezar unas décimas después por los cuadros B) sin tiempos negativos
   // delay: tramos vacíos al principio de la lista de edición (la pista empieza más tarde), en la escala de la película
   kind: string; lang: string; ts: number; enabled: boolean; entry: Uint8Array | null; width: number; height: number; mediaTime: number; delay: number; shift: number;
-  off: number[]; size: number[]; dts: number[]; cts: number[]; key: Set<number> | null;
+  // tablas de muestras (fillTables): arreglos de tamaño fijo, no listas que crecen de a uno (2.0.12)
+  off: Float64Array; size: Uint32Array; dts: Float64Array; cts: Int32Array; key: Set<number> | null;
+  // dónde están sus tablas en el índice (se leen solo las de las pistas que se usan)
+  tbl: { [t: string]: { s: number; e: number } | undefined } | null; filled: boolean;
 };
+const NO_F64 = new Float64Array(0);
+const NO_U32 = new Uint32Array(0);
+const NO_I32 = new Int32Array(0);
 
 const u32 = (b: Uint8Array, o: number) => ((b[o] << 24) >>> 0) + (b[o + 1] << 16) + (b[o + 2] << 8) + b[o + 3];
 const u16 = (b: Uint8Array, o: number) => (b[o] << 8) + b[o + 1];
@@ -48,8 +54,12 @@ function kids(b: Uint8Array, s: number, e: number): { t: string; s: number; e: n
 }
 const kid = (b: Uint8Array, s: number, e: number, t: string) => kids(b, s, e).find(k => k.t === t) || null;
 
+// Cabecera de una pista (tipo, idioma, escala, descripción, lista de edición) y dónde están sus tablas. Las tablas de
+// muestras se leen aparte (fillTables) y solo las del video y el audio elegido: un MP4 de 2 h con 3 idiomas tiene ~1
+// millón de muestras y leerlas todas, de a una en listas que crecen, tardaba varios segundos en el Fire TV (aviso
+// «tardó en empezar»: índice=7.5MB en 2.4s, imagen recién a los 6.8s)
 function parseTrak(b: Uint8Array, s: number, e: number): Trk | null {
-  const tk: Trk = { kind: '', lang: '', ts: 0, enabled: false, entry: null, width: 0, height: 0, mediaTime: 0, delay: 0, shift: 0, off: [], size: [], dts: [], cts: [], key: null };
+  const tk: Trk = { kind: '', lang: '', ts: 0, enabled: false, entry: null, width: 0, height: 0, mediaTime: 0, delay: 0, shift: 0, off: NO_F64, size: NO_U32, dts: NO_F64, cts: NO_I32, key: null, tbl: null, filled: false };
   const tkhd = kid(b, s, e, 'tkhd');
   if (tkhd) tk.enabled = (b[tkhd.s + 3] & 1) === 1;
   const elst = kid(b, s, e, 'edts');
@@ -78,63 +88,88 @@ function parseTrak(b: Uint8Array, s: number, e: number): Trk | null {
   const language = u16(b, mdhd.s + (b[mdhd.s] === 1 ? 32 : 20));
   if (language) tk.lang = String.fromCharCode(96 + ((language >> 10) & 31), 96 + ((language >> 5) & 31), 96 + (language & 31));
   tk.kind = typ(b, hdlr.s + 8);
-  const box = (t: string) => kid(b, stbl.s, stbl.e, t);
-  const stsd = box('stsd');
+  const tbl: Trk['tbl'] = {};
+  for (const k of kids(b, stbl.s, stbl.e)) if (!tbl[k.t]) tbl[k.t] = { s: k.s, e: k.e };
+  const stsd = tbl.stsd;
   const ent = stsd ? kids(b, stsd.s + 8, stsd.e)[0] : null;
   if (ent) tk.entry = b.subarray(ent.s - 8, ent.e);
+  const stsz = tbl.stsz;
+  if (!stsz || !tk.ts || !u32(b, stsz.s + 8)) return null;
+  if (!(tbl.stco || tbl.co64) || !tbl.stsc || !tbl.stts) return null;
+  tk.tbl = tbl;
+  return tk;
+}
+
+// Tablas de muestras de una pista: tamaño, posición en el archivo, tiempo de decodificación, desfase de presentación y
+// cuadros clave. false = no sirven (la pista no se puede usar)
+function fillTables(b: Uint8Array, tk: Trk): boolean {
+  if (tk.filled) return tk.size.length > 0;
+  tk.filled = true;
+  const tbl = tk.tbl;
+  if (!tbl) return false;
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
   // tamaños
-  const stsz = box('stsz');
-  if (!stsz || !tk.ts) return null;
-  const fixed = u32(b, stsz.s + 4);
-  const n = u32(b, stsz.s + 8);
-  for (let i = 0; i < n; i++) tk.size.push(fixed || u32(b, stsz.s + 12 + i * 4));
+  const stsz = tbl.stsz!;
+  const fixed = dv.getUint32(stsz.s + 4);
+  const n = dv.getUint32(stsz.s + 8);
+  const size = new Uint32Array(n);
+  if (fixed) size.fill(fixed);
+  else for (let i = 0, o = stsz.s + 12; i < n; i++, o += 4) size[i] = dv.getUint32(o);
   // posición de cada muestra: trozos (stco / co64) y muestras por trozo (stsc)
-  const co = box('stco') || box('co64');
-  const stsc = box('stsc');
-  if (!co || !stsc) return null;
-  const wide = co.t === 'co64';
-  const chunks = u32(b, co.s + 4);
-  const runs = u32(b, stsc.s + 4);
+  const co = (tbl.stco || tbl.co64)!;
+  const wide = !tbl.stco;
+  const stsc = tbl.stsc!;
+  const chunks = dv.getUint32(co.s + 4);
+  const runs = dv.getUint32(stsc.s + 4);
+  const off = new Float64Array(n);
   let smp = 0;
   for (let r = 0; r < runs && smp < n; r++) {
-    const first = u32(b, stsc.s + 8 + r * 12);
-    const per = u32(b, stsc.s + 12 + r * 12);
-    const last = r + 1 < runs ? u32(b, stsc.s + 8 + (r + 1) * 12) - 1 : chunks;
+    const first = dv.getUint32(stsc.s + 8 + r * 12);
+    const per = dv.getUint32(stsc.s + 12 + r * 12);
+    const last = r + 1 < runs ? dv.getUint32(stsc.s + 8 + (r + 1) * 12) - 1 : chunks;
     for (let c = first; c <= last && smp < n; c++) {
-      let o = wide ? u64(b, co.s + 8 + (c - 1) * 8) : u32(b, co.s + 8 + (c - 1) * 4);
+      let o = wide ? dv.getUint32(co.s + 8 + (c - 1) * 8) * 4294967296 + dv.getUint32(co.s + 12 + (c - 1) * 8) : dv.getUint32(co.s + 8 + (c - 1) * 4);
       for (let k = 0; k < per && smp < n; k++, smp++) {
-        tk.off.push(o);
-        o += tk.size[smp];
+        off[smp] = o;
+        o += size[smp];
       }
     }
   }
   // tiempos (stts), desfase de presentación (ctts) y cuadros clave (stss)
-  const stts = box('stts');
-  if (!stts) return null;
+  const stts = tbl.stts!;
+  const dts = new Float64Array(n);
+  let nd = 0;
   let t = 0;
-  for (let i = 0, m = u32(b, stts.s + 4); i < m; i++) {
-    const cnt = u32(b, stts.s + 8 + i * 8);
-    const d = u32(b, stts.s + 12 + i * 8);
-    for (let k = 0; k < cnt && tk.dts.length < n; k++, t += d) tk.dts.push(t);
+  for (let i = 0, m = dv.getUint32(stts.s + 4), o = stts.s + 8; i < m && nd < n; i++, o += 8) {
+    const cnt = dv.getUint32(o);
+    const d = dv.getUint32(o + 4);
+    for (let k = 0; k < cnt && nd < n; k++, t += d) dts[nd++] = t;
   }
-  const ctts = box('ctts');
+  let cts = NO_I32;
+  const ctts = tbl.ctts;
   if (ctts) {
-    for (let i = 0, m = u32(b, ctts.s + 4); i < m; i++) {
-      const cnt = u32(b, ctts.s + 8 + i * 8);
-      let d = u32(b, ctts.s + 12 + i * 8);
-      if (d > 0x7fffffff) d -= 4294967296;
-      for (let k = 0; k < cnt && tk.cts.length < n; k++) tk.cts.push(d);
+    cts = new Int32Array(n);
+    let nc = 0;
+    for (let i = 0, m = dv.getUint32(ctts.s + 4), o = ctts.s + 8; i < m && nc < n; i++, o += 8) {
+      const cnt = dv.getUint32(o);
+      const d = dv.getInt32(o + 4);
+      cts.fill(d, nc, Math.min(n, nc + cnt));
+      nc = Math.min(n, nc + cnt);
     }
+    // (las muestras que la tabla no cubre quedan en 0; antes quedaban sin valor y daban NaN)
   }
-  const stss = box('stss');
+  const stss = tbl.stss;
   if (stss) {
     tk.key = new Set();
-    for (let i = 0, m = u32(b, stss.s + 4); i < m; i++) tk.key.add(u32(b, stss.s + 8 + i * 4) - 1);
+    for (let i = 0, m = dv.getUint32(stss.s + 4), o = stss.s + 8; i < m; i++, o += 4) tk.key.add(dv.getUint32(o) - 1);
   }
-  const len = Math.min(tk.off.length, tk.dts.length, tk.size.length);
-  if (!len) return null;
-  tk.off.length = tk.size.length = tk.dts.length = len;
-  return tk;
+  const len = Math.min(smp, nd, n);
+  if (!len) return false;
+  tk.size = len < n ? size.subarray(0, len) : size;
+  tk.off = len < n ? off.subarray(0, len) : off;
+  tk.dts = len < n ? dts.subarray(0, len) : dts;
+  tk.cts = cts.length > len ? cts.subarray(0, len) : cts;
+  return true;
 }
 
 // SPS / PPS del avcC (largo de los NAL de 4 bytes, como escribe mp4box)
@@ -269,6 +304,11 @@ export class Mp4Mse {
   }
   // la primera entrega después de abrir o saltar es corta (1,5 s): la imagen sale antes
   private firstOut = true;
+  // segundo pedido al abrir o saltar: la primera entrega llega hasta 1,5 s después de él (no solo 1,5 s desde el cuadro
+  // clave anterior, que podía quedar antes del minuto guardado y obligaba a otro pedido al servidor)
+  private firstAt = 0;
+  // la primera entrega de Continuar viendo, pedida mientras se arma el reproductor (2.0.12)
+  private pre: { lo: number; hi: number; p: Promise<Uint8Array | null> } | null = null;
   // MP4 con el índice al final: el principio del video (2 MB) se pide a la vez que el índice
   private head: { off: number; p: Promise<Uint8Array | null> } | null = null;
   private headBusy = false;
@@ -315,6 +355,9 @@ export class Mp4Mse {
     this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '' }));
     const at0 = auds[this.selectedAudio] || auds.find(x => x.enabled) || auds[0] || null;
     this.audioIdx = at0 ? auds.indexOf(at0) : -1;
+    // solo las tablas de muestras del video y del audio elegido (los demás idiomas, cuando se elijan)
+    const vOk = !!vt && fillTables(moov, vt);
+    const aOk = !at0 || fillTables(moov, at0);
     this.onHeader();
     const hv = vt && !videoCfg(vt) ? hevcCfg(vt) : null;
     const vc = vt ? videoCfg(vt) || hv?.cfg || null : null;
@@ -323,7 +366,7 @@ export class Mp4Mse {
     const aac = at0 ? audioCfg(at0) : null;
     const dolby = at0 && !aac ? dolbyCfg(at0) : null;
     const ac = aac || dolby;
-    if (!vt || !vc || (at0 && !ac)) return 'códec v=' + (vt?.entry ? typ(vt.entry, 4) : '-') + ' a=' + (at0?.entry ? typ(at0.entry, 4) : '-');
+    if (!vt || !vOk || !vc || (at0 && (!ac || !aOk))) return 'códec v=' + (vt?.entry ? typ(vt.entry, 4) : '-') + ' a=' + (at0?.entry ? typ(at0.entry, 4) : '-');
     const mime = vcodec(dolby ? mp4Mime(vc, null).replace(/"$/, ',' + typ(at0!.entry!, 4) + '"') : mp4Mime(vc, ac));
     // la consulta no manda: algunos equipos dicen que no y lo aceptan; manda addSourceBuffer
     let typeOk = true;
@@ -344,6 +387,13 @@ export class Mp4Mse {
     if (this.at) this.at.shift = offOf(this.at) - base;
     this.arate = ac ? ac.rate : 0;
     if (!this.alive) return '';
+    // Continuar viendo: el primer tramo se pide ya, mientras se abre el reproductor (cada pedido al servidor IPTV tarda
+    // ~1,7 s en contestar: avisos «tardó en empezar» con espera_media=1679ms)
+    if (at > 5) {
+      this.place(at);
+      const pl = this.chunkPlan();
+      if (pl.lo < pl.hi && pl.hi - pl.lo <= pl.need * 1.5 + 2097152) this.pre = { lo: pl.lo, hi: pl.hi, p: this.get(pl.lo, pl.hi - pl.lo) };
+    }
     const ms: any = new MediaSource();
     this.ms = ms;
     const opened = new Promise<void>(res => ms.addEventListener('sourceopen', () => res()));
@@ -458,6 +508,7 @@ export class Mp4Mse {
   // muestras desde el cuadro clave en o antes de t
   private place(t: number): void {
     this.firstOut = true;
+    this.firstAt = t;
     const vt = this.vt!;
     let lo = 0;
     let hi = vt.dts.length - 1;
@@ -687,6 +738,54 @@ export class Mp4Mse {
     return [lo, hi, sum];
   }
 
+  // el próximo tramo: muestras de video [vi, vj) y de audio [ai, aj), y los bytes que ocupan en el archivo
+  private chunkPlan(): { vj: number; aj: number; vs: [number, number, number] | null; as: [number, number, number] | null; lo: number; hi: number; need: number } {
+    // ~4 s de video (el primero 1,5 s: empieza a verse apenas llega lo mínimo) y el audio de ese mismo tramo
+    const vt = this.vt!;
+    const a = this.at;
+    const t0 = this.secs(vt, vt.dts[Math.min(this.vi, vt.dts.length - 1)]);
+    const n = vt.dts.length;
+    const target = this.firstOut ? Math.max(1.5, this.firstAt - t0 + 1.5) : CHUNK;
+    // el corte va donde todo lo anterior se muestra antes que todo lo siguiente (no parte un grupo de cuadros B: eso
+    // dejaba huecos de milésimas entre tramos y micro cortes); antes se esperaba al cuadro clave siguiente (hasta 15 s
+    // de video, varios MB antes de la primera imagen)
+    let vj = this.vi + 1;
+    let maxP = this.ptsU(this.vi);
+    const closed = (j: number) => {
+      for (let k = j; k < Math.min(n, j + 16); k++) if (this.ptsU(k) <= maxP) return false;
+      return true;
+    };
+    while (vj < n) {
+      const t = this.secs(vt, vt.dts[vj]);
+      if (t >= t0 + target && closed(vj)) break;
+      if (t >= t0 + 15 && (!vt.key || vt.key.has(vj))) break;
+      maxP = Math.max(maxP, this.ptsU(vj));
+      vj++;
+    }
+    let nextP = Infinity;
+    for (let k = vj; k < Math.min(n, vj + 16); k++) nextP = Math.min(nextP, this.ptsU(k));
+    const tEnd = vj < n ? this.secs(vt, nextP) : Infinity;
+    let aj = this.ai;
+    if (a) while (aj < a.dts.length && this.secs(a, a.dts[aj]) < tEnd) aj++;
+    const vs = this.vi < vj ? this.span(vt, this.vi, vj) : null;
+    const as = a && this.ai < aj ? this.span(a, this.ai, aj) : null;
+    // video y audio van intercalados en el archivo: un solo pedido si casi todo lo de en medio es de ellos
+    const lo = Math.min(vs ? vs[0] : Infinity, as ? as[0] : Infinity);
+    const hi = Math.max(vs ? vs[1] : 0, as ? as[1] : 0);
+    const need = (vs ? vs[2] : 0) + (as ? as[2] : 0);
+    return { vj, aj, vs, as, lo, hi, need };
+  }
+
+  // la primera entrega ya pedida al abrir (Continuar viendo); otra cosa (se saltó antes de usarla): se descarta
+  private async fromPre(lo: number, hi: number): Promise<Uint8Array | null> {
+    const pr = this.pre;
+    if (!pr) return null;
+    this.pre = null;
+    if (pr.lo !== lo || pr.hi !== hi) return null;
+    const d = await pr.p;
+    return d && d.length >= hi - lo ? d : null;
+  }
+
   private async pump(): Promise<void> {
     this.running = true;
     try {
@@ -707,44 +806,14 @@ export class Mp4Mse {
           await sleep(1000);
           continue;
         }
-        // ~4 s de video (el primero 1,5 s: empieza a verse apenas llega lo mínimo) y el audio de ese mismo tramo
-        const t0 = this.secs(vt, vt.dts[Math.min(this.vi, vt.dts.length - 1)]);
-        const n = vt.dts.length;
-        const target = this.firstOut ? 1.5 : CHUNK;
-        // el corte va donde todo lo anterior se muestra antes que todo lo siguiente (no parte un grupo de cuadros B: eso
-        // dejaba huecos de milésimas entre tramos y micro cortes); antes se esperaba al cuadro clave siguiente (hasta 15 s
-        // de video, varios MB antes de la primera imagen)
-        let vj = this.vi + 1;
-        let maxP = this.ptsU(this.vi);
-        const closed = (j: number) => {
-          for (let k = j; k < Math.min(n, j + 16); k++) if (this.ptsU(k) <= maxP) return false;
-          return true;
-        };
-        while (vj < n) {
-          const t = this.secs(vt, vt.dts[vj]);
-          if (t >= t0 + target && closed(vj)) break;
-          if (t >= t0 + 15 && (!vt.key || vt.key.has(vj))) break;
-          maxP = Math.max(maxP, this.ptsU(vj));
-          vj++;
-        }
-        let nextP = Infinity;
-        for (let k = vj; k < Math.min(n, vj + 16); k++) nextP = Math.min(nextP, this.ptsU(k));
-        const tEnd = vj < n ? this.secs(vt, nextP) : Infinity;
-        let aj = this.ai;
-        if (a) while (aj < a.dts.length && this.secs(a, a.dts[aj]) < tEnd) aj++;
-        const vs = this.vi < vj ? this.span(vt, this.vi, vj) : null;
-        const as = a && this.ai < aj ? this.span(a, this.ai, aj) : null;
-        // video y audio van intercalados en el archivo: un solo pedido si casi todo lo de en medio es de ellos
-        const lo = Math.min(vs ? vs[0] : Infinity, as ? as[0] : Infinity);
-        const hi = Math.max(vs ? vs[1] : 0, as ? as[1] : 0);
-        const need = (vs ? vs[2] : 0) + (as ? as[2] : 0);
+        const { vj, aj, vs, as, lo, hi, need } = this.chunkPlan();
         let vb: Uint8Array | null = null;
         let ab: Uint8Array | null = null;
         let vbase = 0;
         let abase = 0;
         if (hi - lo <= need * 1.5 + 2097152) {
           // el principio del video ya pedido junto con el índice (MP4 con el índice al final)
-          const all = (await this.fromHead(lo, hi)) || (await this.get(lo, hi - lo));
+          const all = (await this.fromPre(lo, hi)) || (await this.fromHead(lo, hi)) || (await this.get(lo, hi - lo));
           vb = ab = all;
           vbase = abase = lo;
         } else {

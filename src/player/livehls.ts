@@ -75,6 +75,8 @@ export function disableMp4(): void {
   mp4Off = true;
 }
 
+const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
+
 export class LiveHls {
   private ms: any = null;
   private sb: any = null;
@@ -111,6 +113,8 @@ export class LiveHls {
   // veces que se pidió la lista otra vez desde la dirección del canal (token vencido) y páginas seguidas en lugar de
   // un segmento
   private renews = 0;
+  // llaves AES que se volvieron a pedir porque la guardada ya no descifraba (para el reporte)
+  private keyRenews = 0;
   // veces que se volvió a pedir la lista al empezar (el servidor no la dio a la primera)
   private retries = 0;
   private pageRetries = 0;
@@ -193,7 +197,7 @@ export class LiveHls {
     const how = ' modo=' + (this.mode || '?') + (this.mode === 'mp4' && m ? ' ' + m.mime.replace(/^.*codecs=/, '') + (m.why ? ' (' + m.why + ')' : '') + ' silencio=' + m.filled + ' descartados=' + m.dropped + ' cosidos=' + m.joins : '') + (this.muxWhy ? ' (' + this.muxWhy + ')' : '');
     return 'hls host=' + host + how + ' segs=' + this.segs.length + ' duracion=' + this.target + (this.encrypted ? ' cifrado=aes128' + (nativeAesOn() ? '(nativo)' : '(js)') : '') + ' entregados=' + this.appended + ' bytes=' + this.bytes +
       ' bajada=' + Math.round(this.fetchMs / n) + 'ms descifrado=' + Math.round(this.decMs / n) + 'ms cortes=' + this.stalls + ' esperas=' + this.holds.length + ' margen=' + this.margin().toFixed(0) +
-      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + (this.resumed ? ' reanudados=' + this.resumed : '') + (this.retries ? ' reintentos=' + this.retries : '') + (this.fromPreview ? ' miniatura=' + this.fromPreview : '') + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
+      's saltados=' + this.skipped + ' reacomodos=' + this.resyncs + ' pegados=' + this.joins + ' huecos=' + this.gapJumps + ' renovaciones=' + this.renews + (this.resumed ? ' reanudados=' + this.resumed : '') + (this.retries ? ' reintentos=' + this.retries : '') + (this.keyRenews ? ' llaves_nuevas=' + this.keyRenews : '') + (this.fromPreview ? ' miniatura=' + this.fromPreview : '') + ' buf=[' + buf + '] t=' + (this.v.currentTime || 0).toFixed(1) + (this.head ? ' inicio=' + this.head : '') + (this.lastProblem ? ' problema=' + this.lastProblem : '');
   }
 
   // Con los segmentos de la miniatura: se empieza en uno de ellos (el primero desde donde empezaría siempre, 5 antes del
@@ -388,21 +392,41 @@ export class LiveHls {
     }
   }
 
-  // segmento cifrado con AES-128: llave de la lista (una vez por dirección) e IV del segmento
-  private async decrypt(seg: Seg, data: Uint8Array): Promise<Uint8Array | null> {
-    const k = seg.key!;
-    let key = this.keys.get(k.uri);
+  // la llave AES-128 de una dirección (guardada; fresh = pedirla otra vez al servidor)
+  private async keyFor(uri: string, fresh: boolean): Promise<Uint8Array | null> {
+    let key = fresh ? undefined : this.keys.get(uri);
+    if (key) return key;
+    const r = await this.get(uri, 15000, 'bin');
+    key = r.data ? keyBytes(r.data) || undefined : undefined;
     if (!key) {
-      const r = await this.get(k.uri, 15000, 'bin');
-      key = r.data ? keyBytes(r.data) || undefined : undefined;
-      if (!key) {
-        const txt = r.data ? String.fromCharCode(...Array.from(r.data.slice(0, 600))) : '';
-        const x = /<html|<!doctype/i.test(txt) ? xuiError(txt) : null;
-        this.lastProblem = 'llave HTTP ' + r.code + ' ' + (r.type || '') + ' (' + (r.data ? r.data.length : 0) + ' bytes' + (x ? ', xui ' + x.code : '') + ')';
-        return null;
-      }
-      this.keys.set(k.uri, key);
+      const txt = r.data ? String.fromCharCode(...Array.from(r.data.slice(0, 600))) : '';
+      const x = /<html|<!doctype/i.test(txt) ? xuiError(txt) : null;
+      this.lastProblem = 'llave HTTP ' + r.code + ' ' + (r.type || '') + ' (' + (r.data ? r.data.length : 0) + ' bytes' + (x ? ', xui ' + x.code : '') + ')';
+      return null;
     }
+    this.keys.set(uri, key);
+    return key;
+  }
+
+  // Segmento cifrado con AES-128: llave de la lista (una vez por dirección) e IV del segmento. (2.0.12) Si con la llave
+  // guardada no sale el video (relleno inválido, «aes/pkcs5: wrong padding», o algo que no es MPEG-TS), la llave se pide
+  // otra vez: al renovar la lista (token vencido, ~40 min) el servidor cifra con otra llave en la MISMA dirección y la
+  // guardada ya no sirve. Antes cada segmento fallaba hasta que el canal se cortaba y se volvía a abrir entero
+  private async decrypt(seg: Seg, data: Uint8Array): Promise<Uint8Array | null> {
+    const uri = seg.key!.uri;
+    const cached = this.keys.has(uri);
+    const key = await this.keyFor(uri, false);
+    if (!key || !this.alive) return null;
+    const out = await this.decryptWith(seg, key, data);
+    if ((out && tsStart(out) >= 0) || !cached || !this.alive) return out;
+    const fresh = await this.keyFor(uri, true);
+    if (!fresh || !this.alive || sameBytes(fresh, key)) return out;
+    this.keyRenews++;
+    const again = await this.decryptWith(seg, fresh, data);
+    return again && tsStart(again) >= 0 ? again : out;
+  }
+
+  private async decryptWith(seg: Seg, key: Uint8Array, data: Uint8Array): Promise<Uint8Array | null> {
     // primero el descifrado nativo de Vega (milisegundos); si no da MPEG-TS, el de JavaScript y, si ese sí lo da, el
     // nativo no se vuelve a usar en la sesión
     const fast = await nativeCbc(key, segIv(seg), data);
@@ -990,6 +1014,8 @@ export class LiveHls {
     this.renews++;
     this.list = this.first;
     this.inflight.clear();
+    // la lista nueva (otra sesión del servidor) puede cifrar con otras llaves en las mismas direcciones
+    this.keys.clear();
     await this.refresh();
   }
 

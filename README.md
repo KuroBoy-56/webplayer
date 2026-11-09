@@ -207,6 +207,19 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canales cifrados que se cortaban y Continuar viendo más rápido (2.0.12)**:
+  - **Canal cifrado (AES-128) que se cortaba a los ~40 min** (aviso «Canal cortado mientras se veía», `problema=descifrado:
+    aes/pcks5: wrong padding`, `renovaciones=1`): al renovar la lista (token vencido) el servidor cifra con otra llave en
+    la misma dirección y la app seguía con la guardada: cada segmento fallaba hasta que el canal se volvía a abrir
+    entero. Ahora al renovar la lista se olvidan las llaves y, si un segmento no sale con la guardada, la llave se pide
+    otra vez y el segmento se descifra con la nueva (`llaves_nuevas=` en el reporte; `src/player/livehls.ts`).
+  - **MP4 que tardaba 11-15 s en continuar** (aviso «tardó en empezar», lector mp4 con `índice=7.5MB en 2.4s
+    inicio=6.8s`): las tablas del índice se leían para todas las pistas, de a una muestra en listas que crecen (en el
+    Fire TV, sin compilación al vuelo, varios segundos con ~1 millón de muestras). Ahora solo las del video y del audio
+    elegido, en arreglos de tamaño fijo (`fillTables`; en la prueba con un MP4 de 2 h: 475 → 114 ms sin JIT, mismas
+    tablas). Al continuar, el primer tramo se pide mientras se abre el reproductor y llega hasta 1,5 s después del
+    segundo guardado (antes 1,5 s desde el cuadro clave anterior, que podía quedar antes y obligaba a otro pedido de
+    ~1,7 s; `chunkPlan`, `fromPre` en `src/player/mp4mse.ts`).
 - **Línea llena en pantalla grande y sin reaperturas de más (2.0.11)**: los avisos mostraron `conexiones=4/4` (la línea
   sin conexiones libres: otros equipos y canales recién dejados, que XUI sigue contando un rato) y XUI contestaba una
   página vacía; la pantalla grande terminaba en «el equipo no pudo abrir el video» con un canal que sí abre. Ahora, con
