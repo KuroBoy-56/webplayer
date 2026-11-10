@@ -7,7 +7,7 @@ import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia'
 import { rangeGet, RangeState } from './rangeget';
 import { lineLimit, ReadAhead } from './readahead';
 import { dropIndex, hasIndex, loadIndex, saveIndex, STALE_INDEX, fromBase64, toBase64 } from './indexstore';
-import { shareIndex, sharedIndex, sharedKnown, sharedStale } from './sharedindex';
+import { bridgeAsk, shareIndex, sharedIndex, sharedKnown, sharedStale } from './sharedindex';
 import { dropPrefetch, prefetchedAt } from './prefetch';
 export { STALE_INDEX };
 import { readJson, writeJson } from '../lib/storage';
@@ -505,7 +505,7 @@ export class Mp4Mse {
   diag(): string {
     const s = (t: number) => (t ? ((t - this.t0) / 1000).toFixed(1) + 's' : '-');
     const n = this.rs.reqs || 0;
-    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB' : this.moovBox ? (this.moovBox.got / 1048576).toFixed(1) + '/' + (this.moovBox.size / 1048576).toFixed(1) + 'MB' : 'no') + ' en ' + s(this.tIdx) + (this.partAt ? ' empezo_con=' + this.partAt : '') + (this.tailUsed ? ' indice_del_final=' + this.tailUsed : '') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + (this.oneConn || this.ra.single) + ' indice_recordado=' + this.spotUsed + ' indice_guardado=' + this.packed + (this.shared ? ' indice_panel=true' : '') + ' ' + this.ra.diag() + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
+    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB' : this.moovBox ? (this.moovBox.got / 1048576).toFixed(1) + '/' + (this.moovBox.size / 1048576).toFixed(1) + 'MB' : 'no') + ' en ' + s(this.tIdx) + (this.partAt ? ' empezo_con=' + this.partAt : '') + (this.tailUsed ? ' indice_del_final=' + this.tailUsed : '') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + (this.oneConn || this.ra.single) + ' indice_recordado=' + this.spotUsed + ' indice_guardado=' + this.packed + (this.shared ? ' indice_panel=true' : '') + ' ' + this.ra.diag() + ' pedidos=' + n + (this.rs.bridge ? ' puente=' + this.rs.bridge : '') + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
   }
 
   // lo ya preparado (índice, pistas, códecs y el primer tramo pedido): desde la ficha (warm.ts) o al abrir
@@ -519,6 +519,9 @@ export class Mp4Mse {
   // Índice del archivo, pistas y el primer tramo del video pedido a la descarga adelantada. '' = listo
   private async doPrepare(at: number): Promise<string> {
     if (!this.t0) this.t0 = Date.now();
+    // ¿hay puente con caché en la VPS / VDS? (antes del primer pedido: todo por el mismo camino)
+    await bridgeAsk(this.url);
+    if (!this.alive) return '';
     this.fromStart = at <= 5;
     // el índice ya leído de este archivo (volver a abrirlo, Continuar viendo, cambiar de audio): sin pedirlo otra vez.
     // Primero el de la memoria, después el guardado en el equipo (indexstore.ts) y recién después el servidor

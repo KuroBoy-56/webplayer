@@ -6,11 +6,12 @@
 // directo). why dice el motivo para el reporte.
 import { UA } from '../lib/http';
 import { takeRange } from './prefetch';
+import { bridgeFailed, viaBridge } from './bridge';
 
 // lastData: cuándo llegó el último tramo (Player espera más mientras el servidor sigue entregando)
 // reqs / waitMs: pedidos hechos y lo que tardó el servidor en contestar cada uno (para el aviso de apertura lenta)
 // errs: pedidos que se cortaron por la red (la descarga adelantada mira si pasa con varios pedidos a la vez)
-export type RangeState = { close: boolean; unbounded: boolean; size: number; why: string; lastData?: number; reqs?: number; waitMs?: number; errs?: number; from?: number };
+export type RangeState = { close: boolean; unbounded: boolean; size: number; why: string; lastData?: number; reqs?: number; waitMs?: number; errs?: number; from?: number; bridge?: number };
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -81,17 +82,27 @@ export async function rangeGet(url: string, off: number, len: number, st: RangeS
     const ctrl = new AbortController();
     requests.add(ctrl);
     let phase = 'contestar';
-    let limit = 12000;
+    // por el puente: la máquina puede tardar lo que tarda el servidor IPTV en darle la primera parte (y reintentar)
+    const bridge = viaBridge(url);
+    let limit = bridge ? 28000 : 12000;
     let timer = setTimeout(() => ctrl.abort(), limit);
     const t0 = Date.now();
     try {
       // off < 0: los últimos len bytes del archivo (donde va el índice de casi todos los MP4 de los servidores IPTV)
       const headers: Record<string, string> = { 'User-Agent': UA, Range: off < 0 ? 'bytes=-' + len : 'bytes=' + off + '-' + (off + len - 1) };
       if (st.close) headers.Connection = 'close';
-      const target = finalUrl.get(url) || url;
+      const target = bridge || finalUrl.get(url) || url;
       const r = await fetch(target, { headers, signal: ctrl.signal });
       st.reqs = (st.reqs || 0) + 1;
       st.waitMs = (st.waitMs || 0) + (Date.now() - t0);
+      if (bridge) st.bridge = (st.bridge || 0) + 1;
+      if (bridge && r.status !== 206) {
+        // el puente no entregó (apagado: 409; la máquina no consiguió el video: 504): directo desde ahora
+        bridgeFailed(url);
+        st.why = 'puente ' + r.status;
+        ctrl.abort();
+        continue;
+      }
       if (r.status !== 206 && target !== url) {
         // el token del balanceador venció o no admite otro pedido: otra vez por la dirección original
         finalUrl.delete(url);
@@ -142,6 +153,8 @@ export async function rangeGet(url: string, off: number, len: number, st: RangeS
       if (!alive()) return null;
       st.errs = (st.errs || 0) + 1;
       finalUrl.delete(url);
+      // el puente no contestó a tiempo (máquina caída o sin red hacia ella): directo desde ahora
+      if (bridge) bridgeFailed(url);
       st.why = ctrl.signal.aborted
         ? 'sin ' + phase + ' en ' + Math.round((Date.now() - t0) / 1000) + ' s (' + Math.round(len / 1024) + ' KB en ' + Math.round(off / 1048576) + ' MB)'
         : 'red: ' + String(e?.message || e).slice(0, 60);

@@ -12,6 +12,7 @@
 import type { HttpResult } from '../lib/http';
 import { http } from '../lib/http';
 import { b64Encode } from '../lib/crypto';
+import { setBridge } from './bridge';
 
 // (el cliente del panel se carga al usarlo: el lector de MP4 se prueba sin la app entera)
 function cloud(file: string, method: 'GET' | 'POST', payload: Record<string, any>): Promise<HttpResult> {
@@ -32,7 +33,11 @@ async function linksFor(url: string): Promise<{ head: string; url: string } | nu
   if (l && Date.now() - l.at < 3600000) return l;
   const r = await within(cloud('vidx.php', 'GET', { u: b64u(url) }), HEAD_MS);
   const j = r?.ok ? parsed(r.body) : null;
+  // {ok: false}: sin máquina para esta línea (ni índice compartido ni puente)
+  if (j && j.ok === false) setBridge(url, '');
   if (!j || j.ok !== true || typeof j.head !== 'string' || typeof j.url !== 'string') return null;
+  // el puente con caché del video (panel con el motor 2.0.18; uno anterior no lo manda)
+  setBridge(url, typeof j.vod === 'string' ? j.vod : '');
   const got = { head: j.head, url: j.url, at: Date.now() };
   links.set(k, got);
   if (links.size > 50) links.delete(links.keys().next().value as string);
@@ -70,6 +75,13 @@ export function parseShared(body: string): Shared | null {
   const text = body.slice(nl + 1);
   if (text.length !== Number(m[3]) || !(Number(m[2]) > 0)) return null;
   return { kind: m[1], size: Number(m[2]), text };
+}
+
+// el puente de este archivo, preguntado al panel si todavía no se sabe (como mucho 2,5 s; la ficha ya lo suele haber
+// preguntado). Los lectores lo esperan antes de su primer pedido para que todo vaya por el mismo camino
+export function bridgeAsk(url: string): Promise<void> {
+  if (!vod(url)) return Promise.resolve();
+  return linksFor(url).then(() => undefined, () => undefined);
 }
 
 // el panel ya dijo que tiene el índice de este archivo (Player no pide la cabecera por adelantado)

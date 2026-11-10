@@ -21,6 +21,7 @@ import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
 import { dropWarm, mp4Ready, Mp4Mse, NOT_MP4_MKV, STALE_INDEX } from './mp4mse';
 import { isSingle } from './rangeget';
+import { viaBridge } from './bridge';
 import { dropMkvWarm, MkvMse, mkvKnown } from './mkvmse';
 import { Mkv } from './mkvparse';
 import { reportError } from '../api/report';
@@ -682,7 +683,7 @@ export class Playback {
   // (2.0.16) Tampoco si el lector ya tiene el índice (equipo, memoria o panel) y el audio predeterminado es AAC: abre con un
   // solo pedido al servidor IPTV y deja cambiar de idioma en el equipo; el nativo tendría que leer el índice otra vez
   nativeVodPlanned(url: string, at: number): boolean {
-    return /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url) && at <= 5 && !titleLang(url) && pref('subs_lang', 'off') === 'off' && nativeAllowed('vod') && nativeHttpOk(url) && !vodNativeTried.has(fileKey(url)) && !this.readerReady(url);
+    return /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url) && at <= 5 && !titleLang(url) && pref('subs_lang', 'off') === 'off' && nativeAllowed('vod') && nativeHttpOk(url) && !vodNativeTried.has(fileKey(url)) && !this.readerReady(url) && !viaBridge(url);
   }
 
   private readerReady(url: string): boolean {

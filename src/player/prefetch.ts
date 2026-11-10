@@ -5,6 +5,7 @@
 // reproductor se inicia; antes ese segmento (varios MB) se pedía recién con el reproductor listo.
 import { UA } from '../lib/http';
 import { liveStartSeg, parseList } from '../lib/hlslist';
+import { viaBridge } from './bridge';
 
 export type ListGot = { code: number; url: string; text?: string; type?: string };
 // lo mismo que LiveHls.get en modo 'seg': bytes, o el texto si llegó una página (motivo de XUI) o una lista
@@ -142,7 +143,7 @@ function fetchRange(url: string, off: number, len: number, stop: AbortSignal): P
     const timer = setTimeout(() => ctrl.abort(), 30000);
     stop.addEventListener('abort', () => ctrl.abort(), { once: true } as any);
     try {
-      const r = await fetch(url, { headers: { 'User-Agent': UA, Range: 'bytes=' + off + '-' + (off + len - 1) }, signal: ctrl.signal });
+      const r = await fetch(viaBridge(url) || url, { headers: { 'User-Agent': UA, Range: 'bytes=' + off + '-' + (off + len - 1) }, signal: ctrl.signal });
       // sin partes (200) o mandaría el resto del archivo: lo pide el lector, que lo detecta y sigue por otro camino
       if (r.status !== 206 || Number(r.headers.get('content-length') || 0) > len + 65536) {
         ctrl.abort();
