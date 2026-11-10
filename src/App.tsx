@@ -25,7 +25,7 @@ import { resetEngine } from './api/media';
 import { setStreamFlip } from './api/xtream';
 import { bindReportContext, installCrashReporter } from './api/report';
 import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppState } from './state';
-import { onCacheClear, panelAnswered, panelCheckMac } from './api/panel';
+import { onCacheClear, panelCheckMac, panelLineGone } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
 installCrashReporter();
@@ -163,12 +163,13 @@ function App() {
   useEffect(() => {
     let last = Date.now();
     let lastPanel = Date.now();
-    // si el dueño quitó la línea de este equipo o la demo venció, vuelve al inicio de sesión
+    // si el dueño quitó la línea de este equipo, la demo venció o lo bloquearon, vuelve al inicio de sesión (solo
+    // cuando el panel deja de dar una línea que antes dio: ver lineLost en api/panel.ts)
     const recheck = () => {
       lastPanel = Date.now();
       const ses = getState().session;
       panelCheckMac(deviceId(), true).then(ln => {
-        if (!ln && panelAnswered() && getState().session === ses) {
+        if (!ln && panelLineGone() && getState().session === ses) {
           logout();
           setStack([{ name: 'login' }]);
         }

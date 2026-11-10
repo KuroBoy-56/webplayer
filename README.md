@@ -23,6 +23,15 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 `appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
 `dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
 
+## Novedades de la 1.3.11
+
+Con número de distribuidor la app sacaba al cliente a los ~10 minutos y pedía otra vez usuario y contraseña (el panel no
+devolvía la línea de un cliente que su distribuidor había quitado de Clientes aunque volviera a iniciar sesión; arreglado
+en el panel, que hay que actualizar). En la app: la sesión abierta solo se cierra cuando el panel **deja de dar** una
+línea que antes dio para este televisor, o lo bloquea (`lineLost`, `src/api/panel.ts`), y el rechazo del número de
+distribuidor se confirma con una segunda consulta antes de borrar el número y la sesión (`runCheck`, `src/state.ts`).
+El identificador del televisor (LGUDID de LG) es el mismo siempre, también al reinstalar la app.
+
 ## Novedades de la 1.3.10
 
 Sin la pantalla de carga fija de LG (`splashBackground`) que puso la 1.3.8: mostraba el logo del dueño a todos los
