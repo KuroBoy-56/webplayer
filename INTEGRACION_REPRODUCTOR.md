@@ -123,6 +123,13 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.0.17 — el índice compartido en la VPS / VDS
+
+`sharedindex.ts`: `linksFor()` pide al panel (`vidx.php`, 2,5 s) los dos enlaces firmados de la máquina (`head` y
+`url`, válidos 6 h; se piden otra vez pasada 1 h). `{ok: false}` = sin máquina para esta línea: ni se pregunta ni se
+sube nada. Con enlaces: «¿lo tiene?» (`head`), el índice (`url`, GET) y la subida por partes (`url`, POST con JSON), todo
+directo con la VPS / VDS (`media_worker.php?do=vidx`, `includes/vidx_store.php` del panel).
+
 ## 2.0.16 — índice compartido por el panel e idiomas con el reproductor nativo
 
 | Pieza | Qué hace |

@@ -1,12 +1,16 @@
-// Índice compartido por el panel (api/vidx.php, 2.0.16).
+// Índice compartido entre los equipos (2.0.16; en la VPS / VDS desde 2.0.17).
 //
 // Abrir una película o capítulo por primera vez obliga a leer su índice (moov, 3-10 MB al final del archivo) del
 // servidor IPTV: con servidores que tardan ~5 s en contestar cada pedido y líneas de una sola conexión eran 15-35 s
-// (avisos «tardó en empezar»: indice=8.4MB en 14.3s unaConexion=true). El primer equipo que lo lee lo deja en el panel
-// (comprimido); los demás lo reciben del panel —otro servidor, no ocupa la conexión de la línea— mientras al servidor
-// IPTV solo se le pide el video. Lo recibido es un atajo como lo guardado en el equipo (indexstore.ts): si el archivo
-// tiene otro tamaño en el servidor se descarta (sharedStale) y el equipo que lo nota deja el índice correcto.
+// (avisos «tardó en empezar»: indice=8.4MB en 14.3s unaConexion=true). El primer equipo que lo lee lo deja en la VPS del
+// dueño o en la VDS propia de su distribuidor; los demás lo reciben de esa máquina —no ocupa la conexión de la línea—
+// mientras al servidor IPTV solo se le pide el video. El panel (api/vidx.php) solo revisa la línea y entrega dos
+// enlaces firmados («¿lo tiene?» y bajar / subir): nada pasa por su hosting. Sin VPS / VDS (o un distribuidor sin VDS
+// propia) el panel dice que no y todo sigue como antes. Lo recibido es un atajo como lo guardado en el equipo
+// (indexstore.ts): si el archivo tiene otro tamaño en el servidor se descarta (sharedStale) y el equipo que lo nota
+// deja el índice correcto.
 import type { HttpResult } from '../lib/http';
+import { http } from '../lib/http';
 import { b64Encode } from '../lib/crypto';
 
 // (el cliente del panel se carga al usarlo: el lector de MP4 se prueba sin la app entera)
@@ -17,13 +21,27 @@ const b64u = (s: string) => b64Encode(s).replace(/\+/g, '-').replace(/\//g, '_')
 
 export type Shared = { kind: string; size: number; text: string };
 
-// lo que dijo el panel de cada archivo: 'none' = no lo tiene (este equipo lo sube al leerlo), 'has' = lo tiene,
+// lo que dijo la VPS / VDS de cada archivo: 'none' = no lo tiene (este equipo lo sube al leerlo), 'has' = lo tiene,
 // 'up' = ya se subió (o se está subiendo) desde aquí
 const said = new Map<string, 'none' | 'has' | 'up'>();
+// enlaces firmados de la máquina para cada archivo (el panel los firma por 6 h; se piden otra vez pasada 1 h)
+const links = new Map<string, { head: string; url: string; at: number }>();
+async function linksFor(url: string): Promise<{ head: string; url: string } | null> {
+  const k = keyOf(url);
+  const l = links.get(k);
+  if (l && Date.now() - l.at < 3600000) return l;
+  const r = await within(cloud('vidx.php', 'GET', { u: b64u(url) }), HEAD_MS);
+  const j = r?.ok ? parsed(r.body) : null;
+  if (!j || j.ok !== true || typeof j.head !== 'string' || typeof j.url !== 'string') return null;
+  const got = { head: j.head, url: j.url, at: Date.now() };
+  links.set(k, got);
+  if (links.size > 50) links.delete(links.keys().next().value as string);
+  return got;
+}
 const asking = new Map<string, Promise<Shared | null>>();
 const HEAD_MS = 2500; // ¿lo tiene? (respuesta chica)
 const BODY_MS = 25000; // el índice (hasta ~6 MB comprimido)
-const PART = 1536000; // partes de la subida (el panel acepta hasta 2 MB; hostings con post_max_size de 8 MB)
+const PART = 1536000; // partes de la subida (la máquina acepta hasta 2 MB por parte)
 const MAX_TEXT = 16 * 1048576;
 
 const keyOf = (url: string) => url.replace(/^https?:\/\//i, '');
@@ -59,14 +77,17 @@ export function sharedKnown(url: string): boolean {
   return said.get(keyOf(url)) === 'has';
 }
 
-// El índice de este archivo si el panel lo tiene (kind 'm' = MP4, 'k' = MKV); null si no lo tiene, no contesta o tarda
+// El índice de este archivo si la VPS / VDS lo tiene (kind 'm' = MP4, 'k' = MKV); null si no lo tiene, no contesta o tarda
 export function sharedIndex(url: string, kind: string): Promise<Shared | null> {
   if (!vod(url)) return Promise.resolve(null);
   const k = keyOf(url);
   let p = asking.get(k);
   if (!p) {
     p = (async () => {
-      const h = await within(cloud('vidx.php', 'GET', { u: b64u(url), head: 1 }), HEAD_MS);
+      // sin VPS / VDS (o el distribuidor no tiene la suya) el panel dice que no: nada que pedir ni que subir
+      const ln = await linksFor(url);
+      if (!ln) return null;
+      const h = await within(http(ln.head, { timeout: HEAD_MS }), HEAD_MS);
       const j = h?.ok ? parsed(h.body) : null;
       if (!j) return null;
       if (j.ok !== true) {
@@ -74,7 +95,7 @@ export function sharedIndex(url: string, kind: string): Promise<Shared | null> {
         return null;
       }
       said.set(k, 'has');
-      const r = await within(cloud('vidx.php', 'GET', { u: b64u(url) }), BODY_MS);
+      const r = await within(http(ln.url, { timeout: BODY_MS }), BODY_MS);
       return r?.ok ? parseShared(r.body) : null;
     })();
     asking.set(k, p);
@@ -92,7 +113,7 @@ export function sharedStale(url: string): void {
   said.set(k, 'none');
 }
 
-// El índice completo leído del servidor IPTV, al panel: solo si el panel dijo que no lo tenía (sin respuesta del panel
+// El índice completo leído del servidor IPTV, a la VPS / VDS: solo si dijo que no lo tenía (sin respuesta
 // no se sube nada), una vez por archivo, de a partes y sin apuro (después de que el video ya empezó)
 export function shareIndex(url: string, kind: string, size: number, make: () => Promise<string> | string): void {
   const k = keyOf(url);
@@ -103,8 +124,11 @@ export function shareIndex(url: string, kind: string, size: number, make: () => 
     if (!text || text.length > MAX_TEXT) return;
     const n = Math.ceil(text.length / PART);
     if (n > 12) return;
+    const ln = links.get(k);
+    if (!ln) return;
     for (let i = 0; i < n; i++) {
-      const r = await cloud('vidx.php', 'POST', { u: b64u(url), kind, size, len: text.length, i, n, part: text.slice(i * PART, (i + 1) * PART) });
+      const body = JSON.stringify({ kind, size, len: text.length, i, n, part: text.slice(i * PART, (i + 1) * PART) });
+      const r = await http(ln.url, { method: 'POST', body, type: 'application/json', timeout: 60000 });
       const j = r.ok ? parsed(r.body) : null;
       // el panel no lo aceptó, o ya lo tiene (otro equipo lo subió mientras tanto)
       if (!j || j.ok !== true || j.have || j.saved) return;

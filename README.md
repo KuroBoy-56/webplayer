@@ -207,6 +207,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **El índice compartido se guarda en la VPS / VDS, no en el hosting (2.0.17)**: `api/vidx.php` del panel solo revisa
+  la línea y entrega dos enlaces firmados a la máquina (VPS del dueño o VDS propia del distribuidor); la app pregunta,
+  baja y sube el índice directo con ella (`src/player/sharedindex.ts`). Un distribuidor sin VDS propia, o un panel sin
+  máquina, responde que no y todo sigue como antes (el índice se lee del servidor IPTV). La VPS / VDS necesita
+  `includes/vidx_store.php` y el `api/media_worker.php` nuevo (ver `tools/vps/README.md` del panel).
 - **Índice compartido por el panel, idiomas con el reproductor nativo y sin choques en la línea (2.0.16)**:
   - **Películas y capítulos que otro equipo ya abrió empiezan con un solo pedido al servidor IPTV**: el primer equipo que
     lee el índice de un MP4 (moov, 3-10 MB al final del archivo; avisos «tardó en empezar» con `indice=8.4MB en 14.3s
