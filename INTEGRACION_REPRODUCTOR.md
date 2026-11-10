@@ -170,6 +170,7 @@ A = nuevo desde el principio, B = Continuar viendo con el índice guardado, C = 
 | Caso | 2.0.14 | 2.0.15 |
 | --- | --- | --- |
 | 2 idiomas (índice 2,9 MB), 2 MB/s por conexión | A 14,2 s · B 6,6 s · C 19,9 s | A 8,9 s · B 6,6 s · C 14,6 s |
+| 6 idiomas (índice 6,6 MB), 2 MB/s por conexión | A 14,9 s · B 6,6 s · C 20,6 s | A 14,9 s · B 6,6 s · C 19,8 s |
 | 6 idiomas (índice 6,6 MB), 260 KB/s por conexión | A 23,1 s · B 7,5 s · C 29,6 s | A 23,4 s · B 7,5 s · C 24,1 s |
 | 6 idiomas, línea que admite 1 conexión | no abría («índice: pedido 403») | A 33,7 s · C 34,6 s |
 
