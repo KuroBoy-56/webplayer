@@ -82,6 +82,11 @@ object Store {
         get() = p.getString(tenantKey("panel_pin2"), null)?.takeIf { it.length == 4 } ?: "0000"
         set(v) = p.edit().putString(tenantKey("panel_pin2"), v).apply()
 
+    /** el panel ya le dio a este equipo su línea (check_mac con línea o demo creada): solo entonces un «sin línea» cierra la sesión */
+    var lineSeen: Boolean
+        get() = p.getBoolean(tenantKey("line_seen"), false)
+        set(v) = p.edit().putBoolean(tenantKey("line_seen"), v).apply()
+
     var blockedCats: Set<String>
         get() = p.getStringSet("blocked_cats", emptySet()) ?: emptySet()
         set(v) = p.edit().putStringSet("blocked_cats", v).apply()

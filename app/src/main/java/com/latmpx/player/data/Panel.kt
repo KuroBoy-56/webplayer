@@ -111,6 +111,13 @@ object Panel {
 
     /** pantalla falsa que mandó el último check_mac (null = ninguna) */
     @Volatile var fakeScreen: FakeScreen? = null
+
+    /**
+     * El panel dejó de dar una línea que antes dio a este equipo (el dueño la quitó o la demo venció): ahí se cierra la
+     * sesión abierta. Si nunca la dio (se entró escribiendo usuario y contraseña y el panel los aceptó), «sin línea» no
+     * saca al cliente: pasaba a los 10 minutos con los clientes que su distribuidor había quitado de la lista.
+     */
+    @Volatile var lineGone = false
         private set
 
     /** ¿El equipo ya tiene una línea activa en el panel? */
@@ -127,10 +134,16 @@ object Panel {
         fakeScreen = FakeScreen.parse(j)
         // orden de borrado de caché del panel (viene con línea o sin ella; un panel viejo no la manda)
         if (j.has("cache_clear")) CacheClear.received(j.optLong("cache_clear", 0L), j.optLong("cache_clear_at", 0L), System.currentTimeMillis() / 1000 + clockSkew)
-        if (!j.optBoolean("exists", false)) return Answer(null)
+        if (!j.optBoolean("exists", false)) {
+            lineGone = Store.lineSeen
+            if (lineGone) Store.lineSeen = false
+            return Answer(null)
+        }
         // PIN parental del panel: es el que usa la app
         j.s("pin").takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { Store.parentalPin = it }
         val line = lineFromUrl(tr(R.string.server), j.s("url"), j.s("username"), j.s("password"))?.copy(demo = j.optBoolean("demo", false), demoExpires = j.optLong("demo_expires", 0L), demoDuration = j.optLong("demo_duration", 0L))
+        lineGone = false
+        if (line != null && !Store.lineSeen) Store.lineSeen = true
         return Answer(line)
     }
 
@@ -172,6 +185,8 @@ object Panel {
         val a = login("auto_demo", p)
         val r = a.value ?: return Answer(null, a.error)
         val j = r.json()
+        // la demo recién creada es una línea que el panel le dio a este equipo
+        if (r.ok && j?.s("status") == "ok" && j.s("username").isNotEmpty()) Store.lineSeen = true
         if (r.ok && j?.s("status") == "ok" && j.s("username").isNotEmpty()) return Answer(Demo(j.s("username"), j.s("password"), j.s("url"), j.optLong("demo_expires", 0L), j.optLong("demo_duration", 0L)), code = r.code)
         val fallback = when (r.code) {
             403 -> tr(R.string.err_demo_used)

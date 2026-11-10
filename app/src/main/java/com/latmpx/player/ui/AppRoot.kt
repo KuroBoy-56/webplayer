@@ -118,7 +118,13 @@ fun AppRoot() {
         if (checking.value) return
         checking.value = true
         scope.launch {
-            val r = Tenant.fetch(b.code, Device.id(ctx))
+            val first = Tenant.fetch(b.code, Device.id(ctx))
+            // el panel rechaza el número: se confirma con una segunda consulta antes de borrar el número y la sesión (una
+            // sola respuesta equivocada del panel sacaba al cliente de la app)
+            val r = if (first is Tenant.Check.Denied) {
+                kotlinx.coroutines.delay(3000L)
+                Tenant.fetch(b.code, Device.id(ctx))
+            } else first
             checking.value = false
             if (Tenant.code != b.code) return@launch // cambió de distribuidor mientras tanto
             when (r) {
@@ -148,9 +154,10 @@ fun AppRoot() {
     }
     // el panel cortó el distribuidor mientras se usaba la app (vencido, suspendido, no vinculado)
     LaunchedEffect(Tenant.revoked) {
-        val m = Tenant.revoked ?: return@LaunchedEffect
+        if (Tenant.revoked == null) return@LaunchedEffect
         Tenant.revoked = null
-        if (Tenant.active) wipe(m)
+        // no se borra el número con un solo rechazo (progreso, guía, deportes): lo confirma el guardián con tenant_config
+        if (Tenant.active) guard()
     }
     // al entrar con sesión: primero el catálogo guardado en el equipo (al instante) y
     // después, en segundo plano, el del servidor si la copia ya es vieja o no existe
@@ -187,9 +194,9 @@ fun AppRoot() {
         lastPanelCheck.longValue = System.currentTimeMillis()
         scope.launch {
             val c = com.latmpx.player.data.Panel.checkMac(Store.deviceIdOrEmpty(), poll = true)
-            // sin conexión o error del panel no se cierra la sesión; solo cuando el panel dice que no hay línea o que el
-            // equipo está en la lista negra
-            if (((c.error == null && c.value == null) || com.latmpx.player.data.Panel.blocked != null) && state.session === s) {
+            // sin conexión o error del panel no se cierra la sesión; solo cuando el panel deja de dar una línea que antes dio
+            // a este equipo (Panel.lineGone) o el equipo está en la lista negra
+            if (((c.error == null && c.value == null && com.latmpx.player.data.Panel.lineGone) || com.latmpx.player.data.Panel.blocked != null) && state.session === s) {
                 Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
             }
         }
