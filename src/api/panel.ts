@@ -354,14 +354,29 @@ export async function panelCheckMac(deviceId: string, poll = false): Promise<Lin
   // orden del panel de borrar la caché (viene con o sin línea; un panel viejo no la manda)
   if (lastCheckAnswered && takeCacheOrder(j.cache_clear, j.cache_clear_at, Math.floor(Date.now() / 1000) + clockSkew)) cacheHook();
   fakeScreen = parseFake(j);
-  if (!j || j.exists !== true) return null;
+  const ln = j && j.exists === true ? lineFromUrl(t('Servidor'), str(j.url), str(j.username), str(j.password)) : null;
+  lineGone = lineLost(lastCheckAnswered, !!ln, lineSeen, !!blockedMsg);
+  if (lastCheckAnswered) lineSeen = !!ln;
+  if (!ln) return null;
   // PIN parental del panel: es el que usa la app
   if (/^\d{4}$/.test(str(j.pin))) write(scoped('panel_pin'), str(j.pin));
-  const ln = lineFromUrl(t('Servidor'), str(j.url), str(j.username), str(j.password));
-  return ln ? { ...ln, demo: j.demo === true, demoExpires: Number(j.demo_expires) || 0, demoDuration: Number(j.demo_duration) || 0 } : null;
+  return { ...ln, demo: j.demo === true, demoExpires: Number(j.demo_expires) || 0, demoDuration: Number(j.demo_duration) || 0 };
 }
 
 let lastCheckAnswered = false;
+
+// La sesión abierta se cierra cuando el panel deja de dar la línea de este equipo: el dueño la quitó, la demo venció o
+// bloquearon el equipo. «Deja de dar» = antes la dio (seen). Si el panel nunca la dio para este equipo (se entró
+// escribiendo usuario y contraseña y el panel los aceptó), una respuesta «sin línea» no saca al cliente de la app a
+// los 10 minutos: eso pasaba con los clientes que su distribuidor había quitado de la lista y volvían a entrar.
+export function lineLost(answered: boolean, line: boolean, seen: boolean, blocked: boolean): boolean {
+  return answered && !line && (seen || blocked);
+}
+let lineSeen = false;
+let lineGone = false;
+export function panelLineGone(): boolean {
+  return lineGone;
+}
 
 // borrar la caché y reiniciar (lo hace App)
 let cacheHook: () => void = () => {};
@@ -392,9 +407,6 @@ export async function panelReview(user: string, pass: string, demo: boolean): Pr
   const list = (a: any): ReviewVideo[] =>
     (Array.isArray(a) ? a : []).map((v: any) => ({ name: str(v?.name), url: str(v?.url) })).filter((v: ReviewVideo) => !!v.url);
   return { ok: true, review: { movies: list(j.movies), series: list(j.series) } };
-}
-export function panelAnswered(): boolean {
-  return lastCheckAnswered;
 }
 
 // cambia el PIN parental en el panel (pide el actual); si el panel no lo acepta, no cambia
@@ -437,6 +449,8 @@ export async function panelDemo(
   const r = await panelLogin('auto_demo', code ? { mac_address: deviceId, reseller: code, enc: 1 } : { mac_address: deviceId, enc: 1 });
   noteBlocked(r);
   const j = loginReply(r);
+  // la demo recién creada es una línea que el panel le dio a este equipo
+  if (r.ok && j && str(j.status) === 'ok' && str(j.username)) lineSeen = true;
   if (r.ok && j && str(j.status) === 'ok' && str(j.username)) return {
       ok: true,
       user: str(j.username),

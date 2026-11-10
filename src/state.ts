@@ -361,7 +361,13 @@ async function runCheck(): Promise<Guard> {
   if (!code) return { kind: 'skip' };
   const old = brand();
   const now = nowSec();
-  const r = await panelTenantConfig(code, deviceId(), now);
+  let r = await panelTenantConfig(code, deviceId(), now);
+  // el panel rechaza el número: antes de borrar el número y cerrar la sesión se le pregunta otra vez (una sola
+  // respuesta equivocada del panel sacaba al cliente de la app)
+  if (!r.ok && TENANT_FATAL.includes(r.code)) {
+    await new Promise<void>(res => setTimeout(res, 3000));
+    r = await panelTenantConfig(code, deviceId(), nowSec());
+  }
   if (tenantCode() !== code) return { kind: 'skip' }; // cambió mientras tanto
   if (r.ok) {
     saveBrand(r.brand);

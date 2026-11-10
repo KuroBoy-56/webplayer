@@ -10,6 +10,15 @@ Windows, Roku y Vega OS. Un cambio en `src/` de la rama `vega-os` se trae aquí 
 compila sola en cada cambio de la rama `tizenOS` (workflow `App Tizen OS (Samsung)`), con la llave del panel
 del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
+## Novedades de la 1.2.1
+
+Con número de distribuidor la app sacaba al cliente a los ~10 minutos y pedía otra vez usuario y contraseña (el panel no
+devolvía la línea de un cliente que su distribuidor había quitado de Clientes aunque volviera a iniciar sesión; arreglado
+en el panel, que hay que actualizar). En la app: la sesión abierta solo se cierra cuando el panel **deja de dar** una
+línea que antes dio para este televisor, o lo bloquea (`lineLost`, `src/api/panel.ts`), y el rechazo del número de
+distribuidor se confirma con una segunda consulta antes de borrar el número y la sesión (`runCheck`, `src/state.ts`).
+El identificador del televisor (DUID de Samsung) es el mismo siempre, también al reinstalar la app.
+
 ## Novedades de la 1.2.0 (webOS 1.3.1 a 1.3.7, Vega OS 1.0.56 a 1.0.60 y los arreglos de interfaz de Vega hasta la 2.0.11)
 
 - **Todo lo de webOS hasta la 1.3.7** (merge de la rama `webOS`): TV en vivo como Vega y Roku (OK miniatura y punto

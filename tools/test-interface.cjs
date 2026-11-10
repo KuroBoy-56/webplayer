@@ -255,3 +255,19 @@ test('canal en vivo: imagen trabada con video por delante salta al cuadro clave 
   assert.equal(v.currentTime, 12.15);
   reader.destroy();
 });
+
+test('sesión: el panel «sin línea» solo cierra la sesión si antes dio la línea de este equipo (o lo bloqueó)', () => {
+  const src = fs.readFileSync(require.resolve('../src/api/panel.ts'), 'utf8');
+  const fn = /export function lineLost\([^)]*\): boolean \{\n([^}]*)\}/.exec(src);
+  assert.ok(fn, 'lineLost en src/api/panel.ts');
+  const lineLost = new Function('answered', 'line', 'seen', 'blocked', fn[1]);
+  // se entró escribiendo usuario y contraseña y el panel nunca dio la línea de este equipo: no se saca al cliente
+  assert.equal(lineLost(true, false, false, false), false);
+  // el panel la daba y la quitó (o la demo venció): sí
+  assert.equal(lineLost(true, false, true, false), true);
+  // equipo bloqueado: siempre
+  assert.equal(lineLost(true, false, false, true), true);
+  // el panel no contestó, o sigue dando la línea: no
+  assert.equal(lineLost(false, false, true, false), false);
+  assert.equal(lineLost(true, true, true, false), false);
+});
