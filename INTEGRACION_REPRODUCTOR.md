@@ -123,21 +123,6 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
-## 2.0.18 — puente con caché de la VPS / VDS
-
-| Pieza | Qué hace |
-| --- | --- |
-| `src/player/bridge.ts` | `setBridge(url, enlace)` (lo llama `sharedindex.linksFor` con el `vod` que firma `vidx.php`; '' = sin máquina), `viaBridge(url)` (a dónde pedir los tramos), `bridgeNone(url)` (se sabe que es directo), `bridgeFailed(url)` (el puente no entregó: directo el resto de la sesión) |
-| `rangeget.ts` | pide a `viaBridge(url)` si hay puente (plazo para contestar 28 s: la máquina espera al servidor IPTV); otro código que 206 o sin respuesta → `bridgeFailed` y el mismo pedido sigue directo. `RangeState.bridge` cuenta los pedidos por el puente |
-| `prefetch.ts` | el pedido adelantado de Player también va al puente |
-| `Mp4Mse.doPrepare`, `MkvMse.start` / `indexOnly` | `await bridgeAsk(url)` antes del primer pedido |
-| `Player.tsx` | sin pedido adelantado mientras no se sepa si hay puente |
-| `Playback.nativeVodPlanned` | con puente, el lector (no el nativo) |
-
-Panel: `includes/vod_bridge.php` en la VPS / VDS (una conexión al servidor IPTV por video, pedidos de la app desde el
-disco, el que baja va hasta 150 MB por delante de lo que se lee, 30 GB de disco de fábrica, se borra a los 30 min sin
-pedidos). Prueba: `php tools/vod_bridge_test.php` del panel.
-
 ## 2.0.17 — el índice compartido en la VPS / VDS
 
 `sharedindex.ts`: `linksFor()` pide al panel (`vidx.php`, 2,5 s) los dos enlaces firmados de la máquina (`head` y

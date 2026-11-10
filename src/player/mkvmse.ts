@@ -7,7 +7,6 @@
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
 import { takeRangeFrom } from './prefetch';
-import { bridgeAsk } from './sharedindex';
 import { ReadAhead } from './readahead';
 import { sameLang } from '../lib/lang';
 import { b64, dropIndex, fromBase64, hasIndexKind, loadText, saveText, STALE_INDEX } from './indexstore';
@@ -197,9 +196,6 @@ export class MkvMse {
 
   // '' = empezó; si no, el motivo (Playback sigue con el modo directo de siempre)
   async start(at: number): Promise<string> {
-    // ¿hay puente con caché en la VPS / VDS? (antes del primer pedido)
-    if (!this.index) await bridgeAsk(this.url);
-    if (!this.alive) return '';
     let m: MkvX | null = this.index;
     const hit = m ? null : MKV_CACHE.get(fileKey(this.url));
     if (hit) {
@@ -314,8 +310,6 @@ export class MkvMse {
 
   // solo la cabecera y el índice, sin abrir el video (preloadMkv): quedan en memoria y en el equipo
   async indexOnly(): Promise<MkvX | null> {
-    await bridgeAsk(this.url);
-    if (!this.alive) return null;
     const m: MkvX | null = await readMkvHeader((o, l) => this.get(o, l));
     if (!m || !this.alive) return null;
     if (!m.cues && m.cuesPos > 0) {
@@ -338,7 +332,7 @@ export class MkvMse {
   // para el aviso de apertura lenta (como el lector de MP4)
   diag(): string {
     const n = this.rs.reqs || 0;
-    return '[archivo=' + Math.round(this.size / 1048576) + 'MB cabecera_guardada=' + this.packed + ' indice=' + (this.index?.cues ? this.index.cues.length : 'no') + ' ' + this.ra.diag() + ' pedidos=' + n + (this.rs.bridge ? ' puente=' + this.rs.bridge : '') + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
+    return '[archivo=' + Math.round(this.size / 1048576) + 'MB cabecera_guardada=' + this.packed + ' indice=' + (this.index?.cues ? this.index.cues.length : 'no') + ' ' + this.ra.diag() + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
   }
 
   // posición del Cluster del índice en o antes de t (0 = sin índice)

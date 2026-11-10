@@ -207,16 +207,6 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
-- **Puente con caché de la VPS / VDS para películas y series (2.0.18)**: los avisos mostraban que cada pedido al
-  servidor IPTV tardaba ~3,5 s en empezar (`espera_media=3487ms`, 6 pedidos = 21 s de espera) y un episodio que no
-  consiguió el índice en 120 s cuatro veces. Ahora, si la línea tiene máquina (VPS del dueño o VDS propia del
-  distribuidor), los lectores de MP4 y MKV piden cada tramo al **puente** de esa máquina (`src/player/bridge.ts`,
-  `rangeget.ts`): la máquina baja la película con una sola conexión continua (como ExoPlayer), la guarda por delante de lo
-  que se ve y contesta al instante desde su disco. El primer pedido espera a saber si hay puente (`bridgeAsk`, como mucho
-  2,5 s; la ficha ya lo pregunta) y Player no pide nada por adelantado mientras no se sepa (chocaría en la línea). Con
-  puente no se usa el reproductor nativo. Si el puente no entrega (apagado 409, la máquina no consiguió el video 504, o
-  no contesta), ese archivo sigue directo al servidor IPTV como antes. En el aviso: `puente=<pedidos>`. Panel:
-  `includes/vod_bridge.php` (hay que subirlo a la VPS / VDS con `media_worker.php`).
 - **El índice compartido se guarda en la VPS / VDS, no en el hosting (2.0.17)**: `api/vidx.php` del panel solo revisa
   la línea y entrega dos enlaces firmados a la máquina (VPS del dueño o VDS propia del distribuidor); la app pregunta,
   baja y sube el índice directo con ella (`src/player/sharedindex.ts`). Un distribuidor sin VDS propia, o un panel sin

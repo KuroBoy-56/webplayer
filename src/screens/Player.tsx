@@ -20,7 +20,6 @@ import { PlayParams, useNav } from '../nav';
 import { Hooks, MenuItem, nativeLivePlanned, Playback, seedTitleLang, titlePlayHint } from '../player/playback';
 import { dropReturn, offerReturn, playerClosing, setLastLive, stopLivePreview, takeLiveOrigin, takePreview, waitForLivePreview } from '../player/preview-session';
 import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
-import { bridgeNone, viaBridge } from '../player/bridge';
 import { hasHandoff } from '../player/livehls';
 import { vodKnown } from '../player/warm';
 import { MP4_HEAD, mp4Spot } from '../player/mp4mse';
@@ -963,9 +962,6 @@ export default function Player({ params }: { params: PlayParams }) {
           // nada
         } else if (!live && vodKnown(first)) {
           // el índice ya está en el equipo o lo viene leyendo la ficha: el lector pide directo el video
-        } else if (!live && !viaBridge(first) && !bridgeNone(first)) {
-          // todavía no se sabe si va por el puente de la VPS / VDS: nada por adelantado (pedirlo directo chocaría en la
-          // línea con la conexión de la máquina); el lector pregunta primero (como mucho 2,5 s)
         } else if (!live && /\.mkv(\?|$)/i.test(first)) {
           preUrl = first;
           prefetchRange(first, 0, 262144, firstResume.current > 5 ? 0 : 1048576);
