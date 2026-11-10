@@ -5,7 +5,7 @@
 // No pasa por la VPS: solo el cambio de idioma la usa. Saltos (◀▶, Continuar viendo) desde el cuadro clave anterior.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
-import { ReadAhead } from './readahead';
+import { lineLimit, ReadAhead } from './readahead';
 import { dropIndex, hasIndex, loadIndex, saveIndex, STALE_INDEX } from './indexstore';
 export { STALE_INDEX };
 import { readJson, writeJson } from '../lib/storage';
@@ -311,6 +311,25 @@ function rememberSpot(url: string, s: Spot): void {
   }
   writeJson(SPOTS, spots);
 }
+// Índice leído a medias (2.0.15): se abrió con la pista del video y la del audio elegido y se salió (o se eligió otro
+// idioma) antes de tener el resto. El lector siguiente del mismo archivo sigue desde ahí en lugar de pedirlo de nuevo
+// tailAt: desde ahí (dentro del índice) ya está lo que llegó con el final del archivo
+type MoovPart = { off: number; size: number; hl: number; buf: Uint8Array; got: number; file: number; tailAt?: number };
+// el final del archivo (from: dónde empieza)
+type Tail = { from: number; data: Uint8Array };
+// el índice entero que empieza en off, si está dentro del final del archivo (es lo último del archivo)
+function moovIn(tl: Tail, off: number): Uint8Array | null {
+  if (off < tl.from || off + 16 > tl.from + tl.data.length) return null;
+  const b = tl.data.subarray(off - tl.from);
+  let n = u32(b, 0);
+  if (n === 1) n = u64(b, 8);
+  if (typ(b, 4) !== 'moov' || n < 16 || n > b.length || off + n !== tl.from + tl.data.length) return null;
+  return b.slice(0, n);
+}
+// lo que se pide del final del archivo junto con el principio (líneas de varias conexiones): el índice entero si es de
+// hasta ~3 MB (capítulos y películas con 1-3 idiomas) y, si es más grande, su final
+const SUFFIX = 3 * 1048576;
+const PARTIAL = new Map<string, MoovPart>();
 function rememberMoov(url: string, moov: Uint8Array): void {
   const k = cacheKey(url);
   MOOV_CACHE.delete(k);
@@ -320,6 +339,15 @@ function rememberMoov(url: string, moov: Uint8Array): void {
 
 // tamaño de los archivos cuyo índice está en memoria
 const SIZES = new Map<string, number>();
+
+// ¿se sabe dónde está el índice de este archivo? (el lector lo pide directo, sin leer antes el principio)
+export function mp4Spot(url: string): boolean {
+  return !!spotOf(url);
+}
+
+// lo que el lector pide primero de un MP4: desde el principio, también el principio del video (Player lo pide por
+// adelantado mientras se inicia el reproductor: el mismo pedido, no dos)
+export const MP4_HEAD = 1572864;
 
 // ¿ya se tiene (o se está leyendo) el índice de este archivo?
 export function mp4Known(url: string): boolean {
@@ -395,6 +423,18 @@ export class Mp4Mse {
   private fromStart = true;
   // la línea no admite pedidos a la vez: todo de a uno
   private oneConn = false;
+  // Índice al final del archivo, leído en orden (2.0.15): mra baja el índice por ventanas seguidas (varias a la vez si la
+  // línea lo admite) y el video empieza apenas llegaron enteras la pista del video y la del audio elegido; el resto (los
+  // otros idiomas) sigue por detrás sin quitarle la conexión al video. moovBox: lo leído; part: se empezó sin el resto
+  private mra: ReadAhead;
+  private moovBox: MoovPart | null = null;
+  private part = false;
+  private partAt = '';
+  private moovMiss: Uint8Array | null = null;
+  // pedido del final del archivo (junto con el principio) y para qué sirvió: 'entero' = traía el índice entero
+  private sufReqs = new Set<AbortController>();
+  private sufOff = false;
+  private tailUsed = '';
   // por qué no siguió (para el reporte del panel)
   why = '';
   // el reproductor no acepta el audio del archivo (Dolby en Vega): suena solo el video; los idiomas quedan en el menú
@@ -407,6 +447,10 @@ export class Mp4Mse {
   constructor(private v: VideoPlayer, private url: string, private selectedAudio = -1, index: Uint8Array | null = null, private wantLang = '') {
     this.index = index;
     this.ra = new ReadAhead(url, this.rs, () => this.bps);
+    // ventanas del índice: ~0,75, 1,5, 3 MB… (como si fuera video de 384 KB/s). Línea de 2 conexiones: una para el índice
+    // y otra para el principio del video
+    this.mra = new ReadAhead(url, this.rs, () => 393216);
+    if (lineLimit() === 2) this.mra.par = 1;
   }
 
   // preparado desde la ficha, todavía sin reproductor
@@ -445,7 +489,7 @@ export class Mp4Mse {
   diag(): string {
     const s = (t: number) => (t ? ((t - this.t0) / 1000).toFixed(1) + 's' : '-');
     const n = this.rs.reqs || 0;
-    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB en ' + s(this.tIdx) : 'no') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + (this.oneConn || this.ra.single) + ' indice_recordado=' + this.spotUsed + ' indice_guardado=' + this.packed + ' ' + this.ra.diag() + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
+    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB' : this.moovBox ? (this.moovBox.got / 1048576).toFixed(1) + '/' + (this.moovBox.size / 1048576).toFixed(1) + 'MB' : 'no') + ' en ' + s(this.tIdx) + (this.partAt ? ' empezo_con=' + this.partAt : '') + (this.tailUsed ? ' indice_del_final=' + this.tailUsed : '') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + (this.oneConn || this.ra.single) + ' indice_recordado=' + this.spotUsed + ' indice_guardado=' + this.packed + ' ' + this.ra.diag() + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
   }
 
   // lo ya preparado (índice, pistas, códecs y el primer tramo pedido): desde la ficha (warm.ts) o al abrir
@@ -504,9 +548,12 @@ export class Mp4Mse {
       break;
     }
     if (!moov) return 'índice: ' + (this.why || 'no encontrado');
-    rememberMoov(this.url, moov);
-    if (this.size > 0) SIZES.set(cacheKey(this.url), this.size);
-    this.index = moov;
+    // lo leído a medias no queda como índice del archivo (otro idioma necesitaría lo que falta): al terminar (moovDone)
+    if (!this.part) {
+      rememberMoov(this.url, moov);
+      if (this.size > 0) SIZES.set(cacheKey(this.url), this.size);
+      this.index = moov;
+    }
     const hv = vt && !videoCfg(vt) ? hevcCfg(vt) : null;
     const vc = vt ? videoCfg(vt) || hv?.cfg || null : null;
     // con H.265 el códec del video es el de su hvcC (mp4Mime lo arma de H.264)
@@ -665,6 +712,8 @@ export class Mp4Mse {
     this.requests.clear();
     this.ra.stop();
     this.ra2?.stop();
+    this.mra.stop();
+    for (const c of this.sufReqs) c.abort();
     if (this.watch) clearInterval(this.watch);
     this.watch = null;
     try {
@@ -738,21 +787,62 @@ export class Mp4Mse {
   // de una vez (64 KB: ftyp y, si está al principio, el moov) y, al saltar al final, 1 MB desde la cabecera del moov
   // (casi siempre entra entero); antes eran 16 bytes por caja y otro pedido para el moov
   private async readMoov(): Promise<Uint8Array | null> {
-    // índice de este archivo ya ubicado antes (otra vez la misma película o episodio, Continuar viendo): se pide ya, a la
-    // vez que el principio. El servidor IPTV tarda ~6 s en contestar cada pedido (avisos «tardó en empezar»): es una
-    // espera menos
+    // índice de este archivo ya ubicado antes (otra vez la misma película o episodio, Continuar viendo): se lee ya, por
+    // partes, sin pedir antes el principio del archivo (el tamaño se comprueba con la primera respuesta). El servidor
+    // IPTV tarda ~6 s en contestar cada pedido (avisos «tardó en empezar»): es una espera menos
     const spot = spotOf(this.url);
-    const early = spot ? this.getParts(spot.off, spot.len) : null;
-    let off = 0;
-    let win = await this.get(0, 65536);
-    let wOff = 0;
-    if (early && spot && win && this.size === spot.size) {
-      const m = await early;
-      if (m && m.length === spot.len && typ(m, 4) === 'moov') {
-        this.spotUsed = true;
-        return kidsBody(m);
-      }
+    // desde el principio y con varias conexiones: el principio del video (1,5 MB desde el byte 0) va ya, a la vez que la
+    // cabecera y el índice (de a una ventana mientras baja el índice)
+    if (this.fromStart && !(this.ra.single || this.oneConn) && !this.headAsked) {
+      this.headAsked = true;
+      this.ra.hold = true;
+      // solo ese principio mientras se lee el índice (sin tope cuando el video se abre: start → ra.go)
+      this.ra.limit = MP4_HEAD;
+      this.ra.seek(0, MP4_HEAD);
     }
+    if (spot) {
+      const m = await this.moovFrom(spot.off, spot.len, spot.size);
+      if (m) {
+        this.spotUsed = true;
+        return m;
+      }
+      if (!this.alive) return null;
+      // el archivo cambió en el servidor: se busca el índice otra vez
+      this.mra.park();
+    }
+    let off = 0;
+    // Desde el principio, el primer pedido trae también el principio del video (1,5 MB): en una línea de una sola conexión
+    // son dos esperas del servidor (esto y el índice) en lugar de tres (cabecera, índice y después el video). Con varias
+    // conexiones, a la vez se pide el final del archivo (donde está el índice): si el índice cabe ahí, todo llega en UNA
+    // espera del servidor; si no, ya se tiene su final y falta solo el principio (2.0.15)
+    const single = this.ra.single || this.oneConn;
+    const headLen = this.fromStart && single ? MP4_HEAD : 65536;
+    const srs: RangeState = { close: false, unbounded: false, size: 0, why: '' };
+    const sufReqs = this.sufReqs;
+    this.sufOff = false;
+    // (líneas de 2 o 3 conexiones: no; ocuparía el lugar de la cabecera o del índice)
+    const lim = lineLimit();
+    const suffix = single || (lim > 0 && lim < 4) ? null : rangeGet(this.url, -1, SUFFIX, srs, sufReqs, () => this.alive && !this.sufOff).catch(() => null);
+    let win = await this.get(0, headLen);
+    let wOff = 0;
+    if (win && headLen > 65536 && win.length > 65536) {
+      this.ra.seed(0, win);
+      this.headAsked = true;
+    }
+    // lo que llegó del final del archivo (si el servidor lo dio bien); stop: ya no hace falta
+    const stopSuffix = () => {
+      this.sufOff = true;
+      for (const c of sufReqs) c.abort();
+    };
+    // (una promesa: el índice por partes no la espera; la usa si llega antes)
+    const tailP: Promise<Tail | null> = (async () => {
+      if (!suffix) return null;
+      const d = await suffix;
+      if (!d || !srs.size || srs.from === undefined || srs.from + d.length !== srs.size) return null;
+      if (this.size && srs.size !== this.size) return null;
+      return { from: srs.from, data: d };
+    })();
+    if (!win || win.length < 8 || win[0] === 0x1a || !/^[a-z0-9 ]{4}$/i.test(typ(win, 4))) stopSuffix();
     // no es MP4 aunque diga .mp4: un MKV (los servidores IPTV entregan remuxes MKV con extensión mp4) lo abre el lector
     // de MKV; otra cosa (cabecera sin una caja MP4) al modo directo. Antes se hacían hasta 12 lecturas al azar del
     // archivo buscando un índice que no existe (segundos perdidos) y la película no abría
@@ -769,12 +859,17 @@ export class Mp4Mse {
     for (let i = 0; i < 12 && win; i++) {
       if (off + 16 > wOff + win.length) {
         if (this.size && off >= this.size) return null;
-        // después del video (mdat) solo queda el índice: todo de una vez, en 3 partes a la vez. Antes se pedía 1 MB para
-        // leer su tamaño y después el resto de a 1 MB (un índice de 9 MB eran 10 pedidos y tardaba 16 s; cada pedido al
-        // servidor IPTV tarda en contestar)
+        // después del video (mdat) solo queda el índice: se lee en orden desde su principio y el video empieza apenas
+        // están enteras su pista y la del audio elegido (2.0.15; antes se esperaba el índice entero: 10,9 MB en 20 s)
         const tail = this.size - off;
-        win = this.size && tail > 1048576 && tail <= 24 * 1048576 ? await this.getParts(off, tail) : null;
-        // si no se pudo de una vez, como antes: 1 MB para leer su tamaño y el resto en partes
+        if (this.size && tail > 1048576 && tail <= MOOV_MAX) {
+          this.moovMiss = null;
+          const m = await this.moovFrom(off, 0, this.size, null, suffix ? tailP : null);
+          if (m || !this.alive) return m;
+          win = this.moovMiss;
+          this.moovMiss = null;
+        } else win = null;
+        // si no se pudo así, como antes: 1 MB para leer su tamaño y el resto en partes
         if (!win) win = await this.get(off, 1048576);
         wOff = off;
         if (!win || win.length < 8) return null;
@@ -785,17 +880,22 @@ export class Mp4Mse {
       else if (size === 0) size = this.size - off;
       if (typ(h, 4) === 'moov') {
         if (size > MOOV_MAX) return null;
-        // dónde está, para la próxima vez (Continuar viendo): se pide junto con el principio
+        // dónde está, para la próxima vez (Continuar viendo): se pide sin buscarlo
         rememberSpot(this.url, { size: this.size, off, len: size });
-        // lo ya leído del índice y el resto en partes a la vez (cada conexión la limita el servidor por separado)
         const have = win.slice(off - wOff, Math.min(win.length, off - wOff + size));
-        if (have.length >= size) return kidsBody(have);
+        if (have.length >= size) {
+          stopSuffix();
+          return kidsBody(have);
+        }
+        const m = await this.moovFrom(off, size, this.size, have, suffix ? tailP : null);
+        if (m || !this.alive) return m;
         const rest = await this.getParts(off + have.length, size - have.length);
         return rest ? kidsBody(concat([have, rest])) : null;
       }
       if (size < 8) return null;
-      // el video (mdat) va antes del índice: su principio se pide ya, a la vez que el índice (lo primero que se va a ver)
-      if (typ(h, 4) === 'mdat' && !this.headAsked && this.fromStart && size > 4194304) {
+      // el video (mdat) va antes del índice: su principio se pide ya, a la vez que el índice (lo primero que se va a ver).
+      // Con una sola conexión no: primero el índice
+      if (typ(h, 4) === 'mdat' && !this.headAsked && this.fromStart && size > 4194304 && !this.ra.single && !this.oneConn) {
         this.headAsked = true;
         // de a un pedido mientras baja el índice (va primero); después, hasta 3 a la vez
         this.ra.hold = true;
@@ -804,7 +904,220 @@ export class Mp4Mse {
       off += size;
       if (this.size && off >= this.size) return null;
     }
+    stopSuffix();
     return null;
+  }
+
+  // El índice (moov) desde el byte off, en orden. len: su tamaño (0 = se lee de su cabecera); file: tamaño del archivo
+  // esperado; have: lo que ya llegó. Devuelve el contenido del índice apenas alcanza para empezar (la pista del video y
+  // la del audio elegido enteras) o entero; el resto sigue por detrás (moovRest) y al terminar queda como el índice
+  // completo (moovDone). null = no es el índice o no llegó
+  private async moovFrom(off: number, len: number, file: number, have: Uint8Array | null = null, tailP: Promise<Tail | null> | null = null): Promise<Uint8Array | null> {
+    const key = cacheKey(this.url);
+    const old = PARTIAL.get(key);
+    // el final del archivo, cuando llegue (undefined = todavía no)
+    let tl: Tail | null | undefined = tailP ? undefined : null;
+    let st: MoovPart | null = old && old.off === off && old.file === file && (!len || old.size === len) ? old : null;
+    if (st) PARTIAL.delete(key);
+    else {
+      let first = have;
+      if (!first || first.length < 16) {
+        // primer tramo: la cabecera del índice y la pista del video. Tamaño del índice (es lo último del archivo)
+        const total = len || file - off;
+        const single = this.ra.single || this.mra.single || this.oneConn;
+        // lo que suele ocupar el video y el primer audio: ~40 % del índice (1,5-6 MB). Con varias conexiones, en 3 partes
+        // iguales a la vez (llegan juntas); con una, de una vez (cada pedido más es otra espera del servidor)
+        const need = Math.max(1572864, Math.min(6291456, Math.round(total * 0.4)));
+        const want = Math.min(total, single ? need : Math.ceil(need / 3));
+        // una sola conexión: solo lo que se lee, nada por adelantado (otro pedido a la vez lo rechaza el servidor)
+        if (single) {
+          this.mra.goSingle();
+          this.mra.lazy = true;
+        } else this.mra.startLen = want;
+        this.mra.end = off + total;
+        const firstP = this.moovRead(off, want);
+        // carrera: si el final del archivo llega antes y trae el índice entero, se usa ya (una sola espera del servidor)
+        const won = tailP
+          ? await Promise.race([
+            firstP.then(d => ({ d, w: null as Uint8Array | null })),
+            tailP.then(t => {
+              tl = t;
+              const w = t ? moovIn(t, off) : null;
+              return w ? { d: null as Uint8Array | null, w } : firstP.then(d => ({ d, w: null as Uint8Array | null }));
+            }),
+          ])
+          : { d: await firstP, w: null };
+        if (won.w) {
+          this.mra.park();
+          this.tailUsed = 'entero';
+          rememberSpot(this.url, { size: file || this.size, off, len: won.w.length });
+          return kidsBody(won.w);
+        }
+        first = won.d;
+        if (!first || first.length < 16) return null;
+        if (file && this.rs.size && this.rs.size !== file) return null;
+        if (typ(first, 4) !== 'moov') {
+          // otra caja antes del índice: el que llama sigue buscando con lo que llegó (lo demás que venía, se corta)
+          this.moovMiss = first;
+          this.mra.park();
+          return null;
+        }
+      }
+      let size = u32(first, 0);
+      let hl = 8;
+      if (size === 1) {
+        size = u64(first, 8);
+        hl = 16;
+      } else if (size === 0) size = file - off;
+      if (size > MOOV_MAX || size < hl || (len && size !== len)) return null;
+      rememberSpot(this.url, { size: file || this.size, off, len: size });
+      const buf = new Uint8Array(size);
+      const n = Math.min(size, first.length);
+      buf.set(first.subarray(0, n), 0);
+      st = { off, size, hl, buf, got: n, file: file || this.size };
+    }
+    this.moovBox = st;
+    if (!this.size) this.size = st.file;
+    this.mra.end = st.off + (st.tailAt ?? st.size);
+    const box = st;
+    let started = false;
+    let give: (m: Uint8Array | null) => void = () => {};
+    const startP = new Promise<Uint8Array | null>(r => (give = r));
+    const begin = (m: Uint8Array | null) => {
+      if (started) return;
+      started = true;
+      this.part = !!m && box.got < box.size;
+      if (this.part) this.partAt = (box.got / 1048576).toFixed(1) + '/' + (box.size / 1048576).toFixed(1) + 'MB';
+      // desde ahora el resto del índice va de a una ventana y solo cuando se pide (moovGate). Línea de una sola conexión:
+      // lo que quedaba en camino del índice se corta ya (si no, le peleaba la única conexión al principio del video)
+      this.mra.lazy = true;
+      this.mra.par = 1;
+      this.mra.startLen = 0;
+      if (this.ra.single || this.mra.single || this.oneConn) this.mra.park();
+      give(m);
+    };
+    // el final del índice llegó con el final del archivo: lo que falta leer termina donde empieza ese final; si ya se
+    // leyó hasta ahí (o el final lo trae entero), el índice está completo
+    const useTail = () => {
+      if (!tl || box.got >= box.size || box.off + box.size !== tl.from + tl.data.length) return;
+      if (tl.from <= box.off) {
+        box.buf.set(tl.data.subarray(box.off - tl.from, box.off - tl.from + box.size), 0);
+        box.got = box.size;
+      } else {
+        const at = tl.from - box.off;
+        box.buf.set(tl.data, at);
+        box.tailAt = at;
+        if (box.got >= at) box.got = box.size;
+        else this.mra.end = box.off + at;
+      }
+      this.tailUsed = box.got >= box.size ? 'entero' : 'final';
+      if (box.got >= box.size) {
+        this.mra.park();
+        if (!started) begin(box.buf.subarray(box.hl));
+        else if (this.part) this.moovDone(box.buf.subarray(box.hl));
+      }
+    };
+    if (tailP && tl === undefined) {
+      tailP.then(t => {
+        tl = t;
+        if (this.alive) useTail();
+      });
+    } else useTail();
+    if (box.got >= box.size) begin(box.buf.subarray(box.hl));
+    else if (this.enough(box)) begin(box.buf.subarray(box.hl, box.got));
+    void (async () => {
+      const CH = 262144;
+      while (this.alive && box.got < box.size) {
+        if (started) await this.moovGate();
+        if (!this.alive || box.got >= box.size) break;
+        const stopAt = box.tailAt ?? box.size;
+        const d = await this.moovRead(box.off + box.got, Math.min(CH, stopAt - box.got));
+        if (!d || !d.length || !this.alive) break;
+        if (box.got >= box.size) break;
+        const upto = box.tailAt ?? box.size;
+        box.buf.set(d.subarray(0, Math.min(d.length, upto - box.got)), box.got);
+        box.got += Math.min(d.length, upto - box.got);
+        if (box.got >= upto) box.got = box.size;
+        if (!started && (box.got >= box.size || this.enough(box))) begin(box.buf.subarray(box.hl, box.got));
+      }
+      if (box.got >= box.size) {
+        const body = box.buf.subarray(box.hl);
+        if (!started) begin(body);
+        else if (this.part) this.moovDone(body);
+        return;
+      }
+      if (!started) begin(null);
+      // se salió antes de tenerlo entero: el próximo lector de este archivo sigue desde aquí
+      else if (box.size <= 32 * 1048576) {
+        PARTIAL.clear();
+        PARTIAL.set(key, box);
+      }
+    })();
+    return startP;
+  }
+
+  // ¿alcanza lo leído del índice para empezar? La pista del video y la del audio que va a sonar, enteras
+  private enough(box: MoovPart): boolean {
+    const traks = kids(box.buf, box.hl, box.got)
+      .filter(k => k.t === 'trak')
+      .map(k => parseTrak(box.buf, k.s, k.e))
+      .filter((x): x is Trk => !!x);
+    if (!traks.some(x => x.kind === 'vide' && x.tbl)) return false;
+    const auds = traks.filter(x => x.kind === 'soun');
+    // elegido a mano (su número), el idioma guardado para el título o el audio predeterminado (el primero activado)
+    if (this.selectedAudio >= 0) return !!auds[this.selectedAudio]?.tbl;
+    const want = this.wantLang ? auds.find(x => sameLang(x.lang, this.wantLang)) : auds.find(x => x.enabled);
+    return !!want?.tbl;
+  }
+
+  // un tramo del índice (descarga adelantada del índice). Línea de una sola conexión: el principio del video espera
+  private async moovRead(off: number, len: number): Promise<Uint8Array | null> {
+    const d = await this.mra.read(off, len);
+    if (this.mra.single && !this.oneConn && this.ra.active > 0) {
+      this.oneConn = true;
+      this.ra.goSingle();
+      this.ra.park();
+      this.headAsked = false;
+    }
+    if (this.rs.size > 0) this.size = this.rs.size;
+    if (!d) this.why = this.mra.why || this.rs.why || this.why;
+    return d;
+  }
+
+  // el resto del índice, sin quitarle la conexión al video: con varias conexiones cuando ya hay 12 s de video por delante;
+  // con una sola, cuando el video no está pidiendo nada y tiene 40 s por delante. Desde la ficha (sin reproductor), cuando
+  // el arranque ya bajó
+  private async moovGate(): Promise<void> {
+    for (;;) {
+      if (!this.alive) return;
+      const single = this.ra.single || this.mra.single || this.oneConn;
+      let ahead = 0;
+      try {
+        ahead = this.sb ? Math.max(0, this.bufEnd() - (this.v?.currentTime || 0)) : 0;
+      } catch {
+        ahead = 0;
+      }
+      // (el video «quieto» = sin ventanas pendientes, ni siquiera esperando su turno tras un rechazo)
+      if (this.warm ? this.ra.pending === 0 : single ? this.ra.pending === 0 && ahead >= 40 : ahead >= 12) return;
+      await sleep(500);
+    }
+  }
+
+  // el índice ya está entero: queda como el de siempre (memoria, guardado en el equipo y los idiomas que faltaban en el menú)
+  private moovDone(body: Uint8Array): void {
+    if (!this.alive) return;
+    this.part = false;
+    this.moovBox = null;
+    rememberMoov(this.url, body);
+    if (this.size > 0) SIZES.set(cacheKey(this.url), this.size);
+    this.index = body;
+    const auds = kids(body, 0, body.length)
+      .filter(k => k.t === 'trak')
+      .map(k => parseTrak(body, k.s, k.e))
+      .filter((x): x is Trk => !!x && x.kind === 'soun');
+    this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '' }));
+    this.onHeader();
+    if (this.warm || this.tInit) this.keepIndex(3000);
   }
 
   // un tramo grande (el índice al final del archivo) en 3 partes a la vez (de 1 MB como mínimo): una sola vuelta de
@@ -854,7 +1167,7 @@ export class Mp4Mse {
 
   // el servidor sigue entregando (hay pedidos en curso o llegó algo hace poco): vale la pena esperar
   busy(): boolean {
-    return this.requests.size > 0 || this.ra.active > 0 || Date.now() - (this.rs.lastData || 0) < 10000;
+    return this.requests.size > 0 || this.ra.active > 0 || this.mra.active > 0 || Date.now() - (this.rs.lastData || 0) < 10000;
   }
 
   // [off, off + len) del archivo en el servidor IPTV (el índice; el video lo baja la descarga adelantada)
@@ -862,8 +1175,11 @@ export class Mp4Mse {
     let d = await rangeGet(this.url, off, len, this.rs, this.requests, () => this.alive);
     // rechazado mientras se baja el principio del video u otra parte del índice: la línea admite una sola conexión. Se
     // corta ese adelanto (el índice va primero), todo sigue de a un pedido y se pide otra vez
-    if (!d && this.alive && !this.rs.unbounded && (this.ra.active > 0 || this.requests.size > 0)) {
+    if (!d && this.alive && !this.rs.unbounded && (this.ra.active > 0 || this.mra.active > 0 || this.requests.size > 0 || this.sufReqs.size > 0)) {
       this.oneConn = true;
+      // el final del archivo pedido a la vez también se deja (la línea no admite dos)
+      this.sufOff = true;
+      for (const c of this.sufReqs) c.abort();
       this.ra.goSingle();
       this.ra.park();
       this.headAsked = false;

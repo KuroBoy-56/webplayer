@@ -148,12 +148,27 @@ function setPanelRoute(url: string, r: 'p' | 'v' | ''): void {
   writeJson(ROUTE_KEY, all);
 }
 
-// canales que tampoco se vieron con el reproductor nativo de Vega (no se vuelve a probar en la sesión)
-const nativeFailed = new Set<string>();
+// Canales y el reproductor nativo de Vega en esta sesión (2.0.15). Un fallo suelto antes de verse NO cuenta: al cambiar
+// de canal rápido (▲▼ o la lista en pantalla grande) el reproductor anterior todavía puede estar soltando el
+// decodificador (Amazon: uno solo; hay que cerrar el anterior antes de iniciar el siguiente) o el servidor sigue
+// contando la conexión del canal anterior. Antes ese fallo pasajero dejaba el canal sin el nativo toda la sesión (y, con
+// dos, 2 días): HBO y otros canales que solo se ven bien con el nativo pasaban al lector de la app, se congelaban, iban a
+// MPEG-TS sin imagen y a los 40 s probaban el otro protocolo («No se pudo reproducir»). Ahora el primer fallo se prueba
+// otra vez con un reproductor nuevo, como abre la miniatura; con 2 seguidos, el lector de la app.
+const nativeMiss = new Map<string, number>();
+const liveKey = (u: string) => u.replace(/^https?:\/\//i, '').replace(/\.(m3u8|ts)(\?.*)?$/i, '');
+// canales que el reproductor no mostró en MP4 propio (van en MPEG-TS) y en MPEG-TS (van en MP4). Antes un MP4 rechazado
+// apagaba el MP4 para TODOS los canales de la sesión (y muchos en MPEG-TS no muestran imagen en Vega); ahora solo ese
+// canal, y con 3 canales distintos, el equipo entero
+const mp4BadLive = new Set<string>();
+const tsBadLive = new Set<string>();
 // el canal va a abrir con el reproductor nativo (entonces no hace falta pedir su lista HLS por adelantado)
 export function nativeLivePlanned(url: string): boolean {
-  return nativeAllowed('live') && nativeHttpOk(url) && !nativeFailed.has(url) && /\.m3u8(\?|$)/i.test(url) && !nativeLiveBad(url);
+  return nativeAllowed('live') && nativeHttpOk(url) && (nativeMiss.get(liveKey(url)) || 0) < 2 && /\.m3u8(\?|$)/i.test(url) && !nativeLiveBad(url);
 }
+// qué hacer con un canal que falló: 'here' = sigue en este mismo reproductor (otra forma ya puesta), 'fresh' = otra vez
+// con un reproductor nuevo (Player y la miniatura lo crean, como al cambiar de canal), '' = no queda otra forma
+export type LiveNext = 'here' | 'fresh' | '';
 // películas y capítulos ya probados con el reproductor nativo en esta sesión (sin http/https: el mismo archivo)
 const vodNativeTried = new Set<string>();
 const fileKey = (u: string) => u.replace(/^https?:\/\//i, '');
@@ -362,7 +377,10 @@ export class Playback {
       this.openNative();
       return;
     }
-    const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, this.liveFrozen > 0 && this.liveFrozen % 2 === 0);
+    // MPEG-TS: el canal que en MP4 propio no se vio o se congeló (alternando); nunca el que en MPEG-TS no mostró imagen
+    const k = liveKey(url);
+    const ts = !tsBadLive.has(k) && (mp4BadLive.has(k) || (this.liveFrozen > 0 && this.liveFrozen % 2 === 0));
+    const h = new LiveHls(this.v, url, this.liveAudio, this.liveNoAudio, ts);
     h.keep = this.liveKeep;
     this.liveHls = h;
     h.onError = why => g === this.gen && this.liveHls === h && this.hooks.liveFailed?.(why);
@@ -384,49 +402,74 @@ export class Playback {
   }
 
   // estado del canal por HLS (para el reporte): lista, segmentos entregados, lo que tiene el reproductor
-  // El canal iba en MP4 propio y el reproductor lo rechazó: otra vez el mismo canal entregando el MPEG-TS (el resto
-  // de la sesión), sin pasar por otro formato ni protocolo. false = no era eso
+  // compatibilidad (pruebas): true = sigue en este reproductor
   liveRetryTs(): boolean {
-    if (!this.live) return false;
-    // el reproductor nativo no pudo (error, sin imagen o imagen quieta): el lector propio
+    return this.liveNext() === 'here';
+  }
+
+  // El canal falló (error, sin imagen, imagen quieta). Qué sigue, sin pasar por otro formato ni protocolo: el servidor
+  // contestó; lo que no anduvo es la forma de mostrarlo en este equipo
+  liveNext(): LiveNext {
+    if (!this.live) return '';
+    const k = liveKey(this.url);
+    // el reproductor nativo no pudo (error, sin imagen o imagen quieta)
     if (this.liveNative) {
       this.httpCheck();
-      if (!this.played) nativeFailedOnce('live');
-      // no llegó a verse con el nativo: los próximos días este canal va directo al lector (también al abrir la app de nuevo)
-      if (!this.played) markNativeLiveBad(this.url);
-      nativeFailed.add(this.url);
       this.stopNative();
+      if (!this.played) {
+        const n = (nativeMiss.get(k) || 0) + 1;
+        nativeMiss.set(k, n);
+        // el primero: el nativo otra vez con un reproductor nuevo (si el equipo no rechazó http al instante)
+        if (n < 2 && nativeLivePlanned(this.url)) return 'fresh';
+        nativeFailedOnce('live');
+        // dos seguidos con reproductores nuevos: los próximos días va directo al lector de la app
+        markNativeLiveBad(this.url, true);
+      } else nativeMiss.set(k, 2);
       this.openLive(this.url);
-      return true;
+      return 'here';
     }
     const h = this.liveHls;
-    if (!h) return false;
-    // imagen congelada con video por delante: primero el reproductor nativo de Vega con el MPEG-TS del canal (una vez
-    // por canal); si no, el canal otra vez alternando MP4 propio y MPEG-TS (solo este canal), hasta 6 veces; nunca la
-    // pantalla de error por esto
+    if (!h) return '';
+    // Entregó el canal y el equipo no lo muestra (2.0.15): el nativo con un reproductor nuevo si se puede; si no, el otro
+    // modo del lector (MPEG-TS ↔ MP4) en este mismo reproductor
+    if (h.noShow) {
+      if (h.isMp4()) mp4BadLive.add(k);
+      else tsBadLive.add(k);
+      h.destroy();
+      this.liveHls = null;
+      if (!this.played && nativeLivePlanned(this.url)) return 'fresh';
+      if (mp4BadLive.has(k) && tsBadLive.has(k)) return '';
+      this.openLive(this.url);
+      return 'here';
+    }
+    // imagen congelada con video por delante: primero el reproductor nativo de Vega con el MPEG-TS del canal (con un
+    // reproductor nuevo: el nativo no toma otra dirección en uno ya usado); si no, el canal otra vez alternando MP4
+    // propio y MPEG-TS (solo este canal), hasta 6 veces; nunca la pantalla de error por esto
     if (h.frozen) {
-      if (this.liveFrozen >= 6) return false;
+      if (this.liveFrozen >= 6) return '';
       this.liveFrozen++;
       h.destroy();
       if (!this.reused && nativeLivePlanned(this.url)) {
         this.liveHls = null;
-        this.openNative();
-        return true;
+        return 'fresh';
       }
       this.openLive(this.url);
-      return true;
+      return 'here';
     }
     // con audio MP2 / AC-3 lo que falló (error o sin imagen) es ese audio: el mismo canal en MP4 sin él (en MPEG-TS
     // Vega no mostraba imagen)
     // (si ya se veía, se reconecta igual: nunca se apaga el MP4 de toda la sesión por el audio de un canal)
     if (h.otherAudio()) {
-      if (this.liveNoAudio || this.hasPlayed()) return false;
+      if (this.liveNoAudio || this.hasPlayed()) return '';
       this.liveNoAudio = true;
-    } else if (h.isMp4() && (h.mediaFailed() || (this.v as any).error)) disableMp4();
-    else return false;
+    } else if (h.isMp4() && (h.mediaFailed() || (this.v as any).error)) {
+      // el reproductor rechazó el MP4 propio de este canal: este canal en MPEG-TS (con 3 canales, todo el equipo)
+      mp4BadLive.add(k);
+      if (mp4BadLive.size >= 3) disableMp4();
+    } else return '';
     h.destroy();
     this.openLive(this.url);
-    return true;
+    return 'here';
   }
 
   // el canal todavía no se ve pero sigue llegando video (segmentos largos o servidor lento)
@@ -461,7 +504,15 @@ export class Playback {
         last = t;
         still = Date.now();
       }
-      if (!this.v.paused && Date.now() - still > 8000 && (t > 0 || Date.now() - began > 10000)) {
+      // sin empezar: 10 s; si el equipo ya recibe el canal (readyState, algo bajado) hasta 18 s (servidor lento al
+      // cambiar de canal: antes a los 10 s se daba el nativo por perdido con el canal llegando)
+      let loading = false;
+      try {
+        loading = ((this.v as any).readyState || 0) >= 1 || ((this.v as any).buffered?.length || 0) > 0;
+      } catch {
+        loading = false;
+      }
+      if (!this.v.paused && Date.now() - still > 8000 && (t > 0 || Date.now() - began > (loading ? 18000 : 10000))) {
         this.stopNative();
         this.hooks.liveFailed?.(t > 0 ? 'nativo: imagen quieta' : 'nativo: no empezó');
       }
@@ -516,6 +567,8 @@ export class Playback {
       m.onHeader = () => {
         if (g !== this.gen || this.mse !== m) return;
         if (m instanceof MkvMse && !this.probe?.ok) this.probe = m.probe();
+        // MP4 que empezó con el índice a medias: al completarse, el índice entero (cambiar de idioma no lo lee otra vez)
+        else if (!(m instanceof MkvMse) && m.index) this.mp4Index = m.index;
         this.hooks.changed();
       };
       m.onTracks = () => {
@@ -928,6 +981,7 @@ export class Playback {
     if (this.live && this.liveNative) {
       nativeWorked('live');
       nativeLiveGood(this.url);
+      nativeMiss.delete(liveKey(this.url));
     }
     if (this.vodNative) {
       nativeWorked('vod');

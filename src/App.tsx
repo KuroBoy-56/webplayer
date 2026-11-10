@@ -48,7 +48,7 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
     case 'detail':
       return <Detail item={route.item} />;
     case 'actor':
-      return <Actor personId={route.personId} name={route.actorName} />;
+      return <Actor personId={route.personId} name={route.actorName} active={active} />;
     case 'grid':
       return <Grid title={route.title} mode={route.mode} keyName={route.key} kind={route.kind} active={active} />;
     case 'player':

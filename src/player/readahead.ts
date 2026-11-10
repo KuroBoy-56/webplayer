@@ -12,13 +12,16 @@
 //   ventanas más grandes (single).
 // - Salto (◀▶, Continuar viendo): seek() corta lo que estaba en camino y empieza en el byte nuevo.
 // - Memoria: como mucho ~20 MB entre lo bajado sin usar y lo que viene en camino.
-import { rangeGet, RangeState } from './rangeget';
+import { isSingle, lineLimit, markSingle, rangeGet, RangeState } from './rangeget';
 
 const MB = 1048576;
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-// servidores donde la línea no admitió varios pedidos a la vez en esta sesión: los siguientes videos empiezan de a uno
-const singleHosts = new Set<string>();
-const hostOf = (u: string) => (/^https?:\/\/([^/]+)/i.exec(u) || ['', ''])[1].toLowerCase();
+// conexiones de la línea y servidores «de a uno» (rangeget.ts, donde está el tope de pedidos a la vez)
+export { lineLimit, setLineMax } from './rangeget';
+// ¿este archivo se lee de a un pedido? (línea de una conexión, o el servidor rechazó varios a la vez hace poco)
+export function singleFor(url: string): boolean {
+  return isSingle(url);
+}
 
 // waiting: falló y espera su turno para pedirse otra vez (de a uno, primero la de más atrás)
 type Win = { off: number; len: number; data: Uint8Array | null; done: boolean; failed: boolean; par: boolean; waiting: boolean; p: Promise<void> };
@@ -45,6 +48,10 @@ export class ReadAhead {
   end = 0;
   // bytes como mucho desde donde se empezó (lectura por adelantado desde la ficha: solo el arranque); 0 = sin tope
   limit = 0;
+  // solo lo que se pide (read), nada por adelantado (el resto del índice de un MP4 mientras suena el video, 2.0.15)
+  lazy = false;
+  // tamaño de las primeras ventanas (las que van a la vez al empezar): iguales, así llegan juntas (el índice); 0 = como siempre
+  startLen = 0;
   private start0 = 0;
   why = '';
   // para el reporte: ventanas pedidas, bytes y milisegundos (espera + bajada)
@@ -63,18 +70,23 @@ export class ReadAhead {
 
   // bps: bytes por segundo del archivo (0 = todavía no se sabe)
   constructor(private url: string, private rs: RangeState, private bps: () => number) {
-    this.single = singleHosts.has(hostOf(url));
+    this.single = isSingle(url);
   }
 
   // de a un pedido desde ahora (y los próximos videos de este servidor en la sesión)
   goSingle(): void {
     this.single = true;
-    singleHosts.add(hostOf(this.url));
+    markSingle(this.url);
   }
 
   // pedidos en camino
   get active(): number {
     return this.reqs.size;
+  }
+
+  // ventanas sin terminar (también las que esperan su turno para pedirse otra vez)
+  get pending(): number {
+    return this.flying;
   }
 
   // ¿ya se está leyendo desde off (o cerca)? Los lectores no vuelven a posicionar si es así
@@ -101,19 +113,21 @@ export class ReadAhead {
     // sin saber todavía el ritmo del archivo, la primera con algo de margen (alta definición)
     if (!known && this.ramp === 0) len = Math.max(len, 1536 * 1024);
     if (this.ramp === 0 && this.firstNeed > len) len = this.firstNeed;
+    if (this.startLen > 0 && this.ramp < 3) len = this.startLen;
     return Math.min(max, len);
   }
 
   // pide ventanas mientras haya lugar; must: byte hasta donde el lector ya está esperando
   private fill(must = 0): void {
     if (!this.alive) return;
-    const par = this.single || this.hold ? 1 : Math.max(1, this.par);
+    const par = this.single || this.hold ? 1 : Math.max(1, Math.min(this.par, lineLimit() === 2 ? 2 : 3));
     const cap = (this.single ? 14 : 20) * MB;
     for (let guard = 0; guard < 16; guard++) {
       // fin del video dentro del archivo o, si no se sabe, el tamaño del archivo
       const lim = this.end > 0 ? this.end : this.rs.size || 0;
       if (lim > 0 && this.next >= lim) return;
       if (this.flying >= par) return;
+      if (this.lazy && this.next >= must) return;
       if (this.limit > 0 && this.next >= must && this.next - this.start0 >= this.limit) return;
       const held = this.next - (this.wins.length ? this.wins[0].off : this.next);
       if (this.next >= must && held >= cap) return;
@@ -188,6 +202,22 @@ export class ReadAhead {
     this.firstNeed = need;
     this.why = '';
     this.fill(off + need);
+  }
+
+  // lo que ya llegó por otro pedido (el principio del archivo en una línea de una sola conexión): se lee de ahí y lo
+  // siguiente se pide a continuación
+  seed(off: number, data: Uint8Array): void {
+    this.gen++;
+    for (const c of this.reqs) c.abort();
+    this.reqs.clear();
+    this.flyP.clear();
+    this.flying = 0;
+    this.wins = [{ off, len: data.length, data, done: true, failed: false, par: false, waiting: false, p: Promise.resolve() }];
+    this.next = off + data.length;
+    this.start0 = off;
+    this.ramp = 1;
+    this.firstNeed = 0;
+    this.why = '';
   }
 
   // sin tope desde ahora (el video se abrió de verdad): sigue leyendo por delante

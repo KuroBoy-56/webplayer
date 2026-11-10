@@ -618,6 +618,36 @@ export class LiveHls {
     return framesWork && Date.now() - this.vFramesAt > 3500 && t - this.vFramesT > 3;
   }
 
+  // Entregó el canal y el equipo no lo muestra (2.0.15): 3 segmentos o más en el reproductor y el reloj sin moverse 7 s
+  // después de darle play (con lo entregado sin aparecer, o con margen de sobra). Pasa con algunos canales en MPEG-TS
+  // (HBO: «sin imagen en 40 s … modo=ts … buf=[] t=0.0») o si el decodificador del canal anterior no quedó libre. Antes se
+  // esperaban 40 s y se probaba el otro protocolo, que no cambia nada (el servidor sí entregaba). Ahora a los 7 s el
+  // canal se abre de otra forma (playback.liveNext: el nativo con un reproductor nuevo, o el otro modo del lector)
+  noShow = false;
+  private moveT = -1;
+  private moved = false;
+  private noImage(): boolean {
+    if (this.noShow || this.moved) return false;
+    const t = this.v.currentTime || 0;
+    // un salto del vigilante (al principio de lo bajado) no es avance
+    if (this.moveT < 0 || Date.now() - this.lastJump < 1500) {
+      this.moveT = t;
+      return false;
+    }
+    if (t - this.moveT > 0.5) {
+      this.moved = true;
+      return false;
+    }
+    if (this.appended < 3 || Date.now() - this.startedAt < 7000) return false;
+    let n = 0;
+    try {
+      n = this.sb?.buffered?.length || 0;
+    } catch {
+      n = 0;
+    }
+    return n === 0 || this.aheadSec() >= 3 || Date.now() - this.startedAt > 10000;
+  }
+
   // último segmento que llegó del servidor (el vigilante de Player espera más si el canal sigue bajando)
   lastData = 0;
   private lastJump = 0;
@@ -666,6 +696,12 @@ export class LiveHls {
       this.alive = false;
       this.lastProblem = this.lastProblem || 'sin video nuevo en 45 s';
       this.onError('el canal dejó de mandar video');
+      return;
+    }
+    if (this.noImage()) {
+      this.noShow = true;
+      this.lastProblem = 'el equipo no muestra lo entregado (' + this.appended + ' segmentos, modo ' + (this.mode || '?') + ')';
+      this.onError('el equipo no muestra el video');
       return;
     }
     this.unstick();

@@ -42,7 +42,7 @@ function Chunk({ text }: { text: string }) {
   );
 }
 
-export default function Actor({ personId, name }: { personId: number; name: string }) {
+export default function Actor({ personId, name, active }: { personId: number; name: string; active?: boolean }) {
   const st = useAppState();
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,7 +92,7 @@ export default function Actor({ personId, name }: { personId: number; name: stri
 
   return (
     <View style={s.root}>
-      <ItemGrid items={person.items} header={header} />
+      <ItemGrid items={person.items} header={header} active={active} />
       <Modal visible={bioOpen} transparent animationType="fade" onRequestClose={() => setBioOpen(false)}>
         <View style={s.modalBack}>
           <View style={s.modalCard}>

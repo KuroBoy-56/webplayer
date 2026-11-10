@@ -207,6 +207,32 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canales en pantalla grande como en la miniatura, películas que abren antes y sin carga infinita, foco al volver (2.0.15)**:
+  - **Cambiar de canal en pantalla grande** (▲▼ o la lista de la izquierda): al cambiar rápido, el reproductor anterior
+    todavía puede estar soltando el decodificador (Amazon, *Media Player Requirements*: Vega tiene un solo decodificador
+    y hay que cerrar el reproductor anterior antes de iniciar el siguiente) o el servidor sigue contando la conexión del
+    canal anterior. Ese fallo pasajero se tomaba como «este canal no abre así»: apagaba el reproductor nativo para ese
+    canal toda la sesión (y 2 días con dos), un MP4 rechazado apagaba el MP4 para **todos** los canales, y canales como
+    HBO terminaban en un modo que Vega no muestra (aviso «sin imagen en 40 s … modo=ts … buf=[] t=0.0») y probaban el otro
+    protocolo, que no cambia nada («error 0»). Ahora un fallo suelto se prueba otra vez con un **reproductor nuevo**,
+    igual que abre la miniatura; si el lector entrega el canal y el equipo no lo muestra, se nota a los 7 s (no 40) y
+    se abre de la otra forma; un MP4 rechazado afecta solo a ese canal; con el servidor contestando no se prueba el otro
+    protocolo ni el DNS. La miniatura usa la misma lógica (`Playback.liveNext`).
+  - **Películas y series**: el índice del MP4 (al final del archivo; 10,9 MB en el aviso, 20 s) ya no se espera entero:
+    se lee en orden y el video empieza apenas llegan la pista del video y la del idioma que suena; el resto (otros
+    idiomas) sigue por detrás sin quitarle la conexión al video. Con varias conexiones, a la vez que el principio se pide
+    el final del archivo: si el índice cabe ahí (capítulos con 1-3 idiomas), todo llega en una sola espera del servidor.
+    Todos los pedidos comparten un tope (las conexiones de la línea, 4 si no se sabe; 1 si el servidor rechazó pedidos a
+    la vez): antes podían ir más de los que admite la línea y el servidor los rechazaba.
+  - **Líneas de una conexión** (o una línea con las demás conexiones ocupadas por otros equipos: «unaConexion=true …
+    de_a_uno» en el aviso): todo va en orden, el primer pedido trae también el principio del video y el servidor queda
+    «de a uno» solo 4 minutos (antes toda la sesión).
+  - **Carga infinita**: cuando el lector de la app pasaba al modo directo de Vega no quedaba ningún plazo y, si ese modo
+    no arrancaba, la pantalla quedaba cargando para siempre. Ahora tiene 30 s y sigue los pasos hasta el aviso.
+  - **Foco al volver de la ficha**: en Inicio, Películas y Series el foco vuelve a la tarjeta que se abrió (antes caía
+    en el menú de arriba); también en la página del actor.
+  - Detalle técnico y medidas: `INTEGRACION_REPRODUCTOR.md` (2.0.15). Pruebas: `tools/test-player.cjs` (canales),
+    `tools/test-interface.cjs` (índice por partes), `tools/test-readahead.cjs`, `tools/test-indexstore.cjs`.
 - **Películas y series sin trabarse, canales que vuelven a la miniatura e idioma compartido (2.0.14)**:
   - **Por qué se trababa** (avisos «tardó en empezar»: `indice=5.6MB en 24.3s`, `espera_media=6439ms`): los lectores
     propios (MP4 y MKV) pedían el video de a ~4 s, un pedido después del otro, y esos servidores tardan ~6 s en

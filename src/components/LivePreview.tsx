@@ -20,6 +20,9 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
   const surface = useRef('');
   const video = useRef<VideoPlayer | null>(null);
   const [playing, setPlaying] = useState(false);
+  // el canal falló y va otra vez con un reproductor nuevo (playback.liveNext 'fresh', 2.0.15): se cierra este y se abre
+  // otro al momento, sin esperar los 2,5 s
+  const [again, setAgain] = useState({ id: '', n: 0 });
 
   useEffect(() => {
     setPlaying(false);
@@ -47,7 +50,8 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
     };
     // error del reproductor (nativo o lector propio): el canal sigue por el otro camino (como en pantalla grande)
     const onErr = () => {
-      if (alive && c) c.liveRetryTs();
+      if (!alive || !c) return;
+      if (c.liveNext() === 'fresh') setAgain(a => ({ id: channel.id, n: a.n + 1 }));
     };
     // OK otra vez: la pantalla grande se queda con este reproductor (sin cerrarlo ni abrir el canal de nuevo), también si
     // todavía conecta: abrir el canal otra vez mientras el servidor sigue contando la conexión de la miniatura hacía que
@@ -159,16 +163,16 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
         // sin imagen en 15 s con audio MP2 / AC-3 que el equipo no decodifica: el canal otra vez solo con el video
         // (como en pantalla grande, Player)
         retry = setTimeout(() => {
-          if (alive && c && !c.hasPlayed()) c.liveRetryTs();
+          if (alive && c && !c.hasPlayed()) onErr();
         }, 15000);
       } catch { void stop(); }
-    }, delay);
+    }, again.id === channel.id && again.n > 0 ? 400 : delay);
     const unregister = registerLivePreview(stop, give);
     return () => {
       if (timer) clearTimeout(timer);
       unregister();
     };
-  }, [channel, active]);
+  }, [channel, active, again]);
 
   return (
     <View style={s.box}>

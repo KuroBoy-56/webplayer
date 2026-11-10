@@ -4,6 +4,7 @@ import { FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-nativ
 import { openItem, playEpisodes, playMovie } from '../actions';
 import { CastMember, castFor, overviewFor, searchArt } from '../api/tmdb';
 import { warmStop, warmVideo as warmPlay } from '../player/warm';
+import { setLineMax } from '../player/readahead';
 import { episodeUrl, movieUrl, SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
 import { warmTracks } from '../api/media';
 import { Button, Focusable } from '../components/ui';
@@ -75,7 +76,10 @@ export default function Detail({ item }: { item: Item }) {
   const warmVideo = (url: string, at: number, id = '') => {
     if (idxTimer.current) clearTimeout(idxTimer.current);
     const hint = item.kind === 'series' ? playHintFor('episode', id, item.id) : playHintFor('movie', item.id, '');
-    idxTimer.current = setTimeout(() => warmPlay(url, at > 5 ? at : 0, hint), 1200);
+    idxTimer.current = setTimeout(() => {
+      setLineMax(Number(getState().session?.max) || 0);
+      warmPlay(url, at > 5 ? at : 0, hint);
+    }, 1200);
   };
   useEffect(() => () => {
     if (idxTimer.current) clearTimeout(idxTimer.current);

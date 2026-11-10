@@ -53,26 +53,26 @@ export const PosterTile = memo(function PosterTile({
   );
 });
 
-export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: { sp: Special; onPress: () => void; onFocus?: () => void }) {
+export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus, preferred }: { sp: Special; onPress: () => void; onFocus?: () => void; preferred?: boolean }) {
   if (sp.kind === 'platform') {
     return (
       // mosaico 16:9 como Roku: la imagen entera (las de plataformas son 16:9), fondo oscuro y borde fino. Con ancho y
       // alto fijos: Vega dibuja las imágenes del paquete a su tamaño real si solo se estiran con left/right (se veían
       // gigantes y cortadas)
-      <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.plat, f && s.platF]}>
+      <Focusable onPress={onPress} onFocus={onFocus} preferred={preferred} style={f => [s.plat, f && s.platF]}>
         {sp.image ? <Image source={sp.image} style={s.platImg} resizeMode="contain" /> : <Text style={[s.platText, { color: sp.color }]}>{sp.label}</Text>}
       </Focusable>
     );
   }
   if (sp.kind === 'genre') {
     return (
-      <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.genre, { backgroundColor: sp.color === '#000000' ? '#333' : sp.color }, f && s.tileF]}>
+      <Focusable onPress={onPress} onFocus={onFocus} preferred={preferred} style={f => [s.genre, { backgroundColor: sp.color === '#000000' ? '#333' : sp.color }, f && s.tileF]}>
         <Text style={s.genreText}>{sp.label}</Text>
       </Focusable>
     );
   }
   return (
-    <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.tile, s.more, f && s.tileF]}>
+    <Focusable onPress={onPress} onFocus={onFocus} preferred={preferred} style={f => [s.tile, s.more, f && s.tileF]}>
       <Text style={s.moreText}>{t('Ver todo')} ›</Text>
     </Focusable>
   );
@@ -93,6 +93,9 @@ export const RowView = memo(function RowView({
   onFocusRow,
   progressOf,
   live = true,
+  focusKey,
+  focusRev = 0,
+  focusPref = false,
 }: {
   row: Row;
   onItem: (it: Item) => void;
@@ -105,6 +108,11 @@ export const RowView = memo(function RowView({
   progressOf?: (it: Item) => number | undefined;
   // false: fila lejos del foco, solo su título y su alto (Inicio la monta antes de llegar, src/lib/rowwindow.ts)
   live?: boolean;
+  // al volver de la ficha: la tarjeta que tenía el foco se vuelve a montar con «preferred» (focusRev la monta de nuevo)
+  focusKey?: string;
+  focusRev?: number;
+  // «preferred» solo un momento (si la tarjeta se vuelve a montar al desplazarse, no roba el foco)
+  focusPref?: boolean;
 }) {
   const height = cardsHeight(row);
   const focus = useCallback((x: Item | Special) => {
@@ -120,7 +128,11 @@ export const RowView = memo(function RowView({
         data={row.items}
         style={{ height }}
         contentContainerStyle={s.rowContent}
-        keyExtractor={(x, i) => (isItem(x) ? x.kind + x.id : x.kind + x.key) + ':' + i}
+        keyExtractor={(x, i) => {
+          const k = isItem(x) ? x.kind + x.id : x.kind + x.key;
+          return k + ':' + i + (focusKey && k === focusKey ? ':' + focusRev : '');
+        }}
+        extraData={focusKey ? focusKey + ':' + focusRev + ':' + focusPref : undefined}
         showsHorizontalScrollIndicator={false}
         initialNumToRender={8}
         // una pantalla de tarjetas a cada lado de lo visible (antes dos): con muchas filas montadas eran cientos de
@@ -132,11 +144,12 @@ export const RowView = memo(function RowView({
               item={x}
               rank={row.type === 'top10' ? index + 1 : undefined}
               progress={progressOf?.(x)}
+              preferred={focusPref && x.kind + x.id === focusKey}
               onPress={() => onItem(x)}
               onFocus={onFocusItem || onFocusAny || onFocusRow ? () => focus(x) : undefined}
             />
           ) : (
-            <SpecialTile sp={x} onPress={() => onSpecial(x)} onFocus={onFocusAny || onFocusRow ? () => focus(x) : undefined} />
+            <SpecialTile sp={x} preferred={focusPref && x.kind + x.key === focusKey} onPress={() => onSpecial(x)} onFocus={onFocusAny || onFocusRow ? () => focus(x) : undefined} />
           )
         }
       /> : null}

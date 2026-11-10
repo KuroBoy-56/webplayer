@@ -737,7 +737,7 @@ test('listas con el control: la app las mueve solo si la fila enfocada queda a m
   assert.equal(scrollFor(11, 100, 600, 500, 12), 700);
 });
 
-test('películas MP4 con el índice al final: el índice se pide entero en una sola vuelta de 3 partes (antes 1 MB y después de a 1 MB)', async () => {
+test('películas MP4 con el índice al final: el principio y el final del archivo a la vez; del índice solo falta lo que no llegó con el final, en partes iguales a la vez (2.0.15)', async () => {
   const { Mp4Mse } = require('../src/player/mp4mse.ts');
   const realFetch = global.fetch;
   const MB = 1048576;
@@ -750,9 +750,10 @@ test('películas MP4 con el índice al final: el índice se pide entero en una s
   };
   const asked = [];
   global.fetch = async (url, { headers }) => {
+    const sfx = /bytes=-(\d+)/.exec(headers.Range);
     const m = /bytes=(\d+)-(\d+)/.exec(headers.Range);
-    const a = +m[1];
-    const b = Math.min(size, +m[2] + 1);
+    const a = sfx ? size - +sfx[1] : +m[1];
+    const b = sfx ? size : Math.min(size, +m[2] + 1);
     asked.push([a, b - a]);
     const out = new Uint8Array(b - a);
     // ftyp (24) + mdat (hasta el índice) + moov al final
@@ -766,10 +767,13 @@ test('películas MP4 con el índice al final: el índice se pide entero en una s
     const r = new Mp4Mse({}, 'http://fixture.invalid/index-end.mp4');
     const moov = await r.readMoov();
     assert.equal(moov.length, moovSize - 8);
-    const tail = asked.filter(([a]) => a >= moovAt);
-    // 3 pedidos que cubren todo el índice, ninguno de 1 MB para leer primero su tamaño
-    assert.equal(tail.length, 3);
-    assert.equal(tail.reduce((n, [, len]) => n + len, 0), moovSize);
+    // el final del archivo (3 MB) junto con el principio
+    assert.ok(asked.some(([a, len]) => a === size - 3 * MB && len === 3 * MB), JSON.stringify(asked));
+    // del índice solo lo que faltaba (2 MB), en hasta 3 partes, sin un pedido de 1 MB para leer primero su tamaño
+    const mid = asked.filter(([a]) => a >= moovAt && a < size - 3 * MB);
+    assert.ok(mid.length >= 1 && mid.length <= 3, JSON.stringify(mid));
+    const got = mid.reduce((n, [, len]) => n + len, 0);
+    assert.ok(got >= 2 * MB && got <= 2 * MB + 16, String(got));
     r.destroy();
   } finally { global.fetch = realFetch; }
 });
@@ -779,11 +783,13 @@ test('películas: un «.mp4» que es MKV (cabecera EBML) se reconoce con el prim
   const realFetch = global.fetch;
   const asked = [];
   global.fetch = async (url, { headers }) => {
+    const sfx = /bytes=-(\d+)/.exec(headers.Range);
     const m = /bytes=(\d+)-(\d+)/.exec(headers.Range);
-    const a = +m[1];
-    const b = +m[2] + 1;
-    asked.push(a);
-    const out = new Uint8Array(b - a);
+    const total = 10 * 1073741824;
+    const a = sfx ? total - +sfx[1] : +m[1];
+    const b = sfx ? total : +m[2] + 1;
+    asked.push(sfx ? 'final' : a);
+    const out = new Uint8Array(Math.min(b - a, 4 * 1048576));
     if (a === 0) out.set([0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x00, 0x00, 0x00]);
     return { status: 206, url, headers: { get: k => (k === 'content-range' ? 'bytes ' + a + '-' + (b - 1) + '/' + 10 * 1073741824 : k === 'content-length' ? String(b - a) : null) }, arrayBuffer: async () => out.buffer };
   };
@@ -791,7 +797,8 @@ test('películas: un «.mp4» que es MKV (cabecera EBML) se reconoce con el prim
     const r = new Mp4Mse({}, 'http://fixture.invalid/remux.mp4');
     assert.equal(await r.readMoov(), null);
     assert.equal(r.why, NOT_MP4_MKV);
-    assert.deepEqual(asked, [0]);
+    // solo el principio del archivo (cabecera y principio del video) y su final: ningún pedido buscando un índice MP4
+    assert.ok(asked.every(a => a === 0 || a === 'final'), JSON.stringify(asked));
     r.destroy();
   } finally { global.fetch = realFetch; }
 });

@@ -216,9 +216,34 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     return out;
   }, [rows]);
 
+  // Al volver de la ficha (o del reproductor) el foco vuelve a la tarjeta que se abrió, en su fila (2.0.15). Antes la
+  // pantalla se mostraba otra vez sin nada enfocado y el foco caía en el menú de arriba. Como ItemGrid (Buscar, Ver todo):
+  // la fila se monta y se pone arriba, y la tarjeta se vuelve a montar con «preferred» un momento
+  const lastCard = useRef<{ row: number; key: string } | null>(null);
+  const [back, setBack] = useState<{ row: number; key: string; n: number } | null>(null);
+  const [backPref, setBackPref] = useState(false);
+  const [heroRev, setHeroRev] = useState(0);
+  const wasActive = useRef(active);
+  useEffect(() => {
+    const came = active && !wasActive.current;
+    wasActive.current = active;
+    if (!came) return;
+    const lc = lastCard.current;
+    if (lc && inRowsRef.current && lc.row < rows.length) {
+      setWin(w => onFocusWin(w, lc.row, rows.length));
+      list.current?.scrollTo({ y: offsets[lc.row] || 0, animated: false });
+      setBack(b => ({ row: lc.row, key: lc.key, n: (b?.n || 0) + 1 }));
+    } else setHeroRev(r => r + 1);
+    setBackPref(true);
+    const id = setTimeout(() => setBackPref(false), 1000);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
   // foco en una tarjeta: su fila queda arriba y la portada muestra lo enfocado cuando el foco se detiene
   const onFocusAt = useCallback(
     (i: number, x: Item | Special) => {
+      lastCard.current = { row: i, key: isItem(x) ? x.kind + x.id : x.kind + x.key };
       lastFocusAt.current = Date.now();
       setInRows(true);
       setRowIdx(i);
@@ -306,6 +331,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
       {hero ? (
         <View style={[s.btns, inRows && s.btnsHidden]}>
           <Button
+            key={'play' + heroRev}
             label={t('Reproducir')}
             icon="▶"
             primary
@@ -338,6 +364,9 @@ export default function Browse({ section, active = true }: { section: 'home' | '
               onSpecial={selectSpecial}
               onFocusRow={onFocusAt}
               progressOf={progressOf}
+              focusKey={back && back.row === i ? back.key : undefined}
+              focusRev={back && back.row === i ? back.n : 0}
+              focusPref={!!back && back.row === i && backPref}
             />
           ))}
         </ScrollView>

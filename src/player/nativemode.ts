@@ -33,13 +33,15 @@ export function nativeLiveBad(url: string): boolean {
   const e = bads()[chanKey(url)];
   return !!e && e.n >= 2 && Date.now() - e.t < BAD_TTL;
 }
-// el nativo no llegó a mostrar el canal
-export function markNativeLiveBad(url: string): void {
+// el nativo no llegó a mostrar el canal. sure: falló dos veces seguidas, cada una con un reproductor nuevo (2.0.15:
+// playback.liveNext): ya es seguro, se marca de una vez
+export function markNativeLiveBad(url: string, sure = false): void {
   const k = chanKey(url);
   if (!k) return;
   const all = bads();
   const e = all[k];
-  all[k] = { n: e && Date.now() - e.t < BAD_TTL ? e.n + 1 : 1, t: Date.now() };
+  const n = e && Date.now() - e.t < BAD_TTL ? e.n + 1 : 1;
+  all[k] = { n: sure ? Math.max(2, n) : n, t: Date.now() };
   const ks = Object.keys(all);
   if (ks.length > 200) {
     ks.sort((x, y) => all[x].t - all[y].t);

@@ -22,6 +22,8 @@ import { dropReturn, offerReturn, playerClosing, setLastLive, stopLivePreview, t
 import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
 import { hasHandoff } from '../player/livehls';
 import { vodKnown } from '../player/warm';
+import { MP4_HEAD, mp4Spot } from '../player/mp4mse';
+import { setLineMax, singleFor } from '../player/readahead';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
 import { probeTracks } from '../lib/probe';
@@ -238,6 +240,19 @@ export default function Player({ params }: { params: PlayParams }) {
     [params, urlFor],
   );
 
+  // El lector de la app no pudo y la película sigue por otro camino (modo directo de Vega): 30 s para empezar a sonar; si
+  // no, los pasos de siempre hasta el aviso. Antes no quedaba ningún plazo después de ese cambio y, si el modo directo
+  // no arrancaba (índice al final, servidor lento), la pantalla quedaba cargando para siempre (2.0.15)
+  const vodFinal = useCallback((i: number) => {
+    if (startDog.current) clearTimeout(startDog.current);
+    startDog.current = setTimeout(() => {
+      startDog.current = null;
+      const c = ctl.current;
+      if (!c || c.hasPlayed() || indexRef.current !== i) return;
+      onErrorRef.current();
+    }, 30000);
+  }, []);
+
   // ---------- carga ----------
   const load = useCallback(
     (i: number, resume = 0) => {
@@ -260,6 +275,8 @@ export default function Player({ params }: { params: PlayParams }) {
         const hint = playHintFor(params.kind, params.queue[i].id, params.seriesId);
         if (hint?.a) seedTitleLang(urlFor(i), String(hint.a), typeof hint.ai === 'number' ? hint.ai : -1);
       }
+      // conexiones de la línea (la lectura de películas no prueba varias a la vez si la línea admite una)
+      setLineMax(Number(getState().session?.max) || 0);
       c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
@@ -311,7 +328,8 @@ export default function Player({ params }: { params: PlayParams }) {
                 startDog.current = null;
                 const c3 = ctl.current;
                 if (!c3 || c3.hasPlayed() || indexRef.current !== i) return;
-                if (!c3.mp4Fallback('sin empezar tras leer el índice')) onErrorRef.current();
+                if (c3.mp4Fallback('sin empezar tras leer el índice')) vodFinal(i);
+                else onErrorRef.current();
               }, 25000);
               return;
             }
@@ -320,7 +338,8 @@ export default function Player({ params }: { params: PlayParams }) {
               startDog.current = setTimeout(waitIndex, 5000);
               return;
             }
-            if (!c2.mp4Fallback('sin índice en ' + Math.round(20 + (Date.now() - t0) / 1000) + ' s')) onErrorRef.current();
+            if (c2.mp4Fallback('sin índice en ' + Math.round(20 + (Date.now() - t0) / 1000) + ' s')) vodFinal(i);
+            else onErrorRef.current();
           };
           waitIndex();
           return;
@@ -330,14 +349,15 @@ export default function Player({ params }: { params: PlayParams }) {
             startDog.current = null;
             const c2 = ctl.current;
             if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
-            if (!c2.mp4Fallback('sin empezar en 45 s')) onErrorRef.current();
+            if (c2.mp4Fallback('sin empezar en 45 s')) vodFinal(i);
+            else onErrorRef.current();
           }, 25000);
           return;
         }
         onErrorRef.current();
       }, live ? 25000 : resume > 0 ? 15000 : 20000);
     },
-    [urlFor, live],
+    [urlFor, live, vodFinal],
   );
 
   const next = useCallback(() => {
@@ -728,6 +748,20 @@ export default function Player({ params }: { params: PlayParams }) {
         retryLive(i, 1000);
         return;
       }
+      // el servidor contestó y entregó el canal (200): el otro protocolo o el DNS no cambian nada (2.0.15; antes, tras 40 s,
+      // se probaba https en un servidor que solo da http y terminaba en «error 0»). Una vez más con un reproductor nuevo
+      // y, si tampoco, el aviso
+      const reached = !!vod.current.live && vod.current.live.code >= 200 && vod.current.live.code < 400;
+      if (reached) {
+        if (!vod.current.retried) {
+          vod.current.retried = true;
+          setStatus(t('Reintentando…'));
+          retryLive(i, 1500);
+          return;
+        }
+        failLive();
+        return;
+      }
       if (!triedOther.current) {
         triedOther.current = true;
         flipped.current = !flipped.current;
@@ -758,7 +792,19 @@ export default function Player({ params }: { params: PlayParams }) {
       if (params.kind === 'live') {
         // el reproductor rechazó el video convertido por el lector (MP4): el mismo canal otra vez en MPEG-TS
         const before = c.liveDiag();
-        if (c.liveRetryTs()) {
+        const nx = c.liveNext();
+        // otra vez con un reproductor nuevo, como abre la miniatura (2.0.15): un fallo suelto del nativo al cambiar de canal
+        // (el anterior todavía soltaba el decodificador) o un canal que el lector no muestra y el nativo sí
+        if (nx === 'fresh') {
+          const vs = vod.current;
+          if (vs.attempts.length < 16) vs.attempts.push('otra vez con un reproductor nuevo: ' + (liveNote.current || 'error del reproductor') + (before ? ' · ' + before : ''));
+          liveNote.current = '';
+          setStatus(t('Conectando con el canal…'));
+          setBuffering(true);
+          retryLive(indexRef.current, 600);
+          return;
+        }
+        if (nx === 'here') {
           const ch = params.channels[indexRef.current] || params.channel;
           reportError('warning', 'Canal en vivo: el equipo no aceptó el MP4 del lector (se vuelve a abrir en MPEG-TS o solo con el video)', 'canal=' + (ch?.name || '') + ' id=' + (ch?.id || '') + ' motivo=' + (liveNote.current || 'error del reproductor') + ' · ' + before, 'Reproductor');
           liveNote.current = '';
@@ -822,8 +868,12 @@ export default function Player({ params }: { params: PlayParams }) {
         nextLive();
         return;
       }
-      // el MP4 que lee la app no le gustó al reproductor: el modo directo de siempre (y sus pasos) con este video
-      if (c.mp4Fallback()) return;
+      // el MP4 que lee la app no le gustó al reproductor: el modo directo de siempre (y sus pasos) con este video; con su
+      // plazo para empezar (si no, quedaba cargando sin fin)
+      if (c.mp4Fallback()) {
+        if (!c.hasPlayed()) vodFinal(indexRef.current);
+        return;
+      }
       if (vodError()) return;
       if (vod.current.format) {
         triedOther.current = true;
@@ -889,6 +939,8 @@ export default function Player({ params }: { params: PlayParams }) {
     }
     // (un reproductor que volvía a la miniatura y nadie tomó se cierra antes de abrir este)
     if (!inherited) dropReturn();
+    // conexiones de la línea, antes del primer pedido por adelantado (en una línea de una conexión es uno solo)
+    setLineMax(Number(getState().session?.max) || 0);
     const begin: Promise<void> = inherited
       ? Promise.resolve()
       : stopLivePreview().then(waitForLivePreview).then(() => {
@@ -913,9 +965,11 @@ export default function Player({ params }: { params: PlayParams }) {
         } else if (!live && /\.mkv(\?|$)/i.test(first)) {
           preUrl = first;
           prefetchRange(first, 0, 262144, firstResume.current > 5 ? 0 : 1048576);
-        } else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) {
+        } else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first) && !mp4Spot(first)) {
+          // lo mismo que pide primero el lector (mp4mse.ts): en una línea de una conexión, desde el principio, también el
+          // principio del video (un solo pedido); si no, la cabecera (el principio del video lo pide el lector a la vez)
           preUrl = first;
-          prefetchRange(first, 0, 65536);
+          prefetchRange(first, 0, firstResume.current <= 5 && singleFor(first) ? MP4_HEAD : 65536);
         }
         initializing = v.initialize().then(() => { initialized = true; });
         return initializing;

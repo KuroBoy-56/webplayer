@@ -52,7 +52,7 @@ class Mkv {
 }
 class PanelHls {static supported(){return true;}}
 let lives = [];
-class LiveHls {static supported(){return true;}constructor(v,url,audio,noAudio,tsOnly){this.tsOnly=tsOnly;this.frozen=false;lives.push(this);}isMp4(){return !this.tsOnly;}otherAudio(){return false;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
+class LiveHls {static supported(){return true;}constructor(v,url,audio,noAudio,tsOnly){this.tsOnly=tsOnly;this.frozen=false;this.noShow=false;this.mf=false;lives.push(this);}isMp4(){return !this.tsOnly;}mediaFailed(){return this.mf;}otherAudio(){return false;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
 const media = {
   engineDenied:()=>'',knownNow:()=>probe,knownTracks:async()=>probe||noTracks,
   fileTracks:async()=>probe||noTracks,
@@ -189,16 +189,49 @@ test('MKV con audio que no entra por MSE (E-AC-3): primero el lector nativo; si 
   assert.equal(c.mp4Fallback(),true);await tick();
   assert.equal(mkvs.length,2);assert.equal(c.mp4Fallback('x'),true);await c.destroy();
 });
-test('canal congelado: primero el reproductor nativo de Vega (.ts directo, una vez por canal) y después alternando MP4 y MPEG-TS hasta 6 veces',async()=>{
-  // un equipo que todavía no sabe si el nativo abre, con un canal que el nativo ya no pudo abrir: el lector propio
-  lives=[];const {c,video}=setup();delete memory['native_live_'+APP_VERSION];
+test('canal en vivo: un fallo suelto del nativo se prueba otra vez con un reproductor nuevo (como la miniatura); con dos seguidos, el lector propio, alternando MP4 y MPEG-TS',async()=>{
+  lives=[];let {c,video}=setup();delete memory['native_live_'+APP_VERSION];
   c.load('http://fixture.invalid/live/u/p/1.m3u8',0,true);await tick();
   assert.equal(lives.length,0);assert.equal(video.src,'http://fixture.invalid/live/u/p/1.ts');
-  assert.equal(c.liveRetryTs(),true);assert.equal(lives.length,1);
-  // ese canal se congela con el lector propio: el nativo ya falló con él, así que sigue alternando el lector
-  lives[0].frozen=true;assert.equal(c.liveRetryTs(),true);assert.equal(lives.length,2);assert.equal(lives[1].tsOnly,false);
+  // el primer fallo (el canal anterior todavía soltaba el decodificador al cambiar rápido): otra vez el nativo, en un reproductor nuevo
+  assert.equal(c.liveNext(),'fresh');assert.equal(lives.length,0);await c.destroy();
+  ({c,video}=setup());delete memory['native_live_'+APP_VERSION];
+  c.load('http://fixture.invalid/live/u/p/1.m3u8',0,true);await tick();
+  assert.equal(video.src,'http://fixture.invalid/live/u/p/1.ts','el reproductor nuevo prueba otra vez el nativo');
+  // el segundo seguido: el lector propio en este mismo reproductor
+  assert.equal(c.liveNext(),'here');assert.equal(lives.length,1);
+  // ese canal se congela con el lector propio: el nativo ya falló dos veces con él, así que sigue alternando el lector
+  lives[0].frozen=true;assert.equal(c.liveNext(),'here');assert.equal(lives.length,2);assert.equal(lives[1].tsOnly,false);
   c.load('http://fixture.invalid/live/u/p/9.m3u8',0,true);await tick();lives=[];
   memory['native_live_'+APP_VERSION]='no';
+});
+
+test('canal que el lector entrega y el equipo no muestra (HBO en MPEG-TS, buf vacío): el nativo con un reproductor nuevo; si no, el otro modo del lector; nunca el otro protocolo',async()=>{
+  lives=[];let {c,video}=setup();memory['native_live_'+APP_VERSION]='ok';
+  const u='http://fixture.invalid/live/u/p/51.m3u8';
+  c.load(u,0,true);await tick();assert.equal(video.src,'http://fixture.invalid/live/u/p/51.ts');
+  assert.equal(c.liveNext(),'fresh');await c.destroy();
+  ({c,video}=setup());memory['native_live_'+APP_VERSION]='ok';
+  c.load(u,0,true);await tick();assert.equal(c.liveNext(),'here');assert.equal(lives.length,1);assert.equal(lives[0].tsOnly,false);
+  // en MP4 propio no se ve: MPEG-TS en el mismo reproductor (el nativo ya falló dos veces)
+  lives[0].noShow=true;assert.equal(c.liveNext(),'here');assert.equal(lives.length,2);assert.equal(lives[1].tsOnly,true);
+  // tampoco en MPEG-TS: no queda otra forma (Player avisa; no prueba https ni el DNS)
+  lives[1].noShow=true;assert.equal(c.liveNext(),'');
+  await c.destroy();
+  // un canal que el nativo nunca probó: lo que el lector no muestra va al nativo con un reproductor nuevo
+  ({c,video}=setup());memory['native_live_'+APP_VERSION]='no';
+  c.load('http://fixture.invalid/live/u/p/52.m3u8',0,true);await tick();const n=lives.length;
+  memory['native_live_'+APP_VERSION]='ok';lives[n-1].noShow=true;assert.equal(c.liveNext(),'fresh');
+  await c.destroy();lives=[];memory['native_live_'+APP_VERSION]='no';
+});
+
+test('MP4 propio rechazado: solo ese canal pasa a MPEG-TS (antes todos los canales de la sesión)',async()=>{
+  lives=[];const {c}=setup();
+  c.load('http://fixture.invalid/live/u/p/61.m3u8',0,true);await tick();
+  assert.equal(lives[0].tsOnly,false);lives[0].mf=true;assert.equal(c.liveNext(),'here');assert.equal(lives[1].tsOnly,true);
+  c.load('http://fixture.invalid/live/u/p/62.m3u8',0,true);await tick();assert.equal(lives[2].tsOnly,false,'otro canal sigue en MP4');
+  c.load('http://fixture.invalid/live/u/p/61.m3u8',0,true);await tick();assert.equal(lives[3].tsOnly,true,'ese canal, en MPEG-TS');
+  await c.destroy();lives=[];
 });
 
 test('canales: el reproductor nativo primero; si abre, el equipo lo recuerda; 3 fallos seguidos sin abrir nunca = el lector propio hasta cerrar la app (no para siempre)',async()=>{
@@ -210,7 +243,8 @@ test('canales: el reproductor nativo primero; si abre, el equipo lo recuerda; 3 
   // (cada canal con su reproductor, como la miniatura)
   ({c,video}=setup());delete memory['native_live_'+APP_VERSION];
   const hooks={toast(){},status(){},changed(){},subText(){},fatal(){}};
-  for(const n of [21,22,24]){c=new Playback({...video,src:''},hooks);c.load('http://fixture.invalid/live/u/p/'+n+'.m3u8',0,true);await tick();assert.equal(c.liveDiag().includes('modo=nativo'),true);assert.equal(c.liveRetryTs(),true);await c.destroy();}
+  // cada canal: el primer fallo con un reproductor nuevo; el segundo cuenta
+  for(const n of [21,22,24])for(let k=0;k<2;k++){c=new Playback({...video,src:''},hooks);c.load('http://fixture.invalid/live/u/p/'+n+'.m3u8',0,true);await tick();assert.equal(c.liveDiag().includes('modo=nativo'),true);assert.equal(c.liveNext(),k?'here':'fresh');await c.destroy();}
   // nada guardado: la próxima vez que se abra la app se prueba otra vez el nativo
   assert.equal(memory['native_live_'+APP_VERSION],undefined);
   c=new Playback({...video,src:''},hooks);
