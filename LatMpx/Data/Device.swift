@@ -13,11 +13,18 @@ enum Device {
     private static let account = "device_id"
 
     static let id: String = {
-        if let v = keychainRead(), !v.isEmpty { return v }
-        if let v = UserDefaults.standard.string(forKey: "device_id"), !v.isEmpty { keychainWrite(v); return v }
+        let (saved, readable) = keychainRead()
+        if let v = saved, !v.isEmpty { return v }
+        if let v = UserDefaults.standard.string(forKey: "device_id"), !v.isEmpty {
+            if readable { keychainWrite(v) }
+            return v
+        }
         var b = (0..<8).map { _ in UInt8.random(in: 0...255) }
         b[0] |= 0x10 // nunca empieza en "00": siempre 8 pares
         let v = normalize(b.map { String(format: "%02x", $0) }.joined())
+        // el llavero no se pudo leer (equipo sin desbloquear todavía, error del sistema): no se escribe encima del
+        // identificador que el panel ya tiene registrado; este vale solo hasta cerrar la app
+        guard readable else { return v }
         keychainWrite(v)
         UserDefaults.standard.set(v, forKey: "device_id")
         return v
@@ -36,15 +43,18 @@ enum Device {
         return pairs.joined(separator: ":")
     }
 
-    private static func keychainRead() -> String? {
+    /** (valor, readable): readable = el llavero respondió (con el identificador o «no hay ninguno») */
+    private static func keychainRead() -> (String?, Bool) {
         #if canImport(Security)
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                 kSecAttrAccount as String: account, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
         var out: AnyObject?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
-        return String(data: d, encoding: .utf8)
+        let st = SecItemCopyMatching(q as CFDictionary, &out)
+        if st == errSecItemNotFound { return (nil, true) }
+        guard st == errSecSuccess, let d = out as? Data else { return (nil, false) }
+        return (String(data: d, encoding: .utf8), true)
         #else
-        return nil
+        return (nil, true)
         #endif
     }
 

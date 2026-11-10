@@ -4,6 +4,17 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.0.5
+
+- **La app ya no saca al cliente a los minutos con número de distribuidor**: el panel no devolvía la línea de un cliente
+  que su distribuidor había quitado de Clientes aunque volviera a iniciar sesión (arreglado en el panel, que hay que
+  actualizar). En la app, la sesión solo se cierra cuando el panel deja de dar una línea que antes dio para este
+  equipo (`Panel.lineGone`, `Store.lineSeen`) o lo bloquea, y el rechazo del número de distribuidor se confirma con una
+  segunda consulta antes de borrar el número y la sesión (`guardTenant`; los rechazos de progreso, guía y deportes
+  también pasan por ahí).
+- **Identificador del equipo** (`Device.id`): sigue en el llavero (se conserva al reinstalar). Si el llavero no se puede
+  leer al abrir, ya no se crea uno nuevo encima del que el panel tiene registrado.
+
 ## Novedades de la 1.0.4 (como Vega, Roku, Android y las TV)
 
 - **Lista negra del panel:** si el distribuidor (o el dueño con Omitir) bloqueó este equipo, `login.php` responde

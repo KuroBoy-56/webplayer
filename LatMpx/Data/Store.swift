@@ -81,6 +81,12 @@ enum Store {
         set { p.set(newValue, forKey: tenantKey("panel_pin2")) }
     }
 
+    /** el panel ya le dio a este equipo su línea (check_mac con línea o demo creada): solo entonces un «sin línea» cierra la sesión */
+    static var lineSeen: Bool {
+        get { p.bool(forKey: tenantKey("line_seen")) }
+        set { p.set(newValue, forKey: tenantKey("line_seen")) }
+    }
+
     static var blockedCats: Set<String> {
         get { Set(p.stringArray(forKey: "blocked_cats") ?? []) }
         set { p.set(Array(newValue), forKey: "blocked_cats") }

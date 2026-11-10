@@ -108,6 +108,13 @@ enum Panel {
     /** pantalla falsa que mandó el último check_mac (nil = ninguna) */
     private(set) static var fakeScreen: FakeScreen?
 
+    /**
+     * El panel dejó de dar una línea que antes dio a este equipo (el dueño la quitó o la demo venció): ahí se cierra la
+     * sesión abierta. Si nunca la dio (se entró escribiendo usuario y contraseña y el panel los aceptó), «sin línea» no
+     * saca al cliente: pasaba a los 10 minutos con los clientes que su distribuidor había quitado de la lista.
+     */
+    private(set) static var lineGone = false
+
     /** ¿El equipo ya tiene una línea activa en el panel? value nil + error nil = no la tiene. */
     /** poll: la app ya abierta vuelve a preguntar (cada 10 min o al volver a ella): el panel no lo cuenta como otra apertura */
     static func checkMac(poll: Bool = false) async -> Answer<Line> {
@@ -126,7 +133,11 @@ enum Panel {
         if j["cache_clear"] != nil {
             CacheClear.received(j.i("cache_clear"), at: j.i("cache_clear_at"), now: Int(Date().timeIntervalSince1970) + clockSkew)
         }
-        if !j.b("exists") { return Answer(value: nil, error: nil) }
+        if !j.b("exists") {
+            lineGone = Store.lineSeen
+            if lineGone { Store.lineSeen = false }
+            return Answer(value: nil, error: nil)
+        }
         // PIN parental del panel: es el que usa la app
         let pin = j.s("pin")
         if pin.count == 4 && pin.isDigits { Store.parentalPin = pin }
@@ -134,6 +145,8 @@ enum Panel {
         line?.demo = j.b("demo")
         line?.demoExpires = j.i("demo_expires")
         line?.demoDuration = j.i("demo_duration")
+        lineGone = false
+        if line != nil && !Store.lineSeen { Store.lineSeen = true }
         return Answer(value: line)
     }
 
@@ -172,6 +185,8 @@ enum Panel {
         noteBlocked(r)
         let j = r.json()
         if r.ok, let j = j, j.s("status") == "ok", !j.s("username").isEmpty {
+            // la demo recién creada es una línea que el panel le dio a este equipo
+            Store.lineSeen = true
             return Answer(value: Demo(user: j.s("username"), pass: j.s("password"), url: j.s("url"), expires: j.i("demo_expires"), duration: j.i("demo_duration")), code: r.code)
         }
         let fallback: String

@@ -54,9 +54,10 @@ struct RootView: View {
         }
         .onAppear(perform: boot)
         .onChange(of: tenant.revoked) { m in
-            guard let m = m else { return }
+            guard m != nil else { return }
             tenant.revoked = nil
-            if Tenant.active { wipe(m) }
+            // no se borra el número con un solo rechazo (progreso, guía, deportes): lo confirma el guardián con tenant_config
+            if Tenant.active { guardTenant() }
         }
         .onChange(of: phase) { p in if p == .active { resumed() } }
         .onChange(of: cacheClear.notice) { on in if on { clearCacheAndRestart() } }
@@ -140,7 +141,13 @@ struct RootView: View {
         if checking { return }
         checking = true
         Task { @MainActor in
-            let r = await Tenant.fetch(b.code)
+            var r = await Tenant.fetch(b.code)
+            // el panel rechaza el número: se confirma con una segunda consulta antes de borrar el número y la sesión (una
+            // sola respuesta equivocada del panel sacaba al cliente de la app)
+            if case .denied(_) = r {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                r = await Tenant.fetch(b.code)
+            }
             checking = false
             if Tenant.code != b.code { return }
             switch r {
@@ -174,8 +181,9 @@ struct RootView: View {
         Task { @MainActor in
             let c = await Panel.checkMac(poll: true)
             guard state.session == s else { return }
-            // sin línea o equipo bloqueado en la lista negra del panel: vuelve al inicio de sesión (que muestra el aviso)
-            if (c.error == nil && c.value == nil) || Panel.blocked != nil { clearAll(); return }
+            // el panel dejó de dar una línea que antes dio a este equipo, o lo bloqueó: vuelve al inicio de sesión (que
+            // muestra el aviso). Si nunca la dio (usuario y contraseña escritos), «sin línea» no saca al cliente
+            if (c.error == nil && c.value == nil && Panel.lineGone) || Panel.blocked != nil { clearAll(); return }
             guard iptv, let line = c.value else { return }
             if case .fail(let m) = await Xtream.login([(line.name, line.base)], user: line.user, pass: line.pass), m != Xtream.noServer {
                 if state.session == s { clearAll() }
