@@ -10,7 +10,7 @@
 //   video sigue directo; nada automático pasa por el motor (estado guardado por línea en media.ts).
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { disableMp4, LiveHls } from './livehls';
-import { Engine, engineDenied, fileTracks, knownNow, knownTracks, mediaEngine, subCheck, subText, hlsLink } from '../api/media';
+import { Engine, engineDenied, fileTracks, knownNow, knownTracks, mediaEngine, shareTracks, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
 import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
 import { osBefore2, osVersion } from '../lib/osversion';
@@ -19,8 +19,9 @@ import { pref, readJson, setPref, writeJson } from '../lib/storage';
 import { markNativeLiveBad, nativeLiveGood, nativeAllowed, nativeFailedOnce, nativeHttpOk, nativeLiveBad, nativeRejectedHttp, nativeWorked } from './nativemode';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
-import { Mp4Mse, NOT_MP4_MKV, STALE_INDEX } from './mp4mse';
-import { MkvMse, mkvKnown } from './mkvmse';
+import { dropWarm, mp4Ready, Mp4Mse, NOT_MP4_MKV, STALE_INDEX } from './mp4mse';
+import { isSingle } from './rangeget';
+import { dropMkvWarm, MkvMse, mkvKnown } from './mkvmse';
 import { Mkv } from './mkvparse';
 import { reportError } from '../api/report';
 import { ShakaPlayback } from './shaka';
@@ -361,6 +362,21 @@ export class Playback {
     // remota antigua antes de probar las capacidades locales actuales.
     this.probe = knownNow(url);
     this.direct(resume);
+    // los idiomas que recuerda el panel (como mucho 2 s; la ficha ya los suele haber pedido): llegan al menú sin tocar
+    // el servidor IPTV, también con el reproductor nativo y en líneas de una sola conexión (2.0.16)
+    if (!this.probe && /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url)) {
+      const g = this.gen;
+      knownTracks(url)
+        .then(p => {
+          if (g !== this.gen || !p.ok || this.probe?.ok || this.shaka || (this.mse && this.mse.tracks.length)) return;
+          this.probe = p;
+          if (!this.audioKey) this.audioApplied = false;
+          if (!this.subKey) this.subApplied = false;
+          this.applyPrefs();
+          this.langNotice();
+        })
+        .catch(() => {});
+    }
     // los idiomas del archivo se leen a los 1,5 s de abrirlo (antes 3 s), o apenas suena (onPlaying), lo que llegue antes
     // MP4 y MKV: el lector propio ya trae las pistas (leer la cabecera aparte competía con el video al abrir)
     if (!/\.(m3u8|mpd|mp4|m4v|mov|mkv)(\?|$)/i.test(url)) this.langWatch(1500);
@@ -569,6 +585,7 @@ export class Playback {
         if (m instanceof MkvMse && !this.probe?.ok) this.probe = m.probe();
         // MP4 que empezó con el índice a medias: al completarse, el índice entero (cambiar de idioma no lo lee otra vez)
         else if (!(m instanceof MkvMse) && m.index) this.mp4Index = m.index;
+        if (!(m instanceof MkvMse) && m.index) this.shareReaderTracks(m);
         this.hooks.changed();
       };
       m.onTracks = () => {
@@ -578,6 +595,7 @@ export class Playback {
           // las pistas del MKV ya leídas: el menú (audio y subtítulos) sin leer otra vez la cabecera
           if (!this.probe?.ok) this.probe = m.probe();
         } else this.mp4Index = m.index;
+        this.shareReaderTracks(m);
         if (this.mp4Paused) { this.mp4Paused = false; this.v.pause(); }
         this.applyPrefs();
         if (this.pendingSub) {
@@ -640,11 +658,38 @@ export class Playback {
     this.v.play();
   }
 
+  // Los idiomas que leyó el lector (índice del MP4 entero, cabecera del MKV) al panel (tracks.php): así los equipos que
+  // abren el mismo video con el reproductor nativo ven todos los idiomas sin leer nada del servidor IPTV (2.0.16)
+  private shareReaderTracks(m: Mp4Mse | MkvMse): void {
+    if (m instanceof MkvMse) {
+      const p = m.probe();
+      if (p?.ok) shareTracks(this.url, p);
+      return;
+    }
+    // (un índice a medias no trae todas las pistas)
+    if (!m.index || !m.tracks.length) return;
+    shareTracks(this.url, {
+      ok: true,
+      container: 'mp4',
+      audio: m.tracks.map((tr, i) => ({ id: String(i), lang: tr.lang, codec: tr.codec, name: '', def: !!tr.def, forced: false })),
+      subs: [],
+    });
+  }
+
   // ¿se abre con el reproductor nativo de Vega? Desde el principio (Continuar viendo lo abre el lector de la app, que
   // empieza en el segundo exacto), sin idioma elegido antes para el título ni subtítulos automáticos (eso lo hace el
   // lector), una vez por archivo en la sesión y si el reproductor nativo no falló antes en este equipo
+  // (2.0.16) Tampoco si el lector ya tiene el índice (equipo, memoria o panel) y el audio predeterminado es AAC: abre con un
+  // solo pedido al servidor IPTV y deja cambiar de idioma en el equipo; el nativo tendría que leer el índice otra vez
   nativeVodPlanned(url: string, at: number): boolean {
-    return /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url) && at <= 5 && !titleLang(url) && pref('subs_lang', 'off') === 'off' && nativeAllowed('vod') && nativeHttpOk(url) && !vodNativeTried.has(fileKey(url));
+    return /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url) && at <= 5 && !titleLang(url) && pref('subs_lang', 'off') === 'off' && nativeAllowed('vod') && nativeHttpOk(url) && !vodNativeTried.has(fileKey(url)) && !this.readerReady(url);
+  }
+
+  private readerReady(url: string): boolean {
+    if (!/\.(mp4|m4v|mov)(\?|$)/i.test(url) || !mp4Ready(url)) return false;
+    const p = knownNow(url);
+    const a = p?.ok ? p.audio.find(x => x.def) || p.audio[0] : undefined;
+    return !!a && /mp4a|aac/i.test(a.codec);
   }
 
   // el archivo directo al reproductor de Vega (lo lee y decodifica él, como Android y LG). Los idiomas se leen de la
@@ -652,6 +697,8 @@ export class Playback {
   // lento), en 12 s no empieza o da error, el lector de la app (mp4Fallback)
   private openNativeVod(): void {
     const g = this.gen;
+    dropWarm(this.url);
+    dropMkvWarm(this.url);
     vodNativeTried.add(fileKey(this.url));
     this.vodNative = true;
     this.nativeMeta = false;
@@ -1034,6 +1081,10 @@ export class Playback {
     this.langNotice();
     if (this.shaka || (this.mse && !this.mp4Url)) return;
     if (this.langNoticed || this.probe?.ok || this.remux) return;
+    // reproductor nativo en una línea de una sola conexión: leer la cabecera abre otra conexión y el servidor corta el
+    // video (o rechaza la lectura y se reintentaba cada 15 s). Los idiomas llegan del panel (tracks.php) o de las pistas
+    // que informe el reproductor
+    if (this.vodNative && isSingle(this.url)) return;
     this.langBusy = true;
     this.langTries++;
     const g = this.gen;
@@ -1283,12 +1334,13 @@ export class Playback {
       }
       const it = this.audioItems().find(i => i.key === m.key);
       if (it && it.probe !== undefined && this.vodNative) {
-        // el reproductor nativo no cambia de idioma: el lector de la app con ese audio, desde el mismo segundo (local)
-        this.mp4Audio = it.probe;
-        this.mp4Paused = this.v.paused;
-        setTitleLang(this.url, it);
-        this.hooks.toast(t('Audio: {x}', { x: it.label }));
-        this.leaveNativeVod(false, this.realPos());
+        // el reproductor nativo informa esa pista (archivo con varios audios que Vega sí expone): se cambia ahí mismo, sin
+        // volver a abrir el video; si en 1,5 s no la tomó, el lector de la app con ese audio
+        if (it.native !== undefined && this.nativeAudio().length > 1 && this.decodable(it)) {
+          this.nativeSwitch(it);
+          return;
+        }
+        this.toReaderAudio(it);
         return;
       }
       if (it && it.probe !== undefined && this.panelMenu()) {
@@ -1317,6 +1369,43 @@ export class Playback {
       }
       this.pickSub(s, true);
     }
+  }
+
+  // el reproductor nativo no cambia de idioma: el lector de la app con ese audio, desde el mismo segundo (local). Si el
+  // equipo no decodifica ese audio, el lector lo deja al panel (o avisa que hace falta el servidor)
+  private toReaderAudio(it: AudioItem): void {
+    if (!this.vodNative || it.probe === undefined) return;
+    this.mp4Audio = it.probe;
+    this.mp4Paused = this.v.paused;
+    setTitleLang(this.url, it);
+    this.hooks.toast(t('Cambiando a {x}…', { x: it.label }));
+    this.leaveNativeVod(false, this.realPos());
+  }
+
+  // cambio de pista en el reproductor nativo con la comprobación de que la tomó
+  private nativeSwitch(it: AudioItem): void {
+    const choice = ++this.audioChange;
+    const n = it.native!;
+    if (this.enabledNative() === n) {
+      this.audioKey = it.key;
+      setTitleLang(this.url, it);
+      this.hooks.toast(t('Audio: {x}', { x: it.label }));
+      this.hooks.changed();
+      return;
+    }
+    this.enableNative(n);
+    const g = this.gen;
+    if (this.audioTimer) clearTimeout(this.audioTimer);
+    this.audioTimer = setTimeout(() => {
+      this.audioTimer = null;
+      if (g !== this.gen || choice !== this.audioChange || !this.vodNative) return;
+      if (this.enabledNative() === n) {
+        this.audioKey = it.key;
+        setTitleLang(this.url, it);
+        this.hooks.toast(t('Audio: {x}', { x: it.label }));
+        this.hooks.changed();
+      } else this.toReaderAudio(it);
+    }, 1500);
   }
 
   // ---------- idioma preferido (Cuenta › Ajustes) ----------

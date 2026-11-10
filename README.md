@@ -207,6 +207,28 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Índice compartido por el panel, idiomas con el reproductor nativo y sin choques en la línea (2.0.16)**:
+  - **Películas y capítulos que otro equipo ya abrió empiezan con un solo pedido al servidor IPTV**: el primer equipo que
+    lee el índice de un MP4 (moov, 3-10 MB al final del archivo; avisos «tardó en empezar» con `indice=8.4MB en 14.3s
+    unaConexion=true`) lo deja en el panel (`api/vidx.php`, entero, con todos los idiomas). Los demás lo reciben del
+    panel —otro servidor: no ocupa la conexión de la línea— y al servidor IPTV solo le piden el video
+    (`src/player/sharedindex.ts`, `Mp4Mse.doPrepare`). Orden: memoria → equipo → panel → servidor IPTV. Un archivo
+    que cambió de tamaño se descarta (`sharedStale`) y el índice que lee ese equipo lo reemplaza. En el aviso:
+    `indice_panel=true`.
+  - **Los idiomas llegan con el reproductor nativo**: el lector propio (MP4 y MKV) deja sus pistas en el panel
+    (`tracks.php`, `shareTracks`); antes solo lo hacía la lectura aparte de la cabecera, que en líneas de una conexión
+    no se puede hacer con el nativo abierto. Al abrir, la app pide al panel los idiomas sin esperar (`knownTracks`) y
+    con el nativo en una línea de una conexión ya no lee la cabecera del servidor IPTV (cortaba el video y se
+    reintentaba cada 15 s).
+  - **Cambio de idioma con el nativo**: si el reproductor de Vega informa la pista, se cambia ahí mismo
+    (`nativeSwitch`, comprobado a los 1,5 s); si no, el lector de la app abre ese audio desde el mismo segundo
+    (`toReaderAudio`) y, si el equipo no lo decodifica, el servidor del panel lo convierte o sale el aviso de que hace
+    falta encenderlo.
+  - **Nativo o lector**: con el índice ya listo (equipo, memoria o panel) y audio AAC abre el lector (un pedido, cambio de
+    idioma local). Al abrir con el nativo se corta lo que la ficha estaba preparando con el lector
+    (`dropWarm` / `dropMkvWarm`): en una línea de una conexión las dos lecturas chocaban y el video no abría.
+  - Versión de Vega OS en los avisos: `keplerOSVersion` (antes tomaba `keplerOSVariant` y decía
+    `{"keplerOSVariant":"kepler"}`).
 - **Canales en pantalla grande como en la miniatura, películas que abren antes y sin carga infinita, foco al volver (2.0.15)**:
   - **Cambiar de canal en pantalla grande** (▲▼ o la lista de la izquierda): al cambiar rápido, el reproductor anterior
     todavía puede estar soltando el decodificador (Amazon, *Media Player Requirements*: Vega tiene un solo decodificador

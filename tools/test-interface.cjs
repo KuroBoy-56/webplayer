@@ -1026,3 +1026,49 @@ test('2.0.14: al salir de la pantalla grande el reproductor vuelve a la miniatur
   await previews.waitForLivePreview();
   assert.equal(d.p.closed, 1);
 });
+
+test('índice compartido (panel): lo usa si el panel lo tiene; si no, lo sube por partes una sola vez después de leerlo', async () => {
+  const calls = [];
+  let has = null;
+  const prev = Module._load;
+  Module._load = function(request, parent, isMain) {
+    if (request === '../api/panel') return { cloud: async (file, method, p) => {
+      calls.push([method, p.head ? 'head' : method === 'GET' ? 'body' : 'part' + p.i + '/' + p.n]);
+      if (method === 'GET' && p.head) return { ok: true, code: 200, body: JSON.stringify(has ? { ok: true, kind: 'm', size: has.size, len: has.text.length } : { ok: false }) };
+      if (method === 'GET') return { ok: true, code: 200, body: 'VIDX1 m ' + has.size + ' ' + has.text.length + '\n' + has.text };
+      return { ok: true, code: 200, body: JSON.stringify({ ok: true, saved: p.i === p.n - 1 }) };
+    } };
+    return prev.call(this, request, parent, isMain);
+  };
+  try {
+    delete require.cache[require.resolve('../src/player/sharedindex.ts')];
+    const s = require('../src/player/sharedindex.ts');
+    const u = 'http://fixture.invalid/movie/u/p/77.mp4';
+    // el panel no lo tiene: null, y el equipo que lo lee lo sube (texto de 3,2 MB → 3 partes)
+    assert.equal(await s.sharedIndex(u, 'm'), null);
+    s.shareIndex(u, 'm', 900, () => 'A'.repeat(3200000));
+    s.shareIndex(u, 'm', 900, () => 'B');
+    await new Promise(r => setTimeout(r, 1200));
+    assert.deepEqual(calls.map(c => c[1]), ['head', 'part0/3', 'part1/3', 'part2/3']);
+    // otro archivo que el panel sí tiene: llega entero y no se vuelve a subir
+    calls.length = 0;
+    has = { size: 1234, text: 'QUJD' };
+    const u2 = 'http://fixture.invalid/movie/u/p/78.mp4';
+    assert.deepEqual(await s.sharedIndex(u2, 'm'), { kind: 'm', size: 1234, text: 'QUJD' });
+    assert.equal(s.sharedKnown(u2), true);
+    s.shareIndex(u2, 'm', 1234, () => 'X');
+    await new Promise(r => setTimeout(r, 50));
+    assert.deepEqual(calls.map(c => c[1]), ['head', 'body']);
+    // el archivo cambió en el servidor: lo del panel no se usa más y el índice que se lea lo reemplaza
+    s.sharedStale(u2);
+    assert.equal(s.sharedKnown(u2), false);
+    s.shareIndex(u2, 'm', 1300, () => 'Y');
+    await new Promise(r => setTimeout(r, 50));
+    assert.equal(calls[calls.length - 1][1], 'part0/1');
+    // canales u otras direcciones: nunca se le pregunta al panel
+    assert.equal(await s.sharedIndex('http://fixture.invalid/live/u/p/1.ts', 'm'), null);
+    assert.equal(s.parseShared('VIDX1 m 10 5\nABCD'), null);
+  } finally {
+    Module._load = prev;
+  }
+});

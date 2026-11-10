@@ -213,6 +213,13 @@ export function takeRange(url: string, off: number, len: number): Promise<RangeG
   return Promise.all([slice(need, off, end), need[0].p]).then(([d, g]) => (d && d.length === len ? { data: d, size: g?.size || 0 } : null));
 }
 
+// largo del pedido adelantado que empieza en off (0 si no hay): el lector de MP4 con el índice del panel lo usa como
+// principio del video, o lo corta
+export function prefetchedAt(url: string, off: number): number {
+  const p = parts(url)?.[0];
+  return p && p.off === off ? p.len : 0;
+}
+
 // lo que haya desde off (hasta len bytes) aunque no llegue al final: el lector de MKV junta el resto con otro pedido
 export function takeRangeFrom(url: string, off: number, len: number): Promise<RangeGot> | null {
   const list = parts(url);

@@ -123,6 +123,23 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.0.16 — índice compartido por el panel e idiomas con el reproductor nativo
+
+| Pieza | Qué hace |
+| --- | --- |
+| `src/player/sharedindex.ts` | `sharedIndex(url, 'm')`: pregunta al panel (`vidx.php?head=1`, 2,5 s) y, si lo tiene, baja el índice (25 s). `shareIndex()`: sube el índice entero por partes de 1,5 MB, solo si el panel dijo que no lo tenía. `sharedStale()`: lo del panel no era de este archivo (otro tamaño) |
+| `Mp4Mse.doPrepare` | índice: memoria → equipo → **panel** → servidor IPTV. Del panel cuenta como guardado (`packed`, tamaño comprobado con la primera respuesta) y se guarda también en el equipo. `takeHead()` usa el principio que Player pidió por adelantado (desde el principio) o lo corta (Continuar viendo) para que no ocupe la conexión |
+| `Mp4Mse.keepIndex` | además del índice adelgazado en el equipo, el entero al panel (`shareIndex`) |
+| `api/media.ts` `shareTracks` | los idiomas que leyó el lector propio a `tracks.php` (si el panel no los tenía) |
+| `Playback.load` | pide los idiomas al panel sin esperar (`knownTracks`) y los pone en el menú cuando llegan |
+| `Playback.langCheck` | con el nativo en una línea de una conexión (`isSingle`) no lee la cabecera del servidor IPTV |
+| `Playback.select` | con el nativo: `nativeSwitch` si el reproductor informa la pista; si no, `toReaderAudio` |
+| `Playback.nativeVodPlanned` | no usa el nativo si el lector ya tiene el índice (`mp4Ready`) y el audio predeterminado es AAC; `openNativeVod` corta lo que preparaba la ficha (`dropWarm`, `dropMkvWarm`) |
+
+Panel: `api/vidx.php` + `includes/vidx_store.php` (misma clave y permisos que `tracks.php`, gzip, se borra con los
+días de los idiomas y pasados 2 GB lo menos usado). Pruebas: `tools/media_test.php` (panel), `test-player.cjs` y
+`test-interface.cjs` (app).
+
 ## 2.0.15 — canales que abren igual en pantalla grande, índice por partes y foco al volver
 
 ### Canales en vivo: un fallo suelto no es «este canal no abre así»

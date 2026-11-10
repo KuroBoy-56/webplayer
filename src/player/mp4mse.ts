@@ -6,7 +6,9 @@
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
 import { lineLimit, ReadAhead } from './readahead';
-import { dropIndex, hasIndex, loadIndex, saveIndex, STALE_INDEX } from './indexstore';
+import { dropIndex, hasIndex, loadIndex, saveIndex, STALE_INDEX, fromBase64, toBase64 } from './indexstore';
+import { shareIndex, sharedIndex, sharedKnown, sharedStale } from './sharedindex';
+import { dropPrefetch, prefetchedAt } from './prefetch';
 export { STALE_INDEX };
 import { readJson, writeJson } from '../lib/storage';
 import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VIDEO_ID, VideoCfg, videoEntry } from '../lib/mp4box';
@@ -355,6 +357,18 @@ export function mp4Known(url: string): boolean {
   return MOOV_CACHE.has(k) || WARM.has(k) || hasIndex(url);
 }
 
+// el índice ya está (memoria, equipo o panel): el lector de la app abre con un solo pedido al servidor IPTV (2.0.16)
+export function mp4Ready(url: string): boolean {
+  const k = cacheKey(url);
+  return MOOV_CACHE.has(k) || hasIndex(url) || sharedKnown(url) || !!WARM.get(k)?.indexed;
+}
+
+// el video se abre con el reproductor nativo: lo que la ficha estaba preparando con el lector se corta (en una línea de
+// una conexión, seguía bajando el índice a la vez que el nativo pedía el video y uno de los dos no abría)
+export function dropWarm(url: string): void {
+  WARM.get(cacheKey(url))?.release();
+}
+
 // Prepara un MP4 sin abrirlo (la ficha del título): lee su índice (queda en memoria y guardado en el equipo) y deja
 // pedido el arranque del video en el segundo at. Al pulsar Reproducir, Playback se queda con este mismo lector
 // (Mp4Mse.open) y solo falta entregarle el video al reproductor. done: 'ok', 'mkv' (un MKV con extensión mp4) o ''
@@ -374,7 +388,7 @@ export function preloadMp4(url: string, at = 0, wantLang = ''): { stop: () => vo
 }
 
 export class Mp4Mse {
-  tracks: { lang: string; codec: string }[] = [];
+  tracks: { lang: string; codec: string; def?: boolean }[] = [];
   audioIdx = -1;
   onTracks: () => void = () => {};
   // las pistas apenas se lee el índice (el menú de idiomas sin esperar al reproductor)
@@ -417,6 +431,8 @@ export class Mp4Mse {
   private bps = 0;
   // el índice salió del guardado en el equipo (indexstore.ts): tamaño del archivo cuando se guardó
   private packed = false;
+  // el índice vino del panel (otro equipo lo leyó antes)
+  private shared = false;
   private packSize = 0;
   // MP4 con el índice al final, desde el principio: el comienzo del video ya se pidió junto con el índice
   private headAsked = false;
@@ -489,7 +505,7 @@ export class Mp4Mse {
   diag(): string {
     const s = (t: number) => (t ? ((t - this.t0) / 1000).toFixed(1) + 's' : '-');
     const n = this.rs.reqs || 0;
-    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB' : this.moovBox ? (this.moovBox.got / 1048576).toFixed(1) + '/' + (this.moovBox.size / 1048576).toFixed(1) + 'MB' : 'no') + ' en ' + s(this.tIdx) + (this.partAt ? ' empezo_con=' + this.partAt : '') + (this.tailUsed ? ' indice_del_final=' + this.tailUsed : '') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + (this.oneConn || this.ra.single) + ' indice_recordado=' + this.spotUsed + ' indice_guardado=' + this.packed + ' ' + this.ra.diag() + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
+    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB' : this.moovBox ? (this.moovBox.got / 1048576).toFixed(1) + '/' + (this.moovBox.size / 1048576).toFixed(1) + 'MB' : 'no') + ' en ' + s(this.tIdx) + (this.partAt ? ' empezo_con=' + this.partAt : '') + (this.tailUsed ? ' indice_del_final=' + this.tailUsed : '') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + (this.oneConn || this.ra.single) + ' indice_recordado=' + this.spotUsed + ' indice_guardado=' + this.packed + (this.shared ? ' indice_panel=true' : '') + ' ' + this.ra.diag() + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
   }
 
   // lo ya preparado (índice, pistas, códecs y el primer tramo pedido): desde la ficha (warm.ts) o al abrir
@@ -518,6 +534,24 @@ export class Mp4Mse {
         this.size = pk.size;
       }
     }
+    // el índice que otro equipo ya leyó y dejó en el panel (2.0.16): al servidor IPTV solo se le pide el video
+    if (!moov) {
+      const sh = await sharedIndex(this.url, 'm');
+      if (!this.alive) return '';
+      if (sh) {
+        try {
+          moov = fromBase64(sh.text);
+          this.packed = true;
+          this.shared = true;
+          this.packSize = sh.size;
+          this.size = sh.size;
+          await this.takeHead();
+          if (!this.alive) return '';
+        } catch {
+          moov = null;
+        }
+      }
+    }
     let vt: Trk | null = null;
     let at0: Trk | null = null;
     let vOk = false;
@@ -531,7 +565,7 @@ export class Mp4Mse {
       const traks = kids(m, 0, m.length).filter(k => k.t === 'trak').map(k => parseTrak(m, k.s, k.e)).filter((x): x is Trk => !!x);
       vt = traks.find(x => x.kind === 'vide') || null;
       const auds = traks.filter(x => x.kind === 'soun');
-      this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '' }));
+      this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '', def: !!x.enabled }));
       const byLang = this.selectedAudio < 0 && this.wantLang ? auds.find(x => sameLang(x.lang, this.wantLang)) : undefined;
       at0 = auds[this.selectedAudio] || byLang || auds.find(x => x.enabled) || auds[0] || null;
       this.audioIdx = at0 ? auds.indexOf(at0) : -1;
@@ -668,6 +702,19 @@ export class Mp4Mse {
     return this.size;
   }
 
+  // Player pidió por adelantado el principio del archivo (no sabía que el índice llegaría del panel): desde el principio
+  // esos bytes son el comienzo del video y se usan; si no, se cortan para que no ocupen la conexión de la línea
+  private async takeHead(): Promise<void> {
+    const pf = prefetchedAt(this.url, 0);
+    if (!pf) return;
+    if (!this.fromStart) {
+      dropPrefetch(this.url);
+      return;
+    }
+    const win = await this.get(0, pf);
+    if (win && win.length === pf) this.ra.seed(0, win);
+  }
+
   // pide ya el próximo tramo (el de place) a la descarga adelantada
   private prime(): void {
     const pl = this.chunkPlan();
@@ -687,7 +734,7 @@ export class Mp4Mse {
   // el índice de este archivo, al equipo (adelgazado: video + el audio que suena), cuando ya lleva unos segundos abierto
   private kept = false;
   private keepIndex(wait = 8000): void {
-    if (this.packed || !this.index || this.kept) return;
+    if ((this.packed && !this.shared) || !this.index || this.kept) return;
     this.kept = true;
     const moov = this.index;
     const keep = this.noAudio ? -1 : this.audioIdx;
@@ -702,6 +749,8 @@ export class Mp4Mse {
       } catch {
         // índice raro: no se guarda
       }
+      // entero (con todos los idiomas) al panel para los demás equipos, si el panel no lo tenía
+      if (!this.shared) shareIndex(this.url, 'm', this.size, () => toBase64(moov));
     }, wait);
   }
 
@@ -1115,7 +1164,7 @@ export class Mp4Mse {
       .filter(k => k.t === 'trak')
       .map(k => parseTrak(body, k.s, k.e))
       .filter((x): x is Trk => !!x && x.kind === 'soun');
-    this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '' }));
+    this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '', def: !!x.enabled }));
     this.onHeader();
     if (this.warm || this.tInit) this.keepIndex(3000);
   }
@@ -1336,6 +1385,7 @@ export class Mp4Mse {
         // el índice guardado en el equipo era de otro archivo (el servidor lo cambió: otro tamaño): se olvida y playback
         // abre de nuevo leyendo el índice del servidor
         if (this.packed && this.rs.size > 0 && this.rs.size !== this.packSize) {
+          if (this.shared) sharedStale(this.url);
           dropIndex(this.url);
           MOOV_CACHE.delete(cacheKey(this.url));
           this.index = null;

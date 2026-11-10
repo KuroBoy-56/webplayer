@@ -11,6 +11,9 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
 }).outputText, filename);
 let memory = {};
 let probe = null;
+let shared = [];
+const ready = new Set();
+let dropped = [];
 let calls = [];
 let shakas = [];
 let release = null;
@@ -54,7 +57,7 @@ class PanelHls {static supported(){return true;}}
 let lives = [];
 class LiveHls {static supported(){return true;}constructor(v,url,audio,noAudio,tsOnly){this.tsOnly=tsOnly;this.frozen=false;this.noShow=false;this.mf=false;lives.push(this);}isMp4(){return !this.tsOnly;}mediaFailed(){return this.mf;}otherAudio(){return false;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
 const media = {
-  engineDenied:()=>'',knownNow:()=>probe,knownTracks:async()=>probe||noTracks,
+  engineDenied:()=>'',knownNow:()=>probe,knownTracks:async()=>probe||noTracks,shareTracks:(u,p)=>shared.push([u,p]),
   fileTracks:async()=>probe||noTracks,
   mediaEngine:async()=>{calls.push('mediaEngine');return {ok:false,error:'Motor de prueba no disponible'};},
 };
@@ -66,8 +69,8 @@ Module._load = function(request,parent,isMain){
   if(request==='../lib/i18n'||request==='./i18n') return {t:(key,vars)=>key.replace(/\{(\w+)\}/g,(m,k)=>vars?.[k]??m)};
   if(request==='../api/report') return {reportError:()=>{}};
   if(request==='./shaka') return {ShakaPlayback:Shaka};
-  if(request==='./mp4mse') return {Mp4Mse:Mp4,NOT_MP4_MKV:'el archivo es MKV',STALE_INDEX:'índice guardado viejo'};
-  if(request==='./mkvmse') return {MkvMse:Mkv,mkvKnown:()=>false};
+  if(request==='./mp4mse') return {Mp4Mse:Mp4,NOT_MP4_MKV:'el archivo es MKV',STALE_INDEX:'índice guardado viejo',mp4Ready:u=>ready.has(u),dropWarm:u=>dropped.push(u)};
+  if(request==='./mkvmse') return {MkvMse:Mkv,mkvKnown:()=>false,dropMkvWarm:()=>{}};
   if(request==='./hls') return {PanelHls};
   if(request==='./livehls') return {LiveHls,disableMp4:()=>{}};
   return originalLoad.call(this,request,parent,isMain);
@@ -385,4 +388,53 @@ test('2.0.14: el idioma del título llega del panel (otro equipo) y vuelve al pa
   assert.equal(p.titleLangOf(u),'spa','lo que ya tiene este equipo no se pisa');
   p.seedTitleLang('http://srv.example/movie/u/p/56.mp4','',-1);
   assert.equal(p.titleLangOf('http://srv.example/movie/u/p/56.mp4'),'','sin idioma en el panel no se guarda nada');
+});
+
+// 2.0.16: idiomas con el reproductor nativo (equipo donde el nativo abre películas)
+const nativeOk = () => { delete memory['native_vod_'+APP_VERSION]; };
+test('nativo: los idiomas que recuerda el panel llegan al menú sin leer el archivo del servidor IPTV',async()=>{
+  const {c}=setup();nativeOk();
+  const before=media.knownNow;media.knownNow=()=>null;probe=dual;
+  try {
+    c.load('https://fixture.invalid/movie/u/p/2001.mp4',0,false);
+    for(let i=0;i<5;i++) await tick();
+    const labels=c.menu().filter(m=>m.kind==='audio').map(m=>m.label).join('|');
+    assert.match(labels,/Inglés/);assert.equal(mp4s.length,0);
+  } finally {media.knownNow=before;await c.destroy();}
+});
+test('nativo: con las dos pistas en el reproductor de Vega el idioma cambia ahí mismo (sin abrir otra vez el video)',async()=>{
+  const tracks=[{language:'es',label:'',enabled:true},{language:'en',label:'',enabled:false}];
+  const {c}=setup({tracks,cached:dual});nativeOk();
+  c.load('https://fixture.invalid/movie/u/p/2002.mp4',0,false);await tick();
+  choose(c,'Inglés');
+  assert.equal(tracks[1].enabled,true);assert.equal(tracks[0].enabled,false);
+  await new Promise(r=>setTimeout(r,1600));
+  assert.equal(mp4s.length,0);assert.ok(toasts.some(t=>t.includes('Inglés')),toasts.join('|'));
+  await c.destroy();
+});
+test('nativo: si el reproductor de Vega no informa la otra pista, el lector de la app la abre desde el mismo segundo',async()=>{
+  const {c,video}=setup({tracks:[{language:'es',label:'',enabled:true}],cached:dual});nativeOk();
+  c.load('https://fixture.invalid/movie/u/p/2003.mp4',0,false);await tick();video.currentTime=95;
+  choose(c,'Inglés');await tick();
+  assert.equal(mp4s.length,1);assert.equal(mp4s[0].audioIdx,1);
+  await c.destroy();
+});
+test('lector MP4: sus idiomas se dejan en el panel para los equipos que abren con el nativo',async()=>{
+  const {c}=setup();shared=[];
+  c.load('https://fixture.invalid/movie/u/p/2004.mp4',0,false);await tick();
+  assert.equal(shared.length>0,true);
+  assert.deepEqual(shared[0][1].audio.map(a=>a.lang),['spa','eng']);
+  await c.destroy();
+});
+test('nativo: lo que la ficha preparaba con el lector se corta al abrir con el nativo; con el índice ya listo y audio AAC abre el lector',async()=>{
+  const {c}=setup({cached:dual});nativeOk();dropped=[];
+  const u1='https://fixture.invalid/movie/u/p/2005.mp4';
+  c.load(u1,0,false);await tick();
+  assert.equal(mp4s.length,0);assert.deepEqual(dropped,[u1]);
+  await c.destroy();
+  const {c:c2}=setup({cached:dual});nativeOk();
+  const u2='https://fixture.invalid/movie/u/p/2006.mp4';ready.add(u2);
+  c2.load(u2,0,false);await tick();
+  assert.equal(mp4s.length,1);
+  ready.delete(u2);await c2.destroy();
 });

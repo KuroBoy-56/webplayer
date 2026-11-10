@@ -65,7 +65,7 @@ export function resetEngine(): void {
   state = null;
 }
 
-function b64u(s: string): string {
+export function b64u(s: string): string {
   return b64Encode(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
@@ -165,6 +165,24 @@ export async function knownTracks(url: string): Promise<Probe> {
     p.finally(() => asking.delete(k));
   }
   return p;
+}
+
+// Idiomas que leyó el lector propio (índice del MP4, cabecera del MKV), al panel para los demás equipos (2.0.16): antes
+// solo los dejaba la lectura aparte de la cabecera, que en el modo nativo no se hace en líneas de una conexión (cortaba
+// el video), y los equipos que abren con el reproductor nativo veían un solo idioma. Una vez por archivo y solo si el
+// panel no los tenía.
+const shared = new Set<string>();
+export function shareTracks(url: string, p: Probe): void {
+  if (!p.ok || (!p.audio.length && !p.subs.length)) return;
+  const k = noScheme(url);
+  if (!local(url)) remember(url, p);
+  if (shared.has(k)) return;
+  shared.add(k);
+  knownTracks(url)
+    .then(k2 => {
+      if (!k2.ok || k2.audio.length < p.audio.length) cloud('tracks.php', 'POST', { u: b64u(url), probe: { container: p.container, audio: p.audio, subs: p.subs } }).catch(() => {});
+    })
+    .catch(() => {});
 }
 
 // la ficha de la película o serie pide los idiomas apenas se abre (como Roku): al pulsar Reproducir ya se saben y el

@@ -87,6 +87,11 @@ export function mkvKnown(url: string): boolean {
   return MKV_CACHE.has(k) || MKV_PRE.has(k) || hasIndexKind(url, 'k');
 }
 
+// lo que la ficha estaba leyendo de este MKV se corta (el video lo abre el reproductor nativo)
+export function dropMkvWarm(url: string): void {
+  MKV_PRE.get(fileKey(url))?.stop();
+}
+
 // Lee la cabecera y el índice de un MKV sin abrirlo (y los guarda en el equipo)
 export function preloadMkv(url: string): { stop: () => void; done: Promise<string> } {
   const k = fileKey(url);

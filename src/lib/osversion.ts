@@ -4,7 +4,8 @@ import { Platform } from 'react-native';
 
 export function osVersion(): string {
   const pc: any = (Platform as any).constants || {};
-  const key = Object.keys(pc).find(k => /^kepler.*os.*ver/i.test(k) || /^os.*ver/i.test(k));
+  // keplerOSVersion (no keplerOSVariant: «Var» también encajaba con «ver» y el aviso decía {"keplerOSVariant":"kepler"})
+  const key = Object.keys(pc).find(k => /os.?version/i.test(k)) || Object.keys(pc).find(k => /^(kepler)?os.?ver$/i.test(k));
   const v = key ? pc[key] : (Platform as any).Version;
   if (v && typeof v === 'object') {
     const parts = [v.major, v.minor, v.patch].filter(x => x !== undefined && x !== null);

@@ -11,13 +11,14 @@
 import { hasIndex } from './indexstore';
 import { mkvKnown, preloadMkv } from './mkvmse';
 import { mp4Known, preloadMp4 } from './mp4mse';
+import { sharedKnown } from './sharedindex';
 import { seedTitleLang, titleLangOf } from './playback';
 
 let current: { url: string; stop: () => void } | null = null;
 
 // ¿el lector ya tiene (o está leyendo) el índice de este archivo? Entonces Player no pide la cabecera por adelantado
 export function vodKnown(url: string): boolean {
-  return hasIndex(url) || mp4Known(url) || mkvKnown(url);
+  return hasIndex(url) || mp4Known(url) || mkvKnown(url) || sharedKnown(url);
 }
 
 // at: segundo donde se va a abrir (Continuar viendo) o 0; lang: idioma guardado para el título
