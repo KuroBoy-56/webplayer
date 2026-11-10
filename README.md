@@ -207,6 +207,48 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Películas y series sin trabarse, canales que vuelven a la miniatura e idioma compartido (2.0.14)**:
+  - **Por qué se trababa** (avisos «tardó en empezar»: `indice=5.6MB en 24.3s`, `espera_media=6439ms`): los lectores
+    propios (MP4 y MKV) pedían el video de a ~4 s, un pedido después del otro, y esos servidores tardan ~6 s en
+    contestar **cada** pedido: 4 s de video cada 6-10 s. La película se quedaba quieta una y otra vez («un fotograma
+    cada 30 s», sin sonido) y abría tarde (cabecera → índice de 5-8 MB al final del archivo → primer tramo: tres
+    esperas seguidas).
+  - **Descarga adelantada** (`src/player/readahead.ts`): el archivo se baja por ventanas seguidas, **hasta 3 a la
+    vez** y más grandes cuando el servidor tarda (2, 4, 8, 8 s… hasta 16 s de video por pedido), siempre por delante
+    de lo que se ve, con ~20 MB de tope. Línea de una sola conexión (el servidor rechaza o corta el segundo pedido):
+    se nota sola y sigue de a uno con ventanas más grandes (se recuerda por servidor en la sesión). MP4 y MKV usan lo
+    mismo.
+  - **Índice guardado en el equipo** (`src/player/indexstore.ts`): el índice de los 8 últimos títulos queda guardado
+    (MP4: solo el video y el audio que suena, ~35 % menos; MKV: cabecera y puntos de salto). Continuar viendo y volver
+    a abrir un título piden directo el video del segundo guardado. Si el archivo cambió en el servidor (otro tamaño),
+    lo guardado se descarta y se lee de nuevo; si el almacenamiento tarda más de 2,5 s, se lee del servidor como antes.
+    El borrado de caché del panel también lo borra.
+  - **Desde la ficha** (`src/player/warm.ts`): con la ficha abierta 1,2 s (o un capítulo enfocado) se lee el índice y
+    el arranque del video que se va a ver (del segundo guardado si es Continuar viendo). Al pulsar Reproducir, ese
+    mismo lector ya preparado pasa al reproductor. Al salir de la ficha se corta.
+  - **Medido** con un servidor de prueba que tarda 6,4 s en contestar cada pedido y entrega cada conexión a 260 KB/s
+    (como los de los avisos), MP4 de 2 h con el índice al final (7,4 MB): con el lector anterior 60 s de video se
+    detenían 87,8 s en total; ahora 0,1 s (`tools/test-readahead.cjs`). Continuar viendo con la app recién abierta:
+    7,6 s y sin detenerse; Reproducir después de estar en la ficha: 0,9 s (Continuar viendo) y 2,0 s (título nuevo);
+    MKV: 15,7 s nuevo y 8,6 s al continuar. Un título nuevo abierto sin esperar en la ficha tarda lo que el servidor
+    tarde en dar la cabecera y el índice (24 s en esa prueba; 21 s pulsando a los 3 s de abrir la ficha): eso no lo
+    puede acortar la app, pero ya no se detiene después de empezar. Pruebas: `npm run test:readahead` y
+    `npm run test:indexstore`.
+  - **Canales: la miniatura hereda la pantalla grande** (`src/player/preview-session.ts`): antes solo la pantalla
+    grande heredaba la miniatura. Ahora, al salir de la pantalla grande con el canal sonando, ese mismo reproductor
+    vuelve a la miniatura de TV en vivo (solo cambia de superficie, como Roku): el canal no se corta ni se abre otra
+    vez. Si se cambió de canal con ▲▼ o con la lista, vuelve el que quedó sonando; si nadie lo toma en 4 s (se salió
+    de TV en vivo), se cierra.
+  - **Canales que el reproductor nativo no abre** (aviso «el equipo no aceptó el MP4 del lector… modo=nativo (.ts
+    directo) t=0.0»): el canal que falla dos veces con el nativo sin llegar a sonar se recuerda 2 días y abre directo
+    con el lector de la app (`nativeLiveBad`, `src/player/nativemode.ts`): sin el intento fallido cada vez.
+  - **Idioma compartido** (`play` de `api/progress.php`; contrato en `docs/AVANCE-COMPARTIDO.md` del panel): el idioma
+    elegido para un título va con el avance (`a` = idioma, `ai` = número de pista) y el de otro equipo se toma si este
+    no tiene uno propio. Si en el Roku se veía en español (con audio convertido), aquí abre en español con su
+    reproductor, **sin conversión**: los lectores eligen esa pista desde el arranque (`wantLang`), en el segundo
+    guardado. Al volver al audio predeterminado se manda `"a": ""`.
+  - Qué sigue pasando por el panel (último recurso): el archivo o códec que el equipo no reproduce, y los subtítulos
+    incrustados en MP4 (los de texto de los MKV se leen en el equipo).
 - **La app ya no saca al cliente a los minutos (2.0.13)**: con número de distribuidor, la app cerraba la sesión a los
   ~10 min y pedía otra vez usuario y contraseña. Causa (en el panel): un cliente que su distribuidor había quitado de
   Clientes seguía oculto al volver a iniciar sesión; `submit_url` respondía «ok» pero `check_mac` no daba la línea.

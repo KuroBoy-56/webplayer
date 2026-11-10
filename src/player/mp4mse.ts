@@ -5,9 +5,13 @@
 // No pasa por la VPS: solo el cambio de idioma la usa. Saltos (◀▶, Continuar viendo) desde el cuadro clave anterior.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
+import { ReadAhead } from './readahead';
+import { dropIndex, hasIndex, loadIndex, saveIndex, STALE_INDEX } from './indexstore';
+export { STALE_INDEX };
 import { readJson, writeJson } from '../lib/storage';
 import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VIDEO_ID, VideoCfg, videoEntry } from '../lib/mp4box';
 import { hevcCodec } from './mkvparse';
+import { sameLang } from '../lib/lang';
 import { StartWatch } from './startwatch';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -93,11 +97,54 @@ function parseTrak(b: Uint8Array, s: number, e: number): Trk | null {
   const stsd = tbl.stsd;
   const ent = stsd ? kids(b, stsd.s + 8, stsd.e)[0] : null;
   if (ent) tk.entry = b.subarray(ent.s - 8, ent.e);
+  if (!tk.ts) return null;
   const stsz = tbl.stsz;
-  if (!stsz || !tk.ts || !u32(b, stsz.s + 8)) return null;
-  if (!(tbl.stco || tbl.co64) || !tbl.stsc || !tbl.stts) return null;
+  // sin tablas: una pista del índice guardado «adelgazado» (slimMoov), solo con su descripción (idioma y códec para el
+  // menú); o un archivo dañado. fillTables da false y el que llama decide
+  if (!stsz || !u32(b, stsz.s + 8) || !(tbl.stco || tbl.co64) || !tbl.stsc || !tbl.stts) return tk;
   tk.tbl = tbl;
   return tk;
+}
+
+// caja con su cabecera
+function box(t: string, body: Uint8Array[]): Uint8Array {
+  const n = body.reduce((a, x) => a + x.length, 8);
+  const out = new Uint8Array(n);
+  out[0] = n >>> 24; out[1] = (n >> 16) & 255; out[2] = (n >> 8) & 255; out[3] = n & 255;
+  for (let i = 0; i < 4; i++) out[4 + i] = t.charCodeAt(i);
+  let o = 8;
+  for (const x of body) {
+    out.set(x, o);
+    o += x.length;
+  }
+  return out;
+}
+
+// Índice «adelgazado» para guardar en el equipo (indexstore.ts): la cabecera, el video y el audio keep completos; de
+// las demás pistas (otros idiomas, subtítulos) solo la descripción, sin sus tablas de muestras (cada audio son ~1,3 MB
+// en una película de 2 h). Elegir después otro idioma vuelve a leer el índice entero del servidor.
+export function slimMoov(moov: Uint8Array, keep: number): Uint8Array {
+  const out: Uint8Array[] = [];
+  let audio = -1;
+  // la caja entera, con su cabecera (8 bytes, o 16 si es de tamaño largo)
+  const raw = (k: { s: number; e: number }) => {
+    const h = k.s >= 16 && u32(moov, k.s - 16) === 1 ? 16 : 8;
+    return moov.subarray(k.s - h, k.e);
+  };
+  // copia la caja k dejando de sus hijas path[0] → path[1]… solo lo que diga only al final
+  const strip = (k: { t: string; s: number; e: number }, path: string[]): Uint8Array =>
+    box(k.t, kids(moov, k.s, k.e).map(c => (c.t !== path[0] ? raw(c) : path.length > 1 ? strip(c, path.slice(1)) : box(c.t, kids(moov, c.s, c.e).filter(x => x.t === 'stsd').map(raw)))));
+  for (const k of kids(moov, 0, moov.length)) {
+    if (k.t === 'mvhd') out.push(raw(k));
+    if (k.t !== 'trak') continue;
+    const mdia = kid(moov, k.s, k.e, 'mdia');
+    const hdlr = mdia ? kid(moov, mdia.s, mdia.e, 'hdlr') : null;
+    const kind = hdlr ? typ(moov, hdlr.s + 8) : '';
+    if (kind === 'soun') audio++;
+    if (kind === 'vide' || (kind === 'soun' && audio === keep)) out.push(raw(k));
+    else out.push(strip(k, ['mdia', 'minf', 'stbl']));
+  }
+  return concat(out);
 }
 
 // Tablas de muestras de una pista: tamaño, posición en el archivo, tiempo de decodificación, desfase de presentación y
@@ -271,6 +318,33 @@ function rememberMoov(url: string, moov: Uint8Array): void {
   while (MOOV_CACHE.size > 3) MOOV_CACHE.delete(MOOV_CACHE.keys().next().value as string);
 }
 
+// tamaño de los archivos cuyo índice está en memoria
+const SIZES = new Map<string, number>();
+
+// ¿ya se tiene (o se está leyendo) el índice de este archivo?
+export function mp4Known(url: string): boolean {
+  const k = cacheKey(url);
+  return MOOV_CACHE.has(k) || WARM.has(k) || hasIndex(url);
+}
+
+// Prepara un MP4 sin abrirlo (la ficha del título): lee su índice (queda en memoria y guardado en el equipo) y deja
+// pedido el arranque del video en el segundo at. Al pulsar Reproducir, Playback se queda con este mismo lector
+// (Mp4Mse.open) y solo falta entregarle el video al reproductor. done: 'ok', 'mkv' (un MKV con extensión mp4) o ''
+const WARM = new Map<string, Mp4Mse>();
+export function preloadMp4(url: string, at = 0, wantLang = ''): { stop: () => void; done: Promise<string> } {
+  const k = cacheKey(url);
+  const old = WARM.get(k);
+  if (old) return { stop: () => old.release(), done: old.prepare(at).then(e => (e ? '' : 'ok')) };
+  const m = new Mp4Mse(null as unknown as VideoPlayer, url, -1, null, wantLang);
+  m.warm = true;
+  WARM.set(k, m);
+  const done = m.prepare(at).then(e => {
+    if (e && WARM.get(k) === m) WARM.delete(k);
+    return e ? (m.why === NOT_MP4_MKV ? 'mkv' : '') : 'ok';
+  });
+  return { stop: () => m.release(), done };
+}
+
 export class Mp4Mse {
   tracks: { lang: string; codec: string }[] = [];
   audioIdx = -1;
@@ -307,13 +381,18 @@ export class Mp4Mse {
   // segundo pedido al abrir o saltar: la primera entrega llega hasta 1,5 s después de él (no solo 1,5 s desde el cuadro
   // clave anterior, que podía quedar antes del minuto guardado y obligaba a otro pedido al servidor)
   private firstAt = 0;
-  // la primera entrega de Continuar viendo, pedida mientras se arma el reproductor (2.0.12)
-  private pre: { lo: number; hi: number; p: Promise<Uint8Array | null> } | null = null;
-  // MP4 con el índice al final: el principio del video (2 MB) se pide a la vez que el índice
-  private head: { off: number; p: Promise<Uint8Array | null> } | null = null;
-  private headBusy = false;
-  private headReqs = new Set<AbortController>();
-  private headOff = false;
+  // descarga adelantada del video (readahead.ts): varias ventanas a la vez, por delante de lo que se ve. ra2: el audio
+  // cuando el archivo lo trae lejos del video (sin intercalar)
+  private ra: ReadAhead;
+  private ra2: ReadAhead | null = null;
+  // bytes por segundo del archivo (tamaño / duración); 0 hasta leer el índice
+  private bps = 0;
+  // el índice salió del guardado en el equipo (indexstore.ts): tamaño del archivo cuando se guardó
+  private packed = false;
+  private packSize = 0;
+  // MP4 con el índice al final, desde el principio: el comienzo del video ya se pidió junto con el índice
+  private headAsked = false;
+  private fromStart = true;
   // la línea no admite pedidos a la vez: todo de a uno
   private oneConn = false;
   // por qué no siguió (para el reporte del panel)
@@ -324,8 +403,37 @@ export class Mp4Mse {
   // video que el equipo no decodifica (Vega no avisa el error)
   private sw = new StartWatch();
 
-  constructor(private v: VideoPlayer, private url: string, private selectedAudio = -1, index: Uint8Array | null = null) {
+  // wantLang: idioma con el que abrir si no se eligió una pista (el guardado para el título)
+  constructor(private v: VideoPlayer, private url: string, private selectedAudio = -1, index: Uint8Array | null = null, private wantLang = '') {
     this.index = index;
+    this.ra = new ReadAhead(url, this.rs, () => this.bps);
+  }
+
+  // preparado desde la ficha, todavía sin reproductor
+  warm = false;
+
+  // El lector para abrir url: el que la ficha dejó preparado (mismo audio: el predeterminado) o uno nuevo
+  static open(v: VideoPlayer, url: string, selectedAudio: number, index: Uint8Array | null, wantLang = ''): Mp4Mse {
+    const k = cacheKey(url);
+    const w = WARM.get(k);
+    if (w) {
+      WARM.delete(k);
+      if (w.alive && selectedAudio < 0 && !index && w.wantLang === wantLang) {
+        w.warm = false;
+        w.v = v;
+        return w;
+      }
+      w.destroy();
+    }
+    return new Mp4Mse(v, url, selectedAudio, index, wantLang);
+  }
+
+  // la ficha se cerró sin abrir el video: se corta lo que estaba en camino (el índice ya leído queda)
+  release(): void {
+    if (!this.warm) return;
+    const k = cacheKey(this.url);
+    if (WARM.get(k) === this) WARM.delete(k);
+    this.destroy();
   }
 
   // '' = empezó en el segundo pedido; si no, el motivo (el que llama sigue con el modo directo de siempre)
@@ -337,28 +445,68 @@ export class Mp4Mse {
   diag(): string {
     const s = (t: number) => (t ? ((t - this.t0) / 1000).toFixed(1) + 's' : '-');
     const n = this.rs.reqs || 0;
-    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB en ' + s(this.tIdx) : 'no') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + this.oneConn + ' indice_recordado=' + this.spotUsed + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
+    return '[indice=' + (this.index ? (this.index.length / 1048576).toFixed(1) + 'MB en ' + s(this.tIdx) : 'no') + ' inicio=' + s(this.tInit) + ' archivo=' + Math.round(this.size / 1048576) + 'MB unaConexion=' + (this.oneConn || this.ra.single) + ' indice_recordado=' + this.spotUsed + ' indice_guardado=' + this.packed + ' ' + this.ra.diag() + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
   }
 
-  async start(at: number): Promise<string> {
-    this.t0 = Date.now();
-    // el índice ya leído de este archivo (volver a abrirlo, Continuar viendo, cambiar de audio): sin pedirlo otra vez
-    const moov = this.index || MOOV_CACHE.get(cacheKey(this.url)) || await this.readMoov();
-    this.tIdx = Date.now();
-    if (moov) rememberMoov(this.url, moov);
+  // lo ya preparado (índice, pistas, códecs y el primer tramo pedido): desde la ficha (warm.ts) o al abrir
+  private prep: Promise<string> | null = null;
+  private cfg: { vt: Trk; at0: Trk | null; vc: VideoCfg; ac: AudioCfg | null; dolby: AudioCfg | null; hv: ReturnType<typeof hevcCfg>; mime: string; typeOk: boolean; vcodec: (m: string) => string } | null = null;
+  prepare(at: number): Promise<string> {
+    if (!this.prep) this.prep = this.doPrepare(at);
+    return this.prep;
+  }
+
+  // Índice del archivo, pistas y el primer tramo del video pedido a la descarga adelantada. '' = listo
+  private async doPrepare(at: number): Promise<string> {
+    if (!this.t0) this.t0 = Date.now();
+    this.fromStart = at <= 5;
+    // el índice ya leído de este archivo (volver a abrirlo, Continuar viendo, cambiar de audio): sin pedirlo otra vez.
+    // Primero el de la memoria, después el guardado en el equipo (indexstore.ts) y recién después el servidor
+    let moov = this.index || MOOV_CACHE.get(cacheKey(this.url)) || null;
+    if (moov && !this.size) this.size = SIZES.get(cacheKey(this.url)) || 0;
+    if (!moov) {
+      const pk = await loadIndex(this.url);
+      if (!this.alive) return '';
+      if (pk) {
+        moov = pk.moov;
+        this.packed = true;
+        this.packSize = pk.size;
+        this.size = pk.size;
+      }
+    }
+    let vt: Trk | null = null;
+    let at0: Trk | null = null;
+    let vOk = false;
+    let aOk = false;
+    for (let pass = 0; pass < 2; pass++) {
+      if (!moov) moov = await this.readMoov();
+      this.tIdx = Date.now();
+      if (!moov) return 'índice: ' + (this.why || 'no encontrado');
+      if (!this.alive) return '';
+      const m = moov;
+      const traks = kids(m, 0, m.length).filter(k => k.t === 'trak').map(k => parseTrak(m, k.s, k.e)).filter((x): x is Trk => !!x);
+      vt = traks.find(x => x.kind === 'vide') || null;
+      const auds = traks.filter(x => x.kind === 'soun');
+      this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '' }));
+      const byLang = this.selectedAudio < 0 && this.wantLang ? auds.find(x => sameLang(x.lang, this.wantLang)) : undefined;
+      at0 = auds[this.selectedAudio] || byLang || auds.find(x => x.enabled) || auds[0] || null;
+      this.audioIdx = at0 ? auds.indexOf(at0) : -1;
+      // solo las tablas de muestras del video y del audio elegido (los demás idiomas, cuando se elijan)
+      vOk = !!vt && fillTables(m, vt);
+      aOk = !at0 || fillTables(m, at0);
+      // el índice adelgazado (guardado en el equipo o en memoria) no trae las tablas de este idioma: el entero, del servidor
+      if (pass === 0 && vt && (!vOk || !aOk) && (!vt.tbl || (at0 && !at0.tbl))) {
+        this.packed = false;
+        this.ra.park();
+        moov = null;
+        continue;
+      }
+      break;
+    }
     if (!moov) return 'índice: ' + (this.why || 'no encontrado');
-    if (!this.alive) return '';
+    rememberMoov(this.url, moov);
+    if (this.size > 0) SIZES.set(cacheKey(this.url), this.size);
     this.index = moov;
-    const traks = kids(moov, 0, moov.length).filter(k => k.t === 'trak').map(k => parseTrak(moov, k.s, k.e)).filter((x): x is Trk => !!x);
-    const vt = traks.find(x => x.kind === 'vide') || null;
-    const auds = traks.filter(x => x.kind === 'soun');
-    this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '' }));
-    const at0 = auds[this.selectedAudio] || auds.find(x => x.enabled) || auds[0] || null;
-    this.audioIdx = at0 ? auds.indexOf(at0) : -1;
-    // solo las tablas de muestras del video y del audio elegido (los demás idiomas, cuando se elijan)
-    const vOk = !!vt && fillTables(moov, vt);
-    const aOk = !at0 || fillTables(moov, at0);
-    this.onHeader();
     const hv = vt && !videoCfg(vt) ? hevcCfg(vt) : null;
     const vc = vt ? videoCfg(vt) || hv?.cfg || null : null;
     // con H.265 el códec del video es el de su hvcC (mp4Mime lo arma de H.264)
@@ -379,21 +527,50 @@ export class Mp4Mse {
     this.at = ac ? at0 : null;
     // dónde empieza cada pista según la lista de edición (tramos vacíos y comienzo dentro de la pista), todo corrido para
     // que nada quede antes de 0
-    const mvhd = kid(moov, 0, moov.length, 'mvhd');
-    const mts = mvhd ? u32(moov, mvhd.s + (moov[mvhd.s] === 1 ? 20 : 12)) || 1 : 1;
+    const mv = moov;
+    const mvhd = kid(mv, 0, mv.length, 'mvhd');
+    const mts = mvhd ? u32(mv, mvhd.s + (mv[mvhd.s] === 1 ? 20 : 12)) || 1 : 1;
     const offOf = (x: Trk) => x.delay / mts - x.mediaTime / x.ts;
     const base = Math.min(offOf(vt), this.at ? offOf(this.at) : Infinity);
     vt.shift = offOf(vt) - base;
     if (this.at) this.at.shift = offOf(this.at) - base;
     this.arate = ac ? ac.rate : 0;
     if (!this.alive) return '';
-    // Continuar viendo: el primer tramo se pide ya, mientras se abre el reproductor (cada pedido al servidor IPTV tarda
-    // ~1,7 s en contestar: avisos «tardó en empezar» con espera_media=1679ms)
-    if (at > 5) {
-      this.place(at);
-      const pl = this.chunkPlan();
-      if (pl.lo < pl.hi && pl.hi - pl.lo <= pl.need * 1.5 + 2097152) this.pre = { lo: pl.lo, hi: pl.hi, p: this.get(pl.lo, pl.hi - pl.lo) };
+    // ritmo del archivo y hasta dónde llega el video dentro de él (después solo queda el índice): la descarga adelantada
+    // arma sus ventanas con eso
+    const dur = this.secs(vt, vt.dts[vt.dts.length - 1]);
+    const lastEnd = (x: Trk) => x.off[x.off.length - 1] + x.size[x.size.length - 1];
+    const mediaEnd = Math.max(lastEnd(vt), this.at ? lastEnd(this.at) : 0);
+    if (this.size > 0 && dur > 1) this.bps = this.size / dur;
+    else if (dur > 1) this.bps = mediaEnd / dur;
+    this.ra.hold = false;
+    this.ra.end = mediaEnd;
+    if (this.warm) {
+      // desde la ficha: solo el arranque (~6 s de video) y el índice al equipo ya (no hay reproductor que esperar)
+      this.ra.limit = Math.max(1048576, Math.min(6 * 1048576, Math.round(this.bps * 6)));
+      this.keepIndex(0);
     }
+    // El primer tramo se pide ya, mientras se abre el reproductor (cada pedido al servidor IPTV tarda 1,5-6 s en
+    // contestar: avisos «tardó en empezar»). Con el índice guardado en el equipo esto pasa apenas se abre el video
+    this.place(at);
+    this.prime();
+    this.cfg = { vt, at0, vc, ac, dolby, hv, mime, typeOk, vcodec };
+    return '';
+  }
+
+  // '' = empezó en el segundo pedido; si no, el motivo (el que llama sigue con el modo directo de siempre)
+  async start(at: number): Promise<string> {
+    this.t0 = Date.now();
+    const err = await this.prepare(at);
+    if (this.tIdx < this.t0) this.tIdx = this.t0;
+    if (err || !this.alive || !this.cfg) return err;
+    const { vt, at0, vc, ac, dolby, hv, mime, typeOk, vcodec } = this.cfg;
+    this.onHeader();
+    // lo preparado desde la ficha pudo ser para otro segundo (Reiniciar): se pide desde este; y sin tope desde ahora
+    this.place(at);
+    this.prime();
+    this.ra.go();
+    this.ra2?.go();
     const ms: any = new MediaSource();
     this.ms = ms;
     const opened = new Promise<void>(res => ms.addEventListener('sourceopen', () => res()));
@@ -436,7 +613,49 @@ export class Mp4Mse {
     this.watch = setInterval(() => this.alive && this.unstick(), 300);
     this.v.play();
     this.onTracks();
+    this.keepIndex();
     return '';
+  }
+
+  fileSize(): number {
+    return this.size;
+  }
+
+  // pide ya el próximo tramo (el de place) a la descarga adelantada
+  private prime(): void {
+    const pl = this.chunkPlan();
+    if (pl.lo >= pl.hi) return;
+    if (pl.hi - pl.lo <= pl.need * 1.5 + 2097152) {
+      if (!this.ra.covers(pl.lo)) this.ra.seek(pl.lo, pl.hi - pl.lo);
+    } else {
+      // video y audio lejos uno del otro en el archivo: cada uno con su lectura, de a un pedido
+      if (!this.ra2) this.ra2 = new ReadAhead(this.url, this.rs, () => this.bps * 0.15);
+      this.ra.par = 2;
+      this.ra2.par = 1;
+      if (pl.vs && !this.ra.covers(pl.vs[0])) this.ra.seek(pl.vs[0], pl.vs[1] - pl.vs[0]);
+      if (pl.as && !this.ra2.covers(pl.as[0])) this.ra2.seek(pl.as[0], pl.as[1] - pl.as[0]);
+    }
+  }
+
+  // el índice de este archivo, al equipo (adelgazado: video + el audio que suena), cuando ya lleva unos segundos abierto
+  private kept = false;
+  private keepIndex(wait = 8000): void {
+    if (this.packed || !this.index || this.kept) return;
+    this.kept = true;
+    const moov = this.index;
+    const keep = this.noAudio ? -1 : this.audioIdx;
+    setTimeout(() => {
+      // (el tamaño del archivo se sabe con la primera respuesta del servidor)
+      if (!this.alive || !this.size) {
+        this.kept = false;
+        return;
+      }
+      try {
+        saveIndex(this.url, this.size, slimMoov(moov, keep));
+      } catch {
+        // índice raro: no se guarda
+      }
+    }, wait);
   }
 
   destroy(): void {
@@ -444,8 +663,8 @@ export class Mp4Mse {
     this.gen++;
     for (const request of this.requests) request.abort();
     this.requests.clear();
-    for (const request of this.headReqs) request.abort();
-    this.headReqs.clear();
+    this.ra.stop();
+    this.ra2?.stop();
     if (this.watch) clearInterval(this.watch);
     this.watch = null;
     try {
@@ -479,6 +698,8 @@ export class Mp4Mse {
       // se sigue igual
     }
     this.place(t);
+    // lo que venía en camino ya no sirve: se pide desde el lugar nuevo
+    this.prime();
     this.v.currentTime = t;
     if (!this.running) this.pump();
   }
@@ -487,18 +708,6 @@ export class Mp4Mse {
   private ptsU(i: number): number {
     const vt = this.vt!;
     return vt.dts[i] + (vt.cts.length ? vt.cts[i] : 0);
-  }
-
-  // [lo, hi) del principio del video si ya llegó con el índice; si no, null (se pide como siempre)
-  private async fromHead(lo: number, hi: number): Promise<Uint8Array | null> {
-    const h = this.head;
-    if (!h || lo < h.off) return null;
-    const d = await h.p;
-    if (!d || hi > h.off + d.length) {
-      if (!d || lo >= h.off + d.length) this.head = null;
-      return null;
-    }
-    return d.subarray(lo - h.off, hi - h.off);
   }
 
   private secs(tk: Trk, units: number): number {
@@ -586,12 +795,11 @@ export class Mp4Mse {
       }
       if (size < 8) return null;
       // el video (mdat) va antes del índice: su principio se pide ya, a la vez que el índice (lo primero que se va a ver)
-      if (typ(h, 4) === 'mdat' && !this.head && size > 4194304) {
-        const at = off + (u32(h, 0) === 1 ? 16 : 8);
-        this.headBusy = true;
-        const p = this.get(at, 2097152, true);
-        this.head = { off: at, p };
-        p.then(() => (this.headBusy = false), () => (this.headBusy = false));
+      if (typ(h, 4) === 'mdat' && !this.headAsked && this.fromStart && size > 4194304) {
+        this.headAsked = true;
+        // de a un pedido mientras baja el índice (va primero); después, hasta 3 a la vez
+        this.ra.hold = true;
+        this.ra.seek(off + (u32(h, 0) === 1 ? 16 : 8));
       }
       off += size;
       if (this.size && off >= this.size) return null;
@@ -646,25 +854,19 @@ export class Mp4Mse {
 
   // el servidor sigue entregando (hay pedidos en curso o llegó algo hace poco): vale la pena esperar
   busy(): boolean {
-    return this.requests.size > 0 || Date.now() - (this.rs.lastData || 0) < 10000;
+    return this.requests.size > 0 || this.ra.active > 0 || Date.now() - (this.rs.lastData || 0) < 10000;
   }
 
-  // [off, off + len) del archivo en el servidor IPTV
-  private async get(off: number, len: number, head = false): Promise<Uint8Array | null> {
-    // el adelanto cancelado no se vuelve a pedir (rangeGet reintenta mientras alive)
-    let d = await rangeGet(this.url, off, len, this.rs, head ? this.headReqs : this.requests, head ? () => this.alive && !this.headOff : () => this.alive);
-    // rechazado mientras se baja el principio del video: la línea admite una sola conexión. Se cancela ese adelanto (el
-    // índice va primero), todo sigue de a un pedido y se pide otra vez
-    if (!d && !head && this.alive && !this.rs.unbounded && (this.headBusy || this.requests.size > 0)) {
+  // [off, off + len) del archivo en el servidor IPTV (el índice; el video lo baja la descarga adelantada)
+  private async get(off: number, len: number): Promise<Uint8Array | null> {
+    let d = await rangeGet(this.url, off, len, this.rs, this.requests, () => this.alive);
+    // rechazado mientras se baja el principio del video u otra parte del índice: la línea admite una sola conexión. Se
+    // corta ese adelanto (el índice va primero), todo sigue de a un pedido y se pide otra vez
+    if (!d && this.alive && !this.rs.unbounded && (this.ra.active > 0 || this.requests.size > 0)) {
       this.oneConn = true;
-      this.headOff = true;
-      const hp = this.head?.p;
-      for (const c of this.headReqs) c.abort();
-      this.headReqs.clear();
-      this.head = null;
-      this.headBusy = false;
-      // que la conexión cancelada termine de cerrarse (como mucho 3 s) y lo demás en curso
-      if (hp) await Promise.race([hp, sleep(3000)]);
+      this.ra.goSingle();
+      this.ra.park();
+      this.headAsked = false;
       await this.idleRequests();
       for (let i = 0; i < 2 && !d && this.alive && !this.rs.unbounded; i++) {
         if (i) await sleep(700);
@@ -776,16 +978,6 @@ export class Mp4Mse {
     return { vj, aj, vs, as, lo, hi, need };
   }
 
-  // la primera entrega ya pedida al abrir (Continuar viendo); otra cosa (se saltó antes de usarla): se descarta
-  private async fromPre(lo: number, hi: number): Promise<Uint8Array | null> {
-    const pr = this.pre;
-    if (!pr) return null;
-    this.pre = null;
-    if (pr.lo !== lo || pr.hi !== hi) return null;
-    const d = await pr.p;
-    return d && d.length >= hi - lo ? d : null;
-  }
-
   private async pump(): Promise<void> {
     this.running = true;
     try {
@@ -811,18 +1003,31 @@ export class Mp4Mse {
         let ab: Uint8Array | null = null;
         let vbase = 0;
         let abase = 0;
-        if (hi - lo <= need * 1.5 + 2097152) {
-          // el principio del video ya pedido junto con el índice (MP4 con el índice al final)
-          const all = (await this.fromPre(lo, hi)) || (await this.fromHead(lo, hi)) || (await this.get(lo, hi - lo));
+        if (hi - lo <= need * 1.5 + 2097152 && !this.ra2) {
+          // de la descarga adelantada (ya en camino desde que se abrió o se saltó)
+          const all = await this.ra.read(lo, hi - lo);
           vb = ab = all;
           vbase = abase = lo;
         } else {
-          if (vs) vb = await this.get(vs[0], vs[1] - vs[0]);
-          if (as) ab = await this.get(as[0], as[1] - as[0]);
+          if (!this.ra2) this.prime();
+          if (vs) vb = await this.ra.read(vs[0], vs[1] - vs[0]);
+          if (as && this.ra2) ab = await this.ra2.read(as[0], as[1] - as[0]);
           vbase = vs ? vs[0] : 0;
           abase = as ? as[0] : 0;
         }
         if (!this.alive || g !== this.gen) continue;
+        if (this.rs.size > 0) this.size = this.rs.size;
+        // el índice guardado en el equipo era de otro archivo (el servidor lo cambió: otro tamaño): se olvida y playback
+        // abre de nuevo leyendo el índice del servidor
+        if (this.packed && this.rs.size > 0 && this.rs.size !== this.packSize) {
+          dropIndex(this.url);
+          MOOV_CACHE.delete(cacheKey(this.url));
+          this.index = null;
+          this.why = STALE_INDEX;
+          this.onError();
+          return;
+        }
+        if (!vb && !this.why) this.why = this.ra.why;
         if ((vs && (!vb || vb.length < vs[1] - vbase)) || (as && (!ab || ab.length < as[1] - abase))) {
           this.why = 'bajada: ' + (this.why || 'incompleta');
           this.onError();

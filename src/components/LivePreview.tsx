@@ -6,9 +6,9 @@ import React, { memo, useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { LIVE_FORMATS, liveUrl, otherScheme, streamFlip } from '../api/xtream';
 import { Item } from '../data/catalog';
-import { nativeLivePlanned, Playback } from '../player/playback';
+import { Hooks, nativeLivePlanned, Playback } from '../player/playback';
 import { dropPrefetch, prefetchList } from '../player/prefetch';
-import { offerPreview, registerLivePreview, waitForLivePreview } from '../player/preview-session';
+import { dropReturn, offerPreview, registerLivePreview, takeReturn, waitForLivePreview } from '../player/preview-session';
 import { reportError } from '../api/report';
 import { getState } from '../state';
 import { px, themed } from '../theme';
@@ -31,6 +31,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
     let initializing: Promise<void> | null = null;
     let closed: Promise<void> | null = null;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     // dirección del canal: su lista y su primer segmento se piden mientras el reproductor se inicia (como Player)
     let url = '';
     let isPlaying = false;
@@ -54,7 +55,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
     const give = (): boolean => {
       if (!alive || closed || !v || !c) return false;
       alive = false;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       if (retry) clearTimeout(retry);
       const player = v;
       try {
@@ -72,7 +73,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
     const stop = (): Promise<void> => {
       if (closed) return closed;
       alive = false;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       if (retry) clearTimeout(retry);
       setPlaying(false);
       video.current = null;
@@ -95,7 +96,44 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
       })();
       return closed;
     };
-    const timer = setTimeout(async () => {
+    const hooks: Hooks = {
+      toast: () => {},
+      status: () => {},
+      changed: () => {},
+      subText: () => {},
+      fatal: () => {},
+      liveFailed: () => onErr(),
+      // microcortes o detenciones seguidas en la miniatura: al panel con el estado del lector (como pantalla grande)
+      liveStalls: diag => reportError('warning', 'Canal en vivo se detiene seguido', 'miniatura canal=' + channel.name + ' id=' + channel.id + ' ' + diag, 'TV en vivo'),
+    };
+    // Se vuelve de la pantalla grande con este canal sonando: la miniatura se queda con ese mismo reproductor (solo cambia
+    // la superficie, como Roku): sin cortar el canal ni abrirlo otra vez (2.0.14)
+    const back = takeReturn(channel.id);
+    if (back) {
+      v = back.v;
+      c = back.c;
+      const u = liveUrl(s, channel.id, LIVE_FORMATS[0]);
+      url = streamFlip() ? otherScheme(u) : u;
+      initializing = Promise.resolve();
+      video.current = v;
+      isPlaying = true;
+      setPlaying(true);
+      try {
+        v.addEventListener('playing', onPlaying);
+        v.addEventListener('timeupdate', onTick);
+        v.addEventListener('error', onErr);
+        if (surface.current) v.setSurfaceHandle(surface.current);
+        c.toPreview(hooks);
+        if (v.paused) v.play();
+      } catch { /* sigue igual: si quedó mal, el error del reproductor lo vuelve a abrir */ }
+      const unregisterBack = registerLivePreview(stop, give);
+      return () => {
+        unregisterBack();
+      };
+    }
+    timer = setTimeout(async () => {
+      // el reproductor que volvió de la pantalla grande era de otro canal: se cierra antes de abrir este
+      dropReturn();
       await waitForLivePreview();
       if (!alive) return;
       try {
@@ -115,16 +153,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
         v.addEventListener('timeupdate', onTick);
         v.addEventListener('error', onErr);
         if (surface.current) v.setSurfaceHandle(surface.current);
-        c = new Playback(v, {
-          toast: () => {},
-          status: () => {},
-          changed: () => {},
-          subText: () => {},
-          fatal: () => {},
-          liveFailed: () => onErr(),
-          // microcortes o detenciones seguidas en la miniatura: al panel con el estado del lector (como pantalla grande)
-          liveStalls: diag => reportError('warning', 'Canal en vivo se detiene seguido', 'miniatura canal=' + channel.name + ' id=' + channel.id + ' ' + diag, 'TV en vivo'),
-        });
+        c = new Playback(v, hooks);
         c.liveKeep = true;
         c.load(url, 0, true);
         // sin imagen en 15 s con audio MP2 / AC-3 que el equipo no decodifica: el canal otra vez solo con el video
@@ -136,7 +165,7 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
     }, delay);
     const unregister = registerLivePreview(stop, give);
     return () => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       unregister();
     };
   }, [channel, active]);

@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem, playEpisodes, playMovie } from '../actions';
 import { CastMember, castFor, overviewFor, searchArt } from '../api/tmdb';
+import { warmStop, warmVideo as warmPlay } from '../player/warm';
 import { episodeUrl, movieUrl, SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
 import { warmTracks } from '../api/media';
 import { Button, Focusable } from '../components/ui';
@@ -13,7 +14,7 @@ import { catalog, Item } from '../data/catalog';
 import { savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
-import { getState, isFav, progressMovie, progressSeries, toggleFav, useAppState } from '../state';
+import { getState, isFav, playHintFor, progressMovie, progressSeries, toggleFav, useAppState } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
@@ -58,14 +59,28 @@ export default function Detail({ item }: { item: Item }) {
     if (!s || loading) return;
     if (item.kind !== 'series') {
       warmTracks(movieUrl(s, item.id, vod?.ext || item.ext));
+      warmVideo(movieUrl(s, item.id, vod?.ext || item.ext), progressMovie(item.id)?.position || 0);
       return;
     }
     if (!ser || !ser.seasons.length) return;
     const want = resumeEp ? digits(resumeEp.id) : '';
     const ep = (want && ser.seasons.flatMap(x => x.episodes).find(e => e.id === want)) || ser.seasons[0].episodes[0];
     if (ep) warmTracks(episodeUrl(s, ep.id, ep.ext));
+    if (ep) warmVideo(episodeUrl(s, ep.id, ep.ext), resumeEp && digits(resumeEp.id) === ep.id ? resumeEp.position : 0, ep.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, loading, ser, vod]);
+  // el índice del video que se va a ver, leído mientras se mira la ficha (warm.ts): al pulsar Reproducir solo falta el
+  // video. Empieza cuando la ficha (o el capítulo enfocado) lleva 1,2 s; al salir de la ficha se corta
+  const idxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warmVideo = (url: string, at: number, id = '') => {
+    if (idxTimer.current) clearTimeout(idxTimer.current);
+    const hint = item.kind === 'series' ? playHintFor('episode', id, item.id) : playHintFor('movie', item.id, '');
+    idxTimer.current = setTimeout(() => warmPlay(url, at > 5 ? at : 0, hint), 1200);
+  };
+  useEffect(() => () => {
+    if (idxTimer.current) clearTimeout(idxTimer.current);
+    warmStop();
+  }, []);
   // el episodio que se queda enfocado un momento también
   const warmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -76,6 +91,7 @@ export default function Detail({ item }: { item: Item }) {
     warmTimer.current = setTimeout(() => {
       const s = getState().session;
       if (s) warmTracks(episodeUrl(s, id, ext));
+      if (s) warmVideo(episodeUrl(s, id, ext), resumeEp && digits(resumeEp.id) === id ? resumeEp.position : 0, id);
     }, 600);
   };
 

@@ -7,6 +7,9 @@
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
 import { takeRangeFrom } from './prefetch';
+import { ReadAhead } from './readahead';
+import { sameLang } from '../lib/lang';
+import { b64, dropIndex, fromBase64, hasIndexKind, loadText, saveText, STALE_INDEX } from './indexstore';
 import { AUDIO_ID, audioEntry, concat, esdsFor, fragment, initSegment, rawBox, Sample, VIDEO_ID, videoEntry } from '../lib/mp4box';
 import { Probe } from '../lib/probe';
 import { Cue } from '../lib/vtt';
@@ -32,6 +35,72 @@ const ID_GROUP = 0xa0;
 const ID_BLOCK = 0xa1;
 const ID_REF = 0xfb;
 
+type AInfo = { codec: string; entry: Uint8Array; rate: number; channels: number; frameLen: number };
+// datos del audio ya averiguados por pista (para AC-3 / E-AC-3 / MP3 hay que leer su primer cuadro del archivo): van
+// con la cabecera guardada
+type MkvX = Mkv & { ainfo?: Record<number, AInfo> };
+
+// Cabecera, índice (Cues) y datos de audio del MKV como texto para guardar en el equipo (indexstore.ts): al continuar
+// el video se pide directo el Cluster del segundo guardado, sin leer otra vez la cabecera ni el índice (2.0.14)
+function packMkv(m: MkvX): string {
+  return JSON.stringify({
+    v: 1, scale: m.scale, duration: m.duration, segStart: m.segStart, firstCluster: m.firstCluster, cuesPos: m.cuesPos, vnum: m.vnum,
+    tracks: m.tracks.map(x => ({ ...x, priv: x.priv ? b64(x.priv) : '' })),
+    ct: m.cues ? m.cues.map(c => Math.round(c.t * 1000)) : null,
+    cp: m.cues ? m.cues.map(c => c.pos) : null,
+    ai: Object.entries(m.ainfo || {}).map(([num, a]) => ({ num: Number(num), codec: a.codec, entry: b64(a.entry), rate: a.rate, channels: a.channels, frameLen: a.frameLen })),
+  });
+}
+
+function unpackMkv(text: string): MkvX | null {
+  try {
+    const j = JSON.parse(text);
+    if (!j || j.v !== 1 || !Array.isArray(j.tracks) || !(j.firstCluster > 0)) return null;
+    const ainfo: Record<number, AInfo> = {};
+    for (const a of j.ai || []) ainfo[a.num] = { codec: a.codec, entry: fromBase64(a.entry), rate: a.rate, channels: a.channels, frameLen: a.frameLen };
+    return {
+      scale: j.scale, duration: j.duration, segStart: j.segStart, firstCluster: j.firstCluster, cuesPos: j.cuesPos, vnum: j.vnum,
+      tracks: j.tracks.map((x: any) => ({ ...x, priv: x.priv ? fromBase64(x.priv) : null })),
+      cues: Array.isArray(j.ct) && Array.isArray(j.cp) ? j.ct.map((t: number, i: number) => ({ t: t / 1000, pos: j.cp[i] })) : null,
+      ainfo,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// cabeceras de los últimos MKV abiertos o leídos por adelantado desde la ficha (warm.ts)
+const fileKey = (u: string) => u.replace(/^https?:\/\//i, '');
+const MKV_CACHE = new Map<string, { m: MkvX; size: number }>();
+type MkvPre = { p: Promise<MkvX | null>; stop: () => void; size: () => number; claimed: boolean };
+const MKV_PRE = new Map<string, MkvPre>();
+function rememberMkv(url: string, m: MkvX, size: number): void {
+  const k = fileKey(url);
+  MKV_CACHE.delete(k);
+  MKV_CACHE.set(k, { m, size });
+  while (MKV_CACHE.size > 3) MKV_CACHE.delete(MKV_CACHE.keys().next().value as string);
+}
+
+// ¿ya se tiene (o se está leyendo) la cabecera de este archivo como MKV?
+export function mkvKnown(url: string): boolean {
+  const k = fileKey(url);
+  return MKV_CACHE.has(k) || MKV_PRE.has(k) || hasIndexKind(url, 'k');
+}
+
+// Lee la cabecera y el índice de un MKV sin abrirlo (y los guarda en el equipo)
+export function preloadMkv(url: string): { stop: () => void; done: Promise<string> } {
+  const k = fileKey(url);
+  if (MKV_CACHE.has(k) || hasIndexKind(url, 'k')) return { stop: () => {}, done: Promise.resolve('ok') };
+  const old = MKV_PRE.get(k);
+  if (old) return { stop: old.stop, done: old.p.then(m => (m ? 'ok' : '')) };
+  const r = new MkvMse(null as unknown as VideoPlayer, url);
+  const p = r.indexOnly();
+  const pre: MkvPre = { p, size: () => r.fileSize(), claimed: false, stop: () => { if (!pre.claimed) r.destroy(); } };
+  MKV_PRE.set(k, pre);
+  p.then(() => MKV_PRE.get(k) === pre && MKV_PRE.delete(k), () => MKV_PRE.delete(k));
+  return { stop: pre.stop, done: p.then(m => (m ? 'ok' : '')) };
+}
+
 export class MkvMse {
   tracks: { lang: string; codec: string }[] = [];
   audioIdx = -1;
@@ -41,8 +110,13 @@ export class MkvMse {
   // índice Cues pedido mientras se abre el reproductor (Continuar viendo)
   private cuesP: Promise<unknown> | null = null;
   // la cabecera ya leída (se reusa al cambiar de idioma o al volver a abrir)
-  index: Mkv | null = null;
+  index: MkvX | null = null;
   why = '';
+  // descarga adelantada de los Cluster (readahead.ts): varias ventanas a la vez, por delante de lo que se ve
+  private ra: ReadAhead;
+  // la cabecera salió de lo guardado en el equipo: tamaño del archivo cuando se guardó
+  private packed = false;
+  private packSize = 0;
   noAudio = false;
   onError: () => void = () => {};
   // video que el equipo no decodifica (Vega no avisa el error)
@@ -80,8 +154,9 @@ export class MkvMse {
   // el primer tramo de los Cluster ya leído al buscar la cabecera del audio: el video empieza con él, sin pedirlo otra vez
   private pre: { off: number; data: Uint8Array } | null = null;
 
-  constructor(private v: VideoPlayer, private url: string, private selectedAudio = -1, index: Mkv | null = null) {
+  constructor(private v: VideoPlayer, private url: string, private selectedAudio = -1, index: Mkv | null = null, private wantLang = '') {
     this.index = index;
+    this.ra = new ReadAhead(url, this.rs, () => (this.size > 0 && this.index && this.index.duration > 1 ? this.size / this.index.duration : 0));
   }
 
   // subtítulos de texto del archivo (SRT, ASS, WebVTT) por pista: se juntan mientras se lee el video, sin servidor
@@ -116,10 +191,45 @@ export class MkvMse {
 
   // '' = empezó; si no, el motivo (Playback sigue con el modo directo de siempre)
   async start(at: number): Promise<string> {
-    const m = this.index || (await readMkvHeader((o, l) => this.get(o, l)));
+    let m: MkvX | null = this.index;
+    const hit = m ? null : MKV_CACHE.get(fileKey(this.url));
+    if (hit) {
+      m = hit.m;
+      if (!this.size) this.size = hit.size;
+    }
+    // la ficha ya la estaba leyendo: se espera ese mismo pedido
+    const pre = m ? null : MKV_PRE.get(fileKey(this.url));
+    if (pre) {
+      pre.claimed = true;
+      m = await pre.p;
+      if (!this.alive) return '';
+      if (m) this.size = pre.size();
+    }
+    // la cabecera y el índice guardados en el equipo (Continuar viendo, volver a abrir): sin pedirlos al servidor
+    if (!m) {
+      const pk = await loadText(this.url, 'k');
+      if (!this.alive) return '';
+      const got = pk ? unpackMkv(pk.text) : null;
+      if (pk && got) {
+        m = got;
+        this.packed = true;
+        this.packSize = pk.size;
+        this.size = pk.size;
+      }
+    }
+    if (!m) m = await readMkvHeader((o, l) => this.get(o, l));
     if (!m) return 'cabecera: ' + (this.why || 'no se pudo leer');
     if (!this.alive) return '';
     this.index = m;
+    rememberMkv(this.url, m, this.size);
+    // Continuar viendo con el índice ya sabido: el Cluster del segundo pedido se pide ya, mientras se abre el reproductor
+    if (at > 0.5 && m.cues) {
+      const from = this.cueFor(at);
+      if (from > 0) this.ra.seek(from, 524288);
+    } else if (at <= 0.5 && (this.packed || hit || pre)) {
+      // desde el principio con la cabecera ya sabida (Player no pidió nada por adelantado): el primer Cluster ya
+      this.ra.seek(m.firstCluster, 524288);
+    }
     const vt = m.tracks.find(x => x.type === 1) || null;
     const auds = m.tracks.filter(x => x.type === 2);
     this.tracks = auds.map(x => ({ lang: x.lang, codec: x.codec }));
@@ -131,7 +241,9 @@ export class MkvMse {
     const ve = videoOf(vt);
     if (!ve) return 'códec v=' + vt.codec;
     // audio: el elegido, si no el predeterminado; el que el equipo no acepta se prueba con los demás y si ninguno, solo video
-    const pick = auds[this.selectedAudio] || auds.find(x => x.def) || auds[0] || null;
+    // sin pista elegida a mano, el idioma guardado para el título
+    const byLang = this.selectedAudio < 0 && this.wantLang ? auds.find(x => sameLang(x.lang, this.wantLang)) : undefined;
+    const pick = auds[this.selectedAudio] || byLang || auds.find(x => x.def) || auds[0] || null;
     const order = pick ? [pick, ...auds.filter(x => x !== pick)] : [];
     this.vt = vt;
     this.startAt = Math.max(0, at);
@@ -187,7 +299,69 @@ export class MkvMse {
     this.watch = setInterval(() => this.alive && this.unstick(), 300);
     this.v.play();
     this.onTracks();
+    this.keepIndex();
     return '';
+  }
+
+  // solo la cabecera y el índice, sin abrir el video (preloadMkv): quedan en memoria y en el equipo
+  async indexOnly(): Promise<MkvX | null> {
+    const m: MkvX | null = await readMkvHeader((o, l) => this.get(o, l));
+    if (!m || !this.alive) return null;
+    if (!m.cues && m.cuesPos > 0) {
+      try {
+        m.cues = await readCues((o, l) => this.get(o, l), m);
+      } catch {
+        // sin índice
+      }
+    }
+    if (!this.alive) return null;
+    rememberMkv(this.url, m, this.size);
+    if (this.size > 0) saveText(this.url, 'k', this.size, () => packMkv(m));
+    return m;
+  }
+
+  fileSize(): number {
+    return this.size;
+  }
+
+  // para el aviso de apertura lenta (como el lector de MP4)
+  diag(): string {
+    const n = this.rs.reqs || 0;
+    return '[archivo=' + Math.round(this.size / 1048576) + 'MB cabecera_guardada=' + this.packed + ' indice=' + (this.index?.cues ? this.index.cues.length : 'no') + ' ' + this.ra.diag() + ' pedidos=' + n + (n ? ' espera_media=' + Math.round((this.rs.waitMs || 0) / n) + 'ms' : '') + (this.why ? ' motivo=' + this.why : '') + ']';
+  }
+
+  // posición del Cluster del índice en o antes de t (0 = sin índice)
+  private cueFor(t: number): number {
+    const cues = this.index?.cues || [];
+    let best = -1;
+    for (let i = 0; i < cues.length; i++) if (cues[i].t <= t + 0.01 && (best < 0 || cues[i].t >= cues[best].t)) best = i;
+    return best >= 0 ? cues[best].pos : 0;
+  }
+
+  // Cabecera e índice al equipo cuando el video ya lleva unos segundos abierto. El índice (Cues, al final del archivo)
+  // se lee antes si todavía no se leyó (desde el principio no hace falta para ver, pero sí para continuar después sin
+  // pedirlo); con líneas de una sola conexión no se pide (cortaría el video): se guarda la cabecera sola
+  private keepIndex(): void {
+    if (this.packed && this.index?.cues) return;
+    setTimeout(async () => {
+      const m = this.index;
+      if (!this.alive || !m || !this.size) return;
+      if (!m.cues && m.cuesPos > 0 && !this.ra.single) {
+        this.ra.hold = true;
+        try {
+          m.cues = await readCues((o, l) => this.get(o, l), m);
+        } catch {
+          // sin índice: se sigue igual
+        }
+        this.ra.hold = false;
+        if (!this.alive) return;
+      }
+      try {
+        saveText(this.url, 'k', this.size, () => packMkv(m));
+      } catch {
+        // cabecera rara: no se guarda
+      }
+    }, 10000);
   }
 
   destroy(): void {
@@ -195,6 +369,7 @@ export class MkvMse {
     this.gen++;
     for (const request of this.requests) request.abort();
     this.requests.clear();
+    this.ra.stop();
     if (this.watch) clearInterval(this.watch);
     this.watch = null;
     try {
@@ -222,6 +397,8 @@ export class MkvMse {
     }
     this.gen++;
     for (const request of this.requests) request.abort();
+    // lo que venía en camino ya no sirve (la próxima lectura empieza en el lugar nuevo)
+    this.ra.park();
     await this.idle();
     try {
       this.sb.abort();
@@ -253,10 +430,8 @@ export class MkvMse {
     if (t > 0.5) {
       if (!m.cues && this.cuesP) await this.cuesP.catch(() => null);
       if (!m.cues && m.cuesPos > 0) m.cues = await readCues((o, l) => this.get(o, l), m);
-      const cues = m.cues || [];
-      let best = -1;
-      for (const c of cues) if (c.t <= t + 0.01 && (best < 0 || c.t >= cues[best].t)) best = cues.indexOf(c);
-      if (best >= 0) at = cues[best].pos;
+      const cue = this.cueFor(t);
+      if (cue > 0) at = cue;
       else if (m.duration > 0 && this.size > 0) at = Math.max(m.firstCluster, Math.floor((t / m.duration) * this.size) - 2097152);
     }
     this.pos = this.bufOff = at;
@@ -266,7 +441,17 @@ export class MkvMse {
     }
   }
 
-  private async audioOf(a: MkvTrack): Promise<{ codec: string; entry: Uint8Array; rate: number; channels: number; frameLen: number } | null> {
+  private async audioOf(a: MkvTrack): Promise<AInfo | null> {
+    const m = this.index!;
+    // ya averiguado (va con la cabecera guardada en el equipo): sin leer el primer Cluster otra vez
+    const known = m.ainfo?.[a.num];
+    if (known) return known;
+    const got = await this.audioRead(a);
+    if (got) (m.ainfo = m.ainfo || {})[a.num] = got;
+    return got;
+  }
+
+  private async audioRead(a: MkvTrack): Promise<AInfo | null> {
     if (a.compressed) return null;
     const c = a.codec;
     if (c.startsWith('A_AAC')) {
@@ -324,7 +509,7 @@ export class MkvMse {
 
   // el servidor sigue entregando (hay pedidos en curso o llegó algo hace poco): vale la pena esperar
   busy(): boolean {
-    return this.requests.size > 0 || Date.now() - (this.rs.lastData || 0) < 10000;
+    return this.requests.size > 0 || this.ra.active > 0 || Date.now() - (this.rs.lastData || 0) < 10000;
   }
 
   // [off, off + len) del archivo; partial: vale lo que haya desde off en lo ya pedido al abrir (ensure junta el resto)
@@ -358,8 +543,23 @@ export class MkvMse {
         return false;
       }
       const g = this.gen;
-      const d = await this.get(from, this.firstOut ? FIRST_READ : READ, true);
+      // lo pedido al abrir (Player, desde el principio) o la descarga adelantada. De a tramos de ~1,5 s el primero y ~4 s
+      // los siguientes (antes siempre 1 y 4 MB: con un video liviano eso eran 30 s y había que esperarlos enteros)
+      const bps = this.size > 0 && this.index && this.index.duration > 1 ? this.size / this.index.duration : 0;
+      const want = this.firstOut ? Math.max(262144, Math.min(FIRST_READ, Math.round(bps * 1.5) || FIRST_READ)) : Math.max(524288, Math.min(READ, Math.round(bps * 4) || READ));
+      const pre = takeRangeFrom(this.url, from, want);
+      const early = pre ? await pre : null;
+      if (early && early.size > 0) this.size = this.rs.size = early.size;
+      const d = early ? early.data : await this.ra.read(from, want);
+      if (this.rs.size > 0) this.size = this.rs.size;
+      if (!d && !early) this.why = this.ra.why || this.rs.why || this.why;
       if (g !== this.gen || !this.alive) return false;
+      // lo guardado en el equipo era de otro archivo (el servidor lo cambió: otro tamaño)
+      if (this.packed && this.rs.size > 0 && this.rs.size !== this.packSize) {
+        dropIndex(this.url);
+        this.index = null;
+        throw new Error(STALE_INDEX);
+      }
       if (!d) {
         if (this.size > 0 && from >= this.size - 1) this.eof = true;
         else throw new Error(this.why || 'bajada');
@@ -374,7 +574,7 @@ export class MkvMse {
       const rest = this.buf.subarray(keep);
       this.buf = concat([rest, d]);
       this.bufOff += keep;
-      if (d.length < (this.firstOut ? FIRST_READ : READ)) this.eof = this.size > 0 ? from + d.length >= this.size : true;
+      if (d.length < want) this.eof = this.size > 0 ? from + d.length >= this.size : true;
     }
   }
 

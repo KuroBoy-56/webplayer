@@ -9,7 +9,8 @@ import { takeRange } from './prefetch';
 
 // lastData: cuándo llegó el último tramo (Player espera más mientras el servidor sigue entregando)
 // reqs / waitMs: pedidos hechos y lo que tardó el servidor en contestar cada uno (para el aviso de apertura lenta)
-export type RangeState = { close: boolean; unbounded: boolean; size: number; why: string; lastData?: number; reqs?: number; waitMs?: number };
+// errs: pedidos que se cortaron por la red (la descarga adelantada mira si pasa con varios pedidos a la vez)
+export type RangeState = { close: boolean; unbounded: boolean; size: number; why: string; lastData?: number; reqs?: number; waitMs?: number; errs?: number };
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -79,6 +80,7 @@ export async function rangeGet(url: string, off: number, len: number, st: RangeS
       return out;
     } catch (e: any) {
       if (!alive()) return null;
+      st.errs = (st.errs || 0) + 1;
       finalUrl.delete(url);
       st.why = ctrl.signal.aborted
         ? 'sin ' + phase + ' en ' + Math.round((Date.now() - t0) / 1000) + ' s (' + Math.round(len / 1024) + ' KB en ' + Math.round(off / 1048576) + ' MB)'

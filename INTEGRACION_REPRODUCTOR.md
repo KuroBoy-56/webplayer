@@ -123,6 +123,40 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.0.14 — lectura adelantada, índice en el equipo e idioma compartido
+
+Para llevar esto a las otras apps con lector propio (webOS, Tizen, web player) o entender un aviso.
+
+### Piezas
+
+| Archivo | Qué hace |
+| --- | --- |
+| `src/player/readahead.ts` | `ReadAhead`: baja el archivo por ventanas seguidas, hasta 3 pedidos a la vez, delante de la reproducción. `read(off, len)` entrega bytes de las ventanas ya bajadas o en camino; `seek()` corta y empieza en otro byte; `goSingle()` pasa a un pedido a la vez (línea de 1 conexión); `limit` acota lo que se baja mientras solo se prepara desde la ficha |
+| `src/player/indexstore.ts` | Índices en AsyncStorage con prefijo `latmpxidx:` (fuera de lo que `storage.ts` carga al iniciar). Lista `idx_list_1`: 8 títulos, 32 MB de texto. Clave = dirección sin http/https. Lectura con tope de 2,5 s |
+| `src/player/mp4mse.ts` | `prepare()` (índice: memoria → equipo → servidor) y `start()` (MSE). `Mp4Mse.open()` entrega la instancia ya preparada por la ficha. `slimMoov()` guarda el índice sin las tablas de los otros idiomas; si se elige uno que falta, se lee el índice entero |
+| `src/player/mkvmse.ts` | Igual para MKV: `packMkv` / `unpackMkv` (cabecera, pistas, Cues), `preloadMkv`, lectura con `ReadAhead` |
+| `src/player/warm.ts` | `warmVideo(url, at, hint)` desde la ficha (1,2 s), `vodKnown(url)`, `warmStop()` |
+| `src/player/preview-session.ts` | `offerPreview` / `takePreview` (miniatura → pantalla grande) y `offerReturn` / `takeReturn` / `dropReturn` (pantalla grande → miniatura) |
+| `src/player/nativemode.ts` | `nativeLiveBad` / `markNativeLiveBad` / `nativeLiveGood`: canal que el nativo no abre |
+| `src/state.ts`, `src/player/playback.ts` | `play` del avance: `playHintFor`, `seedTitleLang`, `titlePlayHint`, `titleLangOf` |
+
+### Reglas que no hay que romper
+
+- **Un solo decodificador** (Amazon): un reproductor nuevo solo se inicia cuando el anterior terminó de cerrarse
+  (`playerClosing` / `waitForLivePreview`). El reproductor que cambia de superficie (miniatura ↔ pantalla grande) no
+  se cierra: `clearSurfaceHandle` en la que deja y `setSurfaceHandle` en la que toma.
+- **Línea de una conexión**: nunca dar por hecho que admite pedidos a la vez. `ReadAhead` lo detecta por el pedido
+  rechazado, cortado o incompleto con otro en curso (`rs.errs`) y sigue de a uno.
+- **Lo guardado es un atajo, no una fuente**: tamaño del archivo distinto → `STALE_INDEX` → se descarta y se abre de
+  nuevo leyendo del servidor. Texto guardado a medias (largo distinto) → no se usa.
+- **El idioma se comparte, la forma no**: `play.a` dice en qué idioma se ve el título; cada equipo decide cómo
+  (pista local, o conversión solo donde no hay otra).
+
+### En los avisos
+
+`modo=lector mp4 [...]` trae ahora `indice_guardado=true|false`, `adelanto=<ventanas>v <MB>MB <KB/s>KB/s_por_conexion`
+y `de_a_uno` si la línea no admitió pedidos a la vez.
+
 ## Comprobación pendiente en el dispositivo
 
 Probar las fuentes propias de HLS, DASH, MP4 y MKV: audio único, dos idiomas,

@@ -1,12 +1,14 @@
 {
   "name": "latmpxvega",
-  "version": "2.0.13",
+  "version": "2.0.14",
   "private": true,
   "scripts": {
     "start": "react-native start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:player": "node tools/test-player.cjs",
     "test:interface": "node tools/test-interface.cjs",
+    "test:readahead": "node --test tools/test-readahead.cjs",
+    "test:indexstore": "node --test tools/test-indexstore.cjs",
     "bundle:check": "react-native bundle --entry-file index.js --platform kepler --dev false --bundle-output build/check/main.js --assets-dest build/check/assets",
     "build:release": "react-native build-vega --build-type Release",
     "build:debug": "react-native build-vega --build-type Debug",

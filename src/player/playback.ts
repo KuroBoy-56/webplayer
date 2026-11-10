@@ -16,11 +16,11 @@ import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, t
 import { osBefore2, osVersion } from '../lib/osversion';
 import { Probe } from '../lib/probe';
 import { pref, readJson, setPref, writeJson } from '../lib/storage';
-import { nativeAllowed, nativeFailedOnce, nativeHttpOk, nativeRejectedHttp, nativeWorked } from './nativemode';
+import { markNativeLiveBad, nativeLiveGood, nativeAllowed, nativeFailedOnce, nativeHttpOk, nativeLiveBad, nativeRejectedHttp, nativeWorked } from './nativemode';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
-import { Mp4Mse, NOT_MP4_MKV } from './mp4mse';
-import { MkvMse } from './mkvmse';
+import { Mp4Mse, NOT_MP4_MKV, STALE_INDEX } from './mp4mse';
+import { MkvMse, mkvKnown } from './mkvmse';
 import { Mkv } from './mkvparse';
 import { reportError } from '../api/report';
 import { ShakaPlayback } from './shaka';
@@ -94,9 +94,30 @@ function titleLang(url: string): TitleLang | null {
   const e = (readJson<Record<string, TitleLang>>(TLANG_KEY) || {})[routeKey(url)];
   return e && Date.now() - e.t < 180 * 86400000 ? e : null;
 }
+// títulos donde el usuario volvió al audio predeterminado en esta sesión (se le avisa al panel con a: '')
+const langCleared = new Set<string>();
+// El idioma elegido en otro equipo (Roku, otro Fire TV…), que llega con el avance del panel (state.ts PlayHint): vale si
+// este equipo no tiene uno propio para el título. Así Continuar viendo abre en el idioma en que se venía viendo en
+// cualquier equipo, cada uno a su manera (Vega con su reproductor; Roku convirtiendo si hace falta). 2.0.14
+export function seedTitleLang(url: string, lang: string, a = -1): void {
+  if (!lang || titleLang(url) || langCleared.has(routeKey(url))) return;
+  setTitleLang(url, { lang, probe: a >= 0 ? a : undefined });
+}
+// lo que va con el avance al panel: el idioma elegido para este título (o '' si se volvió al predeterminado)
+export function titlePlayHint(url: string): { a: string; ai?: number } | undefined {
+  const s = titleLang(url);
+  if (s) return { a: s.l, ai: s.a };
+  return langCleared.has(routeKey(url)) ? { a: '' } : undefined;
+}
+// idioma elegido para el título (los lectores abren directo con esa pista)
+export function titleLangOf(url: string): string {
+  return titleLang(url)?.l || '';
+}
 function setTitleLang(url: string, it: { lang: string; probe?: number } | null): void {
   const all = readJson<Record<string, TitleLang>>(TLANG_KEY) || {};
   const k = routeKey(url);
+  if (it) langCleared.delete(k);
+  else langCleared.add(k);
   if (!it) {
     if (!all[k]) return;
     delete all[k];
@@ -131,7 +152,7 @@ function setPanelRoute(url: string, r: 'p' | 'v' | ''): void {
 const nativeFailed = new Set<string>();
 // el canal va a abrir con el reproductor nativo (entonces no hace falta pedir su lista HLS por adelantado)
 export function nativeLivePlanned(url: string): boolean {
-  return nativeAllowed('live') && nativeHttpOk(url) && !nativeFailed.has(url) && /\.m3u8(\?|$)/i.test(url);
+  return nativeAllowed('live') && nativeHttpOk(url) && !nativeFailed.has(url) && /\.m3u8(\?|$)/i.test(url) && !nativeLiveBad(url);
 }
 // películas y capítulos ya probados con el reproductor nativo en esta sesión (sin http/https: el mismo archivo)
 const vodNativeTried = new Set<string>();
@@ -251,6 +272,14 @@ export class Playback {
     this.liveHls?.stopKeeping();
   }
 
+  // el reproductor vuelve de la pantalla grande a la miniatura: avisos de la miniatura y el lector guarda otra vez los
+  // últimos segmentos (por si se vuelve a agrandar)
+  toPreview(h: Hooks): void {
+    this.hooks = h;
+    this.liveKeep = true;
+    if (this.liveHls) this.liveHls.keep = true;
+  }
+
   // ---------- fuente ----------
 
   load(url: string, resume: number, live: boolean): void {
@@ -363,6 +392,8 @@ export class Playback {
     if (this.liveNative) {
       this.httpCheck();
       if (!this.played) nativeFailedOnce('live');
+      // no llegó a verse con el nativo: los próximos días este canal va directo al lector (también al abrir la app de nuevo)
+      if (!this.played) markNativeLiveBad(this.url);
       nativeFailed.add(this.url);
       this.stopNative();
       this.openLive(this.url);
@@ -473,9 +504,13 @@ export class Playback {
       }
       this.resumeAt = 0;
       const g = this.gen;
-      const mkv = /\.mkv(\?|$)/i.test(this.url) || this.mkvBody;
+      // (un «.mp4» que ya se supo que es MKV, p. ej. leído desde la ficha: directo al lector de MKV)
+      const mkv = /\.mkv(\?|$)/i.test(this.url) || this.mkvBody || (!/\.mkv(\?|$)/i.test(this.url) && mkvKnown(this.url));
       const want = this.mp4Audio;
-      const m = mkv ? new MkvMse(this.v, this.url, this.mp4Audio, this.mkvIndex) : new Mp4Mse(this.v, this.url, this.mp4Audio, this.mp4Index);
+      // sin pista elegida a mano: el idioma guardado para el título (el lector abre directo con esa pista, sin empezar
+      // en el predeterminado y volver a abrir)
+      const lang = this.mp4Audio < 0 ? titleLangOf(this.url) : '';
+      const m = mkv ? new MkvMse(this.v, this.url, this.mp4Audio, this.mkvIndex, lang) : Mp4Mse.open(this.v, this.url, this.mp4Audio, this.mp4Index, lang);
       this.mse = m;
       // los idiomas al menú apenas se lee la cabecera del archivo
       m.onHeader = () => {
@@ -499,7 +534,20 @@ export class Playback {
         }
         this.hooks.changed();
       };
-      m.onError = () => g === this.gen && this.mse === m && this.mp4Failed(at, m.why);
+      m.onError = () => {
+        if (g !== this.gen || this.mse !== m) return;
+        // el índice guardado en el equipo era de otro archivo (el servidor lo cambió): otra vez, leyendo el índice
+        if (m.why.includes(STALE_INDEX)) {
+          const pos = this.played ? this.realPos() : at;
+          m.destroy();
+          this.mse = null;
+          this.mp4Index = null;
+          this.mkvIndex = null;
+          this.direct(pos);
+          return;
+        }
+        this.mp4Failed(at, m.why);
+      };
       m.start(at)
         .catch((e: any) => 'excepción: ' + String(e?.message || e).slice(0, 80))
         .then(err => {
@@ -668,7 +716,7 @@ export class Playback {
 
   // con qué se está viendo la película (para el aviso de apertura lenta)
   vodMode(): string {
-    const m = this.vodNative ? 'nativo' : this.mse ? 'lector ' + (this.mse instanceof MkvMse ? 'mkv' : 'mp4 ' + this.mse.diag()) : this.shaka ? 'shaka' : this.remux ? 'panel' : 'directo';
+    const m = this.vodNative ? 'nativo' : this.mse ? 'lector ' + (this.mse instanceof MkvMse ? 'mkv ' : 'mp4 ') + this.mse.diag() : this.shaka ? 'shaka' : this.remux ? 'panel' : 'directo';
     return m + (this.mp4Why ? ' (' + this.mp4Why + ')' : '');
   }
 
@@ -877,7 +925,10 @@ export class Playback {
     if (this.seekTo > 0 && !this.remux) return;
     this.clearSeek();
     this.played = true;
-    if (this.live && this.liveNative) nativeWorked('live');
+    if (this.live && this.liveNative) {
+      nativeWorked('live');
+      nativeLiveGood(this.url);
+    }
     if (this.vodNative) {
       nativeWorked('vod');
       if (this.nativeTimer) clearTimeout(this.nativeTimer);

@@ -37,6 +37,7 @@ class Shaka {
   async destroy(){this.stopped=true;if(release) await release;}
 }
 class Mp4 {
+  static open(v,url,index,cache){return new Mp4(v,url,index,cache);}
   constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||new Uint8Array([1]);this.noAudio=false;this.tracks=[{lang:'spa',codec:'mp4a'},{lang:'eng',codec:'mp4a'}];mp4s.push(this);}
   async start(at){if(this.url.includes('mkvbody'))return 'índice: el archivo es MKV';this.v.currentTime=at;this.onTracks();return '';}
   destroy(){}
@@ -65,8 +66,8 @@ Module._load = function(request,parent,isMain){
   if(request==='../lib/i18n'||request==='./i18n') return {t:(key,vars)=>key.replace(/\{(\w+)\}/g,(m,k)=>vars?.[k]??m)};
   if(request==='../api/report') return {reportError:()=>{}};
   if(request==='./shaka') return {ShakaPlayback:Shaka};
-  if(request==='./mp4mse') return {Mp4Mse:Mp4,NOT_MP4_MKV:'el archivo es MKV'};
-  if(request==='./mkvmse') return {MkvMse:Mkv};
+  if(request==='./mp4mse') return {Mp4Mse:Mp4,NOT_MP4_MKV:'el archivo es MKV',STALE_INDEX:'índice guardado viejo'};
+  if(request==='./mkvmse') return {MkvMse:Mkv,mkvKnown:()=>false};
   if(request==='./hls') return {PanelHls};
   if(request==='./livehls') return {LiveHls,disableMp4:()=>{}};
   return originalLoad.call(this,request,parent,isMain);
@@ -319,4 +320,35 @@ test('película «.mp4» que en realidad es MKV (remux de 10 GB con AC-3): el le
     assert.equal(video.currentTime,at);assert.notEqual(video.src,'http://fixture.invalid/movie/u/p/mkvbody'+at+'.mp4');
     await c.destroy();
   }
+});
+test('2.0.14: un canal que el nativo no abrió 2 veces va directo al lector (se recuerda en el equipo); uno suelto, no',()=>{
+  memory={};
+  delete require.cache[require.resolve('../src/player/nativemode.ts')];
+  const n=require('../src/player/nativemode.ts');
+  const u='http://srv.example:80/live/user/pass/978566.m3u8';
+  assert.equal(n.nativeLiveBad(u),false);
+  n.markNativeLiveBad(u);
+  assert.equal(n.nativeLiveBad(u),false,'un fallo suelto no lo marca');
+  n.markNativeLiveBad('https://srv.example:80/live/otro/clave/978566.ts');
+  assert.equal(n.nativeLiveBad(u),true,'mismo canal por https, otra línea u otro formato: es el mismo');
+  assert.equal(n.nativeLiveBad('http://srv.example:80/live/user/pass/978567.m3u8'),false,'otro canal no');
+  // guardado en el equipo: al abrir la app de nuevo sigue marcado
+  delete require.cache[require.resolve('../src/player/nativemode.ts')];
+  const n2=require('../src/player/nativemode.ts');
+  assert.equal(n2.nativeLiveBad(u),true);
+  n2.nativeLiveGood(u);
+  assert.equal(n2.nativeLiveBad(u),false,'si el nativo lo muestra, se olvida');
+});
+test('2.0.14: el idioma del título llega del panel (otro equipo) y vuelve al panel al guardar; lo elegido aquí manda',()=>{
+  memory={};
+  const p=require('../src/player/playback.ts');
+  const u='http://srv.example/movie/u/p/55.mp4';
+  assert.equal(p.titlePlayHint(u),undefined,'sin elegir nada no se manda idioma (el panel conserva el que haya)');
+  p.seedTitleLang(u,'spa',1);
+  assert.equal(p.titleLangOf('https://srv.example/movie/u/p/55.mp4'),'spa','el mismo archivo por https');
+  assert.deepEqual(p.titlePlayHint(u),{a:'spa',ai:1});
+  p.seedTitleLang(u,'eng',0);
+  assert.equal(p.titleLangOf(u),'spa','lo que ya tiene este equipo no se pisa');
+  p.seedTitleLang('http://srv.example/movie/u/p/56.mp4','',-1);
+  assert.equal(p.titleLangOf('http://srv.example/movie/u/p/56.mp4'),'','sin idioma en el panel no se guarda nada');
 });

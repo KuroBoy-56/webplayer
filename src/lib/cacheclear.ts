@@ -2,6 +2,7 @@
 // esta app y la app le dice con "cc" la última que ya aplicó. El id aplicado se guarda aparte
 // (cache_clear_seen, por distribuidor) y el borrado nunca lo toca.
 import { keys, read, remove, write } from './storage';
+import { clearIndexes } from '../player/indexstore';
 import { scoped } from './tenant';
 
 const SEEN = 'cache_clear_seen';
@@ -49,6 +50,8 @@ export function whenNotPlaying(run: () => void): void {
 
 export function clearStoredCache(): void {
   for (const k of keys()) if (/^(servers|tmdb_key)(@|$)/.test(k)) remove(k);
+  // índices de películas y capítulos guardados (se vuelven a leer del servidor)
+  clearIndexes();
   try {
     const c = (globalThis as any).caches;
     c?.keys?.().then((ks: string[]) => ks.forEach(k => c.delete(k))).catch(() => {});

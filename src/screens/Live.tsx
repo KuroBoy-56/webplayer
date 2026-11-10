@@ -7,7 +7,7 @@ import { openItem } from '../actions';
 import { channelEpg, EpgEntry } from '../api/xtream';
 import PinDialog from '../components/PinDialog';
 import LivePreview from '../components/LivePreview';
-import { handPreview, takeLastLive } from '../player/preview-session';
+import { handPreview, markLiveOrigin, takeLastLive } from '../player/preview-session';
 import { Button, Focusable, Message, Spinner } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
 import { clock, digits, nowSec } from '../lib/util';
@@ -145,6 +145,8 @@ export default function Live({ active = true }: { active?: boolean }) {
     }
     // la pantalla grande se queda con el reproductor de la miniatura si ya suena (si no, se cierra como siempre)
     handPreview();
+    // la miniatura queda debajo: al salir de la pantalla grande recibe de vuelta el reproductor
+    markLiveOrigin();
     openItem(nav, channel, channels);
   }, [nav, channels]);
   const renderCh = useCallback(

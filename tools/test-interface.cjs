@@ -982,3 +982,40 @@ test('identificador del equipo: si lo guardado no se pudo leer no se escribe uno
     for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
   }
 });
+test('2.0.14: al salir de la pantalla grande el reproductor vuelve a la miniatura del mismo canal; si nadie lo toma, se cierra', async () => {
+  const player = () => { const p = { paused: 0, closed: 0, destroyed: 0 }; return { p, v: { pause() { p.paused++; }, deinitialize: async () => { p.closed++; } }, c: { destroy: async () => { p.destroyed++; } } }; };
+  // la miniatura del mismo canal lo toma: no se cierra nada
+  const a = player();
+  previews.offerReturn('101', a.v, a.c);
+  assert.equal(previews.takeReturn('999'), null, 'otro canal no se lo lleva');
+  const got = previews.takeReturn('101');
+  assert.ok(got && got.v === a.v && got.c === a.c);
+  assert.equal(previews.takeReturn('101'), null, 'una sola vez');
+  await tick();
+  assert.deepEqual(a.p, { paused: 0, closed: 0, destroyed: 0 });
+  // se eligió otro canal: el que volvía se cierra (pausa, lector y reproductor) y el siguiente espera ese cierre
+  const b = player();
+  previews.offerReturn('102', b.v, b.c);
+  previews.dropReturn();
+  await previews.waitForLivePreview();
+  assert.deepEqual(b.p, { paused: 1, closed: 1, destroyed: 1 });
+  // un segundo ofrecido reemplaza al primero (que se cierra)
+  const c1 = player();
+  const c2 = player();
+  previews.offerReturn('103', c1.v, c1.c);
+  previews.offerReturn('104', c2.v, c2.c);
+  await previews.waitForLivePreview();
+  assert.equal(c1.p.closed, 1);
+  assert.ok(previews.takeReturn('104'));
+  // la marca «abierto desde TV en vivo» se usa una vez
+  assert.equal(previews.takeLiveOrigin(), false);
+  previews.markLiveOrigin();
+  assert.equal(previews.takeLiveOrigin(), true);
+  assert.equal(previews.takeLiveOrigin(), false);
+  // la miniatura entregó su reproductor pero la pantalla grande abre otro canal: se cierra (antes quedaba abierto)
+  const d = player();
+  previews.offerPreview({ url: 'http://x/1.m3u8', v: d.v, c: d.c, at: Date.now() });
+  assert.equal(previews.takePreview('http://x/2.m3u8'), null);
+  await previews.waitForLivePreview();
+  assert.equal(d.p.closed, 1);
+});

@@ -13,6 +13,7 @@ import { digits, nowSec, parseIso, str } from './lib/util';
 import { setImgCache } from './lib/images';
 import { Key, t } from './lib/i18n';
 
+export type PlayHint = { a?: string; ai?: number; [k: string]: unknown };
 export type Progress = {
   title: string;
   position: number;
@@ -24,6 +25,10 @@ export type Progress = {
   seriesId: string;
   categoryId: string;
   order?: number;
+  // Datos de reproducción que viajan con el avance en el panel (api/progress.php «play», compartido entre equipos):
+  // a = idioma de audio elegido para este título ('' = se volvió al predeterminado), ai = su número de pista en el
+  // archivo (-1 = no se sabe). Roku guarda además cómo abrió el archivo (e, f, s, t, u); el panel junta lo de cada app.
+  play?: PlayHint;
 };
 
 export type Fav = { id: string; type: 'movie' | 'series' | 'live'; title: string; poster: string; categoryId: string };
@@ -186,7 +191,8 @@ function progressSeconds(e: any): number {
 export async function loadCloud() {
   // la DEMO no tiene Continuar viendo ni Mi lista
   if (state.demo) return;
-  const j = json(await cloud('progress.php', 'GET', { v: '2' }));
+  // play=1: cada avance trae «play» (idioma elegido para el título en cualquier equipo; ver PlayHint)
+  const j = json(await cloud('progress.php', 'GET', { v: '2', play: '1' }));
   // caché de carátulas del panel (el dueño la puede apagar): apagada, imágenes directo a los servidores
   if (j && typeof j === 'object' && typeof j.img === 'boolean') setImgCache(j.img);
   if (!j || typeof j !== 'object' || state.demo) return;
@@ -206,6 +212,7 @@ export async function loadCloud() {
       seriesId: str(e.seriesId),
       categoryId: str(e.categoryId),
       order: progressSeconds(e),
+      play: e.play && typeof e.play === 'object' && !Array.isArray(e.play) ? e.play : undefined,
     });
   }
   list.sort((a, b) => (b.order || 0) - (a.order || 0));
@@ -253,6 +260,14 @@ export function toggleFav(kind: string, id: string, title: string, poster: strin
 
 export function progressMovie(id: string): Progress | undefined {
   return state.progress.find(p => p.type === 'movie' && digits(p.id) === id);
+}
+
+// «play» guardado en el panel para el video que se va a abrir: el de la película, o el de la serie (el idioma con el
+// que se viene viendo vale también para sus otros capítulos; el número de pista solo para el mismo capítulo)
+export function playHintFor(kind: 'movie' | 'episode', id: string, seriesId: string): PlayHint | undefined {
+  const p = kind === 'movie' ? progressMovie(digits(id)) : progressSeries(digits(seriesId));
+  if (!p?.play) return undefined;
+  return kind === 'movie' || digits(p.id) === digits(id) ? p.play : { a: p.play.a };
 }
 
 export function progressSeries(seriesId: string): Progress | undefined {

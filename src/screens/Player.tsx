@@ -17,14 +17,15 @@ import { Item } from '../data/catalog';
 import { useListScroll } from '../lib/listscroll';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
-import { Hooks, MenuItem, nativeLivePlanned, Playback } from '../player/playback';
-import { playerClosing, setLastLive, stopLivePreview, takePreview, waitForLivePreview } from '../player/preview-session';
+import { Hooks, MenuItem, nativeLivePlanned, Playback, seedTitleLang, titlePlayHint } from '../player/playback';
+import { dropReturn, offerReturn, playerClosing, setLastLive, stopLivePreview, takeLiveOrigin, takePreview, waitForLivePreview } from '../player/preview-session';
 import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
 import { hasHandoff } from '../player/livehls';
+import { vodKnown } from '../player/warm';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
 import { probeTracks } from '../lib/probe';
-import { getState, isFav, saveProgress, toggleFav } from '../state';
+import { getState, isFav, saveProgress, toggleFav, playHintFor } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
 
@@ -74,6 +75,8 @@ export default function Player({ params }: { params: PlayParams }) {
   // reproductor, crear otro, iniciarlo, ponerle la superficie y recién darle el canal). Al cambiarle la dirección a un
   // reproductor ya usado, el nativo de Vega daba error («Reconectando…») y el lector de la app tardaba y se congelaba
   const [session, setSession] = useState(0);
+  // abierto desde TV en vivo: al salir, el reproductor que suena vuelve a su miniatura (preview-session.ts)
+  const [fromLive] = useState(() => params.kind === 'live' && takeLiveOrigin());
   // el reproductor se cierra para abrir otro canal (no se sale de la pantalla)
   const zapping = useRef(false);
   const [pos, setPos] = useState(0);
@@ -226,6 +229,8 @@ export default function Player({ params }: { params: PlayParams }) {
           id: e.id,
           seriesId: params.seriesId,
           categoryId: params.cat,
+          // el idioma elegido para el título va con el avance: los demás equipos abren en ese idioma
+          play: titlePlayHint(urlFor(indexRef.current)),
         },
         force,
       );
@@ -250,6 +255,11 @@ export default function Player({ params }: { params: PlayParams }) {
       setWork('');
       setStatus(live ? t('Conectando con el canal…') : t('Cargando…'));
       if (vod.current.idx !== i) vod.current = { idx: i, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, format: false, srv: 0, acct: '', attempts: [], live: null, xui: null };
+      if (params.kind !== 'live') {
+        // el idioma con el que se venía viendo este título en otro equipo (llega con el avance del panel)
+        const hint = playHintFor(params.kind, params.queue[i].id, params.seriesId);
+        if (hint?.a) seedTitleLang(urlFor(i), String(hint.a), typeof hint.ai === 'number' ? hint.ai : -1);
+      }
       c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
@@ -877,6 +887,8 @@ export default function Player({ params }: { params: PlayParams }) {
       preUrl = zapFirst;
       prefetchList(zapFirst);
     }
+    // (un reproductor que volvía a la miniatura y nadie tomó se cierra antes de abrir este)
+    if (!inherited) dropReturn();
     const begin: Promise<void> = inherited
       ? Promise.resolve()
       : stopLivePreview().then(waitForLivePreview).then(() => {
@@ -896,6 +908,8 @@ export default function Player({ params }: { params: PlayParams }) {
         // con el reproductor nativo el archivo lo pide él: nada por adelantado (sería otra conexión a la vez)
         else if (!live && c.nativeVodPlanned(first, firstResume.current)) {
           // nada
+        } else if (!live && vodKnown(first)) {
+          // el índice ya está en el equipo o lo viene leyendo la ficha: el lector pide directo el video
         } else if (!live && /\.mkv(\?|$)/i.test(first)) {
           preUrl = first;
           prefetchRange(first, 0, 262144, firstResume.current > 5 ? 0 : 1048576);
@@ -953,6 +967,38 @@ export default function Player({ params }: { params: PlayParams }) {
       loadRev.current++;
       if (preUrl) dropPrefetch(preUrl);
       if (params.kind === 'live' && !zap) setLastLive((params.channels[indexRef.current] || params.channel)?.id || '');
+      // Se vuelve a TV en vivo con el canal sonando: la miniatura se queda con este mismo reproductor (solo cambia de
+      // superficie, como Roku): el canal no se corta ni se abre otra vez (preview-session.ts, 2.0.14)
+      const backCh = params.kind === 'live' && !zap && fromLive && initialized && ready.current && !errorRef.current && c.hasPlayed() ? params.channels[indexRef.current] || params.channel : null;
+      if (backCh) {
+        if (stuckDog) clearInterval(stuckDog);
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+        if (toastTimer.current) clearTimeout(toastTimer.current);
+        if (zapTimer.current) clearTimeout(zapTimer.current);
+        zapTimer.current = null;
+        if (startDog.current) clearTimeout(startDog.current);
+        startDog.current = null;
+        try {
+          v.removeEventListener('loadedmetadata', onMeta);
+          v.removeEventListener('timeupdate', onTime);
+          v.removeEventListener('playing', onPlaying);
+          v.removeEventListener('waiting', onWaiting);
+          v.removeEventListener('pause', onPause);
+          v.removeEventListener('ended', onEnded);
+          v.removeEventListener('error', onError);
+          (v as any).audioTracks?.removeEventListener?.('addtrack', onTrack);
+          (v as any).audioTracks?.removeEventListener?.('change', onTrack);
+          (v as any).textTracks?.removeEventListener?.('addtrack', onTrack);
+          if (surface.current) v.clearSurfaceHandle(surface.current);
+        } catch {
+          // sigue igual
+        }
+        offerReturn(backCh.id, v, c);
+        video.current = null;
+        ctl.current = null;
+        ready.current = false;
+        return;
+      }
       try {
         save(true);
         released = c.destroy();
