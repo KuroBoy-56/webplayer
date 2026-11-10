@@ -128,6 +128,9 @@ export class ReadAhead {
       if (lim > 0 && this.next >= lim) return;
       if (this.flying >= par) return;
       if (this.lazy && this.next >= must) return;
+      // una ventana espera su turno para pedirse otra vez (la rechazaron): nada nuevo hasta que llegue, si no le gana la
+      // conexión y el video llega desordenado (2.0.15)
+      if (this.wins.some(w => w.waiting)) return;
       if (this.limit > 0 && this.next >= must && this.next - this.start0 >= this.limit) return;
       const held = this.next - (this.wins.length ? this.wins[0].off : this.next);
       if (this.next >= must && held >= cap) return;

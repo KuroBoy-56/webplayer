@@ -164,6 +164,20 @@ El vigilante del nativo espera 18 s (no 10) si el equipo ya recibe el canal (`re
 
 En el aviso «tardó en empezar»: `indice=<leído>/<total>MB en Xs empezo_con=<MB con que arrancó> indice_del_final=entero|final`.
 
+Medido con el simulador (servidor que tarda 6,4 s en contestar cada pedido; capítulo de 45 min con el índice al final;
+A = nuevo desde el principio, B = Continuar viendo con el índice guardado, C = Continuar algo visto en otro equipo):
+
+| Caso | 2.0.14 | 2.0.15 |
+| --- | --- | --- |
+| 2 idiomas (índice 2,9 MB), 2 MB/s por conexión | A 14,2 s · B 6,6 s · C 19,9 s | A 8,9 s · B 6,6 s · C 14,6 s |
+| 6 idiomas (índice 6,6 MB), 260 KB/s por conexión | A 23,1 s · B 7,5 s · C 29,6 s | A 23,4 s · B 7,5 s · C 24,1 s |
+| 6 idiomas, línea que admite 1 conexión | no abría («índice: pedido 403») | A 33,7 s · C 34,6 s |
+
+Con un índice grande y conexiones libres, un título nuevo tarda lo mismo: son dos esperas del servidor (cabecera e
+índice) que la app no puede evitar. En la línea de 1 conexión del simulador, B (47,9 s) cuenta como si fuera el
+primer video de la sesión (el simulador olvida que la línea es «de a uno»); en la app eso se recuerda 4 minutos y, con
+`max_connections` 1, desde el principio.
+
 ### Foco al volver de la ficha
 
 Las filas de Inicio, Películas y Series (`Browse`) recuerdan la tarjeta enfocada (fila y título); al volver a la
