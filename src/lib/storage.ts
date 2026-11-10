@@ -4,13 +4,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const PREFIX = 'latmpx:';
 const mem: Record<string, string> = {};
 
+// true = lo guardado se leyó bien al iniciar (si no, no se sabe qué hay guardado en el equipo)
+let loaded = false;
+export function storageLoaded(): boolean {
+  return loaded;
+}
+
 export async function loadStorage(): Promise<void> {
-  try {
-    const keys = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith(PREFIX));
-    const pairs = await AsyncStorage.multiGet(keys);
-    for (const [k, v] of pairs) if (v !== null) mem[k.slice(PREFIX.length)] = v;
-  } catch {
-    // sin almacenamiento la app sigue funcionando en memoria
+  // un fallo suelto al leer no deja la app «como recién instalada»: se intenta otra vez
+  for (let attempt = 0; attempt < 2 && !loaded; attempt++) {
+    try {
+      const keys = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith(PREFIX));
+      const pairs = await AsyncStorage.multiGet(keys);
+      for (const [k, v] of pairs) if (v !== null) mem[k.slice(PREFIX.length)] = v;
+      loaded = true;
+    } catch {
+      // sin almacenamiento la app sigue funcionando en memoria
+    }
   }
 }
 

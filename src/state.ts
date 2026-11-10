@@ -6,6 +6,7 @@ import { bindSession, cloud, forgetCloud, onPanelDemo, panelTenantConfig, Sessio
 import { Kind, loadKind, setStreamFlip } from './api/xtream';
 import { catalog } from './data/catalog';
 import { json } from './lib/http';
+import { deviceId } from './lib/deviceid';
 import { read, readJson, remove, write, writeJson } from './lib/storage';
 import { brand, clearTenant, expiredMessage, locallyExpired, OFFLINE_GRACE, saveBrand, scoped, TENANT_FATAL, tenantCode } from './lib/tenant';
 import { digits, nowSec, parseIso, str } from './lib/util';
@@ -297,17 +298,7 @@ export function removeProgress(title: string) {
 
 // ---------- equipo ----------
 
-// identificador con formato MAC del panel: 8 pares hex en mayúsculas que nunca empiezan en "00"
-export function deviceId(): string {
-  const saved = read('device_id');
-  if (saved) return saved;
-  let hex = '';
-  for (let i = 0; i < 16; i++) hex += '0123456789ABCDEF'[Math.floor(Math.random() * 16)];
-  if (hex.startsWith('00')) hex = '1' + hex.slice(1);
-  const id = hex.match(/.{2}/g)!.join(':');
-  write('device_id', id);
-  return id;
-}
+export { deviceId };
 
 // PIN de control parental (siempre activo): el del panel (check_mac / auth.php), 0000 de fábrica.
 // Se cambia en Cuenta y se guarda en el panel (set_pin).
@@ -354,7 +345,13 @@ async function runCheck(): Promise<Guard> {
   if (!code) return { kind: 'skip' };
   const old = brand();
   const now = nowSec();
-  const r = await panelTenantConfig(code, deviceId(), now);
+  let r = await panelTenantConfig(code, deviceId(), now);
+  // el panel rechaza el número: antes de borrar el número y cerrar la sesión se le pregunta otra vez (una sola
+  // respuesta equivocada del panel sacaba al cliente de la app)
+  if (!r.ok && TENANT_FATAL.includes(r.code)) {
+    await new Promise<void>(res => setTimeout(res, 3000));
+    r = await panelTenantConfig(code, deviceId(), nowSec());
+  }
   if (tenantCode() !== code) return { kind: 'skip' }; // cambió mientras tanto
   if (r.ok) {
     saveBrand(r.brand);

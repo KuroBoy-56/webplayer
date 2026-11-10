@@ -930,3 +930,55 @@ test('canal: al abrir, video quieto con el audio sonando (cuadros sin sumar y re
   assert.equal(r.videoStuck(), false);
   r.destroy();
 });
+
+test('sesión: el panel «sin línea» solo cierra la sesión si antes dio la línea de este equipo (o lo bloqueó)', () => {
+  const src = fs.readFileSync(require.resolve('../src/api/panel.ts'), 'utf8');
+  const fn = /export function lineLost\([^)]*\): boolean \{\n([^}]*)\}/.exec(src);
+  assert.ok(fn, 'lineLost en src/api/panel.ts');
+  const lineLost = new Function('answered', 'line', 'seen', 'blocked', fn[1]);
+  // se entró escribiendo usuario y contraseña y el panel nunca dio la línea de este equipo: no se saca al cliente
+  assert.equal(lineLost(true, false, false, false), false);
+  // el panel la daba y la quitó (o la demo venció): sí
+  assert.equal(lineLost(true, false, true, false), true);
+  // equipo bloqueado: siempre
+  assert.equal(lineLost(true, false, false, true), true);
+  // el panel no contestó, o sigue dando la línea: no
+  assert.equal(lineLost(false, false, true, false), false);
+  assert.equal(lineLost(true, true, true, false), false);
+});
+
+test('identificador del equipo: si lo guardado no se pudo leer no se escribe uno nuevo encima del registrado en el panel', async () => {
+  const saved = [];
+  let fail = true;
+  const prev = Module._load;
+  Module._load = function(request, parent, isMain) {
+    if (request === '@react-native-async-storage/async-storage') return { __esModule: true, default: {
+      getAllKeys: async () => { if (fail) throw new Error('storage'); return ['latmpx:device_id']; },
+      multiGet: async () => [['latmpx:device_id', 'AB:CD:EF:01:23:45:67:89']],
+      setItem: async (k, v) => { saved.push(k); },
+      removeItem: async () => {},
+    } };
+    return prev.call(this, request, parent, isMain);
+  };
+  try {
+    for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
+    let storage = require('../src/lib/storage.ts');
+    let dev = require('../src/lib/deviceid.ts');
+    await storage.loadStorage();
+    const temp = dev.deviceId();
+    assert.match(temp, /^([0-9A-F]{2}:){7}[0-9A-F]{2}$/);
+    assert.equal(dev.deviceId(), temp);
+    assert.deepEqual(saved, []);
+    // siguiente inicio, lectura bien: vuelve el identificador de siempre
+    fail = false;
+    for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
+    storage = require('../src/lib/storage.ts');
+    dev = require('../src/lib/deviceid.ts');
+    await storage.loadStorage();
+    assert.equal(dev.deviceId(), 'AB:CD:EF:01:23:45:67:89');
+    assert.deepEqual(saved, []);
+  } finally {
+    Module._load = prev;
+    for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
+  }
+});

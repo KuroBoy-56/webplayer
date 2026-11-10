@@ -207,6 +207,19 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **La app ya no saca al cliente a los minutos (2.0.13)**: con número de distribuidor, la app cerraba la sesión a los
+  ~10 min y pedía otra vez usuario y contraseña. Causa (en el panel): un cliente que su distribuidor había quitado de
+  Clientes seguía oculto al volver a iniciar sesión; `submit_url` respondía «ok» pero `check_mac` no daba la línea.
+  Arreglado en el panel (hay que actualizarlo) y, en la app:
+  - La sesión abierta solo se cierra cuando el panel **deja de dar** una línea que antes dio para este equipo (la quitó
+    el dueño, venció la demo) o lo bloqueó (`lineLost`, `src/api/panel.ts`). Si se entró escribiendo usuario y
+    contraseña y el panel nunca dio la línea, «sin línea» ya no saca al cliente.
+  - El rechazo del número de distribuidor se confirma con una segunda consulta antes de borrar el número y la sesión
+    (`runCheck`, `src/state.ts`).
+  - **Identificador del equipo** (`src/lib/deviceid.ts`): es el mismo en cada inicio y en cada actualización. Si lo
+    guardado no se puede leer al iniciar (se reintenta), no se escribe uno nuevo encima del que el panel ya tiene.
+    Vega OS no da a las apps un número propio del equipo (serie o MAC): al **desinstalar** la app el identificador se
+    pierde y el equipo aparece como nuevo en el panel.
 - **Canales cifrados que se cortaban y Continuar viendo más rápido (2.0.12)**:
   - **Canal cifrado (AES-128) que se cortaba a los ~40 min** (aviso «Canal cortado mientras se veía», `problema=descifrado:
     aes/pcks5: wrong padding`, `renovaciones=1`): al renovar la lista (token vencido) el servidor cifra con otra llave en
