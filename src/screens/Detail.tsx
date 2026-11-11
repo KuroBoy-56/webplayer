@@ -4,6 +4,7 @@ import { FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-nativ
 import { openItem, playEpisodes, playMovie } from '../actions';
 import { CastMember, castFor, overviewFor, searchArt } from '../api/tmdb';
 import { warmStop, warmVideo as warmPlay } from '../player/warm';
+import { idxWarmHold } from '../player/idxwarm';
 import { setLineMax } from '../player/readahead';
 import { episodeUrl, movieUrl, SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
 import { warmTracks } from '../api/media';
@@ -81,9 +82,14 @@ export default function Detail({ item }: { item: Item }) {
       warmPlay(url, at > 5 ? at : 0, hint);
     }, 1200);
   };
-  useEffect(() => () => {
-    if (idxTimer.current) clearTimeout(idxTimer.current);
-    warmStop();
+  useEffect(() => {
+    // la ficha prepara su propio video: los índices de Continuar viendo en segundo plano esperan
+    idxWarmHold(true);
+    return () => {
+      if (idxTimer.current) clearTimeout(idxTimer.current);
+      warmStop();
+      idxWarmHold(false);
+    };
   }, []);
   // el episodio que se queda enfocado un momento también
   const warmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

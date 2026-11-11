@@ -8,6 +8,7 @@ import { LIVE_FORMATS, liveUrl, otherScheme, streamFlip } from '../api/xtream';
 import { Item } from '../data/catalog';
 import { Hooks, nativeLivePlanned, Playback } from '../player/playback';
 import { dropPrefetch, prefetchList } from '../player/prefetch';
+import { idxWarmHold } from '../player/idxwarm';
 import { dropReturn, offerPreview, registerLivePreview, takeReturn, waitForLivePreview } from '../player/preview-session';
 import { reportError } from '../api/report';
 import { getState } from '../state';
@@ -168,9 +169,12 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
       } catch { void stop(); }
     }, again.id === channel.id && again.n > 0 ? 400 : delay);
     const unregister = registerLivePreview(stop, give);
+    // la miniatura usa la línea: los índices de Continuar viendo en segundo plano esperan
+    idxWarmHold(true);
     return () => {
       if (timer) clearTimeout(timer);
       unregister();
+      idxWarmHold(false);
     };
   }, [channel, active, again]);
 

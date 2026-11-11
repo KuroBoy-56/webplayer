@@ -407,6 +407,7 @@ const fr: Record<Key, string> = {
   "▲▼ cambiar canal ({x}/{y}) · OK lista de canales · MENÚ audio y subtítulos": "▲▼ changer de chaîne ({x}/{y}) · OK liste des chaînes · MENU audio et sous-titres",
   "Todavía no hay videos de prueba.": "Aucune vidéo de test pour l'instant.",
   "Este Fire TV tiene Vega OS {v}. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran al instante.": "Ce Fire TV a Vega OS {v}. Mettez-le à jour vers Vega OS 2.0 (Paramètres › Mon Fire TV › À propos › Rechercher des mises à jour) pour que les films et les chaînes s'ouvrent instantanément.",
+  "El sistema de este Fire TV no abre los videos con el reproductor de Amazon. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran más rápido.": "Le système de ce Fire TV n'ouvre pas les vidéos avec le lecteur d'Amazon. Mettez-le à jour vers Vega OS 2.0 (Paramètres › Mon Fire TV › À propos › Rechercher des mises à jour) pour que les films et les chaînes s'ouvrent plus vite.",
   "Línea ocupada ({a}/{m}): esperando una conexión libre…": "Ligne occupée ({a}/{m}) : en attente d'une connexion libre…",
 };
 

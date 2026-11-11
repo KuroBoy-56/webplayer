@@ -16,7 +16,7 @@ import { codecKey, codecName, imageSub, langKey, langName, numbered, sameLang, t
 import { osBefore2, osVersion } from '../lib/osversion';
 import { Probe } from '../lib/probe';
 import { pref, readJson, setPref, writeJson } from '../lib/storage';
-import { markNativeLiveBad, nativeLiveGood, nativeAllowed, nativeFailedOnce, nativeHttpOk, nativeLiveBad, nativeRejectedHttp, nativeWorked } from './nativemode';
+import { markNativeLiveBad, nativeLiveGood, nativeAllowed, nativeFailedOnce, nativeHttpOk, nativeKnownGood, nativeLiveBad, nativeRejectedHttp, nativeWorked } from './nativemode';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
 import { dropWarm, mp4Ready, Mp4Mse, NOT_MP4_MKV, STALE_INDEX } from './mp4mse';
@@ -566,7 +566,7 @@ export class Playback {
     // de índice al final, los de casi todos los servidores IPTV). Empieza ya en el segundo pedido (sin el salto)
     if (!this.live && !this.mp4Url && /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(this.url)) {
       if (this.mp4Audio < 0 && !this.mkvNative && this.nativeVodPlanned(this.url, at)) {
-        this.openNativeVod();
+        this.openNativeVod(at);
         return;
       }
       this.resumeAt = 0;
@@ -585,6 +585,7 @@ export class Playback {
         if (m instanceof MkvMse && !this.probe?.ok) this.probe = m.probe();
         // MP4 que empezó con el índice a medias: al completarse, el índice entero (cambiar de idioma no lo lee otra vez)
         else if (!(m instanceof MkvMse) && m.index) this.mp4Index = m.index;
+        if (!(m instanceof MkvMse)) this.readerSubs(m);
         if (!(m instanceof MkvMse) && m.index) this.shareReaderTracks(m);
         this.hooks.changed();
       };
@@ -594,9 +595,16 @@ export class Playback {
           this.mkvIndex = m.index;
           // las pistas del MKV ya leídas: el menú (audio y subtítulos) sin leer otra vez la cabecera
           if (!this.probe?.ok) this.probe = m.probe();
-        } else this.mp4Index = m.index;
+        } else {
+          this.mp4Index = m.index;
+          this.readerSubs(m);
+        }
         this.shareReaderTracks(m);
-        if (this.mp4Paused) { this.mp4Paused = false; this.v.pause(); }
+        if (this.mp4Paused) {
+          this.mp4Paused = false;
+          m.cancelPlay?.();
+          this.v.pause();
+        }
         this.applyPrefs();
         if (this.pendingSub) {
           const sub = this.subItems().find(i => i.key === this.pendingSub);
@@ -617,7 +625,7 @@ export class Playback {
           this.direct(pos);
           return;
         }
-        this.mp4Failed(at, m.why);
+        this.readerGaveUp(at, m.why);
       };
       m.start(at)
         .catch((e: any) => 'excepción: ' + String(e?.message || e).slice(0, 80))
@@ -632,13 +640,17 @@ export class Playback {
               this.direct(at);
               return;
             }
-            this.mp4Failed(at, err);
+            this.readerGaveUp(at, err);
             return;
           }
           if (m instanceof MkvMse && m.noAudio && want < 0 && !this.mkvNative) {
-            this.mkvNative = 'trying';
-            this.mp4Failed(at, 'MKV con audio que no entra por MSE: lector nativo');
-            return;
+            // (si el modo directo no puede abrirlo, sigue el lector con el video y el audio por el panel / el aviso)
+            if (this.directUseless()) this.mkvNative = 'failed';
+            else {
+              this.mkvNative = 'trying';
+              this.mp4Failed(at, 'MKV con audio que no entra por MSE: lector nativo');
+              return;
+            }
           }
           // el equipo no tomó el audio pedido (o ninguno del archivo): el servidor lo prepara; apagado, el aviso
           const lost = m.noAudio ? (want >= 0 ? want : Math.max(0, this.probeDefault())) : want >= 0 && m.audioIdx !== want ? want : -1;
@@ -672,7 +684,7 @@ export class Playback {
       ok: true,
       container: 'mp4',
       audio: m.tracks.map((tr, i) => ({ id: String(i), lang: tr.lang, codec: tr.codec, name: '', def: !!tr.def, forced: false })),
-      subs: [],
+      subs: m.subList(),
     });
   }
 
@@ -682,7 +694,7 @@ export class Playback {
   // (2.0.16) Tampoco si el lector ya tiene el índice (equipo, memoria o panel) y el audio predeterminado es AAC: abre con un
   // solo pedido al servidor IPTV y deja cambiar de idioma en el equipo; el nativo tendría que leer el índice otra vez
   nativeVodPlanned(url: string, at: number): boolean {
-    return /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url) && at <= 5 && !titleLang(url) && pref('subs_lang', 'off') === 'off' && nativeAllowed('vod') && nativeHttpOk(url) && !vodNativeTried.has(fileKey(url)) && !this.readerReady(url);
+    return /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url) && (at <= 5 || nativeKnownGood('vod')) && !titleLang(url) && pref('subs_lang', 'off') === 'off' && nativeAllowed('vod') && nativeHttpOk(url) && !vodNativeTried.has(fileKey(url)) && !this.readerReady(url);
   }
 
   private readerReady(url: string): boolean {
@@ -695,7 +707,7 @@ export class Playback {
   // el archivo directo al reproductor de Vega (lo lee y decodifica él, como Android y LG). Los idiomas se leen de la
   // cabecera cuando ya suena (onPlaying → langWatch). Si en 6 s no dio ninguna señal de vida (índice al final, servidor
   // lento), en 12 s no empieza o da error, el lector de la app (mp4Fallback)
-  private openNativeVod(): void {
+  private openNativeVod(at = 0): void {
     const g = this.gen;
     dropWarm(this.url);
     dropMkvWarm(this.url);
@@ -704,6 +716,8 @@ export class Playback {
     this.nativeMeta = false;
     this.nativeAt = Date.now();
     this.resumeAt = 0;
+    // Continuar viendo con el nativo (2.1.0, solo en equipos donde el nativo ya abrió): apenas suena, al segundo guardado
+    if (at > 5) this.seekAfter = at;
     this.v.src = this.url;
     this.v.play();
     const give = () => g === this.gen && this.vodNative && !this.played && this.hooks.panelFailed?.();
@@ -754,12 +768,30 @@ export class Playback {
     return true;
   }
 
-  // la lectura propia del MP4 no pudo (códec raro, el servidor cortó): el modo directo de siempre desde donde iba
-  private mp4Failed(at: number, why: string): void {
+  // la lectura propia del MP4 no pudo (códec raro, el servidor cortó): el modo directo de siempre desde donde iba.
+  // false = el modo directo no puede abrirlo (2.1.0): con http en un equipo donde el nativo nunca abrió (Vega OS antes de
+  // 2.0 lo rechaza al instante con error 4) no se prueba; se sigue ya con los pasos de Player (antes «directo: 4» y 30 s
+  // de espera por cada vuelta, avisos con cuatro vueltas seguidas)
+  private directUseless(): boolean {
+    return /^http:/i.test(this.url) && (!nativeHttpOk(this.url) || !nativeKnownGood('vod'));
+  }
+
+  private mp4Failed(at: number, why: string): boolean {
     const pos = this.played ? this.realPos() : at;
     this.mp4Why = why;
     this.mp4Url = true;
+    if (this.directUseless()) {
+      this.mse?.destroy();
+      this.mse = null;
+      return false;
+    }
     this.direct(pos);
+    return true;
+  }
+
+  // el lector falló sin que el modo directo sirva: Player sigue con sus pasos (otro protocolo, DNS, el panel o el aviso)
+  private readerGaveUp(at: number, why: string): void {
+    if (!this.mp4Failed(at, why)) this.hooks.panelFailed?.();
   }
 
   // error del reproductor con el MP4 leído por la app: true = se sigue con el modo directo de siempre
@@ -781,8 +813,7 @@ export class Playback {
     }
     if (!this.mse || this.mp4Url) return false;
     const e: any = (this.v as any).error;
-    this.mp4Failed(this.played ? this.realPos() : this.wantAt, why + (e?.code ? ' ' + e.code : '') + (this.mse.why ? ' · ' + this.mse.why : ''));
-    return true;
+    return this.mp4Failed(this.played ? this.realPos() : this.wantAt, why + (e?.code ? ' ' + e.code : '') + (this.mse.why ? ' · ' + this.mse.why : ''));
   }
 
   // la app todavía arma el MP4 (el reproductor espera más antes de darlo por perdido)
@@ -811,6 +842,8 @@ export class Playback {
       // una vez por sesión: con Vega OS anterior a 2.0, cómo hacer que todo abra al instante
       const v = osVersion();
       if (osBefore2(v)) this.hooks.toast(t('Este Fire TV tiene Vega OS {v}. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran al instante.', { v }));
+      // (2.1.0) el equipo no dice su versión (Platform.constants solo trae keplerOSVariant): el mismo consejo sin el número
+      else if (!/\d/.test(v)) this.hooks.toast(t('El sistema de este Fire TV no abre los videos con el reproductor de Amazon. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran más rápido.'));
     }
   }
 
@@ -1508,10 +1541,15 @@ export class Playback {
           this.toRemux(it.mp4, it.label, user, t('Cambiando a {x}…', { x: it.label }));
           return;
         }
-        const pos = this.realPos();
-        this.mp4Audio = it.mp4;
-        this.mp4Paused = this.v.paused;
-        this.direct(pos);
+        // 2.1.0: el mismo lector cambia de idioma con lo ya bajado (sin abrir de nuevo ni esperar al servidor)
+        if (this.mse instanceof Mp4Mse && !this.mse.noAudio && this.mse.switchAudio(it.mp4)) {
+          this.mp4Audio = it.mp4;
+        } else {
+          const pos = this.realPos();
+          this.mp4Audio = it.mp4;
+          this.mp4Paused = this.v.paused;
+          this.direct(pos);
+        }
       }
       this.audioKey = it.key;
       if (user) {
@@ -1817,7 +1855,18 @@ export class Playback {
 
   // textos de un subtítulo que la app lee del MKV (null = de imagen, otro formato o sin lector propio)
   private localCues(it: SubItem): Cue[] | null {
-    return it.probe !== undefined && this.mse instanceof MkvMse && !this.mp4Url ? this.mse.subCues(it.probe) : null;
+    if (it.probe === undefined || !this.mse || this.mp4Url) return null;
+    // (2.1.0) también los de texto de un MP4 (tx3g / WebVTT): los lee el lector junto con el video
+    return this.mse.subCues(it.probe);
+  }
+
+  // las pistas de subtítulos de texto que leyó el lector de MP4 van al menú si el panel no las conocía (2.1.0)
+  private readerSubs(m: Mp4Mse): void {
+    const subs = m.subList();
+    if (!subs.length) return;
+    if (!this.probe?.ok) {
+      this.probe = { ok: true, container: 'mp4', audio: m.tracks.map((tr, i) => ({ id: String(i), lang: tr.lang, codec: tr.codec, name: '', def: !!tr.def, forced: false })), subs };
+    } else if (!this.probe.subs.length) this.probe = { ...this.probe, subs };
   }
 
   private async extSub(s: number, label: string): Promise<void> {

@@ -1,4 +1,4 @@
-// Índice guardado en el equipo (src/player/indexstore.ts): ida y vuelta de base64, los 8 más recientes, archivo que
+// Índice guardado en el equipo (src/player/indexstore.ts): ida y vuelta de base64, los 12 más recientes, archivo que
 // cambió y almacenamiento lento. Sin Vega ni red: AsyncStorage es un mapa en memoria.
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -61,21 +61,21 @@ test('guarda y lee el índice de un archivo; http y https son el mismo archivo',
   for (const k of disk.keys()) if (!k.startsWith('latmpx:')) assert.ok(k.startsWith('latmpxidx:'), k);
 });
 
-test('quedan los 8 más recientes; lo más viejo se borra del equipo', async () => {
-  for (let i = 0; i < 11; i++) {
+test('quedan los 12 más recientes (2.1.0: también los de Continuar viendo); lo más viejo se borra del equipo', async () => {
+  for (let i = 0; i < 15; i++) {
     ix.saveIndex('http://srv.test/movie/u/p/' + (100 + i) + '.mp4', 1000 + i, bytes(50000, i));
     await settled('http://srv.test/movie/u/p/' + (100 + i) + '.mp4');
   }
   await sleep(50);
-  assert.equal(ix.hasIndex('http://srv.test/movie/u/p/110.mp4'), true);
+  assert.equal(ix.hasIndex('http://srv.test/movie/u/p/114.mp4'), true);
   assert.equal(ix.hasIndex('http://srv.test/movie/u/p/103.mp4'), true);
   assert.equal(ix.hasIndex('http://srv.test/movie/u/p/102.mp4'), false);
   assert.equal(ix.hasIndex('http://srv.test/movie/u/p/10.mp4'), false);
-  assert.equal([...disk.keys()].filter(k => k.startsWith('latmpxidx:')).length, 8);
+  assert.equal([...disk.keys()].filter(k => k.startsWith('latmpxidx:')).length, 12);
 });
 
 test('texto guardado a medias (se cortó la escritura) no se usa', async () => {
-  const url = 'http://srv.test/movie/u/p/110.mp4';
+  const url = 'http://srv.test/movie/u/p/114.mp4';
   assert.ok(await ix.loadIndex(url));
   for (const k of disk.keys()) if (k.startsWith('latmpxidx:')) disk.set(k, disk.get(k).slice(0, -8));
   assert.equal(await ix.loadIndex(url), null);

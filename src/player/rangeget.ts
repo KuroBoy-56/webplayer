@@ -10,7 +10,9 @@ import { takeRange } from './prefetch';
 // lastData: cuándo llegó el último tramo (Player espera más mientras el servidor sigue entregando)
 // reqs / waitMs: pedidos hechos y lo que tardó el servidor en contestar cada uno (para el aviso de apertura lenta)
 // errs: pedidos que se cortaron por la red (la descarga adelantada mira si pasa con varios pedidos a la vez)
-export type RangeState = { close: boolean; unbounded: boolean; size: number; why: string; lastData?: number; reqs?: number; waitMs?: number; errs?: number; from?: number };
+// rate: bytes por segundo que entrega cada conexión una vez que contesta (sin la espera), para el tamaño de las ventanas
+// rejected: pedidos que el servidor rechazó (403 / 429 / 503) porque todavía contaba la conexión anterior de la línea
+export type RangeState = { close: boolean; unbounded: boolean; size: number; why: string; lastData?: number; reqs?: number; waitMs?: number; errs?: number; from?: number; rate?: number; rejected?: number };
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -66,6 +68,23 @@ function free(): void {
 // olvida y se vuelve a la original.
 const finalUrl = new Map<string, string>();
 
+// Línea de una conexión (2.1.0): XUI sigue contando la conexión de un pedido unos cientos de ms después de terminarlo y
+// rechaza el siguiente con 403 si llega antes (simulador: cada pedido seguido se rechazaba 1-2 veces y costaba ~0,8 s).
+// Se aprende cuánto tarda en soltarla cada servidor y el pedido siguiente espera eso, en lugar de rechazo + reintento.
+const lastEnd = new Map<string, number>();
+const linger = new Map<string, number>();
+export function lingerOf(url: string): number {
+  return linger.get(hostOf(url)) || 0;
+}
+// espera del servidor y ritmo por conexión vistos en esta sesión (el primer pedido de una película ya sabe cómo es el
+// servidor y la descarga adelantada arma ventanas del tamaño justo desde el principio)
+const hostWait = new Map<string, number>();
+const hostRate = new Map<string, number>();
+export function hostStats(url: string): { wait: number; rate: number } {
+  const h = hostOf(url);
+  return { wait: hostWait.get(h) || 0, rate: hostRate.get(h) || 0 };
+}
+
 export async function rangeGet(url: string, off: number, len: number, st: RangeState, requests: Set<AbortController>, alive: () => boolean): Promise<Uint8Array | null> {
   // el primer pedido ya lanzado por Player mientras se iniciaba el reproductor (prefetch.ts)
   const pre = takeRange(url, off, len);
@@ -76,22 +95,53 @@ export async function rangeGet(url: string, off: number, len: number, st: RangeS
       return got.data;
     }
   }
+  const host = hostOf(url);
+  let refused = 0;
   for (let tries = 0; tries < 3 && alive() && !st.unbounded; tries++) {
     if (!(await slot(url, alive))) return null;
+    // de a un pedido: el servidor todavía puede contar la conexión del anterior (linger)
+    if (isSingle(url)) {
+      const gap = (lastEnd.get(host) || 0) + (linger.get(host) || 0) - Date.now();
+      if (gap > 0) await sleep(gap);
+      if (!alive()) {
+        free();
+        return null;
+      }
+    }
     const ctrl = new AbortController();
     requests.add(ctrl);
     let phase = 'contestar';
-    let limit = 12000;
+    // plazo para que el servidor empiece a contestar: 30 s (antes 12 s). Con el índice al final de un archivo grande, XUI
+    // puede tardar más en llegar a esa parte del disco; cortar a los 12 s y pedir otra vez volvía a empezar la búsqueda
+    // y el índice no llegaba nunca (aviso «lector MP4: sin índice en 120 s» cuatro veces seguidas)
+    let limit = 30000;
     let timer = setTimeout(() => ctrl.abort(), limit);
     const t0 = Date.now();
+    let sent = false;
     try {
       // off < 0: los últimos len bytes del archivo (donde va el índice de casi todos los MP4 de los servidores IPTV)
       const headers: Record<string, string> = { 'User-Agent': UA, Range: off < 0 ? 'bytes=-' + len : 'bytes=' + off + '-' + (off + len - 1) };
       if (st.close) headers.Connection = 'close';
       const target = finalUrl.get(url) || url;
+      sent = true;
       const r = await fetch(target, { headers, signal: ctrl.signal });
-      st.reqs = (st.reqs || 0) + 1;
-      st.waitMs = (st.waitMs || 0) + (Date.now() - t0);
+      const waited = Date.now() - t0;
+      // rechazado al toque justo después de otro pedido: el servidor todavía contaba esa conexión. Se aprende cuánto
+      // esperar y se pide otra vez (sin contar como pedido fallido ni cerrar conexiones)
+      if ((r.status === 403 || r.status === 429 || r.status === 503) && isSingle(url) && refused < 4 && Date.now() - (lastEnd.get(host) || 0) < 4000) {
+        refused++;
+        st.rejected = (st.rejected || 0) + 1;
+        linger.set(host, Math.min(2500, Math.max(400, (linger.get(host) || 0) * 2)));
+        ctrl.abort();
+        tries--;
+        continue;
+      }
+      if (r.status === 206) {
+        st.reqs = (st.reqs || 0) + 1;
+        st.waitMs = (st.waitMs || 0) + waited;
+        const hw = hostWait.get(host);
+        hostWait.set(host, hw ? hw * 0.7 + waited * 0.3 : waited);
+      }
       if (r.status !== 206 && target !== url) {
         // el token del balanceador venció o no admite otro pedido: otra vez por la dirección original
         finalUrl.delete(url);
@@ -135,8 +185,16 @@ export async function rangeGet(url: string, off: number, len: number, st: RangeS
       phase = 'bajar';
       limit = 15000 + Math.round((len / (40 * 1024)) * 1000);
       timer = setTimeout(() => ctrl.abort(), limit);
+      const t1 = Date.now();
       const out = new Uint8Array(await r.arrayBuffer());
       st.lastData = Date.now();
+      // ritmo de la conexión sin la espera (solo con tramos de más de 256 KB: los chicos no dicen nada)
+      if (out.length >= 262144) {
+        const bps = out.length / Math.max(0.05, (Date.now() - t1) / 1000);
+        st.rate = st.rate ? st.rate * 0.6 + bps * 0.4 : bps;
+        const hr = hostRate.get(host);
+        hostRate.set(host, hr ? hr * 0.6 + bps * 0.4 : bps);
+      }
       return out;
     } catch (e: any) {
       if (!alive()) return null;
@@ -151,6 +209,7 @@ export async function rangeGet(url: string, off: number, len: number, st: RangeS
     } finally {
       clearTimeout(timer);
       requests.delete(ctrl);
+      if (sent) lastEnd.set(host, Date.now());
       free();
     }
   }

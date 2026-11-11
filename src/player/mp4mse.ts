@@ -4,9 +4,9 @@
 // bajan de a ~4 s las muestras de video y del audio predeterminado y se entregan como MP4 fragmentado (mp4box.ts).
 // No pasa por la VPS: solo el cambio de idioma la usa. Saltos (◀▶, Continuar viendo) desde el cuadro clave anterior.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import { rangeGet, RangeState } from './rangeget';
+import { hostStats, rangeGet, RangeState } from './rangeget';
 import { lineLimit, ReadAhead } from './readahead';
-import { dropIndex, hasIndex, loadIndex, saveIndex, STALE_INDEX, fromBase64, toBase64 } from './indexstore';
+import { dropIndex, hasIndex, loadIndex, saveIndex, saved, STALE_INDEX, fromBase64, toBase64 } from './indexstore';
 import { shareIndex, sharedIndex, sharedKnown, sharedStale } from './sharedindex';
 import { dropPrefetch, prefetchedAt } from './prefetch';
 export { STALE_INDEX };
@@ -15,6 +15,8 @@ import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VID
 import { hevcCodec } from './mkvparse';
 import { sameLang } from '../lib/lang';
 import { StartWatch } from './startwatch';
+import { addCue, sampleText, SUB_ENTRIES, SUB_HANDLERS } from './mp4subs';
+import type { Cue } from '../lib/vtt';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const AHEAD = 40; // segundos bajados por adelantado
@@ -143,7 +145,8 @@ export function slimMoov(moov: Uint8Array, keep: number): Uint8Array {
     const hdlr = mdia ? kid(moov, mdia.s, mdia.e, 'hdlr') : null;
     const kind = hdlr ? typ(moov, hdlr.s + 8) : '';
     if (kind === 'soun') audio++;
-    if (kind === 'vide' || (kind === 'soun' && audio === keep)) out.push(raw(k));
+    // (los subtítulos de texto pesan poco: enteros, así se leen sin el índice completo)
+    if (kind === 'vide' || (kind === 'soun' && audio === keep) || SUB_HANDLERS.has(kind)) out.push(raw(k));
     else out.push(strip(k, ['mdia', 'minf', 'stbl']));
   }
   return concat(out);
@@ -336,11 +339,21 @@ function rememberMoov(url: string, moov: Uint8Array): void {
   const k = cacheKey(url);
   MOOV_CACHE.delete(k);
   MOOV_CACHE.set(k, moov);
-  while (MOOV_CACHE.size > 3) MOOV_CACHE.delete(MOOV_CACHE.keys().next().value as string);
+  // dos como mucho (cada uno hasta ~10 MB de memoria de la app; el resto queda guardado en el equipo)
+  while (MOOV_CACHE.size > 2) MOOV_CACHE.delete(MOOV_CACHE.keys().next().value as string);
 }
 
 // tamaño de los archivos cuyo índice está en memoria
 const SIZES = new Map<string, number>();
+
+// La app pasa a segundo plano (2.1.0): Vega cierra las apps que ocupan más de 150 MB en segundo plano y al volver
+// muestra «Could not resume where you left off». Se suelta lo que vuelve a leerse (índices en memoria, lo leído a
+// medias, lo que preparaba la ficha); lo guardado en el equipo queda
+export function freeMp4Memory(): void {
+  MOOV_CACHE.clear();
+  PARTIAL.clear();
+  for (const w of Array.from(WARM.values())) w.release();
+}
 
 // ¿se sabe dónde está el índice de este archivo? (el lector lo pide directo, sin leer antes el principio)
 export function mp4Spot(url: string): boolean {
@@ -383,6 +396,30 @@ export function preloadMp4(url: string, at = 0, wantLang = ''): { stop: () => vo
   const done = m.prepare(at).then(e => {
     if (e && WARM.get(k) === m) WARM.delete(k);
     return e ? (m.why === NOT_MP4_MKV ? 'mkv' : '') : 'ok';
+  });
+  return { stop: () => m.release(), done };
+}
+
+// Solo el índice entero de un MP4 (2.1.0, Continuar viendo en segundo plano: idxwarm.ts), sin video: queda guardado en
+// el equipo (y en la VPS / VDS si la línea tiene, como siempre) y el lector suelta todo al terminar. done: 'ok', 'mkv'
+// (un MKV con extensión mp4), 'busy' (otro lector lo está leyendo) o ''
+export function preloadIndex(url: string): { stop: () => void; done: Promise<string> } {
+  const k = cacheKey(url);
+  if (MOOV_CACHE.has(k) || hasIndex(url)) return { stop: () => {}, done: Promise.resolve('ok') };
+  if (WARM.has(k)) return { stop: () => {}, done: Promise.resolve('busy') };
+  const m = new Mp4Mse(null as unknown as VideoPlayer, url, -1, null, '');
+  m.warm = true;
+  m.idxOnly = true;
+  WARM.set(k, m);
+  const done = m.fullIndex().then(ok => {
+    const r = ok ? 'ok' : m.why === NOT_MP4_MKV ? 'mkv' : '';
+    // (si Player se quedó con este lector mientras tanto, sigue siendo suyo: release no hace nada)
+    if (m.warm) {
+      m.release();
+      // en memoria no queda (memoria de la app): se abre desde lo guardado en el equipo
+      MOOV_CACHE.delete(k);
+    }
+    return r;
   });
   return { stop: () => m.release(), done };
 }
@@ -471,6 +508,20 @@ export class Mp4Mse {
 
   // preparado desde la ficha, todavía sin reproductor
   warm = false;
+  // solo el índice, sin el principio del video (idxwarm.ts)
+  idxOnly = false;
+
+  // el índice entero (no a medias) y guardado; false si no se pudo
+  async fullIndex(): Promise<boolean> {
+    const err = await this.prepare(0);
+    if (err || !this.alive) return false;
+    for (let i = 0; i < 900 && this.alive && this.part; i++) await sleep(200);
+    if (!this.alive || this.part || !this.index) return false;
+    // keepIndex lo guarda en el equipo con un temporizador de 0 ms: se espera a que quede escrito (como mucho 10 s)
+    await sleep(50);
+    await Promise.race([saved(), sleep(10000)]);
+    return true;
+  }
 
   // El lector para abrir url: el que la ficha dejó preparado (mismo audio: el predeterminado) o uno nuevo
   static open(v: VideoPlayer, url: string, selectedAudio: number, index: Uint8Array | null, wantLang = ''): Mp4Mse {
@@ -480,6 +531,7 @@ export class Mp4Mse {
       WARM.delete(k);
       if (w.alive && selectedAudio < 0 && !index && w.wantLang === wantLang) {
         w.warm = false;
+        w.idxOnly = false;
         w.v = v;
         return w;
       }
@@ -519,7 +571,7 @@ export class Mp4Mse {
   // Índice del archivo, pistas y el primer tramo del video pedido a la descarga adelantada. '' = listo
   private async doPrepare(at: number): Promise<string> {
     if (!this.t0) this.t0 = Date.now();
-    this.fromStart = at <= 5;
+    this.fromStart = at <= 5 && !this.idxOnly;
     // el índice ya leído de este archivo (volver a abrirlo, Continuar viendo, cambiar de audio): sin pedirlo otra vez.
     // Primero el de la memoria, después el guardado en el equipo (indexstore.ts) y recién después el servidor
     let moov = this.index || MOOV_CACHE.get(cacheKey(this.url)) || null;
@@ -564,6 +616,7 @@ export class Mp4Mse {
       const m = moov;
       const traks = kids(m, 0, m.length).filter(k => k.t === 'trak').map(k => parseTrak(m, k.s, k.e)).filter((x): x is Trk => !!x);
       vt = traks.find(x => x.kind === 'vide') || null;
+      this.subTrks = traks.filter(x => SUB_HANDLERS.has(x.kind));
       const auds = traks.filter(x => x.kind === 'soun');
       this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '', def: !!x.enabled }));
       const byLang = this.selectedAudio < 0 && this.wantLang ? auds.find(x => sameLang(x.lang, this.wantLang)) : undefined;
@@ -626,6 +679,8 @@ export class Mp4Mse {
     else if (dur > 1) this.bps = mediaEnd / dur;
     this.ra.hold = false;
     this.ra.end = mediaEnd;
+    // ~40 s ya leídos quedan detrás (como mucho 12 MB): otro idioma sale de ahí sin pedirle nada al servidor (switchAudio)
+    this.ra.keepBehind = Math.min(12 * 1048576, Math.round(this.bps * 40));
     if (this.warm) {
       // desde la ficha: solo el arranque (~6 s de video) y el índice al equipo ya (no hay reproductor que esperar)
       this.ra.limit = Math.max(1048576, Math.min(6 * 1048576, Math.round(this.bps * 6)));
@@ -633,8 +688,10 @@ export class Mp4Mse {
     }
     // El primer tramo se pide ya, mientras se abre el reproductor (cada pedido al servidor IPTV tarda 1,5-6 s en
     // contestar: avisos «tardó en empezar»). Con el índice guardado en el equipo esto pasa apenas se abre el video
-    this.place(at);
-    this.prime();
+    if (!this.idxOnly) {
+      this.place(at);
+      this.prime();
+    }
     this.cfg = { vt, at0, vc, ac, dolby, hv, mime, typeOk, vcodec };
     return '';
   }
@@ -692,10 +749,47 @@ export class Mp4Mse {
     if (at > 0) this.v.currentTime = at;
     this.pump();
     this.watch = setInterval(() => this.alive && this.unstick(), 300);
-    this.v.play();
+    this.startPlay();
     this.onTracks();
     this.keepIndex();
     return '';
+  }
+
+  // Línea de un pedido a la vez (2.1.0): el video arranca cuando lo bajado alcanza hasta que llegue la ventana siguiente
+  // (espera del servidor + bajada, como mucho 10 s), no apenas hay una imagen. Antes, en alta calidad empezaba con 2 s de
+  // video y se detenía 5 s al toque (simulador, película de 5 Mbps); ahora la misma espera queda antes de la primera
+  // imagen y después sigue de corrido. Con varias conexiones, como siempre
+  private holding = false;
+  private noPlay = false;
+  // Playback dejó el video en pausa (se eligió otro idioma estando en pausa): el arranque con colchón no lo reanuda
+  cancelPlay(): void {
+    this.noPlay = true;
+  }
+  private startPlay(): void {
+    if (!(this.ra.single || this.oneConn)) {
+      this.v.play();
+      return;
+    }
+    const t0 = Date.now();
+    const g = this.gen;
+    this.holding = true;
+    const go = () => {
+      if (!this.alive) return;
+      if (this.noPlay) {
+        this.holding = false;
+        return;
+      }
+      const ahead = this.bufEnd() - (this.v.currentTime || 0);
+      const need = Math.min(10, this.ra.eta() + 1.5);
+      // (un salto mientras tanto: seekTo sigue igual; se suelta para no quedar en pausa)
+      if (g !== this.gen || ahead >= need || ahead >= 30 || Date.now() - t0 > 12000 || (this.vi >= (this.vt?.dts.length || 0) && ahead > 0)) {
+        this.holding = false;
+        this.v.play();
+        return;
+      }
+      setTimeout(go, 250);
+    };
+    go();
   }
 
   fileSize(): number {
@@ -776,10 +870,97 @@ export class Mp4Mse {
     }
   }
 
-  // ◀▶ o un salto: lo ya bajado al momento; si no, desde el cuadro clave anterior
-  async seekTo(t: number): Promise<void> {
+  // ---------- subtítulos de texto del MP4 (2.1.0, mp4subs.ts) ----------
+  private subTrks: Trk[] = [];
+  private subGot = new Map<number, { list: Cue[]; done: Set<number> }>();
+
+  // las pistas de subtítulos del archivo (para el menú; el panel las cuenta en el mismo orden: 0:s:N)
+  subList(): { id: string; lang: string; codec: string; name: string; def: boolean; forced: boolean }[] {
+    return this.subTrks.map((x, i) => ({ id: String(i), lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '', name: '', def: false, forced: false }));
+  }
+
+  // textos de la pista N (crece mientras se baja el video); null = de imagen u otro formato (los prepara el servidor)
+  subCues(n: number): Cue[] | null {
+    const tk = this.subTrks[n];
+    const m = this.index;
+    if (!tk || !tk.entry || !SUB_ENTRIES.has(typ(tk.entry, 4))) return null;
+    let st = this.subGot.get(n);
+    if (!st) {
+      if (!m || !fillTables(m, tk)) return null;
+      st = { list: [], done: new Set() };
+      this.subGot.set(n, st);
+      this.collectSubs();
+    }
+    return st.list;
+  }
+
+  // saca de lo ya bajado los textos de ~10 s antes a 90 s después del segundo actual (no pide nada al servidor)
+  private collectSubs(): void {
+    if (!this.subGot.size || !this.alive) return;
+    const t = this.v?.currentTime || 0;
+    for (const [n, st] of this.subGot) {
+      const tk = this.subTrks[n];
+      if (!tk || !tk.entry || !tk.size.length) continue;
+      const kind = typ(tk.entry, 4);
+      let lo = 0;
+      let hi = tk.dts.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (this.secs(tk, tk.dts[mid]) < t - 10) lo = mid + 1;
+        else hi = mid;
+      }
+      for (let i = lo; i < tk.dts.length; i++) {
+        const s0 = this.secs(tk, tk.dts[i]);
+        if (s0 > t + 90) break;
+        if (st.done.has(i)) continue;
+        const d = this.ra.peek(tk.off[i], tk.size[i]) || this.ra2?.peek(tk.off[i], tk.size[i]) || null;
+        if (!d) continue;
+        st.done.add(i);
+        const text = sampleText(kind, d);
+        if (!text) continue;
+        const e = i + 1 < tk.dts.length ? this.secs(tk, tk.dts[i + 1]) : s0 + 4;
+        addCue(st.list, { s: s0, e: Math.max(e, s0 + 0.3), text });
+      }
+    }
+  }
+
+  // Otro idioma sin volver a abrir el video (2.1.0). Los MP4 de IPTV traen los audios de todos los idiomas intercalados
+  // con el video: lo ya bajado (ReadAhead.keepBehind) tiene también el otro idioma. Se cambia la pista de audio y se
+  // vuelve a entregar desde el segundo actual, sin MediaSource nuevo, sin leer el índice ni (casi siempre) pedir nada al
+  // servidor: antes era abrir todo de nuevo (una espera del servidor como mínimo, 4-10 s con la pantalla cargando).
+  // false = no se puede así (índice a medias, otro códec u otra frecuencia): el que llama abre de nuevo como antes
+  switchAudio(idx: number): boolean {
+    if (!this.sb || !this.vt || !this.at || this.noAudio || this.part || !this.index || idx === this.audioIdx) return false;
+    const m = this.index;
+    const auds = kids(m, 0, m.length)
+      .filter(k => k.t === 'trak')
+      .map(k => parseTrak(m, k.s, k.e))
+      .filter((x): x is Trk => !!x && x.kind === 'soun');
+    const nt = auds[idx];
+    if (!nt || !fillTables(m, nt)) return false;
+    const ac = audioCfg(nt);
+    const cur = audioCfg(this.at);
+    // el mismo inicio sirve solo con AAC de la misma configuración (frecuencia, canales, perfil)
+    if (!ac || !cur || ac.rate !== cur.rate || ac.channels !== cur.channels || ac.config.join(',') !== cur.config.join(',')) return false;
+    const mvhd = kid(m, 0, m.length, 'mvhd');
+    const mts = mvhd ? u32(m, mvhd.s + (m[mvhd.s] === 1 ? 20 : 12)) || 1 : 1;
+    const offOf = (x: Trk) => x.delay / mts - x.mediaTime / x.ts;
+    // el video sigue con su corrimiento (ya entregado así); el audio nuevo, respecto del mismo origen
+    const base = offOf(this.vt) - this.vt.shift;
+    nt.shift = Math.max(0, offOf(nt) - base);
+    this.at = nt;
+    this.arate = ac.rate;
+    this.audioIdx = idx;
+    this.selectedAudio = idx;
+    void this.seekTo(this.v.currentTime || 0, true);
+    return true;
+  }
+
+  // ◀▶ o un salto: lo ya bajado al momento; si no, desde el cuadro clave anterior. again: se vuelve a entregar aunque
+  // ya esté bajado (otro idioma)
+  async seekTo(t: number, again = false): Promise<void> {
     if (!this.sb || !this.vt) return;
-    if (this.isBuffered(t)) {
+    if (!again && this.isBuffered(t)) {
       this.v.currentTime = t;
       return;
     }
@@ -977,7 +1158,14 @@ export class Mp4Mse {
         // lo que suele ocupar el video y el primer audio: ~40 % del índice (1,5-6 MB). Con varias conexiones, en 3 partes
         // iguales a la vez (llegan juntas); con una, de una vez (cada pedido más es otra espera del servidor)
         const need = Math.max(1572864, Math.min(6291456, Math.round(total * 0.4)));
-        const want = Math.min(total, single ? need : Math.ceil(need / 3));
+        // De a un pedido (2.1.0): si lo que falta del índice baja en menos de lo que tarda otro pedido en contestar, el
+        // índice entero de una vez; si no, el 60 %. Con el 40 % el video y el audio no siempre alcanzaban (con 2 idiomas
+        // ocupan ~70 % del índice) y hacía falta otro pedido: 4 s más (simulador, película de 5 Mbps)
+        const hs = hostStats(this.url);
+        const wr = ((hs.wait || 3500) / 1000) * (hs.rate || this.rs.rate || 1000000);
+        // (en segundo plano, idxwarm.ts: entero siempre; nadie espera la primera imagen)
+        const one = this.idxOnly || total <= Math.max(need + wr, 6291456) ? total : Math.max(need, Math.round(total * 0.6));
+        const want = Math.min(total, single ? one : Math.ceil(need / 3));
         // una sola conexión: solo lo que se lee, nada por adelantado (otro pedido a la vez lo rechaza el servidor)
         if (single) {
           this.mra.goSingle();
@@ -1165,8 +1353,12 @@ export class Mp4Mse {
       .map(k => parseTrak(body, k.s, k.e))
       .filter((x): x is Trk => !!x && x.kind === 'soun');
     this.tracks = auds.map(x => ({ lang: x.lang, codec: x.entry ? typ(x.entry, 4) : '', def: !!x.enabled }));
+    this.subTrks = kids(body, 0, body.length)
+      .filter(k => k.t === 'trak')
+      .map(k => parseTrak(body, k.s, k.e))
+      .filter((x): x is Trk => !!x && SUB_HANDLERS.has(x.kind));
     this.onHeader();
-    if (this.warm || this.tInit) this.keepIndex(3000);
+    if (this.warm || this.tInit) this.keepIndex(this.idxOnly ? 0 : 3000);
   }
 
   // un tramo grande (el índice al final del archivo) en 3 partes a la vez (de 1 MB como mínimo): una sola vuelta de
@@ -1292,6 +1484,53 @@ export class Mp4Mse {
     return fragment(this.seq++, id, conv(tk.dts[from]) + Math.round(tk.shift * scale), samples, concat(parts));
   }
 
+  // el tramo con las muestras de video y audio que terminan antes del byte avail (al menos 1 s de video, cortado donde
+  // todo lo anterior se muestra antes que lo siguiente); null si no alcanza
+  private fitIn(avail: number): ReturnType<Mp4Mse['chunkPlan']> | null {
+    const vt = this.vt!;
+    const a = this.at;
+    const n = vt.dts.length;
+    if (this.vi >= n) return null;
+    const t0 = this.secs(vt, vt.dts[this.vi]);
+    const target = this.firstOut ? Math.max(1.5, this.firstAt - t0 + 1.5) : CHUNK;
+    // hasta qué segundo llega el audio bajado (el reproductor necesita los dos: el video se corta ahí)
+    let aLim = Infinity;
+    if (a) {
+      let k = this.ai;
+      while (k < a.dts.length && a.off[k] + a.size[k] <= avail) k++;
+      if (k < a.dts.length) aLim = this.secs(a, a.dts[k]);
+    }
+    let vj = this.vi;
+    let maxP = -Infinity;
+    let cut = -1;
+    while (vj < n && vt.off[vj] + vt.size[vj] <= avail) {
+      const t = this.secs(vt, vt.dts[vj]);
+      if (t >= t0 + target || t >= aLim - 0.1) break;
+      maxP = Math.max(maxP, this.ptsU(vj));
+      vj++;
+      let closed = true;
+      for (let k = vj; k < Math.min(n, vj + 16); k++) if (this.ptsU(k) <= maxP) { closed = false; break; }
+      if (closed) cut = vj;
+    }
+    // si el tramo entero entra, el plan de siempre
+    if (vj < n && this.secs(vt, vt.dts[vj]) >= t0 + target && vt.off[vj] <= avail && this.secs(vt, vt.dts[vj]) < aLim - 0.1) return null;
+    if (cut < 0 || this.secs(vt, vt.dts[cut]) - t0 < 1) return null;
+    vj = cut;
+    let nextP = Infinity;
+    for (let k = vj; k < Math.min(n, vj + 16); k++) nextP = Math.min(nextP, this.ptsU(k));
+    const tEnd = vj < n ? this.secs(vt, nextP) : Infinity;
+    let aj = this.ai;
+    if (a) while (aj < a.dts.length && this.secs(a, a.dts[aj]) < tEnd && a.off[aj] + a.size[aj] <= avail) aj++;
+    // el audio de ese tramo todavía no llegó entero: no se corta (el reproductor necesita los dos)
+    if (a && aj < a.dts.length && this.secs(a, a.dts[aj]) < tEnd - 0.5) return null;
+    const vs = this.vi < vj ? this.span(vt, this.vi, vj) : null;
+    const as = a && this.ai < aj ? this.span(a, this.ai, aj) : null;
+    const lo = Math.min(vs ? vs[0] : Infinity, as ? as[0] : Infinity);
+    const hi = Math.max(vs ? vs[1] : 0, as ? as[1] : 0);
+    const need = (vs ? vs[2] : 0) + (as ? as[2] : 0);
+    return { vj, aj, vs, as, lo, hi, need };
+  }
+
   // bytes que ocupan las muestras [from, to)
   private span(tk: Trk, from: number, to: number): [number, number, number] {
     let lo = Infinity;
@@ -1306,10 +1545,16 @@ export class Mp4Mse {
   }
 
   // el próximo tramo: muestras de video [vi, vj) y de audio [ai, aj), y los bytes que ocupan en el archivo
-  private chunkPlan(): { vj: number; aj: number; vs: [number, number, number] | null; as: [number, number, number] | null; lo: number; hi: number; need: number } {
+  private chunkPlan(avail = Infinity): { vj: number; aj: number; vs: [number, number, number] | null; as: [number, number, number] | null; lo: number; hi: number; need: number } {
     // ~4 s de video (el primero 1,5 s: empieza a verse apenas llega lo mínimo) y el audio de ese mismo tramo
     const vt = this.vt!;
     const a = this.at;
+    // avail: hasta dónde está bajado (2.1.0): el tramo se corta ahí si alcanza para 1 s de video, en lugar de esperar la
+    // ventana siguiente entera con segundos de video ya bajados
+    if (avail < Infinity) {
+      const fit = this.fitIn(avail);
+      if (fit) return fit;
+    }
     const t0 = this.secs(vt, vt.dts[Math.min(this.vi, vt.dts.length - 1)]);
     const n = vt.dts.length;
     const target = this.firstOut ? Math.max(1.5, this.firstAt - t0 + 1.5) : CHUNK;
@@ -1360,10 +1605,18 @@ export class Mp4Mse {
           return;
         }
         if (this.bufEnd() - (this.v.currentTime || 0) > AHEAD) {
+          this.collectSubs();
           await sleep(1000);
           continue;
         }
-        const { vj, aj, vs, as, lo, hi, need } = this.chunkPlan();
+        // lo que ya está bajado desde la próxima muestra (solo con una sola lectura: video y audio juntos)
+        let avail = Infinity;
+        if (!this.ra2 && this.vi < vt.dts.length) {
+          const from = Math.min(vt.off[this.vi], a && this.ai < a.dts.length ? a.off[this.ai] : Infinity);
+          const got = this.ra.doneUntil(from);
+          if (got > from) avail = got;
+        }
+        const { vj, aj, vs, as, lo, hi, need } = this.chunkPlan(avail);
         let vb: Uint8Array | null = null;
         let ab: Uint8Array | null = null;
         let vbase = 0;
@@ -1412,6 +1665,7 @@ export class Mp4Mse {
         }
         this.vi = vj;
         this.ai = aj;
+        this.collectSubs();
       }
     } finally {
       this.running = false;
@@ -1474,7 +1728,7 @@ export class Mp4Mse {
     this.sw.moved(to);
     this.v.currentTime = to;
     this.lastMove = Date.now();
-    if (this.v.paused) this.v.play();
+    if (this.v.paused && !this.holding) this.v.play();
   }
 }
 

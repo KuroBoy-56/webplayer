@@ -13,7 +13,7 @@ import { readJson, writeJson } from '../lib/storage';
 
 const PREFIX = 'latmpxidx:';
 const LIST = 'idx_list_1';
-const MAX_ITEMS = 8;
+const MAX_ITEMS = 12; // 2.1.0: también los de Continuar viendo leídos en segundo plano (idxwarm.ts)
 const MAX_BYTES = 32 * 1048576; // de texto guardado (base64: ~24 MB de índices)
 const MAX_ONE = 8 * 1048576;
 const LOAD_MS = 2500;
@@ -142,6 +142,10 @@ export async function loadText(url: string, kind: string): Promise<{ size: numbe
 }
 
 let saving: Promise<void> = Promise.resolve();
+// termina cuando se escribió lo pedido hasta ahora (idxwarm.ts suelta el índice de la memoria recién entonces)
+export function saved(): Promise<void> {
+  return saving;
+}
 
 // guarda en segundo plano (una escritura a la vez); lo más viejo se borra
 export function saveText(url: string, kind: string, size: number, make: () => Promise<string> | string): void {

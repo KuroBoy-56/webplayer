@@ -302,10 +302,43 @@ export class MkvMse {
     if (this.startAt > 0) this.v.currentTime = this.startAt + SHIFT;
     this.pump();
     this.watch = setInterval(() => this.alive && this.unstick(), 300);
-    this.v.play();
+    this.startPlay();
     this.onTracks();
     this.keepIndex();
     return '';
+  }
+
+  // Línea de un pedido a la vez (2.1.0, como Mp4Mse.startPlay): el video arranca cuando lo bajado alcanza hasta que
+  // llegue la ventana siguiente (como mucho 10 s de colchón y 12 s de espera); con varias conexiones, como siempre
+  private holding = false;
+  private noPlay = false;
+  cancelPlay(): void {
+    this.noPlay = true;
+  }
+  private startPlay(): void {
+    if (!this.ra.single) {
+      this.v.play();
+      return;
+    }
+    const t0 = Date.now();
+    const g = this.gen;
+    this.holding = true;
+    const go = () => {
+      if (!this.alive) return;
+      if (this.noPlay) {
+        this.holding = false;
+        return;
+      }
+      const ahead = this.bufEnd() - (this.v.currentTime || 0);
+      const need = Math.min(10, this.ra.eta() + 1.5);
+      if (g !== this.gen || ahead >= need || ahead >= 30 || Date.now() - t0 > 12000) {
+        this.holding = false;
+        this.v.play();
+        return;
+      }
+      setTimeout(go, 250);
+    };
+    go();
   }
 
   // solo la cabecera y el índice, sin abrir el video (preloadMkv): quedan en memoria y en el equipo
@@ -902,7 +935,7 @@ export class MkvMse {
     this.sw.moved(to);
     this.v.currentTime = to;
     this.lastMove = Date.now();
-    if (this.v.paused) this.v.play();
+    if (this.v.paused && !this.holding) this.v.play();
   }
 }
 

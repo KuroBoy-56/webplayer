@@ -42,7 +42,12 @@ class Shaka {
 class Mp4 {
   static open(v,url,index,cache){return new Mp4(v,url,index,cache);}
   constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||new Uint8Array([1]);this.noAudio=false;this.tracks=[{lang:'spa',codec:'mp4a'},{lang:'eng',codec:'mp4a'}];mp4s.push(this);}
-  async start(at){if(this.url.includes('mkvbody'))return 'índice: el archivo es MKV';this.v.currentTime=at;this.onTracks();return '';}
+  async start(at){if(this.url.includes('mkvbody'))return 'índice: el archivo es MKV';if(this.url.includes('noindex'))return 'índice: sin contestar en 30 s';this.v.currentTime=at;this.onTracks();return '';}
+  // 2.1.0: con el índice entero cambia de idioma con lo ya bajado (las pruebas «inplace»); si no, se abre de nuevo
+  switchAudio(i){if(!this.url.includes('inplace'))return false;this.audioIdx=i;this.switched=(this.switched||0)+1;return true;}
+  // subtítulos de texto dentro del MP4 (las pruebas «mp4subs»)
+  subList(){return this.url.includes('mp4subs')?[{id:'0',lang:'spa',codec:'tx3g',name:'',def:false,forced:false}]:[];}
+  subCues(n){return this.url.includes('mp4subs')&&n===0?(this.cues||(this.cues=[{s:0,e:5,text:'hola'}])):null;}
   destroy(){}
 }
 class Mkv {
@@ -83,8 +88,9 @@ after(()=>{Module._load=originalLoad;if(previousTs)require.extensions['.ts']=pre
 function setup({tracks=[],cached=null}={}){
   memory={};noNative();calls=[];probe=cached;shakas=[];mp4s=[];mkvs=[];toasts=[];release=null;mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_AAC'}];
   const video={src:'',currentTime:0,duration:600,paused:false,audioTracks:tracks,textTracks:[],play(){this.paused=false;return Promise.resolve();},pause(){this.paused=true;}};
-  const c=new Playback(video,{toast:m=>toasts.push(m),status:()=>{},changed:()=>{},subText:()=>{},fatal:()=>{}});
-  return {c,video};
+  const hooks={toast:m=>toasts.push(m),status:()=>{},changed:()=>{},subText:()=>{},fatal:()=>{},panelFailed:()=>{hooks.gaveUp++;},gaveUp:0};
+  const c=new Playback(video,hooks);
+  return {c,video,hooks};
 }
 const dual = {ok:true,container:'mkv',audio:[{lang:'es',name:'',codec:'aac',def:true},{lang:'en',name:'',codec:'aac',def:false}],subs:[]};
 const tick = ()=>new Promise(r=>setTimeout(r,0));
@@ -437,4 +443,26 @@ test('nativo: lo que la ficha preparaba con el lector se corta al abrir con el n
   c2.load(u2,0,false);await tick();
   assert.equal(mp4s.length,1);
   ready.delete(u2);await c2.destroy();
+});
+
+test('2.1.0: el lector no pudo con un MP4 por http y el nativo nunca abrió en el equipo: sin el modo directo (error 4 seguro), Player sigue ya',async()=>{
+  const {c,video,hooks}=setup();c.load('http://fixture.invalid/movie/u/p/noindex.mp4',0,false);await tick();await tick();
+  assert.notEqual(video.src,'http://fixture.invalid/movie/u/p/noindex.mp4');assert.equal(hooks.gaveUp,1);
+  assert.ok(c.vodMode().includes('sin contestar'),c.vodMode());await c.destroy();
+});
+test('2.1.0: con https (o un equipo donde el nativo ya abrió) el modo directo sigue siendo el respaldo',async()=>{
+  const {c,video,hooks}=setup();c.load('https://fixture.invalid/movie/u/p/noindex.mp4',0,false);await tick();await tick();
+  assert.equal(video.src,'https://fixture.invalid/movie/u/p/noindex.mp4');assert.equal(hooks.gaveUp,0);await c.destroy();
+});
+
+test('2.1.0: MP4 con el índice entero: otro idioma en el mismo lector, sin abrir de nuevo ni pedir al servidor',async()=>{
+  const {c,video}=setup();c.load('https://fixture.invalid/inplace.mp4',0,false);await tick();video.currentTime=180;choose(c,'Inglés');await tick();
+  assert.equal(mp4s.length,1);assert.equal(mp4s[0].switched,1);assert.equal(mp4s[0].audioIdx,1);assert.equal(video.currentTime,180);
+  assert.ok(c.menu().find(m=>m.kind==='audio'&&m.label.includes('Inglés')).on);assert.deepEqual(calls,[]);await c.destroy();
+});
+
+test('2.1.0: subtítulos de texto dentro de un MP4: al menú y a la pantalla sin el servidor',async()=>{
+  const {c}=setup();c.load('https://fixture.invalid/mp4subs.mp4',0,false);await tick();
+  const sub=c.menu().find(m=>m.kind==='text'&&m.label.includes('Español'));assert.ok(sub,JSON.stringify(c.menu()));
+  c.select(sub);await tick();assert.deepEqual(calls,[]);assert.ok(c.menu().find(m=>m.kind==='text'&&m.label.includes('Español')).on);await c.destroy();
 });

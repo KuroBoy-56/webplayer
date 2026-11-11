@@ -15,7 +15,9 @@ import { Art, heroArt, heroArtList, savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
 import { idleStep, onFocusWin, Win } from '../lib/rowwindow';
 import { useNav } from '../nav';
-import { isFav, toggleFav, useAppState } from '../state';
+import { getState, isFav, toggleFav, useAppState } from '../state';
+import { episodeUrl, movieUrl } from '../api/xtream';
+import { idxWarmList } from '../player/idxwarm';
 import { t } from '../lib/i18n';
 import { brandInitial, features, useBrandRev } from '../lib/tenant';
 import { alpha, C, px, SIDE, themed } from '../theme';
@@ -124,6 +126,25 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     out.splice(at, 0, ...extra);
     return out;
   }, [base, progress, favorites, section]);
+
+  // los índices de los primeros de Continuar viendo se leen en segundo plano mientras se mira el inicio (idxwarm.ts):
+  // al abrirlos solo falta pedir el video (también si se empezaron en otro equipo)
+  useEffect(() => {
+    if (section !== 'home' || !active) return;
+    const s = getState().session;
+    if (!s) return;
+    const urls: string[] = [];
+    for (const p of progress) {
+      if (urls.length >= 4) break;
+      if (p.duration > 0 && p.position >= p.duration * 0.95) continue;
+      const ext = (/\.([a-z0-9]{2,4})(?:\?|$)/i.exec(p.url || '') || [])[1] || '';
+      if (p.type === 'movie') {
+        const it = catalog.find('vod', digits(p.id));
+        if (it) urls.push(movieUrl(s, it.id, it.ext || ext));
+      } else if (p.type === 'episode' && digits(p.id)) urls.push(episodeUrl(s, digits(p.id), ext));
+    }
+    idxWarmList(urls, Number(s.max) || 0);
+  }, [section, active, progress]);
 
   const progressOf = useMemo(() => {
     const map = new Map<string, number>();

@@ -12,7 +12,7 @@
 //   ventanas más grandes (single).
 // - Salto (◀▶, Continuar viendo): seek() corta lo que estaba en camino y empieza en el byte nuevo.
 // - Memoria: como mucho ~20 MB entre lo bajado sin usar y lo que viene en camino.
-import { isSingle, lineLimit, markSingle, rangeGet, RangeState } from './rangeget';
+import { hostStats, isSingle, lineLimit, markSingle, rangeGet, RangeState } from './rangeget';
 
 const MB = 1048576;
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -24,7 +24,7 @@ export function singleFor(url: string): boolean {
 }
 
 // waiting: falló y espera su turno para pedirse otra vez (de a uno, primero la de más atrás)
-type Win = { off: number; len: number; data: Uint8Array | null; done: boolean; failed: boolean; par: boolean; waiting: boolean; p: Promise<void> };
+type Win = { off: number; len: number; data: Uint8Array | null; done: boolean; failed: boolean; par: boolean; waiting: boolean; p: Promise<void>; at?: number };
 
 function join(list: Uint8Array[]): Uint8Array {
   if (list.length === 1) return list[0];
@@ -48,6 +48,10 @@ export class ReadAhead {
   end = 0;
   // bytes como mucho desde donde se empezó (lectura por adelantado desde la ficha: solo el arranque); 0 = sin tope
   limit = 0;
+  // bytes ya leídos que se guardan detrás de lo que se lee (2.1.0): cambiar de idioma vuelve a armar el video del segundo
+  // actual desde aquí, sin pedirle nada al servidor (los audios de todos los idiomas vienen intercalados con el video)
+  keepBehind = 0;
+  private readAt = -1;
   // solo lo que se pide (read), nada por adelantado (el resto del índice de un MP4 mientras suena el video, 2.0.15)
   lazy = false;
   // tamaño de las primeras ventanas (las que van a la vez al empezar): iguales, así llegan juntas (el índice); 0 = como siempre
@@ -99,10 +103,35 @@ export class ReadAhead {
     return 'adelanto=' + this.count + 'v ' + (this.bytes / MB).toFixed(1) + 'MB' + (kbs ? ' ' + kbs + 'KB/s_por_conexion' : '') + (this.single ? ' de_a_uno' : '');
   }
 
+  // De a un pedido (2.1.0): cada ventana paga la espera entera del servidor (3,5 s en los avisos) y mientras tanto no
+  // llega nada. Antes eran de ~10 s de video (1,3-1,7 MB en un capítulo): el video bajaba apenas más rápido de lo que se
+  // veía y cualquier pedido lento lo detenía (simulador: 4,4 s detenido en los primeros 10 s de Continuar viendo). Ahora
+  // el tamaño sale de la espera y el ritmo reales del servidor: lo bastante grande para que la espera pese poco
+  // (3 veces lo mínimo para no detenerse, entre 4 y 16 MB); la primera, lo que dura la espera de la segunda con margen.
+  private singleSize(bps: number): number {
+    const hs = hostStats(this.url);
+    const n = this.rs.reqs || 0;
+    const wait = (n ? (this.rs.waitMs || 0) / n : hs.wait || 3500) / 1000 + 0.3;
+    const rate = this.rs.rate || hs.rate || 1000000;
+    // para no detenerse: L / bps >= espera + L / ritmo
+    const min = rate > bps * 1.1 ? (wait * bps * rate) / (rate - bps) : 16 * MB;
+    const steady = Math.max(4 * MB, Math.min(16 * MB, 3 * min));
+    const second = Math.max(4 * MB, steady * 0.6);
+    if (this.ramp === 0) {
+      // la primera: lo que se ve mientras llega la segunda (su espera y su bajada) con margen, más lo que va antes del
+      // segundo pedido (desde el cuadro clave); ni menos de 6 s de video ni más de 6 MB
+      const first = Math.round(bps * ((wait + second / rate) * 1.3 + 2)) + this.firstNeed;
+      return Math.max(this.firstNeed, Math.max(1536 * 1024, Math.round(bps * 6)), Math.min(6 * MB, first));
+    }
+    if (this.ramp === 1) return Math.round(second);
+    return Math.round(steady);
+  }
+
   // tamaño de la próxima ventana
   private size(): number {
     const known = this.bps() > 0;
     const bps = this.bps() || 250000;
+    if (this.single && known && !this.startLen && !this.lazy) return this.singleSize(bps);
     const wait = this.rs.reqs ? (this.rs.waitMs || 0) / this.rs.reqs / 1000 : 1.5;
     // en régimen: lo bastante larga para que la espera del servidor pese poco en cada pedido
     const steady = Math.max(8, Math.min(16, 4 + 2 * wait));
@@ -121,7 +150,8 @@ export class ReadAhead {
   private fill(must = 0): void {
     if (!this.alive) return;
     const par = this.single || this.hold ? 1 : Math.max(1, Math.min(this.par, lineLimit() === 2 ? 2 : 3));
-    const cap = (this.single ? 14 : 20) * MB;
+    // lo que se guarda por delante: con ventanas de hasta 16 MB, dos (la que se está viendo y la siguiente)
+    const cap = (this.single ? 24 : 20) * MB;
     for (let guard = 0; guard < 16; guard++) {
       // fin del video dentro del archivo o, si no se sabe, el tamaño del archivo
       const lim = this.end > 0 ? this.end : this.rs.size || 0;
@@ -132,7 +162,8 @@ export class ReadAhead {
       // conexión y el video llega desordenado (2.0.15)
       if (this.wins.some(w => w.waiting)) return;
       if (this.limit > 0 && this.next >= must && this.next - this.start0 >= this.limit) return;
-      const held = this.next - (this.wins.length ? this.wins[0].off : this.next);
+      // (solo lo que está por delante de lo que se lee; lo guardado detrás no cuenta)
+      const held = this.next - Math.max(this.readAt, this.wins.length ? this.wins[0].off : this.next);
       if (this.next >= must && held >= cap) return;
       let len = this.size();
       if (lim > 0) len = Math.min(len, lim - this.next);
@@ -144,7 +175,7 @@ export class ReadAhead {
 
   private launch(off: number, len: number): void {
     const g = this.gen;
-    const w: Win = { off, len, data: null, done: false, failed: false, par: this.flying > 0, waiting: false, p: Promise.resolve() };
+    const w: Win = { off, len, data: null, done: false, failed: false, par: this.flying > 0, waiting: false, p: Promise.resolve(), at: Date.now() };
     if (w.par) for (const x of this.wins) if (!x.done) x.par = true;
     this.wins.push(w);
     this.flying++;
@@ -201,6 +232,7 @@ export class ReadAhead {
     this.flying = 0;
     this.next = off;
     this.start0 = off;
+    this.readAt = off;
     this.ramp = 0;
     this.firstNeed = need;
     this.why = '';
@@ -218,6 +250,7 @@ export class ReadAhead {
     this.wins = [{ off, len: data.length, data, done: true, failed: false, par: false, waiting: false, p: Promise.resolve() }];
     this.next = off + data.length;
     this.start0 = off;
+    this.readAt = off;
     this.ramp = 1;
     this.firstNeed = 0;
     this.why = '';
@@ -244,14 +277,55 @@ export class ReadAhead {
     this.park();
   }
 
+  // [off, off + len) si ya está bajado (sin pedir nada); null si no (los subtítulos del MP4 salen de aquí, 2.1.0)
+  peek(off: number, len: number): Uint8Array | null {
+    const end = off + len;
+    const out: Uint8Array[] = [];
+    let at = off;
+    for (const w of this.wins) {
+      if (w.off + w.len <= at) continue;
+      if (w.off > at || !w.done || !w.data || w.data.length < w.len) return null;
+      out.push(w.data.subarray(at - w.off, Math.min(w.len, end - w.off)));
+      at = Math.min(end, w.off + w.len);
+      if (at >= end) break;
+    }
+    if (at < end) return null;
+    return out.length === 1 ? out[0] : join(out);
+  }
+
+  // segundos que faltan para que llegue la próxima ventana en camino (espera del servidor + bajada), 0 si no hay ninguna
+  eta(): number {
+    const w = this.wins.find(x => !x.done);
+    if (!w) return 0;
+    const hs = hostStats(this.url);
+    const n = this.rs.reqs || 0;
+    const wait = (n ? (this.rs.waitMs || 0) / n : hs.wait || 3500) / 1000;
+    const rate = this.rs.rate || hs.rate || 1000000;
+    return Math.max(0, (w.at || Date.now()) / 1000 + wait + w.len / rate - Date.now() / 1000);
+  }
+
+  // hasta qué byte está todo bajado desde off, sin esperar nada (los lectores entregan eso y no esperan la ventana
+  // siguiente entera: un tramo que cruzaba el final de una ventana detenía el video aunque tuviera segundos bajados)
+  doneUntil(off: number): number {
+    let at = off;
+    for (const w of this.wins) {
+      if (w.off > at) break;
+      if (w.off + w.len <= at) continue;
+      if (!w.done || !w.data || w.data.length < w.len) break;
+      at = w.off + w.len;
+    }
+    return at;
+  }
+
   // [off, off + len) del archivo; null = no se pudo bajar (why) o se saltó a otro lugar mientras tanto
   async read(off: number, len: number): Promise<Uint8Array | null> {
     if (!this.alive || len <= 0) return null;
     // fuera de lo que se está leyendo (un salto): se empieza ahí
     if (!this.covers(off)) this.seek(off, len);
     const g = this.gen;
-    // lo que quedó atrás se suelta
-    while (this.wins.length && this.wins[0].done && this.wins[0].off + this.wins[0].len <= off) this.wins.shift();
+    // lo que quedó atrás se suelta (salvo keepBehind)
+    this.readAt = off;
+    while (this.wins.length && this.wins[0].done && this.wins[0].off + this.wins[0].len <= off - this.keepBehind) this.wins.shift();
     for (let guard = 0; guard < 400; guard++) {
       // fin de lo que hay para leer (se sabe con la primera respuesta del servidor)
       const lim = this.end > 0 ? this.end : this.rs.size || 0;

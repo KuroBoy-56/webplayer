@@ -207,6 +207,36 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Películas y series rápidas y de corrido sin la VPS (2.1.0)**: todo es tráfico del servidor IPTV; nada de video pasa
+  por la VPS / VDS ni por el hosting. Medido con un servidor XUI simulado como el de los avisos (una conexión, 3,5 s de
+  espera por pedido, índice al final del archivo; `npm run test:vod`, `node tools/vod-sim/run.cjs`):
+  - **«sin índice en 120 s»**: con el índice al final de un archivo grande el servidor puede tardar más de 12 s en
+    llegar a esa parte; la app cortaba el pedido a los 12 s y lo pedía otra vez desde cero, para siempre (reproducido:
+    «índice: sin contestar en 12 s» a los 118 s). Ahora espera hasta 30 s (`rangeget.ts`): el mismo capítulo abre.
+  - **Sin cortes**: en una línea de una conexión cada pedido paga la espera entera del servidor. Las ventanas de video
+    eran de ~1,5 MB (el video bajaba apenas más rápido de lo que se veía): ahora salen de la espera y el ritmo medidos
+    (4-16 MB, `ReadAhead.singleSize`); el lector entrega lo que ya llegó sin esperar la ventana siguiente entera
+    (`ReadAhead.doneUntil`, `Mp4Mse.fitIn`) y el video arranca con el colchón justo para que llegue el pedido
+    siguiente (`Mp4Mse.startPlay`, `MkvMse.startPlay`; como ExoPlayer). XUI sigue contando la conexión de un pedido unos cientos de ms
+    después de terminarlo: la app aprende cuánto y espera eso en lugar de ser rechazada y reintentar.
+  - **Índice de una vez**: el índice entero en un solo pedido si lo que falta baja en menos de lo que tarda otro
+    pedido (antes el 40 % y, con 2 idiomas, otro pedido más).
+  - **Continuar viendo en ~6 s, aunque se haya empezado en otra app**: mientras se mira el inicio sin ver nada, los
+    índices de los primeros 4 de Continuar viendo se leen de a uno y quedan en el equipo (`src/player/idxwarm.ts`); al
+    abrirlos solo falta el video. Se detiene al abrir un video, una ficha o una miniatura de canal; nunca en líneas de
+    una conexión. Película de 2 h y 5 idiomas, minuto 74: 18 s sin el índice, 6 s con él.
+  - **Cambiar de idioma al instante**: los audios de todos los idiomas vienen intercalados con el video; el lector
+    guarda ~40 s ya bajados detrás de lo que se ve y cambia la pista sin abrir de nuevo ni pedir nada al servidor
+    (`Mp4Mse.switchAudio`). Si no se puede así (índice a medias, otro códec), como antes.
+  - **Subtítulos de texto de los MP4 sin la VPS** (tx3g / mov_text, texto de QuickTime y WebVTT, `mp4subs.ts`): salen
+    de lo ya bajado, como los del MKV.
+  - **Sin el modo directo que nunca abría**: si el lector no puede y el reproductor de Amazon nunca abrió http en el
+    equipo (Vega OS antes de 2.0), Player sigue con sus pasos al instante (antes «directo: 4» y 30 s por vuelta). Si
+    el sistema rechaza http y no dice su versión, se avisa una vez que actualizar a Vega OS 2.0 lo hace más rápido. En
+    equipos donde el reproductor de Amazon sí abrió, también Continuar viendo va con él.
+  - **«Could not resume where you left off»**: Vega cierra las apps que ocupan más de 150 MB en segundo plano. Al
+    pasar a segundo plano con un video abierto se guarda el avance y se suelta todo (video bajado, índices); al volver
+    se abre otra vez en el mismo segundo.
 - **El índice compartido se guarda en la VPS / VDS, no en el hosting (2.0.17)**: `api/vidx.php` del panel solo revisa
   la línea y entrega dos enlaces firmados a la máquina (VPS del dueño o VDS propia del distribuidor); la app pregunta,
   baja y sube el índice directo con ella (`src/player/sharedindex.ts`). Un distribuidor sin VDS propia, o un panel sin

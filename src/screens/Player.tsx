@@ -9,7 +9,7 @@ import { reportError } from '../api/report';
 import { engineDenied, warmTracks } from '../api/media';
 import { viaDns } from '../lib/securedns';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
+import { AppState, BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveUrl, movieUrl, otherScheme, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
 import { Button, Focusable, Loader } from '../components/ui';
@@ -22,7 +22,8 @@ import { dropReturn, offerReturn, playerClosing, setLastLive, stopLivePreview, t
 import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
 import { hasHandoff } from '../player/livehls';
 import { vodKnown } from '../player/warm';
-import { MP4_HEAD, mp4Spot } from '../player/mp4mse';
+import { idxWarmHold } from '../player/idxwarm';
+import { freeMp4Memory, MP4_HEAD, mp4Spot } from '../player/mp4mse';
 import { setLineMax, singleFor } from '../player/readahead';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
@@ -172,8 +173,11 @@ export default function Player({ params }: { params: PlayParams }) {
   // la orden de borrar la caché del panel espera a que se cierre el reproductor
   useEffect(() => {
     setPlayerOpen(true);
+    // los índices de Continuar viendo en segundo plano se detienen (la línea es del video)
+    idxWarmHold(true);
     return () => {
       setPlayerOpen(false);
+      idxWarmHold(false);
       if (startDog.current) clearTimeout(startDog.current);
     };
   }, []);
@@ -359,6 +363,36 @@ export default function Player({ params }: { params: PlayParams }) {
     },
     [urlFor, live, vodFinal],
   );
+
+  // La app pasa a segundo plano con el reproductor abierto (botón de inicio, 2.1.0). Vega cierra las apps que ocupan más
+  // de 150 MB en segundo plano y al volver muestra «Could not resume where you left off» (foto del aviso): el video
+  // bajado por adelantado, los índices y lo que preparaba la ficha pesan decenas de MB. Se guarda el avance, se suelta
+  // todo y al volver se abre otra vez desde el mismo segundo (con el índice guardado en el equipo: un solo pedido)
+  useEffect(() => {
+    let away: { i: number; at: number } | null = null;
+    const sub = AppState.addEventListener('change', st => {
+      const c = ctl.current;
+      if (!c || !ready.current) return;
+      if (st === 'background' && !away) {
+        save(true);
+        away = { i: indexRef.current, at: live ? 0 : c.hasPlayed() ? Math.floor(c.realPos()) : Math.floor(c.resumePos()) };
+        if (startDog.current) clearTimeout(startDog.current);
+        startDog.current = null;
+        try {
+          video.current?.pause();
+        } catch {
+          // ya cerrado
+        }
+        void c.destroy();
+        freeMp4Memory();
+      } else if (st === 'active' && away) {
+        const a = away;
+        away = null;
+        load(a.i, a.at);
+      }
+    });
+    return () => sub.remove();
+  }, [load, save, live]);
 
   const next = useCallback(() => {
     if (params.kind !== 'episode') return false;

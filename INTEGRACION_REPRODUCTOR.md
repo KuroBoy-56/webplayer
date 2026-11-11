@@ -123,6 +123,28 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.1.0 — películas y series sin la VPS: menos pedidos, sin cortes, idioma y subtítulos locales
+
+Todo el tráfico del video va del servidor IPTV al Fire TV (el puente de la VPS de 2.0.18 se quitó por su costo). La VPS
+sigue solo para lo que ya hacía: convertir audio como último recurso y el índice compartido (`sharedindex.ts`).
+
+| Pieza | Qué hace |
+| --- | --- |
+| `rangeget.ts` | plazo para que el servidor empiece a contestar: 30 s (antes 12 s: con el índice al final de un archivo grande se cortaba y volvía a empezar para siempre, «sin índice en 120 s»). En líneas de un pedido aprende cuánto tarda el servidor en soltar la conexión (`linger`, 403 / 429 / 503 justo después de otro pedido) y el siguiente espera eso. Mide la espera (solo de los 206) y el ritmo por conexión (`hostStats`) |
+| `readahead.ts` | `singleSize`: ventanas del tamaño justo para que la espera pese poco (4-16 MB; la primera, lo que se ve mientras llega la segunda). `doneUntil` / `peek`: lo ya bajado sin esperar nada. `eta`: cuándo llega la ventana en camino. `keepBehind`: ~40 s ya leídos se guardan (cambio de idioma) |
+| `Mp4Mse.fitIn` | el tramo se corta donde termina lo bajado (video y audio), si alcanza para 1 s |
+| `Mp4Mse.startPlay`, `MkvMse.startPlay` | de a un pedido: el video arranca cuando lo bajado alcanza hasta que llegue la ventana siguiente (como mucho 10 s de colchón, 12 s de espera) |
+| `Mp4Mse.moovFrom` | de a un pedido: el índice entero de una vez si lo que falta baja en menos que una espera; si no, el 60 % |
+| `Mp4Mse.switchAudio` | otro audio AAC de la misma configuración: misma MediaSource, desde el segundo actual, de lo ya bajado |
+| `mp4subs.ts`, `Mp4Mse.subCues` | subtítulos tx3g / text / wvtt sacados de lo ya bajado (de 10 s antes a 90 s después del segundo actual); `slimMoov` guarda sus pistas enteras |
+| `idxwarm.ts`, `preloadIndex`, `Mp4Mse.fullIndex` | índices de los primeros 4 de Continuar viendo en segundo plano (Inicio), de a uno, guardados en el equipo (`indexstore.ts`, ahora 12 títulos). `idxWarmHold`: Player, la ficha y la miniatura de canal lo detienen |
+| `Playback.mp4Failed` / `readerGaveUp` | sin el modo directo cuando no puede abrir (http y el nativo nunca abrió en el equipo): Player sigue al instante |
+| `Playback.nativeVodPlanned` / `openNativeVod(at)` | con el nativo ya probado en el equipo (Vega OS 2.0), también Continuar viendo |
+| `Player.tsx` (AppState) | a segundo plano: avance guardado, `Playback.destroy`, `freeMp4Memory`; al volver, `load` en el mismo segundo |
+
+Simulador: `tools/vod-sim/` (MP4 con el índice al final, servidor XUI con espera, ritmo, una conexión, `linger` y
+final del archivo lento) y `npm run test:vod` (4-5 min, tiempo real).
+
 ## 2.0.17 — el índice compartido en la VPS / VDS
 
 `sharedindex.ts`: `linksFor()` pide al panel (`vidx.php`, 2,5 s) los dos enlaces firmados de la máquina (`head` y

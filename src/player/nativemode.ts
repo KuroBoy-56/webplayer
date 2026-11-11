@@ -64,6 +64,11 @@ export function nativeAllowed(k: NativeKind): boolean {
   return k === 'vod' ? vodMisses < 2 : v === 'ok' || fails.live < 3;
 }
 
+// el nativo ya abrió alguna vez en este equipo (con esta versión de la app)
+export function nativeKnownGood(k: NativeKind): boolean {
+  return read(key(k)) === 'ok';
+}
+
 export function nativeWorked(k: NativeKind): void {
   fails[k] = 0;
   if (k === 'vod') vodMisses = 0;
