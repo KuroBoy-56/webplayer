@@ -218,6 +218,7 @@ return [
     'No hay información de la guía de programas para este canal.' => 'No TV guide information for this channel.',
     'No hay partidos con estos filtros' => 'No matches with these filters',
     'No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.' => 'We couldn’t connect to the servers. Check your connection and try again.',
+    'El servidor de video no está dejando entrar a la web en este momento (no es tu conexión). Inténtalo de nuevo en unos minutos.' => 'The video server isn’t letting the website in right now (it’s not your connection). Try again in a few minutes.',
     'El servidor rechazó el inicio de sesión ({c}). Inténtalo de nuevo en unos minutos.' => 'The server rejected the sign-in ({c}). Try again in a few minutes.',
     'No se encontraron resultados.' => 'No results found.',
     'No se encontró información de este actor.' => 'No information found for this actor.',

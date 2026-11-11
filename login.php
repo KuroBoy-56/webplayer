@@ -90,28 +90,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
     // Cuando el panel responde por HTTPS cambia http:// por https:// en las DNS.
     // Se prueba también la versión http:// (primero), porque muchos servidores IPTV no tienen HTTPS.
     // «https://host:80» (paneles viejos cambiaban http por https sin quitar el puerto) nunca contesta: https va sin él.
-    $cands = [];
+    //
+    // Menos intentos fallidos desde la IP del hosting (11 de noviembre). Todos los usuarios de la web entran con la IP
+    // del hosting y XUI la bloquea cuando junta intentos fallidos (protección contra flood): después el hosting no
+    // puede conectarse a nada («curl 7 Failed to connect … after 12 ms» en todas las DNS) y sale «No pudimos conectar
+    // con los servidores» para todos. Antes cada inicio de sesión probaba a la vez todas las DNS, en http y en https:
+    // varias DNS suelen ser el mismo XUI (otro nombre, la misma IP y puerto) y cada una contaba como un intento fallido.
+    // Ahora: una sola vez por servidor real (IP + puerto), primero la DNS con la que este usuario entró la última vez
+    // (sola), después las demás en http y https solo si en http nadie contestó.
+    $first = [];
+    $later = [];
+    $taken = [];
     foreach ($servers as $srv) {
-        if (stripos($srv['url'], 'https://') === 0) {
-            $cands[] = ['url' => 'http://' . substr($srv['url'], 8)] + $srv;
-            $srv['url'] = preg_replace('~^(https://[^/:]+):80(?=/|$)~i', '$1', $srv['url']);
+        $isHttps = stripos($srv['url'], 'https://') === 0;
+        $plain = $isHttps ? 'http://' . substr($srv['url'], 8) : $srv['url'];
+        $k = wp_login_endpoint($plain);
+        if (!isset($taken[$k])) {
+            $taken[$k] = 1;
+            $first[] = ['url' => $plain] + $srv;
         }
-        $cands[] = $srv;
+        if ($isHttps) {
+            $sec = preg_replace('~^(https://[^/:]+):80(?=/|$)~i', '$1', $srv['url']);
+            $k2 = wp_login_endpoint($sec);
+            if (!isset($taken[$k2])) {
+                $taken[$k2] = 1;
+                $later[] = ['url' => $sec] + $srv;
+            }
+        }
     }
-    $servers = $cands;
-
-    $urls = [];
-    foreach ($servers as $i => $srv) {
-        $urls[$i] = $srv['url'] . '/player_api.php?username=' . urlencode($username) . '&password=' . urlencode($password);
-    }
-
-    // Consulta paralela: se corta en cuanto un servidor acepta al usuario
-    $fails = [];
-    $responses = wp_http_multi($urls, 10, function ($k, $body) {
+    $lastKey = 'lastdns|' . sha1(strtolower($username));
+    $lastUrl = wp_cache_get($lastKey, 120 * 86400);
+    $okWhen = function ($k, $body) {
         $j = json_decode($body, true);
         return isset($j['user_info']['auth']) && (int)$j['user_info']['auth'] === 1
             && strcasecmp((string)($j['user_info']['status'] ?? ''), 'Active') === 0;
-    }, $fails);
+    };
+    $servers = [];
+    $responses = [];
+    $fails = [];
+    // pide a la lista y junta lo que contestó (las claves siguen el orden de $servers)
+    $ask = function (array $list) use (&$servers, &$responses, &$fails, $username, $password, $okWhen) {
+        if (!$list) return false;
+        $base = count($servers);
+        $urls = [];
+        foreach ($list as $j => $srv) {
+            $servers[$base + $j] = $srv;
+            $urls[$base + $j] = $srv['url'] . '/player_api.php?username=' . urlencode($username) . '&password=' . urlencode($password);
+        }
+        $f = [];
+        $r = wp_http_multi($urls, 10, $okWhen, $f);
+        $hit = false;
+        foreach ($r as $k => $body) {
+            $responses[$k] = $body;
+            if ($body !== null && $okWhen($k, $body)) $hit = true;
+        }
+        foreach ($f as $k => $why) $fails[$k] = $why;
+        return $hit;
+    };
+    // 1) la DNS de la última vez, sola
+    $rest = $first;
+    if (is_string($lastUrl) && $lastUrl !== '') {
+        foreach ($rest as $j => $srv) {
+            if ($srv['url'] === $lastUrl) {
+                unset($rest[$j]);
+                $hit = $ask([$srv]);
+                break;
+            }
+        }
+    }
+    // 2) las demás (una por servidor real), en paralelo
+    if (empty($hit)) $hit = $ask(array_values($rest));
+    // 3) https solo si en http ningún servidor contestó nada (conexión rechazada, sin respuesta)
+    if (!$hit && $later && !array_filter($responses, function ($b) { return $b !== null; })) $ask($later);
 
     $match = null;
     $anyReply = false;
@@ -151,6 +201,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
 
     if ($match !== null) {
         $srv = $servers[$match];
+        // la próxima vez esta DNS va primero y sola (un solo intento al servidor IPTV)
+        wp_cache_set($lastKey, $srv['url']);
         session_regenerate_id(true);
         $_SESSION["username"] = $username;
         $_SESSION["password"] = $password;
@@ -216,7 +268,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
             : 'Login de la web player: ningún servidor IPTV contestó',
             implode(' | ', $seen) . "\nServidores: " . implode(', ', $ips)
             . ($refused ? "\nRevisa en XUI «IPs bloqueadas» la IP del hosting de la web (abajo) y agrégala a las IP excluidas de la protección contra flood." : ''), 'Login');
-        echo json_encode(['success' => false, 'message' => t('No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.')]);
+        // conexión rechazada en todas: no es la conexión del cliente sino el servidor IPTV, que no deja entrar a la web
+        echo json_encode(['success' => false, 'message' => $refused
+            ? t('El servidor de video no está dejando entrar a la web en este momento (no es tu conexión). Inténtalo de nuevo en unos minutos.')
+            : t('No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.')]);
         exit;
     }
     echo json_encode(['success' => false, 'message' => t('Usuario o contraseña incorrectos.')]);

@@ -236,6 +236,19 @@ function wp_http_get($url, $timeout = 12, &$code = null)
     return $body;
 }
 
+/** El servidor real detrás de una DNS (inicio de sesión): esquema + IP + puerto. Dos DNS con otro nombre y la misma IP y
+ * puerto son el mismo XUI: se le pregunta una sola vez (cada pregunta con datos equivocados es un intento fallido para
+ * su protección contra flood, y todos los usuarios de la web salen con la IP del hosting). */
+function wp_login_endpoint($url)
+{
+    $p = parse_url((string)$url);
+    $scheme = strtolower((string)($p['scheme'] ?? 'http'));
+    $host = strtolower((string)($p['host'] ?? ''));
+    $port = (int)($p['port'] ?? ($scheme === 'https' ? 443 : 80));
+    $ip = wp_resolve_ip($host);
+    return $scheme . '://' . ($ip !== '' ? $ip : $host) . ':' . $port . rtrim((string)($p['path'] ?? ''), '/');
+}
+
 /**
  * Varias peticiones en paralelo. $urls = [key => url]. Devuelve [key => body|null].
  * $stopWhen(key, body) puede devolver true para cortar el resto (p. ej. login encontrado).
