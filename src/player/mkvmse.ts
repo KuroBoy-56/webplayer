@@ -308,8 +308,8 @@ export class MkvMse {
     return '';
   }
 
-  // Línea de un pedido a la vez (2.1.0, como Mp4Mse.startPlay): el video arranca cuando lo bajado alcanza hasta que
-  // llegue la ventana siguiente (como mucho 10 s de colchón y 12 s de espera); con varias conexiones, como siempre
+  // Línea de un pedido a la vez (como Mp4Mse.startPlay): un colchón chico (como mucho 4 s bajados y 5 s de espera);
+  // con varias conexiones, como siempre
   private holding = false;
   private noPlay = false;
   cancelPlay(): void {
@@ -330,8 +330,8 @@ export class MkvMse {
         return;
       }
       const ahead = this.bufEnd() - (this.v.currentTime || 0);
-      const need = Math.min(10, this.ra.eta() + 1.5);
-      if (g !== this.gen || ahead >= need || ahead >= 30 || Date.now() - t0 > 12000) {
+      const need = Math.min(4, this.ra.eta() + 1.5);
+      if (g !== this.gen || ahead >= need || Date.now() - t0 > 5000) {
         this.holding = false;
         this.v.play();
         return;

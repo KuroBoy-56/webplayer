@@ -353,6 +353,7 @@ export class Playback {
     this.mkvNative = '';
     this.mkvBody = false;
     this.mp4Why = '';
+    if (!sameFile) this.nativeNote = '';
     this.deniedShown = false;
     if (live) {
       this.direct(resume);
@@ -368,7 +369,8 @@ export class Playback {
       const g = this.gen;
       knownTracks(url)
         .then(p => {
-          if (g !== this.gen || !p.ok || this.probe?.ok || this.shaka || (this.mse && this.mse.tracks.length)) return;
+          // (2.1.1: también si el lector leyó menos pistas que las que conoce el panel: índice a medias)
+          if (g !== this.gen || !p.ok || this.probe?.ok || this.shaka || (this.mse && this.mse.tracks.length >= p.audio.length)) return;
           this.probe = p;
           if (!this.audioKey) this.audioApplied = false;
           if (!this.subKey) this.subApplied = false;
@@ -720,24 +722,35 @@ export class Playback {
     if (at > 5) this.seekAfter = at;
     this.v.src = this.url;
     this.v.play();
-    const give = () => g === this.gen && this.vodNative && !this.played && this.hooks.panelFailed?.();
-    // en modo directo Vega no siempre avisa loadedmetadata (Amazon): también cuenta timeupdate, readyState o la duración
+    this.nativeSlow = false;
+    const give = () => {
+      if (g !== this.gen || !this.vodNative || this.played) return;
+      // tardó (servidor lento): no cuenta como que el nativo no sirve en este equipo
+      this.nativeSlow = true;
+      this.hooks.panelFailed?.();
+    };
+    // 2.1.1: el nativo tiene que leer el índice del final del archivo igual que el lector de la app; con servidores de
+    // 6-15 s por pedido eso pasa de 12 s. Antes a los 12 s se lo daba por perdido y, dos veces así, el nativo quedaba
+    // apagado para siempre en el equipo (también en Vega OS 2.0, donde sí abre). Ahora 30 s para dar señales de vida (en
+    // modo directo Vega no siempre avisa loadedmetadata: también cuentan timeupdate, readyState o la duración) y 20 s más
+    // para empezar; un error del reproductor sigue cortando al instante
     this.nativeTimer = setTimeout(() => {
       this.nativeTimer = null;
       if (!this.nativeMeta && !((this.v as any).readyState >= 1) && !((this.v.duration || 0) > 0)) return give();
       this.nativeTimer = setTimeout(() => {
         this.nativeTimer = null;
         give();
-      }, 6000);
-    }, 6000);
+      }, 20000);
+    }, 30000);
   }
+  private nativeSlow = false;
 
   // del reproductor nativo al lector de la app (failed: no llegó a sonar), desde pos
   private leaveNativeVod(failed: boolean, pos: number): void {
     if (this.nativeTimer) clearTimeout(this.nativeTimer);
     this.nativeTimer = null;
     this.vodNative = false;
-    if (failed) nativeFailedOnce('vod');
+    if (failed && !this.nativeSlow) nativeFailedOnce('vod');
     this.direct(pos);
   }
 
@@ -778,7 +791,8 @@ export class Playback {
 
   private mp4Failed(at: number, why: string): boolean {
     const pos = this.played ? this.realPos() : at;
-    this.mp4Why = why;
+    // (2.1.1: con lo que hizo el lector —índice, pedidos, espera del servidor— para el aviso)
+    this.mp4Why = why + (this.mse ? ' ' + this.mse.diag() : '');
     this.mp4Url = true;
     if (this.directUseless()) {
       this.mse?.destroy();
@@ -800,6 +814,7 @@ export class Playback {
     if (this.vodNative) {
       this.httpCheck();
       const e: any = (this.v as any).error;
+      this.nativeNote = !nativeHttpOk(this.url) ? 'http_rechazado' : this.nativeSlow ? 'lento' : 'error' + (e?.code ? '_' + e.code : '');
       this.mp4Why = 'nativo: ' + why + (e?.code ? ' ' + e.code + (e.message ? ' ' + String(e.message).slice(0, 60) : '') : '') + ' a los ' + ((Date.now() - this.nativeAt) / 1000).toFixed(1) + ' s';
       this.leaveNativeVod(!this.played, this.played ? this.realPos() : this.wantAt);
       return true;
@@ -814,6 +829,11 @@ export class Playback {
     if (!this.mse || this.mp4Url) return false;
     const e: any = (this.v as any).error;
     return this.mp4Failed(this.played ? this.realPos() : this.wantAt, why + (e?.code ? ' ' + e.code : '') + (this.mse.why ? ' · ' + this.mse.why : ''));
+  }
+
+  // el reproductor de Amazon todavía lee la película (2.1.1: Player no lo corta antes de sus plazos)
+  nativeStarting(): boolean {
+    return this.vodNative && !this.played;
   }
 
   // la app todavía arma el MP4 (el reproductor espera más antes de darlo por perdido)
@@ -847,11 +867,15 @@ export class Playback {
     }
   }
 
-  // con qué se está viendo la película (para el aviso de apertura lenta)
+  // con qué se está viendo la película (para el aviso de apertura lenta). 2.1.1: también qué pasó con el reproductor de
+  // Amazon (reproductor_amazon=): http_rechazado (el sistema no admite http en modo directo: Vega OS antes de 2.0),
+  // error, lento (no empezó en sus plazos), abrió o no_probado
   vodMode(): string {
     const m = this.vodNative ? 'nativo' : this.mse ? 'lector ' + (this.mse instanceof MkvMse ? 'mkv ' : 'mp4 ') + this.mse.diag() : this.shaka ? 'shaka' : this.remux ? 'panel' : 'directo';
-    return m + (this.mp4Why ? ' (' + this.mp4Why + ')' : '');
+    const amazon = this.nativeNote || (!nativeHttpOk(this.url) ? 'http_rechazado' : nativeKnownGood('vod') ? 'abre_en_este_equipo' : 'no_probado');
+    return m + (this.mp4Why ? ' (' + this.mp4Why + ')' : '') + ' reproductor_amazon=' + amazon;
   }
+  private nativeNote = '';
 
   private clearSeek(): void {
     this.seekAfter = 0;
@@ -1065,6 +1089,7 @@ export class Playback {
     }
     if (this.vodNative) {
       nativeWorked('vod');
+      this.nativeNote = 'abrio';
       if (this.nativeTimer) clearTimeout(this.nativeTimer);
       this.nativeTimer = null;
     }
@@ -1214,9 +1239,15 @@ export class Playback {
 
   private audioItems(): AudioItem[] {
     if (this.shaka) return this.shaka.audioTracks().map(tr => ({ key: 's:' + tr.id, label: tr.label, lang: tr.lang, codec: tr.codec, shaka: tr.id }));
-    if (this.mse?.tracks.length) return numbered(this.mse.tracks.map((tr, i) => ({
-      key: 'm:' + i, label: langName(tr.lang, '') || t('Audio {n}', { n: i + 1 }), lang: tr.lang, codec: tr.codec, mp4: i, probe: i,
-    })));
+    if (this.mse?.tracks.length) {
+      // 2.1.1: con el índice a medias el lector todavía no vio todas las pistas; si el panel conoce más (otro equipo las
+      // leyó), el menú las muestra todas (mismo orden que en el archivo) y elegir una que falta lee ese resto
+      const pr = this.probe?.ok ? this.probe.audio : [];
+      const list = this.mse instanceof Mp4Mse && pr.length > this.mse.tracks.length ? pr.map(x => ({ lang: x.lang, codec: x.codec })) : this.mse.tracks;
+      return numbered(list.map((tr, i) => ({
+        key: 'm:' + i, label: langName(tr.lang, '') || t('Audio {n}', { n: i + 1 }), lang: tr.lang, codec: tr.codec, mp4: i, probe: i,
+      })));
+    }
     // canal con varios idiomas (lector propio): uno por audio del canal
     const hl = this.live && this.liveHls ? this.liveHls.audioLangs() : [];
     if (hl.length > 1) return numbered(hl.map((l, i) => ({ key: 'h:' + i, label: langName(l, '') || t('Audio {n}', { n: i + 1 }), lang: trackLang(l, ''), codec: '' })));

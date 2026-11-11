@@ -29,7 +29,8 @@ function u32arr(list) {
 
 // opts: secs (duración), audios (cantidad de idiomas), vkbps / akbps (ritmo de video y de cada audio), langs
 // subs: pistas de subtítulos tx3g (una frase cada 2 s, intercalada después de los audios)
-function makeMp4({ secs = 2700, audios = 2, vkbps = 1000, akbps = 128, langs = ['spa', 'eng', 'por', 'fra', 'ita', 'deu'], subs = 0 } = {}) {
+// fat: tiempos muestra por muestra (stts con una fila por muestra), como algunos convertidores: índices de 10-16 MB
+function makeMp4({ secs = 2700, audios = 2, vkbps = 1000, akbps = 128, langs = ['spa', 'eng', 'por', 'fra', 'ita', 'deu'], subs = 0, fat = false } = {}) {
   const FPS = 24;
   const SLICE = 2; // segundos por trozo intercalado
   const vframes = secs * FPS;
@@ -110,7 +111,8 @@ function makeMp4({ secs = 2700, audios = 2, vkbps = 1000, akbps = 128, langs = [
   for (let k = 0; k < audios; k++) {
     const esds = full('esds', 0, [0x03, 0x19, 0, k + 2, 0, 0x04, 0x11, 0x40, 0x15, ...zeros(11), 0x05, 0x02, 0x11, 0x90, 0x06, 0x01, 0x02]);
     const mp4a = box('mp4a', zeros(6), [0, 1], zeros(8), [0, 2, 0, 16], zeros(4), u16(48000), [0, 0], esds);
-    const astbl = box('stbl', full('stsd', 0, u32(1), mp4a), full('stts', 0, u32(1), u32(aframes), u32(1024)), stsc(aper[k]), stsz(as), co(aco[k]));
+    const astts = fat ? full('stts', 0, u32(aframes), u32arr(Array.from({ length: aframes * 2 }, (_, j) => (j % 2 ? 1024 : 1)))) : full('stts', 0, u32(1), u32(aframes), u32(1024));
+    const astbl = box('stbl', full('stsd', 0, u32(1), mp4a), astts, stsc(aper[k]), stsz(as), co(aco[k]));
     atraks.push(box('trak', tkhd(k + 2, k === 0), box('mdia', mdhd(48000, aframes * 1024, langs[k % langs.length]), hdlr('soun'), minf(full('smhd', 0, zeros(4)), astbl))));
   }
   const straks = [];

@@ -123,6 +123,21 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.1.1 — servidor de 6-8 s por pedido: arrancar antes, no reiniciar, idiomas completos, navegación sin trabas
+
+| Pieza | Qué hace |
+| --- | --- |
+| `Mp4Mse.startPlay`, `MkvMse.startPlay` | colchón de arranque chico: `min(4, eta + 1,5)` s bajados, como mucho 5 s de espera (2.1.0: hasta 10 s y 12 s) |
+| `MP4_HEAD` | 3 MB (lo que pide Player por adelantado desde el principio en líneas de un pedido) |
+| `ReadAhead.singleSize` (primera ventana) | `bps × (espera + segunda / ritmo) + firstNeed`, entre 1,5 y 4 MB |
+| `ReadAhead.fixed` / `paused` | ventanas de tamaño fijo (índice en segundo plano: 2 MB; el resto del índice: un pedido) y la descarga del video detenida mientras se lee el resto del índice |
+| `Mp4Mse.moovGate(rest)` | de a un pedido: con `ahead ≥ min(40, espera + rest / ritmo + 10)` s, el resto del índice en un pedido |
+| `Playback.audioItems` | índice a medias y el panel con más pistas: el menú con las del panel (mismo orden del archivo) |
+| `Player.waitStart` | lector con el índice leído y el servidor entregando: espera hasta 2 min antes de la vuelta siguiente |
+| `openNativeVod`, `nativeStarting`, `nativeSlow` | 30 s + 20 s para el reproductor de Amazon; tardar no lo apaga en el equipo |
+| `src/lib/keyidle.ts` (`noteKey` en `App.tsx`) | última tecla del control: `idxwarm.ts`, la lectura del índice en segundo plano y la miniatura de canales (`LiveHls.deliver`, solo `keep`) esperan a que no se navegue |
+| `Playback.vodMode` | `reproductor_amazon=` en los avisos; al fallar, `mp4Why` lleva el `diag()` del lector |
+
 ## 2.1.0 — películas y series sin la VPS: menos pedidos, sin cortes, idioma y subtítulos locales
 
 Todo el tráfico del video va del servidor IPTV al Fire TV (el puente de la VPS de 2.0.18 se quitó por su costo). La VPS

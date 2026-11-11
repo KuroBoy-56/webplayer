@@ -92,3 +92,16 @@ test('subtítulos de texto dentro del MP4 (tx3g): salen de lo ya bajado, sin ser
     await s.close();
   }
 });
+
+test('2.1.1: película nueva con un servidor de 6 s por pedido, 15 s al final del archivo e índice de 12 MB: empieza antes de los 45 s (antes «sin empezar en 45 s») y sin detenerse', async () => {
+  const file = makeMp4({ secs: 6600, audios: 3, vkbps: 1100, fat: true });
+  const s = await xui(file, { wait: 6000, tailWait: 15000, rate: 1_000_000, max: 1 });
+  try {
+    const r = await H.openOnce(s.url, { at: 0, lineMax: 1, watch: 20 });
+    assert.equal(r.err, null, r.diag);
+    assert.ok(r.first !== null && r.first < 38, 'primera imagen a los ' + r.first + ' s ' + r.diag);
+    assert.ok(r.stalled < 1, 'detenido ' + r.stalled + ' s');
+  } finally {
+    await s.close();
+  }
+});

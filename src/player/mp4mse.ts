@@ -16,6 +16,7 @@ import { hevcCodec } from './mkvparse';
 import { sameLang } from '../lib/lang';
 import { StartWatch } from './startwatch';
 import { addCue, sampleText, SUB_ENTRIES, SUB_HANDLERS } from './mp4subs';
+import { keyIdleMs } from '../lib/keyidle';
 import type { Cue } from '../lib/vtt';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -362,7 +363,9 @@ export function mp4Spot(url: string): boolean {
 
 // lo que el lector pide primero de un MP4: desde el principio, también el principio del video (Player lo pide por
 // adelantado mientras se inicia el reproductor: el mismo pedido, no dos)
-export const MP4_HEAD = 1572864;
+// 2.1.1: 3 MB (antes 1,5 MB): en una línea de un pedido ese principio es todo el video que hay hasta el pedido siguiente
+// (6-8 s de espera en los avisos); con 1,5 MB el video empezaba y se detenía
+export const MP4_HEAD = 3145728;
 
 // ¿ya se tiene (o se está leyendo) el índice de este archivo?
 export function mp4Known(url: string): boolean {
@@ -755,10 +758,9 @@ export class Mp4Mse {
     return '';
   }
 
-  // Línea de un pedido a la vez (2.1.0): el video arranca cuando lo bajado alcanza hasta que llegue la ventana siguiente
-  // (espera del servidor + bajada, como mucho 10 s), no apenas hay una imagen. Antes, en alta calidad empezaba con 2 s de
-  // video y se detenía 5 s al toque (simulador, película de 5 Mbps); ahora la misma espera queda antes de la primera
-  // imagen y después sigue de corrido. Con varias conexiones, como siempre
+  // Línea de un pedido a la vez: el video arranca con un colchón chico (2.1.1: como mucho 4 s bajados y 5 s de espera;
+  // en 2.1.0 esperaba hasta tener lo que tardaba en llegar la ventana siguiente: con un servidor de 6-8 s por pedido la
+  // primera imagen salía 11 s después de tener el índice y el video bajado, y a los 45 s Player lo daba por perdido)
   private holding = false;
   private noPlay = false;
   // Playback dejó el video en pausa (se eligió otro idioma estando en pausa): el arranque con colchón no lo reanuda
@@ -780,9 +782,9 @@ export class Mp4Mse {
         return;
       }
       const ahead = this.bufEnd() - (this.v.currentTime || 0);
-      const need = Math.min(10, this.ra.eta() + 1.5);
+      const need = Math.min(4, this.ra.eta() + 1.5);
       // (un salto mientras tanto: seekTo sigue igual; se suelta para no quedar en pausa)
-      if (g !== this.gen || ahead >= need || ahead >= 30 || Date.now() - t0 > 12000 || (this.vi >= (this.vt?.dts.length || 0) && ahead > 0)) {
+      if (g !== this.gen || ahead >= need || Date.now() - t0 > 5000 || (this.vi >= (this.vt?.dts.length || 0) && ahead > 0)) {
         this.holding = false;
         this.v.play();
         return;
@@ -1164,8 +1166,10 @@ export class Mp4Mse {
         const hs = hostStats(this.url);
         const wr = ((hs.wait || 3500) / 1000) * (hs.rate || this.rs.rate || 1000000);
         // (en segundo plano, idxwarm.ts: entero siempre; nadie espera la primera imagen)
-        const one = this.idxOnly || total <= Math.max(need + wr, 6291456) ? total : Math.max(need, Math.round(total * 0.6));
-        const want = Math.min(total, single ? one : Math.ceil(need / 3));
+        const one = total <= Math.max(need + wr, 6291456) ? total : Math.max(need, Math.round(total * 0.6));
+        // (en segundo plano, idxwarm.ts: de a 2 MB; nadie espera la primera imagen y la navegación no se traba)
+        const want = this.idxOnly ? Math.min(total, 2097152) : Math.min(total, single ? one : Math.ceil(need / 3));
+        if (this.idxOnly) this.mra.fixed = 2097152;
         // una sola conexión: solo lo que se lee, nada por adelantado (otro pedido a la vez lo rechaza el servidor)
         if (single) {
           this.mra.goSingle();
@@ -1265,7 +1269,10 @@ export class Mp4Mse {
     void (async () => {
       const CH = 262144;
       while (this.alive && box.got < box.size) {
-        if (started) await this.moovGate();
+        // (lo que ya bajó el pedido del resto no espera otra vez)
+        if (started && !this.mra.peek(box.off + box.got, 1)) await this.moovGate((box.tailAt ?? box.size) - box.got);
+        // en segundo plano (idxwarm.ts): cada parte, cuando no se está tocando el control
+        while (this.alive && this.idxOnly && keyIdleMs() < 2500) await sleep(500);
         if (!this.alive || box.got >= box.size) break;
         const stopAt = box.tailAt ?? box.size;
         const d = await this.moovRead(box.off + box.got, Math.min(CH, stopAt - box.got));
@@ -1276,6 +1283,12 @@ export class Mp4Mse {
         box.got += Math.min(d.length, upto - box.got);
         if (box.got >= upto) box.got = box.size;
         if (!started && (box.got >= box.size || this.enough(box))) begin(box.buf.subarray(box.hl, box.got));
+      }
+      // el video sigue bajando (moovGate lo detuvo para el índice)
+      this.mra.fixed = 0;
+      if (this.ra.paused) {
+        this.ra.paused = false;
+        this.ra.go();
       }
       if (box.got >= box.size) {
         const body = box.buf.subarray(box.hl);
@@ -1324,7 +1337,11 @@ export class Mp4Mse {
   // el resto del índice, sin quitarle la conexión al video: con varias conexiones cuando ya hay 12 s de video por delante;
   // con una sola, cuando el video no está pidiendo nada y tiene 40 s por delante. Desde la ficha (sin reproductor), cuando
   // el arranque ya bajó
-  private async moovGate(): Promise<void> {
+  // 2.1.1, de a un pedido: con las ventanas grandes de 2.1.0 el video casi nunca quedaba «quieto» y el resto del índice
+  // (los otros idiomas) tardaba minutos: el menú mostraba solo el idioma que sonaba. Ahora, con el video bajado lo
+  // bastante por delante para lo que tarda ese pedido (como mucho 40 s), la descarga del video espera y el resto del índice
+  // va en UN pedido. rest: bytes que faltan del índice
+  private async moovGate(rest = 0): Promise<void> {
     for (;;) {
       if (!this.alive) return;
       const single = this.ra.single || this.mra.single || this.oneConn;
@@ -1334,10 +1351,21 @@ export class Mp4Mse {
       } catch {
         ahead = 0;
       }
-      // (el video «quieto» = sin ventanas pendientes, ni siquiera esperando su turno tras un rechazo)
-      if (this.warm ? this.ra.pending === 0 : single ? this.ra.pending === 0 && ahead >= 40 : ahead >= 12) return;
+      if (this.warm ? this.ra.pending === 0 : !single ? ahead >= 12 : false) break;
+      if (single && !this.warm) {
+        const hs = hostStats(this.url);
+        const est = (hs.wait || 3500) / 1000 + rest / (hs.rate || this.rs.rate || 1000000);
+        if (ahead >= Math.min(40, est + 10)) {
+          // la ventana del video que está bajando termina; después, el índice
+          this.ra.paused = true;
+          if (this.ra.pending === 0) break;
+        } else this.ra.paused = false;
+      }
       await sleep(500);
     }
+    // el resto del índice de una vez (desde la ficha, de a 4 MB: no traba la navegación; en segundo plano, los 2 MB de
+    // idxwarm)
+    if (rest > 0 && !this.idxOnly) this.mra.fixed = this.warm ? Math.min(rest, 4194304) : rest;
   }
 
   // el índice ya está entero: queda como el de siempre (memoria, guardado en el equipo y los idiomas que faltaban en el menú)

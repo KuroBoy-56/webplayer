@@ -2,6 +2,8 @@
 // al mismo lugar al pulsar Atrás.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, BackHandler, LayoutChangeEvent, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { useTVEventHandler } from '@amazon-devices/react-native-kepler';
+import { noteKey } from './lib/keyidle';
 import { fetchAlert, PanelAlert } from './api/alerts';
 import AlertDialog from './components/AlertDialog';
 import { Logo } from './components/ui';
@@ -242,6 +244,9 @@ function App() {
       onTenantProblem(() => {});
     };
   }, [ready, nav]);
+
+  // cada tecla del control: lo que trabaja en segundo plano espera a que no se navegue (keyidle.ts)
+  useTVEventHandler(() => noteKey());
 
   const onBack = useCallback(() => {
     if (stack && stack.length > 1 && stack[stack.length - 1].name !== 'player') {

@@ -207,6 +207,29 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Lo que mostraron los avisos de 2.1.0 (2.1.1)**: el servidor tarda 6-8 s en contestar cada pedido (no 3,5 s: hasta
+  2.0.17 el promedio contaba también los rechazos al instante), más al pedir el final del archivo, y hay índices de 16 MB.
+  Simulado así (`npm run test:vod`, caso «2.1.1»), una película nueva tardaba 42 s en verse y Player la daba por perdida
+  a los 45 s («lector MP4: sin empezar en 45 s» dos veces):
+  - **Sin la espera de colchón**: con el índice leído, 2.1.0 esperaba hasta 10 s más de video antes de arrancar; ahora
+    como mucho 4 s bajados y 5 s de espera (`startPlay`). Principio del archivo de 3 MB (antes 1,5 MB, `MP4_HEAD`) y
+    primera ventana del video del tamaño justo (`ReadAhead.singleSize`). La misma película: 33 s sin cortes.
+  - **Sin empezar todo de nuevo**: con el índice leído, mientras el servidor siga entregando (algo en los últimos 10 s)
+    Player espera hasta 2 min en total en lugar de pasar a la vuelta siguiente a los 45 s (`waitStart`).
+  - **Todos los idiomas en el menú**: con el índice a medias el menú mostraba solo las pistas leídas; ahora, si el panel
+    conoce más (las dejó otro equipo), las muestra todas y elegir una lee lo que falta. El resto del índice se lee en un
+    solo pedido apenas el video tiene margen para esa espera (la descarga del video se detiene mientras, `moovGate`); en
+    2.1.0 casi nunca había un momento «quieto» y tardaba minutos.
+  - **Navegación sin trabas**: convertir lo bajado ocupa la app (todo pasa por JavaScript en Vega). Las teclas se
+    juntaban: la lista no se movía y después saltaba dos lugares. Los índices de Continuar viendo en segundo plano ahora
+    se leen de a 2 MB y solo cuando no se toca el control (`src/lib/keyidle.ts`, `App.tsx`); la miniatura de los canales
+    deja para después la conversión de un segmento mientras se navega (como mucho 1,5 s, `LiveHls.deliver`).
+  - **El reproductor de Amazon tiene su tiempo**: en Vega OS 2.0 lee el índice del final del archivo igual que la app; a
+    los 12 s se lo daba por perdido y, dos veces así, quedaba apagado para siempre en el equipo. Ahora 30 s para dar
+    señales y 20 s más para empezar, y tardar no cuenta como que no sirve (`openNativeVod`, `nativeStarting`).
+  - En los avisos: `reproductor_amazon=http_rechazado | error_N | lento | abrio | abre_en_este_equipo | no_probado`
+    (http_rechazado = el sistema no admite http en modo directo: Vega OS anterior a 2.0, también el simulador de Vega con
+    el sistema 1.x) y, al fallar, lo que hizo el lector (índice, pedidos, espera del servidor).
 - **Películas y series rápidas y de corrido sin la VPS (2.1.0)**: todo es tráfico del servidor IPTV; nada de video pasa
   por la VPS / VDS ni por el hosting. Medido con un servidor XUI simulado como el de los avisos (una conexión, 3,5 s de
   espera por pedido, índice al final del archivo; `npm run test:vod`, `node tools/vod-sim/run.cjs`):

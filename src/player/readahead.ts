@@ -52,6 +52,11 @@ export class ReadAhead {
   // actual desde aquí, sin pedirle nada al servidor (los audios de todos los idiomas vienen intercalados con el video)
   keepBehind = 0;
   private readAt = -1;
+  // ventanas siempre de este tamaño (2.1.1: el índice en segundo plano de a 2 MB, así nunca traba la navegación al
+  // convertir lo bajado; 0 = como siempre)
+  fixed = 0;
+  // sin ventanas nuevas mientras tanto (2.1.1: el resto del índice usa la única conexión de la línea)
+  paused = false;
   // solo lo que se pide (read), nada por adelantado (el resto del índice de un MP4 mientras suena el video, 2.0.15)
   lazy = false;
   // tamaño de las primeras ventanas (las que van a la vez al empezar): iguales, así llegan juntas (el índice); 0 = como siempre
@@ -118,10 +123,11 @@ export class ReadAhead {
     const steady = Math.max(4 * MB, Math.min(16 * MB, 3 * min));
     const second = Math.max(4 * MB, steady * 0.6);
     if (this.ramp === 0) {
-      // la primera: lo que se ve mientras llega la segunda (su espera y su bajada) con margen, más lo que va antes del
-      // segundo pedido (desde el cuadro clave); ni menos de 6 s de video ni más de 6 MB
-      const first = Math.round(bps * ((wait + second / rate) * 1.3 + 2)) + this.firstNeed;
-      return Math.max(this.firstNeed, Math.max(1536 * 1024, Math.round(bps * 6)), Math.min(6 * MB, first));
+      // la primera (2.1.1): justo lo que se ve mientras llega la segunda (su espera y su bajada, sin margen) más lo que va
+      // antes del segundo pedido (desde el cuadro clave), entre 1,5 y 4 MB; en 2.1.0 tenía margen de más (hasta 6 MB: con
+      // 1 MB/s eran 3 s más antes de la primera imagen). El colchón de arranque (startPlay) cubre lo que falte
+      const first = Math.round(bps * (wait + second / rate)) + this.firstNeed;
+      return Math.max(this.firstNeed, Math.min(4 * MB, Math.max(1536 * 1024, first)));
     }
     if (this.ramp === 1) return Math.round(second);
     return Math.round(steady);
@@ -129,6 +135,7 @@ export class ReadAhead {
 
   // tamaño de la próxima ventana
   private size(): number {
+    if (this.fixed > 0) return this.fixed;
     const known = this.bps() > 0;
     const bps = this.bps() || 250000;
     if (this.single && known && !this.startLen && !this.lazy) return this.singleSize(bps);
@@ -148,7 +155,7 @@ export class ReadAhead {
 
   // pide ventanas mientras haya lugar; must: byte hasta donde el lector ya está esperando
   private fill(must = 0): void {
-    if (!this.alive) return;
+    if (!this.alive || this.paused) return;
     const par = this.single || this.hold ? 1 : Math.max(1, Math.min(this.par, lineLimit() === 2 ? 2 : 3));
     // lo que se guarda por delante: con ventanas de hasta 16 MB, dos (la que se está viendo y la siguiente)
     const cap = (this.single ? 24 : 20) * MB;
@@ -349,6 +356,12 @@ export class ReadAhead {
           if (w.data && a < w.data.length) out.push(w.data.subarray(a, Math.min(b, w.data.length)));
         }
         return out.length ? join(out) : null;
+      }
+      // detenida un momento (el resto del índice usa la conexión, moovGate): se espera, no es un fallo
+      if (this.paused && !this.flyP.size) {
+        await sleep(200);
+        if (g !== this.gen || !this.alive) return null;
+        continue;
       }
       // todavía no se pudo pedir lo que falta (los lugares están ocupados): se espera a que termine alguno
       if (!this.flyP.size) return null;

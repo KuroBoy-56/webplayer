@@ -47,6 +47,7 @@ class Mp4 {
   switchAudio(i){if(!this.url.includes('inplace'))return false;this.audioIdx=i;this.switched=(this.switched||0)+1;return true;}
   // subtítulos de texto dentro del MP4 (las pruebas «mp4subs»)
   subList(){return this.url.includes('mp4subs')?[{id:'0',lang:'spa',codec:'tx3g',name:'',def:false,forced:false}]:[];}
+  diag(){return '[lector de prueba]';}
   subCues(n){return this.url.includes('mp4subs')&&n===0?(this.cues||(this.cues=[{s:0,e:5,text:'hola'}])):null;}
   destroy(){}
 }
@@ -56,6 +57,7 @@ class Mkv {
   subCues(n){return n===0?(this.cuesList||(this.cuesList=[{s:0,e:5,text:'hola'}])):null;}
   async start(at){this.v.currentTime=at;this.onTracks();return '';}
   timeOf(t){return t;}
+  diag(){return '[lector mkv de prueba]';}
   destroy(){}
 }
 class PanelHls {static supported(){return true;}}
@@ -465,4 +467,11 @@ test('2.1.0: subtítulos de texto dentro de un MP4: al menú y a la pantalla sin
   const {c}=setup();c.load('https://fixture.invalid/mp4subs.mp4',0,false);await tick();
   const sub=c.menu().find(m=>m.kind==='text'&&m.label.includes('Español'));assert.ok(sub,JSON.stringify(c.menu()));
   c.select(sub);await tick();assert.deepEqual(calls,[]);assert.ok(c.menu().find(m=>m.kind==='text'&&m.label.includes('Español')).on);await c.destroy();
+});
+
+test('2.1.1: índice a medias (el lector vio 2 idiomas) y el panel conoce 3: el menú muestra los 3',async()=>{
+  const three={ok:true,container:'mp4',audio:[{lang:'es',name:'',codec:'aac',def:true},{lang:'en',name:'',codec:'aac',def:false},{lang:'pt',name:'',codec:'aac',def:false}],subs:[]};
+  const {c}=setup({cached:three});c.load('https://fixture.invalid/partial.mp4',0,false);await tick();
+  const audios=c.menu().filter(m=>m.kind==='audio');assert.equal(audios.length,3,JSON.stringify(audios));
+  assert.ok(audios.some(m=>m.label.includes('Portugu')));await c.destroy();
 });

@@ -8,10 +8,12 @@
 // sola espera del servidor. El tráfico es del servidor IPTV (unos MB por título, una vez), nada pasa por la VPS / VDS.
 //
 // Se detiene apenas se abre un video, una ficha o una miniatura de canal (idxWarmHold) y sigue 3 s después de cerrarlos.
+// Solo cuando no se toca el control (2.1.1, keyidle.ts) y de a 2 MB: la navegación no se traba.
 // Nunca en líneas de una conexión: otro equipo de la misma cuenta podría estar viendo y el servidor cortaría a uno.
 import { hasIndex } from './indexstore';
 import { mkvKnown, preloadMkv } from './mkvmse';
 import { mp4Known, preloadIndex } from './mp4mse';
+import { keyIdleMs } from '../lib/keyidle';
 
 const MAX = 4;
 let list: string[] = [];
@@ -52,6 +54,11 @@ export function idxWarmHold(on: boolean): void {
 async function run(): Promise<void> {
   timer = null;
   if (holds > 0 || running) return;
+  // se está navegando: después (2.1.1)
+  if (keyIdleMs() < 2500) {
+    schedule(1000);
+    return;
+  }
   const url = list.find(u => !known(u) && !missed.has(key(u)));
   if (!url) return;
   const mkv = /\.mkv(\?|$)/i.test(url);

@@ -285,6 +285,24 @@ export default function Player({ params }: { params: PlayParams }) {
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
       liveWait.current = false;
+      // El lector propio con el índice ya leído y todavía sin imagen: se espera ms y, si el servidor sigue entregando
+      // (algo llegó en los últimos 10 s), hasta 2 min en total (2.1.1). Antes a los 45 s se daba por perdido y la vuelta
+      // siguiente empezaba todo de nuevo (aviso «lector MP4: sin empezar en 45 s» dos veces, servidor de 8 s por pedido)
+      const t0Start = Date.now();
+      const waitStart = (why: string, ms: number) => {
+        startDog.current = setTimeout(() => {
+          startDog.current = null;
+          const c2 = ctl.current;
+          if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
+          if (c2.mp4Starting() && c2.mp4Busy() && Date.now() - t0Start < 120000) {
+            setStatus(t('Cargando…'));
+            waitStart(why, 5000);
+            return;
+          }
+          if (c2.mp4Fallback(why)) vodFinal(i);
+          else onErrorRef.current();
+        }, ms);
+      };
       // 20 s para empezar a sonar (15 s en Continuar viendo; 25 s en los canales: la app baja la lista y los primeros
       // segmentos); con el panel, sus propios plazos
       startDog.current = setTimeout(() => {
@@ -327,14 +345,8 @@ export default function Player({ params }: { params: PlayParams }) {
             const c2 = ctl.current;
             if (!c2 || c2.hasPlayed() || indexRef.current !== i || !c2.mp4Starting()) return;
             if (c2.mp4Indexed()) {
-              // ya tiene el índice: 25 s más para empezar a sonar
-              startDog.current = setTimeout(() => {
-                startDog.current = null;
-                const c3 = ctl.current;
-                if (!c3 || c3.hasPlayed() || indexRef.current !== i) return;
-                if (c3.mp4Fallback('sin empezar tras leer el índice')) vodFinal(i);
-                else onErrorRef.current();
-              }, 25000);
+              // ya tiene el índice: 25 s más para empezar a sonar (y más mientras el servidor siga entregando)
+              waitStart('sin empezar tras leer el índice', 25000);
               return;
             }
             if (c2.mp4Busy() && Date.now() - t0 < 100000) {
@@ -349,13 +361,18 @@ export default function Player({ params }: { params: PlayParams }) {
           return;
         }
         if (!live && ctl.current.mp4Starting()) {
+          waitStart('sin empezar en 45 s', 25000);
+          return;
+        }
+        // el reproductor de Amazon leyendo el archivo (2.1.1): tiene sus propios plazos (30 s + 20 s, Playback); esto es
+        // solo por si no avisa nada
+        if (!live && ctl.current.nativeStarting()) {
           startDog.current = setTimeout(() => {
             startDog.current = null;
             const c2 = ctl.current;
             if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
-            if (c2.mp4Fallback('sin empezar en 45 s')) vodFinal(i);
-            else onErrorRef.current();
-          }, 25000);
+            onErrorRef.current();
+          }, 35000);
           return;
         }
         onErrorRef.current();
@@ -657,7 +674,8 @@ export default function Player({ params }: { params: PlayParams }) {
       const e = params.kind === 'live' ? null : params.queue[i];
       if (!e || c.hasPlayed() || c.panelActive()) return false;
       const err: any = (v as any).error;
-      if (vs.attempts.length < 12) vs.attempts.push((flipped.current ? 'otro protocolo' : 'directo') + ': ' + (err?.code ?? '') + ' ' + String(err?.message || '').slice(0, 80) + (c.mp4Note() ? ' (lector MP4: ' + c.mp4Note() + ')' : ''));
+      // (2.1.1: con lo que dejó el lector —índice, pedidos, espera del servidor— y qué pasó con el reproductor de Amazon)
+      if (vs.attempts.length < 12) vs.attempts.push((flipped.current ? 'otro protocolo' : 'directo') + ': ' + (err?.code ?? '') + ' ' + String(err?.message || '').slice(0, 80) + (c.mp4Note() ? ' (lector MP4: ' + c.mp4Note() + ')' : '') + ' ' + (/reproductor_amazon=\S+/.exec(c.vodMode()) || [''])[0]);
       const at = c.resumePos();
       // 1) una vez: qué contesta el servidor (código, cuenta, si la película sigue y con qué extensión)
       if (!vs.checked) {
