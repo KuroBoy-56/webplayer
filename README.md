@@ -207,6 +207,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Número del equipo que no cambia al reinstalar (2.1.6)**: el «MAC» de una instalación nueva sale del identificador
+  que Vega OS da a las apps de un mismo vendedor (Vendor Tracking ID, `@amazon-devices/kepler-identifiers`,
+  `src/lib/deviceid.ts`): según Amazon se mantiene al desinstalar y volver a instalar, y solo cambia al restablecer el
+  equipo de fábrica. Al panel va combinado en 8 pares hex (el UUID no sale del equipo). El número ya guardado en un
+  equipo se respeta (el panel lo tiene registrado); sin esa función, uno al azar como antes.
 - **Idioma guardado sin el panel (2.1.5)**: Continuar viendo abre con el idioma con que se venía viendo (también el
   elegido en Roku con el audio del panel), puesto en el equipo; si este equipo no reproduce esa pista sigue con el
   audio predeterminado del archivo. El panel solo prepara un idioma elegido en el menú. Ver `INTEGRACION_REPRODUCTOR.md`.
@@ -385,7 +390,8 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   - **Identificador del equipo** (`src/lib/deviceid.ts`): es el mismo en cada inicio y en cada actualización. Si lo
     guardado no se puede leer al iniciar (se reintenta), no se escribe uno nuevo encima del que el panel ya tiene.
     Vega OS no da a las apps un número propio del equipo (serie o MAC): al **desinstalar** la app el identificador se
-    pierde y el equipo aparece como nuevo en el panel.
+    pierde y el equipo aparece como nuevo en el panel (desde 2.1.6 ya no: sale del Vendor Tracking ID de Vega, ver
+    arriba).
 - **Canales cifrados que se cortaban y Continuar viendo más rápido (2.0.12)**:
   - **Canal cifrado (AES-128) que se cortaba a los ~40 min** (aviso «Canal cortado mientras se veía», `problema=descifrado:
     aes/pcks5: wrong padding`, `renovaciones=1`): al renovar la lista (token vencido) el servidor cifra con otra llave en

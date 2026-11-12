@@ -980,6 +980,61 @@ test('2.1.3: inicio de sesión: si el panel no contesta se le pregunta otra vez 
   assert.match(app, /registerPending\(deviceId\(\), ses\.user\)/);
 });
 
+test('2.1.6: identificador del equipo desde el de Vega (no cambia al reinstalar): el mismo siempre; el ya guardado se respeta; sin él, al azar', async () => {
+  const disk = new Map();
+  let vendor = async () => '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+  const prev = Module._load;
+  Module._load = function(request, parent, isMain) {
+    if (request === '@react-native-async-storage/async-storage') return { __esModule: true, default: {
+      getAllKeys: async () => [...disk.keys()],
+      multiGet: async ks => ks.map(k => [k, disk.get(k)]),
+      setItem: async (k, v) => { disk.set(k, v); },
+      removeItem: async k => { disk.delete(k); },
+    } };
+    if (request === '@amazon-devices/kepler-identifiers') return { KeplerIdentifiers: { getVendorTrackingId: () => vendor() } };
+    return prev.call(this, request, parent, isMain);
+  };
+  const start = async () => {
+    for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
+    const storage = require('../src/lib/storage.ts');
+    const dev = require('../src/lib/deviceid.ts');
+    await storage.loadStorage();
+    await dev.prepareDeviceId();
+    await new Promise(r => setTimeout(r, 0));
+    return dev;
+  };
+  try {
+    let dev = await start();
+    const id = dev.deviceId();
+    assert.match(id, /^([0-9A-F]{2}:){7}[0-9A-F]{2}$/);
+    assert.equal(id, dev.idFromUuid('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'));
+    assert.ok(!id.startsWith('00'));
+    // desinstalar y volver a instalar (nada guardado): el mismo número
+    disk.clear();
+    dev = await start();
+    assert.equal(dev.deviceId(), id);
+    // el número que ya estaba guardado (instalación de antes) no se cambia
+    disk.clear();
+    disk.set('latmpx:device_id', 'AB:CD:EF:01:23:45:67:89');
+    dev = await start();
+    assert.equal(dev.deviceId(), 'AB:CD:EF:01:23:45:67:89');
+    // sin la función (o apagada por el usuario: UUID en ceros): al azar, guardado como antes
+    for (const v of [async () => { throw new Error('sin módulo'); }, async () => '00000000-0000-0000-0000-000000000000']) {
+      vendor = v;
+      disk.clear();
+      dev = await start();
+      const r = dev.deviceId();
+      assert.match(r, /^([0-9A-F]{2}:){7}[0-9A-F]{2}$/);
+      assert.equal(disk.get('latmpx:device_id'), r);
+    }
+    assert.equal(dev.idFromUuid(''), '');
+    assert.notEqual(dev.idFromUuid('11111111-2222-4333-8444-555555555555'), dev.idFromUuid('11111111-2222-4333-8444-555555555556'));
+  } finally {
+    Module._load = prev;
+    for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
+  }
+});
+
 test('identificador del equipo: si lo guardado no se pudo leer no se escribe uno nuevo encima del registrado en el panel', async () => {
   const saved = [];
   let fail = true;

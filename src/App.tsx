@@ -11,6 +11,7 @@ import { clearStoredCache, whenNotPlaying } from './lib/cacheclear';
 import { onLangChange, t } from './lib/i18n';
 import { clearDnsCache } from './lib/securedns';
 import { loadStorage } from './lib/storage';
+import { prepareDeviceId } from './lib/deviceid';
 import { applyBrand, distChoice, features, onTenantProblem, tenantCode } from './lib/tenant';
 import { Nav, NavContext, Route } from './nav';
 import Actor from './screens/Actor';
@@ -123,7 +124,8 @@ function App() {
   useEffect(() => {
     const started = Date.now();
     let timer: ReturnType<typeof setTimeout> | null = null;
-    loadStorage().then(() => {
+    // (2.1.6: el identificador del equipo que no cambia al reinstalar, antes de la primera pantalla)
+    loadStorage().then(prepareDeviceId).then(() => {
       // marca guardada del distribuidor antes de la primera pantalla
       applyBrand();
       const logged = restoreSession();
