@@ -230,4 +230,4 @@ async function openOnce(url, { at = 0, lineMax = 1, watch = 30, log = null, acti
   return { first: first < 0 ? null : (first - t0) / 1000, stalled: stalled / 1000, err, diag, pos: v.currentTime };
 }
 
-module.exports = { openOnce, sharedBox, memory, asyncMem, mp4, rangeget, prefetch };
+module.exports = { openOnce, sharedBox, memory, asyncMem, mp4, rangeget, prefetch, current };

@@ -1,7 +1,7 @@
 // Una sola vista previa puede poseer el reproductor. La pantalla completa
 // espera su cierre asíncrono para liberar la conexión y el decodificador.
 import type { VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
-import type { Playback } from './playback';
+import type { Playback } from './playback-live';
 
 type Stop = () => Promise<void>;
 let current: Stop | null = null;

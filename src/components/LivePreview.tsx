@@ -6,7 +6,7 @@ import React, { memo, useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { LIVE_FORMATS, liveUrl, otherScheme, streamFlip } from '../api/xtream';
 import { Item } from '../data/catalog';
-import { Hooks, nativeLivePlanned, Playback } from '../player/playback';
+import { Hooks, nativeLivePlanned, Playback } from '../player/playback-live';
 import { dropPrefetch, prefetchList } from '../player/prefetch';
 import { idxWarmHold } from '../player/idxwarm';
 import { dropReturn, offerPreview, registerLivePreview, takeReturn, waitForLivePreview } from '../player/preview-session';

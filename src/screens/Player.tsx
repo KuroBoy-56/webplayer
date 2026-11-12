@@ -392,7 +392,8 @@ export default function Player({ params }: { params: PlayParams }) {
     if (!foreground) return;
     // el canal que ya suena en la miniatura: la pantalla grande se queda con ese reproductor (sin cerrarlo ni abrir el
     // canal de nuevo; solo cambia la superficie), como Roku
-    const inherited = session === 0 && params.kind === 'live' ? takePreview(urlFor(indexRef.current)) : null;
+    // (2.1.2: los canales en vivo van por PlayerLive.tsx; aquí nunca llega un canal)
+    const inherited = session === 0 && params.kind === 'live' ? (takePreview(urlFor(indexRef.current)) as unknown as { v: VideoPlayer; c: Playback } | null) : null;
     zapping.current = false;
     const v = inherited ? inherited.v : new VideoPlayer();
     video.current = v;
@@ -954,7 +955,7 @@ export default function Player({ params }: { params: PlayParams }) {
         } catch {
           // sigue igual
         }
-        offerReturn(backCh.id, v, c);
+        offerReturn(backCh.id, v, c as never);
         video.current = null;
         ctl.current = null;
         ready.current = false;

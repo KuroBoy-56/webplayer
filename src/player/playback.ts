@@ -756,7 +756,10 @@ export class Playback {
   private httpCheck(): void {
     const e: any = (this.v as any).error;
     const cleartext = /cleartext|insecure (protocol|scheme)|http.*not (allowed|supported)/i.test(e?.message || '');
-    if (e?.code === 4 && /^http:/i.test(this.url) && (cleartext || (osBefore2() && Date.now() - this.nativeAt < 300)) && nativeRejectedHttp()) {
+    // (2.1.2: también si el equipo no dice su versión —solo trae keplerOSVariant—: el error 4 al instante con http es el
+    // rechazo de Vega OS antes de 2.0; sin esto el nativo se probaba en cada película y la ficha no preparaba nada)
+    const unknownOs = !/\d/.test(osVersion());
+    if (e?.code === 4 && /^http:/i.test(this.url) && (cleartext || ((osBefore2() || unknownOs) && Date.now() - this.nativeAt < 500)) && nativeRejectedHttp()) {
       // una vez por sesión: con Vega OS anterior a 2.0, cómo hacer que todo abra al instante
       const v = osVersion();
       if (osBefore2(v)) this.hooks.toast(t('Este Fire TV tiene Vega OS {v}. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran al instante.', { v }));

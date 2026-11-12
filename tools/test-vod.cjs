@@ -105,3 +105,17 @@ test('2.1.1: película nueva con un servidor de 6 s por pedido, 15 s al final de
     await s.close();
   }
 });
+
+test('2.1.2: el reproductor de películas completo (playback.ts) en un equipo que rechaza http en modo directo: pasa al lector, abre y desde la segunda película no prueba el nativo', async () => {
+  const P = require('./vod-sim/playback-harness.cjs');
+  const file = makeMp4({ secs: 2700, audios: 2, vkbps: 1100 });
+  const s = await xui(file, { wait: 3500, rate: 1_500_000, max: 1 });
+  try {
+    const r = await P.openVod(s.url, { at: 0, lineMax: 1, watch: 5, nativeHttp: 'reject' });
+    assert.equal(r.failed, null, r.mode);
+    assert.ok(r.first !== null && r.first < 20, 'primera imagen a los ' + r.first + ' s ' + r.mode);
+    assert.ok(/reproductor_amazon=http_rechazado/.test(r.mode), r.mode);
+  } finally {
+    await s.close();
+  }
+});

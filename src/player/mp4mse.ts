@@ -592,8 +592,10 @@ export class Mp4Mse {
     // el índice que otro equipo ya leyó y dejó en el panel (2.0.16): al servidor IPTV solo se le pide el video
     if (!moov) {
       const cached = sharedIndex(this.url, 'm');
-      // La búsqueda remota de un índice no demora un arranque en primer plano.
-      const sh = this.idxOnly ? await cached : await Promise.race([cached, sleep(600).then(() => null)]);
+      // La búsqueda remota de un índice no demora un arranque en primer plano: como mucho 8 s (2.1.2: con 0,6 s casi
+      // nunca llegaba —solo pedir los enlaces al panel tarda eso— y se perdía el índice que dejó otro equipo, como Roku;
+      // leerlo del servidor IPTV son 15-30 s). Si la VPS no lo tiene, contesta al toque y se sigue
+      const sh = this.idxOnly ? await cached : await Promise.race([cached, sleep(8000).then(() => null)]);
       if (!this.alive) return '';
       if (sh) {
         try {

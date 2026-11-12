@@ -7,6 +7,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:player": "node tools/test-player.cjs",
     "test:interface": "node tools/test-interface.cjs",
+    "test:player-live": "node --test tools/test-player-live.cjs",
     "test:readahead": "node --test tools/test-readahead.cjs",
     "test:indexstore": "node --test tools/test-indexstore.cjs",
     "test:vod": "node --test tools/test-vod.cjs",

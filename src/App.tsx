@@ -20,6 +20,7 @@ import Grid from './screens/Grid';
 import Login from './screens/Login';
 import Main from './screens/Main';
 import Player from './screens/Player';
+import PlayerLive from './screens/PlayerLive';
 import Review from './screens/Review';
 import { clearSportsCache } from './screens/Sports';
 import { clearTmdbCache } from './api/tmdb';
@@ -54,7 +55,8 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
     case 'grid':
       return <Grid title={route.title} mode={route.mode} keyName={route.key} kind={route.kind} active={active} />;
     case 'player':
-      return <Player params={route.params} />;
+      // canales en vivo: la pantalla grande de la 2.0.17 (PlayerLive); películas y series: Player
+      return route.params.kind === 'live' ? <PlayerLive params={route.params} /> : <Player params={route.params} />;
     case 'review':
       return <Review data={route.data} />;
   }

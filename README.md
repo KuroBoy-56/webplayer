@@ -207,6 +207,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canales en vivo de la 2.0.17 y el reproductor de películas enviado (2.1.2)**: películas y series con el reproductor
+  del archivo `webplayer-vega-os_1.zip` (`playback.ts`, `Player.tsx`); los canales en vivo vuelven a ser los de la
+  2.0.17 (`PlayerLive.tsx`, `playback-live.ts`, `nativemode-live.ts`, `livehls.ts`; ver `INTEGRACION_REPRODUCTOR.md`).
+  Además, el índice compartido se espera hasta 8 s y el rechazo de http del sistema se reconoce aunque el equipo no
+  diga su versión.
 - **Lo que mostraron los avisos de 2.1.0 (2.1.1)**: el servidor tarda 6-8 s en contestar cada pedido (no 3,5 s: hasta
   2.0.17 el promedio contaba también los rechazos al instante), más al pedir el final del archivo, y hay índices de 16 MB.
   Simulado así (`npm run test:vod`, caso «2.1.1»), una película nueva tardaba 42 s en verse y Player la daba por perdida

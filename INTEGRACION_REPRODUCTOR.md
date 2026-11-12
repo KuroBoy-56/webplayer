@@ -123,6 +123,22 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.1.2 — canales en vivo de la 2.0.17 y dos ajustes de películas
+
+**Canales en vivo, como en la 2.0.17.** La pantalla grande de los canales es `src/screens/PlayerLive.tsx` (el
+`Player.tsx` de la 2.0.17 tal cual) con su reproductor `src/player/playback-live.ts` y `src/player/nativemode-live.ts`
+(los de la 2.0.17). La miniatura (`LivePreview.tsx`) y el paso miniatura → pantalla grande (`preview-session.ts`) usan
+ese mismo reproductor; `livehls.ts` es el de la 2.0.17. `App.tsx` abre `PlayerLive` para `kind: 'live'` y `Player`
+(películas y series) para lo demás. Lo único agregado: `PlayerLive` detiene los índices de Continuar viendo en
+segundo plano (`idxWarmHold`). Las pruebas de la 2.0.17 corren contra esta copia: `npm run test:player-live`.
+
+**Películas y series (`playback.ts` del archivo enviado), dos ajustes:**
+- Índice compartido (el que dejó otro equipo, p. ej. Roku): se espera hasta 8 s, no 0,6 s (`Mp4Mse.doPrepare`); con
+  0,6 s casi nunca llegaba y se leía el índice del servidor IPTV (15-30 s).
+- Error 4 al instante con http en un equipo que no dice su versión (solo `keplerOSVariant`) = Vega OS antes de 2.0
+  (`Playback.httpCheck`): desde ahí no se prueba el modo directo con http y la ficha vuelve a preparar el video.
+- Simulador del reproductor completo: `tools/vod-sim/playback-harness.cjs` (en `npm run test:vod`).
+
 ## 2.1.2 — reproducción de películas y series
 
 | Situación | Ruta |

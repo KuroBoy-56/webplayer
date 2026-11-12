@@ -1,13 +1,17 @@
 // Menú del reproductor: audio y subtítulos (y favoritos en TV en vivo). Mismos botones que el resto.
 import React, { memo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { MenuItem } from '../player/playback';
+import type { MenuItem as VodItem } from '../player/playback';
+import type { MenuItem as LiveItem } from '../player/playback-live';
+
+// (2.1.2) opciones del reproductor de películas y series (playback.ts) o del de canales (playback-live.ts)
+type MenuItem = VodItem | LiveItem;
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
 import { Button } from './ui';
 
 // memo: el reproductor se redibuja seguido (barra, avisos); el menú solo cuando cambian sus opciones
-export default memo(function TrackMenu({ items, favLabel, onFav, onPick, audioOnly = false }: { items: MenuItem[]; favLabel: string; onFav: () => void; onPick: (m: MenuItem) => void; audioOnly?: boolean }) {
+function TrackMenu<T extends MenuItem>({ items, favLabel, onFav, onPick, audioOnly = false }: { items: T[]; favLabel: string; onFav: () => void; onPick: (m: T) => void; audioOnly?: boolean }) {
   const safe = (items || []).filter(Boolean);
   const audio = safe.filter(m => m.kind !== 'text');
   const subs = audioOnly ? [] : safe.filter(m => m.kind === 'text');
@@ -15,7 +19,7 @@ export default memo(function TrackMenu({ items, favLabel, onFav, onPick, audioOn
   const realAudio = audio.filter(m => m.kind === 'audio');
   // el foco empieza en lo que suena ahora
   const first = (favLabel ? null : realAudio.find(m => m.on) || audio[0] || subs.find(m => m.on) || subs[0]) || null;
-  const row = (m: MenuItem) => (
+  const row = (m: T) => (
     <View key={m.kind + m.key} style={s.opt}>
       <Button label={(m.on ? '✓  ' : '     ') + m.label} left last small={m.kind === 'local'} preferred={m === first} onPress={() => onPick(m)} />
     </View>
@@ -39,7 +43,8 @@ export default memo(function TrackMenu({ items, favLabel, onFav, onPick, audioOn
       <Text style={s.hint}>{t('Atrás para cerrar')}</Text>
     </View>
   );
-});
+}
+export default memo(TrackMenu) as typeof TrackMenu;
 
 const s = themed(() =>
   StyleSheet.create({

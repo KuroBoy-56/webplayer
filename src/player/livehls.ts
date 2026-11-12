@@ -21,7 +21,6 @@ import { cbc } from '@noble/ciphers/aes';
 import { liveStartSeg, parseList, resolveUrl, Seg, segIv, tsStart, tsStartPts } from '../lib/hlslist';
 import { TsMux } from '../lib/tsmux';
 import { disableNativeAes, nativeAesOn, nativeCbc } from '../lib/aesnative';
-import { keyIdleMs } from '../lib/keyidle';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 // el contador de cuadros de video del equipo (getVideoPlaybackQuality) sumó alguna vez en esta sesión: se puede confiar
@@ -986,12 +985,6 @@ export class LiveHls {
     if (this.mode !== 'ts' && !mp4Off && !this.tsOnly) {
       if (!this.mux) this.mux = new TsMux(this.noAudio ? -1 : this.audioIdx, false, this.target >= 8 ? 2 : 3);
       await sleep(0);
-      // 2.1.1: convertir un segmento ocupa la app 0,1-0,4 s; si se está navegando (lista de canales, filas) espera a que
-      // se suelte el control un momento (como mucho 1,5 s: el canal tiene varios segundos de margen). Antes las teclas
-      // se juntaban: la lista no se movía y después saltaba dos lugares
-      // (solo la miniatura: en pantalla grande ▲▼ cambia de canal y el canal nuevo no espera)
-      for (let i = 0; i < 6 && this.keep && this.alive && keyIdleMs() < 500; i++) await sleep(250);
-      if (!this.alive) return 0;
       let r;
       try {
         r = this.mux.push(data);
