@@ -585,8 +585,9 @@ export class Playback {
 
   nativeVodPlanned(url: string, at: number): boolean {
     if (!nativeVodAllowed(url)) return false;
-    // Con un índice local ya leído se puede pedir directamente el tramo guardado.
-    if (at > 5 && readerFile.test(url) && (mkvReady(url) || mp4Ready(url))) return false;
+    // Con el índice ya leído (la ficha lo leyó mientras se miraba, o el título ya se abrió) el lector pide de una vez el
+    // video: una sola espera del servidor IPTV. El reproductor de Amazon pide cabecera, índice y video: ~12 s (2.1.3)
+    if (readerFile.test(url) && (mkvReady(url) || mp4Ready(url))) return false;
     return true;
   }
 

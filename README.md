@@ -207,6 +207,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Canales con Vega OS 2.0, sesión que no se pierde y películas con el índice leído (2.1.3)**: los canales abren
+  primero con el lector de la app (con Vega OS 2.0 el reproductor de Amazon acepta el `.ts` pero no empieza con muchos
+  servidores y cada canal esperaba 10-18 s dos veces); el de Amazon queda para el canal que el lector no puede mostrar.
+  Una respuesta «sin línea» suelta del panel se confirma a los 2 min antes de cerrar la sesión, el inicio pregunta otra
+  vez al panel si no contestó y una cuenta escrita que el panel no pudo registrar se registra más tarde. Películas y
+  series con el índice ya leído (ficha o título ya abierto) abren con el lector: una sola espera del servidor. Ver
+  `INTEGRACION_REPRODUCTOR.md`.
 - **Canales en vivo de la 2.0.17 y el reproductor de películas enviado (2.1.2)**: películas y series con el reproductor
   del archivo `webplayer-vega-os_1.zip` (`playback.ts`, `Player.tsx`); los canales en vivo vuelven a ser los de la
   2.0.17 (`PlayerLive.tsx`, `playback-live.ts`, `nativemode-live.ts`, `livehls.ts`; ver `INTEGRACION_REPRODUCTOR.md`).

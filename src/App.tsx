@@ -28,7 +28,7 @@ import { resetEngine } from './api/media';
 import { setStreamFlip } from './api/xtream';
 import { bindReportContext, installCrashReporter } from './api/report';
 import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppState } from './state';
-import { onCacheClear, panelCheckMac, panelLineGone } from './api/panel';
+import { deviceBlocked, onCacheClear, panelAnswered, panelCheckMac, panelLineGone, registerPending, sessionVerdict } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
 installCrashReporter();
@@ -169,11 +169,22 @@ function App() {
     let lastPanel = Date.now();
     // si el dueño quitó la línea de este equipo, la demo venció o lo bloquearon, vuelve al inicio de sesión (solo
     // cuando el panel deja de dar una línea que antes dio: ver lineLost en api/panel.ts)
+    // 2.1.3: una respuesta «sin línea» suelta se confirma a los 2 min (sessionVerdict). goneFor: la sesión que ya tuvo una
+    let goneFor: unknown = null;
     const recheck = () => {
       lastPanel = Date.now();
       const ses = getState().session;
       panelCheckMac(deviceId(), true).then(ln => {
-        if (!ln && panelLineGone() && getState().session === ses) {
+        if (!ses || getState().session !== ses) return;
+        const v = sessionVerdict(!!ln, panelAnswered(), panelLineGone(), !!deviceBlocked(), goneFor === ses);
+        if (v === 'keep') {
+          if (ln) goneFor = null;
+          else registerPending(deviceId(), ses.user);
+        } else if (v === 'confirm') {
+          goneFor = ses;
+          lastPanel = Date.now() - 8 * 60000;
+        } else {
+          goneFor = null;
           logout();
           setStack([{ name: 'login' }]);
         }

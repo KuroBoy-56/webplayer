@@ -123,6 +123,31 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.1.3 — canales con Vega OS 2.0, sesión que no se pierde y películas con el índice ya leído
+
+**Canales en vivo: el lector de la app primero (`playback-live.ts`).** Con Vega OS anterior a 2.0 el reproductor de
+Amazon rechazaba al instante el `.ts` en modo directo y todo iba al lector de la app (miniatura rápida, cambio de canal
+fluido). Con Vega OS 2.0 lo acepta, pero con muchos servidores no empieza (avisos `nativo: no empezó · modo=nativo
+(.ts directo) t=0.0`): cada canal esperaba 10-18 s dos veces antes del lector y la pantalla grande se quedaba en
+«cargando». Ahora `nativeLivePlanned` solo es verdadero para un canal que el lector no pudo mostrar en ninguna de sus
+formas (MP4 propio, MPEG-TS, sin el audio MP2 / AC-3, congelado 6 veces): entonces una vez el nativo con un reproductor
+nuevo (`liveNext` → `'fresh'`); si tampoco empieza, no queda otra forma. Las listas HLS se piden por adelantado para
+todos los canales (miniatura y pantalla grande).
+
+**Sesión (`App.tsx`, `Login.tsx`, `api/panel.ts`).** La sesión vive en memoria: si el sistema cierra la app, al volver
+entra sola solo si el panel da la línea del equipo.
+- Una respuesta «sin línea» suelta del chequeo de cada 10 min ya no saca al cliente: se pregunta otra vez a los 2 min
+  y se cierra si sigue sin darla (`sessionVerdict`); el equipo bloqueado sale al momento. Igual con distribuidor.
+- Al abrir la app, si `check_mac` no tuvo respuesta (red recién despierta, panel lento) se pregunta dos veces más
+  (2 y 4 s) antes de mostrar usuario y contraseña.
+- Usuario y contraseña escritos que el panel no pudo registrar (503: no llegó al servidor IPTV) se registran otra vez
+  con el chequeo de cada 10 min (`registerLater` / `registerPending`): el próximo inicio entra solo.
+
+**Películas y series (`playback.ts`, `warm.ts`).** Con el índice ya leído (la ficha lo lee mientras se mira, o el título
+ya se abrió) el lector abre también desde el principio: pide de una vez el video, una sola espera del servidor IPTV. El
+reproductor de Amazon pide cabecera, índice y video (aviso `modo=nativo total=12.6s`). La ficha lee el índice en las
+líneas de más de una conexión (en las de una sola no la ocupa: abre el reproductor de Amazon como en 2.1.2).
+
 ## 2.1.2 — canales en vivo de la 2.0.17 y dos ajustes de películas
 
 **Canales en vivo, como en la 2.0.17.** La pantalla grande de los canales es `src/screens/PlayerLive.tsx` (el

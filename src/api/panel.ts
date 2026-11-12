@@ -377,6 +377,34 @@ let lineGone = false;
 export function panelLineGone(): boolean {
   return lineGone;
 }
+// el último check_mac tuvo respuesta del panel (con o sin línea); false = no contestó
+export function panelAnswered(): boolean {
+  return lastCheckAnswered;
+}
+
+// Qué hacer con la sesión abierta después del chequeo de cada 10 min (2.1.3). Una sola respuesta «sin línea» no la
+// cierra (el panel puede dar por vencida un momento una línea que el servidor IPTV no le contestó bien): 'confirm' =
+// preguntar otra vez a los 2 min; pending = esta sesión ya tuvo una. El equipo bloqueado sale al momento.
+export function sessionVerdict(line: boolean, answered: boolean, gone: boolean, blocked: boolean, pending: boolean): 'keep' | 'confirm' | 'logout' {
+  if (line || !answered) return 'keep';
+  if (blocked || pending) return 'logout';
+  return gone ? 'confirm' : 'keep';
+}
+
+// Usuario y contraseña escritos que el panel no pudo registrar para este equipo (503: el panel no llegó al servidor IPTV,
+// que la app sí validó). Sin registro el próximo inicio no entra solo y vuelve a pedirlos: se registra otra vez con el
+// chequeo de cada 10 min hasta que el panel conteste (2.1.3)
+let unregistered: { user: string; pass: string; base: string } | null = null;
+export function registerLater(line: { user: string; pass: string; base: string } | null): void {
+  unregistered = line;
+}
+export async function registerPending(deviceId: string, user: string): Promise<void> {
+  const p = unregistered;
+  if (!p || p.user !== user) return;
+  const r = await panelSubmit(deviceId, p.user, p.pass, p.base).catch(() => ({ ok: false, code: 0 }));
+  // registrada, o el panel la rechazó (eso lo decide el chequeo de la línea, no esto): no se insiste
+  if (unregistered === p && r.code !== 503 && r.code !== 0 && r.code < 500) unregistered = null;
+}
 
 // borrar la caché y reiniciar (lo hace App)
 let cacheHook: () => void = () => {};

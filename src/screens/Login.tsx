@@ -1,7 +1,7 @@
 // Inicio de sesión: solo usuario y contraseña; se prueba en todos los DNS del panel.
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, Easing, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { deviceBlocked, FakeScreen as Fake, lastFakeScreen, Line, panel, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelReview, panelSubmit, resellerCode } from '../api/panel';
+import { deviceBlocked, FakeScreen as Fake, lastFakeScreen, Line, panel, panelAnswered, panelCheckMac, panelDemo, panelFeatures, panelDnsList, panelPlaylists, panelReview, panelSubmit, registerLater, resellerCode } from '../api/panel';
 import FakeScreen from '../components/FakeScreen';
 import KeyboardModal from '../components/KeyboardModal';
 import { loginAll, sessionFrom } from '../api/xtream';
@@ -75,7 +75,13 @@ export default function Login() {
       let lines: Line[] = [];
       let err = '';
       if (hasMasterKey()) {
-        const ln = await panelCheckMac(dev);
+        let ln = await panelCheckMac(dev);
+        // el panel no contestó (red del equipo recién despierta, panel lento): dos intentos más antes de pedir usuario y
+        // contraseña (2.1.3: si no, una línea que el panel sí tiene para este equipo había que escribirla otra vez)
+        for (let i = 1; i <= 2 && alive && !ln && !panelAnswered() && !deviceBlocked(); i++) {
+          await new Promise<void>(r => setTimeout(r, 2000 * i));
+          ln = await panelCheckMac(dev);
+        }
         if (ln) lines = [ln];
       }
       // equipo en la lista negra del panel (de este distribuidor o del dueño con Omitir): solo el aviso, sin
@@ -170,6 +176,7 @@ export default function Login() {
         setError(reg.error || t('No se pudo conectar con el panel. Revisa tu conexión a internet.'));
         return;
       }
+      registerLater(reg.ok ? null : { user: r.session.user, pass: r.session.pass, base: r.session.base });
     }
     setBusy('');
     if (r.session) {

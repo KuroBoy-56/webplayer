@@ -46,8 +46,9 @@ export function warmIndex(url: string, at = 0, lang = ''): void {
 // el video preparado con ese idioma
 export function warmVideo(url: string, at: number, hint?: { a?: string; ai?: number }): void {
   if (hint?.a) seedTitleLang(url, String(hint.a), typeof hint.ai === 'number' ? hint.ai : -1);
-  // Una apertura directa no necesita que la ficha ocupe la línea por adelantado.
-  if (nativeVodAllowed(url) && (at <= 5 || lineLimit() <= 1 || isSingle(url))) {
+  // En una línea de una conexión la ficha no la ocupa por adelantado (el reproductor de Amazon abre directo). Con más
+  // conexiones se lee el índice mientras se mira la ficha: al pulsar Reproducir el lector solo pide el video (2.1.3)
+  if (nativeVodAllowed(url) && (lineLimit() <= 1 || isSingle(url))) {
     warmStop();
     return;
   }

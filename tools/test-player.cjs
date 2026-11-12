@@ -611,6 +611,12 @@ test('nativo: lo que la ficha preparaba con el lector se corta al abrir con el n
   c2.load(u2,180,false);await tick();
   assert.equal(mp4s.length,1);
   ready.delete(u2);await c2.destroy();
+  // 2.1.3: también desde el principio (la ficha leyó el índice mientras se miraba): el lector, una sola espera del servidor
+  const {c:c3}=setup({cached:dual});nativeOk();
+  const u3='https://fixture.invalid/movie/u/p/2007.mp4';ready.add(u3);
+  c3.load(u3,0,false);await tick();
+  assert.equal(mp4s.length,1);assert.doesNotMatch(c3.vodMode(),/modo=nativo/);
+  ready.delete(u3);await c3.destroy();
 });
 
 test('2.1.0: el lector no pudo con un MP4 por http y el nativo nunca abrió en el equipo: sin el modo directo (error 4 seguro), Player sigue ya',async()=>{

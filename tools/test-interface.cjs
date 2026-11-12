@@ -954,6 +954,32 @@ test('sesión: el panel «sin línea» solo cierra la sesión si antes dio la l�
   assert.equal(lineLost(true, true, true, false), false);
 });
 
+test('2.1.3: una sola respuesta «sin línea» no saca al cliente: se confirma a los 2 minutos; el bloqueo, al momento', () => {
+  const src = fs.readFileSync(require.resolve('../src/api/panel.ts'), 'utf8');
+  const fn = /export function sessionVerdict\([^)]*\): [^{]+\{\n([^}]*)\}/.exec(src);
+  assert.ok(fn, 'sessionVerdict en src/api/panel.ts');
+  const v = new Function('line', 'answered', 'gone', 'blocked', 'pending', fn[1]);
+  // el panel dejó de dar la línea: primero se confirma
+  assert.equal(v(false, true, true, false, false), 'confirm');
+  // a los 2 minutos sigue sin darla: se cierra
+  assert.equal(v(false, true, false, false, true), 'logout');
+  // la volvió a dar, o no contestó: sigue abierta
+  assert.equal(v(true, true, false, false, true), 'keep');
+  assert.equal(v(false, false, false, false, true), 'keep');
+  // línea escrita que el panel nunca dio: sigue abierta
+  assert.equal(v(false, true, false, false, false), 'keep');
+  // equipo bloqueado: al momento
+  assert.equal(v(false, true, true, true, false), 'logout');
+});
+
+test('2.1.3: inicio de sesión: si el panel no contesta se le pregunta otra vez antes de pedir usuario y contraseña; una cuenta escrita que el panel no pudo registrar se registra más tarde', () => {
+  const login = fs.readFileSync(require.resolve('../src/screens/Login.tsx'), 'utf8');
+  assert.match(login, /!ln && !panelAnswered\(\) && !deviceBlocked\(\)/);
+  assert.match(login, /registerLater\(reg\.ok \? null :/);
+  const app = fs.readFileSync(require.resolve('../src/App.tsx'), 'utf8');
+  assert.match(app, /registerPending\(deviceId\(\), ses\.user\)/);
+});
+
 test('identificador del equipo: si lo guardado no se pudo leer no se escribe uno nuevo encima del registrado en el panel', async () => {
   const saved = [];
   let fail = true;

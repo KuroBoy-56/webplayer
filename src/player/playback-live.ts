@@ -1,4 +1,4 @@
-// Canales en vivo (2.1.2): el reproductor de la versión 2.0.17, tal cual, para la pantalla grande de los canales
+// Canales en vivo (2.1.2): el reproductor de la versión 2.0.17 (2.1.3: el lector de la app primero, ver nativeLivePlanned)
 // (PlayerLive.tsx) y la miniatura (LivePreview.tsx). Las películas y series usan playback.ts.
 // Fuente del video, audio y subtítulos del reproductor (misma lógica que PlayerTracks.brs de Roku).
 // - Pistas que informa el reproductor de Vega (audioTracks / textTracks): se eligen ahí y se comprueba
@@ -165,9 +165,15 @@ const liveKey = (u: string) => u.replace(/^https?:\/\//i, '').replace(/\.(m3u8|t
 // canal, y con 3 canales distintos, el equipo entero
 const mp4BadLive = new Set<string>();
 const tsBadLive = new Set<string>();
+// 2.1.3: los canales abren primero con el lector de la app, como con Vega OS anterior a 2.0 (ese sistema rechazaba al
+// instante el .ts en modo directo y todo iba al lector: miniatura rápida y cambio de canal fluido). Con Vega OS 2.0 el
+// reproductor de Amazon acepta el .ts pero con muchos servidores no empieza (avisos «nativo: no empezó»): cada canal
+// esperaba 10-18 s dos veces antes del lector y la pantalla grande se quedaba en «cargando». Ahora el nativo es el último
+// recurso, una vez, solo para el canal que el lector no pudo mostrar en ninguna de sus formas.
+const readerFailedLive = new Set<string>();
 // el canal va a abrir con el reproductor nativo (entonces no hace falta pedir su lista HLS por adelantado)
 export function nativeLivePlanned(url: string): boolean {
-  return nativeAllowed('live') && nativeHttpOk(url) && (nativeMiss.get(liveKey(url)) || 0) < 2 && /\.m3u8(\?|$)/i.test(url) && !nativeLiveBad(url);
+  return readerFailedLive.has(liveKey(url)) && nativeAllowed('live') && nativeHttpOk(url) && !nativeMiss.get(liveKey(url)) && /\.m3u8(\?|$)/i.test(url) && !nativeLiveBad(url);
 }
 // qué hacer con un canal que falló: 'here' = sigue en este mismo reproductor (otra forma ya puesta), 'fresh' = otra vez
 // con un reproductor nuevo (Player y la miniatura lo crean, como al cambiar de canal), '' = no queda otra forma
@@ -430,47 +436,55 @@ export class Playback {
   liveNext(): LiveNext {
     if (!this.live) return '';
     const k = liveKey(this.url);
-    // el reproductor nativo no pudo (error, sin imagen o imagen quieta)
+    // el reproductor nativo (último recurso: el lector ya no pudo con este canal) tampoco pudo
     if (this.liveNative) {
       this.httpCheck();
       this.stopNative();
+      nativeMiss.set(k, 2);
       if (!this.played) {
-        const n = (nativeMiss.get(k) || 0) + 1;
-        nativeMiss.set(k, n);
-        // el primero: el nativo otra vez con un reproductor nuevo (si el equipo no rechazó http al instante)
-        if (n < 2 && nativeLivePlanned(this.url)) return 'fresh';
         nativeFailedOnce('live');
-        // dos seguidos con reproductores nuevos: los próximos días va directo al lector de la app
         markNativeLiveBad(this.url, true);
-      } else nativeMiss.set(k, 2);
+        return '';
+      }
+      // se veía y se cortó: el lector otra vez
       this.openLive(this.url);
       return 'here';
     }
+    const r = this.readerNext(k);
+    if (r) return r;
+    // el lector no pudo mostrar este canal en ninguna de sus formas: el reproductor nativo una vez, con uno nuevo
+    if (!this.played && !readerFailedLive.has(k)) {
+      readerFailedLive.add(k);
+      if (nativeLivePlanned(this.url)) {
+        this.liveHls?.destroy();
+        this.liveHls = null;
+        return 'fresh';
+      }
+    }
+    return '';
+  }
+
+  // el lector propio falló: otra forma de mostrar el canal en este mismo reproductor ('here') o ninguna ('')
+  private readerNext(k: string): LiveNext {
     const h = this.liveHls;
     if (!h) return '';
-    // Entregó el canal y el equipo no lo muestra (2.0.15): el nativo con un reproductor nuevo si se puede; si no, el otro
-    // modo del lector (MPEG-TS ↔ MP4) en este mismo reproductor
+    // Entregó el canal y el equipo no lo muestra (2.0.15): el otro modo del lector (MPEG-TS ↔ MP4) en este mismo
+    // reproductor
     if (h.noShow) {
       if (h.isMp4()) mp4BadLive.add(k);
       else tsBadLive.add(k);
       h.destroy();
       this.liveHls = null;
-      if (!this.played && nativeLivePlanned(this.url)) return 'fresh';
       if (mp4BadLive.has(k) && tsBadLive.has(k)) return '';
       this.openLive(this.url);
       return 'here';
     }
-    // imagen congelada con video por delante: primero el reproductor nativo de Vega con el MPEG-TS del canal (con un
-    // reproductor nuevo: el nativo no toma otra dirección en uno ya usado); si no, el canal otra vez alternando MP4
-    // propio y MPEG-TS (solo este canal), hasta 6 veces; nunca la pantalla de error por esto
+    // imagen congelada con video por delante: el canal otra vez alternando MP4 propio y MPEG-TS (solo este canal), hasta
+    // 6 veces; nunca la pantalla de error por esto
     if (h.frozen) {
       if (this.liveFrozen >= 6) return '';
       this.liveFrozen++;
       h.destroy();
-      if (!this.reused && nativeLivePlanned(this.url)) {
-        this.liveHls = null;
-        return 'fresh';
-      }
       this.openLive(this.url);
       return 'here';
     }
