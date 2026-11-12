@@ -56,7 +56,7 @@ class Mp4 {
   destroy(){}
 }
 class Mkv {
-  constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||{cached:true};this.noAudio=mkvTracks.every(t=>t.codec==='A_EAC3');this.tracks=mkvTracks;mkvs.push(this);}
+  constructor(v,url,index=-1,cache=null,language=''){this.v=v;this.url=url;this.audioIdx=index>=0?index:Math.max(0,language?mkvTracks.findIndex(t=>t.lang.slice(0,2)===language.slice(0,2)):0);this.index=cache||{cached:true};this.noAudio=mkvTracks.every(t=>t.codec==='A_EAC3')||(!!language&&mkvTracks[this.audioIdx]?.codec==='A_EAC3');this.tracks=mkvTracks;mkvs.push(this);}
   probe(){return {ok:true,headOk:true,container:'mkv',audio:this.tracks.map((t,i)=>({id:String(i),lang:t.lang,codec:t.codec,name:'',def:i===0,forced:false})),subs:[{id:'0',lang:'spa',codec:'S_TEXT/UTF8',name:'',def:false,forced:false},{id:'1',lang:'eng',codec:'S_HDMV/PGS',name:'',def:false,forced:false}]};}
   subCues(n){return n===0?(this.cuesList||(this.cuesList=[{s:0,e:5,text:'hola'}])):null;}
   cancelPlay(){}
@@ -402,6 +402,37 @@ test('2.1.4: el reproductor de Amazon abrió el archivo y no pudo: el lector va 
   // y si el lector tampoco puede, no vuelve al de Amazon: el aviso de Player
   c2.vodError('el lector no pudo');await tick();
   assert.notEqual(v2.src,url);
+  await c2.destroy();
+});
+
+test('2.1.5: Continuar viendo con el idioma guardado en Roku (audio que preparó el panel) que este equipo no reproduce: sigue con el audio predeterminado del archivo, sin el panel',async()=>{
+  const {c,hooks}=setup();
+  mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_EAC3'}];
+  engineAvailable=true;
+  const url='https://fixture.invalid/movie/u/p/roku1.mkv';
+  require('../src/player/playback.ts').seedTitleLang(url,'eng',1);
+  c.load(url,600,false);await tick();await tick();
+  assert.equal(mkvs.length,2);assert.equal(mkvs[0].audioIdx,1);assert.equal(mkvs[1].audioIdx,0);assert.equal(mkvs[1].noAudio,false);
+  assert.equal(mkvs[1].at,600);
+  assert.deepEqual(calls,[],'sin el panel');assert.deepEqual(hooks.failures,[]);
+  await c.destroy();
+});
+
+test('2.1.5: con el reproductor de Amazon sonando, el idioma guardado que él no informa se pone con el lector en un reproductor nuevo (en el mismo quedaba en negro), sin el panel',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
+  const {c,video,hooks}=setup({tracks:[{language:'es',label:'',enabled:true}],cached:dual});nativeOk();
+  const fresh=[];hooks.vodFresh=at=>fresh.push(at);
+  const url='https://fixture.invalid/movie/u/p/roku2.mp4';
+  require('../src/player/playback.ts').seedTitleLang(url,'en',1);
+  c.load(url,0,false);assert.equal(video.src,url);
+  video.currentTime=0.5;c.onPlaying();
+  t.mock.timers.tick(2000);
+  assert.equal(fresh.length,1);assert.equal(mp4s.length,0,'el lector no se abre en este reproductor');
+  assert.deepEqual(calls,[]);
+  await c.destroy();
+  // el reproductor nuevo abre con el lector y el idioma guardado
+  const {c:c2}=setup({cached:dual});
+  c2.load(url,0,false);assert.equal(mp4s.length,1);
   await c2.destroy();
 });
 

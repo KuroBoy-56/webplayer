@@ -207,6 +207,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Idioma guardado sin el panel (2.1.5)**: Continuar viendo abre con el idioma con que se venía viendo (también el
+  elegido en Roku con el audio del panel), puesto en el equipo; si este equipo no reproduce esa pista sigue con el
+  audio predeterminado del archivo. El panel solo prepara un idioma elegido en el menú. Ver `INTEGRACION_REPRODUCTOR.md`.
 - **Continuar viendo sin pantalla negra (2.1.4)**: Continuar viendo abre con el lector de la app desde el segundo
   guardado (como hasta 2.0.17); el reproductor de Amazon queda de respaldo. Si el de Amazon abrió un video y no pudo,
   el lector va en un reproductor nuevo (en el mismo quedaba en negro con Vega OS 2.0). Ver `INTEGRACION_REPRODUCTOR.md`.

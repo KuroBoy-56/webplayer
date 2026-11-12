@@ -123,6 +123,17 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.1.5 — idioma guardado (también el de Roku) sin el panel
+
+Casi todo Continuar viendo viene de Roku con el idioma elegido ahí (`play.a` / `play.ai`; Roku lo hace sonar con el audio
+que prepara el panel). Vega lo toma como idioma del título (`seedTitleLang`) y lo pone en el equipo:
+- Lector (MP4 / MKV): abre directo con esa pista. Si este equipo no la reproduce (`noAudio`, p. ej. E-AC-3 por MSE),
+  sigue con el audio predeterminado del archivo desde el mismo segundo (`langGaveUp`), sin el panel y sin volver a
+  aplicarlo. Antes iba solo al panel (`pickAudio` desde `autoAudio` y el `lost` de `openReader`).
+- Reproductor de Amazon sonando y el idioma no está entre sus pistas: el lector con ese idioma en un reproductor nuevo
+  (`toReaderTracks` → `vodFresh`), no en el mismo (quedaba en negro).
+- El panel solo prepara un idioma que se elige ahora en el menú (`audioByUser`).
+
 ## 2.1.4 — Continuar viendo sin pantalla negra
 
 En 2.1.3, Continuar viendo sin el índice leído abría con el reproductor de Amazon: empezaba en 0 sin sonido y, apenas

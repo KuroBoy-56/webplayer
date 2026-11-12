@@ -149,6 +149,10 @@ export class Playback {
   private shaka: ShakaPlayback | null = null;
   private shakaRelease: Promise<void> | null = null;
   private mp4Audio = -1;
+  // 2.1.5: el idioma del lector lo eligió el usuario ahora (no el guardado del título): solo entonces el panel lo prepara
+  private audioByUser = false;
+  // el idioma guardado no suena en este equipo: sigue el predeterminado del archivo y no se vuelve a aplicar
+  private langGaveUp = false;
   private mp4Index: Uint8Array | null = null;
   private mp4Paused = false;
   private audioChange = 0;
@@ -250,6 +254,8 @@ export class Playback {
     this.liveNoAudio = false;
     this.liveFrozen = 0;
     this.mp4Audio = -1;
+    this.audioByUser = false;
+    this.langGaveUp = false;
     this.mp4Index = null;
     this.mkvIndex = null;
     this.mp4Paused = false;
@@ -554,11 +560,26 @@ export class Playback {
         } else this.readerGaveUp(err);
         return;
       }
-      if (m.noAudio && want < 0 && !this.nativeTried && !nativeLost.has(fileKey(this.url)) && nativeVodAllowed(this.url)) {
+      // 2.1.5: el idioma guardado del título (elegido antes aquí o en otro equipo, p. ej. Roku con el audio que preparó el
+      // panel) no suena en este equipo con el lector: sigue con el audio predeterminado del archivo, sin el panel. El panel
+      // solo si el idioma se elige ahora en el menú
+      const def = Math.max(0, m.tracks.findIndex(tr => (tr as { def?: boolean }).def));
+      if (m.noAudio && !this.audioByUser && !this.langGaveUp && m.audioIdx !== def) {
+        this.langGaveUp = true;
+        this.mp4Audio = def;
+        this.direct(this.resumePos(), 'reader');
+        return;
+      }
+      if (m.noAudio && (want < 0 || !this.audioByUser) && !this.nativeTried && !nativeLost.has(fileKey(this.url)) && nativeVodAllowed(this.url)) {
         this.direct(this.resumePos(), 'native');
         return;
       }
       const lost = m.noAudio ? (want >= 0 ? want : Math.max(0, m.audioIdx)) : want >= 0 && m.audioIdx !== want ? want : -1;
+      // el lector abrió otra pista que la guardada y suena: sigue así (sin el panel)
+      if (lost >= 0 && !m.noAudio && !this.audioByUser) {
+        this.langGaveUp = true;
+        return;
+      }
       if (lost >= 0 && !this.audioRemuxTried.has(lost)) {
         this.audioRemuxTried.add(lost);
         const label = this.audioItems().find(i => i.mp4 === lost)?.label || t('Audio predeterminado');
@@ -1204,11 +1225,23 @@ export class Playback {
   }
 
   private toReaderTracks(audio?: AudioItem, sub?: SubItem, user = false): void {
+    // 2.1.5: del reproductor de Amazon al lector para el idioma: en un reproductor nuevo desde este segundo (en el mismo
+    // quedaba en negro, 2.1.4), que abre el lector con el idioma del título
+    if (audio && !sub && this.vodNative && nativeHttpOk(this.url) && this.hooks.vodFresh) {
+      setTitleLang(this.url, audio);
+      nativeLost.add(fileKey(this.url));
+      const pos = this.resumePos();
+      this.clearVodTimer();
+      this.releaseVodSource();
+      this.hooks.vodFresh(pos);
+      return;
+    }
     const items = this.audioItems();
     this.readerLang = audio?.lang || this.audioOn(items)?.lang || '';
     this.mp4Audio = audio?.probe ?? (audio ? -1 : this.audioOn(items)?.probe ?? -1);
     this.mp4Paused = this.played && this.v.paused;
     if (sub?.probe !== undefined) this.pendingSub = 'p:' + sub.probe;
+    this.audioByUser = user;
     if (audio && user) setTitleLang(this.url, audio);
     this.direct(this.resumePos(), 'reader');
   }
@@ -1266,7 +1299,7 @@ export class Playback {
   }
 
   private autoAudio(): void {
-    if (this.audioApplied || this.audioKey || this.live) return;
+    if (this.audioApplied || this.audioKey || this.live || this.langGaveUp) return;
     const want = this.preferredAudio(this.audioItems());
     if (!want) return;
     if (want.native === undefined && want.shaka === undefined && want.mp4 === undefined) {
@@ -1333,7 +1366,9 @@ export class Playback {
     }
     if (it.mp4 !== undefined && this.mse) {
       if (this.mse.noAudio && this.mse.audioIdx === it.mp4) {
-        this.toRemux(it.mp4, it.label, user, t('Cambiando a {x}…', { x: it.label }));
+        // (2.1.5) el idioma guardado que no suena lo resuelve el lector al terminar de abrir (el predeterminado, sin el
+        // panel); el panel solo si se elige ahora en el menú
+        if (user) this.toRemux(it.mp4, it.label, user, t('Cambiando a {x}…', { x: it.label }));
         return;
       }
       if (this.mse.audioIdx !== it.mp4 || this.mse.noAudio) {
@@ -1343,6 +1378,7 @@ export class Playback {
         } else {
           const pos = this.resumePos();
           this.mp4Audio = it.mp4;
+          this.audioByUser = user;
           this.mp4Paused = this.played && this.v.paused;
           this.direct(pos, 'reader');
         }
