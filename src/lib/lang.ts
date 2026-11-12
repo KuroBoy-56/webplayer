@@ -1,14 +1,19 @@
 // Nombres de idiomas y códecs de las pistas de audio y subtítulos (igual que PlayerTracks.brs de Roku).
 import { Key, t } from './i18n';
 
-const THREE: Record<string, string> = { spa: 'es', eng: 'en', por: 'pt', fre: 'fr', fra: 'fr', ger: 'de', deu: 'de', ita: 'it', jpn: 'ja', kor: 'ko' };
+const THREE: Record<string, string> = {
+  spa: 'es', eng: 'en', por: 'pt', fre: 'fr', fra: 'fr', ger: 'de', deu: 'de',
+  ita: 'it', jpn: 'ja', kor: 'ko', zho: 'zh', chi: 'zh', cmn: 'zh', rus: 'ru', ara: 'ar',
+  hin: 'hi', tur: 'tr', nld: 'nl', dut: 'nl', swe: 'sv', nor: 'no', dan: 'da', fin: 'fi',
+  pol: 'pl', ukr: 'uk', ell: 'el', gre: 'el', ces: 'cs', cze: 'cs', heb: 'he',
+  vie: 'vi', tha: 'th', ind: 'id', ron: 'ro', rum: 'ro', hun: 'hu', cat: 'ca',
+};
 
-// código de 2 letras (spa, es, es-419 -> es); '' si no se sabe
+// Normaliza etiquetas como spa, es y es-419 al mismo idioma.
 export function langKey(code: string): string {
-  const c = (code || '').toLowerCase().trim();
-  if (!c || c === 'und') return '';
-  if (THREE[c]) return THREE[c];
-  return c.slice(0, 2);
+  const c = (code || '').toLowerCase().trim().split(/[-_]/, 1)[0];
+  if (!/^[a-z]{2,3}$/.test(c) || c === 'und') return '';
+  return THREE[c] || c;
 }
 
 export function sameLang(a: string, b: string): boolean {

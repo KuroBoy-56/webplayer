@@ -7,7 +7,7 @@ import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia'
 import { hostStats, rangeGet, RangeState } from './rangeget';
 import { lineLimit, ReadAhead } from './readahead';
 import { dropIndex, hasIndex, loadIndex, saveIndex, saved, STALE_INDEX, fromBase64, toBase64 } from './indexstore';
-import { shareIndex, sharedIndex, sharedKnown, sharedStale } from './sharedindex';
+import { shareIndex, sharedIndex, sharedStale } from './sharedindex';
 import { dropPrefetch, prefetchedAt } from './prefetch';
 export { STALE_INDEX };
 import { readJson, writeJson } from '../lib/storage';
@@ -373,10 +373,10 @@ export function mp4Known(url: string): boolean {
   return MOOV_CACHE.has(k) || WARM.has(k) || hasIndex(url);
 }
 
-// el índice ya está (memoria, equipo o panel): el lector de la app abre con un solo pedido al servidor IPTV (2.0.16)
+// el índice ya está en memoria o en el equipo: el lector de la app abre con un solo pedido al servidor IPTV (2.0.16)
 export function mp4Ready(url: string): boolean {
   const k = cacheKey(url);
-  return MOOV_CACHE.has(k) || hasIndex(url) || sharedKnown(url) || !!WARM.get(k)?.indexed;
+  return MOOV_CACHE.has(k) || hasIndex(url) || !!WARM.get(k)?.indexed;
 }
 
 // el video se abre con el reproductor nativo: lo que la ficha estaba preparando con el lector se corta (en una línea de
@@ -591,7 +591,9 @@ export class Mp4Mse {
     }
     // el índice que otro equipo ya leyó y dejó en el panel (2.0.16): al servidor IPTV solo se le pide el video
     if (!moov) {
-      const sh = await sharedIndex(this.url, 'm');
+      const cached = sharedIndex(this.url, 'm');
+      // La búsqueda remota de un índice no demora un arranque en primer plano.
+      const sh = this.idxOnly ? await cached : await Promise.race([cached, sleep(600).then(() => null)]);
       if (!this.alive) return '';
       if (sh) {
         try {

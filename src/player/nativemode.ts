@@ -1,19 +1,11 @@
-// ¿El reproductor nativo de Vega (modo directo, src = dirección) abre en este equipo? Amazon lo recomienda para MP4 / MKV
-// y, desde Vega OS 2.0, para canales MPEG-TS en vivo: es lo que hacen Android, LG y Roku (rápido y sin trabajo de la app).
-// Se aprende por equipo y versión de la app: si abre una vez, se sigue usando (un título o canal que falla vuelve al
-// lector de la app, solo ese). Películas: si falla 2 veces seguidas sin haber abierto nunca, el lector de la app para
-// todo. Canales: con 3 seguidas sin abrir nunca, el lector solo hasta cerrar la app (antes quedaba apagado para siempre
-// por fallos pasajeros: canal caído, equipo ocupado, y los canales se quedaban en el lector de la app, con microcortes).
+// Compatibilidad del modo URL de Vega. En VOD cada fuente tiene su propio intento.
 import { read, readJson, write, writeJson } from '../lib/storage';
 import { APP_VERSION } from '../version';
 
 export type NativeKind = 'live' | 'vod';
 
 const key = (k: NativeKind) => 'native_' + k + '_' + APP_VERSION;
-const fails: Record<NativeKind, number> = { live: 0, vod: 0 };
-// Películas en un equipo donde el nativo ya abrió: las que seguidas no arrancan con él en esta sesión (servidor lento,
-// índice al final del archivo). Con 2, el resto de la sesión va directo al lector de la app, sin esperarlo cada vez.
-let vodMisses = 0;
+let liveFails = 0;
 
 // Canales que el reproductor nativo no pudo abrir 2 veces seguidas sin llegar a verse (p. ej. [IZZI] BABY TV: «error del
 // reproductor» a los 0 s en dos aperturas): se recuerdan 2 días en el equipo y van directo al lector de la app. Antes
@@ -59,9 +51,9 @@ export function nativeLiveGood(url: string): void {
 }
 
 export function nativeAllowed(k: NativeKind): boolean {
+  if (k === 'vod') return true;
   const v = read(key(k));
-  if (v === 'no') return false;
-  return k === 'vod' ? vodMisses < 2 : v === 'ok' || fails.live < 3;
+  return v !== 'no' && (v === 'ok' || liveFails < 3);
 }
 
 // el nativo ya abrió alguna vez en este equipo (con esta versión de la app)
@@ -70,18 +62,12 @@ export function nativeKnownGood(k: NativeKind): boolean {
 }
 
 export function nativeWorked(k: NativeKind): void {
-  fails[k] = 0;
-  if (k === 'vod') vodMisses = 0;
+  if (k === 'live') liveFails = 0;
   if (read(key(k)) !== 'ok') write(key(k), 'ok');
 }
 
-export function nativeFailedOnce(k: NativeKind): void {
-  if (read(key(k)) === 'ok') {
-    if (k === 'vod') vodMisses++;
-    return;
-  }
-  ++fails[k];
-  if (k === 'vod' && fails.vod >= 2) write(key(k), 'no');
+export function nativeFailedOnce(k: 'live'): void {
+  if (!nativeKnownGood(k)) liveFails++;
 }
 
 // Vega OS anterior a 2.0 rechaza al instante las direcciones http en modo directo (error 4, Amazon: arreglado en 2.0).

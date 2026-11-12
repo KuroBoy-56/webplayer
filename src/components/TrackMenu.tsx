@@ -17,7 +17,7 @@ export default memo(function TrackMenu({ items, favLabel, onFav, onPick, audioOn
   const first = (favLabel ? null : realAudio.find(m => m.on) || audio[0] || subs.find(m => m.on) || subs[0]) || null;
   const row = (m: MenuItem) => (
     <View key={m.kind + m.key} style={s.opt}>
-      <Button label={(m.on ? '✓  ' : '     ') + m.label} left last small={m.kind === 'panel'} preferred={m === first} onPress={() => onPick(m)} />
+      <Button label={(m.on ? '✓  ' : '     ') + m.label} left last small={m.kind === 'local'} preferred={m === first} onPress={() => onPick(m)} />
     </View>
   );
   return (
@@ -32,7 +32,7 @@ export default memo(function TrackMenu({ items, favLabel, onFav, onPick, audioOn
         <Text style={s.head}>{t('Audio')}</Text>
         {realAudio.length ? null : <Text style={s.note}>{t('Audio predeterminado')}</Text>}
         {audio.map(row)}
-        {realAudio.length === 1 ? <Text style={s.note}>{t('Este contenido tiene una sola pista de audio.')}</Text> : null}
+        {realAudio.length === 1 && !audio.some(m => m.kind === 'local') ? <Text style={s.note}>{t('Este contenido tiene una sola pista de audio.')}</Text> : null}
         {!audioOnly ? <Text style={s.head}>{t('Subtítulos')}</Text> : null}
         {subs.map(row)}
       </ScrollView>

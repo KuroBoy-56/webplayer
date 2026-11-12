@@ -21,13 +21,12 @@ import { Hooks, MenuItem, nativeLivePlanned, Playback, seedTitleLang, titlePlayH
 import { dropReturn, offerReturn, playerClosing, setLastLive, stopLivePreview, takeLiveOrigin, takePreview, waitForLivePreview } from '../player/preview-session';
 import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
 import { hasHandoff } from '../player/livehls';
-import { vodKnown } from '../player/warm';
+import { vodKnown, warmStop } from '../player/warm';
 import { idxWarmHold } from '../player/idxwarm';
 import { freeMp4Memory, MP4_HEAD, mp4Spot } from '../player/mp4mse';
 import { setLineMax, singleFor } from '../player/readahead';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
-import { probeTracks } from '../lib/probe';
 import { getState, isFav, saveProgress, toggleFav, playHintFor } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
@@ -45,6 +44,13 @@ function serverText(r: StreamCheck, live: boolean): string {
 
 // películas y episodios que ya avisaron al panel que tardaron en empezar (una vez por archivo mientras la app está abierta)
 const slowSent = new Set<string>();
+
+function playbackAttempt(index: number) {
+  return {
+    idx: index, checked: false, waited: false, extFixed: false, retried: false, remote: false,
+    attempts: [] as string[], live: null as StreamCheck | null, sources: new Map<string, StreamCheck>(),
+  };
+}
 
 // alto de cada canal de la lista (fijo: la lista abre ya en el canal que suena)
 const CH_ROW = 76;
@@ -72,12 +78,15 @@ export default function Player({ params }: { params: PlayParams }) {
   const ctl = useRef<Playback | null>(null);
   const ready = useRef(false);
   const surface = useRef('');
+  const surfaceReady = useRef<(() => void) | null>(null);
   const captions = useRef('');
   const [index, setIndex] = useState(params.index);
   // Cambio de canal en pantalla grande: un reproductor nuevo por canal, como la miniatura y como indica Amazon (cerrar el
   // reproductor, crear otro, iniciarlo, ponerle la superficie y recién darle el canal). Al cambiarle la dirección a un
   // reproductor ya usado, el nativo de Vega daba error («Reconectando…») y el lector de la app tardaba y se congelaba
   const [session, setSession] = useState(0);
+  const [foreground, setForeground] = useState(AppState.currentState !== 'background');
+  const backgrounded = useRef(!foreground);
   // abierto desde TV en vivo: al salir, el reproductor que suena vuelve a su miniatura (preview-session.ts)
   const [fromLive] = useState(() => params.kind === 'live' && takeLiveOrigin());
   // el reproductor se cierra para abrir otro canal (no se sale de la pantalla)
@@ -127,8 +136,7 @@ export default function Player({ params }: { params: PlayParams }) {
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastUi = useRef(0);
-  const retried = useRef(false);
-  const firstResume = useRef(params.kind === 'live' ? 0 : params.resume);
+  const requestedResume = useRef(params.kind === 'live' ? 0 : params.resume);
   const indexRef = useRef(index);
   indexRef.current = index;
   const zapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -144,8 +152,6 @@ export default function Player({ params }: { params: PlayParams }) {
   // empieza con el protocolo que ya funcionó en esta sesión; triedOther: ya se probó el otro en este video
   const flipped = useRef(streamFlip());
   const triedOther = useRef(false);
-  // vueltas automáticas por todas las formas (http, https, DNS, motor) antes de rendirse: nada de «Reintentar»
-  const rounds = useRef(0);
   // canal con la línea llena: veces que se esperó una conexión libre (se reinicia al cambiar de canal o al sonar)
   const lineWaits = useRef(0);
   // botón DNS: si tampoco abre, una vez por la IP que da el DNS elegido (solo ese video)
@@ -153,10 +159,7 @@ export default function Player({ params }: { params: PlayParams }) {
   // TV en vivo: formato que se está probando (LIVE_FORMATS)
   const fmtAt = useRef(0);
   const dnsUrl = useRef<{ i: number; url: string } | null>(null);
-  // película o episodio que todavía no sonó: ya se le preguntó al servidor (checked), se esperaron 10 s tras un 403
-  // (waited), se corrigió la extensión (extFixed); Continuar viendo: 0 = directo, 1 = el panel, 2 = otra vez directo
-  // (retried); intentos para el reporte. Se reinicia con cada video (vodIdx)
-  const vod = useRef({ idx: -1, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, format: false, srv: 0, acct: '', attempts: [] as string[], live: null as StreamCheck | null, xui: null as StreamCheck | null });
+  const vod = useRef(playbackAttempt(-1));
   // vigilante: si el video no empieza a sonar a tiempo, se prueba otra forma (antes podía quedar cargando para siempre)
   const startDog = useRef<ReturnType<typeof setTimeout> | null>(null);
   // ya se le dieron 15 s más a este canal porque seguía bajando video
@@ -169,7 +172,7 @@ export default function Player({ params }: { params: PlayParams }) {
   const liveRecon = useRef({ n: 0, ok: 0, since: 0 });
   // película o episodio: desde cuándo se abre (t: al entrar al reproductor o al pasar a otro episodio) y cuándo se le dio
   // el video al reproductor (load); i = -1 antes del primero
-  const openAt = useRef({ i: -1, t: Date.now(), load: 0 });
+  const openAt = useRef({ i: -1, t: Date.now(), load: 0, at: 0 });
   // la orden de borrar la caché del panel espera a que se cierre el reproductor
   useEffect(() => {
     setPlayerOpen(true);
@@ -217,13 +220,13 @@ export default function Player({ params }: { params: PlayParams }) {
   const save = useCallback(
     (force: boolean) => {
       const c = ctl.current;
-      if (params.kind === 'live' || !c || !ready.current) return;
+      if (params.kind === 'live' || !c?.hasPlayed() || !ready.current || vod.current.idx !== indexRef.current) return;
       const e = params.queue[indexRef.current];
       const position = Math.floor(c.realPos());
       // el motor del panel no sabe la duración total: la del servidor, para que Continuar viendo tenga su avance
       const duration = Math.floor(c.duration()) || e.dur || 0;
       // abriendo desde el principio para saltar a donde quedó: no se pisa el avance guardado
-      if (position < 5 || !Number.isFinite(duration) || c.seeking()) return;
+      if (position < 5 || !Number.isFinite(duration) || video.current?.seeking) return;
       saveProgress(
         {
           title: params.kind === 'episode' ? params.saveTitle : e.title,
@@ -244,19 +247,6 @@ export default function Player({ params }: { params: PlayParams }) {
     [params, urlFor],
   );
 
-  // El lector de la app no pudo y la película sigue por otro camino (modo directo de Vega): 30 s para empezar a sonar; si
-  // no, los pasos de siempre hasta el aviso. Antes no quedaba ningún plazo después de ese cambio y, si el modo directo
-  // no arrancaba (índice al final, servidor lento), la pantalla quedaba cargando para siempre (2.0.15)
-  const vodFinal = useCallback((i: number) => {
-    if (startDog.current) clearTimeout(startDog.current);
-    startDog.current = setTimeout(() => {
-      startDog.current = null;
-      const c = ctl.current;
-      if (!c || c.hasPlayed() || indexRef.current !== i) return;
-      onErrorRef.current();
-    }, 30000);
-  }, []);
-
   // ---------- carga ----------
   const load = useCallback(
     (i: number, resume = 0) => {
@@ -264,182 +254,97 @@ export default function Player({ params }: { params: PlayParams }) {
       if (!c || !ready.current) return;
       loadRev.current++;
       const op = openAt.current;
-      if (op.i !== i || !op.t) openAt.current = { i, t: op.i < 0 ? op.t : Date.now(), load: Date.now() };
+      const now = Date.now();
+      if (op.i !== i || !op.t) openAt.current = { i, t: op.i < 0 ? op.t : now, load: now, at: resume };
       setError('');
       setBuffering(true);
-      setPos(0);
-      setDur(0);
+      setPos(resume);
+      setDur(params.kind === 'live' ? 0 : params.queue[i]?.dur || 0);
       setSub('');
       setAudioLabel('');
       setWork('');
       setStatus(live ? t('Conectando con el canal…') : t('Cargando…'));
-      if (vod.current.idx !== i) vod.current = { idx: i, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, format: false, srv: 0, acct: '', attempts: [], live: null, xui: null };
+      if (vod.current.idx !== i) vod.current = playbackAttempt(i);
       if (params.kind !== 'live') {
         // el idioma con el que se venía viendo este título en otro equipo (llega con el avance del panel)
         const hint = playHintFor(params.kind, params.queue[i].id, params.seriesId);
-        if (hint?.a) seedTitleLang(urlFor(i), String(hint.a), typeof hint.ai === 'number' ? hint.ai : -1);
+        if (hint?.a) {
+          const url = dnsUrl.current?.i === i ? dnsUrl.current.url : urlFor(i);
+          seedTitleLang(url, hint.a, typeof hint.ai === 'number' ? hint.ai : -1);
+        }
       }
       // conexiones de la línea (la lectura de películas no prueba varias a la vez si la línea admite una)
       setLineMax(Number(getState().session?.max) || 0);
-      c.load(dnsUrl.current && dnsUrl.current.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
+      c.load(dnsUrl.current?.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
+      if (!live) return;
       liveWait.current = false;
-      // El lector propio con el índice ya leído y todavía sin imagen: se espera ms y, si el servidor sigue entregando
-      // (algo llegó en los últimos 10 s), hasta 2 min en total (2.1.1). Antes a los 45 s se daba por perdido y la vuelta
-      // siguiente empezaba todo de nuevo (aviso «lector MP4: sin empezar en 45 s» dos veces, servidor de 8 s por pedido)
-      const t0Start = Date.now();
-      const waitStart = (why: string, ms: number) => {
-        startDog.current = setTimeout(() => {
-          startDog.current = null;
-          const c2 = ctl.current;
-          if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
-          if (c2.mp4Starting() && c2.mp4Busy() && Date.now() - t0Start < 120000) {
-            setStatus(t('Cargando…'));
-            waitStart(why, 5000);
-            return;
-          }
-          if (c2.mp4Fallback(why)) vodFinal(i);
-          else onErrorRef.current();
-        }, ms);
-      };
-      // 20 s para empezar a sonar (15 s en Continuar viendo; 25 s en los canales: la app baja la lista y los primeros
-      // segmentos); con el panel, sus propios plazos
+      const revision = loadRev.current;
       startDog.current = setTimeout(() => {
         startDog.current = null;
-        if (!ctl.current || ctl.current.hasPlayed()) return;
-        if (ctl.current.panelActive()) {
-          // abierto por el panel (así se vio antes este archivo): 45 s más para empezar; si no, se deja y siguen los
-          // pasos (antes no había plazo y quedaba cargando sin fin)
-          startDog.current = setTimeout(() => {
-            startDog.current = null;
-            const c2 = ctl.current;
-            if (!c2 || c2.hasPlayed() || !c2.panelActive() || indexRef.current !== i) return;
-            c2.panelStop();
-            onErrorRef.current();
-          }, 45000);
-          return;
-        }
-        // el canal sigue bajando (segmentos largos, servidor lento): 15 s más una vez antes de probar otra forma
-        if (live && ctl.current.liveBusy() && !liveWait.current) {
+        const current = ctl.current;
+        if (!current || current.hasPlayed() || revision !== loadRev.current) return;
+        if (current.liveBusy() && !liveWait.current) {
           liveWait.current = true;
           startDog.current = setTimeout(() => {
             startDog.current = null;
-            const c2 = ctl.current;
-            if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
+            if (revision !== loadRev.current || ctl.current?.hasPlayed()) return;
             liveNote.current = 'sin imagen en 40 s';
             onErrorRef.current();
           }, 15000);
           return;
         }
-        if (live) liveNote.current = 'sin imagen en 25 s';
-        // el MP4 que lee la app (índice al final del archivo) puede tardar más en empezar: 25 s más
-        // el lector propio sin el índice del archivo en 20 s: el servidor no lo entrega así; se sigue ya con lo demás
-        // (antes se esperaban 25 s más: 45 s con la pantalla cargando)
-        // si el servidor sigue entregando (XUI da las películas a la velocidad del video y el índice de muchos MP4 está
-        // al final y pesa varios MB) se espera mientras llegue algo, hasta 2 min; sin nada llegando, se sigue ya
-        if (!live && ctl.current.mp4Starting() && !ctl.current.mp4Indexed()) {
-          const t0 = Date.now();
-          const waitIndex = () => {
-            startDog.current = null;
-            const c2 = ctl.current;
-            if (!c2 || c2.hasPlayed() || indexRef.current !== i || !c2.mp4Starting()) return;
-            if (c2.mp4Indexed()) {
-              // ya tiene el índice: 25 s más para empezar a sonar (y más mientras el servidor siga entregando)
-              waitStart('sin empezar tras leer el índice', 25000);
-              return;
-            }
-            if (c2.mp4Busy() && Date.now() - t0 < 100000) {
-              setStatus(t('Cargando…'));
-              startDog.current = setTimeout(waitIndex, 5000);
-              return;
-            }
-            if (c2.mp4Fallback('sin índice en ' + Math.round(20 + (Date.now() - t0) / 1000) + ' s')) vodFinal(i);
-            else onErrorRef.current();
-          };
-          waitIndex();
-          return;
-        }
-        if (!live && ctl.current.mp4Starting()) {
-          waitStart('sin empezar en 45 s', 25000);
-          return;
-        }
-        // el reproductor de Amazon leyendo el archivo (2.1.1): tiene sus propios plazos (30 s + 20 s, Playback); esto es
-        // solo por si no avisa nada
-        if (!live && ctl.current.nativeStarting()) {
-          startDog.current = setTimeout(() => {
-            startDog.current = null;
-            const c2 = ctl.current;
-            if (!c2 || c2.hasPlayed() || indexRef.current !== i) return;
-            onErrorRef.current();
-          }, 35000);
-          return;
-        }
+        liveNote.current = 'sin imagen en 25 s';
         onErrorRef.current();
-      }, live ? 25000 : resume > 0 ? 15000 : 20000);
+      }, 25000);
     },
-    [urlFor, live, vodFinal],
+    [urlFor, params, live],
   );
 
-  // La app pasa a segundo plano con el reproductor abierto (botón de inicio, 2.1.0). Vega cierra las apps que ocupan más
-  // de 150 MB en segundo plano y al volver muestra «Could not resume where you left off» (foto del aviso): el video
-  // bajado por adelantado, los índices y lo que preparaba la ficha pesan decenas de MB. Se guarda el avance, se suelta
-  // todo y al volver se abre otra vez desde el mismo segundo (con el índice guardado en el equipo: un solo pedido)
+  // Al volver del sistema se crea un VideoPlayer nuevo con la posición confirmada.
   useEffect(() => {
-    let away: { i: number; at: number } | null = null;
-    const sub = AppState.addEventListener('change', st => {
-      const c = ctl.current;
-      if (!c || !ready.current) return;
-      if (st === 'background' && !away) {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'background' && !backgrounded.current) {
+        backgrounded.current = true;
         save(true);
-        away = { i: indexRef.current, at: live ? 0 : c.hasPlayed() ? Math.floor(c.realPos()) : Math.floor(c.resumePos()) };
-        if (startDog.current) clearTimeout(startDog.current);
-        startDog.current = null;
-        try {
-          video.current?.pause();
-        } catch {
-          // ya cerrado
-        }
-        void c.destroy();
+        const c = ctl.current;
+        if (!live && c && ready.current) requestedResume.current = Math.floor(c.resumePos());
+        setForeground(false);
         freeMp4Memory();
-      } else if (st === 'active' && away) {
-        const a = away;
-        away = null;
-        load(a.i, a.at);
+      } else if (state === 'active' && backgrounded.current) {
+        backgrounded.current = false;
+        setForeground(true);
       }
     });
-    return () => sub.remove();
-  }, [load, save, live]);
+    return () => subscription.remove();
+  }, [save, live]);
 
-  const next = useCallback(() => {
-    if (params.kind !== 'episode') return false;
-    const n = indexRef.current + 1;
-    if (n >= params.queue.length) return false;
-    setIndex(n);
-    load(n);
+  const openEpisode = useCallback((i: number) => {
+    if (params.kind !== 'episode' || !ready.current || !params.queue[i]) return false;
+    save(true);
+    indexRef.current = i;
+    loadRev.current++;
+    requestedResume.current = 0;
+    triedOther.current = false;
+    triedDns.current = false;
+    dnsUrl.current = null;
+    setIndex(i);
+    setSession(x => x + 1);
     showOverlay();
     return true;
-  }, [params, load, showOverlay]);
+  }, [params, save, showOverlay]);
 
-  // capítulo anterior (botón |◀ de las series)
-  const prevEp = useCallback(() => {
-    if (params.kind !== 'episode') return;
-    const n = indexRef.current - 1;
-    if (n < 0) return;
-    setIndex(n);
-    load(n);
-    showOverlay();
-  }, [params, load, showOverlay]);
+  const next = useCallback(() => openEpisode(indexRef.current + 1), [openEpisode]);
+  const prevEp = useCallback(() => openEpisode(indexRef.current - 1), [openEpisode]);
 
   // canal n de la carpeta (▲▼ o la lista de canales)
   const goTo = useCallback(
     (n: number) => {
       if (params.kind !== 'live' || n === indexRef.current || !params.channels[n]) return;
-      retried.current = false;
       triedDns.current = false;
       triedOther.current = false;
       fmtAt.current = 0;
-      rounds.current = 0;
       lineWaits.current = 0;
       liveRecon.current = { n: 0, ok: 0, since: 0 };
       // El índice cambia ya, incluso si llegan varias flechas antes del render.
@@ -484,6 +389,7 @@ export default function Player({ params }: { params: PlayParams }) {
   );
 
   useEffect(() => {
+    if (!foreground) return;
     // el canal que ya suena en la miniatura: la pantalla grande se queda con ese reproductor (sin cerrarlo ni abrir el
     // canal de nuevo; solo cambia la superficie), como Roku
     const inherited = session === 0 && params.kind === 'live' ? takePreview(urlFor(indexRef.current)) : null;
@@ -500,13 +406,20 @@ export default function Player({ params }: { params: PlayParams }) {
       },
       subText: setSub,
       fatal: msg => {
+        if (!alive) return;
+        setStatus('');
+        setWork('');
         setBuffering(false);
         setError(msg);
       },
-      // el panel no pudo preparar el video que el equipo no abrió: siguen los otros pasos
-      panelFailed: () => onErrorRef.current(),
-      // Continuar viendo: el salto al segundo guardado no llegó en 15 s; siguen los pasos (el panel desde ese segundo)
-      resumeFailed: () => onErrorRef.current(),
+      vodStarting: position => {
+        if (!alive) return;
+        setPos(Math.floor(position));
+        setBuffering(true);
+        setStatus(t(position > 5 ? 'Preparando desde donde quedó…' : 'Cargando…'));
+      },
+      vodPlaying: () => showPlaying(),
+      vodFailed: position => void recoverVod(position),
       // el canal se detiene seguido: al panel una vez por canal con el estado del lector (bajada, descifrado, cortes)
       liveStalls: diag => {
         const ch = params.kind === 'live' ? params.channels[indexRef.current] || params.channel : null;
@@ -535,23 +448,21 @@ export default function Player({ params }: { params: PlayParams }) {
     // para siempre
     let lastT = -1;
     let lastMove = Date.now();
-    let goodPos = 0;
     const stuckDog = live
       ? null
       : setInterval(() => {
         if (!alive || !ready.current || startDog.current || errorRef.current) return;
         const now = Date.now();
         const tNow = v.currentTime || 0;
-        if (tNow !== lastT || v.paused || !c.hasPlayed() || c.panelActive()) {
-          if (tNow !== lastT && c.hasPlayed()) goodPos = c.realPos();
+        if (tNow !== lastT || v.paused || !c.hasPlayed()) {
           lastT = tNow;
           lastMove = now;
           return;
         }
         if (now - lastMove < 30000) return;
         lastMove = now;
-        reportError('warning', 'Película o serie quieta 30 s (se abre otra vez donde iba)', 'kind=' + params.kind + ' pos=' + Math.round(goodPos) + ' modo=' + c.vodMode(), 'Reproductor');
-        load(indexRef.current, Math.floor(goodPos));
+        reportError('warning', 'Película o serie detenida', 'kind=' + params.kind + ' pos=' + Math.round(c.resumePos()) + ' modo=' + c.vodMode(), 'Reproductor');
+        c.vodError('sin avance durante 30 s');
       }, 5000);
 
     const retryLive = (i: number, delay: number) => {
@@ -565,11 +476,14 @@ export default function Player({ params }: { params: PlayParams }) {
     };
 
     const onMeta = () => c.onMeta();
+    const onCanPlay = () => c.onCanPlay();
     const onTime = () => {
+      if (!alive || backgrounded.current || zapTimer.current) return;
       c.onTime();
       // en modo directo Vega puede avisar solo timeupdate y no «playing» (Amazon): el canal que ya avanza cuenta como
       // sonando (si no, a los 25 s se daba por perdido y pasaba al lector de la app)
       if (live && !c.hasPlayed() && !v.paused && (v.currentTime || 0) > 0.3) onPlaying();
+      if (!c.hasPlayed()) return;
       const now = Date.now();
       if (now - lastUi.current < 1000) return;
       lastUi.current = now;
@@ -583,14 +497,13 @@ export default function Player({ params }: { params: PlayParams }) {
       setPos(Math.floor(c.realPos()));
       setDur(c.duration());
     };
-    const onPlaying = () => {
-      if (!alive || zapTimer.current) return;
+    const showPlaying = () => {
+      if (!alive || backgrounded.current || zapTimer.current || !c.hasPlayed()) return;
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
       setBuffering(false);
-      setPaused(false);
+      setPaused(v.paused);
       setStatus('');
-      rounds.current = 0;
       lineWaits.current = 0;
       liveRecon.current.ok = Date.now();
       if (!liveRecon.current.since) liveRecon.current.since = Date.now();
@@ -601,18 +514,23 @@ export default function Player({ params }: { params: PlayParams }) {
       if (!live && op.i === indexRef.current && op.t && Date.now() - op.t > 8000 && !slowSent.has(url)) {
         slowSent.add(url);
         const e = 'queue' in params ? params.queue[indexRef.current] : null;
-        reportError('warning', 'Película o serie tardó en empezar', 'kind=' + params.kind + ' ext=' + (e?.ext || '') + ' total=' + ((Date.now() - op.t) / 1000).toFixed(1) + 's hasta_cargar=' + ((op.load - op.t) / 1000).toFixed(1) + 's continuar=' + Math.round(firstResume.current) + ' modo=' + c.vodMode(), 'Reproductor');
+        reportError('warning', 'Película o serie tardó en empezar', 'kind=' + params.kind + ' ext=' + (e?.ext || '') + ' total=' + ((Date.now() - op.t) / 1000).toFixed(1) + 's hasta_cargar=' + ((op.load - op.t) / 1000).toFixed(1) + 's continuar=' + Math.round(op.at) + ' modo=' + c.vodMode(), 'Reproductor');
       }
       op.t = 0;
-      c.onPlaying();
       // por este protocolo entrega el video el servidor: los siguientes videos van primero por él
       setStreamFlip(flipped.current);
       // los idiomas del episodio siguiente, para que también empiece con el idioma elegido
       if (params.kind === 'episode' && indexRef.current + 1 < params.queue.length) warmTracks(urlFor(indexRef.current + 1));
     };
-    const onWaiting = () => alive && !zapTimer.current && setBuffering(true);
+    const onPlaying = () => {
+      if (!alive || backgrounded.current || zapTimer.current) return;
+      const wasPlaying = c.hasPlayed();
+      c.onPlaying();
+      if (live || wasPlaying) showPlaying();
+    };
+    const onWaiting = () => alive && !backgrounded.current && !zapTimer.current && setBuffering(true);
     const onPause = () => {
-      if (!alive || zapTimer.current) return;
+      if (!alive || backgrounded.current || zapTimer.current || (!live && !c.hasPlayed())) return;
       // el lector del canal juntando margen: se ve «cargando», no la pausa
       if (c.liveHolding()) {
         setBuffering(true);
@@ -622,7 +540,7 @@ export default function Player({ params }: { params: PlayParams }) {
       save(true);
     };
     const onEnded = () => {
-      if (!alive || zapTimer.current) return;
+      if (!alive || backgrounded.current || zapTimer.current || !c.hasPlayed()) return;
       // se cortó antes del final (servidor, audio del panel): no es el fin del capítulo, se trata como error
       const d = c.duration();
       const p = c.realPos();
@@ -630,126 +548,92 @@ export default function Player({ params }: { params: PlayParams }) {
         onError();
         return;
       }
+      if (next()) return;
       save(true);
-      if (!next()) {
-        if (params.kind === 'live') load(indexRef.current);
-        else nav.pop();
-      }
+      if (params.kind === 'live') load(indexRef.current);
+      else nav.pop();
     };
-    // aviso final y reporte al panel (con cada intento y lo que contestó el servidor)
-    const failVod = (text: string) => {
-      const vs = vod.current;
-      setBuffering(false);
-      setStatus('');
-      setError(text);
-      const base = 'kind=' + params.kind + ' ext=' + (entry?.ext || '') + ' servidor=' + vs.srv + vs.acct + ' intentos=[' + vs.attempts.join(' | ') + ']';
-      if (params.kind === 'live') {
-        reportError('playback', 'No se pudo reproducir (' + params.kind + ')', base, 'Reproductor');
+    let recoveringRevision = -1;
+    const recoverVod = async (position: number) => {
+      if (params.kind === 'live' || !alive || backgrounded.current || recoveringRevision === loadRev.current) return;
+      const revision = loadRev.current;
+      recoveringRevision = revision;
+      const i = indexRef.current;
+      const at = Math.floor(position);
+      const e = params.queue[i];
+      const attempt = vod.current;
+      const url = dnsUrl.current?.i === i ? dnsUrl.current.url : urlFor(i);
+      const active = () => alive && !backgrounded.current && revision === loadRev.current && i === indexRef.current;
+      const line = getState().session;
+      if (!line || !e) return;
+      const fail = (message: string) => {
+        if (!active()) return;
+        hooks.fatal(message);
+        reportError('playback', 'No se pudo reproducir (' + params.kind + ')',
+          'id=' + e.id + ' ext=' + e.ext + ' posición=' + at + ' intentos=[' + attempt.attempts.join(' | ') + ']', 'Reproductor');
+      };
+      const retry = (delay = 0) => {
+        setStatus(t('Reintentando…'));
+        setTimeout(() => { if (active()) load(i, at); }, delay);
+      };
+      const unavailable = t(at > 5 ? 'No se pudo continuar donde quedó' : 'No se pudo reproducir este contenido.');
+      if (attempt.remote) {
+        fail(unavailable);
         return;
       }
-      // ya sin reproductor: qué trae el archivo (códec del video y de los audios, índice del MP4 al final) para saber por
-      // qué el equipo no lo abre directo
-      probeTracks(urlFor(indexRef.current))
-        .catch(() => null)
-        .then(p => {
-          const file = p && p.headOk ? ' archivo=' + (p.container || '?') + ' video=' + (p.video || '?') + ' audio=' + (p.audio.map(a => a.codec + (a.lang ? '(' + a.lang + ')' : '')).join(',') || '?') + (p.container === 'mp4' ? ' moov=' + (p.moovEnd ? 'final' : 'inicio') : '') : ' archivo=sin leer';
-          reportError('playback', 'No se pudo reproducir (' + params.kind + ')', base + file, 'Reproductor');
-        });
-    };
-    const failText = (): string => {
-      const vs = vod.current;
-      if (vs.xui) return serverText(vs.xui, false) + (vs.xui.xui ? '\n' + vs.xui.xui + (vs.xui.xuiText ? ' · ' + vs.xui.xuiText : '') : '');
-      if (vs.gone || vs.srv === 404 || vs.srv === 410) return t('Video no disponible');
-      if (vs.inUse) return t('Línea en uso en otro equipo');
-      if (vs.stage >= 2) return t('No se pudo continuar donde quedó');
-      if (vs.srv >= 400) return t('Error de comunicación con el servidor');
-      // el equipo no lo abre de ninguna forma y el servidor (VPS / VDS) está apagado o sin permiso: se dice qué falta
-      if (engineDenied()) return t('Este video no se puede abrir en este equipo: es necesario encender el servidor.');
-      return t('No se pudo reproducir este contenido.');
-    };
-    // película o episodio que todavía no sonó (Roku: onError → streamCheck, Continuar viendo por pasos)
-    const vodError = (): boolean => {
-      const vs = vod.current;
-      const i = indexRef.current;
-      const e = params.kind === 'live' ? null : params.queue[i];
-      if (!e || c.hasPlayed() || c.panelActive()) return false;
-      const err: any = (v as any).error;
-      // (2.1.1: con lo que dejó el lector —índice, pedidos, espera del servidor— y qué pasó con el reproductor de Amazon)
-      if (vs.attempts.length < 12) vs.attempts.push((flipped.current ? 'otro protocolo' : 'directo') + ': ' + (err?.code ?? '') + ' ' + String(err?.message || '').slice(0, 80) + (c.mp4Note() ? ' (lector MP4: ' + c.mp4Note() + ')' : '') + ' ' + (/reproductor_amazon=\S+/.exec(c.vodMode()) || [''])[0]);
-      const at = c.resumePos();
-      // 1) una vez: qué contesta el servidor (código, cuenta, si la película sigue y con qué extensión)
-      if (!vs.checked) {
-        vs.checked = true;
-        setStatus(t('Cargando…'));
-        streamCheck(urlFor(i), getState().session!, params.kind === 'movie' ? e.id : '', true).then(r => {
-          if (!alive || indexRef.current !== i) return;
-          vs.srv = r.code;
-          if (r.status !== undefined) vs.acct = ' cuenta=' + r.status + ' conexiones=' + r.active + '/' + r.max;
-          vs.inUse = r.code >= 400 && !!r.max && (r.active || 0) >= r.max;
-          // el servidor sí entrega el video y el equipo no lo abre: es el formato; directo al panel (sin el otro
-          // protocolo, el DNS ni otra vuelta: antes el panel lo preparaba hasta 3 veces y tardaba mucho)
-          vs.format = r.code >= 200 && r.code < 300 && !r.html && /video|octet|matroska|mp4|msvideo|mpeg/i.test(r.type || '');
-          vs.attempts.push('servidor: ' + r.code + ' tipo=' + (r.type || '?') + (r.size ? ' tamaño=' + Math.round(r.size / 1048576) + 'MB' : '') + (r.ranges ? ' rangos=' + r.ranges : '') + (r.moved ? ' redirige=' + r.moved : '') + (r.xui ? ' xui=' + r.xui + ' (' + (r.xuiText || '') + ')' : r.html ? ' html=«' + (r.page || '') + '»' : '') + vs.acct + (r.exists !== undefined ? ' existe=' + r.exists + ' ext=' + r.ext : ''));
-          if (r.xui) {
-            // el servidor contestó con la página de error de XUI («Debug Mode»): el motivo exacto, sin insistir
-            vs.xui = r;
-            return failVod(failText());
-          }
-          if (r.exists === false) {
-            // la película ya no está en el servidor (el catálogo guardado quedó viejo)
-            vs.gone = true;
-            return failVod(failText());
-          }
-          if (r.ext && e.ext && r.ext !== e.ext.toLowerCase() && !vs.extFixed) {
-            // el servidor la tiene con otra extensión: se abre con la de verdad
-            vs.extFixed = true;
-            vs.checked = false;
-            e.ext = r.ext;
-            setTimeout(() => alive && load(i, at), 1000);
-            return;
-          }
-          if (r.code === 404 || r.code === 410) return failVod(failText());
-          if (r.status && r.status !== 'active') return failVod(t('Línea no activa'));
-          if (r.code >= 400 && !vs.waited) {
-            // 403 de una línea de pocas conexiones: el servidor sigue contando el intento anterior unos segundos
-            vs.waited = true;
-            setStatus(t('Reintentando…'));
-            setTimeout(() => alive && load(i, at), 10000);
-            return;
-          }
-          onErrorRef.current();
-        });
-        return true;
+      attempt.attempts.push(c.vodMode());
+      let check = attempt.sources.get(url);
+      if (!check) {
+        check = await streamCheck(url, line, params.kind === 'movie' ? e.id : '').catch((): StreamCheck => ({ code: 0 }));
+        if (!active()) return;
+        attempt.sources.set(url, check);
       }
-      // 2) Continuar viendo: nunca empieza solo desde el principio (eso es el botón «Desde el principio»)
-      if (at > 5 && c.seeking()) {
-        if (vs.stage === 0) {
-          vs.stage = 1;
-          setStatus(t('Preparando desde donde quedó…'));
-          setTimeout(() => {
-            if (!alive) return;
-            c.panelOpen(at).then(ok => !ok && alive && onErrorRef.current());
-            // el panel tampoco empieza a sonar en 60 s (antes quedaba en «Preparando desde donde quedó…» sin fin): se
-            // deja y sigue el último paso (otra vez directo en el segundo guardado; si no, el aviso)
-            setTimeout(() => {
-              if (!alive || indexRef.current !== i || vod.current.stage !== 1 || c.hasPlayed()) return;
-              c.panelStop();
-              onErrorRef.current();
-            }, 60000);
-          }, 4000);
-          return true;
-        }
-        if (vs.stage === 1) {
-          // el panel no pudo (o no está): otra vez directo en el segundo guardado 10 s después
-          vs.stage = 2;
-          setStatus(t('Preparando desde donde quedó…'));
-          setTimeout(() => alive && load(i, at), 10000);
-          return true;
-        }
-        failVod(failText());
-        return true;
+      attempt.attempts.push('servidor=' + check.code + (check.xui ? ' ' + check.xui : ''));
+      if (check.ext && check.ext !== (e.ext || 'mp4').toLowerCase() && !attempt.extFixed && /^[a-z0-9]{2,5}$/i.test(check.ext)) {
+        attempt.extFixed = true;
+        e.ext = check.ext;
+        dnsUrl.current = null;
+        retry();
+        return;
       }
-      return false;
+      if (check.status && check.status !== 'active') return fail(t('Línea no activa'));
+      const full = !!check.max && (check.active || 0) >= check.max;
+      if ((full || [403, 429, 503].includes(check.code)) && !attempt.waited) {
+        attempt.waited = true;
+        attempt.sources.delete(url);
+        retry(2400);
+        return;
+      }
+      if (full) return fail(t('Línea en uso en otro equipo'));
+      if (check.xui) return fail(serverText(check, false));
+      if (check.code === 404 || check.code === 410) return fail(t('Video no disponible'));
+
+      const hasMedia = !check.html && (check.code === 206 || (check.code === 200
+        && (!check.type || /video|audio|octet|dash|mpegurl|matroska/i.test(check.type))));
+      if (!hasMedia && !triedOther.current) {
+        triedOther.current = true;
+        flipped.current = !flipped.current;
+        dnsUrl.current = null;
+        retry();
+        return;
+      }
+      if (!hasMedia && !triedDns.current) {
+        triedDns.current = true;
+        const alternate = await viaDns(urlFor(i)).catch(() => '');
+        if (!active()) return;
+        if (alternate) {
+          dnsUrl.current = { i, url: alternate };
+          retry();
+          return;
+        }
+      }
+      if (hasMedia && !engineDenied()) {
+        attempt.remote = true;
+        setStatus(t(at > 5 ? 'Preparando desde donde quedó…' : 'Preparando el video en el panel…'));
+        const opened = await c.panelOpen(at).catch(() => false);
+        if (!active() || opened) return;
+      }
+      fail(!hasMedia ? t('Error de comunicación con el servidor') : unavailable);
     };
     // canal que no abrió de ninguna forma: se le pregunta al servidor qué pasa y el aviso dice el motivo (igual que
     // Roku); al panel va cada intento (formato, protocolo, lo que dijo el reproductor) y lo que contestó el servidor
@@ -837,7 +721,11 @@ export default function Player({ params }: { params: PlayParams }) {
       failLive();
     };
     const onError = () => {
-      if (!alive || zapTimer.current) return;
+      if (!alive || backgrounded.current || zapTimer.current) return;
+      if (!live) {
+        c.vodError();
+        return;
+      }
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
       if (c.adaptiveFallback()) return;
@@ -920,61 +808,10 @@ export default function Player({ params }: { params: PlayParams }) {
         nextLive();
         return;
       }
-      // el MP4 que lee la app no le gustó al reproductor: el modo directo de siempre (y sus pasos) con este video; con su
-      // plazo para empezar (si no, quedaba cargando sin fin)
-      if (c.mp4Fallback()) {
-        if (!c.hasPlayed()) vodFinal(indexRef.current);
-        return;
-      }
-      if (vodError()) return;
-      if (vod.current.format) {
-        triedOther.current = true;
-        triedDns.current = true;
-      }
-      if (!triedOther.current) {
-        triedOther.current = true;
-        flipped.current = !flipped.current;
-        setStatus(t('Reintentando…'));
-        const at = Math.floor(c.resumePos());
-        // 2 s después: el servidor suelta la conexión del intento anterior
-        setTimeout(() => alive && load(indexRef.current, at), 2000);
-        return;
-      }
-      // audio que el equipo no decodifica (DTS…): lo prepara el panel
-      const giveUp = () =>
-        c.onError().then(handled => {
-          if (!alive || handled) return;
-          // una vuelta más tras una pausa (no más: muchos intentos seguidos y el servidor bloquea el equipo)
-          if (rounds.current < 1 && !vod.current.format) {
-            // otra vuelta sola tras una pausa (el servidor pudo cortar un momento)
-            rounds.current++;
-            retried.current = false;
-            triedOther.current = false;
-            triedDns.current = false;
-            setStatus(t('Reconectando…'));
-            const at = Math.floor(c.resumePos());
-            setTimeout(() => alive && load(indexRef.current, at), 5000);
-            return;
-          }
-          failVod(failText());
-        });
-      if (!triedDns.current) {
-        triedDns.current = true;
-        const i = indexRef.current;
-        const at = Math.floor(c.resumePos());
-        viaDns(urlFor(i)).then(url => {
-          if (!alive) return;
-          if (!url) return giveUp();
-          dnsUrl.current = { i, url };
-          setStatus(t('Reintentando con el DNS elegido…'));
-          load(i, at);
-        });
-        return;
-      }
-      giveUp();
     };
     onErrorRef.current = onError;
     const onTrack = () => {
+      if (!alive || backgrounded.current) return;
       c.schedulePrefs();
       if (menuOpen.current) showMenu(c.menu());
     };
@@ -998,7 +835,8 @@ export default function Player({ params }: { params: PlayParams }) {
       : stopLivePreview().then(waitForLivePreview).then(() => {
         if (!alive) return;
         // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
-        const first = dnsUrl.current && dnsUrl.current.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
+        const first = dnsUrl.current?.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
+        warmStop(live ? undefined : first);
         // con lo que dejó la miniatura de este canal (o con el reproductor nativo) no hace falta pedir nada por adelantado;
         // en un cambio de canal ya se pidió (preUrl)
         if (preUrl) {
@@ -1010,18 +848,18 @@ export default function Player({ params }: { params: PlayParams }) {
         // películas y series: la cabecera (los idiomas). MKV desde el principio: también su primer tramo del video (1 MB) en un
         // segundo pedido apenas llega la cabecera; el MP4 ya pide el principio del video a la vez que su índice
         // con el reproductor nativo el archivo lo pide él: nada por adelantado (sería otra conexión a la vez)
-        else if (!live && c.nativeVodPlanned(first, firstResume.current)) {
+        else if (!live && c.nativeVodPlanned(first, requestedResume.current)) {
           // nada
         } else if (!live && vodKnown(first)) {
           // el índice ya está en el equipo o lo viene leyendo la ficha: el lector pide directo el video
         } else if (!live && /\.mkv(\?|$)/i.test(first)) {
           preUrl = first;
-          prefetchRange(first, 0, 262144, firstResume.current > 5 ? 0 : 1048576);
+          prefetchRange(first, 0, 262144, requestedResume.current > 5 ? 0 : 1048576);
         } else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first) && !mp4Spot(first)) {
           // lo mismo que pide primero el lector (mp4mse.ts): en una línea de una conexión, desde el principio, también el
           // principio del video (un solo pedido); si no, la cabecera (el principio del video lo pide el lector a la vez)
           preUrl = first;
-          prefetchRange(first, 0, firstResume.current <= 5 && singleFor(first) ? MP4_HEAD : 65536);
+          prefetchRange(first, 0, requestedResume.current <= 5 && singleFor(first) ? MP4_HEAD : 65536);
         }
         initializing = v.initialize().then(() => { initialized = true; });
         return initializing;
@@ -1029,21 +867,33 @@ export default function Player({ params }: { params: PlayParams }) {
     begin
       .then(async () => {
         if (!alive) return;
-        // la superficie del video antes de darle el video (Amazon: sin ella, error 4 en modo directo); como mucho 3 s
-        for (let i = 0; i < 30 && alive && !surface.current; i++) await new Promise<void>(r => setTimeout(r, 100));
+        if (!surface.current) {
+          await new Promise<void>(resolve => {
+            const finish = () => {
+              clearTimeout(timer);
+              if (surfaceReady.current === finish) surfaceReady.current = null;
+              resolve();
+            };
+            const timer = setTimeout(finish, 3000);
+            surfaceReady.current = finish;
+          });
+        }
         if (!alive) return;
+        if (!surface.current) throw new Error('superficie de video no disponible');
         ready.current = true;
         v.autoplay = false;
         v.addEventListener('loadedmetadata', onMeta);
+        v.addEventListener('canplay', onCanPlay);
         v.addEventListener('timeupdate', onTime);
         v.addEventListener('playing', onPlaying);
         v.addEventListener('waiting', onWaiting);
         v.addEventListener('pause', onPause);
         v.addEventListener('ended', onEnded);
         v.addEventListener('error', onError);
-        (v as any).audioTracks?.addEventListener?.('addtrack', onTrack);
-        (v as any).audioTracks?.addEventListener?.('change', onTrack);
-        (v as any).textTracks?.addEventListener?.('addtrack', onTrack);
+        for (const event of ['addtrack', 'removetrack', 'change']) {
+          v.audioTracks.addEventListener(event, onTrack);
+          v.textTracks.addEventListener(event, onTrack);
+        }
         if (surface.current) v.setSurfaceHandle(surface.current);
         if (captions.current) v.setCaptionViewHandle(captions.current);
         if (inherited) {
@@ -1063,19 +913,22 @@ export default function Player({ params }: { params: PlayParams }) {
           }, 25000);
           return;
         }
-        load(indexRef.current, firstResume.current);
+        load(indexRef.current, requestedResume.current);
       })
-      .catch(() => alive && setError(t('No se pudo iniciar el reproductor.')));
+      .catch(() => { if (alive) hooks.fatal(t('No se pudo iniciar el reproductor.')); });
 
     return () => {
       const zap = zapping.current;
       alive = false;
+      surfaceReady.current?.();
+      if (startDog.current) clearTimeout(startDog.current);
+      startDog.current = null;
       loadRev.current++;
       if (preUrl) dropPrefetch(preUrl);
       if (params.kind === 'live' && !zap) setLastLive((params.channels[indexRef.current] || params.channel)?.id || '');
       // Se vuelve a TV en vivo con el canal sonando: la miniatura se queda con este mismo reproductor (solo cambia de
       // superficie, como Roku): el canal no se corta ni se abre otra vez (preview-session.ts, 2.0.14)
-      const backCh = params.kind === 'live' && !zap && fromLive && initialized && ready.current && !errorRef.current && c.hasPlayed() ? params.channels[indexRef.current] || params.channel : null;
+      const backCh = params.kind === 'live' && !backgrounded.current && !zap && fromLive && initialized && ready.current && !errorRef.current && c.hasPlayed() ? params.channels[indexRef.current] || params.channel : null;
       if (backCh) {
         if (stuckDog) clearInterval(stuckDog);
         if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -1086,15 +939,17 @@ export default function Player({ params }: { params: PlayParams }) {
         startDog.current = null;
         try {
           v.removeEventListener('loadedmetadata', onMeta);
+          v.removeEventListener('canplay', onCanPlay);
           v.removeEventListener('timeupdate', onTime);
           v.removeEventListener('playing', onPlaying);
           v.removeEventListener('waiting', onWaiting);
           v.removeEventListener('pause', onPause);
           v.removeEventListener('ended', onEnded);
           v.removeEventListener('error', onError);
-          (v as any).audioTracks?.removeEventListener?.('addtrack', onTrack);
-          (v as any).audioTracks?.removeEventListener?.('change', onTrack);
-          (v as any).textTracks?.removeEventListener?.('addtrack', onTrack);
+          for (const event of ['addtrack', 'removetrack', 'change']) {
+            v.audioTracks.removeEventListener(event, onTrack);
+            v.textTracks.removeEventListener(event, onTrack);
+          }
           if (surface.current) v.clearSurfaceHandle(surface.current);
         } catch {
           // sigue igual
@@ -1121,15 +976,17 @@ export default function Player({ params }: { params: PlayParams }) {
       try {
         if (initialized) {
           v.removeEventListener('loadedmetadata', onMeta);
+          v.removeEventListener('canplay', onCanPlay);
           v.removeEventListener('timeupdate', onTime);
           v.removeEventListener('playing', onPlaying);
           v.removeEventListener('waiting', onWaiting);
           v.removeEventListener('pause', onPause);
           v.removeEventListener('ended', onEnded);
           v.removeEventListener('error', onError);
-          (v as any).audioTracks?.removeEventListener?.('addtrack', onTrack);
-          (v as any).audioTracks?.removeEventListener?.('change', onTrack);
-          (v as any).textTracks?.removeEventListener?.('addtrack', onTrack);
+          for (const event of ['addtrack', 'removetrack', 'change']) {
+            v.audioTracks.removeEventListener(event, onTrack);
+            v.textTracks.removeEventListener(event, onTrack);
+          }
           v.pause();
           if (surface.current) v.clearSurfaceHandle(surface.current);
         }
@@ -1148,7 +1005,7 @@ export default function Player({ params }: { params: PlayParams }) {
       ready.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [session, foreground]);
 
   // guía del canal actual
   useEffect(() => {
@@ -1249,7 +1106,7 @@ export default function Player({ params }: { params: PlayParams }) {
   }, []);
   const onPick = useCallback((m: MenuItem) => {
     ctl.current?.select(m);
-    if (m.kind === 'audio') {
+    if (m.kind !== 'text') {
       showMenu(null);
       showOverlay();
     } else if (ctl.current) showMenu(ctl.current.menu());
@@ -1257,7 +1114,7 @@ export default function Player({ params }: { params: PlayParams }) {
 
   const seek = (delta: number) => {
     const c = ctl.current;
-    if (!c || !ready.current || live) return;
+    if (!c?.hasPlayed() || !ready.current || live) return;
     flashKey(delta < 0 ? 'back' : 'fwd');
     const d = c.duration();
     let t = c.realPos() + delta;
@@ -1270,7 +1127,7 @@ export default function Player({ params }: { params: PlayParams }) {
 
   const togglePause = () => {
     const v = video.current;
-    if (!v || !ready.current) return;
+    if (!v || !ready.current || (!live && !ctl.current?.hasPlayed())) return;
     flashKey('play');
     if (v.paused) v.play();
     else v.pause();
@@ -1281,8 +1138,15 @@ export default function Player({ params }: { params: PlayParams }) {
   // en películas y capítulos, pausa
   const onSelect = () => {
     if (error) {
-      retried.current = false;
-      load(indexRef.current, Math.floor(pos));
+      if (live) load(indexRef.current);
+      else {
+        requestedResume.current = Math.floor(ctl.current?.resumePos() ?? pos);
+        vod.current = playbackAttempt(-1);
+        triedOther.current = false;
+        triedDns.current = false;
+        dnsUrl.current = null;
+        setSession(x => x + 1);
+      }
     } else if (live) {
       showOverlay();
       if (params.kind === 'live' && params.channels.length > 1) {
@@ -1370,12 +1234,13 @@ export default function Player({ params }: { params: PlayParams }) {
         style={s.video}
         onSurfaceViewCreated={(h: string) => {
           surface.current = h;
+          surfaceReady.current?.();
           if (ready.current) video.current?.setSurfaceHandle(h);
         }}
         onSurfaceViewDestroyed={(h: string) => {
           // solo si es la superficie que usa el video (si ya se creó otra, no se le quita)
           if (h !== surface.current) return;
-          video.current?.clearSurfaceHandle(h);
+          if (ready.current) video.current?.clearSurfaceHandle(h);
           surface.current = '';
         }}
       />

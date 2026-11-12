@@ -380,6 +380,7 @@ const pt: Record<Key, string> = {
   "Preparando el video en el panel…": "Preparando o vídeo no painel…",
   "Convirtiendo el video en el panel…": "Convertendo o vídeo no painel…",
   "Preparando desde donde quedó…": "Preparando de onde você parou…",
+  "Buscar más pistas en el archivo": "Buscar mais faixas no arquivo",
   "No se pudo continuar donde quedó": "Não foi possível continuar de onde parou",
   "Video no disponible": "Vídeo não disponível",
   "Línea no activa": "Linha não ativa",

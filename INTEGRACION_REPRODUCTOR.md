@@ -123,6 +123,29 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.1.2 — reproducción de películas y series
+
+| Situación | Ruta |
+| --- | --- |
+| Archivo nuevo por URL, como MP4 o MKV | Motor W3C Media de Vega. El inicio y el cambio de pistas usan el mismo reproductor. |
+| Manifiesto HLS o DASH | Shaka sobre Media Source Extensions de Vega. |
+| Continuar viendo con un índice local | El lector MP4/MKV pide directamente el tramo guardado. |
+| Continuar viendo por URL | Vega salta al segundo guardado y la app espera a que avance el reloj antes de registrar progreso nuevo. |
+| Vega no abre el archivo o no expone una pista | Lector local MP4/MKV. El menú ofrece «Buscar más pistas en el archivo» si aún falta el catálogo. |
+| Ninguna ruta local compatible | Conversión en la VPS del panel, desde el segundo de reproducción. |
+
+Los fallos de un título se limitan a su apertura. El cambio de episodio y el
+regreso a la app crean un reproductor nuevo después de liberar el anterior.
+El cambio de audio o subtítulos mediante pistas nativas conserva la fuente y
+la posición. Los formatos y códecs que admite Vega dependen de la versión y
+de la salida del equipo. Consulta [W3C Media API de Amazon](https://developer.amazon.com/docs/vega/2.0/media-player).
+
+Para compilar con el SDK de Amazon, usa `npm ci`, `npm run typecheck` y
+`npm run build:release`. También puedes usar el flujo «App Vega OS (Fire TV)»
+que ya incluye el proyecto. En un Fire TV, abre un MP4 y un MKV con dos
+audios y subtítulos, cambia las pistas con el control y retoma ambos desde
+«Continuar viendo». Repite con un episodio guardado desde otro equipo.
+
 ## 2.1.1 — servidor de 6-8 s por pedido: arrancar antes, no reiniciar, idiomas completos, navegación sin trabas
 
 | Pieza | Qué hace |

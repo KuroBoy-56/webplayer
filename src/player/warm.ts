@@ -12,7 +12,8 @@ import { hasIndex } from './indexstore';
 import { mkvKnown, preloadMkv } from './mkvmse';
 import { mp4Known, preloadMp4 } from './mp4mse';
 import { sharedKnown } from './sharedindex';
-import { seedTitleLang, titleLangOf } from './playback';
+import { nativeVodAllowed, seedTitleLang, titleLangOf } from './playback';
+import { isSingle, lineLimit } from './rangeget';
 
 let current: { url: string; stop: () => void } | null = null;
 
@@ -45,11 +46,17 @@ export function warmIndex(url: string, at = 0, lang = ''): void {
 // el video preparado con ese idioma
 export function warmVideo(url: string, at: number, hint?: { a?: string; ai?: number }): void {
   if (hint?.a) seedTitleLang(url, String(hint.a), typeof hint.ai === 'number' ? hint.ai : -1);
+  // Una apertura directa no necesita que la ficha ocupe la línea por adelantado.
+  if (nativeVodAllowed(url) && (at <= 5 || lineLimit() <= 1 || isSingle(url))) {
+    warmStop();
+    return;
+  }
   warmIndex(url, at, titleLangOf(url));
 }
 
 // se salió de la ficha (o se enfocó otro capítulo): lo que no terminó se corta
-export function warmStop(): void {
+export function warmStop(except?: string): void {
+  if (!current || current.url === except) return;
   const c = current;
   current = null;
   c?.stop();

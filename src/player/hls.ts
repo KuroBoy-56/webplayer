@@ -22,6 +22,7 @@ export class PanelHls {
   private next = 0;
   private gen = 0;
   private alive = true;
+  private requests = new AbortController();
   private running = false;
   // Vega: su lector MPEG-TS no toma bien el video del panel (Continuar viendo quedaba en «Preparando desde donde
   // quedó…»): cada segmento se convierte a MP4 fragmentado, como los canales (tsmux.ts). Sin H.264 + AAC (HEVC
@@ -43,7 +44,8 @@ export class PanelHls {
   // ¿el equipo acepta MPEG-TS por MSE?
   static supported(): boolean {
     try {
-      return MediaSource.isTypeSupported('video/mp2t', true);
+      return MediaSource.isTypeSupported('video/mp2t', true)
+        || MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E,mp4a.40.2"');
     } catch {
       return false;
     }
@@ -84,6 +86,7 @@ export class PanelHls {
 
   destroy(): void {
     this.alive = false;
+    this.requests.abort();
     this.gen++;
     if (this.watch) clearInterval(this.watch);
     this.watch = null;
@@ -145,7 +148,8 @@ export class PanelHls {
   }
 
   private async refresh(timeout: number): Promise<string> {
-    const r = await http(this.listUrl, { timeout });
+    if (!this.alive) return '';
+    const r = await http(this.listUrl, { timeout, signal: this.requests.signal });
     if (!r.ok) {
       const msg = engineError(r.body, r.code ? t('No compatible con el dispositivo') : t('No se pudo conectar con el panel.'));
       // sin permiso o sin ffmpeg: no se le vuelve a pedir nada al motor en esta línea
@@ -172,7 +176,10 @@ export class PanelHls {
   }
 
   private async fetchSeg(url: string): Promise<Uint8Array | null> {
+    if (!this.alive) return null;
     const ctrl = new AbortController();
+    const cancel = () => ctrl.abort();
+    this.requests.signal.addEventListener('abort', cancel);
     const timer = setTimeout(() => ctrl.abort(), 30000);
     try {
       const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: ctrl.signal });
@@ -183,6 +190,7 @@ export class PanelHls {
       return null;
     } finally {
       clearTimeout(timer);
+      this.requests.signal.removeEventListener('abort', cancel);
     }
   }
 

@@ -14,13 +14,12 @@ import { ChainImage } from '../components/ChainImage';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, Item } from '../data/catalog';
 import { savedArt } from '../data/heroart';
-import { digits } from '../lib/util';
 import { useNav } from '../nav';
-import { getState, isFav, playHintFor, progressMovie, progressSeries, toggleFav, useAppState } from '../state';
+import { getState, isFav, playHintFor, progressEpisodeId, progressMovie, progressSeries, resumePosition, toggleFav, useAppState } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
-export default function Detail({ item }: { item: Item }) {
+export default function Detail({ item, active }: { item: Item; active: boolean }) {
   const nav = useNav();
   const st = useAppState();
   const [vod, setVod] = useState<VodInfo | null>(null);
@@ -45,12 +44,13 @@ export default function Detail({ item }: { item: Item }) {
 
   // temporada del último episodio visto
   const resumeEp = item.kind === 'series' ? progressSeries(item.id) : undefined;
+  const resumeId = progressEpisodeId(resumeEp);
+  const episodeAt = resumePosition(resumeEp);
   useEffect(() => {
-    if (!ser || !resumeEp) return;
-    const idx = ser.seasons.findIndex(x => x.episodes.some(e => e.id === digits(resumeEp.id)));
+    if (!ser || !resumeId) return;
+    const idx = ser.seasons.findIndex(x => x.episodes.some(e => e.id === resumeId));
     if (idx >= 0) setSeason(idx);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ser]);
+  }, [ser, resumeId]);
 
   const info = item.kind === 'series' ? ser : vod;
 
@@ -58,19 +58,19 @@ export default function Detail({ item }: { item: Item }) {
   // empieza con el idioma elegido. Película: la de la ficha; serie: el episodio de Continuar o el primero
   useEffect(() => {
     const s = getState().session;
-    if (!s || loading) return;
+    if (!active || !s || loading) return;
     if (item.kind !== 'series') {
       warmTracks(movieUrl(s, item.id, vod?.ext || item.ext));
-      warmVideo(movieUrl(s, item.id, vod?.ext || item.ext), progressMovie(item.id)?.position || 0);
+      warmVideo(movieUrl(s, item.id, vod?.ext || item.ext), resumePosition(progressMovie(item.id)));
       return;
     }
     if (!ser || !ser.seasons.length) return;
-    const want = resumeEp ? digits(resumeEp.id) : '';
+    const want = resumeId;
     const ep = (want && ser.seasons.flatMap(x => x.episodes).find(e => e.id === want)) || ser.seasons[0].episodes[0];
     if (ep) warmTracks(episodeUrl(s, ep.id, ep.ext));
-    if (ep) warmVideo(episodeUrl(s, ep.id, ep.ext), resumeEp && digits(resumeEp.id) === ep.id ? resumeEp.position : 0, ep.id);
+    if (ep) warmVideo(episodeUrl(s, ep.id, ep.ext), resumeId === ep.id ? episodeAt : 0, ep.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item, loading, ser, vod]);
+  }, [active, item, loading, ser, vod, resumeId, episodeAt]);
   // el índice del video que se va a ver, leído mientras se mira la ficha (warm.ts): al pulsar Reproducir solo falta el
   // video. Empieza cuando la ficha (o el capítulo enfocado) lleva 1,2 s; al salir de la ficha se corta
   const idxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,25 +83,26 @@ export default function Detail({ item }: { item: Item }) {
     }, 1200);
   };
   useEffect(() => {
-    // la ficha prepara su propio video: los índices de Continuar viendo en segundo plano esperan
+    if (!active) return;
     idxWarmHold(true);
     return () => {
       if (idxTimer.current) clearTimeout(idxTimer.current);
-      warmStop();
       idxWarmHold(false);
     };
-  }, []);
+  }, [active]);
+  useEffect(() => warmStop, []);
   // el episodio que se queda enfocado un momento también
   const warmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (warmTimer.current) clearTimeout(warmTimer.current);
-  }, []);
+  }, [active]);
   const warmEp = (id: string, ext: string) => {
+    if (!active) return;
     if (warmTimer.current) clearTimeout(warmTimer.current);
     warmTimer.current = setTimeout(() => {
       const s = getState().session;
       if (s) warmTracks(episodeUrl(s, id, ext));
-      if (s) warmVideo(episodeUrl(s, id, ext), resumeEp && digits(resumeEp.id) === id ? resumeEp.position : 0, id);
+      if (s) warmVideo(episodeUrl(s, id, ext), resumeId === id ? episodeAt : 0, id);
     }, 600);
   };
 
@@ -151,16 +152,16 @@ export default function Detail({ item }: { item: Item }) {
   }, [item]);
 
   const movieProg = item.kind === 'vod' ? progressMovie(item.id) : undefined;
-  const canResume = !!movieProg && movieProg.position > 5 && (movieProg.duration <= 0 || movieProg.position < movieProg.duration * 0.95);
+  const canResume = resumePosition(movieProg) > 0;
   const eps = ser?.seasons[season]?.episodes || [];
 
   const playSeries = () => {
     if (!ser || !ser.seasons.length) return;
-    if (resumeEp) {
+    if (episodeAt && resumeId) {
       for (const sn of ser.seasons) {
-        const i = sn.episodes.findIndex(e => e.id === digits(resumeEp.id));
+        const i = sn.episodes.findIndex(e => e.id === resumeId);
         if (i >= 0) {
-          playEpisodes(nav, item, sn.episodes, i, Math.floor(resumeEp.position));
+          playEpisodes(nav, item, sn.episodes, i, episodeAt);
           return;
         }
       }
@@ -204,7 +205,7 @@ export default function Detail({ item }: { item: Item }) {
                 {canResume ? <Button label={t('Desde el inicio')} icon="↺" onPress={() => playMovie(nav, item, vod?.ext || item.ext, true, vod?.duration)} /> : null}
               </>
             ) : (
-              <Button label={resumeEp ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onPress={playSeries} />
+              <Button label={episodeAt && resumeId ? t('Continuar') : t('Reproducir')} icon="▶" primary preferred onPress={playSeries} />
             )}
             <Button label={fav ? t('En mi lista') : t('Mi lista')} icon={fav ? '✓' : '+'} last onPress={() => toggleFav(item.kind, item.id, item.name, item.poster, item.cat)} />
           </View>
@@ -231,9 +232,9 @@ export default function Detail({ item }: { item: Item }) {
               contentContainerStyle={{ paddingHorizontal: SIDE, paddingRight: px(200) }}
               style={{ marginTop: px(16) }}
               renderItem={({ item: e, index }) => {
-                const p = st.progress.find(x => x.type === 'episode' && digits(x.id) === e.id);
+                const p = st.progress.find(x => progressEpisodeId(x) === e.id);
                 return (
-                  <Focusable onFocus={() => warmEp(e.id, e.ext)} onPress={() => playEpisodes(nav, item, eps, index, p ? Math.floor(p.position) : 0)} style={f => [s.ep, f && s.epF]}>
+                  <Focusable onFocus={() => warmEp(e.id, e.ext)} onPress={() => playEpisodes(nav, item, eps, index, resumePosition(p))} style={f => [s.ep, f && s.epF]}>
                     <View style={s.epImgBox}>
                       {e.image || item.poster ? <Image source={{ uri: e.image || item.poster }} style={s.epImg} resizeMode="cover" /> : null}
                       {p && p.duration > 0 ? (

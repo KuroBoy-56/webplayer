@@ -87,6 +87,10 @@ export function mkvKnown(url: string): boolean {
   return MKV_CACHE.has(k) || MKV_PRE.has(k) || hasIndexKind(url, 'k');
 }
 
+export function mkvReady(url: string): boolean {
+  return !!MKV_CACHE.get(fileKey(url))?.m.cues?.length || hasIndexKind(url, 'k');
+}
+
 // lo que la ficha estaba leyendo de este MKV se corta (el video lo abre el reproductor nativo)
 export function dropMkvWarm(url: string): void {
   MKV_PRE.get(fileKey(url))?.stop();

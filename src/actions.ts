@@ -4,7 +4,7 @@ import { GENRES, Item, label, PLATFORMS, Special } from './data/catalog';
 import { t } from './lib/i18n';
 import { serverDurationSec } from './lib/util';
 import type { Nav } from './nav';
-import { progressMovie } from './state';
+import { progressMovie, resumePosition } from './state';
 
 export function openItem(nav: Nav, it: Item, channels?: Item[]) {
   if (it.kind === 'live') {
@@ -44,9 +44,8 @@ export function openSpecial(nav: Nav, sp: Special) {
 }
 
 export function playMovie(nav: Nav, item: Item, ext: string, fromStart = false, duration = '') {
-  let resume = 0;
   const p = progressMovie(item.id);
-  if (p && !fromStart && p.position > 5 && (p.duration <= 0 || p.position < p.duration * 0.95)) resume = Math.floor(p.position);
+  const resume = fromStart ? 0 : resumePosition(p);
   nav.push({
     name: 'player',
     params: {

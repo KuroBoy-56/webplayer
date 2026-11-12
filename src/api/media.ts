@@ -6,7 +6,7 @@ import { b64Encode } from '../lib/crypto';
 import { http, json } from '../lib/http';
 import { str } from '../lib/util';
 import { cloud, cloudToken, lineKey, panel, panelApiBase, panelScheme } from './panel';
-import { Probe, probeTracks } from '../lib/probe';
+import { Probe, ProbeTrack, probeTracks } from '../lib/probe';
 import { features } from '../lib/tenant';
 import { lang, t } from '../lib/i18n';
 
@@ -42,7 +42,9 @@ export async function mediaEngine(): Promise<{ ok: true; engine: Engine } | { ok
   const st = await panel(FILE, 'GET', '', '', '?do=status&token=' + encodeURIComponent(token));
   const j = json(st);
   // sin conexión: no se guarda (se vuelve a preguntar la próxima vez)
-  if (st.code === 0) return { ok: false, error: t('No se pudo conectar con el panel.') };
+  if (lineKey() !== line || st.code === 0 || [401, 429, 500, 502, 504].includes(st.code)) {
+    return { ok: false, error: t('No se pudo conectar con el panel.') };
+  }
   // sin el servicio, apagado por el dueño o sin permiso: solo el texto del panel ("Sin permisos" / "No compatible…")
   if (st.code === 404 || !j || j.ffmpeg !== true) {
     const error = (j && str(j.error)) || t('No compatible con el dispositivo');
@@ -122,7 +124,11 @@ async function savedTracks(url: string): Promise<Probe | null> {
   const r = await Promise.race([cloud('tracks.php', 'GET', { u: b64u(url) }), new Promise<null>(ok => setTimeout(() => ok(null), 2000))]);
   const p = r ? json(r)?.probe : null;
   if (!p || !Array.isArray(p.audio) || !Array.isArray(p.subs) || (p.container !== 'mkv' && p.container !== 'mp4')) return null;
-  return { ok: true, container: p.container, audio: p.audio, subs: p.subs };
+  const track = (value: Record<string, unknown> | null): ProbeTrack => ({
+    id: str(value?.id), lang: str(value?.lang), codec: str(value?.codec), name: str(value?.name),
+    def: value?.def === true || value?.def === 1, forced: value?.forced === true || value?.forced === 1,
+  });
+  return { ok: true, container: p.container, audio: p.audio.map(track), subs: p.subs.map(track) };
 }
 
 const known = new Map<string, Promise<Probe>>();
@@ -158,8 +164,9 @@ export async function knownTracks(url: string): Promise<Probe> {
   let p = asking.get(k);
   if (!p) {
     p = savedTracks(url).then(sv => {
-      if (sv) remember(url, sv);
-      return sv || { ok: false, container: '', audio: [], subs: [] };
+      const current = local(url);
+      if (sv && !current) remember(url, sv);
+      return current || sv || { ok: false, container: '', audio: [], subs: [] };
     });
     asking.set(k, p);
     p.finally(() => asking.delete(k));
@@ -175,14 +182,17 @@ const shared = new Set<string>();
 export function shareTracks(url: string, p: Probe): void {
   if (!p.ok || (!p.audio.length && !p.subs.length)) return;
   const k = noScheme(url);
-  if (!local(url)) remember(url, p);
+  const previous = local(url);
+  if (!previous || previous.audio.length <= p.audio.length && previous.subs.length <= p.subs.length) remember(url, p);
   if (shared.has(k)) return;
   shared.add(k);
-  knownTracks(url)
-    .then(k2 => {
-      if (!k2.ok || k2.audio.length < p.audio.length) cloud('tracks.php', 'POST', { u: b64u(url), probe: { container: p.container, audio: p.audio, subs: p.subs } }).catch(() => {});
-    })
-    .catch(() => {});
+  if (shared.size > 200) shared.delete(shared.values().next().value as string);
+  const remote = asking.get(k) || savedTracks(url);
+  void remote.then(other => {
+    if (!other?.ok || other.audio.length < p.audio.length || other.subs.length < p.subs.length) {
+      return cloud('tracks.php', 'POST', { u: b64u(url), probe: { container: p.container, audio: p.audio, subs: p.subs } });
+    }
+  }).catch(() => shared.delete(k));
 }
 
 // la ficha de la película o serie pide los idiomas apenas se abre (como Roku): al pulsar Reproducir ya se saben y el

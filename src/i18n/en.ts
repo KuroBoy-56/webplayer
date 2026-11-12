@@ -379,6 +379,7 @@ const en = {
   "Preparando el video en el panel…": "Preparing the video on the panel…",
   "Convirtiendo el video en el panel…": "Converting the video on the panel…",
   "Preparando desde donde quedó…": "Preparing from where you left off…",
+  "Buscar más pistas en el archivo": "Find more tracks in this file",
   "No se pudo continuar donde quedó": "Could not resume where you left off",
   "Video no disponible": "Video not available",
   "Línea no activa": "Line not active",

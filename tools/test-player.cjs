@@ -10,9 +10,11 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true},fileName:filename,
 }).outputText, filename);
 let memory = {};
+let firmware = '2.0.0';
 let probe = null;
 let shared = [];
 const ready = new Set();
+const mkvReady = new Set();
 let dropped = [];
 let calls = [];
 let shakas = [];
@@ -42,7 +44,9 @@ class Shaka {
 class Mp4 {
   static open(v,url,index,cache){return new Mp4(v,url,index,cache);}
   constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||new Uint8Array([1]);this.noAudio=false;this.tracks=[{lang:'spa',codec:'mp4a'},{lang:'eng',codec:'mp4a'}];mp4s.push(this);}
-  async start(at){if(this.url.includes('mkvbody'))return 'índice: el archivo es MKV';if(this.url.includes('noindex'))return 'índice: sin contestar en 30 s';this.v.currentTime=at;this.onTracks();return '';}
+  cancelPlay(){}
+  busy(){return false;}
+  async start(at){this.at=at;if(this.url.includes('mkvbody'))return 'índice: el archivo es MKV';if(this.url.includes('noindex'))return 'índice: sin contestar en 30 s';this.v.currentTime=at;this.v.paused=false;this.onTracks();return '';}
   // 2.1.0: con el índice entero cambia de idioma con lo ya bajado (las pruebas «inplace»); si no, se abre de nuevo
   switchAudio(i){if(!this.url.includes('inplace'))return false;this.audioIdx=i;this.switched=(this.switched||0)+1;return true;}
   // subtítulos de texto dentro del MP4 (las pruebas «mp4subs»)
@@ -55,29 +59,45 @@ class Mkv {
   constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||{cached:true};this.noAudio=mkvTracks.every(t=>t.codec==='A_EAC3');this.tracks=mkvTracks;mkvs.push(this);}
   probe(){return {ok:true,headOk:true,container:'mkv',audio:this.tracks.map((t,i)=>({id:String(i),lang:t.lang,codec:t.codec,name:'',def:i===0,forced:false})),subs:[{id:'0',lang:'spa',codec:'S_TEXT/UTF8',name:'',def:false,forced:false},{id:'1',lang:'eng',codec:'S_HDMV/PGS',name:'',def:false,forced:false}]};}
   subCues(n){return n===0?(this.cuesList||(this.cuesList=[{s:0,e:5,text:'hola'}])):null;}
-  async start(at){this.v.currentTime=at;this.onTracks();return '';}
+  cancelPlay(){}
+  busy(){return false;}
+  async start(at){
+    this.at=at;
+    if(this.tracks[this.audioIdx]?.codec==='A_TRUEHD') this.audioIdx=0;
+    this.v.currentTime=at;
+    this.v.paused=false;
+    this.onTracks();
+    return '';
+  }
   timeOf(t){return t;}
   diag(){return '[lector mkv de prueba]';}
   destroy(){}
 }
-class PanelHls {static supported(){return true;}}
+let panelError = '';
+let engineAvailable = false;
+let denied = '';
+class PanelHls {
+  static supported(){return true;}
+  async start(){denied=panelError;return panelError;}
+  destroy(){}
+}
 let lives = [];
 class LiveHls {static supported(){return true;}constructor(v,url,audio,noAudio,tsOnly){this.tsOnly=tsOnly;this.frozen=false;this.noShow=false;this.mf=false;lives.push(this);}isMp4(){return !this.tsOnly;}mediaFailed(){return this.mf;}otherAudio(){return false;}async start(){return '';}audioLangs(){return [];}diag(){return '';}destroy(){}}
 const media = {
-  engineDenied:()=>'',knownNow:()=>probe,knownTracks:async()=>probe||noTracks,shareTracks:(u,p)=>shared.push([u,p]),
+  engineDenied:()=>denied,hlsLink:()=> 'https://fixture.invalid/remote.m3u8',knownNow:()=>probe,knownTracks:async()=>probe||noTracks,shareTracks:(u,p)=>shared.push([u,p]),
   fileTracks:async()=>probe||noTracks,
-  mediaEngine:async()=>{calls.push('mediaEngine');return {ok:false,error:'Motor de prueba no disponible'};},
+  mediaEngine:async()=>{calls.push('mediaEngine');return engineAvailable ? {ok:true,engine:{base:'https://fixture.invalid/',token:'fixture'}} : {ok:false,error:'Motor de prueba no disponible'};},
 };
 Module._load = function(request,parent,isMain){
   if(request==='@amazon-devices/react-native-w3cmedia') return {MediaSource:{isTypeSupported:()=>true}};
-  if(request==='react-native') return {Platform:{constants:{uiMode:'tv',keplerOSVersion:'1.2.3'}}};
+  if(request==='react-native') return {Platform:{get constants(){return {uiMode:'tv',keplerOSVersion:firmware};}}};
   if(request==='../api/media') return media;
   if(request==='../lib/storage') return store;
   if(request==='../lib/i18n'||request==='./i18n') return {t:(key,vars)=>key.replace(/\{(\w+)\}/g,(m,k)=>vars?.[k]??m)};
   if(request==='../api/report') return {reportError:()=>{}};
   if(request==='./shaka') return {ShakaPlayback:Shaka};
   if(request==='./mp4mse') return {Mp4Mse:Mp4,NOT_MP4_MKV:'el archivo es MKV',STALE_INDEX:'índice guardado viejo',mp4Ready:u=>ready.has(u),dropWarm:u=>dropped.push(u)};
-  if(request==='./mkvmse') return {MkvMse:Mkv,mkvKnown:()=>false,dropMkvWarm:()=>{}};
+  if(request==='./mkvmse') return {MkvMse:Mkv,mkvKnown:()=>false,mkvReady:u=>mkvReady.has(u),dropMkvWarm:()=>{}};
   if(request==='./hls') return {PanelHls};
   if(request==='./livehls') return {LiveHls,disableMp4:()=>{}};
   return originalLoad.call(this,request,parent,isMain);
@@ -85,18 +105,35 @@ Module._load = function(request,parent,isMain){
 const {Playback} = require('../src/player/playback.ts');
 const {APP_VERSION} = require('../src/version.ts');
 // equipo donde el reproductor nativo de Vega no abre (lo que probaban estas pruebas antes de la 1.0.66): el lector de la app
-const noNative = () => { memory['native_live_'+APP_VERSION]='no'; memory['native_vod_'+APP_VERSION]='no'; };
+const noNative = () => { memory['native_live_'+APP_VERSION]='no'; };
 after(()=>{Module._load=originalLoad;if(previousTs)require.extensions['.ts']=previousTs;else delete require.extensions['.ts'];});
-function setup({tracks=[],cached=null}={}){
-  memory={};noNative();calls=[];probe=cached;shakas=[];mp4s=[];mkvs=[];toasts=[];release=null;mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_AAC'}];
-  const video={src:'',currentTime:0,duration:600,paused:false,audioTracks:tracks,textTracks:[],play(){this.paused=false;return Promise.resolve();},pause(){this.paused=true;}};
-  const hooks={toast:m=>toasts.push(m),status:()=>{},changed:()=>{},subText:()=>{},fatal:()=>{},panelFailed:()=>{hooks.gaveUp++;},gaveUp:0};
+function setup({tracks=[],subs=[],cached=null,os='2.0.0'}={}){
+  memory={};noNative();calls=[];probe=cached;shakas=[];mp4s=[];mkvs=[];toasts=[];release=null;firmware=os;
+  engineAvailable=false;panelError='';denied='';
+  mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_AAC'}];
+  const video={
+    src:'', currentTime:0, duration:600, paused:false, muted:false, audioTracks:tracks, textTracks:subs, resets:0,
+    play(){this.paused=false;return Promise.resolve();},
+    pause(){this.paused=true;},
+    setSrcWithCustomHeaders(src,headers){this.src=src;this.headers=headers;},
+    removeAttribute(){this.src='';},
+    load(){this.currentTime=0;this.resets++;this.error=null;},
+  };
+  const hooks={
+    toast:m=>toasts.push(m),status:()=>{},changed:()=>{},subText:()=>{},fatal:m=>hooks.errors.push(m),errors:[],
+    vodFailed:at=>{hooks.failures.push(at);},failures:[],
+    vodPlaying:()=>{hooks.starts++;},starts:0,
+  };
   const c=new Playback(video,hooks);
   return {c,video,hooks};
 }
 const dual = {ok:true,container:'mkv',audio:[{lang:'es',name:'',codec:'aac',def:true},{lang:'en',name:'',codec:'aac',def:false}],subs:[]};
 const tick = ()=>new Promise(r=>setTimeout(r,0));
 const choose = (c,needle)=>c.select(c.menu().find(m=>m.kind==='audio' && m.label.includes(needle)));
+const local = (c, url, at=0) => {
+  c.load(url, at, false);
+  c.vodError('fixture sin acceso al modo URL');
+};
 
 test('HLS y DASH abren Shaka inmediatamente sin consultar el motor',async()=>{
   for(const ext of ['m3u8','mpd']){
@@ -125,22 +162,22 @@ test('una ruta remota guardada no evita el intento local',async()=>{
   c.load('https://fixture.invalid/video.avi',0,false);assert.equal(video.src,'https://fixture.invalid/video.avi');assert.deepEqual(calls,[]);await c.destroy();
 });
 test('MSE MP4 selecciona la segunda pista sin motor y reutiliza el índice',async()=>{
-  const {c,video}=setup();c.load('https://fixture.invalid/video.mp4',0,false);await tick();video.currentTime=180;choose(c,'Inglés');await tick();
+  const {c,video}=setup();local(c,'https://fixture.invalid/video.mp4');await tick();c.onPlaying();video.currentTime=180;choose(c,'Inglés');await tick();
   assert.equal(mp4s.length,2);assert.equal(mp4s[1].audioIdx,1);assert.equal(mp4s[1].index,mp4s[0].index);assert.equal(video.currentTime,180);assert.deepEqual(calls,[]);await c.destroy();
 });
 test('MKV: la app lo lee y cambia el audio en el equipo, sin servidor (como Android)',async()=>{
-  const {c,video}=setup();c.load('https://fixture.invalid/video.mkv',0,false);await tick();
+  const {c,video}=setup();local(c,'https://fixture.invalid/video.mkv');await tick();c.onPlaying();
   assert.equal(mkvs.length,1);assert.equal(c.menu().filter(m=>m.kind==='audio').length,2);
   video.currentTime=240;choose(c,'Inglés');await tick();
   assert.equal(mkvs.length,2);assert.equal(mkvs[1].audioIdx,1);assert.equal(mkvs[1].index,mkvs[0].index);assert.equal(video.currentTime,240);assert.deepEqual(calls,[]);await c.destroy();
 });
 test('audio que el equipo no decodifica con el servidor apagado: aviso de encender el servidor',async()=>{
-  const {c}=setup();mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_TRUEHD'}];c.load('https://fixture.invalid/video.mkv',0,false);await tick();
+  const {c}=setup();mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_TRUEHD'}];local(c,'https://fixture.invalid/video.mkv');await tick();c.onPlaying();
   choose(c,'Inglés');await tick();await tick();
   assert.deepEqual(calls,['mediaEngine']);assert.ok(toasts.some(m=>m.includes('es necesario encender el servidor')),toasts.join(' | '));await c.destroy();
 });
 test('MKV: subtítulos de texto leídos por la app, sin servidor',async()=>{
-  const {c}=setup();c.load('https://fixture.invalid/video.mkv',0,false);await tick();
+  const {c}=setup();local(c,'https://fixture.invalid/video.mkv');await tick();
   const sub=c.menu().find(m=>m.kind==='text' && m.label.includes('Español'));assert.ok(sub);
   c.select(sub);await tick();assert.deepEqual(calls,[]);assert.ok(c.menu().find(m=>m.kind==='text' && m.label.includes('Español')).on);await c.destroy();
 });
@@ -194,11 +231,18 @@ test('canales con audio MP2 (CINEMAX, tipo 0x03): los cuadros se leen para el MP
   assert.deepEqual(b.frames.map(f=>f.pts),[9000+2160,9000+4320]);
   assert.equal(b.rest,null);
 });
-test('MKV con audio que no entra por MSE (E-AC-3): primero el lector nativo; si falla, el de la app como antes',async()=>{
-  const {c,video}=setup();mkvTracks=[{lang:'spa',codec:'A_EAC3'}];c.load('https://fixture.invalid/video.mkv',0,false);await tick();await tick();
-  assert.equal(mkvs.length,1);assert.equal(video.src,'https://fixture.invalid/video.mkv');assert.deepEqual(calls,[]);
-  assert.equal(c.mp4Fallback(),true);await tick();
-  assert.equal(mkvs.length,2);assert.equal(c.mp4Fallback('x'),true);await c.destroy();
+test('MKV con E-AC-3 intenta el audio nativo antes de preparar una conversión',async()=>{
+  const {c,video}=setup();
+  mkvTracks=[{lang:'spa',codec:'A_EAC3'}];
+  c.load('https://fixture.invalid/dolby.mkv',0,false);
+  assert.equal(mkvs.length,0);
+  assert.equal(video.src,'https://fixture.invalid/dolby.mkv');
+  assert.deepEqual(calls,[]);
+  c.vodError('códec rechazado');
+  await tick();
+  assert.equal(mkvs.length,1);
+  assert.deepEqual(calls,['mediaEngine']);
+  await c.destroy();
 });
 test('canal en vivo: un fallo suelto del nativo se prueba otra vez con un reproductor nuevo (como la miniatura); con dos seguidos, el lector propio, alternando MP4 y MPEG-TS',async()=>{
   lives=[];let {c,video}=setup();delete memory['native_live_'+APP_VERSION];
@@ -284,48 +328,170 @@ test('películas desde el principio: reproductor nativo primero; otro idioma pas
   await c.destroy();
 });
 
-test('películas: si el reproductor nativo no abre, el lector de la app al momento; 2 fallos sin abrir nunca = lector siempre',async()=>{
-  let {c,video}=setup();delete memory['native_vod_'+APP_VERSION];
-  for(const n of [2,3]){
-    c.load('https://fixture.invalid/nat'+n+'.mp4',0,false);await tick();
-    assert.equal(video.src,'https://fixture.invalid/nat'+n+'.mp4');const before=mp4s.length;
-    assert.equal(c.mp4Fallback(),true);await tick();assert.equal(mp4s.length,before+1);
+test('varios fallos nativos no cambian la ruta de un título nuevo ni la de un archivo que vuelve a abrirse',async()=>{
+  const {c,video,hooks}=setup();
+  memory['native_vod_'+APP_VERSION]='no';
+  for(const n of [2,3,2]){
+    const url='https://fixture.invalid/nat'+n+'.mp4';
+    c.load(url,0,false);
+    assert.equal(video.src,url);
+    const before=mp4s.length;
+    c.vodError('rechazo de esta fuente');
+    await tick();
+    assert.equal(mp4s.length,before+1);
+    assert.equal(video.src,'');
   }
-  assert.equal(memory['native_vod_'+APP_VERSION],'no');
-  const before=mp4s.length;c.load('https://fixture.invalid/nat4.mp4',0,false);await tick();assert.equal(mp4s.length,before+1);
-  await c.destroy();
-  // Continuar viendo: siempre el lector de la app (empieza en el segundo exacto)
-  ({c,video}=setup());delete memory['native_vod_'+APP_VERSION];
-  c.load('https://fixture.invalid/nat5.mkv',300,false);await tick();assert.equal(mkvs.length,1);assert.equal(video.currentTime,300);
+  c.load('https://fixture.invalid/nat4.mp4',0,false);
+  assert.equal(video.src,'https://fixture.invalid/nat4.mp4');
+  assert.match(video.headers['User-Agent'],/LatMpxFireTV/);
+  assert.deepEqual(hooks.failures,[]);
+  assert.deepEqual(calls,[]);
   await c.destroy();
 });
 
-test('películas MKV con el reproductor nativo: un subtítulo de texto pasa al lector de la app (sin servidor)',async()=>{
-  const {c,video}=setup();delete memory['native_vod_'+APP_VERSION];
-  c.load('https://fixture.invalid/nat6.mkv',0,false);await tick();assert.equal(mkvs.length,0);
-  // los idiomas y subtítulos del archivo, leídos ya sonando
-  probe=new Mkv(video,'x').probe();mkvs.length=0;c.onPlaying();await new Promise(r=>setTimeout(r,200));
-  const sub=c.menu().find(m=>m.kind==='text'&&m.key!=='off');assert.ok(sub,'hay subtítulos');
-  video.currentTime=60;c.select(sub);await tick();
-  assert.equal(mkvs.length,1);assert.equal(video.currentTime,60);assert.deepEqual(calls,[]);
+test('Continuar viendo nativo espera avance real tras saltar al segundo guardado',async()=>{
+  const {c,video,hooks}=setup();
+  c.load('https://fixture.invalid/episode.mkv',214,false);
+  assert.equal(mkvs.length,0);
+  assert.equal(video.muted,true);
+  assert.equal(c.resumePos(),214);
+  video.seekable={length:1,start:()=>0,end:()=>600};
+  c.onCanPlay();
+  assert.equal(video.currentTime,214);
+  c.onPlaying();
+  c.onTime();
+  assert.equal(c.hasPlayed(),false);
+  assert.equal(c.resumePos(),214);
+  video.currentTime=214.2;
+  c.onTime();
+  assert.equal(c.hasPlayed(),true);
+  assert.equal(hooks.starts,1);
+  assert.equal(video.muted,false);
+  assert.deepEqual(calls,[]);
   await c.destroy();
 });
 
-test('películas: en un equipo donde el nativo ya abrió, 2 títulos seguidos que no arrancan con él = el resto de la sesión con el lector',async()=>{
-  const {nativeWorked}=require('../src/player/nativemode.ts');
-  let {c,video}=setup();memory['native_vod_'+APP_VERSION]='ok';
-  for(const n of [11,12]){
-    c.load('https://fixture.invalid/nat'+n+'.mp4',0,false);await tick();
-    assert.equal(video.src,'https://fixture.invalid/nat'+n+'.mp4');
-    assert.equal(c.mp4Fallback(),true);await tick();
-  }
-  // el tercero ya no espera al nativo; el equipo sigue recordando que el nativo abre
-  const before=mp4s.length;c.load('https://fixture.invalid/nat13.mp4',0,false);await tick();assert.equal(mp4s.length,before+1);
-  assert.equal(memory['native_vod_'+APP_VERSION],'ok');
+test('si el salto nativo no avanza, el lector recibe el segundo guardado y la VPS espera',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
+  const {c,video,hooks}=setup();
+  c.load('https://fixture.invalid/episode.mp4',312,false);
+  video.currentTime=2;
+  c.onPlaying();
+  video.currentTime=3;
+  c.onTime();
+  assert.equal(c.resumePos(),312);
+  t.mock.timers.tick(13000);
+  assert.equal(mp4s.length,1);
+  assert.equal(mp4s[0].at,312);
+  assert.equal(video.muted,false);
+  assert.deepEqual(calls,[]);
+  assert.deepEqual(hooks.failures,[]);
   await c.destroy();
-  nativeWorked('vod');
-  ({c,video}=setup());memory['native_vod_'+APP_VERSION]='ok';
-  c.load('https://fixture.invalid/nat14.mp4',0,false);await tick();assert.equal(video.src,'https://fixture.invalid/nat14.mp4');
+});
+
+test('película sin señales de vida libera el modo URL y prueba el lector sin esperar una segunda alarma',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
+  const {c,video}=setup();
+  c.load('https://fixture.invalid/quiet.mp4',0,false);
+  t.mock.timers.tick(12500);
+  assert.equal(video.resets,1);
+  assert.equal(mp4s.length,1);
+  assert.deepEqual(calls,[]);
+  await c.destroy();
+});
+
+test('ambas rutas locales fallan conservando el punto de reanudación antes de consultar el panel',async()=>{
+  const {c,hooks}=setup();
+  c.load('https://fixture.invalid/movie/u/p/noindex.mp4',241,false);
+  c.vodError('fuente no aceptada');
+  await tick();
+  assert.deepEqual(hooks.failures,[241]);
+  assert.deepEqual(calls,[]);
+  assert.equal(await c.panelOpen(241),false);
+  assert.deepEqual(calls,['mediaEngine']);
+  await c.destroy();
+});
+
+test('un subtítulo de texto MKV sin pista nativa se carga en el equipo desde el mismo segundo',async()=>{
+  const cached={...dual,subs:[{id:'0',lang:'spa',codec:'S_TEXT/UTF8',name:'',def:false,forced:false}]};
+  const {c,video}=setup({cached});
+  c.load('https://fixture.invalid/nat6.mkv',0,false);
+  c.onPlaying();
+  video.currentTime=60;
+  c.select(c.menu().find(m=>m.kind==='text'&&m.key!=='off'));
+  await tick();
+  assert.equal(mkvs.length,1);
+  assert.equal(mkvs[0].at,60);
+  assert.equal(c.menu().find(m=>m.kind==='text'&&m.key!=='off').on,true);
+  assert.deepEqual(calls,[]);
+  await c.destroy();
+});
+
+test('subtítulo MKV expuesto por Vega cambia y se desactiva sin recargar ni pedir al panel',async()=>{
+  const text={id:'1',language:'spa',kind:'subtitles',mode:'disabled'};
+  const {c,video}=setup({subs:[text]});
+  c.load('https://fixture.invalid/native-sub.mkv',0,false);
+  c.onPlaying();
+  video.currentTime=85;
+  c.select(c.menu().find(m=>m.kind==='text'&&m.key==='n:1'));
+  assert.equal(text.mode,'showing');
+  assert.equal(video.currentTime,85);
+  assert.equal(mkvs.length,0);
+  c.select(c.menu().find(m=>m.kind==='text'&&m.key==='off'));
+  assert.equal(text.mode,'disabled');
+  assert.deepEqual(calls,[]);
+  await c.destroy();
+});
+
+test('Vega detecta pistas nuevas sin catálogo y respeta el orden real de audio y texto',async()=>{
+  const es={id:'a-es',language:'es-419',enabled:true};
+  const en={id:'a-en',language:'eng',enabled:false};
+  const {c,video}=setup({tracks:[en,es],cached:dual});
+  c.load('https://fixture.invalid/reordered.mp4',0,false);
+  c.onPlaying();
+  choose(c,'Inglés');
+  assert.equal(en.enabled,true);
+  assert.equal(es.enabled,false);
+  assert.equal(video.resets,0);
+  assert.equal(mp4s.length,0);
+  assert.deepEqual(calls,[]);
+  await c.destroy();
+});
+
+test('preferencia guardada y pistas tardías se aplican en Vega incluso al reanudar',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
+  const {c,video}=setup();
+  const url='https://fixture.invalid/late-tracks.mp4';
+  const {seedTitleLang}=require('../src/player/playback.ts');
+  seedTitleLang(url,'en',1);
+  memory.pref_subs_lang='pt';
+  c.load(url,98,false);
+  c.onMeta();
+  t.mock.timers.tick(180);
+  const en={id:'en',language:'eng',enabled:false};
+  const pt={id:'pt',language:'por',kind:'subtitles',mode:'disabled'};
+  video.audioTracks=[{id:'es',language:'spa',enabled:true},en];
+  video.textTracks=[pt];
+  c.schedulePrefs();
+  t.mock.timers.tick(180);
+  assert.equal(en.enabled,true);
+  assert.equal(pt.mode,'showing');
+  assert.equal(video.src,url);
+  assert.equal(mp4s.length,0);
+  assert.deepEqual(calls,[]);
+  await c.destroy();
+});
+
+test('un archivo con pistas ocultas puede abrirse con el lector local desde el menú',async()=>{
+  const {c,video}=setup({tracks:[{id:'1',language:'es',enabled:true}]});
+  c.load('https://fixture.invalid/hidden.mp4',0,false);
+  c.onPlaying();
+  video.currentTime=127;
+  c.select(c.menu().find(m=>m.kind==='local'));
+  await tick();
+  assert.equal(mp4s.length,1);
+  assert.equal(mp4s[0].at,127);
+  assert.deepEqual(calls,[]);
   await c.destroy();
 });
 
@@ -341,7 +507,7 @@ test('pantalla grande: cambiar de canal en el mismo reproductor va por el lector
 });
 
 test('error 4 al instante con http en el nativo (Vega OS antes de 2.0): el resto de la sesión, http va directo al lector; https sigue con el nativo',async()=>{
-  lives=[];const {c,video}=setup();memory['native_live_'+APP_VERSION]='ok';
+  lives=[];const {c,video}=setup({os:'1.2.3'});memory['native_live_'+APP_VERSION]='ok';
   c.load('http://fixture.invalid/live/u/p/41.m3u8',0,true);await tick();
   assert.equal(video.src,'http://fixture.invalid/live/u/p/41.ts');
   video.error={code:4};assert.equal(c.liveRetryTs(),true);await c.destroy();
@@ -422,19 +588,19 @@ test('nativo: con las dos pistas en el reproductor de Vega el idioma cambia ahí
 });
 test('nativo: si el reproductor de Vega no informa la otra pista, el lector de la app la abre desde el mismo segundo',async()=>{
   const {c,video}=setup({tracks:[{language:'es',label:'',enabled:true}],cached:dual});nativeOk();
-  c.load('https://fixture.invalid/movie/u/p/2003.mp4',0,false);await tick();video.currentTime=95;
+  c.load('https://fixture.invalid/movie/u/p/2003.mp4',0,false);await tick();c.onPlaying();video.currentTime=95;
   choose(c,'Inglés');await tick();
   assert.equal(mp4s.length,1);assert.equal(mp4s[0].audioIdx,1);
   await c.destroy();
 });
 test('lector MP4: sus idiomas se dejan en el panel para los equipos que abren con el nativo',async()=>{
   const {c}=setup();shared=[];
-  c.load('https://fixture.invalid/movie/u/p/2004.mp4',0,false);await tick();
+  local(c,'https://fixture.invalid/movie/u/p/2004.mp4');await tick();
   assert.equal(shared.length>0,true);
   assert.deepEqual(shared[0][1].audio.map(a=>a.lang),['spa','eng']);
   await c.destroy();
 });
-test('nativo: lo que la ficha preparaba con el lector se corta al abrir con el nativo; con el índice ya listo y audio AAC abre el lector',async()=>{
+test('nativo: lo que la ficha preparaba con el lector se corta al abrir con el nativo; con el índice local y un punto guardado abre el lector',async()=>{
   const {c}=setup({cached:dual});nativeOk();dropped=[];
   const u1='https://fixture.invalid/movie/u/p/2005.mp4';
   c.load(u1,0,false);await tick();
@@ -442,36 +608,117 @@ test('nativo: lo que la ficha preparaba con el lector se corta al abrir con el n
   await c.destroy();
   const {c:c2}=setup({cached:dual});nativeOk();
   const u2='https://fixture.invalid/movie/u/p/2006.mp4';ready.add(u2);
-  c2.load(u2,0,false);await tick();
+  c2.load(u2,180,false);await tick();
   assert.equal(mp4s.length,1);
   ready.delete(u2);await c2.destroy();
 });
 
 test('2.1.0: el lector no pudo con un MP4 por http y el nativo nunca abrió en el equipo: sin el modo directo (error 4 seguro), Player sigue ya',async()=>{
   const {c,video,hooks}=setup();c.load('http://fixture.invalid/movie/u/p/noindex.mp4',0,false);await tick();await tick();
-  assert.notEqual(video.src,'http://fixture.invalid/movie/u/p/noindex.mp4');assert.equal(hooks.gaveUp,1);
+  assert.notEqual(video.src,'http://fixture.invalid/movie/u/p/noindex.mp4');assert.deepEqual(hooks.failures,[0]);
   assert.ok(c.vodMode().includes('sin contestar'),c.vodMode());await c.destroy();
 });
 test('2.1.0: con https (o un equipo donde el nativo ya abrió) el modo directo sigue siendo el respaldo',async()=>{
   const {c,video,hooks}=setup();c.load('https://fixture.invalid/movie/u/p/noindex.mp4',0,false);await tick();await tick();
-  assert.equal(video.src,'https://fixture.invalid/movie/u/p/noindex.mp4');assert.equal(hooks.gaveUp,0);await c.destroy();
+  assert.equal(video.src,'https://fixture.invalid/movie/u/p/noindex.mp4');assert.deepEqual(hooks.failures,[]);await c.destroy();
 });
 
 test('2.1.0: MP4 con el índice entero: otro idioma en el mismo lector, sin abrir de nuevo ni pedir al servidor',async()=>{
-  const {c,video}=setup();c.load('https://fixture.invalid/inplace.mp4',0,false);await tick();video.currentTime=180;choose(c,'Inglés');await tick();
+  const {c,video}=setup();local(c,'https://fixture.invalid/inplace.mp4');await tick();c.onPlaying();video.currentTime=180;choose(c,'Inglés');await tick();
   assert.equal(mp4s.length,1);assert.equal(mp4s[0].switched,1);assert.equal(mp4s[0].audioIdx,1);assert.equal(video.currentTime,180);
   assert.ok(c.menu().find(m=>m.kind==='audio'&&m.label.includes('Inglés')).on);assert.deepEqual(calls,[]);await c.destroy();
 });
 
 test('2.1.0: subtítulos de texto dentro de un MP4: al menú y a la pantalla sin el servidor',async()=>{
-  const {c}=setup();c.load('https://fixture.invalid/mp4subs.mp4',0,false);await tick();
+  const {c}=setup();local(c,'https://fixture.invalid/mp4subs.mp4');await tick();
   const sub=c.menu().find(m=>m.kind==='text'&&m.label.includes('Español'));assert.ok(sub,JSON.stringify(c.menu()));
   c.select(sub);await tick();assert.deepEqual(calls,[]);assert.ok(c.menu().find(m=>m.kind==='text'&&m.label.includes('Español')).on);await c.destroy();
 });
 
 test('2.1.1: índice a medias (el lector vio 2 idiomas) y el panel conoce 3: el menú muestra los 3',async()=>{
   const three={ok:true,container:'mp4',audio:[{lang:'es',name:'',codec:'aac',def:true},{lang:'en',name:'',codec:'aac',def:false},{lang:'pt',name:'',codec:'aac',def:false}],subs:[]};
-  const {c}=setup({cached:three});c.load('https://fixture.invalid/partial.mp4',0,false);await tick();
+  const {c}=setup({cached:three});local(c,'https://fixture.invalid/partial.mp4');await tick();
   const audios=c.menu().filter(m=>m.kind==='audio');assert.equal(audios.length,3,JSON.stringify(audios));
   assert.ok(audios.some(m=>m.label.includes('Portugu')));await c.destroy();
+});
+
+test('si la VPS rechaza la conversión tras agotar las rutas locales, termina la carga y conserva el avance',async()=>{
+  const {c,hooks}=setup();
+  engineAvailable=true;
+  panelError='Sin permisos';
+  c.load('https://fixture.invalid/noindex.mp4',95,false);
+  c.vodError('formato no aceptado');
+  await tick();
+  assert.deepEqual(hooks.failures,[95]);
+  assert.deepEqual(calls,[]);
+  assert.equal(await c.panelOpen(95),true);
+  await tick();
+  assert.deepEqual(hooks.errors,['No se pudo continuar donde quedó']);
+  assert.equal(c.resumePos(),95);
+  await c.destroy();
+});
+
+test('Continuar viendo conserva avances recientes y reconoce el episodio de un registro antiguo',async()=>{
+  const load = Module._load;
+  let respond;
+  const posts=[];
+  Module._load = function(request,parent,isMain){
+    if (parent?.filename.endsWith('/src/state.ts')) {
+      const stubs = {
+        './api/panel':{
+          bindSession(){},forgetCloud(){},onPanelDemo(){},
+          cloud(_file, method, body){
+            if (method==='GET') return new Promise(resolve=>{respond=resolve;});
+            posts.push(body);
+            return Promise.resolve({ok:true,body:'{}'});
+          },
+        },
+        './api/xtream':{setStreamFlip(){}},
+        './data/top10':{},
+        './data/catalog':{catalog:{clear(){}}},
+        './lib/images':{setImgCache(){}},
+        './lib/i18n':{t:key=>key},
+        './lib/http':{json:response=>JSON.parse(response.body)},
+        './lib/tenant':{},
+        './lib/deviceid':{deviceId(){return 'test';}},
+        './lib/storage':store,
+      };
+      if (request in stubs) return stubs[request];
+    }
+    return load.call(this,request,parent,isMain);
+  };
+  try {
+    const state=require('../src/state.ts');
+    state.setSession({base:'https://fixture.invalid',user:'test',pass:'test'});
+    const progress={
+      title:'Serie antigua',type:'series',id:'123',position:212,duration:600,
+      url:'https://fixture.invalid/series/test/test/987.mkv',play:{a:'spa',ai:1},ts:100,
+    };
+    const reading=state.loadCloud();
+    await tick();
+    respond({ok:true,body:JSON.stringify({progress:{[progress.title]:progress},favorites:[]})});
+    await reading;
+    const saved=state.progressSeries('123');
+    assert.equal(state.progressEpisodeId(saved),'987');
+    assert.equal(state.resumePosition(saved),212);
+    assert.deepEqual(state.playHintFor('episode','987','123'),{a:'spa',ai:1});
+    assert.deepEqual(state.playHintFor('episode','988','123'),{a:'spa'});
+
+    const old=state.loadCloud();
+    await tick();
+    state.saveProgress({...saved,type:'episode',id:'987',seriesId:'123',position:240},true);
+    respond({ok:true,body:JSON.stringify({progress:{[progress.title]:progress}})});
+    await old;
+    await tick();
+    assert.equal(state.progressSeries('123').position,240);
+    assert.equal(posts.at(-1).position,240);
+
+    const unavailable=state.loadCloud();
+    await tick();
+    respond({ok:false,body:'{"error":"temporal"}'});
+    await unavailable;
+    assert.equal(state.progressSeries('123').position,240);
+  } finally {
+    Module._load = load;
+  }
 });

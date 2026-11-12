@@ -35,7 +35,7 @@ function schedule(ms: number): void {
 
 // los primeros de Continuar viendo (direcciones de película o del capítulo en curso); maxConn: conexiones de la línea
 export function idxWarmList(urls: string[], maxConn: number): void {
-  list = maxConn === 1 ? [] : urls.filter(u => /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(u)).slice(0, MAX);
+  list = maxConn <= 1 ? [] : urls.filter(u => /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(u)).slice(0, MAX);
   if (list.length) schedule(4000);
 }
 

@@ -20,7 +20,7 @@ export type Progress = {
   duration: number;
   url: string;
   poster: string;
-  type: 'movie' | 'episode' | 'live';
+  type: 'movie' | 'episode' | 'series' | 'live';
   id: string;
   seriesId: string;
   categoryId: string;
@@ -108,6 +108,7 @@ export function restoreSession(): boolean {
 // de sesión normal la deja en false
 export function setSession(s: Session, demo = false, demoExpires = 0, demoDuration = 0) {
   forgetCloud();
+  lastSent.clear();
   setStreamFlip(false);
   set({ session: s, progress: [], favorites: [], demo, demoExpires: demo ? demoExpires : 0, demoDuration: demo ? demoDuration : 0 });
 }
@@ -134,6 +135,7 @@ export function showNotice(msg: string) {
 export function logout() {
   remove('session');
   forgetCloud();
+  lastSent.clear();
   catalog.clear();
   catalog.unlocked = false;
   set({ session: null, loaded: { vod: false, series: false, live: false }, loading: '', error: '', progress: [], favorites: [], demo: false, demoExpires: 0, demoDuration: 0 });
@@ -188,11 +190,22 @@ function progressSeconds(e: any): number {
   return parseIso(str(e.updatedAt));
 }
 
+let cloudRead = 0;
+let progressRevision = 0;
+const progressWrites = new WeakMap<Session, Promise<unknown>>();
+
 export async function loadCloud() {
-  // la DEMO no tiene Continuar viendo ni Mi lista
-  if (state.demo) return;
+  const session = state.session;
+  if (!session || state.demo) return;
+  const request = ++cloudRead;
+  const revision = progressRevision;
+  await progressWrites.get(session);
+  if (session !== state.session || request !== cloudRead || state.demo) return;
   // play=1: cada avance trae «play» (idioma elegido para el título en cualquier equipo; ver PlayHint)
-  const j = json(await cloud('progress.php', 'GET', { v: '2', play: '1' }));
+  const response = await cloud('progress.php', 'GET', { v: '2', play: '1' });
+  if (!response.ok) return;
+  const j = json(response);
+  if (session !== state.session || request !== cloudRead || state.demo) return;
   // caché de carátulas del panel (el dueño la puede apagar): apagada, imágenes directo a los servidores
   if (j && typeof j === 'object' && typeof j.img === 'boolean') setImgCache(j.img);
   if (!j || typeof j !== 'object' || state.demo) return;
@@ -203,8 +216,8 @@ export async function loadCloud() {
     if (!e || typeof e !== 'object') continue;
     list.push({
       title,
-      position: Number(e.position) || 0,
-      duration: Number(e.duration) || 0,
+      position: progressSecondsValue(e.position),
+      duration: progressSecondsValue(e.duration),
       url: str(e.url),
       poster: str(e.poster),
       type: (str(e.type) || 'movie') as Progress['type'],
@@ -219,13 +232,26 @@ export async function loadCloud() {
   const favs: Fav[] = Array.isArray(j.favorites)
     ? j.favorites.map((f: any) => ({ id: str(f.id), type: str(f.type) as Fav['type'], title: str(f.title), poster: str(f.poster), categoryId: str(f.categoryId) }))
     : [];
-  set({ progress: list, favorites: favs });
+  set({ progress: revision === progressRevision ? list : state.progress, favorites: favs });
 }
 
 function cloudPost(body: Record<string, any>) {
   // nada se guarda en el panel con una DEMO (save, delete, fav_add, fav_remove)
   if (state.demo) return;
-  cloud('progress.php', 'POST', body).catch(() => {});
+  const session = state.session;
+  if (!session) return;
+  if (body.action !== 'save' && body.action !== 'delete') {
+    void cloud('progress.php', 'POST', body).catch(() => {});
+    return;
+  }
+  const previous = progressWrites.get(session) || Promise.resolve();
+  const pending = previous.then(() => {
+    if (state.session === session && !state.demo) return cloud('progress.php', 'POST', body);
+  }).catch(() => {});
+  progressWrites.set(session, pending);
+  void pending.then(() => {
+    if (progressWrites.get(session) === pending) progressWrites.delete(session);
+  });
 }
 
 export function favType(kind: string): Fav['type'] {
@@ -258,6 +284,32 @@ export function toggleFav(kind: string, id: string, title: string, poster: strin
   return !found;
 }
 
+function progressSecondsValue(raw: unknown): number {
+  const n = Number(str(raw));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+export function resumePosition(p: Progress | undefined): number {
+  if (!p || !Number.isFinite(p.position) || p.position <= 5 || (p.duration > 0 && p.position >= p.duration * 0.95)) return 0;
+  return Math.floor(p.position);
+}
+
+export function progressSeriesId(p: Progress): string {
+  if (p.type === 'episode') return digits(p.seriesId);
+  return p.type === 'series' ? digits(p.seriesId || p.id) : '';
+}
+
+export function progressEpisodeId(p: Progress | undefined): string {
+  if (!p) return '';
+  if (p.type === 'episode' && digits(p.id)) return digits(p.id);
+  if (p.type !== 'episode' && p.type !== 'series') return '';
+  // Algunas apps guardan el ID de la serie y dejan el episodio en la URL.
+  const fromUrl = /\/series\/[^/]+\/[^/]+\/(\d+)(?:\.[a-z0-9]+)?(?:[?#]|$)/i.exec(p.url)?.[1];
+  if (fromUrl) return fromUrl;
+  const id = digits(p.id);
+  return id !== progressSeriesId(p) ? id : '';
+}
+
 export function progressMovie(id: string): Progress | undefined {
   return state.progress.find(p => p.type === 'movie' && digits(p.id) === id);
 }
@@ -267,46 +319,53 @@ export function progressMovie(id: string): Progress | undefined {
 export function playHintFor(kind: 'movie' | 'episode', id: string, seriesId: string): PlayHint | undefined {
   const p = kind === 'movie' ? progressMovie(digits(id)) : progressSeries(digits(seriesId));
   if (!p?.play) return undefined;
-  return kind === 'movie' || digits(p.id) === digits(id) ? p.play : { a: p.play.a };
+  return kind === 'movie' || progressEpisodeId(p) === digits(id) ? p.play : { a: p.play.a };
 }
 
 export function progressSeries(seriesId: string): Progress | undefined {
-  return state.progress.find(p => (p.type === 'episode' || (p.type as string) === 'series') && digits(p.seriesId) === seriesId);
+  return seriesId ? state.progress.find(p => progressSeriesId(p) === seriesId && !!progressEpisodeId(p)) : undefined;
 }
 
-const lastSent: Record<string, number> = {};
+const lastSent = new Map<string, number>();
 // se envía como máximo cada 30 s por título (force en pausa o al salir); al 95 % se borra
 export function saveProgress(p: Progress, force: boolean) {
-  if (state.demo) return;
+  if (state.demo || !Number.isFinite(p.position) || p.position < 5) return;
   const done = p.duration > 0 && p.position >= p.duration * 0.95;
   const now = nowSec();
+  const id = p.type + ':' + p.id;
   const removed: string[] = [];
   const out: Progress[] = [];
   for (const e of state.progress) {
-    const same = e.type === p.type && ((p.type === 'movie' && digits(e.id) === p.id) || (p.type === 'episode' && digits(e.seriesId) === p.seriesId));
+    const sameMovie = p.type === 'movie' && e.type === 'movie' && digits(e.id) === digits(p.id);
+    const sameSeries = p.type === 'episode' && !!p.seriesId && progressSeriesId(e) === digits(p.seriesId);
+    const same = sameMovie || sameSeries;
     if (e.title === p.title) continue;
     if (same) removed.push(e.title);
     else out.push(e);
   }
+  if (done && out.length === state.progress.length && !lastSent.has(id)) return;
+  progressRevision++;
   if (!done) out.unshift({ ...p, order: Date.now() / 1000 });
-  const send = done || force || now - (lastSent[p.title] || 0) >= 30;
+  const send = done || force || now - (lastSent.get(id) || 0) >= 30;
   for (const t of removed) cloudPost({ action: 'delete', title: t });
   if (!send) {
     state = { ...state, progress: out };
     return;
   }
-  lastSent[p.title] = now;
   set({ progress: out });
   if (done) {
+    lastSent.delete(id);
     cloudPost({ action: 'delete', title: p.title });
     return;
   }
+  lastSent.set(id, now);
   const { order, ...body } = p;
   cloudPost({ action: 'save', ...body, platform: 'vega', device: read('device_id') });
 }
 
 export function removeProgress(title: string) {
   if (state.demo) return;
+  progressRevision++;
   set({ progress: state.progress.filter(e => e.title !== title) });
   cloudPost({ action: 'delete', title });
 }
