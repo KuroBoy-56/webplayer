@@ -436,6 +436,43 @@ test('2.1.5: con el reproductor de Amazon sonando, el idioma guardado que él no
   await c2.destroy();
 });
 
+test('2.1.7: Continuar viendo con audio que el lector no da (Dolby): el reproductor de Amazon en uno nuevo (en el mismo, «sin imagen en 20 s»), con más tiempo, y el equipo lo recuerda',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
+  const {c,video,hooks}=setup();
+  mkvTracks=[{lang:'spa',codec:'A_EAC3'}];
+  const fresh=[];hooks.vodFresh=at=>fresh.push(at);
+  const url='https://fixture.invalid/movie/u/p/dolby1.mkv';
+  c.load(url,4115,false);
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(mkvs.length,1);
+  assert.deepEqual(fresh,[4115]);assert.notEqual(video.src,url,'no en este reproductor');
+  assert.deepEqual(memory.reader_no_audio_1,['eac3']);
+  await c.destroy();
+  // el reproductor nuevo abre con el de Amazon desde el segundo guardado
+  const {c:c2,video:v2,hooks:h2}=setup();
+  c2.load(url,4115,false);assert.equal(v2.src,url);assert.equal(mkvs.length,0,'sin volver al lector');
+  // con el índice al final y ~8 s por pedido: a los 30 s todavía espera (antes se rendía a los 20 s)
+  t.mock.timers.tick(30000);assert.deepEqual(h2.failures,[]);
+  // si de verdad no puede: el aviso de Player (no otra vez el lector sin sonido)
+  t.mock.timers.tick(30000);assert.deepEqual(h2.failures,[4115]);assert.equal(mkvs.length,0);
+  await c2.destroy();
+});
+
+test('2.1.7: otro título con ese audio en Continuar viendo abre directo con el reproductor de Amazon (el lector no lo da en este equipo)',async()=>{
+  const {c,video}=setup({cached:{ok:true,container:'mkv',audio:[{lang:'es',name:'',codec:'eac3',def:true}],subs:[]}});
+  memory.reader_no_audio_1=['eac3'];
+  const url='https://fixture.invalid/movie/u/p/dolby2.mkv';
+  c.load(url,900,false);
+  assert.equal(video.src,url);assert.equal(mkvs.length,0);
+  await c.destroy();
+  // con audio AAC sigue con el lector
+  const {c:c2,video:v2}=setup({cached:{ok:true,container:'mkv',audio:[{lang:'es',name:'',codec:'aac',def:true}],subs:[]}});
+  memory.reader_no_audio_1=['eac3'];
+  c2.load('https://fixture.invalid/movie/u/p/aac2.mkv',900,false);
+  assert.notEqual(v2.src,'https://fixture.invalid/movie/u/p/aac2.mkv');assert.equal(mkvs.length,1);
+  await c2.destroy();
+});
+
 test('película sin señales de vida libera el modo URL y prueba el lector sin esperar una segunda alarma',async t=>{
   t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
   const {c,video}=setup();

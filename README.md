@@ -207,6 +207,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Continuar viendo con audio Dolby y número del equipo con más intentos (2.1.7)**: cuando el lector no puede dar el
+  audio (o el archivo), el reproductor de Amazon abre en un reproductor nuevo y con más tiempo (en el mismo no mostraba
+  nada: «sin imagen en 20 s»); el equipo recuerda ese audio y los siguientes van directo al de Amazon. El número del
+  equipo se le pide a Vega hasta 3 veces; si se creó al azar porque Vega no contestó, en cada inicio se vuelve a pedir
+  y se cambia por el fijo.
 - **Número del equipo que no cambia al reinstalar (2.1.6)**: el «MAC» de una instalación nueva sale del identificador
   que Vega OS da a las apps de un mismo vendedor (Vendor Tracking ID, `@amazon-devices/kepler-identifiers`,
   `src/lib/deviceid.ts`): según Amazon se mantiene al desinstalar y volver a instalar, y solo cambia al restablecer el

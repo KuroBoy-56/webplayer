@@ -4,7 +4,7 @@ import type { AudioTrack, TextTrack, VideoPlayer } from '@amazon-devices/react-n
 import { disableMp4, LiveHls } from './livehls';
 import { Engine, engineDenied, fileTracks, knownNow, knownTracks, mediaEngine, shareTracks, subCheck, subText, hlsLink } from '../api/media';
 import { t } from '../lib/i18n';
-import { imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
+import { codecKey, imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
 import { osBefore2, osVersion } from '../lib/osversion';
 import { Probe, stopProbe } from '../lib/probe';
 import { UA } from '../lib/http';
@@ -50,6 +50,20 @@ function rememberLang(key: string, lang: string) {
 const fileKey = (url: string) => url.replace(/^https?:\/\//i, '');
 // archivos que el reproductor de Amazon abrió y no pudo mostrar en esta sesión: el lector de la app, sin volver a él
 const nativeLost = new Set<string>();
+// 2.1.7: archivos que el lector de la app no pudo dar (sin sonido o sin imagen): el reproductor de Amazon, en uno nuevo
+const nativeNext = new Set<string>();
+// códecs de audio que el lector no pudo dar en este equipo (MSE sin Dolby, p. ej.): Continuar viendo de un título con ese
+// audio abre directo con el reproductor de Amazon (sin probar antes el lector)
+const NO_MSE_KEY = 'reader_no_audio_1';
+function readerMute(codec: string): boolean {
+  const k = codecKey(codec);
+  return !!k && (readJson<string[]>(NO_MSE_KEY) || []).includes(k);
+}
+function noteReaderMute(codec: string): void {
+  const k = codecKey(codec);
+  const all = readJson<string[]>(NO_MSE_KEY) || [];
+  if (k && !all.includes(k)) writeJson(NO_MSE_KEY, [...all, k].slice(-8));
+}
 const readerFile = /\.(mp4|m4v|mov|mkv)([?#]|$)/i;
 const manifestFile = /\.(m3u8|mpd)([?#]|$)/i;
 type VodRoute = 'native' | 'reader' | 'adaptive' | 'panel';
@@ -570,8 +584,9 @@ export class Playback {
         this.direct(this.resumePos(), 'reader');
         return;
       }
+      if (m.noAudio) noteReaderMute(m.tracks[m.audioIdx]?.codec || '');
       if (m.noAudio && (want < 0 || !this.audioByUser) && !this.nativeTried && !nativeLost.has(fileKey(this.url)) && nativeVodAllowed(this.url)) {
-        this.direct(this.resumePos(), 'native');
+        this.toNative(this.resumePos());
         return;
       }
       const lost = m.noAudio ? (want >= 0 ? want : Math.max(0, m.audioIdx)) : want >= 0 && m.audioIdx !== want ? want : -1;
@@ -610,6 +625,8 @@ export class Playback {
 
   nativeVodPlanned(url: string, at: number): boolean {
     if (!nativeVodAllowed(url) || nativeLost.has(fileKey(url))) return false;
+    // el lector no pudo con este archivo (2.1.7), o su audio es de los que el lector no da en este equipo
+    if (nativeNext.has(fileKey(url)) || (at > 5 && this.startCodecMute(url))) return true;
     // Con el índice ya leído (la ficha lo leyó mientras se miraba, o el título ya se abrió) el lector pide de una vez el
     // video: una sola espera del servidor IPTV. El reproductor de Amazon pide cabecera, índice y video: ~12 s (2.1.3)
     // 2.1.4: Continuar viendo (at > 5) también con el lector, como hasta 2.0.17: el de Amazon empezaba en 0 y saltaba al
@@ -618,8 +635,19 @@ export class Playback {
     return true;
   }
 
+  // el audio con que abriría el lector (el idioma guardado o el predeterminado, según lo que sabe el panel) no suena con
+  // el lector en este equipo
+  private startCodecMute(url: string): boolean {
+    const audio = knownNow(url)?.audio || [];
+    const l = titleLang(url)?.l || '';
+    const tr = (l && audio.find(a => sameLang(a.lang, l))) || audio.find(a => a.def) || audio[0];
+    return !!tr && readerMute(tr.codec);
+  }
+
   private openNativeVod(at: number): void {
     const g = this.gen;
+    // abre con el de Amazon por el audio que el lector no da: con la paciencia de respaldo y sin volver al lector
+    if (at > 5 && readerFile.test(this.url) && this.startCodecMute(this.url)) nativeNext.add(fileKey(this.url));
     dropWarm(this.url);
     dropMkvWarm(this.url);
     dropPrefetch(this.url);
@@ -672,15 +700,14 @@ export class Playback {
     this.httpCheck();
     const pos = this.resumePos();
     this.nativeNote = nativeHttpOk(this.url) ? why : 'http_rechazado';
-    if (!this.readerTried && readerFile.test(this.url)) {
+    // (2.1.7: el lector ya no pudo con este archivo: no se vuelve a él)
+    if (!this.readerTried && readerFile.test(this.url) && !nativeNext.has(fileKey(this.url))) {
       // 2.1.4: el reproductor de Amazon llegó a abrir el archivo (Vega OS 2.0): ese mismo reproductor después no muestra el
       // lector de la app (pantalla negra; lo mismo que «el equipo no aceptó el MP4 del lector» en los canales). El lector
       // va en uno nuevo. Con http rechazado al instante (Vega OS antes de 2.0) sigue en este, como siempre
       if (nativeHttpOk(this.url) && this.hooks.vodFresh) {
         nativeLost.add(fileKey(this.url));
-        this.clearVodTimer();
-        this.releaseVodSource();
-        this.hooks.vodFresh(pos);
+        this.freshPlayer(pos);
         return;
       }
       this.direct(pos, 'reader');
@@ -695,8 +722,25 @@ export class Playback {
       this.mp4Index = null;
       this.mkvIndex = null;
       this.direct(pos, 'reader');
-    } else if (!this.nativeTried && !nativeLost.has(fileKey(this.url)) && nativeVodAllowed(this.url)) this.direct(pos, 'native');
+    } else if (!this.nativeTried && !nativeLost.has(fileKey(this.url)) && nativeVodAllowed(this.url)) this.toNative(pos);
     else this.failVod(pos, why);
+  }
+
+  // 2.1.7: del lector al reproductor de Amazon en uno nuevo (en el mismo, el modo directo no mostraba nada: «sin imagen
+  // en 20 s» en Continuar viendo con audio Dolby). Sin Player que lo cree (pruebas), en este
+  private toNative(pos: number): void {
+    if (!this.hooks.vodFresh) {
+      this.direct(pos, 'native');
+      return;
+    }
+    nativeNext.add(fileKey(this.url));
+    this.freshPlayer(pos);
+  }
+
+  private freshPlayer(pos: number): void {
+    this.clearVodTimer();
+    this.releaseVodSource();
+    this.hooks.vodFresh!(pos);
   }
 
   private openAdaptive(at: number): void {
@@ -738,7 +782,10 @@ export class Playback {
     this.clearVodTimer();
     const watch = this.vodWatch;
     const began = Date.now();
-    const initial = route === 'native' ? Math.min(21000, Math.max(12000, hostStats(this.url).wait * 2 + 3000))
+    // 2.1.7: el reproductor de Amazon como respaldo del lector (el archivo llega bien; con el índice al final y ~8 s por
+    // pedido no le alcanzaban 20 s ni 9 s para el salto al segundo guardado): con más tiempo
+    const patient = route === 'native' && nativeNext.has(fileKey(this.url));
+    const initial = route === 'native' ? (patient ? 45000 : Math.min(21000, Math.max(12000, hostStats(this.url).wait * 2 + 3000)))
       : route === 'reader' ? 24000 : route === 'adaptive' ? 26000 : 28000;
     const check = () => {
       const now = Date.now();
@@ -747,7 +794,7 @@ export class Playback {
       this.onTime();
       if (this.played || watch !== this.vodWatch) return;
       const pending = route === 'native'
-        ? this.seekIssuedAt ? now - this.seekIssuedAt < 9000 && elapsed < 36000
+        ? this.seekIssuedAt ? now - this.seekIssuedAt < (patient ? 25000 : 9000) && elapsed < (patient ? 75000 : 36000)
           : (this.nativeMeta || this.v.readyState >= 1 || !!this.v.buffered?.length) && elapsed < initial + 8000
         : route === 'reader' && elapsed < 85000 && !!this.mse?.busy();
       if (elapsed < initial || pending) {
@@ -1230,10 +1277,7 @@ export class Playback {
     if (audio && !sub && this.vodNative && nativeHttpOk(this.url) && this.hooks.vodFresh) {
       setTitleLang(this.url, audio);
       nativeLost.add(fileKey(this.url));
-      const pos = this.resumePos();
-      this.clearVodTimer();
-      this.releaseVodSource();
-      this.hooks.vodFresh(pos);
+      this.freshPlayer(this.resumePos());
       return;
     }
     const items = this.audioItems();

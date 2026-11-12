@@ -123,6 +123,19 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.1.7 — del lector al reproductor de Amazon en uno nuevo
+
+Aviso de 2.1.5: Continuar viendo en el segundo 4115, `intentos=[directo (sin imagen en 20 s) reproductor_amazon=sin
+imagen en 20 s | servidor=206]`. El lector abrió el archivo sin poder dar su audio (`noAudio`, p. ej. Dolby por MSE) y
+pasó al reproductor de Amazon en ese mismo reproductor: con Vega OS 2.0 no mostró nada (lo mismo que de Amazon al lector,
+2.1.4), y con ~8 s por pedido y el índice al final 20 s tampoco alcanzaban.
+- `Playback.toNative`: del lector al de Amazon (sin audio, o el lector no pudo) en un reproductor nuevo (`vodFresh`); el
+  archivo queda en `nativeNext` y no vuelve al lector (si el de Amazon tampoco puede, el aviso de Player).
+- Paciencia del de Amazon como respaldo (`watchVod`, `patient`): 45 s para empezar, 25 s para el salto al segundo
+  guardado (antes 20 s y 9 s).
+- El equipo recuerda los códecs de audio que el lector no da (`reader_no_audio_1`): Continuar viendo de un título con ese
+  audio (según lo que sabe el panel, `knownNow`) abre directo con el de Amazon.
+
 ## 2.1.5 — idioma guardado (también el de Roku) sin el panel
 
 Casi todo Continuar viendo viene de Roku con el idioma elegido ahí (`play.a` / `play.ai`; Roku lo hace sonar con el audio

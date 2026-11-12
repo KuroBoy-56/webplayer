@@ -980,7 +980,7 @@ test('2.1.3: inicio de sesión: si el panel no contesta se le pregunta otra vez 
   assert.match(app, /registerPending\(deviceId\(\), ses\.user\)/);
 });
 
-test('2.1.6: identificador del equipo desde el de Vega (no cambia al reinstalar): el mismo siempre; el ya guardado se respeta; sin él, al azar', async () => {
+test('2.1.6 / 2.1.7: identificador del equipo desde el de Vega (no cambia al reinstalar): el mismo siempre; el ya guardado se respeta; sin él, al azar y se vuelve a intentar', async () => {
   const disk = new Map();
   let vendor = async () => '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
   const prev = Module._load;
@@ -1018,7 +1018,7 @@ test('2.1.6: identificador del equipo desde el de Vega (no cambia al reinstalar)
     disk.set('latmpx:device_id', 'AB:CD:EF:01:23:45:67:89');
     dev = await start();
     assert.equal(dev.deviceId(), 'AB:CD:EF:01:23:45:67:89');
-    // sin la función (o apagada por el usuario: UUID en ceros): al azar, guardado como antes
+    // sin la función (o apagada por el usuario: UUID en ceros): al azar, guardado como antes y marcado
     for (const v of [async () => { throw new Error('sin módulo'); }, async () => '00000000-0000-0000-0000-000000000000']) {
       vendor = v;
       disk.clear();
@@ -1026,7 +1026,20 @@ test('2.1.6: identificador del equipo desde el de Vega (no cambia al reinstalar)
       const r = dev.deviceId();
       assert.match(r, /^([0-9A-F]{2}:){7}[0-9A-F]{2}$/);
       assert.equal(disk.get('latmpx:device_id'), r);
+      assert.equal(disk.get('latmpx:device_id_src'), 'r');
     }
+    // 2.1.7: en el inicio siguiente Vega contesta: el número al azar se cambia por el fijo (y ya no se vuelve a tocar)
+    vendor = async () => '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+    dev = await start();
+    assert.equal(dev.deviceId(), id);
+    assert.equal(disk.get('latmpx:device_id_src'), 'v');
+    // 2.1.7: Vega tarda en contestar la primera vez (error pasajero): se le pregunta otra vez y sale el fijo
+    let calls = 0;
+    vendor = async () => { if (++calls === 1) throw new Error('ocupado'); return '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'; };
+    disk.clear();
+    dev = await start();
+    assert.equal(dev.deviceId(), id);
+    assert.equal(calls, 2);
     assert.equal(dev.idFromUuid(''), '');
     assert.notEqual(dev.idFromUuid('11111111-2222-4333-8444-555555555555'), dev.idFromUuid('11111111-2222-4333-8444-555555555556'));
   } finally {

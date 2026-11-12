@@ -26,17 +26,32 @@ export function deviceId(): string {
   return id;
 }
 
-// Al iniciar, después de leer lo guardado: sin identificador guardado (instalación nueva o reinstalada), el de Vega
+// Al iniciar, después de leer lo guardado: sin identificador guardado (instalación nueva o reinstalada), el de Vega.
+// 2.1.7: el que se creó al azar porque Vega no contestó en esa apertura queda marcado y en cada inicio se vuelve a pedir
+// el de Vega; cuando contesta, se usa ese (el fijo). El guardado de antes de 2.1.6 se respeta: el panel lo tiene
+// registrado con la línea del cliente
+const SRC = 'device_id_src';
 export async function prepareDeviceId(): Promise<void> {
-  if (read('device_id')) return;
+  const saved = read('device_id');
+  if (saved && read(SRC) !== 'r') return;
   pending = true;
   const id = await vendorDeviceId();
   pending = false;
-  if (read('device_id')) return;
-  const use = id || temp;
-  if (!use) return;
-  temp = use;
-  if (storageLoaded()) write('device_id', use);
+  if (!storageLoaded()) {
+    if (id) temp = id;
+    return;
+  }
+  if (read('device_id') !== saved) return;
+  if (id) {
+    temp = '';
+    write('device_id', id);
+    write(SRC, 'v');
+    return;
+  }
+  if (saved) return;
+  // Vega no lo dio: al azar (el mismo que ya se usó en esta apertura, si hubo), marcado para intentar otra vez
+  write('device_id', deviceId());
+  write(SRC, 'r');
 }
 
 // UUID del vendedor → 8 pares hex (las dos mitades combinadas: el UUID no sale del equipo); '' si no sirve
@@ -50,13 +65,23 @@ export function idFromUuid(uuid: string): string {
   return out.match(/.{2}/g)!.join(':');
 }
 
+// hasta 3 intentos (el sistema recién encendido puede tardar en contestar); '' si no lo da (sin el módulo, UUID en ceros)
 async function vendorDeviceId(): Promise<string> {
+  let ids: { getVendorTrackingId: () => Promise<string> };
   try {
     // (cargado aquí: un sistema sin el módulo, o las pruebas en Node, siguen con el identificador al azar)
-    const { KeplerIdentifiers } = require('@amazon-devices/kepler-identifiers');
-    const uuid = await Promise.race([KeplerIdentifiers.getVendorTrackingId(), new Promise<string>(r => setTimeout(() => r(''), 1500))]);
-    return idFromUuid(String(uuid || ''));
+    ids = require('@amazon-devices/kepler-identifiers').KeplerIdentifiers;
   } catch {
     return '';
   }
+  for (const wait of [1200, 2000, 2500]) {
+    try {
+      const uuid = await Promise.race([ids.getVendorTrackingId(), new Promise<null>(r => setTimeout(() => r(null), wait))]);
+      if (uuid !== null) return idFromUuid(String(uuid || ''));
+    } catch {
+      // error pasajero: otra vez
+    }
+    await new Promise<void>(r => setTimeout(r, 300));
+  }
+  return '';
 }
