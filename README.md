@@ -207,6 +207,9 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Continuar viendo sin pantalla negra (2.1.4)**: Continuar viendo abre con el lector de la app desde el segundo
+  guardado (como hasta 2.0.17); el reproductor de Amazon queda de respaldo. Si el de Amazon abrió un video y no pudo,
+  el lector va en un reproductor nuevo (en el mismo quedaba en negro con Vega OS 2.0). Ver `INTEGRACION_REPRODUCTOR.md`.
 - **Canales con Vega OS 2.0, sesión que no se pierde y películas con el índice leído (2.1.3)**: los canales abren
   primero con el lector de la app (con Vega OS 2.0 el reproductor de Amazon acepta el `.ts` pero no empieza con muchos
   servidores y cada canal esperaba 10-18 s dos veces); el de Amazon queda para el canal que el lector no puede mostrar.

@@ -34,6 +34,8 @@ export type Hooks = {
   vodStarting?: (position: number) => void;
   vodPlaying?: () => void;
   vodFailed?: (position: number) => void;
+  // 2.1.4: abrir el mismo video otra vez en un reproductor nuevo desde ese segundo (Player lo crea)
+  vodFresh?: (position: number) => void;
   // canal en vivo por HLS (lector propio) que no se pudo abrir o se cortó: el motivo, para el siguiente formato
   liveFailed?: (why: string) => void;
   // el canal se detuvo varias veces (sin datos a tiempo): el estado del lector para el reporte
@@ -46,6 +48,8 @@ function rememberLang(key: string, lang: string) {
 }
 
 const fileKey = (url: string) => url.replace(/^https?:\/\//i, '');
+// archivos que el reproductor de Amazon abrió y no pudo mostrar en esta sesión: el lector de la app, sin volver a él
+const nativeLost = new Set<string>();
 const readerFile = /\.(mp4|m4v|mov|mkv)([?#]|$)/i;
 const manifestFile = /\.(m3u8|mpd)([?#]|$)/i;
 type VodRoute = 'native' | 'reader' | 'adaptive' | 'panel';
@@ -550,7 +554,7 @@ export class Playback {
         } else this.readerGaveUp(err);
         return;
       }
-      if (m.noAudio && want < 0 && !this.nativeTried && nativeVodAllowed(this.url)) {
+      if (m.noAudio && want < 0 && !this.nativeTried && !nativeLost.has(fileKey(this.url)) && nativeVodAllowed(this.url)) {
         this.direct(this.resumePos(), 'native');
         return;
       }
@@ -584,10 +588,12 @@ export class Playback {
   }
 
   nativeVodPlanned(url: string, at: number): boolean {
-    if (!nativeVodAllowed(url)) return false;
+    if (!nativeVodAllowed(url) || nativeLost.has(fileKey(url))) return false;
     // Con el índice ya leído (la ficha lo leyó mientras se miraba, o el título ya se abrió) el lector pide de una vez el
     // video: una sola espera del servidor IPTV. El reproductor de Amazon pide cabecera, índice y video: ~12 s (2.1.3)
-    if (readerFile.test(url) && (mkvReady(url) || mp4Ready(url))) return false;
+    // 2.1.4: Continuar viendo (at > 5) también con el lector, como hasta 2.0.17: el de Amazon empezaba en 0 y saltaba al
+    // segundo guardado sin mostrar nada (pantalla negra, el tiempo quieto); queda de respaldo si el lector no puede
+    if (readerFile.test(url) && (at > 5 || mkvReady(url) || mp4Ready(url))) return false;
     return true;
   }
 
@@ -645,8 +651,19 @@ export class Playback {
     this.httpCheck();
     const pos = this.resumePos();
     this.nativeNote = nativeHttpOk(this.url) ? why : 'http_rechazado';
-    if (!this.readerTried && readerFile.test(this.url)) this.direct(pos, 'reader');
-    else this.failVod(pos, why);
+    if (!this.readerTried && readerFile.test(this.url)) {
+      // 2.1.4: el reproductor de Amazon llegó a abrir el archivo (Vega OS 2.0): ese mismo reproductor después no muestra el
+      // lector de la app (pantalla negra; lo mismo que «el equipo no aceptó el MP4 del lector» en los canales). El lector
+      // va en uno nuevo. Con http rechazado al instante (Vega OS antes de 2.0) sigue en este, como siempre
+      if (nativeHttpOk(this.url) && this.hooks.vodFresh) {
+        nativeLost.add(fileKey(this.url));
+        this.clearVodTimer();
+        this.releaseVodSource();
+        this.hooks.vodFresh(pos);
+        return;
+      }
+      this.direct(pos, 'reader');
+    } else this.failVod(pos, why);
   }
 
   private readerGaveUp(why: string): void {
@@ -657,7 +674,7 @@ export class Playback {
       this.mp4Index = null;
       this.mkvIndex = null;
       this.direct(pos, 'reader');
-    } else if (!this.nativeTried && nativeVodAllowed(this.url)) this.direct(pos, 'native');
+    } else if (!this.nativeTried && !nativeLost.has(fileKey(this.url)) && nativeVodAllowed(this.url)) this.direct(pos, 'native');
     else this.failVod(pos, why);
   }
 

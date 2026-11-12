@@ -3,7 +3,7 @@ schema-version = 1
 [package]
 id = "com.latmpx.player.tv"
 title = "MPX Player"
-version = "2.1.3"
+version = "2.1.4"
 icon = "@image/app_icon.png"
 
 # Vega OS 2.0 (SDK 2.0): el reproductor de Vega abre direcciones http en modo directo (canales .ts y películas, como

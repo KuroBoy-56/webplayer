@@ -349,10 +349,13 @@ test('varios fallos nativos no cambian la ruta de un título nuevo ni la de un a
   await c.destroy();
 });
 
-test('Continuar viendo nativo espera avance real tras saltar al segundo guardado',async()=>{
+test('Continuar viendo nativo (respaldo si el lector no puede) espera avance real tras saltar al segundo guardado',async()=>{
   const {c,video,hooks}=setup();
   c.load('https://fixture.invalid/episode.mkv',214,false);
-  assert.equal(mkvs.length,0);
+  // 2.1.4: Continuar viendo abre con el lector de la app; el de Amazon solo si el lector no puede
+  assert.equal(mkvs.length,1);
+  c.vodError('el lector no pudo');await tick();
+  assert.equal(video.src,'https://fixture.invalid/episode.mkv');
   assert.equal(video.muted,true);
   assert.equal(c.resumePos(),214);
   video.seekable={length:1,start:()=>0,end:()=>600};
@@ -371,22 +374,35 @@ test('Continuar viendo nativo espera avance real tras saltar al segundo guardado
   await c.destroy();
 });
 
-test('si el salto nativo no avanza, el lector recibe el segundo guardado y la VPS espera',async t=>{
+test('2.1.4: Continuar viendo abre con el lector de la app desde el segundo guardado (antes el de Amazon empezaba en 0, saltaba y quedaba en negro) y la VPS espera',async t=>{
   t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
   const {c,video,hooks}=setup();
   c.load('https://fixture.invalid/episode.mp4',312,false);
-  video.currentTime=2;
-  c.onPlaying();
-  video.currentTime=3;
-  c.onTime();
+  assert.notEqual(video.src,'https://fixture.invalid/episode.mp4');
   assert.equal(c.resumePos(),312);
-  t.mock.timers.tick(13000);
   assert.equal(mp4s.length,1);
   assert.equal(mp4s[0].at,312);
   assert.equal(video.muted,false);
   assert.deepEqual(calls,[]);
   assert.deepEqual(hooks.failures,[]);
   await c.destroy();
+});
+
+test('2.1.4: el reproductor de Amazon abrió el archivo y no pudo: el lector va en un reproductor nuevo (en el mismo quedaba en negro) y ese archivo no vuelve al de Amazon',async()=>{
+  const {c,video,hooks}=setup();
+  const fresh=[];hooks.vodFresh=at=>fresh.push(at);
+  const url='https://fixture.invalid/movie/u/p/fresh1.mp4';
+  c.load(url,0,false);assert.equal(video.src,url);
+  c.vodError('el reproductor no inició');await tick();
+  assert.deepEqual(fresh,[0]);assert.equal(mp4s.length,0,'el lector no se abre en este reproductor');
+  await c.destroy();
+  // el reproductor nuevo (Player lo crea) abre con el lector
+  const {c:c2,video:v2}=setup();
+  c2.load(url,0,false);assert.notEqual(v2.src,url);assert.equal(mp4s.length,1);
+  // y si el lector tampoco puede, no vuelve al de Amazon: el aviso de Player
+  c2.vodError('el lector no pudo');await tick();
+  assert.notEqual(v2.src,url);
+  await c2.destroy();
 });
 
 test('película sin señales de vida libera el modo URL y prueba el lector sin esperar una segunda alarma',async t=>{
@@ -403,6 +419,9 @@ test('película sin señales de vida libera el modo URL y prueba el lector sin e
 test('ambas rutas locales fallan conservando el punto de reanudación antes de consultar el panel',async()=>{
   const {c,hooks}=setup();
   c.load('https://fixture.invalid/movie/u/p/noindex.mp4',241,false);
+  c.vodError('fuente no aceptada');
+  await tick();
+  // el lector primero (Continuar viendo); después el de Amazon
   c.vodError('fuente no aceptada');
   await tick();
   assert.deepEqual(hooks.failures,[241]);
@@ -466,6 +485,9 @@ test('preferencia guardada y pistas tardías se aplican en Vega incluso al reanu
   seedTitleLang(url,'en',1);
   memory.pref_subs_lang='pt';
   c.load(url,98,false);
+  // 2.1.4: al reanudar va primero el lector; aquí no puede y sigue el de Amazon
+  c.vodError('el lector no pudo');
+  const readers=mp4s.length;
   c.onMeta();
   t.mock.timers.tick(180);
   const en={id:'en',language:'eng',enabled:false};
@@ -477,7 +499,7 @@ test('preferencia guardada y pistas tardías se aplican en Vega incluso al reanu
   assert.equal(en.enabled,true);
   assert.equal(pt.mode,'showing');
   assert.equal(video.src,url);
-  assert.equal(mp4s.length,0);
+  assert.equal(mp4s.length,readers,'las pistas del de Amazon no vuelven a abrir el lector');
   assert.deepEqual(calls,[]);
   await c.destroy();
 });
@@ -653,6 +675,8 @@ test('si la VPS rechaza la conversión tras agotar las rutas locales, termina la
   engineAvailable=true;
   panelError='Sin permisos';
   c.load('https://fixture.invalid/noindex.mp4',95,false);
+  c.vodError('formato no aceptado');
+  await tick();
   c.vodError('formato no aceptado');
   await tick();
   assert.deepEqual(hooks.failures,[95]);

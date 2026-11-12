@@ -123,6 +123,22 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
+## 2.1.4 — Continuar viendo sin pantalla negra
+
+En 2.1.3, Continuar viendo sin el índice leído abría con el reproductor de Amazon: empezaba en 0 sin sonido y, apenas
+tenía datos, saltaba al segundo guardado sin mostrar nada. Si en 9 s no avanzaba, el lector de la app se abría en ese
+mismo reproductor, y con Vega OS 2.0 un reproductor que ya abrió un video en modo directo no muestra después lo que
+entrega el lector (pantalla negra, el tiempo quieto, OK sin efecto; lo mismo que «el equipo no aceptó el MP4 del lector»
+en los canales, que por eso cambian de forma con un reproductor nuevo). Al final pasaba a la conversión del panel.
+- `Playback.nativeVodPlanned`: con `at > 5` (Continuar viendo) MP4 / MKV abren con el lector, como hasta 2.0.17; el de
+  Amazon queda de respaldo si el lector no puede. Una película nueva sigue abriendo con el de Amazon.
+- `Playback.nativeGaveUp`: si el de Amazon llegó a abrir el archivo (no el rechazo de http al instante de Vega OS
+  anterior a 2.0), el lector va en un reproductor nuevo: hook `vodFresh` → `Player` sube `session` y crea otro
+  `VideoPlayer` (espera a que se libere el anterior) desde ese segundo. El archivo queda en `nativeLost` el resto de la
+  sesión: no vuelve al de Amazon.
+- Prueba en el simulador (`npm run test:vod`, caso «2.1.4»): 13,9 s hasta la imagen (2.1.3: 26,7 s, y en el equipo,
+  negro).
+
 ## 2.1.3 — canales con Vega OS 2.0, sesión que no se pierde y películas con el índice ya leído
 
 **Canales en vivo: el lector de la app primero (`playback-live.ts`).** Con Vega OS anterior a 2.0 el reproductor de

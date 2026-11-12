@@ -119,3 +119,18 @@ test('2.1.2: el reproductor de películas completo (playback.ts) en un equipo qu
     await s.close();
   }
 });
+
+test('2.1.4: Continuar viendo en un equipo con Vega OS 2.0 (el reproductor de Amazon acepta http) sin el índice leído: abre con el lector desde el segundo guardado (antes el de Amazon, pantalla negra)', async () => {
+  const P = require('./vod-sim/playback-harness.cjs');
+  const file = makeMp4({ secs: 2700, audios: 2, vkbps: 1100 });
+  const s = await xui(file, { wait: 3500, rate: 1_500_000, max: 1 });
+  try {
+    const r = await P.openVod(s.url, { at: 1500, lineMax: 1, watch: 5, nativeHttp: 'accept' });
+    assert.equal(r.failed, null, r.mode);
+    // (2.1.3: 26,7 s, el de Amazon sin imagen y después el lector en el mismo reproductor, que en el equipo queda en negro)
+    assert.ok(r.first !== null && r.first < 20, 'primera imagen a los ' + r.first + ' s ' + r.mode);
+    assert.match(r.mode, /^lector mp4/);
+  } finally {
+    await s.close();
+  }
+});

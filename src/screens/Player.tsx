@@ -421,6 +421,12 @@ export default function Player({ params }: { params: PlayParams }) {
       },
       vodPlaying: () => showPlaying(),
       vodFailed: position => void recoverVod(position),
+      // el lector en un reproductor nuevo desde ese segundo (el de Amazon dejó tomado este: pantalla negra)
+      vodFresh: position => {
+        if (!alive) return;
+        requestedResume.current = Math.floor(position);
+        setSession(x => x + 1);
+      },
       // el canal se detiene seguido: al panel una vez por canal con el estado del lector (bajada, descifrado, cortes)
       liveStalls: diag => {
         const ch = params.kind === 'live' ? params.channels[indexRef.current] || params.channel : null;
