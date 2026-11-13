@@ -42,7 +42,7 @@ import com.latmpx.player.ui.theme.NfBg
 @Composable
 fun CatalogScreen(state: AppState, kind: Kind) {
     val all = if (kind == Kind.MOVIE) state.movies else state.series
-    val cats = (if (kind == Kind.MOVIE) state.movieCats else state.seriesCats).filter { it.id !in com.latmpx.player.data.Store.blockedCats }
+    val cats = (if (kind == Kind.MOVIE) state.movieCats else state.seriesCats).let { com.latmpx.player.data.Store.visibleCats(it) }
     val tv = LocalIsTv.current
     val heroItems = remember(all) { all.sortedByDescending { it.added }.filter { it.backdrop.isNotEmpty() }.take(5).ifEmpty { all.take(1) } }
     if (state.loading && all.isEmpty()) { Loading(); return }
