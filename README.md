@@ -10,6 +10,10 @@ Windows, Roku y Vega OS. Un cambio en `src/` de la rama `vega-os` se trae aquí 
 compila sola en cada cambio de la rama `tizenOS` (workflow `App Tizen OS (Samsung)`), con la llave del panel
 del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
+## Novedades de la 1.2.2
+
+- **Control parental:** el diálogo del PIN de control parental (Cuenta › «Ocultar contenido para adultos» y categorías bloqueadas de TV en vivo) se cierra después de la tecla OK / Aceptar, no dentro de ella. En Roku cerrarlo dentro de la tecla del teclado numérico sacaba de la app con el PIN correcto; aquí es preventivo (`PinDialog.tsx`). El PIN sigue siendo el del panel (0000 de fábrica), también con distribuidor.
+
 ## Novedades de la 1.2.1
 
 Con número de distribuidor la app sacaba al cliente a los ~10 minutos y pedía otra vez usuario y contraseña (el panel no
