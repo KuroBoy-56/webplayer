@@ -410,6 +410,20 @@ const fr: Record<Key, string> = {
   "Contenido no compatible con este equipo.": "Contenu non compatible avec cet appareil.",
   "Audio no compatible con este equipo.": "Audio non compatible avec cet appareil.",
   "Subtítulo no compatible con este equipo.": "Sous-titre non compatible avec cet appareil.",
+  "Canales y categorías para adultos": "Chaînes et catégories pour adultes",
+  "Ocultos": "Masqués",
+  "Visibles": "Visibles",
+  "Bloquear categorías": "Bloquer des catégories",
+  "Contenido protegido en esta sesión": "Contenu protégé pour cette session",
+  "Bloqueado": "Verrouillé",
+  "Desbloqueado": "Déverrouillé",
+  "Ingresa el PIN para mostrar contenido para adultos": "Saisissez le code PIN pour afficher le contenu adulte",
+  "Ingresa el PIN para bloquear categorías": "Saisissez le code PIN pour bloquer des catégories",
+  "Ingresa el PIN para desbloquear": "Saisissez le code PIN pour déverrouiller",
+  "Contenido desbloqueado hasta que cierres la app": "Contenu déverrouillé jusqu'à la fermeture de l'app",
+  "Bloqueada": "Verrouillée",
+  "Adultos": "Adultes",
+  "Las categorías bloqueadas se ocultan y piden el PIN. Pulsa OK para bloquear o desbloquear.": "Les catégories verrouillées sont masquées et demandent le code PIN. Appuyez sur OK pour verrouiller ou déverrouiller.",
 };
 
 export default fr;

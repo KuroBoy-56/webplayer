@@ -409,6 +409,20 @@ const en = {
   "Contenido no compatible con este equipo.": "Content not supported on this device.",
   "Audio no compatible con este equipo.": "Audio not supported on this device.",
   "Subtítulo no compatible con este equipo.": "Subtitle not supported on this device.",
+  "Canales y categorías para adultos": "Adult channels and categories",
+  "Ocultos": "Hidden",
+  "Visibles": "Visible",
+  "Bloquear categorías": "Block categories",
+  "Contenido protegido en esta sesión": "Protected content this session",
+  "Bloqueado": "Locked",
+  "Desbloqueado": "Unlocked",
+  "Ingresa el PIN para mostrar contenido para adultos": "Enter the PIN to show adult content",
+  "Ingresa el PIN para bloquear categorías": "Enter the PIN to block categories",
+  "Ingresa el PIN para desbloquear": "Enter the PIN to unlock",
+  "Contenido desbloqueado hasta que cierres la app": "Content unlocked until you close the app",
+  "Bloqueada": "Locked",
+  "Adultos": "Adults",
+  "Las categorías bloqueadas se ocultan y piden el PIN. Pulsa OK para bloquear o desbloquear.": "Locked categories are hidden and ask for the PIN. Press OK to lock or unlock.",
 };
 
 export default en;

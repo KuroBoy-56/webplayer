@@ -410,6 +410,20 @@ const pt: Record<Key, string> = {
   "Contenido no compatible con este equipo.": "Conteúdo não compatível com este aparelho.",
   "Audio no compatible con este equipo.": "Áudio não compatível com este aparelho.",
   "Subtítulo no compatible con este equipo.": "Legenda não compatível com este aparelho.",
+  "Canales y categorías para adultos": "Canais e categorias adultos",
+  "Ocultos": "Ocultos",
+  "Visibles": "Visíveis",
+  "Bloquear categorías": "Bloquear categorias",
+  "Contenido protegido en esta sesión": "Conteúdo protegido nesta sessão",
+  "Bloqueado": "Bloqueado",
+  "Desbloqueado": "Desbloqueado",
+  "Ingresa el PIN para mostrar contenido para adultos": "Digite o PIN para mostrar conteúdo adulto",
+  "Ingresa el PIN para bloquear categorías": "Digite o PIN para bloquear categorias",
+  "Ingresa el PIN para desbloquear": "Digite o PIN para desbloquear",
+  "Contenido desbloqueado hasta que cierres la app": "Conteúdo desbloqueado até você fechar o app",
+  "Bloqueada": "Bloqueada",
+  "Adultos": "Adultos",
+  "Las categorías bloqueadas se ocultan y piden el PIN. Pulsa OK para bloquear o desbloquear.": "As categorias bloqueadas ficam ocultas e pedem o PIN. Aperte OK para bloquear ou desbloquear.",
 };
 
 export default pt;
