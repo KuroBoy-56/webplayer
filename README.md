@@ -207,6 +207,7 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- **Control parental (2.1.8)**: el diálogo del PIN de control parental (Cuenta › «Ocultar contenido para adultos» y categorías bloqueadas de TV en vivo) se cierra después de la tecla OK / Aceptar, no dentro de ella. En Roku cerrarlo dentro de la tecla del teclado numérico sacaba de la app con el PIN correcto; aquí es preventivo (`PinDialog.tsx`). El PIN sigue siendo el del panel (0000 de fábrica), también con distribuidor.
 - **Continuar viendo con audio Dolby y número del equipo con más intentos (2.1.7)**: cuando el lector no puede dar el
   audio (o el archivo), el reproductor de Amazon abre en un reproductor nuevo y con más tiempo (en el mismo no mostraba
   nada: «sin imagen en 20 s»); el equipo recuerda ese audio y los siguientes van directo al de Amazon. El número del

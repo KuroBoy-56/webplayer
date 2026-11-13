@@ -15,7 +15,9 @@ export default function PinDialog({ visible, onClose, onOk }: { visible: boolean
       catalog.unlocked = true;
       setPin('');
       setErr('');
-      onOk();
+      // el diálogo se cierra después de la tecla OK / Aceptar del teclado, no dentro de ella (en Roku cerrarlo dentro de
+      // la tecla del teclado numérico sacaba de la app)
+      setTimeout(onOk, 0);
     } else {
       setErr(t('PIN incorrecto'));
       setPin('');
