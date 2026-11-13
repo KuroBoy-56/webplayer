@@ -10,6 +10,9 @@ import UniformTypeIdentifiers
  * - AVPlayer abre varias conexiones a la vez (principio y final del archivo); las líneas de 1 conexión (las
  *   demos) rechazaban la segunda. Aquí hay una sola conexión con el servidor: el pedido nuevo pasa primero y
  *   el anterior sigue después desde donde iba.
+ * - Índice compartido (SharedIndex): en una película o capítulo MP4 con el moov al final, si otro equipo lo dejó en la
+ *   VPS / VDS, el pedido de AVPlayer al moov se contesta desde ahí (al servidor IPTV solo se le pide el video); si no lo
+ *   tiene, el que llega del servidor se le deja para los demás.
  * Solo para archivos (mp4 / m4v / mov); HLS (m3u8) va directo.
  */
 final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDataDelegate {
@@ -35,6 +38,10 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDat
     private var mime = ""
     private var closed = false
     private var got: Int64 = 0
+    /** índice compartido de este video (nil si no es una película o capítulo MP4) */
+    private let shared: SharedIndex.Entry?
+    /** copia del moov que llega del servidor (la VPS / VDS no lo tenía) */
+    private var copy: MoovCapture?
     /** bytes recibidos del servidor (para no abandonar un video pesado que sigue llegando) */
     var received: Int64 { queue.sync { got } }
 
@@ -45,6 +52,7 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDat
         guard let a = c.url else { return nil }
         origin = url
         assetURL = a
+        shared = SharedIndex.shared.entry(url)
         super.init()
         let cfg = URLSessionConfiguration.default
         cfg.httpMaximumConnectionsPerHost = 1
@@ -100,7 +108,7 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDat
         }
     }
 
-    private func start(_ r: AVAssetResourceLoadingRequest) {
+    private func start(_ r: AVAssetResourceLoadingRequest, until: DispatchTime? = nil) {
         var from: Int64 = 0
         var end = "1"
         if let d = r.dataRequest {
@@ -113,11 +121,56 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDat
                 end = ""
             }
         }
+        // índice compartido: un pedido en los últimos MB del archivo puede ser el moov guardado en la VPS / VDS
+        let tail = shared != nil && length > 0 && from >= length - 8 - Int64(SharedIndex.maxBody)
+        if let e = shared, tail {
+            switch SharedIndex.shared.answer(e, from: from, fileSize: length) {
+            case .wait:
+                // el panel o la VPS / VDS todavía no contestaron: como mucho 8 s (del servidor IPTV son 15-35 s)
+                let limit: DispatchTime = until ?? DispatchTime.now() + 8.0
+                let now = DispatchTime.now()
+                if now < limit {
+                    let left = Double(limit.uptimeNanoseconds - now.uptimeNanoseconds) / 1e9
+                    SharedIndex.shared.whenReady(e, timeout: left, on: queue) { [weak self] in
+                        guard let self = self, !self.closed else { return }
+                        if r.isCancelled || r.isFinished { self.next(); return }
+                        // mientras tanto pasó otro pedido: este espera su turno
+                        if self.active != nil { self.waiting.append(r); return }
+                        self.start(r, until: limit)
+                    }
+                    return
+                }
+            case .box(let box, let at):
+                if serve(r, box, at, from: from, end: end) { return }
+            case .server:
+                break
+            }
+        }
         var q = URLRequest(url: origin)
         q.setValue("bytes=\(from)-\(end)", forHTTPHeaderField: "Range")
         let t = session.dataTask(with: q)
         active = Job(req: r, task: t, from: from)
+        // la VPS / VDS no tenía el índice: se copia el moov que llega (sigue si AVPlayer lo pide de a partes)
+        if let e = shared, tail, SharedIndex.shared.wantsCopy(e), copy.map({ $0.dead || $0.next != from }) ?? true {
+            copy = MoovCapture(at: from)
+        }
         t.resume()
+    }
+
+    /** contesta el pedido con la caja moov guardada, sin pedir nada al servidor; false si no cae entera en ella */
+    private func serve(_ r: AVAssetResourceLoadingRequest, _ box: Data, _ at: Int64, from: Int64, end: String) -> Bool {
+        guard let d = r.dataRequest else { return false }
+        let last = end.isEmpty ? length - 1 : (Int64(end) ?? -1)
+        guard from >= at, last >= from, last < at + Int64(box.count) else { return false }
+        if let info = r.contentInformationRequest {
+            info.contentType = uti()
+            info.contentLength = length
+            info.isByteRangeAccessSupported = ranges
+        }
+        d.respond(with: box.subdata(in: Int(from - at)..<Int(last - at) + 1))
+        r.finishLoading()
+        next()
+        return true
     }
 
     /** sigue el pedido que quedó esperando más reciente */
@@ -194,7 +247,13 @@ final class StreamLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDat
             let room = d.requestedOffset + Int64(d.requestedLength) - d.currentOffset
             if Int64(chunk.count) > room { chunk = chunk.subdata(in: 0..<Int(max(room, 0))) }
         }
-        if !chunk.isEmpty { d.respond(with: chunk) }
+        if !chunk.isEmpty {
+            if var c = copy, !c.dead, c.next == d.currentOffset, let e = shared {
+                if let body = c.feed(chunk) { SharedIndex.shared.share(e, body: body, fileSize: length) }
+                copy = c.dead ? nil : c
+            }
+            d.respond(with: chunk)
+        }
         if !d.requestsAllDataToEndOfResource && d.currentOffset >= d.requestedOffset + Int64(d.requestedLength) {
             active = nil
             dataTask.cancel()

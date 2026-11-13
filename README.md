@@ -4,6 +4,15 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.0.7
+
+- **Índice compartido (más rápido):** en películas y capítulos MP4 con el índice (moov) al final, AVPlayer pedía al
+  servidor IPTV los 3-10 MB del final del archivo antes de empezar (15-35 s con servidores lentos o líneas de una
+  conexión). Ahora, si otro equipo (Roku, Vega, Android, webOS, Tizen o la web) ya dejó ese índice en la VPS del dueño
+  o en la VDS de su distribuidor (`api/vidx.php` del panel), `StreamLoader` le contesta ese pedido desde ahí y al
+  servidor IPTV solo se le pide el video. Si no lo tiene, el moov que llega del servidor se le deja para los demás
+  (`SharedIndex.swift`). Un índice de otro tamaño se descarta; sin VPS / VDS todo sigue igual.
+
 ## Novedades de la 1.0.6
 
 - **Control parental como Roku**: en Cuenta › Control parental (con el PIN del panel) están también «Canales y categorías para adultos» (Ocultos de fábrica / Visibles) y «Contenido protegido en esta sesión» (Desbloqueado muestra todo hasta cerrar la app), además de «Carpetas bloqueadas». Una sola regla (`AppState.hiddenIds`: bloqueadas y adultos si están ocultos, ninguna con la sesión desbloqueada) para Inicio, Películas, Series, TV en vivo, Buscar y Deportes.
