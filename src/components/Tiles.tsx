@@ -60,7 +60,13 @@ export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: {
       // alto fijos: Vega dibuja las imágenes del paquete a su tamaño real si solo se estiran con left/right (se veían
       // gigantes y cortadas)
       <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.plat, f && s.platF]}>
-        {sp.image ? <Image source={sp.image} style={s.platImg} resizeMode="contain" /> : <Text style={[s.platText, { color: sp.color }]}>{sp.label}</Text>}
+        {f => (
+          <>
+            {sp.image ? <Image source={sp.image} style={s.platImg} resizeMode="contain" /> : <Text style={[s.platText, { color: sp.color }]}>{sp.label}</Text>}
+            {/* el borde (y el de foco) encima del logo: antes el logo, de tamaño fijo, tapaba el borde de foco */}
+            <View pointerEvents="none" style={[s.platRing, f && s.platRingF]} />
+          </>
+        )}
       </Focusable>
     );
   }
@@ -155,9 +161,12 @@ const s = themed(() =>
     barFill: { height: '100%', backgroundColor: C.red },
     rankWrap: { flexDirection: 'row', alignItems: 'flex-end', marginRight: px(8) },
     rank: { color: C.bg, fontSize: px(220), fontWeight: '900', lineHeight: px(230), marginRight: px(-24), textShadowColor: '#9a9a9a', textShadowRadius: px(3), textShadowOffset: { width: 0, height: 0 } },
-    plat: { width: px(272), height: px(153), borderRadius: px(10), marginRight: px(22), overflow: 'hidden', justifyContent: 'center', alignItems: 'center', backgroundColor: '#161616', borderWidth: px(3), borderColor: 'rgba(255,255,255,0.12)', marginTop: px(16) },
-    platImg: { width: px(272) - 2 * px(3), height: px(153) - 2 * px(3) },
-    platF: { borderColor: C.focus, borderWidth: px(4), transform: [{ scale: 1.07 }], zIndex: 10 },
+    plat: { width: px(272), height: px(153), borderRadius: px(10), marginRight: px(22), overflow: 'hidden', justifyContent: 'center', alignItems: 'center', backgroundColor: '#161616', marginTop: px(16) },
+    // el logo ocupa la tarjeta con sus propias esquinas redondas (no todos los equipos recortan la imagen con el padre)
+    platImg: { width: px(272), height: px(153), borderRadius: px(10) },
+    platF: { transform: [{ scale: 1.07 }], zIndex: 10 },
+    platRing: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: px(10), borderWidth: px(3), borderColor: 'rgba(255,255,255,0.12)' },
+    platRingF: { borderColor: C.focus, borderWidth: px(4) },
     platText: { color: '#fff', fontSize: px(34), fontWeight: '800', textAlign: 'center' },
     genre: { width: px(250), height: px(100), borderRadius: px(10), marginRight: px(18), justifyContent: 'center', alignItems: 'center', borderWidth: px(4), borderColor: 'transparent', marginTop: px(10) },
     genreText: { color: '#fff', fontSize: px(30), fontWeight: '800' },

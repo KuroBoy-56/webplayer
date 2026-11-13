@@ -10,6 +10,10 @@ Windows, Roku y Vega OS. Un cambio en `src/` de la rama `vega-os` se trae aquí 
 compila sola en cada cambio de la rama `tizenOS` (workflow `App Tizen OS (Samsung)`), con la llave del panel
 del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
+## Novedades de la 1.2.4
+
+- **Plataformas**: el logo de cada plataforma se ve con las esquinas redondas y el borde de selección queda encima del logo (antes el logo, de tamaño fijo, tapaba el borde y se veía cuadrado; `Tiles.tsx`).
+
 ## Novedades de la 1.2.3
 
 - **Control parental como Roku** (Cuenta): «Canales y categorías para adultos» (Ocultos / Visibles; mostrarlos pide el PIN), «Bloquear categorías» (con el PIN, una lista por Películas, Series y TV en vivo: OK bloquea o desbloquea; las bloqueadas se ocultan y piden el PIN, `CategoryLock.tsx`, `blocked_cats`) y «Contenido protegido en esta sesión» (Bloqueado / Desbloqueado: con el PIN se ve todo hasta cerrar la app). Mostrar adultos ya no desbloquea todo de paso. El PIN es el del panel (0000 de fábrica), también con distribuidor.
