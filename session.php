@@ -23,6 +23,9 @@ if (!defined('WP_SESSION_LOADED')) {
     // Línea vigente (contraseña, vencimiento, estado): como mucho cada 15 min
     require_once __DIR__ . '/includes/line_guard.php';
     wp_line_guard($wp_sess);
+    // navegador o IP bloqueados en el panel (lista negra de su distribuidor): como mucho cada 10 min
+    require_once __DIR__ . '/includes/web_device.php';
+    wp_web_device_guard($wp_sess);
     $get_dns = rtrim($wp_sess['server'], '/');
     $username = $wp_sess['username'];
     $password = $wp_sess['password'];

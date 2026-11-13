@@ -231,6 +231,7 @@ return [
     'Este contenido no es compatible con tu navegador' => 'Ce contenu n’est pas compatible avec votre navigateur',
     'Para verlo aquí hay que convertir el video y la conversión de video no está activada. Ábrelo en VLC o en nuestras apps.' => 'Pour le regarder ici, il faut convertir la vidéo, et la conversion vidéo n’est pas activée. Ouvrez-le dans VLC ou dans nos applis.',
     'Ese idioma necesita convertir el video y la conversión de video no está activada' => 'Cette langue nécessite de convertir la vidéo, et la conversion vidéo n’est pas activée',
+    'Este equipo está bloqueado. Contacta a tu proveedor.' => 'Cet appareil est bloqué. Contactez votre fournisseur.',
     'No se pudo convertir este contenido' => 'Impossible de convertir ce contenu',
     'No se pudo iniciar sesión.' => 'Connexion impossible.',
     'No se pudo obtener la información de la serie. Inténtalo de nuevo en unos segundos.' => 'Impossible d’obtenir les informations de la série. Réessayez dans quelques secondes.',

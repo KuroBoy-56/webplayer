@@ -34,6 +34,8 @@ function wp_line_message($code)
         'auth' => t('Tu usuario o contraseña ya no son válidos. Vuelve a iniciar sesión.'),
         'expired' => t('Tu cuenta está vencida. Renueva tu suscripción para seguir viendo.'),
         'disabled' => t('Tu cuenta está deshabilitada. Contacta a soporte.'),
+        // navegador o IP en la lista negra del panel (includes/web_device.php)
+        'blocked' => t('Este equipo está bloqueado. Contacta a tu proveedor.'),
     ];
     return $m[$code] ?? '';
 }

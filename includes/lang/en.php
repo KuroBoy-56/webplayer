@@ -231,6 +231,7 @@ return [
     'Este contenido no es compatible con tu navegador' => 'This content isn’t compatible with your browser',
     'Para verlo aquí hay que convertir el video y la conversión de video no está activada. Ábrelo en VLC o en nuestras apps.' => 'To watch it here the video has to be converted, and video conversion isn’t turned on. Open it in VLC or in our apps.',
     'Ese idioma necesita convertir el video y la conversión de video no está activada' => 'That language needs the video to be converted, and video conversion isn’t turned on',
+    'Este equipo está bloqueado. Contacta a tu proveedor.' => 'This device is blocked. Contact your provider.',
     'No se pudo convertir este contenido' => 'This content couldn’t be converted',
     'No se pudo iniciar sesión.' => 'Couldn’t sign in.',
     'No se pudo obtener la información de la serie. Inténtalo de nuevo en unos segundos.' => 'Couldn’t get the series information. Try again in a few seconds.',

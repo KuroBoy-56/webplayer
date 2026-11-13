@@ -203,6 +203,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         $srv = $servers[$match];
         // la próxima vez esta DNS va primero y sola (un solo intento al servidor IPTV)
         wp_cache_set($lastKey, $srv['url']);
+        // el navegador queda en el panel (Clientes › Web player, con su IP); si su distribuidor bloqueó este navegador
+        // o esta IP, no entra (includes/web_device.php)
+        require_once __DIR__ . '/includes/web_device.php';
+        $dev_blocked = wp_web_device_check($username, $srv['url'], $dist_code);
+        if ($dev_blocked !== null) {
+            echo json_encode(['success' => false, 'message' => $dev_blocked]);
+            exit;
+        }
         session_regenerate_id(true);
         $_SESSION["username"] = $username;
         $_SESSION["password"] = $password;
