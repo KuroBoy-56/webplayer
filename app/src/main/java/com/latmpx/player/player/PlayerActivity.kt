@@ -136,7 +136,7 @@ class PlayerActivity : ComponentActivity() {
         }
 
         tv = Device.isTv(this)
-        buildPlayer()
+        buildPlayer(queue[start])
         pip = PlayerPip(this, player, tv).also { it.register() }
         ui2 = PlayerUiModel(player, kind == Kind.LIVE, tv).apply {
             episodes = if (kind == Kind.SERIES) queue.map { q -> q.title.removePrefix(saveTitle).trim().trimStart('·').trim().ifEmpty { q.title } } else emptyList()
@@ -218,14 +218,15 @@ class PlayerActivity : ComponentActivity() {
 
     /* ---------------- reproductor ---------------- */
 
-    private fun buildPlayer() {
+    private fun buildPlayer(first: QueueEntry) {
         // FFmpeg entra cuando el equipo no tiene decodificador para ese audio (Dolby, DTS...)
         val renderers = DefaultRenderersFactory(this)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true) // si el decodificador por hardware no puede (4K/HEVC/10 bits), prueba el siguiente
 
         val http = OkHttpDataSource.Factory(Net.client).setUserAgent(Net.UA)
-        val data = DefaultDataSource.Factory(this, http)
+        // películas y capítulos MP4: el índice (moov) que otro equipo dejó en la VPS / VDS (SharedIndex)
+        val data = DefaultDataSource.Factory(this, SharedIndexDataSource.Factory(http))
         val extractors = DefaultExtractorsFactory()
             .setConstantBitrateSeekingEnabled(true)          // AVI, MP3 y TS sin índice se pueden adelantar
             .setConstantBitrateSeekingAlwaysEnabled(true)
@@ -233,7 +234,7 @@ class PlayerActivity : ComponentActivity() {
 
         selector = DefaultTrackSelector(this)
         selector.setParameters(selector.buildUponParameters().apply {
-            setPreferredAudioLanguages(*audioLanguages().toTypedArray())
+            setPreferredAudioLanguages(*audioLanguages(first).toTypedArray())
             val sub = Store.subLang
             if (sub.isNullOrEmpty()) setIgnoredTextSelectionFlags(C.SELECTION_FLAG_DEFAULT) // subtítulos apagados salvo los forzados
             else setPreferredTextLanguage(sub)
@@ -274,6 +275,7 @@ class PlayerActivity : ComponentActivity() {
                     showToast(mediaItem?.mediaMetadata?.title?.toString() ?: "")
                 } else if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
                     queue.getOrNull(player.currentMediaItemIndex)?.let { q ->
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setPreferredAudioLanguages(*audioLanguages(q).toTypedArray()).build()
                         val pos = resumePosition(q)
                         if (pos > 0) player.seekTo(pos)
                     }
@@ -292,7 +294,11 @@ class PlayerActivity : ComponentActivity() {
                         if (!g.isTrackSelected(i)) continue
                         val lang = g.getTrackFormat(i).language ?: continue
                         when (g.type) {
-                            C.TRACK_TYPE_AUDIO -> Store.audioLang = lang
+                            C.TRACK_TYPE_AUDIO -> {
+                                Store.audioLang = lang
+                                // (solo si eligió una pista de audio, no subtítulos)
+                                if (player.trackSelectionParameters.overrides.keys.any { it.type == C.TRACK_TYPE_AUDIO }) queue.getOrNull(player.currentMediaItemIndex)?.let { pickedAudio[it.key] = lang }
+                            }
                             C.TRACK_TYPE_TEXT -> Store.subLang = lang
                         }
                     }
@@ -318,13 +324,27 @@ class PlayerActivity : ComponentActivity() {
         })
     }
 
-    /** idiomas preferidos: el que el usuario eligió antes y luego los del equipo (español primero si el equipo está en español) */
-    private fun audioLanguages(): List<String> {
+    /**
+     * idiomas preferidos: el idioma con que se viene viendo este título en cualquier equipo (panel; en series vale para
+     * sus otros capítulos), el que el usuario eligió antes y luego los del equipo (español primero si está en español)
+     */
+    private fun audioLanguages(q: QueueEntry): List<String> {
         val out = ArrayList<String>()
-        Store.audioLang?.let { out += it }
+        titleAudio(q).takeIf { it.isNotEmpty() }?.let { out += it }
+        Store.audioLang?.let { if (it !in out) out += it }
         val locales = LocaleListCompat.getAdjustedDefault()
         for (i in 0 until locales.size()) locales[i]?.language?.let { if (it !in out) out += it }
         return out
+    }
+
+    /** idioma elegido a mano en este equipo para cada título (va al panel con el avance: Roku y Vega siguen en ese idioma) */
+    private val pickedAudio = HashMap<String, String>()
+
+    private fun titleAudio(q: QueueEntry): String {
+        if (kind == Kind.LIVE) return ""
+        pickedAudio[q.key]?.let { return it }
+        val p = Cloud.progress(q.key) ?: q.key.split(":").takeIf { it.size == 3 && it[0] == "series" }?.get(1)?.toIntOrNull()?.let { Cloud.seriesProgress(it) }
+        return p?.audio.orEmpty()
     }
 
     private fun mediaItem(q: QueueEntry): MediaItem {
@@ -457,9 +477,10 @@ class PlayerActivity : ComponentActivity() {
             Progress(
                 key = q.key, title = saveTitle.ifEmpty { q.title }, label = q.title,
                 poster = savePoster.ifEmpty { q.poster }, position = pos, duration = dur,
-                updated = System.currentTimeMillis(), url = url, categoryId = category,
+                updated = System.currentTimeMillis(), url = url, categoryId = category, audio = titleAudio(q),
             ),
             force,
+            audioPicked = pickedAudio.containsKey(q.key),
         )
     }
 

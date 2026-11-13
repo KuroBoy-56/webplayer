@@ -49,10 +49,21 @@ fun SearchScreen(state: AppState) {
         else index.filter { it.first.contains(f) }
             .sortedWith(compareByDescending<Pair<String, com.latmpx.player.data.Item>> { it.first.startsWith(f) }.thenByDescending { it.second.added }).take(120).map { it.second }
     }
+    val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val fm = androidx.compose.ui.platform.LocalFocusManager.current
+    val tv = com.latmpx.player.ui.components.LocalIsTv.current
+    // Buscar (o Listo / Siguiente, según el teclado del equipo): cierra el teclado y en TV el foco baja a los resultados;
+    // antes ninguna tecla hacía nada y había que salir del teclado con Atrás. Al volver de una ficha, TvLayer
+    // (focusRestorer) devuelve el foco a la carátula que se abrió.
+    val submit: androidx.compose.foundation.text.KeyboardActionScope.() -> Unit = {
+        kb?.hide()
+        if (tv && results.isNotEmpty()) fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) else if (!tv) fm.clearFocus()
+    }
     Column(Modifier.fillMaxSize().background(NfBg)) {
         OutlinedTextField(
             value = q, onValueChange = { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.search_hint)) },
             leadingIcon = { Icon(Icons.Filled.Search, null) }, keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Search)),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = submit, onDone = submit, onGo = submit, onNext = submit, onSend = submit),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.White, unfocusedBorderColor = Color(0xFF444444), focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                 focusedContainerColor = Color(0xFF2A2A2A), unfocusedContainerColor = Color(0xFF2A2A2A), unfocusedPlaceholderColor = NfGray2, focusedPlaceholderColor = NfGray2,
