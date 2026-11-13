@@ -70,5 +70,7 @@ data class Progress(
     val updated: Long,
     val url: String = "",
     val categoryId: String = "",
+    /** idioma de audio con que se viene viendo en cualquier equipo (panel «play.a»: lo dejan Roku y Vega) */
+    val audio: String = "",
 )
 

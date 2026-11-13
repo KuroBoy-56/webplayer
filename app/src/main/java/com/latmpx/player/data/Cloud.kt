@@ -92,7 +92,7 @@ object Cloud {
     suspend fun load() {
         // demo: no hay "Continuar viendo" ni "Mi lista"
         if (Store.demo) { withContext(Dispatchers.Main) { synchronized(lock) { progress.clear(); favs.clear() }; rev++ }; return }
-        val r = call { t -> Net.get(api() + "?v=2&token=" + enc(t)) } ?: return
+        val r = call { t -> Net.get(api() + "?v=2&play=1&token=" + enc(t)) } ?: return
         val j = r.json() ?: return
         // caché de carátulas del panel (el dueño la puede apagar): apagada, imágenes directo a los servidores
         if (j.has("img")) PanelImg.on = j.optBoolean("img", true)
@@ -137,6 +137,7 @@ object Cloud {
             key = key, title = title, label = title, poster = o.s("poster"),
             position = (o.d("position") * 1000).toLong(), duration = (o.d("duration") * 1000).toLong(),
             updated = parseTime(o.s("updatedAt")), url = o.s("url"), categoryId = o.s("categoryId"),
+            audio = o.optJSONObject("play")?.s("a").orEmpty(),
         )
     }
 
@@ -163,7 +164,8 @@ object Cloud {
      * Guarda la posición. Se envía al panel como máximo cada 30 s por título salvo con force
      * (pausa, salida del reproductor). Al 95 % se borra, igual que la web.
      */
-    fun saveProgress(p: Progress, force: Boolean = false) {
+    /** audioPicked: el usuario eligió el idioma (p.audio) en este equipo; se manda como «play.a» */
+    fun saveProgress(p: Progress, force: Boolean = false, audioPicked: Boolean = false) {
         if (Store.demo) return // la demo no guarda progreso
         val parts = p.key.split(":")
         val isSeries = parts[0] == "series"
@@ -191,6 +193,8 @@ object Cloud {
             .put("seriesId", if (isSeries) parts.getOrElse(1) { "" } else "")
             .put("categoryId", p.categoryId)
             .put("platform", Tenant.APP).put("device", Store.deviceIdOrEmpty())
+        // solo lo elegido a mano: mandar el idioma que ya traía borraría en el panel el número de pista que dejó Roku
+        if (audioPicked && p.audio.isNotEmpty()) body.put("play", JSONObject().put("a", p.audio))
         post(body)
     }
 
