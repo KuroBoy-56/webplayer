@@ -92,6 +92,20 @@ enum Store {
         set { p.set(Array(newValue), forKey: "blocked_cats") }
     }
 
+    /* ---------- control parental como Roku ---------- */
+    /** «Canales y categorías para adultos»: true = ocultos (de fábrica, como Roku y Vega); mostrarlos pide el PIN */
+    static var hideAdult: Bool {
+        get { p.object(forKey: "hide_adult") == nil ? true : p.bool(forKey: "hide_adult") }
+        set { p.set(newValue, forKey: "hide_adult") }
+    }
+
+    /** «Contenido protegido en esta sesión»: con el PIN se ve todo (adultos y bloqueadas) hasta cerrar la app */
+    static var unlockedNow = false
+
+    static func isAdult(_ name: String) -> Bool {
+        name.range(of: "adult|xxx|\\+18|18\\+|porn|erot|playboy|hot ?club|venus", options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
     /* ---------- sesión (solo en memoria) ---------- */
     private static let lock = NSLock()
     private static var mem: Session?

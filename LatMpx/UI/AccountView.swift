@@ -151,6 +151,8 @@ struct ParentalSheet: View {
     @State private var err: String?
     @State private var busy = false
     @State private var blocked = Store.blockedCats
+    @State private var adultHidden = Store.hideAdult
+    @State private var unlocked = Store.unlockedNow
 
     var body: some View {
         NavigationStack {
@@ -204,6 +206,13 @@ struct ParentalSheet: View {
             row("folder.badge.minus", tr("Carpetas bloqueadas"), tr("%d carpetas ocultas", blocked.count)) { step = .cats }
             row("folder", tr("Mostrar todas las carpetas"), tr("Quita las carpetas bloqueadas (el PIN sigue activo)")) {
                 Store.blockedCats = []; blocked = []; state.refresh += 1
+            }
+            // como Roku: adultos visibles u ocultos y todo lo protegido desbloqueado en esta sesión (el PIN ya se pidió)
+            row(adultHidden ? "eye.slash" : "eye", tr("Canales y categorías para adultos"), tr(adultHidden ? "Ocultos" : "Visibles")) {
+                adultHidden.toggle(); Store.hideAdult = adultHidden; state.refresh += 1
+            }
+            row(unlocked ? "lock.open" : "lock", tr("Contenido protegido en esta sesión"), tr(unlocked ? "Desbloqueado · hasta que cierres la app" : "Bloqueado")) {
+                unlocked.toggle(); Store.unlockedNow = unlocked; state.refresh += 1
             }
         }
     }

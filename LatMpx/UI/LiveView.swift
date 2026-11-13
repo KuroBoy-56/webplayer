@@ -37,7 +37,7 @@ struct LiveView: View {
 
     private var shown: [Item] {
         let _ = cloud.rev
-        let blocked = Store.blockedCats
+        let blocked = state.hiddenIds()
         let base: [Item]
         switch currentCat {
         case LiveView.favs:

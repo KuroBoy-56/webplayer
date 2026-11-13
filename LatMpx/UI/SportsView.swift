@@ -166,7 +166,7 @@ struct SportsView: View {
             if fromMenu { try? await Task.sleep(nanoseconds: 450_000_000) }
             let channels = state.live.isEmpty ? await Xtream.items(s, .live) : state.live
             let cats = state.liveCats.isEmpty ? await Xtream.categories(s, .live) : state.liveCats
-            let blocked = Store.blockedCats
+            let blocked = state.hiddenIds()
             let usable = channels.filter { !blocked.contains($0.categoryId) }
             let rules = d.rules
             // la guía del panel (api/sports_epg.php): los canales que tienen el partido en su programación a esa hora;

@@ -114,14 +114,25 @@ final class AppState: ObservableObject {
     /** películas o series, las más nuevas primero */
     func recent(_ kind: Kind) -> [Item] { index(kind).recent }
 
+    /** carpetas que oculta el control parental: las bloqueadas y, si están ocultos, las de adultos (como Roku); ninguna
+     * con el contenido protegido desbloqueado en esta sesión */
+    func hiddenIds() -> Set<String> {
+        if Store.unlockedNow { return [] }
+        var h = Store.blockedCats
+        if Store.hideAdult {
+            for c in movieCats + seriesCats + liveCats where Store.isAdult(c.name) { h.insert(c.id) }
+        }
+        return h
+    }
+
     /** carpetas que el control parental no oculta */
     func visible(_ cats: [Category]) -> [Category] {
-        let b = Store.blockedCats
+        let b = hiddenIds()
         return b.isEmpty ? cats : cats.filter { !b.contains($0.id) }
     }
 
     func visibleItems(_ items: [Item]) -> [Item] {
-        let b = Store.blockedCats
+        let b = hiddenIds()
         return b.isEmpty ? items : items.filter { !b.contains($0.categoryId) }
     }
 

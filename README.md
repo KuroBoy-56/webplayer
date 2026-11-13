@@ -4,6 +4,10 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.0.6
+
+- **Control parental como Roku**: en Cuenta › Control parental (con el PIN del panel) están también «Canales y categorías para adultos» (Ocultos de fábrica / Visibles) y «Contenido protegido en esta sesión» (Desbloqueado muestra todo hasta cerrar la app), además de «Carpetas bloqueadas». Una sola regla (`AppState.hiddenIds`: bloqueadas y adultos si están ocultos, ninguna con la sesión desbloqueada) para Inicio, Películas, Series, TV en vivo, Buscar y Deportes.
+
 ## Novedades de la 1.0.5
 
 - **La app ya no saca al cliente a los minutos con número de distribuidor**: el panel no devolvía la línea de un cliente
