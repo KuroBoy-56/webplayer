@@ -10,6 +10,10 @@ Windows, Roku y Vega OS. Un cambio en `src/` de la rama `vega-os` se trae aquí 
 compila sola en cada cambio de la rama `tizenOS` (workflow `App Tizen OS (Samsung)`), con la llave del panel
 del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
+## Novedades de la 1.2.5
+
+- **Índice compartido (más rápido):** en películas y capítulos MP4 con el índice (moov) al final, el lector de la app (cambio de audio y subtítulos, `mp4mse.ts`) y la lectura de los idiomas (`probe.ts`) usan el índice que otro equipo (Vega, Roku, Android, la web) dejó en la VPS / VDS de la línea (`api/vidx.php` del panel, `sharedindex.ts`): al servidor IPTV no se le piden los 3-10 MB del final del archivo. Si no lo tiene, el que lee la app se le deja para los demás. Un índice de otro archivo (otro tamaño) se descarta. El reproductor del televisor lee el archivo él mismo (eso no cambia); sin VPS / VDS todo sigue igual.
+
 ## Novedades de la 1.2.4
 
 - **Plataformas**: el logo de cada plataforma se ve con las esquinas redondas y el borde de selección queda encima del logo (antes el logo, de tamaño fijo, tapaba el borde y se veía cuadrado; `Tiles.tsx`).

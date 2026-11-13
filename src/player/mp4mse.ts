@@ -5,6 +5,7 @@
 // No pasa por la VPS: solo el cambio de idioma la usa. Saltos (◀▶, Continuar viendo) desde el cuadro clave anterior.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { rangeGet, RangeState } from './rangeget';
+import { fromB64, shareIndex, sharedIndex, sharedStale, toB64 } from './sharedindex';
 import { AUDIO_ID, AudioCfg, concat, fragment, initSegment, mp4Mime, Sample, VIDEO_ID, VideoCfg } from '../lib/mp4box';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -253,6 +254,8 @@ export class Mp4Mse {
   why = '';
   // el reproductor no acepta el audio del archivo (Dolby en Vega): suena solo el video; los idiomas quedan en el menú
   noAudio = false;
+  // tamaño del archivo con que se guardó el índice de la VPS / VDS (0: el índice no vino de ahí)
+  private sharedSize = 0;
   onError: () => void = () => {};
 
   constructor(private v: VideoPlayer, private url: string, private selectedAudio = -1, index: Uint8Array | null = null) {
@@ -262,7 +265,30 @@ export class Mp4Mse {
   // '' = empezó en el segundo pedido; si no, el motivo (el que llama sigue con el modo directo de siempre)
   async start(at: number): Promise<string> {
     // el índice ya leído de este archivo (volver a abrirlo, Continuar viendo, cambiar de audio): sin pedirlo otra vez
-    const moov = this.index || MOOV_CACHE.get(cacheKey(this.url)) || await this.readMoov();
+    let moov = this.index || MOOV_CACHE.get(cacheKey(this.url)) || null;
+    // el índice que otro equipo (Vega, Roku, Android, la web) dejó en la VPS / VDS: al servidor IPTV solo se le pide el
+    // video. Como mucho 8 s (leerlo del servidor IPTV son 15-30 s); si la VPS no lo tiene, contesta al toque
+    if (!moov) {
+      const sh = await Promise.race([sharedIndex(this.url, 'm'), sleep(8000).then(() => null)]);
+      if (!this.alive) return '';
+      if (sh) {
+        try {
+          moov = fromB64(sh.text);
+          this.sharedSize = sh.size;
+        } catch {
+          moov = null;
+        }
+      }
+    }
+    if (!moov) {
+      moov = await this.readMoov();
+      // leído del servidor: a la VPS / VDS para los demás equipos (si dijo que no lo tenía), sin apuro
+      const read = moov;
+      if (read && this.size > 0) {
+        const size = this.size;
+        setTimeout(() => shareIndex(this.url, 'm', size, () => toB64(read)), 8000);
+      }
+    }
     if (moov) rememberMoov(this.url, moov);
     if (!moov) return 'índice: ' + (this.why || 'no encontrado');
     if (!this.alive) return '';
@@ -674,6 +700,16 @@ export class Mp4Mse {
           abase = as ? as[0] : 0;
         }
         if (!this.alive || g !== this.gen) continue;
+        // el índice de la VPS / VDS era de otro archivo (el servidor lo cambió: otro tamaño): se olvida y el reproductor
+        // sigue con sus otros pasos (este equipo deja el índice correcto la próxima vez)
+        if (this.sharedSize && this.rs.size > 0 && this.rs.size !== this.sharedSize) {
+          sharedStale(this.url);
+          MOOV_CACHE.delete(cacheKey(this.url));
+          this.index = null;
+          this.why = 'índice del panel de otro archivo';
+          this.onError();
+          return;
+        }
         if ((vs && (!vb || vb.length < vs[1] - vbase)) || (as && (!ab || ab.length < as[1] - abase))) {
           this.why = 'bajada: ' + (this.why || 'incompleta');
           this.onError();

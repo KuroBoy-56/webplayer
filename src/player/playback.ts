@@ -437,7 +437,12 @@ export class Playback {
         this.applyPrefs();
         this.hooks.changed();
       };
-      m.onError = () => g === this.gen && this.mse === m && this.mp4Failed(at, m.why);
+      m.onError = () => {
+        if (g !== this.gen || this.mse !== m) return;
+        // (el índice que resultó ser de otro archivo no se vuelve a usar)
+        if (!(m instanceof MkvMse) && !m.index) this.mp4Index = null;
+        this.mp4Failed(at, m.why);
+      };
       m.start(at)
         .catch((e: any) => 'excepción: ' + String(e?.message || e).slice(0, 80))
         .then(err => {
