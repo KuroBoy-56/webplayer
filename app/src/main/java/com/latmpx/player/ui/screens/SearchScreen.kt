@@ -34,8 +34,14 @@ import com.latmpx.player.ui.theme.NfGray2
 fun SearchScreen(state: AppState) {
     var q by rememberSaveable { mutableStateOf("") }
     // nombres normalizados una vez por catálogo y fuera del hilo de la interfaz (antes se normalizaba todo en cada tecla)
-    val index by androidx.compose.runtime.produceState(emptyList<Pair<String, com.latmpx.player.data.Item>>(), state.movies, state.series) {
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { (state.movies + state.series).map { Platforms.fold(it.name) to it } }
+    // (control parental como Roku: sin los títulos de las carpetas ocultas)
+    val index by androidx.compose.runtime.produceState(emptyList<Pair<String, com.latmpx.player.data.Item>>(), state.movies, state.series, state.refresh) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val cats = state.movieCats + state.seriesCats
+            val shown = com.latmpx.player.data.Store.visibleCats(cats).map { it.id }.toSet()
+            val known = cats.map { it.id }.toSet()
+            (state.movies + state.series).filter { it.categoryId in shown || it.categoryId !in known }.map { Platforms.fold(it.name) to it }
+        }
     }
     val results = remember(q, index) {
         val f = Platforms.fold(q.trim())

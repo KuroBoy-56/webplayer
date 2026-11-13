@@ -85,6 +85,26 @@ object Store {
         get() = p.getStringSet("blocked_cats", emptySet()) ?: emptySet()
         set(v) = p.edit().putStringSet("blocked_cats", v).apply()
 
+    /* ---------- control parental como Roku ---------- */
+    /** «Canales y categorías para adultos»: true = ocultos (de fábrica, como Roku y Vega); mostrarlos pide el PIN */
+    var hideAdult: Boolean
+        get() = p.getBoolean("hide_adult", true)
+        set(v) = p.edit().putBoolean("hide_adult", v).apply()
+
+    /** «Contenido protegido en esta sesión»: con el PIN se ve todo (adultos y bloqueadas) hasta cerrar la app */
+    @Volatile var unlockedNow: Boolean = false
+
+    private val ADULT = Regex("adult|xxx|\\+18|18\\+|porn|erot|playboy|hot ?club|venus", RegexOption.IGNORE_CASE)
+    fun isAdult(name: String): Boolean = ADULT.containsMatchIn(name)
+
+    /** carpetas que se ven: sin las bloqueadas ni las de adultos (si están ocultos), salvo desbloqueado en esta sesión */
+    fun visibleCats(cats: List<com.latmpx.player.data.Category>): List<com.latmpx.player.data.Category> {
+        if (unlockedNow) return cats
+        val b = blockedCats
+        val adult = hideAdult
+        return cats.filter { it.id !in b && !(adult && isAdult(it.name)) }
+    }
+
     /* ---------- identificador de respaldo para equipos sin Android ID ---------- */
     /** id del equipo (Device.id), lo carga App al iniciar: para las estadísticas del panel */
     @Volatile var deviceIdCache: String = ""

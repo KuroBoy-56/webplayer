@@ -42,7 +42,7 @@ import com.latmpx.player.ui.theme.NfBg
 @Composable
 fun CatalogScreen(state: AppState, kind: Kind) {
     val all = if (kind == Kind.MOVIE) state.movies else state.series
-    val cats = (if (kind == Kind.MOVIE) state.movieCats else state.seriesCats).filter { it.id !in com.latmpx.player.data.Store.blockedCats }
+    val cats = (if (kind == Kind.MOVIE) state.movieCats else state.seriesCats).let { com.latmpx.player.data.Store.visibleCats(it) }
     val tv = LocalIsTv.current
     // TV: diseño del reproductor web (TvHome.kt)
     if (tv) { TvCatalogScreen(state, kind); return }

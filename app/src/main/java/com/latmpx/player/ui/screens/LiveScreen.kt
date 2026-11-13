@@ -57,9 +57,16 @@ fun LiveScreen(state: AppState) {
     val fetched by produceState<List<Item>?>(null, s, state.live.isEmpty()) { if (state.live.isEmpty()) value = Xtream.items(s, Kind.LIVE) }
     var cat by rememberSaveable { mutableStateOf(ALL) }
     var favTick by remember { mutableIntStateOf(0) }
-    val all = state.live.ifEmpty { null } ?: fetched
-    if (all == null) { Loading(stringResource(R.string.loading_channels)); return }
-    val cats = remember(state.liveCats) { listOf(FAVS to "★ " + tr(R.string.favorites), ALL to tr(R.string.all)) + state.liveCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }.map { it.id to it.name } }
+    val loaded = state.live.ifEmpty { null } ?: fetched
+    if (loaded == null) { Loading(stringResource(R.string.loading_channels)); return }
+    // control parental (como Roku): ni las carpetas ocultas ni sus canales (tampoco en Todos ni en Favoritos)
+    val shownCats = remember(state.liveCats, state.refresh) { com.latmpx.player.data.Store.visibleCats(state.liveCats) }
+    val all = remember(loaded, shownCats) {
+        val shown = shownCats.map { it.id }.toSet()
+        val known = state.liveCats.map { it.id }.toSet()
+        if (shown.size == known.size) loaded else loaded.filter { it.categoryId in shown || it.categoryId !in known }
+    }
+    val cats = remember(shownCats) { listOf(FAVS to "★ " + tr(R.string.favorites), ALL to tr(R.string.all)) + shownCats.map { it.id to it.name } }
     // celular: diseño de tvguide.php de la web (ver LivePhone.kt)
     if (!tv) { PhoneLive(state, all, cats); return }
     
