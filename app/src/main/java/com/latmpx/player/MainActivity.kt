@@ -15,8 +15,8 @@ class MainActivity : ComponentActivity() {
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(Lang.wrap(newBase))
 
     private fun checkSignature() {
-        // rama «sin certificado» (para publicar en tiendas): Amazon Appstore y Google Play vuelven a firmar la app con su
-        // propio certificado, así que aquí no se comprueba la firma (en las ramas de siempre sí)
+        // Google Play (rama play-store-tv, como las «sin certificado» de Amazon): Play App Signing vuelve a firmar la
+        // app con la llave de Google, así que aquí no se comprueba la firma (en las ramas de siempre sí)
         if (STORE_BUILD || com.latmpx.player.BuildConfig.DEBUG) return
         try {
             // GET_SIGNING_CERTIFICATES solo existe desde Android 9; los TV Box y celulares más viejos usan GET_SIGNATURES

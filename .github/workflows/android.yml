@@ -1,8 +1,8 @@
-name: APK Android TV (tiendas)
+name: AAB Google Play (Android TV)
 
 on:
   push:
-    branches: [android-tv-sin-certificado]
+    branches: [play-store-tv]
   workflow_dispatch:
 
 permissions:
@@ -21,38 +21,55 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # la llave maestra no va en el código: el secreto PANEL_MASTER_KEY se escribe en local.properties solo durante la compilación
-      - name: Configurar panel
+      # la llave maestra y la llave de subida de Google Play no van en el código: los secretos se escriben en
+      # local.properties (y la llave en un archivo temporal) solo durante la compilación
+      - name: Configurar panel y llave de subida
         env:
           PANEL_MASTER_KEY: ${{ secrets.PANEL_MASTER_KEY }}
+          PLAY_UPLOAD_KEYSTORE: ${{ secrets.PLAY_UPLOAD_KEYSTORE }}
+          PLAY_UPLOAD_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+          PLAY_UPLOAD_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
         run: |
           : > local.properties
           if [ -n "$PANEL_MASTER_KEY" ]; then echo "panel.master_key=$PANEL_MASTER_KEY" >> local.properties; else echo "::warning::Falta el secreto PANEL_MASTER_KEY: la activación no funcionará"; fi
+          if [ -n "$PLAY_UPLOAD_KEYSTORE" ]; then
+            echo "$PLAY_UPLOAD_KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload.jks"
+            {
+              echo "upload.store_file=$RUNNER_TEMP/upload.jks"
+              echo "upload.store_password=$PLAY_UPLOAD_STORE_PASSWORD"
+              echo "upload.key_alias=$PLAY_UPLOAD_KEY_ALIAS"
+              echo "upload.key_password=$PLAY_UPLOAD_KEY_PASSWORD"
+            } >> local.properties
+          else
+            echo "::warning::Falta el secreto PLAY_UPLOAD_KEYSTORE: el .aab sale firmado con la llave de depuración y Google Play no lo acepta"
+          fi
 
-      - name: Compilar APK
+      # Google Play pide el paquete .aab (Android App Bundle), no el APK
+      - name: Compilar AAB
         run: |
           chmod +x gradlew
           set -o pipefail
-          ./gradlew --no-daemon assembleRelease 2>&1 | tee build.log
+          ./gradlew --no-daemon bundleRelease 2>&1 | tee build.log
       # resumen de errores como anotación (visible sin descargar el registro completo)
       - name: Resumen de errores
         if: failure()
         run: |
-          msg=$(grep -E "^e: |error:|What went wrong|Could not (resolve|find)|> " build.log | head -60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          msg=$(grep -E "^e: |error:|What went wrong|Could not (resolve|find)|> " build.log | head -60 | sed 's/%/%25/g' | awk '{printf "%s%0A", $0}')
           echo "::error title=Errores de compilación::$msg"
 
       - name: Renombrar
-        run: cp app/build/outputs/apk/release/app-release.apk LatMpx-TV.apk
+        run: cp app/build/outputs/bundle/release/app-release.aab MPX-Player-TV.aab
 
       - uses: actions/upload-artifact@v4
         with:
-          name: LatMpx-TV-apk
-          path: LatMpx-TV.apk
+          name: MPX-Player-TV-aab
+          path: MPX-Player-TV.aab
 
-      # publica siempre la última versión en la misma dirección de descarga (Releases > apk-tv-tienda-latest)
+      # la última versión en la misma dirección (Releases > aab-play-tv-latest), para subirla a Google Play Console
       - name: Publicar descarga
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete apk-tv-tienda-latest --yes --cleanup-tag || true
-          gh release create apk-tv-tienda-latest LatMpx-TV.apk --target "$GITHUB_SHA" --title "LatMpx TV APK para tiendas (última versión)" --notes "Para publicar en tiendas (sin comprobar la firma). Compilado automáticamente desde la rama android-tv-sin-certificado ($GITHUB_SHA). Solo para Android TV / Google TV / TV Box." --prerelease
+          gh release delete aab-play-tv-latest --yes --cleanup-tag || true
+          gh release create aab-play-tv-latest MPX-Player-TV.aab --target "$GITHUB_SHA" --title "MPX Player Android TV para Google Play (última versión)" --notes "Paquete .aab para subir a Google Play Console. Compilado automáticamente desde la rama play-store-tv ($GITHUB_SHA)." --prerelease
