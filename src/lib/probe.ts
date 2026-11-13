@@ -3,6 +3,7 @@
 // igual que Probe.brs de Roku: cuántos audios y subtítulos trae el archivo, su idioma, su códec y su
 // orden (el mismo que usa el motor del panel: 0:a:N y 0:s:N).
 import { UA } from './http';
+import { fromB64, sharedIndex } from '../player/sharedindex';
 
 export type ProbeTrack = { id: string; lang: string; codec: string; name: string; def: boolean; forced: boolean };
 // headOk: el archivo contestó (si no es MKV ni MP4 —AVI, TS— no hay pistas que leer y no se vuelve a intentar)
@@ -136,11 +137,34 @@ async function mp4(r: Reader): Promise<{ audio: ProbeTrack[]; subs: ProbeTrack[]
       if (b.size <= MOOV_MAX) await prefetch(r, off, b.size);
       return { ...(await moov(r, off + b.hl, off + b.size)), moovEnd: mdat };
     }
-    if (b.type === 'mdat') mdat = true;
+    if (b.type === 'mdat' && !mdat) {
+      mdat = true;
+      // el índice va después del video: si otro equipo lo dejó en la VPS / VDS, los idiomas salen de ahí (como Roku) sin
+      // pedirle al servidor IPTV el final del archivo
+      const sh = await shared(r);
+      if (sh) return sh;
+    }
     off += b.size;
     if (r.size > 0 && off >= r.size) break;
   }
   return { audio: [], subs: [] };
+}
+
+// las pistas desde el índice compartido (VPS / VDS); null si no está, no es de este archivo o no trae pistas
+async function shared(r: Reader): Promise<{ audio: ProbeTrack[]; subs: ProbeTrack[]; video?: string; moovEnd?: boolean } | null> {
+  try {
+    const sh = await Promise.race([sharedIndex(r.url, 'm'), new Promise<null>(ok => setTimeout(() => ok(null), 8000))]);
+    if (!sh || (r.size > 0 && sh.size !== r.size)) return null;
+    const body = fromB64(sh.text);
+    // solo lo bajado: sin pedidos al servidor (las posiciones son del índice, no del archivo)
+    const data = new Uint8Array(body.length + 16);
+    data.set(body);
+    const only: Reader = { url: r.url, chunks: [{ start: 0, data }], size: body.length, requests: MAX_REQ, failed: false };
+    const res = await moov(only, 0, body.length);
+    return res.audio.length || res.subs.length ? { ...res, moovEnd: true } : null;
+  } catch {
+    return null;
+  }
 }
 
 // subtítulos de MP4: texto 3GPP (sbtl/text), WebVTT y TTML (subt), CEA-608 (clcp)

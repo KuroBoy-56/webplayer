@@ -23,6 +23,10 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 `appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
 `dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
 
+## Novedades de la 1.3.15
+
+- **Índice compartido (más rápido):** en películas y capítulos MP4 con el índice (moov) al final, el lector de la app (cambio de audio y subtítulos, `mp4mse.ts`) y la lectura de los idiomas (`probe.ts`) usan el índice que otro equipo (Vega, Roku, Android, la web) dejó en la VPS / VDS de la línea (`api/vidx.php` del panel, `sharedindex.ts`): al servidor IPTV no se le piden los 3-10 MB del final del archivo. Si no lo tiene, el que lee la app se le deja para los demás. Un índice de otro archivo (otro tamaño) se descarta. El reproductor del televisor lee el archivo él mismo (eso no cambia); sin VPS / VDS todo sigue igual.
+
 ## Novedades de la 1.3.14
 
 - **Plataformas**: el logo de cada plataforma se ve con las esquinas redondas y el borde de selección queda encima del logo (antes el logo, de tamaño fijo, tapaba el borde y se veía cuadrado; `Tiles.tsx`).

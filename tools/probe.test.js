@@ -15,7 +15,10 @@ const code = esbuild.buildSync({
   format: 'cjs',
   platform: 'node',
   write: false,
+  // (los mismos que tools/build-webos.js: probe.ts lee también el índice compartido, que usa el cliente del panel)
   alias: {
+    'react-native': path.join(root, 'web/shims/react-native.tsx'),
+    '@amazon-devices/react-native-w3cmedia': path.join(root, 'web/shims/w3cmedia.tsx'),
     '@react-native-async-storage/async-storage': path.join(root, 'web/shims/async-storage.ts'),
     '@amazon-devices/react-native-kepler': path.join(root, 'web/shims/kepler.ts'),
   },
@@ -74,3 +77,50 @@ for (const ext of ['mkv', 'mp4']) {
     }
   });
 }
+
+// el índice compartido (VPS / VDS) trae el moov que va al final: los idiomas salen de ahí, sin pedir el final del archivo
+test('mp4: con el índice compartido los idiomas salen sin pedir el final del archivo; de otro tamaño no se usa', { skip: !ffmpeg && 'sin ffmpeg' }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'probe-'));
+  const file = sample(dir, 'mp4');
+  const data = fs.readFileSync(file);
+  // el moov (al final) sin su cabecera, como lo guardan Roku, Vega y Android
+  let off = 0, body = null;
+  while (off + 8 <= data.length) {
+    const size = data.readUInt32BE(off), type = data.toString('latin1', off + 4, off + 8);
+    if (type === 'moov') { body = data.subarray(off + 8, off + size); break; }
+    off += size;
+  }
+  assert.ok(body && off > data.length / 2, 'moov al final');
+  const fake = { size: data.length };
+  const shared = (await esbuild.build({
+    stdin: { contents: "export { probeTracks } from './src/lib/probe';", resolveDir: root, loader: 'ts' },
+    bundle: true, format: 'cjs', platform: 'node', write: false,
+    plugins: [{ name: 'vidx', setup(b) {
+      b.onResolve({ filter: /sharedindex$/ }, () => ({ path: 'vidx', namespace: 'vidx' }));
+      b.onLoad({ filter: /.*/, namespace: 'vidx' }, () => ({ loader: 'js', contents:
+        "export const sharedIndex = () => Promise.resolve(globalThis.__vidx);" +
+        "export const fromB64 = s => new Uint8Array(Buffer.from(s, 'base64'));" }));
+    } }],
+  })).outputFiles[0].text;
+  const m2 = { exports: {} };
+  new Function('module', 'exports', 'require', shared)(m2, m2.exports, require);
+  const s = await serve(file);
+  try {
+    globalThis.__vidx = { kind: 'm', size: fake.size, text: body.toString('base64') };
+    const p = await m2.exports.probeTracks(s.url + '.mp4');
+    assert.strictEqual(p.ok, true);
+    assert.deepStrictEqual(p.audio.map(a => a.lang), ['spa', 'eng']);
+    assert.strictEqual(p.subs.length, 1);
+    assert.strictEqual(s.requests, 1, `solo el principio del archivo: ${s.requests} pedidos`);
+    // índice de otro archivo (otro tamaño): se lee del servidor como siempre
+    globalThis.__vidx = { kind: 'm', size: fake.size + 1, text: body.toString('base64') };
+    const before = s.requests;
+    const q = await m2.exports.probeTracks(s.url + '.mp4?otro');
+    assert.deepStrictEqual(q.audio.map(a => a.lang), ['spa', 'eng']);
+    assert.ok(s.requests > before + 1, 'leyó el final del servidor');
+  } finally {
+    delete globalThis.__vidx;
+    s.server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
