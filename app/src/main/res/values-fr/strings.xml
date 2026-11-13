@@ -444,4 +444,10 @@
     <string name="sp_more_details">PLUS DE DÉTAILS</string>
     <string name="sp_no_team_info">Aucune information sur cette équipe</string>
     <string name="review_no_videos">Aucune vidéo de test pour l\'instant.</string>
+    <string name="adult_content">Chaînes et catégories pour adultes</string>
+    <string name="adult_hidden">Masqués</string>
+    <string name="adult_visible">Visibles</string>
+    <string name="protected_session">Contenu protégé pour cette session</string>
+    <string name="protected_locked">Verrouillé</string>
+    <string name="protected_unlocked">Déverrouillé · jusqu\'à la fermeture de l\'app</string>
 </resources>

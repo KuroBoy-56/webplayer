@@ -61,7 +61,7 @@ private val preferredGenres get() = listOf(
     tr(R.string.genre_adventure), tr(R.string.genre_animation), tr(R.string.genre_scifi), "Romance", tr(R.string.genre_documentary),
 )
 
-private fun safe(cats: List<Category>) = cats.filter { it.id !in Store.blockedCats }
+private fun safe(cats: List<Category>) = Store.visibleCats(cats)
 
 /**
  * Inicio de la TV como Roku y Vega OS (portada fija y una sola fila abajo, TvBrowse), con las filas de homex.php:

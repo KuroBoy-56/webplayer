@@ -348,7 +348,8 @@ object Sports {
     /** solo los canales de las carpetas que el cliente ve (las ocultas con el PIN no cuentan), como Roku y Vega */
     fun prepare(channels: List<Item>, cats: List<Category>, r: MatchRules): List<Chan> {
         val eventCats = cats.filter { r.eventCategory.containsMatchIn(Platforms.fold(it.name)) }.map { it.id }.toSet()
-        val hidden = Store.blockedCats
+        val shown = Store.visibleCats(cats).map { it.id }.toSet()
+        val hidden = cats.map { it.id }.filter { it !in shown }.toSet()
         return channels.filter { it.categoryId !in hidden }.map { Chan(it, norm(it.name), it.categoryId in eventCats) }
     }
 

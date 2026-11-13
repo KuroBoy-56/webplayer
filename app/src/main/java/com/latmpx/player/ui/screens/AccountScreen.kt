@@ -112,6 +112,21 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
                             com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.Lock, stringResource(R.string.pin_change), stringResource(R.string.pin_change_desc), Modifier.focusRequester(firstRow)) { pinStep = "CREATE"; tempPin = "" }
                             Divider(color = Color(0xFF333333))
                             com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.OndemandVideo, stringResource(R.string.blocked_folders), pluralStringResource(R.plurals.hidden_folders, blockedCatsState.size, blockedCatsState.size)) { pinStep = "CATS" }
+                            // como Roku: adultos visibles u ocultos y todo lo protegido desbloqueado en esta sesión (el PIN ya se pidió)
+                            Divider(color = Color(0xFF333333))
+                            var adultHidden by remember { mutableStateOf(com.latmpx.player.data.Store.hideAdult) }
+                            com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.Lock, stringResource(R.string.adult_content), stringResource(if (adultHidden) R.string.adult_hidden else R.string.adult_visible)) {
+                                adultHidden = !adultHidden
+                                com.latmpx.player.data.Store.hideAdult = adultHidden
+                                state.refresh++
+                            }
+                            Divider(color = Color(0xFF333333))
+                            var unlockedNow by remember { mutableStateOf(com.latmpx.player.data.Store.unlockedNow) }
+                            com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.Lock, stringResource(R.string.protected_session), stringResource(if (unlockedNow) R.string.protected_unlocked else R.string.protected_locked)) {
+                                unlockedNow = !unlockedNow
+                                com.latmpx.player.data.Store.unlockedNow = unlockedNow
+                                state.refresh++
+                            }
                             Divider(color = Color(0xFF333333))
                             com.latmpx.player.ui.components.TvSettingsRow(Icons.Filled.Lock, stringResource(R.string.show_all_folders), stringResource(R.string.show_all_folders_desc)) {
                                 com.latmpx.player.data.Store.blockedCats = emptySet()

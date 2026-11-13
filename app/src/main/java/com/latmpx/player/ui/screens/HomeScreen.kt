@@ -95,7 +95,7 @@ fun HomeScreen(state: AppState) {
     val top10 = remember(movies, series, com.latmpx.player.data.WeekTop.rev) { com.latmpx.player.data.WeekTop.top10Home(movies, series) }
     val genreRows = remember(movies, state.movieCats) {
         Platforms.genres.mapNotNull { (label, kw) ->
-            val mcats = state.movieCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }
+            val mcats = com.latmpx.player.data.Store.visibleCats(state.movieCats)
             val ids = Platforms.categoriesFor(mcats, kw)
             val list = if (ids.isEmpty()) emptyList() else movies.filter { it.categoryId in ids }.sortedByDescending { it.added }.take(30)
             if (list.size >= 4) label to list else null
@@ -105,7 +105,7 @@ fun HomeScreen(state: AppState) {
     val platforms = remember(state.movieCats, state.seriesCats, platOn) {
         // platforms=false del distribuidor: sin fila de plataformas
         if (!platOn) return@remember emptyList()
-        val safeCats = (state.movieCats + state.seriesCats).filter { it.id !in com.latmpx.player.data.Store.blockedCats }
+        val safeCats = com.latmpx.player.data.Store.visibleCats(state.movieCats + state.seriesCats)
         Platforms.list.filter { p -> Platforms.categoriesFor(safeCats, p.kw).isNotEmpty() }
     }
     val cont = remember(state.refresh, Cloud.rev, movies, series) { Cloud.progressList() }
@@ -192,7 +192,7 @@ fun HomeScreen(state: AppState) {
         genreRows.forEach { (label, list) ->
             item(key = "g_$label") {
                 val kw = com.latmpx.player.data.Platforms.genres.find { it.first == label }?.second ?: emptyList()
-                val ids = com.latmpx.player.data.Platforms.categoriesFor(state.movieCats.filter { it.id !in com.latmpx.player.data.Store.blockedCats }, kw)
+                val ids = com.latmpx.player.data.Platforms.categoriesFor(com.latmpx.player.data.Store.visibleCats(state.movieCats), kw)
                 ShelfRow(label, list, pad, onViewAll = { state.push(Route.Browse(label, com.latmpx.player.data.Kind.MOVIE, ids)) }) { _, it ->
                     PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) })
                 }
