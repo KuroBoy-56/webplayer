@@ -23,6 +23,10 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 `appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
 `dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
 
+## Novedades de la 1.3.12
+
+- **Control parental:** el diálogo del PIN de control parental (Cuenta › «Ocultar contenido para adultos» y categorías bloqueadas de TV en vivo) se cierra después de la tecla OK / Aceptar, no dentro de ella. En Roku cerrarlo dentro de la tecla del teclado numérico sacaba de la app con el PIN correcto; aquí es preventivo (`PinDialog.tsx`). El PIN sigue siendo el del panel (0000 de fábrica), también con distribuidor.
+
 ## Novedades de la 1.3.11
 
 Con número de distribuidor la app sacaba al cliente a los ~10 minutos y pedía otra vez usuario y contraseña (el panel no
