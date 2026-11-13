@@ -409,6 +409,20 @@ const en = {
   "Este Fire TV tiene Vega OS {v}. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran al instante.": "This Fire TV has Vega OS {v}. Update it to Vega OS 2.0 (Settings › My Fire TV › About › Check for Updates) so movies and channels open instantly.",
   "El sistema de este Fire TV no abre los videos con el reproductor de Amazon. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran más rápido.": "This Fire TV's system doesn't open videos with Amazon's player. Update it to Vega OS 2.0 (Settings › My Fire TV › About › Check for Updates) so movies and channels open faster.",
   "Línea ocupada ({a}/{m}): esperando una conexión libre…": "Line busy ({a}/{m}): waiting for a free connection…",
+  "Canales y categorías para adultos": "Adult channels and categories",
+  "Ocultos": "Hidden",
+  "Visibles": "Visible",
+  "Bloquear categorías": "Block categories",
+  "Contenido protegido en esta sesión": "Protected content this session",
+  "Bloqueado": "Locked",
+  "Desbloqueado": "Unlocked",
+  "Ingresa el PIN para mostrar contenido para adultos": "Enter the PIN to show adult content",
+  "Ingresa el PIN para bloquear categorías": "Enter the PIN to block categories",
+  "Ingresa el PIN para desbloquear": "Enter the PIN to unlock",
+  "Contenido desbloqueado hasta que cierres la app": "Content unlocked until you close the app",
+  "Bloqueada": "Locked",
+  "Adultos": "Adults",
+  "Las categorías bloqueadas se ocultan y piden el PIN. Pulsa OK para bloquear o desbloquear.": "Locked categories are hidden and ask for the PIN. Press OK to lock or unlock.",
 };
 
 export default en;

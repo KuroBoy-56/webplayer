@@ -1183,3 +1183,17 @@ test('índice compartido (VPS / VDS): el panel firma, la máquina lo tiene o lo 
     Module._load = prev;
   }
 });
+
+test('control parental como Roku: adultos visibles u ocultos, bloquear categorías y contenido protegido en esta sesión; mostrar adultos ya no desbloquea todo', () => {
+  const acc = fs.readFileSync(require.resolve('../src/screens/Account.tsx'), 'utf8');
+  for (const k of ['Canales y categorías para adultos', 'Bloquear categorías', 'Contenido protegido en esta sesión']) assert.ok(acc.includes("t('" + k + "')"), k);
+  // el PIN de «adultos» solo cambia hide_adult; desbloquear la sesión es la otra opción
+  assert.match(acc, /if \(p === 'adult'\) \{\s*setPref\('hide_adult', '0'\);\s*refreshCatalog\(\);\s*\}/);
+  assert.match(acc, /p === 'unlock'\) \{\s*catalog\.unlocked = true;/);
+  const pin = fs.readFileSync(require.resolve('../src/components/PinDialog.tsx'), 'utf8');
+  assert.ok(!pin.includes('catalog.unlocked'), 'el diálogo no desbloquea por su cuenta');
+  const lock = fs.readFileSync(require.resolve('../src/components/CategoryLock.tsx'), 'utf8');
+  assert.ok(lock.includes("writeJson('blocked_cats'"), 'las bloqueadas se guardan donde las lee el catálogo');
+  const cat = fs.readFileSync(require.resolve('../src/data/catalog.ts'), 'utf8');
+  assert.ok(cat.includes("readJson<string[]>('blocked_cats')"));
+});

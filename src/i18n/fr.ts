@@ -410,6 +410,20 @@ const fr: Record<Key, string> = {
   "Este Fire TV tiene Vega OS {v}. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran al instante.": "Ce Fire TV a Vega OS {v}. Mettez-le à jour vers Vega OS 2.0 (Paramètres › Mon Fire TV › À propos › Rechercher des mises à jour) pour que les films et les chaînes s'ouvrent instantanément.",
   "El sistema de este Fire TV no abre los videos con el reproductor de Amazon. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran más rápido.": "Le système de ce Fire TV n'ouvre pas les vidéos avec le lecteur d'Amazon. Mettez-le à jour vers Vega OS 2.0 (Paramètres › Mon Fire TV › À propos › Rechercher des mises à jour) pour que les films et les chaînes s'ouvrent plus vite.",
   "Línea ocupada ({a}/{m}): esperando una conexión libre…": "Ligne occupée ({a}/{m}) : en attente d'une connexion libre…",
+  "Canales y categorías para adultos": "Chaînes et catégories pour adultes",
+  "Ocultos": "Masqués",
+  "Visibles": "Visibles",
+  "Bloquear categorías": "Bloquer des catégories",
+  "Contenido protegido en esta sesión": "Contenu protégé pour cette session",
+  "Bloqueado": "Verrouillé",
+  "Desbloqueado": "Déverrouillé",
+  "Ingresa el PIN para mostrar contenido para adultos": "Saisissez le code PIN pour afficher le contenu adulte",
+  "Ingresa el PIN para bloquear categorías": "Saisissez le code PIN pour bloquer des catégories",
+  "Ingresa el PIN para desbloquear": "Saisissez le code PIN pour déverrouiller",
+  "Contenido desbloqueado hasta que cierres la app": "Contenu déverrouillé jusqu'à la fermeture de l'app",
+  "Bloqueada": "Verrouillée",
+  "Adultos": "Adultes",
+  "Las categorías bloqueadas se ocultan y piden el PIN. Pulsa OK para bloquear o desbloquear.": "Les catégories verrouillées sont masquées et demandent le code PIN. Appuyez sur OK pour verrouiller ou déverrouiller.",
 };
 
 export default fr;

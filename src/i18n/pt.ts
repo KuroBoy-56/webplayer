@@ -410,6 +410,20 @@ const pt: Record<Key, string> = {
   "Este Fire TV tiene Vega OS {v}. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran al instante.": "Este Fire TV tem o Vega OS {v}. Atualize para o Vega OS 2.0 (Configurações › Meu Fire TV › Sobre › Verificar atualizações) para que filmes e canais abram na hora.",
   "El sistema de este Fire TV no abre los videos con el reproductor de Amazon. Actualízalo a Vega OS 2.0 (Configuración › Mi Fire TV › Acerca de › Buscar actualizaciones) para que las películas y los canales abran más rápido.": "O sistema deste Fire TV não abre os vídeos com o player da Amazon. Atualize para o Vega OS 2.0 (Configurações › Meu Fire TV › Sobre › Verificar atualizações) para que filmes e canais abram mais rápido.",
   "Línea ocupada ({a}/{m}): esperando una conexión libre…": "Linha ocupada ({a}/{m}): aguardando uma conexão livre…",
+  "Canales y categorías para adultos": "Canais e categorias adultos",
+  "Ocultos": "Ocultos",
+  "Visibles": "Visíveis",
+  "Bloquear categorías": "Bloquear categorias",
+  "Contenido protegido en esta sesión": "Conteúdo protegido nesta sessão",
+  "Bloqueado": "Bloqueado",
+  "Desbloqueado": "Desbloqueado",
+  "Ingresa el PIN para mostrar contenido para adultos": "Digite o PIN para mostrar conteúdo adulto",
+  "Ingresa el PIN para bloquear categorías": "Digite o PIN para bloquear categorias",
+  "Ingresa el PIN para desbloquear": "Digite o PIN para desbloquear",
+  "Contenido desbloqueado hasta que cierres la app": "Conteúdo desbloqueado até você fechar o app",
+  "Bloqueada": "Bloqueada",
+  "Adultos": "Adultos",
+  "Las categorías bloqueadas se ocultan y piden el PIN. Pulsa OK para bloquear o desbloquear.": "As categorias bloqueadas ficam ocultas e pedem o PIN. Aperte OK para bloquear ou desbloquear.",
 };
 
 export default pt;

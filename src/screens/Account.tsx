@@ -2,6 +2,7 @@
 // servidor, cuánto contenido tiene y el código del equipo); a la derecha los ajustes.
 import React, { useEffect, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import CategoryLock from '../components/CategoryLock';
 import ChangePinDialog from '../components/ChangePinDialog';
 import PinDialog from '../components/PinDialog';
 import { Button } from '../components/ui';
@@ -13,7 +14,7 @@ import { pref, setPref } from '../lib/storage';
 import { brand, brandName, distChoice } from '../lib/tenant';
 import { dateText, dateTimeText, demoLength } from '../lib/util';
 import { useNav } from '../nav';
-import { deviceId, loadCatalog, loadCloud, logout, refreshCatalog, resetTenant, useAppState } from '../state';
+import { deviceId, loadCatalog, loadCloud, logout, refreshCatalog, resetTenant, showNotice, useAppState } from '../state';
 import { C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
 import { osVersion } from '../lib/osversion';
@@ -79,7 +80,9 @@ export default function Account() {
   const nav = useNav();
   const st = useAppState();
   const [, force] = useState(0);
-  const [pin, setPin] = useState(false);
+  // para qué se pidió el PIN (como Roku): mostrar adultos, bloquear categorías o desbloquear lo protegido en la sesión
+  const [pinFor, setPinFor] = useState<'' | 'adult' | 'blocked' | 'unlock'>('');
+  const [catLock, setCatLock] = useState(false);
   const [changePin, setChangePin] = useState(false);
   const [pinMsg, setPinMsg] = useState('');
   const [reg, setReg] = useState('');
@@ -155,13 +158,26 @@ export default function Account() {
         value={pinMsg || t('Activado · lo administra el panel (Cambiar)')}
         onPress={() => setChangePin(true)}
       />
+      {/* control parental como Roku: adultos visibles u ocultos, categorías bloqueadas y lo protegido en esta sesión */}
       <Setting
-        label={t('Ocultar contenido para adultos')}
-        value={hideAdult ? t('Sí') : t('No')}
+        label={t('Canales y categorías para adultos')}
+        value={hideAdult ? t('Ocultos') : t('Visibles')}
         onPress={() => {
-          if (hideAdult) setPin(true);
+          if (hideAdult) setPinFor('adult');
           else {
             setPref('hide_adult', '1');
+            refreshCatalog();
+            force(x => x + 1);
+          }
+        }}
+      />
+      <Setting label={t('Bloquear categorías')} value="" onPress={() => setPinFor('blocked')} />
+      <Setting
+        label={t('Contenido protegido en esta sesión')}
+        value={catalog.unlocked ? t('Desbloqueado') : t('Bloqueado')}
+        onPress={() => {
+          if (!catalog.unlocked) setPinFor('unlock');
+          else {
             catalog.unlocked = false;
             refreshCatalog();
             force(x => x + 1);
@@ -213,15 +229,31 @@ export default function Account() {
         }}
       />
       <PinDialog
-        visible={pin}
-        onClose={() => setPin(false)}
+        visible={!!pinFor}
+        sub={pinFor === 'adult' ? t('Ingresa el PIN para mostrar contenido para adultos') : pinFor === 'blocked' ? t('Ingresa el PIN para bloquear categorías') : t('Ingresa el PIN para desbloquear')}
+        onClose={() => setPinFor('')}
         onOk={() => {
-          setPin(false);
-          setPref('hide_adult', '0');
-          refreshCatalog();
+          const p = pinFor;
+          setPinFor('');
+          if (p === 'adult') {
+            setPref('hide_adult', '0');
+            refreshCatalog();
+          } else if (p === 'unlock') {
+            catalog.unlocked = true;
+            refreshCatalog();
+            showNotice(t('Contenido desbloqueado hasta que cierres la app'));
+          } else if (p === 'blocked') setCatLock(true);
           force(x => x + 1);
         }}
       />
+      {catLock ? (
+        <CategoryLock
+          onClose={changed => {
+            setCatLock(false);
+            if (changed) refreshCatalog();
+          }}
+        />
+      ) : null}
       {langOpen ? <LangPicker onClose={() => setLangOpen(false)} /> : null}
     </View>
   );
