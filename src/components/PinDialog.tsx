@@ -1,18 +1,17 @@
 // PIN del control parental.
 import React, { useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
-import { catalog } from '../data/catalog';
 import { t } from '../lib/i18n';
 import { parentalPin } from '../state';
 import { C, px, themed } from '../theme';
 import { Button } from './ui';
 
-export default function PinDialog({ visible, onClose, onOk }: { visible: boolean; onClose: () => void; onOk: () => void }) {
+// sub: para qué se pide el PIN (si no, «Escribe el PIN para ver este contenido»); quien lo abre decide qué desbloquea
+export default function PinDialog({ visible, onClose, onOk, sub }: { visible: boolean; onClose: () => void; onOk: () => void; sub?: string }) {
   const [pin, setPin] = useState('');
   const [err, setErr] = useState('');
   const check = () => {
     if (pin === parentalPin()) {
-      catalog.unlocked = true;
       setPin('');
       setErr('');
       // el diálogo se cierra después de la tecla OK / Aceptar del teclado, no dentro de ella (en Roku cerrarlo dentro de
@@ -28,7 +27,7 @@ export default function PinDialog({ visible, onClose, onOk }: { visible: boolean
       <View style={s.back}>
         <View style={s.box}>
           <Text style={s.title}>{t('Control parental')}</Text>
-          <Text style={s.sub}>{t('Escribe el PIN para ver este contenido')}</Text>
+          <Text style={s.sub}>{sub || t('Escribe el PIN para ver este contenido')}</Text>
           <TextInput
             style={s.input}
             value={pin}

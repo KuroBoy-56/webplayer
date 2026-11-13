@@ -235,6 +235,7 @@ export default function Live({ active = true }: { active?: boolean }) {
         visible={!!pinFor}
         onClose={() => setPinFor('')}
         onOk={() => {
+          catalog.unlocked = true;
           setCat(pinFor);
           setPinFor('');
         }}
