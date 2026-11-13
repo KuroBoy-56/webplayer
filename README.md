@@ -23,6 +23,10 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 `appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
 `dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
 
+## Novedades de la 1.3.14
+
+- **Plataformas**: el logo de cada plataforma se ve con las esquinas redondas y el borde de selección queda encima del logo (antes el logo, de tamaño fijo, tapaba el borde y se veía cuadrado; `Tiles.tsx`).
+
 ## Novedades de la 1.3.13
 
 - **Control parental como Roku** (Cuenta): «Canales y categorías para adultos» (Ocultos / Visibles; mostrarlos pide el PIN), «Bloquear categorías» (con el PIN, una lista por Películas, Series y TV en vivo: OK bloquea o desbloquea; las bloqueadas se ocultan y piden el PIN, `CategoryLock.tsx`, `blocked_cats`) y «Contenido protegido en esta sesión» (Bloqueado / Desbloqueado: con el PIN se ve todo hasta cerrar la app). Mostrar adultos ya no desbloquea todo de paso. El PIN es el del panel (0000 de fábrica), también con distribuidor.
