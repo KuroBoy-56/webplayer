@@ -197,6 +197,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
             'demo' => $demo,
             'media' => $media_cfg,
             'mediaOff' => $media_cfg ? '' : $media_off,
+            'vidx' => wp_vidx_url($kind, $id, $ext),
             'multi' => $multi_audio,
             'tracks' => $tracks_url,
             'ext' => $ext,

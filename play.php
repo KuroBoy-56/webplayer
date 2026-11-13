@@ -99,6 +99,7 @@ $media_cfg = $live ? null : wp_media_cfg($kind, $id, $exts, (string)($d['vlcExt'
             'demo' => $demo,
             'media' => $media_cfg,
             'mediaOff' => $media_cfg ? '' : $media_off,
+            'vidx' => $live ? '' : wp_vidx_url($kind, $id, (string)($d['vlcExt'] ?? $ext)),
             'ext' => $ext,
             'extraMenu' => [],
             'id' => $id,

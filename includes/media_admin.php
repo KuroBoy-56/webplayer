@@ -91,6 +91,22 @@ function wp_media_admin_key()
 }
 
 /**
+ * Índice compartido de una película o capítulo MP4 (api/vidx.php del panel): el moov que otro equipo (Roku, Vega,
+ * Android u otro navegador) dejó en la VPS / VDS de la línea. El navegador lo pide directo con el token de la línea
+ * (app=web: la VPS / VDS le da permiso CORS) y así no lee del servidor IPTV los 3-10 MB del final del archivo; si no
+ * lo tiene, el navegador le deja el que lea. El hosting de la web no lo toca. '' si no aplica.
+ */
+function wp_vidx_url($kind, $id, $ext)
+{
+    if ($kind === 'live' || !preg_match('/^(mp4|m4v|mov)$/i', (string)$ext) || !wp_panel_ready()) return '';
+    // página https con el panel en http: el navegador lo bloquearía
+    if (wp_is_https() && stripos(wp_panel_base(), 'https://') !== 0) return '';
+    $tok = wp_panel_token();
+    if ($tok === '') return '';
+    return wp_panel_base() . 'vidx.php?app=web&token=' . rawurlencode($tok) . '&u=' . wp_b64u_enc(wp_stream_url($kind, $id, $ext));
+}
+
+/**
  * Configuración del motor para el reproductor (video_player.php y play.php): el motor del panel (api/media_web.php),
  * SOLO en la VPS / VDS de la línea — la VDS propia del distribuidor si la eligió (nunca la del dueño), si no la del
  * dueño. El hosting de la web nunca convierte. null si no se puede (y $off dice por qué).

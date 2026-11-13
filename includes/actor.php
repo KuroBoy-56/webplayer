@@ -133,6 +133,7 @@ function wp_tmdb_get($path, $query = '', $timeout = 8)
 /** Persona de TMDB por id, o buscando por nombre. Caché 7 días. */
 function wp_tmdb_person($id, $name = '')
 {
+    if (!wp_tmdb_keys()) return null; // sin clave: tampoco lo que otro dejó en la caché
     $id = preg_replace('/\D/', '', (string)$id);
     if ($id === '' && trim($name) !== '') {
         $s = wp_tmdb_get('search/person', 'language=es-MX&include_adult=false&query=' . urlencode(trim($name)));

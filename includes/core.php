@@ -21,26 +21,29 @@ require_once __DIR__ . '/i18n.php';
 
 
 /**
- * Clave de TMDB (carátulas, fondos, elenco y tráileres). No va en el código:
- * 'tmdb_key' de includes/panel_secret.php (no se sube a GitHub) o, si falta,
- * la clave TMDB que manda el panel (se guarda al iniciar sesión). Sin ninguna
- * la web funciona igual, sin datos de TMDB.
+ * Clave de TMDB (carátulas, fondos, elenco y tráileres). No va en el código: la guardada en el panel (Ajustes del
+ * dueño, o la del distribuidor con su número), que el panel manda con el token al iniciar sesión y con Continuar
+ * viendo. Solo el dueño (sin número), si el panel no tiene ninguna, usa 'tmdb_key' de includes/panel_secret.php (no se
+ * sube a GitHub). Sin ninguna la web funciona igual, sin datos de TMDB.
  */
 function wp_tmdb_key()
 {
     static $key = null;
     if ($key !== null) return $key;
-    // con número de distribuidor solo vale su clave (la que manda el panel), nunca la del servidor
-    $dist = function_exists('wp_panel_tenant') && wp_panel_tenant() !== '';
-    $k = !$dist && defined('WP_TMDB_KEY') ? (string)constant('WP_TMDB_KEY') : '';
-    $file = __DIR__ . '/panel_secret.php';
-    if (!$dist && $k === '' && is_file($file)) {
-        $cfg = include $file;
-        if (is_array($cfg)) $k = trim((string)($cfg['tmdb_key'] ?? ''));
-    }
-    if (!preg_match('/^[0-9a-f]{32}$/i', $k) && function_exists('wp_panel_ck')) {
+    $k = '';
+    if (function_exists('wp_panel_ck')) {
         $p = wp_cache_get(wp_panel_ck('panel|tmdbkey'), 30 * 86400, $stale);
         $k = is_string($p) ? $p : (is_string($stale) ? $stale : '');
+    }
+    // con número de distribuidor solo vale su clave (la que manda el panel), nunca la del servidor
+    $dist = function_exists('wp_panel_tenant') && wp_panel_tenant() !== '';
+    if (!$dist && !preg_match('/^[0-9a-f]{32}$/i', $k)) {
+        $k = defined('WP_TMDB_KEY') ? (string)constant('WP_TMDB_KEY') : '';
+        $file = __DIR__ . '/panel_secret.php';
+        if ($k === '' && is_file($file)) {
+            $cfg = include $file;
+            if (is_array($cfg)) $k = trim((string)($cfg['tmdb_key'] ?? ''));
+        }
     }
     if (!preg_match('/^[0-9a-f]{32}$/i', $k)) return ''; // sin guardar: el panel puede mandarla después
     return $key = $k;
@@ -1275,6 +1278,8 @@ function wp_tmdb_search($type, $title, $year = '')
  */
 function wp_tmdb_details($type, $tmdbId, $title, $year = '')
 {
+    // sin clave para este distribuidor (o el dueño): nada de TMDB, tampoco lo que otro dejó en la caché
+    if (!wp_tmdb_key()) return ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', 'ol' => '', '_t' => time()];
     $tl = wp_tmdb_lang();
     $l2 = substr($tl, 0, 2);
     $ck = 'tmdbd4|' . $tl . '|' . $type . '|' . (preg_replace('/\D/', '', (string)$tmdbId) ?: wp_norm_title(wp_tmdb_clean_title($title)) . '|' . $year);
@@ -1344,6 +1349,7 @@ function wp_tmdb_plot(array $tmdb, $serverPlot)
  */
 function wp_tmdb_posters(array $items)
 {
+    if (!wp_tmdb_key()) return []; // sin clave: tampoco las carátulas que otro dejó en la caché
     $out = [];
     $need = [];
     $slow = [];

@@ -282,6 +282,8 @@ function wp_panel_auth($user, $pass, $dns = '')
     $j = $body !== null ? json_decode($body, true) : null;
     if ($code === 403 && is_array($j)) wp_tenant_mark_error(wp_panel_tenant(), (string)($j['code'] ?? ''));
     $ok = is_array($j) && !empty($j['token']) && is_string($j['token']);
+    // la clave TMDB guardada en el panel llega ya con el token: carátulas y fichas desde la primera página
+    if ($ok) wp_panel_remember_tmdb($j);
     // línea DEMO: el panel responde "demo": true (sin el campo = línea normal)
     $GLOBALS['wp_panel_auth_demo'] = $ok && !empty($j['demo']);
     return $ok ? $j['token'] : '';
@@ -393,6 +395,19 @@ function wp_panel_call($endpoint, $body = null, $timeout = 8)
 /* Seguir viendo y favoritos (en el panel, nada local)                  */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Clave TMDB guardada en el panel (la del distribuidor, o la del dueño con Omitir / sin número), que llega con el token
+ * y con Continuar viendo. Vacía: el distribuidor no tiene clave (el panel nunca le da la del dueño) y se olvida la
+ * guardada.
+ */
+function wp_panel_remember_tmdb($j)
+{
+    if (!is_array($j) || !array_key_exists('tmdbKey', $j)) return;
+    $k = is_string($j['tmdbKey']) ? trim($j['tmdbKey']) : '';
+    if (!preg_match('/^[0-9a-f]{32}$/i', $k)) $k = '';
+    if (wp_cache_get(wp_panel_ck('panel|tmdbkey'), 86400) !== $k) wp_cache_set(wp_panel_ck('panel|tmdbkey'), $k);
+}
+
 /** {progress: {...}, favorites: [...]} del usuario (una vez por petición). */
 function wp_panel_userdata($refresh = false)
 {
@@ -400,15 +415,7 @@ function wp_panel_userdata($refresh = false)
     if ($memo !== null && !$refresh) return $memo;
     // parámetro único: ninguna caché del hosting puede devolver un progreso viejo
     $j = wp_panel_call('progress.php?v=2&_=' . str_replace('.', '', (string)microtime(true)), null, 6);
-    // clave TMDB del panel (la usa la página de actor; si falta, la incorporada). Vacía: el distribuidor
-    // no tiene clave (el panel nunca le da la del dueño) y se olvida la guardada
-    if (is_array($j) && in_array($j['tmdbKey'] ?? null, ['', 'missing_tmdb_key'], true)) {
-        wp_cache_set(wp_panel_ck('panel|tmdbkey'), '');
-    }
-    if (is_array($j) && is_string($j['tmdbKey'] ?? null) && preg_match('/^[0-9a-f]{32}$/i', trim($j['tmdbKey']))
-        && wp_cache_get(wp_panel_ck('panel|tmdbkey'), 86400) !== trim($j['tmdbKey'])) {
-        wp_cache_set(wp_panel_ck('panel|tmdbkey'), trim($j['tmdbKey']));
-    }
+    wp_panel_remember_tmdb($j);
     // línea DEMO (el panel la marca también aquí): se recuerda en la sesión
     if (is_array($j) && !empty($j['demo'])) wp_panel_set_demo(true);
     // caché de imágenes del panel encendida o apagada por el dueño (carátulas y fondos, includes/panel_img.php)

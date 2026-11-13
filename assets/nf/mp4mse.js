@@ -38,6 +38,73 @@
         return libP;
     }
 
+    /* ---------- índice compartido (api/vidx.php del panel; el mismo que leen y dejan Roku, Vega y Android) ----------
+       Con el moov al final del archivo, leerlo del servidor IPTV son 3-10 MB de a 1 MB (15-35 s en servidores lentos).
+       Si otro equipo ya lo dejó en la VPS / VDS de la línea, llega de ahí; si no lo tiene, se le deja el que se lea. */
+    var VX = {};
+    var KMAX = 12 * 1048576; // contenido del moov (16 MB en base64, el tope de la VPS / VDS)
+    function within(p, ms) {
+        return Promise.race([p.catch(function () { return null; }), new Promise(function (ok) { setTimeout(function () { ok(null); }, ms); })]);
+    }
+    function getJson(u, ms) {
+        return within(fetch(u, { credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' }).then(function (r) { return r.json(); }), ms);
+    }
+    function vidxGet(link) {
+        if (VX[link]) return VX[link];
+        var x = VX[link] = { up: '', missing: false, sent: false };
+        x.p = getJson(link, 4000).then(function (j) {
+            if (!j || j.ok !== true || !j.head || !j.url) return null;
+            x.up = j.url;
+            return getJson(j.head, 3000).then(function (h) {
+                if (!h) return null;
+                if (h.ok !== true) { x.missing = h.ok === false; return null; } // {"ok": false}: no lo tiene
+                if (h.kind !== 'm' || !(h.len > 0) || h.len > KMAX / 3 * 4 + 4) return null;
+                return within(fetch(j.url, { credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' }).then(function (r) { return r.ok ? r.text() : null; }), 25000).then(function (t) {
+                    var nl = t ? t.indexOf('\n') : -1, m = nl > 0 && nl < 80 ? /^VIDX1 m (\d+) (\d+)$/.exec(t.slice(0, nl)) : null;
+                    if (!m || +m[1] !== h.size || +m[2] !== t.length - nl - 1) return null;
+                    var bin = atob(t.slice(nl + 1)), u8 = new Uint8Array(bin.length);
+                    for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+                    return u8.length >= 16 ? { size: +m[1], body: u8 } : null;
+                });
+            });
+        }).catch(function () { return null; });
+        return x;
+    }
+    /* la caja moov entera (cabecera de 8 bytes + contenido) */
+    function moovBox(body) {
+        var n = body.length + 8, u = new Uint8Array(n);
+        u[0] = n >>> 24 & 255; u[1] = n >>> 16 & 255; u[2] = n >>> 8 & 255; u[3] = n & 255;
+        u[4] = 109; u[5] = 111; u[6] = 111; u[7] = 118;
+        u.set(body, 8);
+        return u.buffer;
+    }
+    function b64(u8) {
+        var s = '', CH = 0x8000;
+        for (var i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+        return btoa(s);
+    }
+    /* el moov leído del servidor IPTV, a la VPS / VDS: solo si dijo que no lo tenía, una vez, de a partes y después de
+       que el video ya empezó */
+    function vidxShare(x, size, body) {
+        if (!x || x.sent || !x.missing || !x.up || !(size > 0)) return;
+        x.sent = true;
+        setTimeout(function () {
+            var text = b64(body), PART = 1536000, n = Math.ceil(text.length / PART), i = 0;
+            if (n > 12) return;
+            var send = function () {
+                // text/plain: sin consulta previa del navegador (la VPS / VDS lee el JSON igual)
+                fetch(x.up, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, credentials: 'omit', referrerPolicy: 'no-referrer',
+                    body: JSON.stringify({ kind: 'm', size: size, len: text.length, i: i, n: n, part: text.slice(i * PART, (i + 1) * PART) }) })
+                    .then(function (r) { return r.json(); }).then(function (j) {
+                        // no lo aceptó, o ya lo tiene (otro equipo lo dejó mientras tanto)
+                        if (!j || j.ok !== true || j.have || j.saved || ++i >= n) return;
+                        setTimeout(send, 400);
+                    }).catch(function () {});
+            };
+            send();
+        }, 8000);
+    }
+
     /* MSE compara el códec en minúsculas para Opus/FLAC (mp4box los nombra como su caja: "Opus", "fLaC") */
     function codec(c) { c = String(c || ''); return /^(opus|flac)$/i.test(c) ? c.toLowerCase() : c; }
 
@@ -66,6 +133,8 @@
         this.audioId = null;
         this.gen = 0;
         this._h = {};
+        // el índice compartido se pide ya, mientras se lee el principio del archivo
+        this.vx = this.o.vidx && window.fetch ? vidxGet(this.o.vidx) : null;
         this.start(this.o.start || 0, null);
     }
 
@@ -86,6 +155,8 @@
         this.ready = false;
         this.flushed = false;
         this.fails = 0;
+        this.vxUsed = false;
+        this.km = null;
         loadLib().then(function () {
             if (g !== self.gen || self.dead) return;
             self.file = window.MP4Box.createFile();
@@ -138,6 +209,26 @@
         }
         if (this.ready && !this.attached) return; // se espera a que el video abra el MediaSource
         if (this.ready && this.ahead() > this.maxAhead()) { this._tk = setTimeout(function () { self.tick(); }, 1000); return; }
+        // la lectura saltó a los últimos MB (moov al final): el índice compartido, si llega en 8 s como mucho
+        if (!this.ready && this.vx && !this.vxUsed && this.size && this.pos > 0 && this.pos >= this.size - 8 - KMAX) {
+            this.vxUsed = true;
+            this.busy = true;
+            var g0 = this.gen, at = this.pos;
+            within(this.vx.p, 8000).then(function (x) {
+                if (g0 !== self.gen || self.dead) return;
+                self.busy = false;
+                if (x && x.size === self.size && at === self.pos && at === x.size - 8 - x.body.length) {
+                    self.shared = true;
+                    try { self.file.appendBuffer(window.MP4Box.MP4BoxBuffer.fromArrayBuffer(moovBox(x.body), at), true); } catch (e) {}
+                    if (g0 !== self.gen || self.dead) return; // (el reproductor ya pasó al nativo con lo que leyó)
+                    // no sirvió: el reproductor prueba otra forma (como cualquier índice que no se pudo leer)
+                    if (!self.ready) { self.err('índice compartido'); return; }
+                    self.pos = self.size;
+                }
+                self.tick();
+            });
+            return;
+        }
         var g = this.gen, sq = this.seq = (this.seq || 0) + 1, st = this.pos, en = st + this.chunk() - 1;
         if (this.size) en = Math.min(en, this.size - 1);
         var ctl = this.ctl = new AbortController();
@@ -161,6 +252,8 @@
             self.busy = false;
             self.fails = 0;
             if (!ab.byteLength) { self.size = self.size || st; self.tick(); return; }
+            // la VPS / VDS no tenía el índice: se guarda una copia del moov que se está leyendo para dejárselo
+            if (!self.ready && self.vx && self.vx.missing && !self.vx.sent) self.keepMoov(st, ab);
             var buf = window.MP4Box.MP4BoxBuffer.fromArrayBuffer(ab, st);
             var next = self.file.appendBuffer(buf, self.size && st + ab.byteLength >= self.size);
             self.pos = (typeof next === 'number' && next > st) ? next : st + ab.byteLength;
@@ -176,6 +269,24 @@
             if (self.fails === 3) self.src = self.url; // el enlace temporal pudo vencer
             self._tk = setTimeout(function () { self.tick(); }, Math.min(8000, 600 * self.fails * self.fails));
         });
+    };
+
+    /* copia del moov leído del servidor (desde la primera lectura después del salto, de corrido) */
+    P.keepMoov = function (st, ab) {
+        var k = this.km;
+        if (!k) {
+            if (st === 0 || ab.byteLength < 8) return; // (moov al principio: no hace falta)
+            var h = new Uint8Array(ab, 0, 8);
+            if (h[4] !== 109 || h[5] !== 111 || h[6] !== 111 || h[7] !== 118) return;
+            var n = h[0] * 16777216 + (h[1] << 16) + (h[2] << 8) + h[3];
+            if (n < 16 || n - 8 > KMAX) { this.km = { dead: true }; return; }
+            k = this.km = { at: st, n: n, body: new Uint8Array(n - 8), got: 0 };
+        }
+        if (k.dead || k.done) return;
+        var from = Math.max(st, k.at + 8), to = Math.min(st + ab.byteLength, k.at + k.n);
+        if (from !== k.at + 8 + k.got) { k.dead = true; return; }
+        if (to > from) { k.body.set(new Uint8Array(ab, from - st, to - from), k.got); k.got += to - from; }
+        if (k.got === k.n - 8) { k.done = true; vidxShare(this.vx, this.size, k.body); }
     };
 
     /* ---------- pistas ---------- */

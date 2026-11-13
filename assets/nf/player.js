@@ -563,6 +563,7 @@
         if (resume) this.resumed = true;
         this.mp4 = new NFMp4(this.v, url, {
             start: resume,
+            vidx: this.o.vidx || '',
             pick: function (list) { return self.pickAudio(list); },
             onInfo: function (m) {
                 self.log('motor MP4: audios ' + m.audio.map(function (a) { return a.codec + (a.ok ? '✓' : '✗'); }).join(',') + ' video ' + (m.videoOk ? '✓' : '✗'));
@@ -1223,15 +1224,17 @@
         return r.ok ? r.json() : null;
     };
     /* fn() si el motor responde; si no, off(). Se pregunta una sola vez por página (do=status) y solo cuando
-       nada lo confirmó antes (lectura de pistas, etc.), así no se suelta el video directo para nada */
-    NFPlayer.prototype.engine = function (fn, off) {
+       nada lo confirmó antes (lectura de pistas, etc.), así no se suelta el video directo para nada. fresh: se pregunta
+       aunque ya respondió (para saber si la conversión de video está encendida: "video" del panel) */
+    NFPlayer.prototype.engine = function (fn, off, fresh) {
         var self = this, m = this.o.media || this._media0;
         if (!m) { if (off) off(); return; }
-        if (this._engineOk) { fn(); return; }
+        if (this._engineOk && !fresh) { fn(); return; }
         fetch(m.status, { credentials: 'omit' }).then(function (r) {
             return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: false, j: null }; });
         }).then(function (x) {
-            if (x.ok && x.j && x.j.ffmpeg) { self._engineOk = true; fn(); return; }
+            // (un panel anterior no manda "video": se prueba la conversión como antes)
+            if (x.ok && x.j && x.j.ffmpeg) { self._engineOk = true; self._vKnown = true; self._videoOff = x.j.video === false; fn(); return; }
             self.engineOff(x.j && x.j.error);
             if (off) off();
         }).catch(function () { self.engineOff(); if (off) off(); });
@@ -1278,18 +1281,21 @@
         var m = this.o.media, self = this, v = this.v;
         this.log('ffmpeg: convertir desde ' + Math.round(t || 0) + 's audio ' + a + (vt ? ' video ' + vt : '') + (m ? '' : ' (sin motor)'));
         if (!m) return; // sin motor: el video directo sigue (el aviso ya se mostró al saberlo)
-        this._native = false;
-        // motor sin confirmar: antes de soltar el video directo se pregunta si responde (sin spinner ni recarga)
-        if (!this._engineOk) {
+        // motor sin confirmar (o, si hay que convertir el video, sin saber si eso está encendido): antes de soltar el
+        // video directo se pregunta (sin spinner ni recarga)
+        if (!this._engineOk || (vt && !this._vKnown)) {
             this.engine(function () { self.startTc(t, a, vt); }, function () {
                 if (self.ok && v.getAttribute('src')) return; // el video directo sigue tal cual
                 // nada se ve todavía: la fuente directa (o la siguiente, o el error normal) desde el mismo punto
                 self.resumed = false;
                 if (self.idx < self.o.sources.length - 1 || !self._fullTried) self.idx--;
                 self.next();
-            });
+            }, true);
             return;
         }
+        // hay que convertir el video y el panel tiene la conversión de video apagada: no se intenta
+        if (vt && this._videoOff) { this.noVideoConv(); return; }
+        this._native = false;
         // al adelantar o cambiar de idioma durante la conversión basta con "Cargando"
         if (this.tc) this.status(tr('Cargando'));
         else {
@@ -1339,6 +1345,33 @@
         }, hadDirect ? 1200 : 50);
         // sin primeros datos a tiempo: lo resuelve el vigilante (vuelve al video original)
         this.tcWatch();
+    };
+
+    /* El video tiene que convertirse para este navegador y la conversión de video está apagada en el panel (del dueño o
+       del distribuidor): se dice de una vez que no es compatible, en vez de «Convirtiendo…» que termina en error */
+    NFPlayer.prototype.noVideoConv = function () {
+        var v = this.v, o = this.o, self = this;
+        this.log('conversión de video apagada en el panel: no compatible');
+        (this._whys = this._whys || []).push('video: conversión apagada');
+        // ya se está viendo (se eligió otro idioma que pide convertir el video): sigue como va
+        if (this.ok && !this.tc && v.getAttribute('src')) { this.toastMsg(tr('Ese idioma necesita convertir el video y la conversión de video no está activada')); return; }
+        this.tc = null;
+        this._fullTried = this._fixTried = true;
+        if (this.tcHls) { try { this.tcHls.destroy(); } catch (e) {} this.tcHls = null; }
+        clearTimeout(this.loadTimer); clearTimeout(this._tcW); clearTimeout(this._stSlow);
+        try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
+        this.root.classList.remove('buffering');
+        this.status();
+        var h = '<h3>' + NF_esc(tr('Este contenido no es compatible con tu navegador')) + '</h3><p>'
+            + NF_esc(tr('Para verlo aquí hay que convertir el video y la conversión de video no está activada. Ábrelo en VLC o en nuestras apps.')) + '</p><div class="acts">';
+        if (NFPlayer.canVlc(o)) h += '<button type="button" class="nf-btn nf-btn-white" data-act="vlc">' + NF_esc(tr('Abrir en VLC')) + '</button>';
+        if (o.downloadUrl) h += '<a class="nf-btn nf-btn-gray" href="' + o.downloadUrl + '">' + NF_esc(tr('Descargar')) + '</a>';
+        this.msg.innerHTML = h + '</div>';
+        this.msg.classList.add('show');
+        var vb = this.msg.querySelector('[data-act=vlc]');
+        if (vb) vb.addEventListener('click', function () { NFPlayer.openVlc(o); });
+        NFPlayer.report('playback', 'No compatible (conversión de video apagada): ' + (o.title || '') + (o.subtitle ? ' · ' + o.subtitle : ''),
+            (this._whys || []).join(' · ') + ' · ' + (o.ext || '?') + ' · ' + navigator.userAgent);
     };
 
     /* reproduce la lista del motor: Safari / iPhone con su HLS nativo; el resto con hls.js (fMP4) */
