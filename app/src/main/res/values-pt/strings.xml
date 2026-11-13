@@ -414,4 +414,10 @@
     <string name="sp_more_details">MAIS DETALHES</string>
     <string name="sp_no_team_info">Não há informações sobre este time</string>
     <string name="review_no_videos">Ainda não há vídeos de teste.</string>
+    <string name="adult_content">Canais e categorias adultos</string>
+    <string name="adult_hidden">Ocultos</string>
+    <string name="adult_visible">Visíveis</string>
+    <string name="protected_session">Conteúdo protegido nesta sessão</string>
+    <string name="protected_locked">Bloqueado</string>
+    <string name="protected_unlocked">Desbloqueado · até você fechar o app</string>
 </resources>
