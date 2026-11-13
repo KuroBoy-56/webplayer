@@ -13,6 +13,10 @@ val localProps: Properties = Properties().apply {
 }
 // llave maestra AES de login.php (hex de 64 caracteres). Única fuente: local.properties (nunca en el repositorio).
 val panelMasterKey: String = localProps.getProperty("panel.master_key") ?: ""
+// Google Play: el paquete (.aab) se sube firmado con la llave de subida (upload key); Google lo vuelve a firmar con la llave
+// de la app (Play App Signing). La llave de subida nunca va en el repositorio: el workflow la escribe desde los secretos
+// en local.properties (upload.store_file, upload.store_password, upload.key_alias, upload.key_password).
+val uploadStore: String = localProps.getProperty("upload.store_file") ?: ""
 
 android {
     namespace = "com.latmpx.player"
@@ -27,13 +31,23 @@ android {
         buildConfigField("String", "PANEL_MASTER_KEY", "\"$panelMasterKey\"")
     }
 
+    signingConfigs {
+        if (uploadStore.isNotEmpty()) create("upload") {
+            storeFile = file(uploadStore)
+            storePassword = localProps.getProperty("upload.store_password")
+            keyAlias = localProps.getProperty("upload.key_alias")
+            keyPassword = localProps.getProperty("upload.key_password")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // para pruebas firma con la clave de depuración; para publicar crea tu propia clave en Build > Generate Signed APK
-            signingConfig = signingConfigs.getByName("debug")
+            // con la llave de subida para Google Play; sin ella, la de depuración (solo para probar: Play no la acepta)
+            signingConfig = signingConfigs.getByName(if (uploadStore.isNotEmpty()) "upload" else "debug")
         }
     }
     compileOptions {

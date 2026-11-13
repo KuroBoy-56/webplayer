@@ -18,7 +18,9 @@ import org.json.JSONObject
  */
 object Tenant {
     /** id de esta app en el panel */
-    val APP: String get() = if (Device.TV_APP) "android_tv" else "android"
+    // ramas play-store / play-store-tv (Google Play): su propio indicativo en el panel («Android (Play Store)» y
+    // «Android TV (Play Store)»), para habilitarlas aparte de las de Amazon (android / android_tv = FireOS)
+    val APP: String get() = if (Device.TV_APP) "android_tv_play" else "android_play"
 
     /** pasado este tiempo sin poder comprobar el distribuidor (sin internet) ya no se usa la copia guardada */
     const val OFFLINE_GRACE_MS = 72 * 3600 * 1000L

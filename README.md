@@ -1,11 +1,14 @@
 # MPX Player para celular y tablet Android (rama `android`)
 
-> **Rama `android-sin-certificado`: para publicar en tiendas (Amazon Appstore, Google Play).** Es igual que la rama
-> `android`, salvo que la app **no comprueba su propia firma** al abrir (`STORE_BUILD` en
-> `MainActivity.kt`): las tiendas vuelven a firmar la app con su certificado y con la comprobación se cerraba al abrir.
-> La rama `android` (con la comprobación) es para compilar con Android Studio e instalar
-> el APK directo. El APK de esta rama queda en Releases › `apk-tienda-latest`. Al cambiar la otra rama, trae aquí los cambios
-> (`git merge android`) sin tocar `STORE_BUILD`.
+> **Rama `play-store`: la app de Google Play** (indicativo `android_play` en el panel: «Android (Play Store)»). Es igual que la rama
+> `android-sin-certificado` (la de Amazon, «Android FireOS (tablet)» en el panel): no comprueba su propia firma al abrir (`STORE_BUILD` en
+> `MainActivity.kt`), porque Google Play vuelve a firmar la app con su llave (Play App Signing, obligatorio para las
+> apps nuevas; con la comprobación se cerraría al abrir). Cambian el indicativo (`Tenant.APP`) y la compilación: el
+> workflow arma el paquete **.aab** (Android App Bundle, lo que pide Google Play) firmado con la **llave de subida**
+> (secretos `PLAY_UPLOAD_KEYSTORE` en base64, `PLAY_UPLOAD_STORE_PASSWORD`, `PLAY_UPLOAD_KEY_ALIAS`,
+> `PLAY_UPLOAD_KEY_PASSWORD`; sin ellos sale con la llave de depuración y Play no lo acepta) y lo deja en Releases ›
+> `aab-play-latest`. Al cambiar `android-sin-certificado`, trae aquí los cambios (`git merge android-sin-certificado`) sin tocar `Tenant.APP` ni el
+> workflow.
 
 **Marca:** la app se llama **MPX Player** (`app_name`; el paquete sigue siendo `com.latmpx.player` para que se actualice sobre la instalada). Logo, icono, banner de TV e imágenes de las plataformas (Netflix, Disney+, HBO Max, Prime Video, Marvel, Apple TV+, Paramount+, DC, Navidad, Halloween) están en `res/drawable-nodpi`, `res/mipmap-xxxhdpi` y `res/drawable-*`.
 
