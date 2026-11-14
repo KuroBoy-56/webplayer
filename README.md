@@ -207,6 +207,17 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.1.11) **Número del equipo que el panel devuelve al reinstalar**: el número («MAC») sale del identificador que
+  Amazon da a las apps del mismo vendedor (Vendor Tracking ID, `@amazon-devices/kepler-identifiers`; Vega no expone el
+  número de serie ni la MAC: lo confirma Amazon en su foro de desarrolladores). Desde esta versión ese identificador es
+  además la **clave fija** del equipo ante el panel (`api/login.php` acción `device_id`, `includes/device_alias.php`):
+  la app ya instalada la deja anotada junto al número que usa (también si es uno al azar de antes de la 2.1.6) y una
+  instalación nueva pregunta con esa clave y recibe el número con el que el equipo ya estaba registrado. Reinstalar la
+  app ya no cambia el número ni en los equipos registrados con uno al azar. Se consulta una vez por clave, distribuidor
+  y número (como mucho 4 s antes del primer `check_mac`); un panel sin la función contesta «Invalid action» y todo
+  sigue como antes. `src/lib/deviceid.ts`, `deviceSync` en `src/api/panel.ts`; prueba `tools/test-deviceid.cjs`.
+  Límite que no depende de la app: si el usuario apaga o reinicia ese identificador en los ajustes del Fire TV, o
+  restablece el equipo de fábrica, Amazon entrega otro.
 - (2.1.10) **Plataformas**: el logo de cada plataforma se ve con las esquinas redondas y el borde de selección queda encima del logo (antes el logo, de tamaño fijo, tapaba el borde y se veía cuadrado; `Tiles.tsx`).
 - (2.1.9) **Control parental como Roku** (Cuenta): «Canales y categorías para adultos» (Ocultos / Visibles; mostrarlos pide el PIN), «Bloquear categorías» (con el PIN, una lista por Películas, Series y TV en vivo: OK bloquea o desbloquea; las bloqueadas se ocultan y piden el PIN, `CategoryLock.tsx`, `blocked_cats`) y «Contenido protegido en esta sesión» (Bloqueado / Desbloqueado: con el PIN se ve todo hasta cerrar la app). Mostrar adultos ya no desbloquea todo de paso. El PIN es el del panel (0000 de fábrica), también con distribuidor.
 - **Control parental (2.1.8)**: el diálogo del PIN de control parental (Cuenta › «Ocultar contenido para adultos» y categorías bloqueadas de TV en vivo) se cierra después de la tecla OK / Aceptar, no dentro de ella. En Roku cerrarlo dentro de la tecla del teclado numérico sacaba de la app con el PIN correcto; aquí es preventivo (`PinDialog.tsx`). El PIN sigue siendo el del panel (0000 de fábrica), también con distribuidor.

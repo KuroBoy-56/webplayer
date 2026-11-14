@@ -6,7 +6,7 @@ import { bindSession, cloud, forgetCloud, onPanelDemo, panelTenantConfig, Sessio
 import { Kind, loadKind, setStreamFlip } from './api/xtream';
 import { catalog } from './data/catalog';
 import { json } from './lib/http';
-import { deviceId } from './lib/deviceid';
+import { deviceId, deviceRegistered } from './lib/deviceid';
 import { read, readJson, remove, write, writeJson } from './lib/storage';
 import { brand, clearTenant, expiredMessage, locallyExpired, OFFLINE_GRACE, saveBrand, scoped, TENANT_FATAL, tenantCode } from './lib/tenant';
 import { digits, nowSec, parseIso, str } from './lib/util';
@@ -107,6 +107,8 @@ export function restoreSession(): boolean {
 // demo: la sesión salió del botón Autodemo o el panel la marcó como DEMO (check_mac); un inicio
 // de sesión normal la deja en false
 export function setSession(s: Session, demo = false, demoExpires = 0, demoDuration = 0) {
+  // sesión iniciada con el identificador actual: el panel ya lo tiene registrado con la línea
+  deviceRegistered();
   forgetCloud();
   lastSent.clear();
   setStreamFlip(false);

@@ -8,6 +8,7 @@ import { cacheSeen, takeCacheOrder } from '../lib/cacheclear';
 import { APP_ID, Brand, parseConfig, reportTenantProblem, scoped, TENANT_ERRORS, TENANT_FATAL, tenantCode, tenantFields } from '../lib/tenant';
 import { lang, t } from '../lib/i18n';
 import { normalizeBase, str } from '../lib/util';
+import { currentId, deviceFresh, hwKeys, syncDone, syncNeeded } from '../lib/deviceid';
 
 export type Session = {
   dns: string;
@@ -139,7 +140,7 @@ export async function panelDnsList(): Promise<Server[]> {
 // datos del dueño: con distribuidor se usa check_mac (login.php).
 export async function panelPlaylists(deviceId: string): Promise<{ lines: Line[]; error: string }> {
   if (tenantCode()) return { lines: [], error: '' };
-  const r = await panel('auth.php', 'POST', JSON.stringify({ data: mopeEncrypt(JSON.stringify({ mac_address: deviceId })) }), 'application/json');
+  const r = await panel('auth.php', 'POST', JSON.stringify({ data: mopeEncrypt(JSON.stringify({ mac_address: currentId(deviceId) })) }), 'application/json');
   if (r.code === 0) return { lines: [], error: t('No se pudo conectar con el panel. Revisa tu conexión a internet.') };
   const outer = json(r);
   if (!outer) return { lines: [], error: t('Respuesta no válida del panel') };
@@ -259,7 +260,41 @@ export function forgetCloud(): void {
 // diferencia entre la hora del panel y la del equipo (segundos), para el "ts" de cada pedido
 let clockSkew = 0;
 
+// Identificador fijo del equipo (panel: api/login.php «device_id», includes/device_alias.php). Antes del primer pedido
+// con el identificador del equipo: una instalación nueva pregunta con su clave fija (la que da el sistema) y, si el
+// panel ya conocía este equipo con otro número (uno al azar de una versión anterior), lo recibe y lo adopta; la app ya
+// instalada deja anotada su clave. Una vez por clave, distribuidor e identificador; como mucho 4 s de espera. Un panel
+// sin la función contesta «Invalid action» y no se pregunta más en esta apertura (todo sigue como antes).
+let syncing: Promise<void> | null = null;
+let syncOff = 0;
+async function deviceSync(): Promise<void> {
+  const tenant = tenantCode();
+  if (!hasMasterKey() || Date.now() < syncOff || !syncNeeded(tenant)) return;
+  if (!syncing) {
+    syncing = (async () => {
+      try {
+        const sent = read('device_id');
+        const r = await panelLogin('device_id', { mac_address: sent, hw: hwKeys(), ...(deviceFresh() ? { fresh: 1 } : {}) });
+        const j = r.code === 200 ? json<any>(r) : null;
+        const id = j && typeof j === 'object' ? str(j.device_id).toUpperCase() : '';
+        if (/^[0-9A-F]{2}(:[0-9A-F]{2}){5,7}$/.test(id)) syncDone(tenant, sent, id);
+        // panel sin la función (400) o sin respuesta: se vuelve a intentar más tarde, no en cada pedido
+        else syncOff = Date.now() + (r.code === 400 ? 6 * 3600000 : 120000);
+      } catch {
+        syncOff = Date.now() + 120000;
+      } finally {
+        syncing = null;
+      }
+    })();
+  }
+  await Promise.race([syncing, new Promise<void>(res => setTimeout(res, 4000))]);
+}
+
 async function panelLogin(action: string, payload: Record<string, any>): Promise<HttpResult & { error?: string }> {
+  if (action !== 'device_id' && typeof payload.mac_address === 'string') {
+    await deviceSync();
+    payload = { ...payload, mac_address: currentId(payload.mac_address) };
+  }
   // verificador antihack del panel: hora del pedido ("ts"); si el reloj del equipo está mal, el panel
   // responde 401 ts_expired con su hora y se reintenta una vez con el reloj corregido
   let r: HttpResult = { code: 0, body: '', ok: false };

@@ -778,7 +778,7 @@ test('Continuar viendo conserva avances recientes y reconoce el episodio de un r
         './lib/i18n':{t:key=>key},
         './lib/http':{json:response=>JSON.parse(response.body)},
         './lib/tenant':{},
-        './lib/deviceid':{deviceId(){return 'test';}},
+        './lib/deviceid':{deviceId(){return 'test';},deviceRegistered(){}},
         './lib/storage':store,
       };
       if (request in stubs) return stubs[request];
