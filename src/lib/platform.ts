@@ -46,10 +46,22 @@ export async function initTv(): Promise<void> {
     luna('luna://com.webos.service.sm/deviceid/getIDs', { idType: ['LGUDID'] }),
     luna('luna://com.webos.service.tv.systemproperty/getSystemInfo', { keys: ['modelName', 'firmwareVersion', 'sdkVersion'] }),
   ]);
-  const id = (ids?.idList || []).find((x: any) => x?.idType === 'LGUDID')?.idValue;
-  udid = String(id || '');
+  udid = lgudid(ids);
   model = String(info?.modelName || '');
   os = String(info?.sdkVersion || info?.firmwareVersion || '');
+  // el televisor no dio su id esta vez (recién encendido, servicio ocupado): se le pide otra vez sin demorar la app
+  // (3 intentos más, cada 4 s). Con él, el número al azar de esta apertura se cambia por el fijo (lib/deviceid.ts)
+  if (!udid && g.PalmServiceBridge) retryUdid(3);
+}
+
+const lgudid = (ids: any): string => String((ids?.idList || []).find((x: any) => x?.idType === 'LGUDID')?.idValue || '');
+
+function retryUdid(left: number): void {
+  setTimeout(async () => {
+    if (udid) return;
+    udid = lgudid(await luna('luna://com.webos.service.sm/deviceid/getIDs', { idType: ['LGUDID'] }));
+    if (!udid && left > 1) retryUdid(left - 1);
+  }, 4000);
 }
 
 // MAC para el panel (AA:BB:CC:DD:EE:FF) armada con el LGUDID del televisor: la misma aunque se reinstale la app

@@ -23,6 +23,13 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 `appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
 `dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
 
+## Novedades de la 1.3.16
+
+- **Número del equipo que no cambia al reinstalar**: el número («MAC») que queda registrado en el panel sale del **LGUDID** de LG (`luna://com.webos.service.sm/deviceid/getIDs`, la función oficial de LG para identificar el televisor, webOS TV 3.0 o posterior), que no lo guarda la app: es el mismo aunque se desinstale y se vuelva a instalar. Cambios de esta versión (`src/lib/deviceid.ts`):
+  - Si el televisor no daba su identificador en la primera apertura, la app creaba un número al azar y **lo dejaba para siempre** (cambiaba al reinstalar y el cliente creía que le habían borrado la cuenta). Ahora ese número queda marcado y, en cuanto el televisor da el suyo (y todavía no se inició sesión), se cambia por el fijo. Si el televisor no contesta al abrir, se le vuelve a pedir en segundo plano (3 intentos, `platform.ts`).
+  - **Con el panel** (`api/login.php` acción `device_id`, `includes/device_alias.php`): el identificador del televisor es su «clave fija». La app ya instalada la deja anotada junto al número que usa (también si es uno al azar de una versión anterior) y una instalación nueva pregunta con esa clave y recibe el número con el que el televisor ya estaba registrado: entra con su línea sin escribir usuario y contraseña. Una consulta por clave, distribuidor y número (como mucho 4 s antes del primer `check_mac`); con un panel sin la función todo sigue como antes.
+  - El número ya guardado nunca se cambia por otro: el panel lo tiene registrado. Prueba: `node --test tools/test-deviceid.cjs`.
+
 ## Novedades de la 1.3.15
 
 - **Índice compartido (más rápido):** en películas y capítulos MP4 con el índice (moov) al final, el lector de la app (cambio de audio y subtítulos, `mp4mse.ts`) y la lectura de los idiomas (`probe.ts`) usan el índice que otro equipo (Vega, Roku, Android, la web) dejó en la VPS / VDS de la línea (`api/vidx.php` del panel, `sharedindex.ts`): al servidor IPTV no se le piden los 3-10 MB del final del archivo. Si no lo tiene, el que lee la app se le deja para los demás. Un índice de otro archivo (otro tamaño) se descarta. El reproductor del televisor lee el archivo él mismo (eso no cambia); sin VPS / VDS todo sigue igual.
