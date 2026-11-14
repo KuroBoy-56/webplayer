@@ -22,6 +22,21 @@ export function tvMac(): string {
   return Array.from(h.slice(0, 6), b => b.toString(16).padStart(2, '0').toUpperCase()).join(':');
 }
 
+// Segunda clave del televisor para el panel: el «Tizen ID» del sistema (tizen.systeminfo, capacidad
+// http://tizen.org/system/tizenid, sin permisos). No se usa como número del equipo: solo ayuda al panel a reconocer el
+// televisor después de reinstalar si el DUID no estuvo disponible. '' si el sistema no lo da.
+export function tvAltKey(): string {
+  let id = '';
+  try {
+    id = String(g.tizen?.systeminfo?.getCapability?.('http://tizen.org/system/tizenid') || '');
+  } catch {
+    id = '';
+  }
+  if (id.length < 8) return '';
+  const h = sha256(new TextEncoder().encode('tizenid:' + id));
+  return Array.from(h.slice(0, 8), b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+}
+
 export function tvModel(): string {
   try {
     return 'Samsung ' + String(g.webapis?.productinfo?.getRealModel?.() || g.webapis?.productinfo?.getModel?.() || 'Smart TV');

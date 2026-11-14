@@ -7,7 +7,7 @@ import { Kind, loadKind, setStreamFlip } from './api/xtream';
 import { catalog } from './data/catalog';
 import { json } from './lib/http';
 import { read, readJson, remove, write, writeJson } from './lib/storage';
-import { tvMac } from './lib/platform';
+import { deviceId, deviceRegistered } from './lib/deviceid';
 import { APP_ID, brand, clearTenant, expiredMessage, locallyExpired, OFFLINE_GRACE, saveBrand, scoped, TENANT_FATAL, tenantCode } from './lib/tenant';
 import { digits, nowSec, parseIso, str } from './lib/util';
 import { setImgCache } from './lib/images';
@@ -102,6 +102,8 @@ export function restoreSession(): boolean {
 // demo: la sesión salió del botón Autodemo o el panel la marcó como DEMO (check_mac); un inicio
 // de sesión normal la deja en false
 export function setSession(s: Session, demo = false, demoExpires = 0, demoDuration = 0) {
+  // sesión iniciada con el identificador actual: el panel ya lo tiene registrado con la línea
+  deviceRegistered();
   forgetCloud();
   setStreamFlip(false);
   set({ session: s, progress: [], favorites: [], demo, demoExpires: demo ? demoExpires : 0, demoDuration: demo ? demoDuration : 0 });
@@ -298,23 +300,8 @@ export function removeProgress(title: string) {
 
 // ---------- equipo ----------
 
-// identificador con formato MAC del panel: 8 pares hex en mayúsculas que nunca empiezan en "00"
-export function deviceId(): string {
-  const saved = read('device_id');
-  if (saved) return saved;
-  // Tizen: MAC armada con el id del televisor (DUID, no cambia al reinstalar la app)
-  const tv = tvMac();
-  if (tv) {
-    write('device_id', tv);
-    return tv;
-  }
-  let hex = '';
-  for (let i = 0; i < 16; i++) hex += '0123456789ABCDEF'[Math.floor(Math.random() * 16)];
-  if (hex.startsWith('00')) hex = '1' + hex.slice(1);
-  const id = hex.match(/.{2}/g)!.join(':');
-  write('device_id', id);
-  return id;
-}
+// identificador del equipo para el panel: src/lib/deviceid.ts
+export { deviceId };
 
 // PIN de control parental (siempre activo): el del panel (check_mac / auth.php), 0000 de fábrica.
 // Se cambia en Cuenta y se guarda en el panel (set_pin).
