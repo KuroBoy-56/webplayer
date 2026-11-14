@@ -47,7 +47,7 @@ const SectionContent = memo(function SectionContent({ section, active, back }: {
   if (section === 'live') return <Live active={active} />;
   if (section === 'sports') return <Sports active={active} back={back} />;
   if (section === 'mylist') return <MyList />;
-  if (section === 'search') return <Search />;
+  if (section === 'search') return <Search active={active} />;
   return <Account />;
 });
 

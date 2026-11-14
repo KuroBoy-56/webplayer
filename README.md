@@ -23,6 +23,10 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 `appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
 `dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
 
+## Novedades de la 1.3.17
+
+- **Buscar como en Vega, Tizen y Android:** el recuadro ya no es el campo de texto del televisor (el teclado de LG se quedaba con «Siguiente» / «Listo» y no se cerraba, y al volver con Atrás el foco bajaba por la pantalla sin quedar en nada). Ahora abre el teclado de la app: los resultados aparecen mientras se escribe y, al cerrarlo con Listo o con Atrás, el foco queda en el primer resultado. Al abrir un resultado y volver, el foco regresa a ese mismo resultado (también en «Ver todo»). `Search.tsx`, `KeyboardModal.tsx` (`onChange`), `ItemGrid` en `Grid.tsx`, `preferred` en `PosterTile`.
+
 ## Novedades de la 1.3.16
 
 - **Número del equipo que no cambia al reinstalar**: el número («MAC») que queda registrado en el panel sale del **LGUDID** de LG (`luna://com.webos.service.sm/deviceid/getIDs`, la función oficial de LG para identificar el televisor, webOS TV 3.0 o posterior), que no lo guarda la app: es el mismo aunque se desinstale y se vuelva a instalar. Cambios de esta versión (`src/lib/deviceid.ts`):

@@ -50,7 +50,7 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
     case 'actor':
       return <Actor personId={route.personId} name={route.actorName} />;
     case 'grid':
-      return <Grid title={route.title} mode={route.mode} keyName={route.key} kind={route.kind} />;
+      return <Grid title={route.title} mode={route.mode} keyName={route.key} kind={route.kind} active={active} />;
     case 'player':
       return <Player params={route.params} />;
     case 'review':

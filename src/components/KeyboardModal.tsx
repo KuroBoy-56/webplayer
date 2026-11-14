@@ -2,7 +2,7 @@
 // del sistema. En algunos Fire TV / el simulador de Vega un TextInput enfocado se quedaba con las flechas (el foco no
 // llegaba a los botones) y al salir del campo sonaba el teclado del sistema. Letras, números, símbolos, mayúsculas,
 // espacio, ⌫, Borrar y Listo; Atrás cierra sin cambiar nada.
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Modal, StyleSheet, Text, View } from 'react-native';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
@@ -17,8 +17,14 @@ const CharacterKey = memo(function CharacterKey({ label, preferred, insert }: { 
   return <View style={s.key}><Button label={label} big compact fontSize={px(32)} width={px(96)} last preferred={preferred} onPress={press} /></View>;
 });
 
-export default function KeyboardModal({ title, value, secret, onDone, onClose }: { title: string; value: string; secret?: boolean; onDone: (v: string) => void; onClose: () => void }) {
+// onChange: cada pulsación (Buscar muestra los resultados mientras se escribe, como Android)
+export default function KeyboardModal({ title, value, secret, onDone, onClose, onChange }: { title: string; value: string; secret?: boolean; onDone: (v: string) => void; onClose: () => void; onChange?: (v: string) => void }) {
   const [text, setText] = useState(value);
+  const changed = useRef(onChange);
+  changed.current = onChange;
+  useEffect(() => {
+    changed.current?.(text);
+  }, [text]);
   const [upper, setUpper] = useState(false);
   const [sym, setSym] = useState(false);
   const [show, setShow] = useState(!secret);
