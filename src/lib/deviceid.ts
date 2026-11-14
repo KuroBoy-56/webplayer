@@ -5,6 +5,12 @@
 // estaba guardado se respeta (el panel lo tiene registrado). Sin él (sistema sin la función, el usuario lo apagó: UUID
 // en ceros) se crea uno al azar como antes, que cambia si se desinstala la app.
 //
+// 2.1.12: el identificador de Vega llega como objeto Uuid ({ bytes: [16 números] }, @amazon-devices/kepler-identifiers),
+// no como texto. Hasta la 2.1.11 se convertía con String() → «[object Object]», no servía y CADA instalación creaba un
+// número al azar: al reinstalar el equipo aparecía como otro en el panel (otro registro, la lista negra no lo frenaba).
+// Ahora se leen sus bytes. El ID de publicidad de Amazon no se usa: su política lo permite solo para anuncios y
+// estadísticas y prohíbe asociarlo a otros identificadores del equipo.
+//
 // 2.1.11: además, con el panel (api/login.php «device_id»). El identificador de Vega queda como «clave fija» del equipo:
 // la app ya instalada la deja anotada en el panel junto al identificador que usa (sea cual sea: el de Vega o uno al
 // azar de antes de la 2.1.6), y una instalación nueva pregunta con esa clave y recibe el identificador con el que el
@@ -38,10 +44,13 @@ export function deviceId(): string {
 const SRC = 'device_id_src';
 export async function prepareDeviceId(): Promise<void> {
   const saved = read('device_id');
-  if (saved && read(SRC) !== 'r') {
-    // el guardado se respeta; el identificador de Vega se pide igual, sin demorar el arranque: es la clave fija con la
-    // que el panel reconoce este equipo después de reinstalar (queda guardada para los próximos inicios)
-    vendorDeviceId().then(noteHw).catch(() => {});
+  // 2.1.12: el guardado se respeta siempre (el panel lo tiene registrado, también los al azar de antes), salvo uno al
+  // azar que puso esta misma instalación y con el que todavía no se inició sesión. El identificador de Vega se pide
+  // igual (como mucho 2,5 s): es la clave fija con la que el panel devuelve este número después de reinstalar
+  if (saved && !(read(SRC) === 'r' && read(NEW) === '1')) {
+    const v = await Promise.race([vendorDeviceId(), new Promise<string>(r => setTimeout(() => r(''), 2500))]).catch(() => '');
+    if (v) noteHw(v);
+    else vendorDeviceId().then(noteHw).catch(() => {});
     return;
   }
   pending = true;
@@ -62,9 +71,11 @@ export async function prepareDeviceId(): Promise<void> {
     return;
   }
   if (saved) return;
-  // Vega no lo dio: al azar (el mismo que ya se usó en esta apertura, si hubo), marcado para intentar otra vez
+  // Vega no lo dio: al azar (el mismo que ya se usó en esta apertura, si hubo), marcado para cambiarlo por el de Vega en
+  // cuanto lo dé (si todavía no se inició sesión con este)
   write('device_id', deviceId());
   write(SRC, 'r');
+  write(NEW, '1');
 }
 
 // ---------- con el panel: clave fija del equipo e identificador de antes (api/login.php «device_id») ----------
@@ -121,9 +132,19 @@ export function deviceRegistered(): void {
   if (read(NEW) === '1') write(NEW, '');
 }
 
+// UUID → 32 hex: el objeto Uuid de Vega ({ bytes: [16 números] }), una lista de 16 bytes o el texto «xxxxxxxx-…»
+export function uuidHex(u: unknown): string {
+  const bytes = Array.isArray(u) ? u : u && typeof u === 'object' && Array.isArray((u as any).bytes) ? (u as any).bytes : null;
+  if (bytes) {
+    if (bytes.length !== 16 || bytes.some((b: unknown) => typeof b !== 'number' || !Number.isFinite(b))) return '';
+    return bytes.map((b: number) => ((b & 255) >>> 0).toString(16).padStart(2, '0')).join('');
+  }
+  return typeof u === 'string' ? u.toLowerCase().replace(/[^0-9a-f]/g, '') : '';
+}
+
 // UUID del vendedor → 8 pares hex (las dos mitades combinadas: el UUID no sale del equipo); '' si no sirve
-export function idFromUuid(uuid: string): string {
-  const h = (uuid || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+export function idFromUuid(uuid: unknown): string {
+  const h = uuidHex(uuid);
   if (h.length !== 32 || /^0+$/.test(h)) return '';
   let out = '';
   for (let i = 0; i < 16; i++) out += (parseInt(h[i], 16) ^ parseInt(h[i + 16], 16)).toString(16);
@@ -134,7 +155,7 @@ export function idFromUuid(uuid: string): string {
 
 // hasta 3 intentos (el sistema recién encendido puede tardar en contestar); '' si no lo da (sin el módulo, UUID en ceros)
 async function vendorDeviceId(): Promise<string> {
-  let ids: { getVendorTrackingId: () => Promise<string> };
+  let ids: { getVendorTrackingId: () => Promise<unknown> };
   try {
     // (cargado aquí: un sistema sin el módulo, o las pruebas en Node, siguen con el identificador al azar)
     ids = require('@amazon-devices/kepler-identifiers').KeplerIdentifiers;
@@ -144,7 +165,7 @@ async function vendorDeviceId(): Promise<string> {
   for (const wait of [1200, 2000, 2500]) {
     try {
       const uuid = await Promise.race([ids.getVendorTrackingId(), new Promise<null>(r => setTimeout(() => r(null), wait))]);
-      if (uuid !== null) return idFromUuid(String(uuid || ''));
+      if (uuid !== null) return idFromUuid(uuid);
     } catch {
       // error pasajero: otra vez
     }

@@ -982,7 +982,8 @@ test('2.1.3: inicio de sesión: si el panel no contesta se le pregunta otra vez 
 
 test('2.1.6 / 2.1.7: identificador del equipo desde el de Vega (no cambia al reinstalar): el mismo siempre; el ya guardado se respeta; sin él, al azar y se vuelve a intentar', async () => {
   const disk = new Map();
-  let vendor = async () => '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+  // como lo da Vega de verdad: un objeto Uuid con 16 bytes (hasta la 2.1.11 se leía como texto y salía al azar)
+  let vendor = async () => ({ bytes: [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b] });
   const prev = Module._load;
   Module._load = function(request, parent, isMain) {
     if (request === '@react-native-async-storage/async-storage') return { __esModule: true, default: {
@@ -1019,7 +1020,7 @@ test('2.1.6 / 2.1.7: identificador del equipo desde el de Vega (no cambia al rei
     dev = await start();
     assert.equal(dev.deviceId(), 'AB:CD:EF:01:23:45:67:89');
     // sin la función (o apagada por el usuario: UUID en ceros): al azar, guardado como antes y marcado
-    for (const v of [async () => { throw new Error('sin módulo'); }, async () => '00000000-0000-0000-0000-000000000000']) {
+    for (const v of [async () => { throw new Error('sin módulo'); }, async () => ({ bytes: new Array(16).fill(0) })]) {
       vendor = v;
       disk.clear();
       dev = await start();
@@ -1029,13 +1030,13 @@ test('2.1.6 / 2.1.7: identificador del equipo desde el de Vega (no cambia al rei
       assert.equal(disk.get('latmpx:device_id_src'), 'r');
     }
     // 2.1.7: en el inicio siguiente Vega contesta: el número al azar se cambia por el fijo (y ya no se vuelve a tocar)
-    vendor = async () => '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+    vendor = async () => ({ bytes: [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b] });
     dev = await start();
     assert.equal(dev.deviceId(), id);
     assert.equal(disk.get('latmpx:device_id_src'), 'v');
     // 2.1.7: Vega tarda en contestar la primera vez (error pasajero): se le pregunta otra vez y sale el fijo
     let calls = 0;
-    vendor = async () => { if (++calls === 1) throw new Error('ocupado'); return '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'; };
+    vendor = async () => { if (++calls === 1) throw new Error('ocupado'); return { bytes: [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b] }; };
     disk.clear();
     dev = await start();
     assert.equal(dev.deviceId(), id);

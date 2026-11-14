@@ -14,7 +14,9 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
 
 // ---- el equipo: lo guardado por la app (se borra al desinstalar) y el identificador de Vega (no se borra) ----
 let disk = new Map();
-let vendor = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+// el identificador de vendedor de Vega, como lo entrega el sistema: un objeto Uuid con 16 bytes
+const UUID = (hex) => ({ bytes: hex.replace(/-/g, '').match(/../g).map(h => parseInt(h, 16)) });
+let vendor = UUID('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b');
 let tenant = '';
 // ---- el panel: claves fijas → identificador, líneas registradas por identificador, pedidos recibidos ----
 let alias = new Map();
@@ -82,7 +84,7 @@ async function open() {
   await tick();
   return { dev, panel };
 }
-const reset = () => { disk = new Map(); alias = new Map(); lines = new Map(); asked = []; tenant = ''; panelKnows = true; vendor = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'; };
+const reset = () => { disk = new Map(); alias = new Map(); lines = new Map(); asked = []; tenant = ''; panelKnows = true; vendor = UUID('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'); };
 
 test('equipo registrado con un número al azar (antes de la 2.1.6): al reinstalar, el panel le devuelve ese mismo número y entra con su línea', async () => {
   reset();
@@ -181,10 +183,44 @@ test('cada distribuidor tiene sus claves; sin identificador de Vega (apagado por
   assert.equal(dev.deviceId(), OLD);
   // sin el identificador de Vega: al azar como antes, sin consultar al panel
   reset();
-  vendor = '00000000-0000-0000-0000-000000000000';
+  vendor = UUID('00000000-0000-0000-0000-000000000000');
   ({ dev, panel } = await open());
   const r = dev.deviceId();
   assert.match(r, MAC);
   await panel.panelCheckMac(r);
   assert.deepEqual(asked.map(a => a[0]), ['check_mac']);
+});
+
+test('2.1.12: el objeto Uuid de Vega se lee por sus bytes (antes salía «[object Object]» y cada instalación tenía otro número al azar)', async () => {
+  reset();
+  let { dev } = await open();
+  const a = dev.deviceId();
+  assert.equal(a, dev.idFromUuid('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'), 'mismo número que el texto del mismo UUID');
+  assert.equal(disk.get('latmpx:device_id_src'), 'v');
+  // reinstalar 3 veces: siempre el mismo número (un solo registro en el panel)
+  for (let i = 0; i < 3; i++) {
+    disk = new Map();
+    ({ dev } = await open());
+    assert.equal(dev.deviceId(), a);
+  }
+  assert.equal(dev.idFromUuid({ bytes: [1, 2, 3] }), '', 'bytes que no son 16: no sirve');
+  assert.equal(dev.idFromUuid({}), '');
+  assert.equal(dev.idFromUuid(String({ bytes: [] })), '', 'lo que hacía la 2.1.11');
+});
+
+test('2.1.12: un equipo de una versión anterior con número al azar lo conserva (el panel lo tiene registrado) y deja anotada su clave fija; al reinstalar el panel le devuelve ese número', async () => {
+  reset();
+  const OLD = '3C:4D:5E:6F:70:81:92:A3';
+  disk.set('latmpx:device_id', OLD);
+  disk.set('latmpx:device_id_src', 'r'); // así lo dejaban la 2.1.6 a 2.1.11 (sin la marca de «nuevo»)
+  lines.set(OLD, 'cliente9');
+  let { dev, panel } = await open();
+  assert.equal(dev.deviceId(), OLD, 'no se cambia: la sesión del cliente sigue');
+  assert.deepEqual(dev.hwKeys(), ['v' + dev.idFromUuid(vendor).replace(/:/g, '')]);
+  await panel.panelCheckMac(dev.deviceId());
+  disk = new Map();
+  ({ dev, panel } = await open());
+  const ln = await panel.panelCheckMac(dev.deviceId());
+  assert.equal(dev.deviceId(), OLD);
+  assert.equal(ln && ln.user, 'cliente9');
 });

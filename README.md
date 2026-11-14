@@ -207,6 +207,17 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.1.12) **El número del equipo ya no cambia al reinstalar (corrección de verdad)**: Amazon entrega el identificador
+  de vendedor (`KeplerIdentifiers.getVendorTrackingId()`) como un objeto `Uuid` con 16 bytes (`{ bytes: [...] }`), no
+  como texto. Desde la 2.1.6 la app lo convertía con `String()` → «[object Object]», lo daba por inválido y **cada
+  instalación creaba un número al azar**: al reinstalar el equipo aparecía como otro en el panel (un registro más cada
+  vez, agotando los equipos de la línea, y un equipo bloqueado quedaba libre). Ahora se leen sus bytes (`uuidHex`,
+  `src/lib/deviceid.ts`) y el número sale siempre del identificador de Amazon: reinstalar da el mismo. Los equipos que
+  ya tienen un número al azar registrado lo conservan (no se les cierra la sesión) y dejan anotado en el panel el
+  identificador de Amazon: al reinstalar, el panel les devuelve ese mismo número (requiere `api/login.php` e
+  `includes/device_alias.php` del 14/11 en el hosting). No se usa el ID de publicidad: la política de Amazon lo permite
+  solo para anuncios y estadísticas. Vega no da a las apps ni MAC ni número de serie. Prueba: `tools/test-deviceid.cjs`
+  (con el objeto Uuid tal como lo entrega el sistema).
 - (2.1.11) **Número del equipo que el panel devuelve al reinstalar**: el número («MAC») sale del identificador que
   Amazon da a las apps del mismo vendedor (Vendor Tracking ID, `@amazon-devices/kepler-identifiers`; Vega no expone el
   número de serie ni la MAC: lo confirma Amazon en su foro de desarrolladores). Desde esta versión ese identificador es
