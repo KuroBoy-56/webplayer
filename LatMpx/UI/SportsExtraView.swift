@@ -1,14 +1,14 @@
 import SwiftUI
 
-/** Pestañas de Deportes (como Roku, Vega y Android): la agenda y, si el panel las ofrece, Tablas, Selecciones y Equipos */
-enum SpTab: String { case agenda, tables, nations, teams }
+/** Pestañas de Deportes como Android TV, Roku y Vega: Hoy, Mañana y, si el panel las ofrece, Tablas, Selecciones y Equipos */
+enum SpTab: String { case today, tomorrow, tables, nations, teams }
 
 struct SportsTabs: View {
     let data: SportsData
     @Binding var tab: SpTab
 
     private var tabs: [(SpTab, String)] {
-        var t: [(SpTab, String)] = [(.agenda, tr("Agenda"))]
+        var t: [(SpTab, String)] = [(.today, tr("Hoy")), (.tomorrow, tr("Mañana"))]
         if data.tablesOn { t.append((.tables, tr("Tablas"))) }
         if data.nationsOn { t.append((.nations, tr("Selecciones"))) }
         if data.fixturesOn { t.append((.teams, tr("Equipos"))) }
@@ -16,10 +16,8 @@ struct SportsTabs: View {
     }
 
     var body: some View {
-        if tabs.count > 1 {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) { ForEach(tabs, id: \.0) { t in Chip(text: t.1, selected: tab == t.0) { tab = t.0 } } }
-            }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) { ForEach(tabs, id: \.0) { t in Chip(text: t.1, selected: tab == t.0) { tab = t.0 } } }
         }
     }
 }
@@ -259,6 +257,8 @@ struct SportsTeamsView: View {
     let nationsMode: Bool
     let now: Double
     let columns: [GridItem]
+    /** el canal de cada partido (como la agenda): nombre y si es uno del cliente (en verde) */
+    var chanOf: ((SportEvent) -> (String, Bool))? = nil
     let onOpen: (SportEvent) -> Void
     @State private var fx: Fixtures?
     @State private var loading = true
@@ -296,7 +296,10 @@ struct SportsTeamsView: View {
             if fx == nil && loading { LoadingView(text: tr("Cargando partidos…")).frame(height: 240) }
             else if !list.isEmpty {
                 LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(list) { e in SportCard(event: e, info: data.sports[e.sport], now: now, withDate: true) { onOpen(e) } }
+                    ForEach(list) { e in
+                        let c = chanOf?(e)
+                        SportCard(event: e, info: data.sports[e.sport], now: now, withDate: true, chan: c?.0, chanFound: c?.1 ?? false) { onOpen(e) }
+                    }
                 }
             }
             else if fx == nil { EmptyMessage(text: tr("No se pudieron cargar los partidos.")) }

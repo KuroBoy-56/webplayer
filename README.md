@@ -4,6 +4,21 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.0.8
+
+- **Deportes igual que Android TV (como Roku y Vega OS), en vertical:** pestañas **Hoy / Mañana** y, si el panel las
+  ofrece, **Tablas / Selecciones / Equipos**; Hoy incluye los que siguen en vivo y el orden es en vivo → próximos →
+  terminados, con las disciplinas en chips y una tarjeta por fila en el iPhone (cuadrícula en iPad). Cada tarjeta muestra
+  el canal encontrado en la lista del cliente (en verde; «Sin canal» / «Por confirmar» / «Buscando…») y «En TV: …» (con
+  «Solo los canales del servidor IPTV» del panel, `chan: "iptv"`, solo los que el cliente tiene). El canal de cada
+  partido: el que lo transmite si el cliente lo tiene, el de la guía del panel (`api/sports_epg.php`) o el de los equipos
+  / nombre del evento; solo cuentan las carpetas que el cliente ve (control parental). Al tocar la tarjeta sale el menú:
+  **Ver el evento (canal automático)**, cada canal que lo transmite, los de la guía y por equipos (en verde los del
+  cliente), **Buscar canales: «equipo»** y **Buscar canal, equipo o evento…**. Los canales de la agenda se buscan una
+  vez, en segundo plano, al abrir Deportes. Se quitan el buscador de la agenda, la fila «En vivo ahora» y los grupos por
+  liga (como Android 1.3.10). Búsqueda del canal como Android TV: `M+` = Movistar y, al final, por las palabras pegadas
+  (`Sports.match`, `findLoose`, `SportMatch`). `SportsView.swift`, `SportsExtraView.swift`, `Sports.swift`.
+
 ## Novedades de la 1.0.7
 
 - **Índice compartido (más rápido):** en películas y capítulos MP4 con el índice (moov) al final, AVPlayer pedía al

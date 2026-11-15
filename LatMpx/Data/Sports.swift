@@ -35,6 +35,28 @@ struct SportsData {
     var fixturesOn = false
     var nationsOn = false
     var fixturesRev = 0
+    /** «Solo los canales del servidor IPTV» del panel ("chan": "iptv"): en cada partido solo se nombran los que el cliente tiene */
+    var iptvOnly = false
+}
+
+/** canales de un partido en la lista del cliente: el automático, cada canal que lo transmite (el del cliente o nil), los
+ *  de la guía del panel y el de los equipos (como Android TV, Roku y Vega) */
+struct SportMatch {
+    var best: Item?
+    let teams: Item?
+    let tv: [(TvChannel, Item?)]
+    var epg: [Item] = []
+
+    /** todos los del cliente, sin repetir: el automático primero */
+    func owned() -> [Item] {
+        var all: [Item] = []
+        if let b = best { all.append(b) }
+        for t in tv { if let c = t.1 { all.append(c) } }
+        all.append(contentsOf: epg)
+        if let t = teams { all.append(t) }
+        var seen = Set<Int>()
+        return all.filter { seen.insert($0.id).inserted }
+    }
 }
 
 enum SpStatus { case soon, live, fin, postponed }
@@ -97,7 +119,8 @@ enum Sports {
         let tb = j.o("tables"), fx = j.o("fixtures")
         return SportsData(events: events, sports: sports, rules: rules,
                           tablesOn: tb?.b("on") ?? false, tablesRev: tb?.i("t") ?? 0,
-                          fixturesOn: fx?.b("on") ?? false, nationsOn: (fx?.b("on") ?? false) && (fx?.b("nat") ?? false), fixturesRev: fx?.i("t") ?? 0)
+                          fixturesOn: fx?.b("on") ?? false, nationsOn: (fx?.b("on") ?? false) && (fx?.b("nat") ?? false), fixturesRev: fx?.i("t") ?? 0,
+                          iptvOnly: j.s("chan") == "iptv")
     }
 
     /** un partido de la agenda o del JSON de 21 días (mismos campos; "l" = liga de Equipos / Selecciones) */
@@ -228,12 +251,13 @@ enum Sports {
         "ve", "venezuela", "uy", "uruguay", "py", "paraguay", "bo", "bolivia", "cr", "pa", "panama", "gt", "hn", "sv", "ni", "do", "pr",
         "latam", "latin", "latino", "latina", "lat", "america", "es", "esp", "spain", "espana", "uk", "gb", "int", "intl", "international",
         "br", "bra", "brasil", "brazil", "pt", "portugal", "ca", "can", "canada", "fr", "france", "it", "italy", "de", "germany",
-        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland"]
+        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland", "en", "network", "net"]
 
     /** palabras que identifican el canal; un número va pegado a la palabra anterior ("espn 2" -> "espn2") */
     static func channelKey(normalized: String) -> [String] {
         var out = [String]()
-        for t in normalized.split(separator: " ").map(String.init) where !t.isEmpty && !noise.contains(t) {
+        // "M+ LaLiga" (Movistar Plus) llega como "m laliga"
+        for t in normalized.split(separator: " ").map({ $0 == "m" ? "movistar" : String($0) }) where !t.isEmpty && !noise.contains(t) {
             if t.isDigits, let last = out.last, !last.isDigits { out[out.count - 1] = last + t } else { out.append(t) }
         }
         return out
@@ -276,7 +300,39 @@ enum Sports {
             else { continue }
             scored.append((score, c))
         }
+        if scored.isEmpty { return findLoose(q, ix) }
         return scored.sorted { $0.0 != $1.0 ? $0.0 > $1.0 : $0.1.item.name.count < $1.1.item.name.count }.map { $0.1.item }
+    }
+
+    /** último intento: las palabras del canal pegadas contienen cada palabra buscada sin que la siga un número
+     *  ("Fox Sports" da "FOXSPORTS PREMIUM", nunca "FoxSports2"), como Android TV y Vega */
+    private static func findLoose(_ q: [String], _ ix: Index) -> [Item] {
+        guard let first = q.first, first.count >= 3 else { return [] }
+        let want = q.joined().count
+        // candidatos: los canales con una palabra que empieza como la primera buscada
+        var cand = Set<Int>()
+        for len in stride(from: first.count, through: 2, by: -1) { ix.words[String(first.prefix(len))]?.forEach { cand.insert($0) } }
+        var scored = [(Int, Chan)]()
+        for c in cand.sorted().map({ ix.chans[$0] }) {
+            let compact = c.key.joined()
+            if compact.isEmpty { continue }
+            let ok = q.allSatisfy { t in
+                guard let r = compact.range(of: t) else { return false }
+                return r.upperBound == compact.endIndex || !compact[r.upperBound].isNumber
+            }
+            if ok { scored.append((300 - (compact.count - want) - c.item.name.count, c)) }
+        }
+        return scored.sorted { $0.0 > $1.0 }.map { $0.1.item }
+    }
+
+    /**
+     * Canales de un partido como Android TV, Roku y Vega: cada canal que lo transmite (el que tiene el cliente) y el de los
+     * equipos o el nombre del evento; el automático es el primero de los que lo transmiten y, si no, el de los equipos.
+     */
+    static func match(_ ev: SportEvent, _ ix: Index, _ r: MatchRules) -> SportMatch {
+        let tv = ev.tv.map { t in (t, findByChannel(t.name, ix).first) }
+        let teams = find(ev, ix, r)
+        return SportMatch(best: tv.first(where: { $0.1 != nil })?.1 ?? teams, teams: teams, tv: tv)
     }
 
     /** El canal del partido: el primero de sus canales de TV que tiene el cliente; si no, por equipos o nombre del evento. */
