@@ -42,18 +42,23 @@ export function hardId(): boolean {
   return !!mac;
 }
 
-// MAC → 12 hex. 2.6.2: la función de Amazon escribe los pares de 80 a FF con signo («02:15:FFFFFFB2:00:…» = 02:15:B2:00:…;
-// visto en el Vega Virtual Device): de cada par «FFFFFFxx» se toman los dos últimos. '' si no es una MAC.
+// MAC → 12 hex. 2.6.2: la función de Amazon escribe los pares de 80 a FF con signo («FFFFFFB2» = B2): de esos se toman
+// los dos últimos. 2.6.3: además la CORTA a 17 caracteres («02:15:FFFFFFB2:00» del Vega Virtual Device): con un par
+// alto se pierden los últimos pares, justo los que distinguen un equipo de otro. Una MAC cortada NO se usa (varios
+// equipos tendrían el mismo número); solo la de los emuladores (EMU) se completa. '' si no es una MAC completa.
+const EMU = /^02:15:F{6}B2:00(:00(:00)?)?$/;
 export function macHex(raw: unknown): string {
   if (typeof raw !== 'string') return '';
   const t = raw.trim().toUpperCase();
+  // MAC por defecto de los emuladores (Android / Vega Virtual Device): 02:15:B2:00:00:00, igual en todos
+  if (EMU.test(t)) return '0215B2000000';
   const parts = t.split(/[:\-\s.]+/).filter(Boolean);
   if (parts.length === 6) {
     const out = parts.map(p => (/^[0-9A-F]{1,2}$/.test(p) ? p.padStart(2, '0') : /^F{6}[0-9A-F]{2}$/.test(p) ? p.slice(-2) : ''));
     return out.every(Boolean) ? out.join('') : '';
   }
   const hex = t.replace(/[^0-9A-F]/g, '');
-  return hex.length === 12 ? hex : '';
+  return parts.length === 1 && hex.length === 12 ? hex : '';
 }
 
 // MAC → número: 6 pares en mayúsculas ('' si no sirve: ni en ceros, ni FF…, ni multicast). Una que empiece en "00"
@@ -123,7 +128,7 @@ export function systemMac(): string {
       const st = Array.isArray(r) ? r[0] : r?.status;
       const val = Array.isArray(r) ? r[1] : r?.address;
       const rank = st === ok ? macRank(val) : 0;
-      seen.push(id + ':' + (st === ok ? (rank ? (rank === 2 ? 'ok' : 'local') : 'vacía ' + String(val).slice(0, 40)) : st === 4 ? 'sin permiso' : 'estado ' + st));
+      seen.push(id + ':' + (st === ok ? (rank ? (rank === 2 ? 'ok' : 'local') : (String(val).length >= 17 ? 'cortada ' : 'vacía ') + String(val).slice(0, 40)) : st === 4 ? 'sin permiso' : 'estado ' + st));
       if (rank > bestRank) {
         best = macId(val);
         bestRank = rank;

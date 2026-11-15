@@ -207,6 +207,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.3) **MAC cortada por Amazon**: `getMacAddress()` además corta la MAC a 17 caracteres («02:15:FFFFFFB2:00»): con un
+  par de 80 a FF se pierden los últimos pares, los que distinguen un equipo de otro. Una MAC cortada **no se usa** (varios
+  Fire TV tendrían el mismo número): en un equipo real queda el identificador de Amazon. Solo la MAC por defecto de los
+  emuladores (02:15:B2:00:00:00, la del Vega Virtual Device, que no tiene identificador de Amazon) se completa. El
+  diagnóstico dice «cortada».
 - (2.6.2) **La MAC se lee aunque Amazon la escriba mal**: `getMacAddress()` entrega los pares de 80 a FF con signo
   («02:15:FFFFFFB2:00:…» en lugar de «02:15:B2:00:…», visto en el Vega Virtual Device con el diagnóstico de la 2.6.1) y la
   app la descartaba. `macHex` toma los dos últimos dígitos de cada par «FFFFFFxx». En el simulador el identificador de

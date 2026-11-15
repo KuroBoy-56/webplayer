@@ -254,26 +254,36 @@ test('2.6.1: sin ningún número, la pantalla muestra qué contestó el sistema'
   assert.match(again.dev.deviceDiag(), /Amazon: forma object \{"weird":true\}/);
 });
 
-test('2.6.2: Vega Virtual Device: la MAC llega con los pares altos con signo («FFFFFFB2») y no hay identificador de Amazon', async () => {
+test('2.6.3: Vega Virtual Device: la función de Amazon corta la MAC («02:15:FFFFFFB2:00») y no hay identificador de Amazon: la MAC de los emuladores', async () => {
   reset();
-  wifiMac = '02:15:FFFFFFB2:00:5A:FFFFFF9C';
+  wifiMac = '02:15:FFFFFFB2:00';
   vendor = new Error('[com.amazon.apmf.NotSupportedError]: Not supported');
   let { dev, panel } = await open();
-  assert.equal(dev.deviceId(), '02:15:B2:00:5A:9C');
+  assert.equal(dev.deviceId(), '02:15:B2:00:00:00');
   await panel.panelSubmit(dev.deviceId(), 'vvd', 'p', 'http://srv.test:80');
   for (const step of ['cierre', 'reinstalar', 'inicio']) {
     if (step === 'reinstalar') disk = new Map();
     storageBroken = step === 'cierre';
     ({ dev, panel } = await open());
-    assert.equal(dev.deviceId(), '02:15:B2:00:5A:9C', step);
+    assert.equal(dev.deviceId(), '02:15:B2:00:00:00', step);
     assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'vvd', step);
   }
   assert.match(dev.deviceDiag(), /Amazon: error .*NotSupportedError/);
-  // un Fire TV real con un par alto en su MAC de fábrica: se lee bien
+});
+
+test('2.6.3: Fire TV real: una MAC cortada por Amazon NO se usa (varios equipos tendrían el mismo número): el identificador de Amazon', async () => {
+  reset();
+  wifiMac = 'FFFFFFF0:27:2D:FF'; // F0:27:2D:AA:BB:CC escrita con signo y cortada a 17 caracteres
+  const { dev } = await open();
+  assert.equal(dev.deviceId(), V());
+  assert.match(dev.deviceDiag(), /cortada FFFFFFF0:27:2D:FF/);
+  // completa (con signo pero sin cortar) sí sirve
   assert.equal(dev.macId('F0:27:FFFFFF9D:AA:FFFFFFBB:0C'), 'F0:27:9D:AA:BB:0C');
   assert.equal(dev.macRank('F0:27:FFFFFF9D:AA:FFFFFFBB:0C'), 2);
+  assert.equal(dev.macId('74:FFFFFFC2:46:01'), '', 'cortada');
   assert.equal(dev.macId('F0:27:1FFFFF9D:AA:BB:0C'), '', 'un par raro no es una MAC');
   assert.equal(dev.macId('2:15:b2:0:5a:9c'), '02:15:B2:00:5A:9C');
+  assert.equal(dev.macId('F0272DAABBCC'), 'F0:27:2D:AA:BB:CC');
 });
 
 test('panel sin la función (viejo): el número guardado o la MAC real, sin preguntar en cada pedido', async () => {
