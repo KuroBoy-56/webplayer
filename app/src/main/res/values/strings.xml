@@ -421,4 +421,23 @@
     <string name="protected_session">Contenido protegido en esta sesión</string>
     <string name="protected_locked">Bloqueado</string>
     <string name="protected_unlocked">Desbloqueado · hasta que cierres la app</string>
+    <string name="sp_no_channel">Sin canal</string>
+    <string name="sp_finding">Buscando…</string>
+    <string name="sp_tbc">Por confirmar</string>
+    <string name="sp_on_tv">En TV:</string>
+    <string name="sp_in_list">en tu lista: %1$s</string>
+    <string name="sp_not_in_list">no está en tu lista: se busca el evento</string>
+    <string name="sp_in_guide">en la guía</string>
+    <string name="sp_by_teams">por equipos</string>
+    <string name="sp_search_x">Buscar canales: «%1$s»</string>
+    <string name="sp_search_any">Buscar canal, equipo o evento…</string>
+    <string name="sp_channels_with">Canales con «%1$s»</string>
+    <string name="sp_no_channels_with">No hay canales con «%1$s» en tu lista</string>
+    <string name="sp_type_hint">Canal, equipo o evento</string>
+    <string name="sp_postponed">El evento está aplazado</string>
+    <string name="sp_loading_channels">Buscando los canales, un momento…</string>
+    <string name="sp_no_matches">No hay partidos para mostrar.</string>
+    <string name="sp_watch_auto">Ver el evento (canal automático)</string>
+    <string name="sp_where">¿Dónde quieres verlo?</string>
+    <string name="sp_search_go">Buscar</string>
 </resources>

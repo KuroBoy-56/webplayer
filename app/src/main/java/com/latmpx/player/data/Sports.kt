@@ -56,7 +56,16 @@ class MatchRules(
 data class SportsData(
     val events: List<SportEvent>, val sports: Map<String, SportInfo>, val rules: MatchRules,
     val tablesOn: Boolean = false, val tablesRev: Long = 0, val fixturesOn: Boolean = false, val nationsOn: Boolean = false, val fixturesRev: Long = 0,
+    /** «Solo los canales del servidor IPTV» del panel ("chan": "iptv"): en cada partido solo se nombran los que el cliente tiene */
+    val iptvOnly: Boolean = false,
 )
+
+/** canales de un partido en la lista del cliente: el automático, cada canal que lo transmite (ch = el del cliente),
+ *  los de la guía del panel y el de los equipos (como Roku y Vega) */
+data class SportMatch(val best: Item?, val teams: Item?, val tv: List<Pair<TvChannel, Item?>>, val epg: List<Item> = emptyList()) {
+    /** todos los del cliente, sin repetir: el automático primero */
+    fun owned(): List<Item> = (listOf(best) + tv.map { it.second } + epg + listOf(teams)).filterNotNull().distinctBy { it.id }
+}
 
 /** Agenda deportiva del panel y búsqueda del canal en vivo (misma puntuación que la web). */
 object Sports {
@@ -106,7 +115,7 @@ object Sports {
             events, sports, rules,
             tablesOn = tb?.optBoolean("on", false) == true, tablesRev = tb?.optLong("t", 0L) ?: 0L,
             fixturesOn = fx?.optBoolean("on", false) == true, nationsOn = fx?.optBoolean("on", false) == true && fx.optBoolean("nat", true),
-            fixturesRev = fx?.optLong("t", 0L) ?: 0L,
+            fixturesRev = fx?.optLong("t", 0L) ?: 0L, iptvOnly = j.s("chan") == "iptv",
         )
     }
 
@@ -152,7 +161,7 @@ object Sports {
         return words.all { hay.contains(it) }
     }
 
-    // compiladas una sola vez (antes se compilaban en cada llamada: decenas de miles por búsqueda de canal)
+    // compiladas una sola vez (antes se compilaban en cada llamada: cientos de miles al buscar los canales de la agenda)
     private val MARKS = Regex("\\p{M}+")
     private val NON_ALNUM = Regex("[^a-z0-9]+")
 
@@ -168,7 +177,7 @@ object Sports {
         return r.alias[n]?.let { listOf(n, it) } ?: listOf(n)
     }
 
-    /** un equipo ya normalizado (con su alias) y sus palabras distintivas: se arma una vez por partido */
+    /** un equipo ya normalizado (con su alias) y sus palabras distintivas: se arma una vez por partido, no por canal */
     private class Team(val names: List<String>, val toks: List<List<String>>)
 
     private fun team(name: String, r: MatchRules): Team? {
@@ -190,19 +199,19 @@ object Sports {
 
     /** Canal ya normalizado con su categoría, para no repetir el trabajo en cada partido. */
     class Chan(val item: Item, val norm: String, val isEvent: Boolean) {
-        val key: List<String> = channelKey(item.name)
+        val key: List<String> by lazy { channelKey(item.name) }
     }
 
     /**
-     * Índice de los canales (como Vega / Roku): se arma una sola vez por catálogo y reglas, y cada partido compara
-     * solo los canales que comparten alguna palabra con sus equipos o su canal de TV (no todos contra todos).
-     * Antes cada toque normalizaba de nuevo todos los canales y los comparaba uno por uno: con catálogos grandes
-     * la búsqueda tardaba muchísimo y el equipo mostraba «la aplicación no responde».
+     * Índice de palabras de los canales, como Vega / Roku: se arma una sola vez por lista de canales y cada partido compara
+     * solo los canales que comparten alguna palabra con sus equipos o con su canal de TV (no todos contra todos). Antes
+     * cada partido recorría todos los canales y volvía a normalizar los equipos en cada uno: al abrir Deportes (todos los
+     * partidos a la vez) el equipo se trababa y salía «la aplicación no responde».
      */
-    class Index(val chans: List<Chan>) {
+    private class Index(val chans: List<Chan>) {
         val words = HashMap<String, MutableList<Int>>()
         val keys = HashMap<String, MutableList<Int>>()
-        val memo = java.util.concurrent.ConcurrentHashMap<String, Int>()
+        val memo = java.util.concurrent.ConcurrentHashMap<String, List<Item>>()
 
         init {
             fun add(m: HashMap<String, MutableList<Int>>, k: String, i: Int) {
@@ -218,13 +227,13 @@ object Sports {
         }
     }
 
-    private var ixCache: Triple<List<Item>, MatchRules, Index>? = null
+    private var lastIx: Pair<List<Chan>, Index>? = null
 
-    /** el índice de este catálogo (el mismo mientras no cambien los canales ni las reglas) */
+    /** el índice de esta lista de canales (la misma lista de prepare: se arma una vez) */
     @Synchronized
-    fun index(channels: List<Item>, cats: List<Category>, r: MatchRules): Index {
-        ixCache?.let { (ch, rr, ix) -> if (ch === channels && rr === r) return ix }
-        return Index(prepare(channels, cats, r)).also { ixCache = Triple(channels, r, it) }
+    private fun ix(chans: List<Chan>): Index {
+        lastIx?.let { (l, ix) -> if (l === chans) return ix }
+        return Index(chans).also { lastIx = chans to it }
     }
 
     /* ---------- búsqueda por el canal que transmite ("ESPN 2" -> los canales ESPN 2 del cliente) ---------- */
@@ -236,12 +245,14 @@ object Sports {
         "ve", "venezuela", "uy", "uruguay", "py", "paraguay", "bo", "bolivia", "cr", "pa", "panama", "gt", "hn", "sv", "ni", "do", "pr",
         "latam", "latin", "latino", "latina", "lat", "america", "es", "esp", "spain", "espana", "uk", "gb", "int", "intl", "international",
         "br", "bra", "brasil", "brazil", "pt", "portugal", "ca", "can", "canada", "fr", "france", "it", "italy", "de", "germany",
-        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland")
+        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland", "en", "network", "net")
 
     /** palabras que identifican el canal; un número va pegado a la palabra anterior ("espn 2" -> "espn2") */
     fun channelKey(name: String): List<String> {
         val out = ArrayList<String>()
-        for (t in norm(name).split(' ')) {
+        for (raw in norm(name).split(' ')) {
+            // "M+ LaLiga" (Movistar Plus) llega como "m laliga"
+            val t = if (raw == "m") "movistar" else raw
             if (t.isEmpty() || t in NOISE) continue
             if (t.all(Char::isDigit) && out.isNotEmpty() && !out.last().all(Char::isDigit)) out[out.size - 1] = out.last() + t else out.add(t)
         }
@@ -252,19 +263,22 @@ object Sports {
      * Canales del cliente que son el canal que transmite: primero los que se llaman igual (sin calidad
      * ni país), después los que contienen todas sus palabras. "ESPN 2" nunca da "ESPN" ni "ESPN 3".
      */
-    fun findByChannel(tvName: String, ix: Index): Item? {
-        val hit = ix.memo[tvName]
-        if (hit != null) return if (hit >= 0) ix.chans[hit].item else null
+    fun findByChannel(tvName: String, chans: List<Chan>): List<Item> {
+        val ix = ix(chans)
+        ix.memo[tvName]?.let { return it }
+        return findByChannelOnce(tvName, ix).also { ix.memo[tvName] = it }
+    }
+
+    private fun findByChannelOnce(tvName: String, ix: Index): List<Item> {
         val q = channelKey(tvName)
-        if (q.isEmpty() || q.joinToString("").length < 2) { ix.memo[tvName] = -1; return null }
+        if (q.isEmpty() || q.joinToString("").length < 2) return emptyList()
         val qs = q.toSet()
-        // solo los canales que tienen la palabra (o el nombre pegado) del canal buscado
+        // solo los canales que tienen la primera palabra (o el nombre pegado) del canal buscado
         val cand = LinkedHashSet<Int>()
         ix.keys[q.joinToString("")]?.let { cand.addAll(it) }
         ix.words[q[0]]?.let { cand.addAll(it) }
-        val scored = ArrayList<Pair<Int, Int>>()
-        for (ci in cand) {
-            val c = ix.chans[ci]
+        val scored = ArrayList<Pair<Int, Chan>>()
+        for (c in cand.sorted().map { ix.chans[it] }) {
             val k = c.key
             if (k.isEmpty()) continue
             val score = when {
@@ -273,27 +287,76 @@ object Sports {
                 k.containsAll(qs) -> 500 - 10 * (k.size - q.size)
                 else -> continue
             }
-            scored.add(score to ci)
+            scored.add(score to c)
         }
-        val best = scored.sortedWith(compareByDescending<Pair<Int, Int>> { it.first }.thenBy { ix.chans[it.second].item.name.length }).firstOrNull()?.second ?: -1
-        ix.memo[tvName] = best
-        return if (best >= 0) ix.chans[best].item else null
+        if (scored.isEmpty()) return findLoose(q, ix)
+        return scored.sortedWith(compareByDescending<Pair<Int, Chan>> { it.first }.thenBy { it.second.item.name.length }).map { it.second.item }
+    }
+
+    /** último intento: las palabras del canal pegadas contienen cada palabra buscada sin que la siga un número
+     *  ("Fox Sports" da "FOXSPORTS PREMIUM", nunca "FoxSports2") */
+    private fun findLoose(q: List<String>, ix: Index): List<Item> {
+        val first = q.first()
+        if (first.length < 3) return emptyList()
+        val want = q.joinToString("").length
+        // candidatos: los canales con una palabra que empieza como la primera buscada (como Vega)
+        val cand = LinkedHashSet<Int>()
+        for (len in first.length downTo 2) ix.words[first.take(len)]?.let { cand.addAll(it) }
+        val scored = ArrayList<Pair<Int, Chan>>()
+        for (c in cand.sorted().map { ix.chans[it] }) {
+            val compact = c.key.joinToString("")
+            if (compact.isEmpty()) continue
+            val ok = q.all { t -> val p = compact.indexOf(t); p >= 0 && compact.getOrNull(p + t.length)?.isDigit() != true }
+            if (ok) scored.add((300 - (compact.length - want) - c.item.name.length) to c)
+        }
+        return scored.sortedByDescending { it.first }.map { it.second.item }
+    }
+
+    /**
+     * Canales de un partido como Roku y Vega: cada canal que lo transmite (el que tiene el cliente) y el de los equipos o
+     * el nombre del evento; el automático es el primero de los que lo transmiten y, si no, el de los equipos.
+     */
+    fun match(ev: SportEvent, chans: List<Chan>, r: MatchRules): SportMatch {
+        val tv = ev.tv.map { t -> t to findByChannel(t.name, chans).firstOrNull() }
+        val teams = find(ev, chans, r)
+        return SportMatch(tv.firstOrNull { it.second != null }?.second ?: teams, teams, tv)
+    }
+
+    // canales deportivos para buscar el partido en la guía del panel (api/sports_epg.php): por el nombre del canal o de su
+    // carpeta, sin las carpetas de eventos; primero los que tienen guía propia (como Vega)
+    private val SPORT_RE = Regex("sport|deport|espn|fox|tnt|tudn|dazn|bein|sky|movistar|futbol|soccer|nba|nfl|mlb|nhl|ufc|liga|win |directv|dsports|claro|vix|paramount|peacock|tyc|gol|telemundo|univision|azteca|canal 5|caracol|rcn|tsn|eurosport|teledeporte|cbs|nbc|usa network|f1|golf|tenis|tennis|box|universo|sportsnet|telefe|tv publica|teletica|tigo|max|apple tv", RegexOption.IGNORE_CASE)
+
+    fun epgChannels(chans: List<Chan>, cats: List<Category>, maxN: Int = 600): List<Item> {
+        val sportCat = cats.filter { SPORT_RE.containsMatchIn(Platforms.fold(it.name)) }.map { it.id }.toSet()
+        val withEpg = ArrayList<Item>()
+        val noEpg = ArrayList<Item>()
+        for (c in chans) {
+            if (c.isEvent) continue
+            if (c.item.categoryId !in sportCat && !SPORT_RE.containsMatchIn(c.norm)) continue
+            if (c.item.epgId.isNotBlank()) withEpg += c.item else noEpg += c.item
+            if (withEpg.size >= maxN) break
+        }
+        return (withEpg + noEpg).take(maxN)
     }
 
     /** El canal del partido: el primero de sus canales de TV que tiene el cliente; si no, por equipos o nombre del evento. */
-    fun best(ev: SportEvent, ix: Index, r: MatchRules): Item? {
-        for (t in ev.tv) findByChannel(t.name, ix)?.let { return it }
-        return find(ev, ix, r)
+    fun best(ev: SportEvent, chans: List<Chan>, r: MatchRules): Item? {
+        for (t in ev.tv) findByChannel(t.name, chans).firstOrNull()?.let { return it }
+        return find(ev, chans, r)
     }
 
+    /** solo los canales de las carpetas que el cliente ve (las ocultas con el PIN no cuentan), como Roku y Vega */
     fun prepare(channels: List<Item>, cats: List<Category>, r: MatchRules): List<Chan> {
         val eventCats = cats.filter { r.eventCategory.containsMatchIn(Platforms.fold(it.name)) }.map { it.id }.toSet()
-        return channels.map { Chan(it, norm(it.name), it.categoryId in eventCats) }
+        val shown = Store.visibleCats(cats).map { it.id }.toSet()
+        val hidden = cats.map { it.id }.filter { it !in shown }.toSet()
+        return channels.filter { it.categoryId !in hidden }.map { Chan(it, norm(it.name), it.categoryId in eventCats) }
     }
 
     private val VS = Regex(" (vs|v|x) ")
 
-    fun find(ev: SportEvent, ix: Index, r: MatchRules): Item? {
+    fun find(ev: SportEvent, chans: List<Chan>, r: MatchRules): Item? {
+        val ix = ix(chans)
         val h = ev.home.trim()
         val a = ev.away.trim()
         val leagueToks = tokens(ev.league, r)
