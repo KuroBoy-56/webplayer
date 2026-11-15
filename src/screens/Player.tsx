@@ -634,7 +634,9 @@ export default function Player({ params }: { params: PlayParams }) {
       }
       if (full) return fail(t('Línea en uso en otro equipo'));
       if (check.xui) return fail(serverText(check, false));
-      if (check.code === 404 || check.code === 410) return fail(t('Video no disponible'));
+      // 2.6.8: el servidor IPTV dice que el archivo no existe (lo borró o lo movió aunque siga en su lista): que se
+      // entienda que no es la app
+      if (check.code === 404 || check.code === 410) return fail(t('Este video ya no está en el servidor de tu proveedor ({x}).', { x: String(check.code) }));
 
       const hasMedia = !check.html && (check.code === 206 || (check.code === 200
         && (!check.type || /video|audio|octet|dash|mpegurl|matroska/i.test(check.type))));

@@ -44,19 +44,31 @@ export function warmIndex(url: string, at = 0, lang = ''): void {
 
 // Desde la ficha: primero el idioma guardado para el título en otro equipo (hint: «play» del avance del panel), después
 // el video preparado con ese idioma
-export function warmVideo(url: string, at: number, hint?: { a?: string; ai?: number }): void {
+// isFree (2.6.8): en líneas de una conexión, si el servidor dice que la línea está libre
+export function warmVideo(url: string, at: number, hint?: { a?: string; ai?: number }, isFree?: () => Promise<boolean>): void {
   if (hint?.a) seedTitleLang(url, String(hint.a), typeof hint.ai === 'number' ? hint.ai : -1);
-  // En una línea de una conexión la ficha no la ocupa por adelantado (el reproductor de Amazon abre directo). Con más
-  // conexiones se lee el índice mientras se mira la ficha: al pulsar Reproducir el lector solo pide el video (2.1.3)
+  // Con más conexiones se lee el índice mientras se mira la ficha: al pulsar Reproducir el lector solo pide el video
+  // (2.1.3). En una línea de una conexión la ficha no la ocupaba (el reproductor de Amazon abría directo: cabecera,
+  // índice y video, tres esperas de ~9 s con servidores lentos). 2.6.8: también, si el servidor dice que la línea no tiene
+  // ninguna conexión en uso (otro equipo de la misma cuenta viendo no se corta); al pulsar Reproducir el lector sigue
+  // con lo leído (Playback.nativeVodPlanned)
   if (nativeVodAllowed(url) && (lineLimit() <= 1 || isSingle(url))) {
     warmStop();
+    if (!isFree || !/\.(mp4|m4v|mov|mkv)(\?|$)/i.test(url)) return;
+    const my = ++asking;
+    isFree().then(ok => {
+      if (ok && my === asking) warmIndex(url, at, titleLangOf(url));
+    }).catch(() => {});
     return;
   }
   warmIndex(url, at, titleLangOf(url));
 }
+// pregunta en curso a la línea (una nueva o warmStop la deja sin efecto)
+let asking = 0;
 
 // se salió de la ficha (o se enfocó otro capítulo): lo que no terminó se corta
 export function warmStop(except?: string): void {
+  if (!except || current?.url !== except) asking++;
   if (!current || current.url === except) return;
   const c = current;
   current = null;

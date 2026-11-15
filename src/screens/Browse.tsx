@@ -16,8 +16,7 @@ import { digits } from '../lib/util';
 import { idleStep, onFocusWin, Win } from '../lib/rowwindow';
 import { useNav } from '../nav';
 import { progressEpisodeId, progressSeriesId, resumePosition, getState, isFav, toggleFav, useAppState } from '../state';
-import { api, episodeUrl, movieUrl } from '../api/xtream';
-import { http, json } from '../lib/http';
+import { episodeUrl, lineFree, movieUrl } from '../api/xtream';
 import { idxWarmList } from '../player/idxwarm';
 import { t } from '../lib/i18n';
 import { brandInitial, features, useBrandRev } from '../lib/tenant';
@@ -148,10 +147,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
       }
     }
     // (2.6.7: líneas de una conexión, solo con la línea libre: ninguna conexión en uso según el servidor)
-    idxWarmList(urls, Number(s.max) || 0, () => http(api(s), { timeout: 8000 }).then(r => {
-      const j: any = json(r);
-      return !!j?.user_info && Number(j.user_info.active_cons) === 0;
-    }));
+    idxWarmList(urls, Number(s.max) || 0, lineFree(s));
   }, [section, active, progress]);
 
   const progressOf = useMemo(() => {

@@ -14,6 +14,8 @@ let firmware = '2.0.0';
 let probe = null;
 let shared = [];
 const ready = new Set();
+// (2.6.8) índices que la ficha está leyendo (warm.ts) en una línea de una conexión
+const known = new Set();
 const mkvReady = new Set();
 let dropped = [];
 let calls = [];
@@ -96,7 +98,7 @@ Module._load = function(request,parent,isMain){
   if(request==='../lib/i18n'||request==='./i18n') return {t:(key,vars)=>key.replace(/\{(\w+)\}/g,(m,k)=>vars?.[k]??m)};
   if(request==='../api/report') return {reportError:()=>{}};
   if(request==='./shaka') return {ShakaPlayback:Shaka};
-  if(request==='./mp4mse') return {Mp4Mse:Mp4,NOT_MP4_MKV:'el archivo es MKV',STALE_INDEX:'índice guardado viejo',mp4Ready:u=>ready.has(u),dropWarm:u=>dropped.push(u)};
+  if(request==='./mp4mse') return {Mp4Mse:Mp4,NOT_MP4_MKV:'el archivo es MKV',STALE_INDEX:'índice guardado viejo',mp4Ready:u=>ready.has(u),mp4Known:u=>known.has(u),dropWarm:u=>dropped.push(u)};
   if(request==='./mkvmse') return {MkvMse:Mkv,mkvKnown:()=>false,mkvReady:u=>mkvReady.has(u),dropMkvWarm:()=>{}};
   if(request==='./hls') return {PanelHls};
   if(request==='./livehls') return {LiveHls,disableMp4:()=>{}};
@@ -618,17 +620,39 @@ test('preferencia guardada y pistas tardías se aplican en Vega incluso al reanu
   await c.destroy();
 });
 
-test('un archivo con pistas ocultas puede abrirse con el lector local desde el menú',async()=>{
+test('2.6.8: línea de una conexión: si la ficha ya está leyendo el índice, Reproducir sigue con el lector (no abre de cero con el de Amazon)',async()=>{
+  const url='https://fixture.invalid/movie/u/p/leyendo.mp4';
+  // sin nada leído: el de Amazon (como siempre en estas líneas)
+  const s1=setup();
+  s1.c.load(url,0,false);
+  assert.equal(s1.video.src,url);assert.equal(mp4s.length,0);
+  await s1.c.destroy();
+  // la ficha lo está leyendo: el lector
+  known.add(url);
+  const s2=setup();
+  s2.c.load(url,0,false);
+  assert.notEqual(s2.video.src,url);assert.equal(mp4s.length,1);
+  await s2.c.destroy();
+  known.delete(url);
+});
+
+test('2.6.8: el menú ya no ofrece «Buscar más pistas en el archivo» (pasaba al lector en un reproductor nuevo y cerraba la app); sin idiomas detectados, «Audio predeterminado»',async()=>{
   const {c,video}=setup({tracks:[{id:'1',language:'es',enabled:true}]});
   c.load('https://fixture.invalid/hidden.mp4',0,false);
   c.onPlaying();
   video.currentTime=127;
-  c.select(c.menu().find(m=>m.kind==='local'));
-  await tick();
-  assert.equal(mp4s.length,1);
-  assert.equal(mp4s[0].at,127);
-  assert.deepEqual(calls,[]);
+  assert.equal(c.menu().some(m=>m.kind==='local'),false);
+  assert.ok(c.menu().some(m=>m.kind==='audio'),'el idioma que detecta el reproductor');
+  assert.equal(mp4s.length,0);
   await c.destroy();
+  const s2=setup({tracks:[]});
+  s2.c.load('https://fixture.invalid/sin-pistas.mp4',0,false);
+  s2.c.onPlaying();
+  const au=s2.c.menu().filter(m=>m.kind==='audio');
+  assert.equal(au.length,1);assert.equal(au[0].label,'Audio predeterminado');assert.equal(au[0].on,true);
+  s2.c.select(au[0]);await tick();
+  assert.equal(mp4s.length,0,'elegirlo no hace nada');
+  await s2.c.destroy();
 });
 
 test('pantalla grande: cambiar de canal en el mismo reproductor va por el lector de la app (el nativo daba error y «Reconectando…»)',async()=>{

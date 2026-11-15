@@ -24,6 +24,15 @@ export function sessionFrom(sv: Server, user: string, pass: string, ui: any): Se
   };
 }
 
+// 2.6.8: ¿la línea no tiene ninguna conexión en uso ahora? (user_info.active_cons = 0). Para leer por adelantado en
+// líneas de una conexión sin cortarle el video a otro equipo de la misma cuenta. Sin respuesta: no (no se lee nada)
+export function lineFree(s: { base: string; user: string; pass: string }): () => Promise<boolean> {
+  return () => http(api(s), { timeout: 8000 }).then(r => {
+    const j: any = json(r);
+    return !!j?.user_info && Number(j.user_info.active_cons) === 0;
+  });
+}
+
 // http://… <-> https://…
 // servidores mixtos: true = el video sale por el otro protocolo que el de la sesión (p. ej. la sesión en
 // https y el video solo en http). Lo pone el reproductor cuando un video arranca; vale para la sesión.

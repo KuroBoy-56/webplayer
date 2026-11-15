@@ -12,7 +12,7 @@ import { pref, readJson, setPref, writeJson } from '../lib/storage';
 import { markNativeLiveBad, nativeLiveGood, nativeAllowed, nativeFailedOnce, nativeHttpOk, nativeKnownGood, nativeLiveBad, nativeRejectedHttp, nativeWorked } from './nativemode';
 import { Cue, cueAt, parseVtt } from '../lib/vtt';
 import { PanelHls } from './hls';
-import { dropWarm, mp4Ready, Mp4Mse, NOT_MP4_MKV, STALE_INDEX } from './mp4mse';
+import { dropWarm, mp4Known, mp4Ready, Mp4Mse, NOT_MP4_MKV, STALE_INDEX } from './mp4mse';
 import { hostStats, isSingle, lineLimit } from './rangeget';
 import { dropPrefetch } from './prefetch';
 import { dropMkvWarm, MkvMse, mkvKnown, mkvReady } from './mkvmse';
@@ -620,6 +620,9 @@ export class Playback {
     // 2.1.4: Continuar viendo (at > 5) también con el lector, como hasta 2.0.17: el de Amazon empezaba en 0 y saltaba al
     // segundo guardado sin mostrar nada (pantalla negra, el tiempo quieto); queda de respaldo si el lector no puede
     if (readerFile.test(url) && (at > 5 || mkvReady(url) || mp4Ready(url))) return false;
+    // 2.6.8: la ficha ya está leyendo el índice (línea de una conexión libre, warm.ts): el lector sigue con esos pedidos
+    // (abrir con el de Amazon los cortaba y empezaba de cero: cabecera, índice y video)
+    if (readerFile.test(url) && (lineLimit() <= 1 || isSingle(url)) && (mp4Known(url) || mkvKnown(url))) return false;
     return true;
   }
 
@@ -1070,7 +1073,7 @@ export class Playback {
     if (this.live) return;
     this.schedulePrefs();
     // Si la línea tiene capacidad, se puede completar el catálogo de pistas
-    // desde el archivo. En una línea de una conexión el menú ofrece el lector local.
+    // desde el archivo (en una línea de una conexión, no: los idiomas que el reproductor detecta).
     if (!this.probing && this.vodNative && readerFile.test(this.url) && !this.probe?.ok && lineLimit() > 1 && !isSingle(this.url)) {
       this.probing = true;
       const g = this.gen;
@@ -1242,9 +1245,11 @@ export class Playback {
     const items = this.audioItems();
     const current = this.audioOn(items);
     for (const it of items) out.push({ kind: 'audio', key: it.key, label: it.label, on: it === current });
-    if (this.vodNative && this.played && readerFile.test(this.url) && !this.probe?.ok) {
-      out.push({ kind: 'local', key: 'tracks', label: t('Buscar más pistas en el archivo'), on: false });
-    }
+    // sin idiomas detectados (película o serie): «Audio predeterminado», marcado (elegirlo no hace nada)
+    if (!items.length && !this.live) out.push({ kind: 'audio', key: 'default', label: t('Audio predeterminado'), on: true });
+    // (2.6.8: ya no está «Buscar más pistas en el archivo»: pasaba del reproductor de Amazon al lector en un reproductor
+    // nuevo y la app se cerraba. Los idiomas que el reproductor detecta salen solos; si no detecta ninguno, «Audio
+    // predeterminado»)
     if (this.shaka) {
       const subs = this.shaka.textTracks();
       out.push({ kind: 'text', key: 'off', label: t('Desactivados'), on: !subs.some(tr => tr.active) });

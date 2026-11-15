@@ -6,7 +6,7 @@ import { CastMember, castFor, overviewFor, searchArt } from '../api/tmdb';
 import { warmStop, warmVideo as warmPlay } from '../player/warm';
 import { idxWarmHold } from '../player/idxwarm';
 import { setLineMax } from '../player/readahead';
-import { episodeUrl, movieUrl, SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
+import { episodeUrl, lineFree, movieUrl, SeriesInfo, seriesInfo, VodInfo, vodInfo } from '../api/xtream';
 import { warmTracks } from '../api/media';
 import { Button, Focusable } from '../components/ui';
 import { RowView } from '../components/Tiles';
@@ -79,7 +79,9 @@ export default function Detail({ item, active }: { item: Item; active: boolean }
     const hint = item.kind === 'series' ? playHintFor('episode', id, item.id) : playHintFor('movie', item.id, '');
     idxTimer.current = setTimeout(() => {
       setLineMax(Number(getState().session?.max) || 0);
-      warmPlay(url, at > 5 ? at : 0, hint);
+      const ses = getState().session;
+      // (2.6.8: líneas de una conexión, solo con la línea libre)
+      warmPlay(url, at > 5 ? at : 0, hint, ses ? lineFree(ses) : undefined);
     }, 1200);
   };
   useEffect(() => {

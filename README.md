@@ -207,6 +207,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.8) **Menú de idiomas sin «Buscar más pistas en el archivo» y la ficha prepara el video en líneas de una
+  conexión**: (1) esa opción pasaba del reproductor de Amazon al lector en un reproductor nuevo y la app se cerraba: ya
+  no está; los idiomas que el reproductor detecta salen solos y, si no detecta ninguno, «Audio predeterminado»; (2) en
+  líneas de una conexión la ficha ya lee el índice mientras se mira (antes no: al pulsar Reproducir el de Amazon abría
+  de cero, tres esperas del servidor), solo si el servidor dice que la línea está libre (`lineFree`, `active_cons`), y
+  Reproducir sigue con el lector y lo ya leído (`nativeVodPlanned`); (3) un video que el servidor no tiene (404/410)
+  dice «Este video ya no está en el servidor de tu proveedor (404).» (antes «Video no disponible»: parecía de la app).
 - (2.6.7) **Continuar viendo con servidores lentos (~9 s por pedido)**: (1) el reproductor de Amazon de respaldo del lector
   espera según la espera del servidor (hasta 45 s; antes 19 s fijos: «sin imagen en 19 s» con un servidor de 9 s) y el
   salto al segundo guardado también (hasta 25 s; antes 9 s); (2) si ya muestra la película pero el salto no se dio, lo
