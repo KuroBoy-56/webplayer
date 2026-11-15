@@ -190,6 +190,8 @@ export class Playback {
   private readerTried = false;
   // 2.6.6: ya se probó desde el principio (no se pudo desde el segundo guardado)
   private fromStartTried = false;
+  // 2.6.7: el salto al segundo guardado del reproductor de Amazon ya se pidió otra vez
+  private seekRetried = false;
   private staleIndexRetried = false;
   private seekIssuedAt = 0;
   private resumeSample: number | null = null;
@@ -627,6 +629,8 @@ export class Playback {
     dropMkvWarm(this.url);
     dropPrefetch(this.url);
     this.nativeTried = true;
+    this.seekRetried = false;
+    this.moveAt = -1;
     this.vodNative = true;
     this.vodReady = true;
     this.nativeMeta = false;
@@ -687,6 +691,13 @@ export class Playback {
         return;
       }
       this.direct(pos, 'reader');
+    } else if (pos > 5 && !this.fromStartTried && nativeHttpOk(this.url) && /sin imagen/.test(why)) {
+      // 2.6.7: tampoco el de Amazon desde el segundo guardado por lento (sin imagen en su plazo; no si rechazó el formato:
+      // ahí sigue la conversión del panel, que sí conserva el segundo): él mismo desde el principio, con un aviso
+      this.fromStartTried = true;
+      this.mp4Why = (this.mp4Why ? this.mp4Why + ' · ' : '') + why + ' · desde el principio';
+      this.hooks.toast(t('No se pudo continuar desde donde quedó: empieza desde el principio.'));
+      this.direct(0, 'native');
     } else this.failVod(pos, why);
   }
 
@@ -755,16 +766,36 @@ export class Playback {
     this.clearVodTimer();
     const watch = this.vodWatch;
     const began = Date.now();
-    const initial = route === 'native' ? Math.min(21000, Math.max(12000, hostStats(this.url).wait * 2 + 3000))
+    // 2.6.7: con servidores lentos (~9 s por pedido) el reproductor de Amazon necesita cabecera, índice al final del
+    // archivo y video: 3 esperas. De respaldo del lector (este ya lo intentó): con más tiempo; el salto al segundo
+    // guardado también según la espera del servidor (antes 19 s y 9 s fijos: «sin imagen en 19 s» con un servidor de 9 s)
+    const wait = hostStats(this.url).wait || 0;
+    const initial = route === 'native'
+      ? this.readerTried ? Math.max(21000, Math.min(45000, wait * 4 + 9000)) : Math.min(21000, Math.max(12000, wait * 2 + 3000))
       : route === 'reader' ? 24000 : route === 'adaptive' ? 26000 : 28000;
+    const seekWin = Math.max(9000, Math.min(25000, wait * 2 + 5000));
     const check = () => {
       const now = Date.now();
       const elapsed = now - began;
       if (this.played || watch !== this.vodWatch) return;
       this.onTime();
       if (this.played || watch !== this.vodWatch) return;
+      // 2.6.7: el de Amazon ya muestra la película pero el salto al segundo guardado no se dio (sigue cerca del principio):
+      // se pide otra vez una vez; si tampoco, se sigue desde donde va, con un aviso (antes «No se pudo continuar donde
+      // quedó», o la película desde 0 con «Preparando desde donde quedó…» encima para siempre)
+      if (route === 'native' && this.seekIssuedAt && now - this.seekIssuedAt >= seekWin && this.nativeMoving()) {
+        if (!this.seekRetried) {
+          this.seekRetried = true;
+          this.issueResumeSeek();
+        } else {
+          this.mp4Why = (this.mp4Why ? this.mp4Why + ' · ' : '') + 'salto al segundo guardado no se dio';
+          this.hooks.toast(t('No se pudo continuar desde donde quedó: empieza desde el principio.'));
+          this.markPlaying();
+          return;
+        }
+      }
       const pending = route === 'native'
-        ? this.seekIssuedAt ? now - this.seekIssuedAt < 9000 && elapsed < 36000
+        ? this.seekIssuedAt ? now - this.seekIssuedAt < seekWin && elapsed < Math.max(36000, initial + seekWin + 10000)
           : (this.nativeMeta || this.v.readyState >= 1 || !!this.v.buffered?.length) && elapsed < initial + 8000
         : route === 'reader' && elapsed < 85000 && !!this.mse?.busy();
       if (elapsed < initial || pending) {
@@ -851,6 +882,20 @@ export class Playback {
 
   seeking(): boolean {
     return !this.played && this.wantAt > 5;
+  }
+
+  // 2.6.7: el reproductor de Amazon avanza (hay imagen) aunque no esté en el segundo guardado
+  private moveAt = -1;
+  private moveSince = 0;
+  private nativeMoving(): boolean {
+    const p = this.v.currentTime || 0;
+    if (this.v.paused || p < 0.5) return false;
+    if (this.moveAt < 0 || p < this.moveAt) {
+      this.moveAt = p;
+      this.moveSince = Date.now();
+      return false;
+    }
+    return p - this.moveAt >= 1 && Date.now() - this.moveSince >= 1000;
   }
 
   hasPlayed(): boolean {

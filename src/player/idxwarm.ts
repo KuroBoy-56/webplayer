@@ -9,7 +9,9 @@
 //
 // Se detiene apenas se abre un video, una ficha o una miniatura de canal (idxWarmHold) y sigue 3 s después de cerrarlos.
 // Solo cuando no se toca el control (2.1.1, keyidle.ts) y de a 2 MB: la navegación no se traba.
-// Nunca en líneas de una conexión: otro equipo de la misma cuenta podría estar viendo y el servidor cortaría a uno.
+// Líneas de una conexión (2.6.7): solo si el servidor dice que la línea no tiene ninguna conexión en uso (user_info
+// active_cons = 0), preguntado antes de cada título: otro equipo de la misma cuenta que esté viendo no se corta. Antes
+// nunca, y en esas líneas cada Continuar viendo eran 3 esperas del servidor (aviso: espera_media=8960ms, 36,9 s).
 import { hasIndex } from './indexstore';
 import { mkvKnown, preloadMkv } from './mkvmse';
 import { mp4Known, preloadIndex } from './mp4mse';
@@ -33,9 +35,14 @@ function schedule(ms: number): void {
   timer = setTimeout(run, ms);
 }
 
-// los primeros de Continuar viendo (direcciones de película o del capítulo en curso); maxConn: conexiones de la línea
-export function idxWarmList(urls: string[], maxConn: number): void {
-  list = maxConn <= 1 ? [] : urls.filter(u => /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(u)).slice(0, MAX);
+// línea de una conexión: ¿está libre ahora? (null = no se puede saber: no se lee nada)
+let lineFree: (() => Promise<boolean>) | null = null;
+
+// los primeros de Continuar viendo (direcciones de película o del capítulo en curso); maxConn: conexiones de la línea;
+// isFree: en líneas de una conexión, si el servidor dice que no hay ninguna en uso
+export function idxWarmList(urls: string[], maxConn: number, isFree?: () => Promise<boolean>): void {
+  lineFree = maxConn <= 1 ? isFree || null : null;
+  list = maxConn <= 1 && !lineFree ? [] : urls.filter(u => /\.(mp4|m4v|mov|mkv)(\?|$)/i.test(u)).slice(0, MAX);
   if (list.length) schedule(4000);
 }
 
@@ -61,6 +68,20 @@ async function run(): Promise<void> {
   }
   const url = list.find(u => !known(u) && !missed.has(key(u)));
   if (!url) return;
+  // línea de una conexión: solo con la línea libre (otro equipo viendo: se espera un minuto)
+  if (lineFree) {
+    const check = lineFree;
+    const free = await check().catch(() => false);
+    if (holds > 0 || running || timer || check !== lineFree) return;
+    if (!free) {
+      schedule(60000);
+      return;
+    }
+    if (keyIdleMs() < 2500) {
+      schedule(1000);
+      return;
+    }
+  }
   const mkv = /\.mkv(\?|$)/i.test(url);
   const job = mkv ? preloadMkv(url) : preloadIndex(url);
   const mine = { url, stop: job.stop };

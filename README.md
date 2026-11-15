@@ -207,6 +207,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.7) **Continuar viendo con servidores lentos (~9 s por pedido)**: (1) el reproductor de Amazon de respaldo del lector
+  espera según la espera del servidor (hasta 45 s; antes 19 s fijos: «sin imagen en 19 s» con un servidor de 9 s) y el
+  salto al segundo guardado también (hasta 25 s; antes 9 s); (2) si ya muestra la película pero el salto no se dio, lo
+  pide otra vez y, si tampoco, sigue desde donde va con un aviso (antes la película desde 0 con «Preparando desde donde
+  quedó…» encima para siempre, o «No se pudo continuar donde quedó»); (3) si sin imagen en su plazo, él mismo desde el
+  principio con un aviso (si rechaza el formato, sigue la conversión del panel como antes); (4) los índices de Continuar
+  viendo se preparan en segundo plano también en líneas de una conexión, solo si el servidor dice que la línea no tiene
+  ninguna conexión en uso (`idxwarm.ts`, `active_cons`): al abrirlos, una sola espera del servidor en vez de tres.
 - (2.6.6) **Continuar viendo que no podía y apertura más rápida**: (1) si el lector falla con un error del reproductor al
   continuar desde un segundo guardado (aviso «No se pudo reproducir (movie)»: un MKV de 343 MB sin índice que se pueda
   leer, «motivo=pedido 416», que salta por proporción del archivo), prueba una vez desde el principio con el lector y un

@@ -1,5 +1,5 @@
 // Índices de Continuar viendo en segundo plano (src/player/idxwarm.ts): de a uno, se detienen al abrir algo que usa la
-// línea y siguen después, nunca en líneas de una conexión. Sin Vega ni red: los lectores son de prueba.
+// línea y siguen después; en líneas de una conexión, solo con la línea libre (2.6.7). Sin Vega ni red: los lectores son de prueba.
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const Module = require('node:module');
@@ -33,10 +33,28 @@ const w = require('../src/player/idxwarm.ts');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const u = n => 'http://srv.test/movie/u/p/' + n + '.mp4';
 
-test('línea de una conexión: no se lee nada en segundo plano', async () => {
+test('línea de una conexión sin poder preguntar si está libre: no se lee nada en segundo plano', async () => {
   w.idxWarmList([u(1), u(2)], 1);
   await sleep(4300);
   assert.equal(started.length, 0);
+});
+
+test('2.6.7: línea de una conexión: se lee solo si el servidor dice que no hay ninguna conexión en uso', async () => {
+  let free = false;
+  let asked = 0;
+  w.idxWarmList([u(7)], 1, async () => { asked++; return free; });
+  await sleep(4300);
+  assert.equal(asked, 1);
+  assert.equal(started.length, 0, 'otro equipo viendo: nada');
+  // libre: el siguiente intento (en un minuto; aquí se vuelve a armar la lista) lo lee
+  free = true;
+  w.idxWarmList([u(7)], 1, async () => { asked++; return free; });
+  await sleep(4300);
+  assert.deepEqual(started, [u(7)]);
+  finish('ok');
+  await sleep(1700);
+  w.idxWarmList([], 4);
+  started.length = 0;
 });
 
 test('de a uno, y al abrir un video se corta lo que estaba leyendo; sigue 3 s después de cerrarlo', async () => {

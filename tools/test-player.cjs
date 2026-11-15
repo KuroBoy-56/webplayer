@@ -396,6 +396,43 @@ test('Continuar viendo nativo (respaldo si el lector no puede) espera avance rea
   await c.destroy();
 });
 
+test('2.6.7: el de Amazon muestra la película pero el salto al segundo guardado no se da: se pide otra vez y, si tampoco, sigue desde donde va con un aviso (no «Preparando…» para siempre ni error)',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
+  const {c,video,hooks}=setup();
+  c.load('https://fixture.invalid/ep2.mkv',4190,false);
+  c.vodError('el lector no pudo');await Promise.resolve();await Promise.resolve();
+  assert.equal(video.src,'https://fixture.invalid/ep2.mkv');
+  // el reproductor empieza en 0 y el salto se pide, pero se queda cerca del principio
+  video.paused=false;video.currentTime=0.5;c.onTime();
+  assert.equal(video.currentTime,4190,'salto pedido');
+  const seeks=[];let ct=0.5;
+  Object.defineProperty(video,'currentTime',{configurable:true,get:()=>ct,set:v=>{seeks.push(v);}});
+  for(let i=0;i<12;i++){ct+=1;t.mock.timers.tick(1000);}
+  assert.ok(seeks.includes(4190),'el salto se pidió otra vez');
+  assert.equal(c.hasPlayed(),false);
+  for(let i=0;i<30&&!c.hasPlayed();i++){ct+=1;t.mock.timers.tick(1000);}
+  assert.equal(c.hasPlayed(),true,'sigue desde donde va');
+  assert.ok(toasts.some(m=>m.includes('desde el principio')),toasts.join(' | '));
+  assert.deepEqual(hooks.failures,[]);
+  await c.destroy();
+});
+
+test('2.6.7: el de Amazon sin imagen desde el segundo guardado (servidor lento): él mismo desde el principio con un aviso',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
+  const {c,video,hooks}=setup();
+  c.load('https://fixture.invalid/ep3.mkv',4190,false);
+  c.vodError('el lector no pudo');await Promise.resolve();await Promise.resolve();
+  assert.equal(video.src,'https://fixture.invalid/ep3.mkv');
+  for(let i=0;i<90&&!toasts.some(m=>m.includes('desde el principio'));i++){t.mock.timers.tick(1000);await Promise.resolve();}
+  assert.ok(toasts.some(m=>m.includes('desde el principio')),toasts.join(' | '));
+  assert.equal(c.resumePos(),0,'desde el principio');
+  assert.deepEqual(hooks.failures,[]);
+  // llega la imagen
+  video.paused=false;video.currentTime=1;c.onTime();
+  assert.equal(c.hasPlayed(),true);
+  await c.destroy();
+});
+
 test('2.1.4: Continuar viendo abre con el lector de la app desde el segundo guardado (antes el de Amazon empezaba en 0, saltaba y quedaba en negro) y la VPS espera',async t=>{
   t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
   const {c,video,hooks}=setup();
