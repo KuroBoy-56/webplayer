@@ -86,6 +86,21 @@ object SportsPanel {
         League(l.s("id"), l.s("n"), l.s("c"), l.s("b"), l.s("sl"), l.i("d").coerceAtLeast(1), l.s("rg"), l.s("s"), l.i("w") == 1, groups)
     }
 
+    // ---------- canal del partido por la guía del panel ----------
+
+    /** api/sports_epg.php: qué canales deportivos del cliente tienen cada partido en su guía a esa hora
+     *  (id del evento -> ids de los canales), como Roku y Vega */
+    suspend fun epg(chans: List<Item>): Map<String, List<String>> = withContext(Dispatchers.IO) {
+        if (chans.isEmpty()) return@withContext emptyMap()
+        val arr = JSONArray()
+        chans.forEach { c -> arr.put(JSONObject().put("id", c.id.toString()).put("epg", c.epgId).put("name", c.name)) }
+        val j = Cloud.call { t -> Net.postJson(PanelUrl.api("sports_epg.php"), JSONObject().put("token", t).put("channels", arr)) }?.json()
+        val m = j?.optJSONObject("map") ?: return@withContext emptyMap()
+        val out = HashMap<String, List<String>>()
+        m.keys().forEach { k -> m.optJSONArray(k)?.let { a -> out[k] = (0 until a.length()).map { a.optString(it) }.filter { it.isNotEmpty() } } }
+        out
+    }
+
     // ---------- ficha del equipo ----------
 
     /** ficha del equipo en el idioma de la app (el panel la guarda 30 días); null si no hay */
