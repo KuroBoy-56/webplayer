@@ -64,16 +64,42 @@ export function reportError(kind: ErrorKind, message: string, detail = '', scree
   panel('report.php', 'POST', formBody({ data }), 'application/x-www-form-urlencoded').catch(() => {});
 }
 
-// errores de JavaScript que no se atraparon (la app se cierra o queda en pantalla de error)
+// errores de JavaScript que no se atraparon. 2.6.4: ya no cierran la app (antes se llamaba enseguida al manejador de
+// siempre, que la cerraba antes de que saliera el aviso al panel: «me bota de la aplicación» sin rastro). Ahora el
+// error va al panel con su detalle y la app vuelve a la pantalla anterior con un aviso (setRecover). Si se repiten
+// muchos seguidos (la app ya no puede seguir), se deja cerrar como antes.
+let recover: ((msg: string) => void) | null = null;
+const fatals: number[] = [];
+
+export function setRecover(fn: (msg: string) => void): void {
+  recover = fn;
+}
+
 export function installCrashReporter(): void {
   const g: any = globalThis as any;
   const eu = g.ErrorUtils;
   if (!eu || typeof eu.getGlobalHandler !== 'function') return;
   const prev = eu.getGlobalHandler();
   eu.setGlobalHandler((e: any, fatal?: boolean) => {
+    const msg = String((e && e.message) || e || 'Error');
     try {
-      reportError(fatal ? 'crash' : 'error', String((e && e.message) || e || 'Error'), String((e && e.stack) || ''), 'JS');
+      reportError(fatal ? 'crash' : 'error', msg, String((e && e.stack) || ''), 'JS');
     } catch {}
+    try {
+      require('../lib/blackbox').bbStep('error de JavaScript: ' + msg, true);
+    } catch {}
+    if (!fatal) return;
+    const now = Date.now();
+    while (fatals.length && fatals[0] < now - 30000) fatals.shift();
+    fatals.push(now);
+    if (recover && fatals.length <= 3) {
+      try {
+        recover(msg);
+        return;
+      } catch {
+        // no se pudo volver: como antes
+      }
+    }
     if (prev) prev(e, fatal);
   });
 }

@@ -207,6 +207,15 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.4) **Un error ya no cierra la app; caja negra del reproductor**: el aviso de errores de JavaScript
+  (`installCrashReporter`) llamaba enseguida al manejador de siempre, que cerraba la app antes de que el aviso saliera
+  al panel («me bota de la aplicación» sin rastro). Ahora el error va al panel («Errores de las apps», tipo crash, con
+  su detalle) y la app vuelve a la pantalla anterior con un aviso (`setRecover`; con más de 3 en 30 s se deja cerrar
+  como antes). Un error al dibujar una pantalla también (`components/ScreenGuard.tsx`). Si la app se cierra sola por algo
+  que JavaScript no puede atrapar (memoria, el reproductor de Amazon), `lib/blackbox.ts` guarda cada pocos segundos lo
+  que hacía el reproductor de películas y series (qué se abrió, pasos, posición, modo y memoria de JavaScript) y en la
+  apertura siguiente llega al panel como «La app se cerró sola durante la reproducción». Salir del reproductor o pasar
+  a segundo plano no cuenta. Pruebas: `tools/test-blackbox.cjs`.
 - (2.6.3) **MAC cortada por Amazon**: `getMacAddress()` además corta la MAC a 17 caracteres («02:15:FFFFFFB2:00»): con un
   par de 80 a FF se pierden los últimos pares, los que distinguen un equipo de otro. Una MAC cortada **no se usa** (varios
   Fire TV tendrían el mismo número): en un equipo real queda el identificador de Amazon. Solo la MAC por defecto de los

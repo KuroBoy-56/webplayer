@@ -204,6 +204,7 @@ const fr: Record<Key, string> = {
   "No se pudo crear la demo": "Impossible de créer la démo",
   "No se pudo guardar el PIN en el panel": "Impossible d'enregistrer le code PIN sur le panneau",
   "No se pudo iniciar el reproductor.": "Impossible de démarrer le lecteur.",
+  "Ocurrió un error y se volvió atrás: {x}": "Une erreur s’est produite et l’application est revenue en arrière : {x}",
   "No se pudo iniciar sesión": "Connexion impossible",
   "No compatible con el dispositivo": "Non compatible avec l’appareil",
   "No se pudo registrar": "Enregistrement impossible",

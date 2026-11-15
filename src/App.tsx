@@ -27,7 +27,9 @@ import { clearSportsCache } from './screens/Sports';
 import { clearTmdbCache } from './api/tmdb';
 import { resetEngine } from './api/media';
 import { setStreamFlip } from './api/xtream';
-import { bindReportContext, installCrashReporter } from './api/report';
+import { bindReportContext, installCrashReporter, reportError, setRecover } from './api/report';
+import ScreenGuard from './components/ScreenGuard';
+import { bbClose, bbPending } from './lib/blackbox';
 import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppState } from './state';
 import { deviceBlocked, deviceSync, onCacheClear, panelAnswered, panelCheckMac, panelLineGone, registerPending, sessionVerdict } from './api/panel';
 
@@ -127,6 +129,9 @@ function App() {
     // (2.1.6: el identificador del equipo que no cambia al reinstalar, antes de la primera pantalla; 2.5.0: y el número
     // que el panel tiene registrado para este equipo, para que la primera pantalla ya muestre el definitivo)
     loadStorage().then(prepareDeviceId).then(() => deviceSync().catch(() => {})).then(() => {
+      // 2.6.4: la vez anterior la app se cerró sola mientras se veía algo: al panel lo último que hacía el reproductor
+      const bb = bbPending();
+      if (bb) reportError('crash', 'La app se cerró sola durante la reproducción', bb, 'Reproductor');
       // marca guardada del distribuidor antes de la primera pantalla
       applyBrand();
       const logged = restoreSession();
@@ -214,6 +219,24 @@ function App() {
     };
   }, []);
 
+  // 2.6.4: un error de JavaScript o al dibujar una pantalla ya no cierra la app: aviso, se vuelve a la pantalla
+  // anterior (el reproductor se cierra) y el error queda al panel (api/report.ts)
+  const failScreen = useCallback((msg: string, at?: number) => {
+    bbClose();
+    showNotice(t('Ocurrió un error y se volvió atrás: {x}', { x: msg.slice(0, 90) }));
+    setStack(st => {
+      if (!st) return st;
+      const i = at === undefined ? st.length - 1 : at;
+      if (i > 0) return st.slice(0, i);
+      // la primera pantalla: se vuelve a armar
+      setSkin(k => k + 1);
+      return st;
+    });
+  }, []);
+  useEffect(() => {
+    setRecover(msg => failScreen(msg));
+  }, [failScreen]);
+
   const nav: Nav = useMemo(
     () => ({
       push: r => setStack(s => [...(s || []), r]),
@@ -289,7 +312,15 @@ function App() {
               // el reproductor tapa todo; lo de abajo se oculta para que el foco no se escape
               return (
                 <View key={i + r.name} style={[StyleSheet.absoluteFill, !active && s.hidden]}>
-                  <Screen route={r} active={active} />
+                  <ScreenGuard
+                    onError={(e, where) => {
+                      const msg = String((e as any)?.message || e || 'Error');
+                      reportError('crash', msg, String((e as any)?.stack || '') + '\n' + where, 'Pantalla ' + r.name);
+                      failScreen(msg, i);
+                    }}
+                  >
+                    <Screen route={r} active={active} />
+                  </ScreenGuard>
                 </View>
               );
             })}

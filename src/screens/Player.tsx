@@ -6,6 +6,7 @@
 import { HWEvent, useTVEventHandler } from '@amazon-devices/react-native-kepler';
 import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { reportError } from '../api/report';
+import { bbClose, bbOpen, bbPause, bbResume, bbStep } from '../lib/blackbox';
 import { engineDenied, warmTracks } from '../api/media';
 import { viaDns } from '../lib/securedns';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -136,6 +137,8 @@ export default function Player({ params }: { params: PlayParams }) {
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastUi = useRef(0);
+  // 2.6.4: último paso de la caja negra con la posición (cada 5 s)
+  const bbTick = useRef(0);
   const requestedResume = useRef(params.kind === 'live' ? 0 : params.resume);
   const indexRef = useRef(index);
   indexRef.current = index;
@@ -277,7 +280,13 @@ export default function Player({ params }: { params: PlayParams }) {
       setLineMax(Number(getState().session?.max) || 0);
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
-      c.load(dnsUrl.current?.i === i ? dnsUrl.current.url : urlFor(i), resume, live);
+      const src = dnsUrl.current?.i === i ? dnsUrl.current.url : urlFor(i);
+      // 2.6.4: caja negra (si la app se cierra sola, lo último que hacía llega al panel en la apertura siguiente)
+      if (!live) {
+        const e = params.queue[i];
+        bbOpen('kind=' + params.kind + ' titulo=' + String(e?.title || e?.id || '').slice(0, 80) + ' ext=' + (e?.ext || '') + ' continuar=' + Math.round(resume) + ' servidor=' + src.replace(/^(https?:\/\/[^/]+).*$/i, '$1'));
+      }
+      c.load(src, resume, live);
       if (!live) return;
       liveWait.current = false;
       const revision = loadRev.current;
@@ -312,9 +321,11 @@ export default function Player({ params }: { params: PlayParams }) {
         if (!live && c && ready.current) requestedResume.current = Math.floor(c.resumePos());
         setForeground(false);
         freeMp4Memory();
+        bbPause();
       } else if (state === 'active' && backgrounded.current) {
         backgrounded.current = false;
         setForeground(true);
+        bbResume();
       }
     });
     return () => subscription.remove();
@@ -408,6 +419,7 @@ export default function Player({ params }: { params: PlayParams }) {
       subText: setSub,
       fatal: msg => {
         if (!alive) return;
+        bbStep('error: ' + msg, true);
         setStatus('');
         setWork('');
         setBuffering(false);
@@ -415,6 +427,7 @@ export default function Player({ params }: { params: PlayParams }) {
       },
       vodStarting: position => {
         if (!alive) return;
+        bbStep('preparando desde ' + Math.round(position) + 's');
         setPos(Math.floor(position));
         setBuffering(true);
         setStatus(t(position > 5 ? 'Preparando desde donde quedó…' : 'Cargando…'));
@@ -495,6 +508,10 @@ export default function Player({ params }: { params: PlayParams }) {
       if (now - lastUi.current < 1000) return;
       lastUi.current = now;
       save(false);
+      if (!live && now - bbTick.current > 5000) {
+        bbTick.current = now;
+        bbStep('pos=' + Math.round(c.realPos()) + '/' + Math.round(c.duration()) + 's');
+      }
       // con el menú abierto la barra no se ve: no se redibuja el reproductor cada medio segundo (el menú se trababa);
       // en los canales no hay barra: sin redibujar, la app queda libre para bajar y descifrar el canal
       if (menuOpen.current || live) return;
@@ -524,6 +541,7 @@ export default function Player({ params }: { params: PlayParams }) {
         reportError('warning', 'Película o serie tardó en empezar', 'kind=' + params.kind + ' ext=' + (e?.ext || '') + ' total=' + ((Date.now() - op.t) / 1000).toFixed(1) + 's hasta_cargar=' + ((op.load - op.t) / 1000).toFixed(1) + 's continuar=' + Math.round(op.at) + ' modo=' + c.vodMode(), 'Reproductor');
       }
       op.t = 0;
+      if (!live) bbStep('reproduciendo modo=' + c.vodMode(), true);
       // por este protocolo entrega el video el servidor: los siguientes videos van primero por él
       setStreamFlip(flipped.current);
       // los idiomas del episodio siguiente, para que también empiece con el idioma elegido
@@ -730,6 +748,7 @@ export default function Player({ params }: { params: PlayParams }) {
     const onError = () => {
       if (!alive || backgrounded.current || zapTimer.current) return;
       if (!live) {
+        bbStep('error del reproductor (pos=' + Math.round(c.realPos()) + 's)', true);
         c.vodError();
         return;
       }
@@ -927,6 +946,8 @@ export default function Player({ params }: { params: PlayParams }) {
     return () => {
       const zap = zapping.current;
       alive = false;
+      // se salió del reproductor (sin que la app se cerrara): nada para la caja negra
+      bbClose();
       surfaceReady.current?.();
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;
