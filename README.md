@@ -207,6 +207,17 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.0) **El número del equipo es la MAC real del Fire TV; nunca uno inventado**: la app lee la MAC de la tarjeta
+  Wi-Fi (o de red por cable si no hay Wi-Fi) con la función oficial de Amazon `NetworkManager.getMacAddress()`
+  (`@amazon-devices/keplerscript-netmgr-lib`; en `manifest.toml` el servicio `com.amazon.network.service` y el permiso
+  `com.amazon.network.privilege.restricted-net-info`, que según Amazon solo se da a apps firmadas, como las de la
+  tienda). Solo sirve una MAC grabada de fábrica (`macId`: ni multicast, ni administrada localmente, ni en ceros; una que
+  empieza en `00` pasa a `10` porque el panel quita un `00:` inicial). Si el sistema no da la MAC: el identificador de
+  Amazon (`getVendorTrackingId`, solo cambia al restablecer de fábrica). **Ya no existe el número al azar**: sin ninguno
+  de los dos no hay número y se sigue intentando cada 3 s. El panel (`device_id` con `"fixed"` y, con la MAC, `"hard"`)
+  pasa a la MAC la línea, demo y lista negra que el equipo tenía con un número anterior, y desde entonces el número es
+  la MAC aunque se reinstale, se cierre de golpe o se borre todo. El número de Amazon nunca le quita el lugar a una MAC
+  real. Pruebas: `tools/test-deviceid.cjs`.
 - (2.5.0) **El número del equipo ya no depende de lo guardado en el equipo**: hasta la 2.1.12 la app respetaba el
   número guardado y, si al volver a abrir no lo podía leer (por ejemplo, después de que la app se cerrara de golpe
   cargando un video), armaba otro: el panel no lo conocía y sacaba al cliente al inicio de sesión. Ahora el número sale

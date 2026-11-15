@@ -3,7 +3,7 @@ schema-version = 1
 [package]
 id = "com.latmpx.player.tv"
 title = "MPX Player"
-version = "2.5.0"
+version = "2.6.0"
 icon = "@image/app_icon.png"
 
 # Vega OS 2.0 (SDK 2.0): el reproductor de Vega abre direcciones http en modo directo (canales .ts y películas, como
@@ -58,6 +58,14 @@ id = "com.amazon.gipc.uuid.*"
 
 [[wants.privilege]]
 id = "com.amazon.devconf.privilege.accessibility"
+
+# 2.6.0: la MAC real del equipo como número del equipo (NetworkManager.getMacAddress, @amazon-devices/keplerscript-netmgr-lib).
+# «wants»: opcional; sin el permiso (Amazon solo lo da a apps firmadas) la app usa el identificador de Amazon
+[[wants.service]]
+id = "com.amazon.network.service"
+
+[[wants.privilege]]
+id = "com.amazon.network.privilege.restricted-net-info"
 
 [offers]
 [[offers.service]]

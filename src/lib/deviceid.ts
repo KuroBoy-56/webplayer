@@ -1,89 +1,115 @@
-// Identificador del equipo (el «MAC» que queda registrado en el panel): 8 pares hex en mayúsculas que nunca empiezan
-// en "00". Vega OS no da a las apps ni serie ni MAC (Amazon, foro de desarrolladores: «no public SDK API to retrieve
-// the DSN»). Lo que sí da es el Vendor Tracking ID (@amazon-devices/kepler-identifiers): según Amazon no cambia al
-// desinstalar y volver a instalar la app; solo al restablecer el equipo de fábrica. Se lee en CADA inicio, no hace
-// falta guardarlo.
-//
-// 2.5.0: el número ya no depende de lo guardado en el equipo. Hasta la 2.1.12 se respetaba el guardado y, si la app
-// no lo podía leer al volver a abrir (un cierre de golpe mientras cargaba un video, el almacenamiento todavía ocupado),
-// armaba otro número: el panel no lo conocía y sacaba al cliente al inicio de sesión. Ahora:
-// - El número sale del identificador de Amazon (siempre el mismo en ese equipo), salvo que el panel diga otro.
-// - En cada inicio, con el identificador de Amazon como clave fija, se le pregunta al panel cuál es el número de este
-//   equipo (api/login.php «device_id» con "fixed": includes/device_alias.php da_resolve_fixed). El panel contesta el que
-//   tiene registrado (línea, demo o lista negra): el guardado, el que tenía anotado para esa clave o el de Amazon; si no
-//   hay ninguno registrado, el de Amazon. Así un equipo registrado con un número al azar de una versión anterior lo
-//   conserva, y lo recupera aunque se borre todo lo guardado.
-// - Sin poder leer lo guardado no se escribe nada encima ni se arma un número al azar si Amazon lo da.
-// - Solo si Amazon no lo da (sistema sin la función) se usa uno al azar guardado, como antes.
+// Número del equipo (el «MAC» que queda registrado en el panel). 2.6.0: SOLO números que da el propio equipo, nunca
+// uno inventado por la app:
+// 1. La MAC real de la tarjeta Wi-Fi (o de red por cable si no tiene Wi-Fi), con la función oficial de Amazon
+//    NetworkManager.getMacAddress() (@amazon-devices/keplerscript-netmgr-lib, permiso
+//    com.amazon.network.privilege.restricted-net-info en manifest.toml). Según Amazon ese permiso solo se da a apps
+//    firmadas (las de la tienda). Solo se usa una MAC grabada de fábrica: una «administrada localmente» (al azar,
+//    por privacidad) puede cambiar y no sirve.
+// 2. Si el sistema no da la MAC: el identificador del equipo para nuestra app que da Amazon (Vendor Tracking ID,
+//    @amazon-devices/kepler-identifiers): según Amazon solo cambia al restablecer el equipo de fábrica.
+// No hay número al azar. Lo guardado solo se usa mientras el panel no contesta; en cada inicio el panel dice el número
+// de este equipo (api/login.php «device_id» con "fixed"; con la MAC real, "hard": el panel pasa a la MAC la línea que
+// el equipo tenía con un número anterior y desde entonces el número es la MAC).
 import { read, storageLoaded, write } from './storage';
 
-// identificador de Amazon de esta apertura (8 pares), '' si no lo dio (todavía)
+// MAC real de esta apertura (6 pares) y el número que sale del identificador de Amazon (8 pares); '' si no los dio
+let mac = '';
 let vendor = '';
-// número a usar cuando lo guardado no se pudo leer o el panel dio otro sin poder guardarlo: vale hasta cerrar la app
+// número que dio el panel sin poder guardarlo (lo guardado no se pudo leer): vale hasta cerrar la app
 let temp = '';
-// mientras se prepara el identificador (inicio de la app): un número al azar no se guarda
-let pending = true;
 // el número no salió de lo guardado en este inicio (instalación nueva o almacenamiento perdido)
 let notSaved = false;
 const SRC = 'device_id_src';
-const HW = 'device_hw';
-
-function randomId(): string {
-  let hex = '';
-  for (let i = 0; i < 16; i++) hex += '0123456789ABCDEF'[Math.floor(Math.random() * 16)];
-  if (hex.startsWith('00')) hex = '1' + hex.slice(1);
-  return hex.match(/.{2}/g)!.join(':');
-}
 
 export function deviceId(): string {
   if (temp) return temp;
-  const saved = read('device_id');
-  if (saved) return saved;
-  if (vendor) return vendor;
-  // sin identificador de Amazon: al azar, guardado solo una vez preparado y con lo guardado leído
-  const id = randomId();
-  if (storageLoaded() && !pending) {
-    write('device_id', id);
-    write(SRC, 'r');
-  } else temp = id;
-  return id;
+  return read('device_id') || mac || vendor;
 }
 
-// el número que arma la app con el identificador de Amazon ('' si no lo dio)
+// el número que da el equipo en esta apertura: la MAC real o, sin ella, el de Amazon ('' si todavía ninguno)
 export function vendorId(): string {
-  return vendor;
+  return mac || vendor;
 }
 
-function setVendor(id: string): void {
-  if (!id) return;
-  vendor = id;
-  const k = 'v' + id.replace(/:/g, '');
-  if (storageLoaded() && read(HW) !== k) write(HW, k);
+// true = el número del equipo es su MAC real
+export function hardId(): boolean {
+  return !!mac;
 }
 
-// Al iniciar, después de leer lo guardado (loadStorage). Pide el identificador de Amazon; sin número guardado espera
-// lo que haga falta (hasta ~9 s, con el logo en pantalla) para no arrancar con uno al azar.
+// MAC → número: 6 pares en mayúsculas. Solo una MAC grabada de fábrica (ni multicast ni administrada localmente, ni
+// en ceros). Una que empiece en "00" pasa a "10" (el panel quita un "00:" del principio de los números).
+export function macId(raw: unknown): string {
+  const hex = typeof raw === 'string' ? raw.toUpperCase().replace(/[^0-9A-F]/g, '') : '';
+  if (hex.length !== 12 || /^0+$/.test(hex) || /^F+$/.test(hex)) return '';
+  if (parseInt(hex.slice(0, 2), 16) & 3) return '';
+  return (hex.startsWith('00') ? '10' + hex.slice(2) : hex).match(/.{2}/g)!.join(':');
+}
+
+// La MAC de la tarjeta de red con la función oficial de Amazon: primero Wi-Fi (la tienen todos los Fire TV), luego
+// cable. '' si el sistema no la da (app sin firmar / sin el permiso: PERMISSION_DENIED, o sistema sin la función)
+export function systemMac(): string {
+  let lib: any;
+  try {
+    lib = require('@amazon-devices/keplerscript-netmgr-lib');
+  } catch {
+    return '';
+  }
+  try {
+    const nm = new lib.NetworkManager();
+    const ok = lib.Status ? lib.Status.SUCCESS : 0;
+    const types = lib.NetworkInterfaceType ? [lib.NetworkInterfaceType.WIFI, lib.NetworkInterfaceType.ETHERNET] : [1, 2];
+    for (const ty of types) {
+      const list: Array<{ id: number }> = [];
+      if (nm.getNetworkInterfaces(ty, list) !== ok) continue;
+      for (const it of [...list].sort((a, b) => a.id - b.id)) {
+        const r = nm.getMacAddress(it.id);
+        const id = Array.isArray(r) && r[0] === ok ? macId(r[1]) : '';
+        if (id) return id;
+      }
+    }
+  } catch {
+    // sin el servicio de red o sin permiso
+  }
+  return '';
+}
+
+// Al iniciar, después de leer lo guardado (loadStorage): la MAC real y el identificador de Amazon. Sin nada guardado
+// se espera lo que haga falta (hasta ~9 s, con el logo en pantalla) para arrancar con el número del equipo.
 export async function prepareDeviceId(): Promise<void> {
   const saved = storageLoaded() ? read('device_id') : '';
   notSaved = !saved;
+  mac = await readMacRetry(saved ? 1 : 3);
   const ask = vendorDeviceId();
-  const v = saved ? await Promise.race([ask, new Promise<string>(r => setTimeout(() => r(''), 2500))]).catch(() => '') : await ask.catch(() => '');
-  if (v) setVendor(v);
-  else if (saved) ask.then(setVendor).catch(() => {});
-  // un número al azar armado antes de leer lo guardado (un aviso de error muy temprano) no le gana a nada
-  if (saved || vendor) temp = '';
-  if (!saved && storageLoaded()) {
-    if (vendor) {
-      write('device_id', vendor);
-      write(SRC, 'v');
-    } else {
-      // sin identificador de Amazon: al azar (el mismo que ya se mostró en esta apertura, si hubo) y guardado
-      write('device_id', temp || randomId());
-      write(SRC, 'r');
-      temp = '';
-    }
+  vendor = saved || mac ? await Promise.race([ask, new Promise<string>(r => setTimeout(() => r(''), 2500))]).catch(() => '') : await ask.catch(() => '');
+  if (!vendor) ask.then(v => (vendor = v)).catch(() => {});
+  if (!saved && storageLoaded() && (mac || vendor)) {
+    write('device_id', mac || vendor);
+    write(SRC, mac ? 'm' : 'v');
   }
-  pending = false;
+  // si el sistema todavía no dio ninguno, se vuelve a intentar en segundo plano (nunca se inventa uno)
+  if (!mac && !vendor) retryLater();
+}
+
+async function readMacRetry(times: number): Promise<string> {
+  for (let i = 0; i < times; i++) {
+    const m = systemMac();
+    if (m) return m;
+    if (i + 1 < times) await new Promise<void>(r => setTimeout(r, 700));
+  }
+  return '';
+}
+
+function retryLater(n = 0): void {
+  if (n >= 20) return;
+  setTimeout(async () => {
+    mac = mac || systemMac();
+    if (!vendor) vendor = await vendorDeviceId().catch(() => '');
+    if (!mac && !vendor) return retryLater(n + 1);
+    if (storageLoaded() && !read('device_id')) {
+      write('device_id', mac || vendor);
+      write(SRC, mac ? 'm' : 'v');
+    }
+  }, 3000);
 }
 
 // ---------- con el panel (api/login.php «device_id») ----------
@@ -93,10 +119,12 @@ const asked = new Set<string>();
 // número que se cambió por el que devolvió el panel (lo que ya lo tenía en la mano lo cambia)
 let replaced: { from: string; to: string } | null = null;
 
-// claves fijas del equipo para el panel (una letra de tipo + hex): el identificador de Amazon
+// claves fijas del equipo para el panel (una letra de tipo + hex): la MAC real y el identificador de Amazon
 export function hwKeys(): string[] {
-  const k = vendor ? 'v' + vendor.replace(/:/g, '') : read(HW);
-  return /^[a-z][0-9A-F]{12,32}$/.test(k) ? [k] : [];
+  const out: string[] = [];
+  if (mac) out.push('m' + mac.replace(/:/g, ''));
+  if (vendor) out.push('v' + vendor.replace(/:/g, ''));
+  return out;
 }
 
 // el número no salió de lo guardado: para un panel del 14 de noviembre (sin «fixed») pide el de antes
@@ -115,7 +143,7 @@ export function syncDone(tenant: string, sent: string, got: string): void {
   if (got === sent || !/^[0-9A-F]{2}(:[0-9A-F]{2}){5,7}$/.test(got)) return;
   if (storageLoaded()) {
     write('device_id', got);
-    write(SRC, 'p');
+    write(SRC, got === mac ? 'm' : got === vendor ? 'v' : 'p');
     temp = '';
   } else temp = got;
   replaced = { from: sent, to: got };
@@ -126,7 +154,7 @@ export function currentId(id: string): string {
   return replaced && id === replaced.from ? replaced.to : id;
 }
 
-// (se inició sesión: nada que hacer, el panel ya decide el número en cada inicio)
+// (se inició sesión: nada que hacer, el panel decide el número en cada inicio)
 export function deviceRegistered(): void {}
 
 // UUID → 32 hex: el objeto Uuid de Vega ({ bytes: [16 números] }), una lista de 16 bytes o el texto «xxxxxxxx-…»
@@ -154,7 +182,6 @@ export function idFromUuid(uuid: unknown): string {
 async function vendorDeviceId(): Promise<string> {
   let ids: { getVendorTrackingId: () => Promise<unknown> };
   try {
-    // (cargado aquí: un sistema sin el módulo, o las pruebas en Node, siguen con el identificador al azar)
     ids = require('@amazon-devices/kepler-identifiers').KeplerIdentifiers;
   } catch {
     return '';
@@ -162,11 +189,8 @@ async function vendorDeviceId(): Promise<string> {
   for (const wait of [1500, 2000, 2500, 2500]) {
     try {
       const uuid = await Promise.race([ids.getVendorTrackingId(), new Promise<null>(r => setTimeout(() => r(null), wait))]);
-      if (uuid !== null) {
-        const id = idFromUuid(uuid);
-        // UUID en ceros (el usuario lo apagó): no hay más que pedir
-        return id;
-      }
+      // (UUID en ceros: el usuario lo apagó; no hay más que pedir)
+      if (uuid !== null) return idFromUuid(uuid);
     } catch {
       // error pasajero: otra vez
     }

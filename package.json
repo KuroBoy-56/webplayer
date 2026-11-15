@@ -1,6 +1,6 @@
 {
   "name": "latmpxvega",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "private": true,
   "scripts": {
     "start": "react-native start",
@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@amazon-devices/kepler-identifiers": "~0.2.7",
+    "@amazon-devices/keplerscript-netmgr-lib": "~2.0.20",
     "@amazon-devices/react-native-async-storage__async-storage": "~2.1.0",
     "@amazon-devices/react-native-kepler": "~4.0.0",
     "@amazon-devices/react-native-w3cmedia": "~2.3.2",

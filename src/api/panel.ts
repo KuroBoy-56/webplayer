@@ -8,7 +8,7 @@ import { cacheSeen, takeCacheOrder } from '../lib/cacheclear';
 import { APP_ID, Brand, parseConfig, reportTenantProblem, scoped, TENANT_ERRORS, TENANT_FATAL, tenantCode, tenantFields } from '../lib/tenant';
 import { lang, t } from '../lib/i18n';
 import { normalizeBase, str } from '../lib/util';
-import { currentId, deviceFresh, deviceId, hwKeys, syncDone, syncNeeded, vendorId } from '../lib/deviceid';
+import { currentId, deviceFresh, deviceId, hardId, hwKeys, syncDone, syncNeeded, vendorId } from '../lib/deviceid';
 
 export type Session = {
   dns: string;
@@ -261,8 +261,8 @@ export function forgetCloud(): void {
 let clockSkew = 0;
 
 // Número del equipo (panel: api/login.php «device_id», includes/device_alias.php). 2.5.0: en cada inicio de la app, con
-// el identificador de Amazon como clave fija ("fixed"), el panel dice cuál es el número de este equipo (el que tiene
-// registrado; si no hay ninguno, el de Amazon). Una vez por inicio y distribuidor, antes del primer pedido con el
+// las claves fijas del equipo ("fixed"), el panel dice cuál es el número de este equipo. 2.6.0: con la MAC real
+// ("hard") el número es siempre la MAC (el panel le pasa la línea de un número anterior); sin ella, el de Amazon. Una vez por inicio y distribuidor, antes del primer pedido con el
 // número; como mucho 5 s de espera. Un panel viejo: sin la función contesta «Invalid action» y se vuelve a intentar
 // en 6 h; el del 14 de noviembre no entiende "fixed" pero sí "fresh" (sin número guardado le devuelve el de antes).
 let syncing: Promise<void> | null = null;
@@ -274,7 +274,15 @@ export async function deviceSync(): Promise<void> {
     syncing = (async () => {
       try {
         const sent = deviceId();
-        const r = await panelLogin('device_id', { mac_address: sent, hw: hwKeys(), base: vendorId(), fixed: 1, ...(deviceFresh() ? { fresh: 1 } : {}) });
+        const r = await panelLogin('device_id', {
+          mac_address: sent,
+          hw: hwKeys(),
+          base: vendorId(),
+          fixed: 1,
+          // 2.6.0: el número es la MAC real del equipo (el panel pasa a ella la línea de un número anterior)
+          ...(hardId() ? { hard: 1 } : {}),
+          ...(deviceFresh() ? { fresh: 1 } : {}),
+        });
         const j = r.code === 200 ? json<any>(r) : null;
         const id = j && typeof j === 'object' ? str(j.device_id).toUpperCase() : '';
         if (/^[0-9A-F]{2}(:[0-9A-F]{2}){5,7}$/.test(id)) syncDone(tenant, sent, id);

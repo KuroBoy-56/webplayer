@@ -18,6 +18,9 @@ let disk = new Map();
 const UUID = (hex) => ({ bytes: hex.replace(/-/g, '').match(/../g).map(h => parseInt(h, 16)) });
 let vendor = UUID('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b');
 let tenant = '';
+// la MAC de la tarjeta Wi-Fi como la da NetworkManager.getMacAddress(); macDenied = app sin firmar (sin el permiso)
+let wifiMac = 'F0:27:2D:AA:BB:CC';
+let macDenied = false;
 // ---- el panel: claves fijas → identificador, líneas registradas por identificador, pedidos recibidos ----
 let alias = new Map();
 let lines = new Map();
@@ -37,7 +40,16 @@ function fakePanel(action, data) {
       const mac = MAC.test(use) ? use : base;
       let al = '';
       for (const k of data.hw) if (alias.has(t + '|' + k)) { al = alias.get(t + '|' + k); break; }
-      use = [...new Set([mac, al, base].filter(Boolean))].find(c => lines.has(c)) || base || al || mac;
+      const reg = [...new Set([mac, al].filter(Boolean))].find(c => c !== base && lines.has(c)) || '';
+      const hardReg = d => [...alias.entries()].some(([k, v]) => k.startsWith(t + '|m') && v === d);
+      if (!base) use = reg || al || mac;
+      else if (lines.has(base)) use = base;
+      else if (reg && (data.hard || !hardReg(reg))) {
+        lines.set(base, lines.get(reg));
+        lines.delete(reg);
+        for (const [k, v] of alias) if (v === reg) alias.set(k, base);
+        use = base;
+      } else use = reg || base;
     } else if (data.fresh) for (const k of data.hw) if (alias.has(t + '|' + k)) { use = alias.get(t + '|' + k); break; }
     for (const k of data.hw) alias.set(t + '|' + k, use);
     return { code: 200, body: JSON.stringify({ status: 'ok', device_id: use }) };
@@ -60,6 +72,14 @@ Module._load = function (request, parent, isMain) {
     removeItem: async k => { disk.delete(k); },
   } };
   if (request === '@amazon-devices/kepler-identifiers') return { KeplerIdentifiers: { getVendorTrackingId: async () => vendor } };
+  if (request === '@amazon-devices/keplerscript-netmgr-lib') return {
+    Status: { SUCCESS: 0, PERMISSION_DENIED: 4 },
+    NetworkInterfaceType: { NONE: 0, WIFI: 1, ETHERNET: 2 },
+    NetworkManager: class {
+      getNetworkInterfaces(type, list) { list.length = 0; if (type === 1) list.push({ id: 3, name: 'wlan0', type: 1, priority: 0 }); return 0; }
+      getMacAddress(id) { return macDenied ? [4, ''] : id === 3 ? [0, wifiMac] : [2, '']; }
+    },
+  };
   if (request === '../lib/aes') return { hasMasterKey: () => true, panelEncrypt: s => s, panelDecrypt: s => s };
   if (request === '../lib/crypto') return { decodePanelUrl: () => 'https://panel.test/api/', dnsDecode: s => s, mopeDecrypt: s => s, mopeEncrypt: s => s };
   if (request === '../lib/i18n' || request === './i18n') return { lang: () => 'es', t: k => k };
@@ -95,73 +115,122 @@ async function open() {
   await tick();
   return { dev, panel, storage };
 }
-const reset = () => { disk = new Map(); alias = new Map(); lines = new Map(); asked = []; tenant = ''; panelKnows = true; panelFixed = true; storageBroken = false; vendor = UUID('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'); };
+const reset = () => { disk = new Map(); alias = new Map(); lines = new Map(); asked = []; tenant = ''; panelKnows = true; panelFixed = true; storageBroken = false; vendor = UUID('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'); wifiMac = 'F0:27:2D:AA:BB:CC'; macDenied = false; };
+const REAL = 'F0:27:2D:AA:BB:CC';
 const V = () => require('../src/lib/deviceid.ts').idFromUuid(vendor);
 
 
-test('2.5.0: la app se cierra de golpe y al volver a abrir no puede leer lo guardado: el número sigue siendo el registrado (no uno nuevo)', async () => {
-  reset();
-  const OLD = 'AB:CD:EF:01:23:45:67:89'; // registrado con un número al azar de una versión anterior
-  disk.set('latmpx:device_id', OLD);
-  disk.set('latmpx:device_id_src', 'r');
-  lines.set(OLD, 'cliente1');
-  let { dev, panel } = await open();
-  assert.equal(dev.deviceId(), OLD);
-  assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente1');
-  // cierre de golpe: el almacenamiento no contesta al volver a abrir
-  storageBroken = true;
-  ({ dev, panel } = await open());
-  assert.equal(dev.deviceId(), OLD, 'el panel devuelve el número registrado');
-  assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente1', 'entra con su línea');
-  assert.equal(disk.get('latmpx:device_id'), OLD, 'no se escribió nada encima');
-  // vuelve a funcionar el almacenamiento: igual
-  storageBroken = false;
-  ({ dev } = await open());
-  assert.equal(dev.deviceId(), OLD);
-});
 
-test('2.5.0: equipo nuevo: el número es el de Amazon y es el mismo en cada inicio, al reinstalar y tras un cierre de golpe', async () => {
+test('2.6.0: el número es la MAC real del equipo; el mismo en cada inicio, al reinstalar y después de un cierre de golpe', async () => {
   reset();
   let { dev, panel } = await open();
-  const id = dev.deviceId();
-  assert.equal(id, V());
-  await panel.panelSubmit(id, 'cliente2', 'p', 'http://srv.test:80');
-  for (const step of ['inicio', 'reinstalar', 'cierre', 'inicio']) {
+  assert.equal(dev.deviceId(), REAL);
+  await panel.panelSubmit(REAL, 'cliente1', 'p', 'http://srv.test:80');
+  for (const step of ['inicio', 'cierre', 'reinstalar', 'cierre', 'inicio']) {
     if (step === 'reinstalar') disk = new Map();
     storageBroken = step === 'cierre';
     ({ dev, panel } = await open());
-    assert.equal(dev.deviceId(), id, step);
-    assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente2', step);
+    assert.equal(dev.deviceId(), REAL, step);
+    assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente1', step);
   }
+  assert.equal(lines.size, 1, 'una sola línea, un solo equipo');
 });
 
-test('2.5.0: equipo registrado con número al azar se reinstala: recupera ese número (una línea, no dos)', async () => {
+test('2.6.0: un equipo registrado con un número al azar de antes pasa a su MAC real sin perder la línea', async () => {
   reset();
-  const OLD = '3C:4D:5E:6F:70:81:92:A3';
+  const OLD = 'AB:CD:EF:01:23:45:67:89';
   disk.set('latmpx:device_id', OLD);
   disk.set('latmpx:device_id_src', 'r');
-  lines.set(OLD, 'cliente9');
-  await open();
-  disk = new Map();
+  lines.set(OLD, 'cliente1');
   const { dev, panel } = await open();
-  assert.equal(dev.deviceId(), OLD);
-  assert.equal(disk.get('latmpx:device_id'), OLD, 'queda guardado');
-  assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente9');
-  assert.equal(lines.size, 1);
+  assert.equal(dev.deviceId(), REAL);
+  assert.equal(disk.get('latmpx:device_id'), REAL);
+  assert.equal(disk.get('latmpx:device_id_src'), 'm');
+  assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente1');
+  assert.equal(lines.has(OLD), false, 'el número inventado ya no existe');
+  const sync = asked.find(a => a[0] === 'device_id');
+  assert.ok(sync, JSON.stringify(asked));
 });
 
-test('2.5.0: número al azar guardado que nunca se registró: pasa al de Amazon (ya no depende de nada guardado)', async () => {
+test('2.6.0: sin el permiso de la MAC (app sin firmar): el identificador de Amazon; el número al azar registrado pasa a ese', async () => {
   reset();
-  disk.set('latmpx:device_id', '5E:5E:5E:5E:5E:5E:5E:5E');
-  disk.set('latmpx:device_id_src', 'r');
+  macDenied = true;
+  const OLD = '3C:4D:5E:6F:70:81:92:A3';
+  disk.set('latmpx:device_id', OLD);
+  lines.set(OLD, 'cliente9');
+  let { dev, panel } = await open();
+  assert.equal(dev.deviceId(), V());
+  assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente9');
+  for (const step of ['cierre', 'reinstalar']) {
+    if (step === 'reinstalar') disk = new Map();
+    storageBroken = step === 'cierre';
+    ({ dev } = await open());
+    assert.equal(dev.deviceId(), V(), step);
+  }
+  // la app pasa a estar firmada (tienda): una sola vez, del de Amazon a la MAC real
+  storageBroken = false;
+  macDenied = false;
+  ({ dev, panel } = await open());
+  assert.equal(dev.deviceId(), REAL);
+  assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente9');
+});
+
+test('2.6.0: una apertura en la que el sistema no da la MAC no cambia el número (sigue la MAC)', async () => {
+  reset();
+  let { dev, panel } = await open();
+  await panel.panelSubmit(dev.deviceId(), 'c', 'p', 'http://srv.test:80');
+  macDenied = true;
+  storageBroken = true;
+  ({ dev } = await open());
+  assert.equal(dev.deviceId(), REAL);
+});
+
+test('2.6.0: nunca un número inventado: sin MAC ni identificador de Amazon no hay número (se sigue intentando)', async () => {
+  reset();
+  macDenied = true;
+  vendor = UUID('00000000-0000-0000-0000-000000000000');
+  const { dev } = await open();
+  assert.equal(dev.deviceId(), '');
+  assert.equal(disk.has('latmpx:device_id'), false);
+  // un número de una versión anterior que ya estaba guardado se sigue usando (el panel lo tiene registrado)
+  reset();
+  macDenied = true;
+  vendor = UUID('00000000-0000-0000-0000-000000000000');
+  disk.set('latmpx:device_id', 'AB:CD:EF:01:23:45:67:89');
+  const again = await open();
+  assert.equal(again.dev.deviceId(), 'AB:CD:EF:01:23:45:67:89');
+});
+
+test('2.6.0: solo una MAC grabada de fábrica (una al azar del sistema no sirve); la que empieza en 00 pasa a 10', async () => {
+  reset();
+  wifiMac = 'DA:A1:19:00:11:22'; // administrada localmente (al azar)
   const { dev } = await open();
   assert.equal(dev.deviceId(), V());
-  assert.equal(disk.get('latmpx:device_id'), V());
+  assert.equal(dev.macId('00:FC:8B:12:34:56'), '10:FC:8B:12:34:56');
+  assert.equal(dev.macId('f0-27-2d-aa-bb-cc'), REAL);
+  assert.equal(dev.macId('00:00:00:00:00:00'), '');
+  assert.equal(dev.macId('01:00:5E:00:00:01'), '', 'multicast');
+  assert.equal(dev.macId('02:00:00:00:00:00'), '');
+  assert.equal(dev.macId(undefined), '');
 });
 
-test('2.5.0: panel del 14 de noviembre (sin «fixed»): con lo guardado perdido igual le devuelve el número de antes', async () => {
+test('panel sin la función (viejo): el número guardado o la MAC real, sin preguntar en cada pedido', async () => {
+  reset();
+  panelKnows = false;
+  let { dev, panel } = await open();
+  assert.equal(dev.deviceId(), REAL);
+  await panel.panelCheckMac(REAL);
+  await panel.panelCheckMac(REAL);
+  assert.equal(asked.filter(a => a[0] === 'device_id').length, 1);
+  storageBroken = true;
+  ({ dev } = await open());
+  assert.equal(dev.deviceId(), REAL);
+});
+
+test('panel del 14 de noviembre (sin «fixed»): con lo guardado perdido le devuelve el número de antes', async () => {
   reset();
   panelFixed = false;
+  macDenied = true;
   const OLD = '7A:11:22:33:44:55:66:77';
   disk.set('latmpx:device_id', OLD);
   lines.set(OLD, 'c');
@@ -169,70 +238,23 @@ test('2.5.0: panel del 14 de noviembre (sin «fixed»): con lo guardado perdido 
   storageBroken = true;
   const { dev } = await open();
   assert.equal(dev.deviceId(), OLD);
-});
-
-test('panel sin la función (viejo): el número guardado o el de Amazon, sin preguntar en cada pedido', async () => {
-  reset();
-  panelKnows = false;
-  let { dev, panel } = await open();
-  const id = dev.deviceId();
-  assert.equal(id, V());
-  await panel.panelCheckMac(id);
-  await panel.panelCheckMac(id);
-  assert.equal(asked.filter(a => a[0] === 'device_id').length, 1);
-  storageBroken = true;
-  ({ dev } = await open());
-  assert.equal(dev.deviceId(), id, 'cierre de golpe: el mismo (sale de Amazon)');
 });
 
 test('cada distribuidor tiene sus claves', async () => {
   reset();
+  macDenied = true;
   const OLD = '7A:11:22:33:44:55:66:77';
   disk.set('latmpx:device_id', OLD);
   lines.set(OLD, 'c');
   tenant = '111111';
   await open();
-  assert.deepEqual([...alias.keys()].map(k => k.split('|')[0]), ['111111']);
-  disk = new Map();
-  tenant = '222222';
-  let { dev, panel } = await open();
-  assert.equal(dev.deviceId(), V(), 'otro distribuidor no conoce el equipo');
-  tenant = '111111';
-  await panel.panelCheckMac(dev.deviceId());
-  assert.equal(dev.deviceId(), OLD, 'con el distribuidor correcto vuelve el de antes');
-});
-
-test('sin identificador de Amazon: uno al azar guardado que no cambia entre inicios; uno armado antes de leer lo guardado no se guarda', async () => {
-  reset();
-  vendor = UUID('00000000-0000-0000-0000-000000000000');
-  for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
-  const early = require('../src/lib/deviceid.ts').deviceId();
-  assert.equal(disk.size, 0, 'nada guardado antes de leer lo guardado');
-  let { dev } = await open();
-  const r = dev.deviceId();
-  assert.match(r, MAC);
-  assert.notEqual(r, early);
-  for (let i = 0; i < 3; i++) {
-    ({ dev } = await open());
-    assert.equal(dev.deviceId(), r);
-  }
-  // con identificador de Amazon y un número guardado: el guardado no le gana a uno armado antes de tiempo
-  reset();
-  disk.set('latmpx:device_id', 'AB:CD:EF:01:23:45:67:89');
-  lines.set('AB:CD:EF:01:23:45:67:89', 'c');
-  for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts', '../src/api/panel.ts']) delete require.cache[require.resolve(f)];
-  const storage = require('../src/lib/storage.ts');
-  const d2 = require('../src/lib/deviceid.ts');
-  d2.deviceId();
-  await storage.loadStorage();
-  await d2.prepareDeviceId();
-  assert.equal(d2.deviceId(), 'AB:CD:EF:01:23:45:67:89');
+  assert.deepEqual([...new Set([...alias.keys()].map(k => k.split('|')[0]))], ['111111']);
 });
 
 test('el objeto Uuid de Vega se lee por sus bytes', async () => {
   reset();
   const { dev } = await open();
-  assert.equal(dev.deviceId(), dev.idFromUuid('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'));
+  assert.equal(dev.idFromUuid({ bytes: [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b] }), dev.idFromUuid('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'));
   assert.equal(dev.idFromUuid({ bytes: [1, 2, 3] }), '');
   assert.equal(dev.idFromUuid({}), '');
   assert.equal(dev.idFromUuid(String({ bytes: [] })), '');

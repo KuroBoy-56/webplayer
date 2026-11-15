@@ -980,19 +980,21 @@ test('2.1.3: inicio de sesión: si el panel no contesta se le pregunta otra vez 
   assert.match(app, /registerPending\(deviceId\(\), ses\.user\)/);
 });
 
-test('2.1.6 / 2.5.0: identificador del equipo desde el de Vega (no cambia al reinstalar): el mismo siempre; el ya guardado se respeta (lo cambia solo el panel); sin él, al azar', async () => {
+test('2.6.0: número del equipo solo del equipo (identificador de Vega, sin MAC en esta prueba): el mismo siempre; el ya guardado se respeta; nunca uno al azar', async () => {
   const disk = new Map();
-  // como lo da Vega de verdad: un objeto Uuid con 16 bytes (hasta la 2.1.11 se leía como texto y salía al azar)
+  // como lo da Vega de verdad: un objeto Uuid con 16 bytes
   let vendor = async () => ({ bytes: [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b] });
+  let storageFail = false;
   const prev = Module._load;
   Module._load = function(request, parent, isMain) {
     if (request === '@react-native-async-storage/async-storage') return { __esModule: true, default: {
-      getAllKeys: async () => [...disk.keys()],
+      getAllKeys: async () => { if (storageFail) throw new Error('storage'); return [...disk.keys()]; },
       multiGet: async ks => ks.map(k => [k, disk.get(k)]),
       setItem: async (k, v) => { disk.set(k, v); },
       removeItem: async k => { disk.delete(k); },
     } };
     if (request === '@amazon-devices/kepler-identifiers') return { KeplerIdentifiers: { getVendorTrackingId: () => vendor() } };
+    if (request === '@amazon-devices/keplerscript-netmgr-lib') throw new Error('sin el módulo');
     return prev.call(this, request, parent, isMain);
   };
   const start = async () => {
@@ -1007,81 +1009,43 @@ test('2.1.6 / 2.5.0: identificador del equipo desde el de Vega (no cambia al rei
   try {
     let dev = await start();
     const id = dev.deviceId();
-    assert.match(id, /^([0-9A-F]{2}:){7}[0-9A-F]{2}$/);
     assert.equal(id, dev.idFromUuid('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'));
     assert.ok(!id.startsWith('00'));
     // desinstalar y volver a instalar (nada guardado): el mismo número
     disk.clear();
     dev = await start();
     assert.equal(dev.deviceId(), id);
-    // el número que ya estaba guardado (instalación de antes) no se cambia
+    // lo guardado no se puede leer (cierre de golpe): el mismo número, nada escrito encima
+    disk.set('latmpx:device_id', id);
+    storageFail = true;
+    dev = await start();
+    assert.equal(dev.deviceId(), id);
+    storageFail = false;
+    // el número que ya estaba guardado (instalación de antes) se respeta mientras el panel no diga otro
     disk.clear();
     disk.set('latmpx:device_id', 'AB:CD:EF:01:23:45:67:89');
     dev = await start();
     assert.equal(dev.deviceId(), 'AB:CD:EF:01:23:45:67:89');
-    // sin la función (o apagada por el usuario: UUID en ceros): al azar, guardado como antes y marcado
+    assert.equal(dev.vendorId(), id);
+    assert.deepEqual(dev.hwKeys(), ['v' + id.replace(/:/g, '')]);
+    // sin la función (o UUID en ceros) y nada guardado: NO hay número inventado ni se guarda nada
     for (const v of [async () => { throw new Error('sin módulo'); }, async () => ({ bytes: new Array(16).fill(0) })]) {
       vendor = v;
       disk.clear();
       dev = await start();
-      const r = dev.deviceId();
-      assert.match(r, /^([0-9A-F]{2}:){7}[0-9A-F]{2}$/);
-      assert.equal(disk.get('latmpx:device_id'), r);
-      assert.equal(disk.get('latmpx:device_id_src'), 'r');
+      assert.equal(dev.deviceId(), '');
+      assert.equal(disk.has('latmpx:device_id'), false);
     }
-    // 2.5.0: en el inicio siguiente Vega contesta: la app sola ya no cambia el guardado (lo decide el panel, que lo
-    // cambia por el de Vega si nunca se registró: tools/test-deviceid.cjs); el de Vega queda como clave fija
-    const saved = disk.get('latmpx:device_id');
-    vendor = async () => ({ bytes: [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b] });
-    dev = await start();
-    assert.equal(dev.deviceId(), saved);
-    assert.equal(dev.vendorId(), id);
-    assert.deepEqual(dev.hwKeys(), ['v' + id.replace(/:/g, '')]);
-    // 2.1.7: Vega tarda en contestar la primera vez (error pasajero): se le pregunta otra vez y sale el fijo
+    // Vega tarda en contestar la primera vez (error pasajero): se le pregunta otra vez y sale el del equipo
     let calls = 0;
     vendor = async () => { if (++calls === 1) throw new Error('ocupado'); return { bytes: [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b] }; };
     disk.clear();
     dev = await start();
     assert.equal(dev.deviceId(), id);
-    assert.equal(calls, 2);
+    // (2 o más: los reintentos en segundo plano de los inicios sin número de arriba también preguntan)
+    assert.ok(calls >= 2);
     assert.equal(dev.idFromUuid(''), '');
     assert.notEqual(dev.idFromUuid('11111111-2222-4333-8444-555555555555'), dev.idFromUuid('11111111-2222-4333-8444-555555555556'));
-  } finally {
-    Module._load = prev;
-    for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
-  }
-});
-
-test('identificador del equipo: si lo guardado no se pudo leer no se escribe uno nuevo encima del registrado en el panel', async () => {
-  const saved = [];
-  let fail = true;
-  const prev = Module._load;
-  Module._load = function(request, parent, isMain) {
-    if (request === '@react-native-async-storage/async-storage') return { __esModule: true, default: {
-      getAllKeys: async () => { if (fail) throw new Error('storage'); return ['latmpx:device_id']; },
-      multiGet: async () => [['latmpx:device_id', 'AB:CD:EF:01:23:45:67:89']],
-      setItem: async (k, v) => { saved.push(k); },
-      removeItem: async () => {},
-    } };
-    return prev.call(this, request, parent, isMain);
-  };
-  try {
-    for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
-    let storage = require('../src/lib/storage.ts');
-    let dev = require('../src/lib/deviceid.ts');
-    await storage.loadStorage();
-    const temp = dev.deviceId();
-    assert.match(temp, /^([0-9A-F]{2}:){7}[0-9A-F]{2}$/);
-    assert.equal(dev.deviceId(), temp);
-    assert.deepEqual(saved, []);
-    // siguiente inicio, lectura bien: vuelve el identificador de siempre
-    fail = false;
-    for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
-    storage = require('../src/lib/storage.ts');
-    dev = require('../src/lib/deviceid.ts');
-    await storage.loadStorage();
-    assert.equal(dev.deviceId(), 'AB:CD:EF:01:23:45:67:89');
-    assert.deepEqual(saved, []);
   } finally {
     Module._load = prev;
     for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
