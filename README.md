@@ -207,6 +207,11 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.2) **La MAC se lee aunque Amazon la escriba mal**: `getMacAddress()` entrega los pares de 80 a FF con signo
+  («02:15:FFFFFFB2:00:…» en lugar de «02:15:B2:00:…», visto en el Vega Virtual Device con el diagnóstico de la 2.6.1) y la
+  app la descartaba. `macHex` toma los dos últimos dígitos de cada par «FFFFFFxx». En el simulador el identificador de
+  Amazon no existe (`NotSupportedError`): por eso las versiones anteriores inventaban un número en cada apertura; ahora
+  usa la MAC de su tarjeta virtual.
 - (2.6.1) **Vega Virtual Device y diagnóstico del número**: en el simulador la 2.6.0 quedaba sin número («Missing
   device identifier»): el sistema no dio la MAC ni el identificador de Amazon. Ahora: (1) una MAC «administrada
   localmente» (la de la tarjeta de red de una máquina virtual) sirve como último recurso, después de la MAC de fábrica y

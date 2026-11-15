@@ -42,11 +42,25 @@ export function hardId(): boolean {
   return !!mac;
 }
 
+// MAC → 12 hex. 2.6.2: la función de Amazon escribe los pares de 80 a FF con signo («02:15:FFFFFFB2:00:…» = 02:15:B2:00:…;
+// visto en el Vega Virtual Device): de cada par «FFFFFFxx» se toman los dos últimos. '' si no es una MAC.
+export function macHex(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const t = raw.trim().toUpperCase();
+  const parts = t.split(/[:\-\s.]+/).filter(Boolean);
+  if (parts.length === 6) {
+    const out = parts.map(p => (/^[0-9A-F]{1,2}$/.test(p) ? p.padStart(2, '0') : /^F{6}[0-9A-F]{2}$/.test(p) ? p.slice(-2) : ''));
+    return out.every(Boolean) ? out.join('') : '';
+  }
+  const hex = t.replace(/[^0-9A-F]/g, '');
+  return hex.length === 12 ? hex : '';
+}
+
 // MAC → número: 6 pares en mayúsculas ('' si no sirve: ni en ceros, ni FF…, ni multicast). Una que empiece en "00"
 // pasa a "10" (el panel quita un "00:" del principio de los números). 2.6.1: también una «administrada localmente»
 // (la de una máquina virtual como el Vega Virtual Device), pero se prefiere la grabada de fábrica (macRank).
 export function macId(raw: unknown): string {
-  const hex = typeof raw === 'string' ? raw.toUpperCase().replace(/[^0-9A-F]/g, '') : '';
+  const hex = macHex(raw);
   if (hex.length !== 12 || /^0+$/.test(hex) || /^F+$/.test(hex)) return '';
   if (parseInt(hex.slice(0, 2), 16) & 1) return '';
   return (hex.startsWith('00') ? '10' + hex.slice(2) : hex).match(/.{2}/g)!.join(':');
@@ -54,10 +68,8 @@ export function macId(raw: unknown): string {
 
 // 2 = grabada de fábrica, 1 = administrada localmente, 0 = no sirve
 export function macRank(raw: unknown): number {
-  const id = macId(raw);
-  if (!id) return 0;
-  const hex = String(raw).toUpperCase().replace(/[^0-9A-F]/g, '');
-  return parseInt(hex.slice(0, 2), 16) & 2 ? 1 : 2;
+  if (!macId(raw)) return 0;
+  return parseInt(macHex(raw).slice(0, 2), 16) & 2 ? 1 : 2;
 }
 
 // qué contestó el sistema en esta apertura (se ve en pantalla cuando no hay número, para saber por qué)
@@ -111,7 +123,7 @@ export function systemMac(): string {
       const st = Array.isArray(r) ? r[0] : r?.status;
       const val = Array.isArray(r) ? r[1] : r?.address;
       const rank = st === ok ? macRank(val) : 0;
-      seen.push(id + ':' + (st === ok ? (rank ? (rank === 2 ? 'ok' : 'local') : 'vacía ' + String(val).slice(0, 17)) : st === 4 ? 'sin permiso' : 'estado ' + st));
+      seen.push(id + ':' + (st === ok ? (rank ? (rank === 2 ? 'ok' : 'local') : 'vacía ' + String(val).slice(0, 40)) : st === 4 ? 'sin permiso' : 'estado ' + st));
       if (rank > bestRank) {
         best = macId(val);
         bestRank = rank;
