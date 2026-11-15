@@ -31,8 +31,13 @@ function flush(): void {
   }
 }
 
-// se abre una película o episodio
+// se abre una película o episodio (si ya había una caja abierta, por un reproductor nuevo o el episodio siguiente, se
+// sigue en la misma: los pasos de antes son los que explican un cierre)
 export function bbOpen(what: string): void {
+  if (cur) {
+    bbStep('abrir ' + what, true);
+    return;
+  }
   cur = { t: Date.now(), what: what.slice(0, 300), steps: [] };
   bbStep('abrir', true);
 }

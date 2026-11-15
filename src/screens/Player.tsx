@@ -250,6 +250,9 @@ export default function Player({ params }: { params: PlayParams }) {
     [params, urlFor],
   );
 
+  // se salió del reproductor (la pantalla se cierra, sin que la app se cerrara): nada para la caja negra
+  useEffect(() => () => bbClose(), []);
+
   // ---------- carga ----------
   const load = useCallback(
     (i: number, resume = 0) => {
@@ -946,8 +949,8 @@ export default function Player({ params }: { params: PlayParams }) {
     return () => {
       const zap = zapping.current;
       alive = false;
-      // se salió del reproductor (sin que la app se cerrara): nada para la caja negra
-      bbClose();
+      // (2.6.5: aquí NO se borra la caja negra: esto corre también al cambiar de reproductor, y justo ahí se cerraba la app)
+      bbStep('se cierra el reproductor', true);
       surfaceReady.current?.();
       if (startDog.current) clearTimeout(startDog.current);
       startDog.current = null;

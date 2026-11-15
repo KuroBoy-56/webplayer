@@ -123,7 +123,15 @@ No se ha generado ni instalado un .vpkg: falta el SDK/dispositivo Vega en este
 entorno. Usar el flujo de compilación existente con su configuración privada.
 Las claves de panel no están incluidas en esta entrega.
 
-## 2.1.7 — del lector al reproductor de Amazon en uno nuevo
+## 2.6.5 — se quita lo de la 2.1.7 (vuelve a ser como la 2.1.6)
+
+Destruir el reproductor y crear uno nuevo para pasar del lector al reproductor de Amazon (audio que el lector no da,
+Dolby) cerraba la app: en el simulador, cada película con ese audio, justo después de empezar. Y abrir Continuar viendo
+directo con el de Amazon por un códec recordado volvía al problema de la 2.1.4 (empieza en 0, no salta al segundo
+guardado, «Preparando desde donde quedó…» sin fin). `src/player/playback.ts` vuelve a la 2.1.6: el de Amazon en el mismo
+reproductor y Continuar viendo con el lector. Lo de abajo queda solo como historia.
+
+## 2.1.7 — del lector al reproductor de Amazon en uno nuevo (QUITADO en 2.6.5)
 
 Aviso de 2.1.5: Continuar viendo en el segundo 4115, `intentos=[directo (sin imagen en 20 s) reproductor_amazon=sin
 imagen en 20 s | servidor=206]`. El lector abrió el archivo sin poder dar su audio (`noAudio`, p. ej. Dolby por MSE) y

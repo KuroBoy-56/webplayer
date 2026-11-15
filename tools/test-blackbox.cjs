@@ -57,6 +57,21 @@ test('la app se cierra sola durante una película: en la apertura siguiente qued
   assert.equal(bb.bbPending(), '', 'se manda una sola vez');
 });
 
+test('un reproductor nuevo para el mismo video sigue en la misma caja (los pasos de antes no se pierden)', async () => {
+  disk = new Map();
+  let { bb } = await fresh();
+  bb.bbOpen('kind=movie titulo=A');
+  bb.bbStep('reproduciendo modo=lector', true);
+  bb.bbStep('se cierra el reproductor', true);
+  bb.bbOpen('kind=movie titulo=A continuar=300');
+  await tick();
+  ({ bb } = await fresh());
+  const got = bb.bbPending();
+  assert.match(got, /reproduciendo modo=lector/);
+  assert.match(got, /se cierra el reproductor/);
+  assert.match(got, /abrir kind=movie titulo=A continuar=300/);
+});
+
 test('salir del reproductor o pasar a segundo plano no cuenta como cierre', async () => {
   disk = new Map();
   let { bb } = await fresh();

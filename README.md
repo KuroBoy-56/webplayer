@@ -207,6 +207,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.5) **Películas que cerraban la app: se quita el cambio de la 2.1.7**: desde la 2.1.7, cuando el lector no podía dar
+  el audio (Dolby), la app destruía el reproductor y creaba uno nuevo para el de Amazon, y ahí la app se cerraba (en el
+  simulador, justo después de empezar la película). Además Continuar viendo de un título con ese audio abría directo con
+  el de Amazon, que empieza en 0 y no salta al segundo guardado («Preparando desde donde quedó…» sin fin). `playback.ts`
+  vuelve a la 2.1.6 (el de Amazon en el mismo reproductor; Continuar viendo con el lector). La caja negra ya no se
+  borraba al cambiar de reproductor (justo antes del cierre): ahora solo al salir de la pantalla.
 - (2.6.4) **Un error ya no cierra la app; caja negra del reproductor**: el aviso de errores de JavaScript
   (`installCrashReporter`) llamaba enseguida al manejador de siempre, que cerraba la app antes de que el aviso saliera
   al panel («me bota de la aplicación» sin rastro). Ahora el error va al panel («Errores de las apps», tipo crash, con
