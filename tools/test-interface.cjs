@@ -980,7 +980,7 @@ test('2.1.3: inicio de sesión: si el panel no contesta se le pregunta otra vez 
   assert.match(app, /registerPending\(deviceId\(\), ses\.user\)/);
 });
 
-test('2.1.6 / 2.1.7: identificador del equipo desde el de Vega (no cambia al reinstalar): el mismo siempre; el ya guardado se respeta; sin él, al azar y se vuelve a intentar', async () => {
+test('2.1.6 / 2.5.0: identificador del equipo desde el de Vega (no cambia al reinstalar): el mismo siempre; el ya guardado se respeta (lo cambia solo el panel); sin él, al azar', async () => {
   const disk = new Map();
   // como lo da Vega de verdad: un objeto Uuid con 16 bytes (hasta la 2.1.11 se leía como texto y salía al azar)
   let vendor = async () => ({ bytes: [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b] });
@@ -1029,11 +1029,14 @@ test('2.1.6 / 2.1.7: identificador del equipo desde el de Vega (no cambia al rei
       assert.equal(disk.get('latmpx:device_id'), r);
       assert.equal(disk.get('latmpx:device_id_src'), 'r');
     }
-    // 2.1.7: en el inicio siguiente Vega contesta: el número al azar se cambia por el fijo (y ya no se vuelve a tocar)
+    // 2.5.0: en el inicio siguiente Vega contesta: la app sola ya no cambia el guardado (lo decide el panel, que lo
+    // cambia por el de Vega si nunca se registró: tools/test-deviceid.cjs); el de Vega queda como clave fija
+    const saved = disk.get('latmpx:device_id');
     vendor = async () => ({ bytes: [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b] });
     dev = await start();
-    assert.equal(dev.deviceId(), id);
-    assert.equal(disk.get('latmpx:device_id_src'), 'v');
+    assert.equal(dev.deviceId(), saved);
+    assert.equal(dev.vendorId(), id);
+    assert.deepEqual(dev.hwKeys(), ['v' + id.replace(/:/g, '')]);
     // 2.1.7: Vega tarda en contestar la primera vez (error pasajero): se le pregunta otra vez y sale el fijo
     let calls = 0;
     vendor = async () => { if (++calls === 1) throw new Error('ocupado'); return { bytes: [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b] }; };

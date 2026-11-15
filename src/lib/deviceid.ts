@@ -1,136 +1,133 @@
 // Identificador del equipo (el «MAC» que queda registrado en el panel): 8 pares hex en mayúsculas que nunca empiezan
-// en "00". Vega OS no da a las apps ni serie ni MAC del equipo. Desde 2.1.6 sale del identificador que Vega da a las
-// apps de un mismo vendedor (Vendor Tracking ID, @amazon-devices/kepler-identifiers): según Amazon no cambia al
-// desinstalar y volver a instalar la app, solo al restablecer el equipo de fábrica. Se guarda en el equipo; el que ya
-// estaba guardado se respeta (el panel lo tiene registrado). Sin él (sistema sin la función, el usuario lo apagó: UUID
-// en ceros) se crea uno al azar como antes, que cambia si se desinstala la app.
+// en "00". Vega OS no da a las apps ni serie ni MAC (Amazon, foro de desarrolladores: «no public SDK API to retrieve
+// the DSN»). Lo que sí da es el Vendor Tracking ID (@amazon-devices/kepler-identifiers): según Amazon no cambia al
+// desinstalar y volver a instalar la app; solo al restablecer el equipo de fábrica. Se lee en CADA inicio, no hace
+// falta guardarlo.
 //
-// 2.1.12: el identificador de Vega llega como objeto Uuid ({ bytes: [16 números] }, @amazon-devices/kepler-identifiers),
-// no como texto. Hasta la 2.1.11 se convertía con String() → «[object Object]», no servía y CADA instalación creaba un
-// número al azar: al reinstalar el equipo aparecía como otro en el panel (otro registro, la lista negra no lo frenaba).
-// Ahora se leen sus bytes. El ID de publicidad de Amazon no se usa: su política lo permite solo para anuncios y
-// estadísticas y prohíbe asociarlo a otros identificadores del equipo.
-//
-// 2.1.11: además, con el panel (api/login.php «device_id»). El identificador de Vega queda como «clave fija» del equipo:
-// la app ya instalada la deja anotada en el panel junto al identificador que usa (sea cual sea: el de Vega o uno al
-// azar de antes de la 2.1.6), y una instalación nueva pregunta con esa clave y recibe el identificador con el que el
-// equipo ya estaba registrado. Así, reinstalar la app no cambia el número aunque el registrado fuera uno al azar.
+// 2.5.0: el número ya no depende de lo guardado en el equipo. Hasta la 2.1.12 se respetaba el guardado y, si la app
+// no lo podía leer al volver a abrir (un cierre de golpe mientras cargaba un video, el almacenamiento todavía ocupado),
+// armaba otro número: el panel no lo conocía y sacaba al cliente al inicio de sesión. Ahora:
+// - El número sale del identificador de Amazon (siempre el mismo en ese equipo), salvo que el panel diga otro.
+// - En cada inicio, con el identificador de Amazon como clave fija, se le pregunta al panel cuál es el número de este
+//   equipo (api/login.php «device_id» con "fixed": includes/device_alias.php da_resolve_fixed). El panel contesta el que
+//   tiene registrado (línea, demo o lista negra): el guardado, el que tenía anotado para esa clave o el de Amazon; si no
+//   hay ninguno registrado, el de Amazon. Así un equipo registrado con un número al azar de una versión anterior lo
+//   conserva, y lo recupera aunque se borre todo lo guardado.
+// - Sin poder leer lo guardado no se escribe nada encima ni se arma un número al azar si Amazon lo da.
+// - Solo si Amazon no lo da (sistema sin la función) se usa uno al azar guardado, como antes.
 import { read, storageLoaded, write } from './storage';
 
-// creado sin poder leer lo guardado: vale solo hasta cerrar la app
+// identificador de Amazon de esta apertura (8 pares), '' si no lo dio (todavía)
+let vendor = '';
+// número a usar cuando lo guardado no se pudo leer o el panel dio otro sin poder guardarlo: vale hasta cerrar la app
 let temp = '';
-// se está pidiendo el identificador de Vega (prepareDeviceId): uno al azar no se guarda encima
-let pending = false;
+// mientras se prepara el identificador (inicio de la app): un número al azar no se guarda
+let pending = true;
+// el número no salió de lo guardado en este inicio (instalación nueva o almacenamiento perdido)
+let notSaved = false;
+const SRC = 'device_id_src';
+const HW = 'device_hw';
 
-export function deviceId(): string {
-  const saved = read('device_id');
-  if (saved) return saved;
-  if (temp) return temp;
+function randomId(): string {
   let hex = '';
   for (let i = 0; i < 16; i++) hex += '0123456789ABCDEF'[Math.floor(Math.random() * 16)];
   if (hex.startsWith('00')) hex = '1' + hex.slice(1);
-  const id = hex.match(/.{2}/g)!.join(':');
-  // sin haber leído lo guardado (todavía cargando, o la lectura falló) no se escribe encima: el identificador que el
-  // panel ya tiene registrado sigue en el equipo y vuelve en el próximo inicio
-  if (storageLoaded() && !pending) write('device_id', id);
-  else temp = id;
+  return hex.match(/.{2}/g)!.join(':');
+}
+
+export function deviceId(): string {
+  if (temp) return temp;
+  const saved = read('device_id');
+  if (saved) return saved;
+  if (vendor) return vendor;
+  // sin identificador de Amazon: al azar, guardado solo una vez preparado y con lo guardado leído
+  const id = randomId();
+  if (storageLoaded() && !pending) {
+    write('device_id', id);
+    write(SRC, 'r');
+  } else temp = id;
   return id;
 }
 
-// Al iniciar, después de leer lo guardado: sin identificador guardado (instalación nueva o reinstalada), el de Vega.
-// 2.1.7: el que se creó al azar porque Vega no contestó en esa apertura queda marcado y en cada inicio se vuelve a pedir
-// el de Vega; cuando contesta, se usa ese (el fijo). El guardado de antes de 2.1.6 se respeta: el panel lo tiene
-// registrado con la línea del cliente
-const SRC = 'device_id_src';
-export async function prepareDeviceId(): Promise<void> {
-  const saved = read('device_id');
-  // 2.1.12: el guardado se respeta siempre (el panel lo tiene registrado, también los al azar de antes), salvo uno al
-  // azar que puso esta misma instalación y con el que todavía no se inició sesión. El identificador de Vega se pide
-  // igual (como mucho 2,5 s): es la clave fija con la que el panel devuelve este número después de reinstalar
-  if (saved && !(read(SRC) === 'r' && read(NEW) === '1')) {
-    const v = await Promise.race([vendorDeviceId(), new Promise<string>(r => setTimeout(() => r(''), 2500))]).catch(() => '');
-    if (v) noteHw(v);
-    else vendorDeviceId().then(noteHw).catch(() => {});
-    return;
-  }
-  pending = true;
-  const id = await vendorDeviceId();
-  pending = false;
-  if (!storageLoaded()) {
-    if (id) temp = id;
-    return;
-  }
-  if (read('device_id') !== saved) return;
-  if (id) {
-    temp = '';
-    write('device_id', id);
-    write(SRC, 'v');
-    // identificador recién puesto por esta instalación: el panel puede devolver el que el equipo tenía antes
-    write(NEW, '1');
-    noteHw(id);
-    return;
-  }
-  if (saved) return;
-  // Vega no lo dio: al azar (el mismo que ya se usó en esta apertura, si hubo), marcado para cambiarlo por el de Vega en
-  // cuanto lo dé (si todavía no se inició sesión con este)
-  write('device_id', deviceId());
-  write(SRC, 'r');
-  write(NEW, '1');
+// el número que arma la app con el identificador de Amazon ('' si no lo dio)
+export function vendorId(): string {
+  return vendor;
 }
 
-// ---------- con el panel: clave fija del equipo e identificador de antes (api/login.php «device_id») ----------
+function setVendor(id: string): void {
+  if (!id) return;
+  vendor = id;
+  const k = 'v' + id.replace(/:/g, '');
+  if (storageLoaded() && read(HW) !== k) write(HW, k);
+}
 
-// '1': el identificador lo puso esta instalación y todavía no se inició sesión con él (solo entonces se adopta otro)
-const NEW = 'device_new';
-// clave fija guardada (la del último inicio) y con qué (clave, distribuidor, identificador) ya se consultó al panel
-const HW = 'device_hw';
-const SYNC = 'device_sync';
-// identificador que se cambió por el que devolvió el panel en esta apertura (lo que ya lo tenía en la mano lo cambia)
+// Al iniciar, después de leer lo guardado (loadStorage). Pide el identificador de Amazon; sin número guardado espera
+// lo que haga falta (hasta ~9 s, con el logo en pantalla) para no arrancar con uno al azar.
+export async function prepareDeviceId(): Promise<void> {
+  const saved = storageLoaded() ? read('device_id') : '';
+  notSaved = !saved;
+  const ask = vendorDeviceId();
+  const v = saved ? await Promise.race([ask, new Promise<string>(r => setTimeout(() => r(''), 2500))]).catch(() => '') : await ask.catch(() => '');
+  if (v) setVendor(v);
+  else if (saved) ask.then(setVendor).catch(() => {});
+  // un número al azar armado antes de leer lo guardado (un aviso de error muy temprano) no le gana a nada
+  if (saved || vendor) temp = '';
+  if (!saved && storageLoaded()) {
+    if (vendor) {
+      write('device_id', vendor);
+      write(SRC, 'v');
+    } else {
+      // sin identificador de Amazon: al azar (el mismo que ya se mostró en esta apertura, si hubo) y guardado
+      write('device_id', temp || randomId());
+      write(SRC, 'r');
+      temp = '';
+    }
+  }
+  pending = false;
+}
+
+// ---------- con el panel (api/login.php «device_id») ----------
+
+// distribuidores ya consultados en esta apertura (una vez por inicio y distribuidor)
+const asked = new Set<string>();
+// número que se cambió por el que devolvió el panel (lo que ya lo tenía en la mano lo cambia)
 let replaced: { from: string; to: string } | null = null;
 
-function noteHw(id: string): void {
-  const k = id ? 'v' + id.replace(/:/g, '') : '';
-  if (k && storageLoaded() && read(HW) !== k) write(HW, k);
-}
-
-// claves fijas del equipo para el panel (una letra de tipo + hex): hoy, el identificador de Vega
+// claves fijas del equipo para el panel (una letra de tipo + hex): el identificador de Amazon
 export function hwKeys(): string[] {
-  const k = read(HW);
+  const k = vendor ? 'v' + vendor.replace(/:/g, '') : read(HW);
   return /^[a-z][0-9A-F]{12,32}$/.test(k) ? [k] : [];
 }
 
+// el número no salió de lo guardado: para un panel del 14 de noviembre (sin «fixed») pide el de antes
 export function deviceFresh(): boolean {
-  return read(NEW) === '1';
+  return notSaved;
 }
 
-const mark = (tenant: string) => hwKeys().join(',') + '|' + tenant + '|' + read('device_id');
-
-// ¿falta consultar al panel con estas claves, este distribuidor y este identificador?
+// ¿falta preguntarle al panel en esta apertura con este distribuidor?
 export function syncNeeded(tenant: string): boolean {
-  return storageLoaded() && hwKeys().length > 0 && !!read('device_id') && read(SYNC) !== mark(tenant);
+  return hwKeys().length > 0 && !asked.has(tenant);
 }
 
-// El panel contestó: got es el identificador a usar. Si es otro (el que este equipo tenía antes de reinstalar) y esta
-// instalación todavía no registró el suyo, se adopta.
+// El panel contestó: got es el número de este equipo. Si es otro, se usa ese (y se guarda si se puede).
 export function syncDone(tenant: string, sent: string, got: string): void {
-  if (got !== sent && deviceFresh() && read('device_id') === sent && /^[0-9A-F]{2}(:[0-9A-F]{2}){5,7}$/.test(got)) {
+  asked.add(tenant);
+  if (got === sent || !/^[0-9A-F]{2}(:[0-9A-F]{2}){5,7}$/.test(got)) return;
+  if (storageLoaded()) {
     write('device_id', got);
     write(SRC, 'p');
-    write(NEW, '');
-    replaced = { from: sent, to: got };
-  }
-  write(SYNC, mark(tenant));
+    temp = '';
+  } else temp = got;
+  replaced = { from: sent, to: got };
 }
 
-// el identificador vigente para un pedido que se armó con id (pudo cambiar por el del panel mientras tanto)
+// el número vigente para un pedido que se armó con id (pudo cambiar por el del panel mientras tanto)
 export function currentId(id: string): string {
   return replaced && id === replaced.from ? replaced.to : id;
 }
 
-// se inició sesión con el identificador actual: ya quedó registrado en el panel, no se cambia por otro
-export function deviceRegistered(): void {
-  if (read(NEW) === '1') write(NEW, '');
-}
+// (se inició sesión: nada que hacer, el panel ya decide el número en cada inicio)
+export function deviceRegistered(): void {}
 
 // UUID → 32 hex: el objeto Uuid de Vega ({ bytes: [16 números] }), una lista de 16 bytes o el texto «xxxxxxxx-…»
 export function uuidHex(u: unknown): string {
@@ -153,7 +150,7 @@ export function idFromUuid(uuid: unknown): string {
   return out.match(/.{2}/g)!.join(':');
 }
 
-// hasta 3 intentos (el sistema recién encendido puede tardar en contestar); '' si no lo da (sin el módulo, UUID en ceros)
+// hasta 4 intentos (el sistema recién encendido o recién cerrada la app puede tardar en contestar); '' si no lo da
 async function vendorDeviceId(): Promise<string> {
   let ids: { getVendorTrackingId: () => Promise<unknown> };
   try {
@@ -162,10 +159,14 @@ async function vendorDeviceId(): Promise<string> {
   } catch {
     return '';
   }
-  for (const wait of [1200, 2000, 2500]) {
+  for (const wait of [1500, 2000, 2500, 2500]) {
     try {
       const uuid = await Promise.race([ids.getVendorTrackingId(), new Promise<null>(r => setTimeout(() => r(null), wait))]);
-      if (uuid !== null) return idFromUuid(uuid);
+      if (uuid !== null) {
+        const id = idFromUuid(uuid);
+        // UUID en ceros (el usuario lo apagó): no hay más que pedir
+        return id;
+      }
     } catch {
       // error pasajero: otra vez
     }

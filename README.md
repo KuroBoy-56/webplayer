@@ -207,6 +207,16 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.5.0) **El número del equipo ya no depende de lo guardado en el equipo**: hasta la 2.1.12 la app respetaba el
+  número guardado y, si al volver a abrir no lo podía leer (por ejemplo, después de que la app se cerrara de golpe
+  cargando un video), armaba otro: el panel no lo conocía y sacaba al cliente al inicio de sesión. Ahora el número sale
+  del identificador de vendedor de Amazon (`getVendorTrackingId`; según Amazon solo cambia al restablecer el equipo de
+  fábrica) y **en cada inicio** se le pregunta al panel cuál es el número de este equipo (`api/login.php` acción
+  `device_id` con `"fixed": 1`, `includes/device_alias.php` `da_resolve_fixed`): contesta el que tiene registrado
+  (línea, demo o lista negra), sea el guardado, el que tenía anotado para esa clave o el de Amazon; sin ninguno
+  registrado, el de Amazon. Sin poder leer lo guardado no se escribe nada encima; se lee lo guardado hasta 5 veces con
+  pausas. Un equipo registrado con un número al azar de una versión anterior lo conserva y lo recupera aunque se borre
+  todo. Pruebas: `tools/test-deviceid.cjs` (cierre de golpe, reinstalar, panel viejo, distribuidores).
 - (2.1.12) **El número del equipo ya no cambia al reinstalar (corrección de verdad)**: Amazon entrega el identificador
   de vendedor (`KeplerIdentifiers.getVendorTrackingId()`) como un objeto `Uuid` con 16 bytes (`{ bytes: [...] }`), no
   como texto. Desde la 2.1.6 la app lo convertía con `String()` → «[object Object]», lo daba por inválido y **cada

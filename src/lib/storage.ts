@@ -11,8 +11,10 @@ export function storageLoaded(): boolean {
 }
 
 export async function loadStorage(): Promise<void> {
-  // un fallo suelto al leer no deja la app «como recién instalada»: se intenta otra vez
-  for (let attempt = 0; attempt < 2 && !loaded; attempt++) {
+  // un fallo suelto al leer no deja la app «como recién instalada»: se intenta otra vez. 2.5.0: hasta 5 veces con
+  // pausas (recién cerrada la app de golpe, el almacenamiento puede seguir ocupado unos instantes)
+  for (let attempt = 0; attempt < 5 && !loaded; attempt++) {
+    if (attempt) await new Promise<void>(r => setTimeout(r, 250 * attempt));
     try {
       const keys = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith(PREFIX));
       const pairs = await AsyncStorage.multiGet(keys);

@@ -23,6 +23,8 @@ let alias = new Map();
 let lines = new Map();
 let asked = [];
 let panelKnows = true; // false = panel viejo, sin la acción «device_id»
+let panelFixed = true; // false = panel del 14 de noviembre (sin «fixed»)
+let storageBroken = false; // true = el almacenamiento no se puede leer (recién cerrada la app de golpe)
 const MAC = /^[0-9A-F]{2}(:[0-9A-F]{2}){5,7}$/;
 function fakePanel(action, data) {
   asked.push([action, data.mac_address, data.fresh ? 'fresh' : '']);
@@ -30,7 +32,13 @@ function fakePanel(action, data) {
     if (!panelKnows) return { code: 400, body: JSON.stringify({ error: 'Invalid action' }) };
     const t = data.tenant || '';
     let use = data.mac_address;
-    if (data.fresh) for (const k of data.hw) if (alias.has(t + '|' + k)) { use = alias.get(t + '|' + k); break; }
+    if (data.fixed && panelFixed) {
+      const base = MAC.test(data.base || '') ? data.base : '';
+      const mac = MAC.test(use) ? use : base;
+      let al = '';
+      for (const k of data.hw) if (alias.has(t + '|' + k)) { al = alias.get(t + '|' + k); break; }
+      use = [...new Set([mac, al, base].filter(Boolean))].find(c => lines.has(c)) || base || al || mac;
+    } else if (data.fresh) for (const k of data.hw) if (alias.has(t + '|' + k)) { use = alias.get(t + '|' + k); break; }
     for (const k of data.hw) alias.set(t + '|' + k, use);
     return { code: 200, body: JSON.stringify({ status: 'ok', device_id: use }) };
   }
@@ -46,7 +54,7 @@ function fakePanel(action, data) {
 }
 Module._load = function (request, parent, isMain) {
   if (request === '@react-native-async-storage/async-storage') return { __esModule: true, default: {
-    getAllKeys: async () => [...disk.keys()],
+    getAllKeys: async () => { if (storageBroken) throw new Error('ocupado'); return [...disk.keys()]; },
     multiGet: async ks => ks.map(k => [k, disk.get(k) ?? null]),
     setItem: async (k, v) => { disk.set(k, v); },
     removeItem: async k => { disk.delete(k); },
@@ -57,6 +65,7 @@ Module._load = function (request, parent, isMain) {
   if (request === '../lib/i18n' || request === './i18n') return { lang: () => 'es', t: k => k };
   if (request === '../lib/cacheclear') return { cacheSeen: () => 0, takeCacheOrder: () => false };
   if (request === '../lib/tenant') return { APP_ID: 'vega', parseConfig: () => null, reportTenantProblem() {}, scoped: k => k, TENANT_ERRORS: {}, TENANT_FATAL: [], tenantCode: () => tenant, tenantFields: () => (tenant ? { tenant, app: 'vega' } : {}) };
+  if (request === './util' || request === '../lib/util') return { normalizeBase: s => s, str: v => (v == null ? '' : String(v)) };
   if (request === '../lib/http') return {
     formBody: o => JSON.stringify(o),
     json: r => { try { return JSON.parse(r.body); } catch { return null; } },
@@ -74,6 +83,7 @@ after(() => {
 });
 const tick = (ms = 5) => new Promise(r => setTimeout(r, ms));
 // abre la app: módulos nuevos (como un proceso nuevo), lee lo guardado y prepara el identificador
+// (como App.tsx: lo guardado, el identificador y el número que dice el panel, antes de la primera pantalla)
 async function open() {
   for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts', '../src/api/panel.ts']) delete require.cache[require.resolve(f)];
   const storage = require('../src/lib/storage.ts');
@@ -81,146 +91,149 @@ async function open() {
   const panel = require('../src/api/panel.ts');
   await storage.loadStorage();
   await dev.prepareDeviceId();
+  await panel.deviceSync();
   await tick();
-  return { dev, panel };
+  return { dev, panel, storage };
 }
-const reset = () => { disk = new Map(); alias = new Map(); lines = new Map(); asked = []; tenant = ''; panelKnows = true; vendor = UUID('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'); };
+const reset = () => { disk = new Map(); alias = new Map(); lines = new Map(); asked = []; tenant = ''; panelKnows = true; panelFixed = true; storageBroken = false; vendor = UUID('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'); };
+const V = () => require('../src/lib/deviceid.ts').idFromUuid(vendor);
 
-test('equipo registrado con un número al azar (antes de la 2.1.6): al reinstalar, el panel le devuelve ese mismo número y entra con su línea', async () => {
+
+test('2.5.0: la app se cierra de golpe y al volver a abrir no puede leer lo guardado: el número sigue siendo el registrado (no uno nuevo)', async () => {
   reset();
-  const OLD = 'AB:CD:EF:01:23:45:67:89';
+  const OLD = 'AB:CD:EF:01:23:45:67:89'; // registrado con un número al azar de una versión anterior
   disk.set('latmpx:device_id', OLD);
+  disk.set('latmpx:device_id_src', 'r');
   lines.set(OLD, 'cliente1');
-  // la app se actualiza: sigue con su número y deja anotada su clave fija
   let { dev, panel } = await open();
   assert.equal(dev.deviceId(), OLD);
-  let ln = await panel.panelCheckMac(dev.deviceId());
-  assert.equal(ln && ln.user, 'cliente1');
-  assert.deepEqual(asked.map(a => a.join(' ')), ['device_id ' + OLD + ' ', 'check_mac ' + OLD + ' ']);
-  assert.equal(alias.size, 1);
-  // otro pedido y otro inicio: ya no se vuelve a consultar
-  asked = [];
-  await panel.panelCheckMac(dev.deviceId());
+  assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente1');
+  // cierre de golpe: el almacenamiento no contesta al volver a abrir
+  storageBroken = true;
   ({ dev, panel } = await open());
-  await panel.panelCheckMac(dev.deviceId());
-  assert.ok(asked.every(a => a[0] === 'check_mac'), JSON.stringify(asked));
-  // se desinstala y se vuelve a instalar: nada guardado; la pantalla ya tiene en la mano el identificador de Vega
-  disk = new Map();
-  asked = [];
-  ({ dev, panel } = await open());
-  const fromVega = dev.deviceId();
-  assert.notEqual(fromVega, OLD);
-  assert.equal(fromVega, dev.idFromUuid(vendor));
-  ln = await panel.panelCheckMac(fromVega);
-  assert.equal(ln && ln.user, 'cliente1', 'entra con su línea sin escribir usuario y contraseña');
-  assert.deepEqual(asked.map(a => a.join(' ')), ['device_id ' + fromVega + ' fresh', 'check_mac ' + OLD + ' ']);
-  assert.equal(dev.deviceId(), OLD, 'el número del equipo vuelve a ser el registrado');
-  assert.equal(disk.get('latmpx:device_id'), OLD);
-  // y queda así en los inicios siguientes, sin más consultas
-  asked = [];
-  ({ dev, panel } = await open());
+  assert.equal(dev.deviceId(), OLD, 'el panel devuelve el número registrado');
+  assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente1', 'entra con su línea');
+  assert.equal(disk.get('latmpx:device_id'), OLD, 'no se escribió nada encima');
+  // vuelve a funcionar el almacenamiento: igual
+  storageBroken = false;
+  ({ dev } = await open());
   assert.equal(dev.deviceId(), OLD);
-  await panel.panelCheckMac(dev.deviceId());
-  assert.deepEqual(asked.map(a => a[0]), ['check_mac']);
 });
 
-test('equipo nuevo: se queda con el identificador de Vega; reinstalar da el mismo; con sesión iniciada no se cambia por otro', async () => {
+test('2.5.0: equipo nuevo: el número es el de Amazon y es el mismo en cada inicio, al reinstalar y tras un cierre de golpe', async () => {
   reset();
   let { dev, panel } = await open();
   const id = dev.deviceId();
-  assert.equal(id, dev.idFromUuid(vendor));
-  assert.equal(await panel.panelCheckMac(id), null);
-  assert.equal(dev.deviceId(), id);
-  assert.equal(dev.deviceFresh(), true);
+  assert.equal(id, V());
   await panel.panelSubmit(id, 'cliente2', 'p', 'http://srv.test:80');
-  dev.deviceRegistered();
-  assert.equal(dev.deviceFresh(), false);
-  assert.equal(lines.get(id), 'cliente2');
-  disk = new Map();
-  ({ dev, panel } = await open());
-  const ln = await panel.panelCheckMac(dev.deviceId());
-  assert.equal(dev.deviceId(), id);
-  assert.equal(ln && ln.user, 'cliente2');
-});
-
-test('panel sin la función (viejo) o que no contesta: todo sigue como antes y no se pregunta en cada pedido', async () => {
-  reset();
-  panelKnows = false;
-  const { dev, panel } = await open();
-  const id = dev.deviceId();
-  await panel.panelCheckMac(id);
-  await panel.panelCheckMac(id);
-  await panel.panelCheckMac(id);
-  assert.equal(dev.deviceId(), id);
-  assert.equal(asked.filter(a => a[0] === 'device_id').length, 1);
-  assert.equal(asked.filter(a => a[0] === 'check_mac').length, 3);
-  // cuando el panel se actualiza, en el inicio siguiente se consulta
-  panelKnows = true;
-  asked = [];
-  const again = await open();
-  await again.panel.panelCheckMac(again.dev.deviceId());
-  assert.equal(asked[0][0], 'device_id');
-});
-
-test('cada distribuidor tiene sus claves; sin identificador de Vega (apagado por el usuario) no se consulta nada', async () => {
-  reset();
-  const OLD = '7A:11:22:33:44:55:66:77';
-  disk.set('latmpx:device_id', OLD);
-  tenant = '111111';
-  let { dev, panel } = await open();
-  await panel.panelCheckMac(dev.deviceId());
-  assert.deepEqual([...alias.keys()].map(k => k.split('|')[0]), ['111111']);
-  // reinstala y escribe OTRO distribuidor: ese no conoce el equipo, se queda con el de Vega
-  disk = new Map();
-  tenant = '222222';
-  ({ dev, panel } = await open());
-  const v = dev.deviceId();
-  await panel.panelCheckMac(v);
-  assert.equal(dev.deviceId(), v);
-  // corrige el número de distribuidor (todavía sin iniciar sesión): ahora sí vuelve el de antes
-  tenant = '111111';
-  await panel.panelCheckMac(dev.deviceId());
-  assert.equal(dev.deviceId(), OLD);
-  // sin el identificador de Vega: al azar como antes, sin consultar al panel
-  reset();
-  vendor = UUID('00000000-0000-0000-0000-000000000000');
-  ({ dev, panel } = await open());
-  const r = dev.deviceId();
-  assert.match(r, MAC);
-  await panel.panelCheckMac(r);
-  assert.deepEqual(asked.map(a => a[0]), ['check_mac']);
-});
-
-test('2.1.12: el objeto Uuid de Vega se lee por sus bytes (antes salía «[object Object]» y cada instalación tenía otro número al azar)', async () => {
-  reset();
-  let { dev } = await open();
-  const a = dev.deviceId();
-  assert.equal(a, dev.idFromUuid('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'), 'mismo número que el texto del mismo UUID');
-  assert.equal(disk.get('latmpx:device_id_src'), 'v');
-  // reinstalar 3 veces: siempre el mismo número (un solo registro en el panel)
-  for (let i = 0; i < 3; i++) {
-    disk = new Map();
-    ({ dev } = await open());
-    assert.equal(dev.deviceId(), a);
+  for (const step of ['inicio', 'reinstalar', 'cierre', 'inicio']) {
+    if (step === 'reinstalar') disk = new Map();
+    storageBroken = step === 'cierre';
+    ({ dev, panel } = await open());
+    assert.equal(dev.deviceId(), id, step);
+    assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente2', step);
   }
-  assert.equal(dev.idFromUuid({ bytes: [1, 2, 3] }), '', 'bytes que no son 16: no sirve');
-  assert.equal(dev.idFromUuid({}), '');
-  assert.equal(dev.idFromUuid(String({ bytes: [] })), '', 'lo que hacía la 2.1.11');
 });
 
-test('2.1.12: un equipo de una versión anterior con número al azar lo conserva (el panel lo tiene registrado) y deja anotada su clave fija; al reinstalar el panel le devuelve ese número', async () => {
+test('2.5.0: equipo registrado con número al azar se reinstala: recupera ese número (una línea, no dos)', async () => {
   reset();
   const OLD = '3C:4D:5E:6F:70:81:92:A3';
   disk.set('latmpx:device_id', OLD);
-  disk.set('latmpx:device_id_src', 'r'); // así lo dejaban la 2.1.6 a 2.1.11 (sin la marca de «nuevo»)
+  disk.set('latmpx:device_id_src', 'r');
   lines.set(OLD, 'cliente9');
-  let { dev, panel } = await open();
-  assert.equal(dev.deviceId(), OLD, 'no se cambia: la sesión del cliente sigue');
-  assert.deepEqual(dev.hwKeys(), ['v' + dev.idFromUuid(vendor).replace(/:/g, '')]);
-  await panel.panelCheckMac(dev.deviceId());
+  await open();
   disk = new Map();
-  ({ dev, panel } = await open());
-  const ln = await panel.panelCheckMac(dev.deviceId());
+  const { dev, panel } = await open();
   assert.equal(dev.deviceId(), OLD);
-  assert.equal(ln && ln.user, 'cliente9');
+  assert.equal(disk.get('latmpx:device_id'), OLD, 'queda guardado');
+  assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'cliente9');
+  assert.equal(lines.size, 1);
+});
+
+test('2.5.0: número al azar guardado que nunca se registró: pasa al de Amazon (ya no depende de nada guardado)', async () => {
+  reset();
+  disk.set('latmpx:device_id', '5E:5E:5E:5E:5E:5E:5E:5E');
+  disk.set('latmpx:device_id_src', 'r');
+  const { dev } = await open();
+  assert.equal(dev.deviceId(), V());
+  assert.equal(disk.get('latmpx:device_id'), V());
+});
+
+test('2.5.0: panel del 14 de noviembre (sin «fixed»): con lo guardado perdido igual le devuelve el número de antes', async () => {
+  reset();
+  panelFixed = false;
+  const OLD = '7A:11:22:33:44:55:66:77';
+  disk.set('latmpx:device_id', OLD);
+  lines.set(OLD, 'c');
+  await open();
+  storageBroken = true;
+  const { dev } = await open();
+  assert.equal(dev.deviceId(), OLD);
+});
+
+test('panel sin la función (viejo): el número guardado o el de Amazon, sin preguntar en cada pedido', async () => {
+  reset();
+  panelKnows = false;
+  let { dev, panel } = await open();
+  const id = dev.deviceId();
+  assert.equal(id, V());
+  await panel.panelCheckMac(id);
+  await panel.panelCheckMac(id);
+  assert.equal(asked.filter(a => a[0] === 'device_id').length, 1);
+  storageBroken = true;
+  ({ dev } = await open());
+  assert.equal(dev.deviceId(), id, 'cierre de golpe: el mismo (sale de Amazon)');
+});
+
+test('cada distribuidor tiene sus claves', async () => {
+  reset();
+  const OLD = '7A:11:22:33:44:55:66:77';
+  disk.set('latmpx:device_id', OLD);
+  lines.set(OLD, 'c');
+  tenant = '111111';
+  await open();
+  assert.deepEqual([...alias.keys()].map(k => k.split('|')[0]), ['111111']);
+  disk = new Map();
+  tenant = '222222';
+  let { dev, panel } = await open();
+  assert.equal(dev.deviceId(), V(), 'otro distribuidor no conoce el equipo');
+  tenant = '111111';
+  await panel.panelCheckMac(dev.deviceId());
+  assert.equal(dev.deviceId(), OLD, 'con el distribuidor correcto vuelve el de antes');
+});
+
+test('sin identificador de Amazon: uno al azar guardado que no cambia entre inicios; uno armado antes de leer lo guardado no se guarda', async () => {
+  reset();
+  vendor = UUID('00000000-0000-0000-0000-000000000000');
+  for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts']) delete require.cache[require.resolve(f)];
+  const early = require('../src/lib/deviceid.ts').deviceId();
+  assert.equal(disk.size, 0, 'nada guardado antes de leer lo guardado');
+  let { dev } = await open();
+  const r = dev.deviceId();
+  assert.match(r, MAC);
+  assert.notEqual(r, early);
+  for (let i = 0; i < 3; i++) {
+    ({ dev } = await open());
+    assert.equal(dev.deviceId(), r);
+  }
+  // con identificador de Amazon y un número guardado: el guardado no le gana a uno armado antes de tiempo
+  reset();
+  disk.set('latmpx:device_id', 'AB:CD:EF:01:23:45:67:89');
+  lines.set('AB:CD:EF:01:23:45:67:89', 'c');
+  for (const f of ['../src/lib/storage.ts', '../src/lib/deviceid.ts', '../src/api/panel.ts']) delete require.cache[require.resolve(f)];
+  const storage = require('../src/lib/storage.ts');
+  const d2 = require('../src/lib/deviceid.ts');
+  d2.deviceId();
+  await storage.loadStorage();
+  await d2.prepareDeviceId();
+  assert.equal(d2.deviceId(), 'AB:CD:EF:01:23:45:67:89');
+});
+
+test('el objeto Uuid de Vega se lee por sus bytes', async () => {
+  reset();
+  const { dev } = await open();
+  assert.equal(dev.deviceId(), dev.idFromUuid('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b'));
+  assert.equal(dev.idFromUuid({ bytes: [1, 2, 3] }), '');
+  assert.equal(dev.idFromUuid({}), '');
+  assert.equal(dev.idFromUuid(String({ bytes: [] })), '');
 });

@@ -8,7 +8,7 @@ import { cacheSeen, takeCacheOrder } from '../lib/cacheclear';
 import { APP_ID, Brand, parseConfig, reportTenantProblem, scoped, TENANT_ERRORS, TENANT_FATAL, tenantCode, tenantFields } from '../lib/tenant';
 import { lang, t } from '../lib/i18n';
 import { normalizeBase, str } from '../lib/util';
-import { currentId, deviceFresh, hwKeys, syncDone, syncNeeded } from '../lib/deviceid';
+import { currentId, deviceFresh, deviceId, hwKeys, syncDone, syncNeeded, vendorId } from '../lib/deviceid';
 
 export type Session = {
   dns: string;
@@ -201,7 +201,7 @@ export async function cloudToken(forceNew = false): Promise<string> {
     const t = read(key);
     if (t) return t;
   }
-  const r = await panel('progress.php', 'POST', JSON.stringify({ action: 'auth', user: s.user, pass: s.pass, dns: s.base, ...tenantFields(), platform: APP_ID, device: read('device_id') }), 'application/json');
+  const r = await panel('progress.php', 'POST', JSON.stringify({ action: 'auth', user: s.user, pass: s.pass, dns: s.base, ...tenantFields(), platform: APP_ID, device: deviceId() }), 'application/json');
   tenantProblem(r);
   const j = json(r);
   if (j && j.demo === true && sessionRef() === s) demoHook();
@@ -260,34 +260,34 @@ export function forgetCloud(): void {
 // diferencia entre la hora del panel y la del equipo (segundos), para el "ts" de cada pedido
 let clockSkew = 0;
 
-// Identificador fijo del equipo (panel: api/login.php «device_id», includes/device_alias.php). Antes del primer pedido
-// con el identificador del equipo: una instalación nueva pregunta con su clave fija (la que da el sistema) y, si el
-// panel ya conocía este equipo con otro número (uno al azar de una versión anterior), lo recibe y lo adopta; la app ya
-// instalada deja anotada su clave. Una vez por clave, distribuidor e identificador; como mucho 4 s de espera. Un panel
-// sin la función contesta «Invalid action» y no se pregunta más en esta apertura (todo sigue como antes).
+// Número del equipo (panel: api/login.php «device_id», includes/device_alias.php). 2.5.0: en cada inicio de la app, con
+// el identificador de Amazon como clave fija ("fixed"), el panel dice cuál es el número de este equipo (el que tiene
+// registrado; si no hay ninguno, el de Amazon). Una vez por inicio y distribuidor, antes del primer pedido con el
+// número; como mucho 5 s de espera. Un panel viejo: sin la función contesta «Invalid action» y se vuelve a intentar
+// en 6 h; el del 14 de noviembre no entiende "fixed" pero sí "fresh" (sin número guardado le devuelve el de antes).
 let syncing: Promise<void> | null = null;
 let syncOff = 0;
-async function deviceSync(): Promise<void> {
+export async function deviceSync(): Promise<void> {
   const tenant = tenantCode();
   if (!hasMasterKey() || Date.now() < syncOff || !syncNeeded(tenant)) return;
   if (!syncing) {
     syncing = (async () => {
       try {
-        const sent = read('device_id');
-        const r = await panelLogin('device_id', { mac_address: sent, hw: hwKeys(), ...(deviceFresh() ? { fresh: 1 } : {}) });
+        const sent = deviceId();
+        const r = await panelLogin('device_id', { mac_address: sent, hw: hwKeys(), base: vendorId(), fixed: 1, ...(deviceFresh() ? { fresh: 1 } : {}) });
         const j = r.code === 200 ? json<any>(r) : null;
         const id = j && typeof j === 'object' ? str(j.device_id).toUpperCase() : '';
         if (/^[0-9A-F]{2}(:[0-9A-F]{2}){5,7}$/.test(id)) syncDone(tenant, sent, id);
         // panel sin la función (400) o sin respuesta: se vuelve a intentar más tarde, no en cada pedido
-        else syncOff = Date.now() + (r.code === 400 ? 6 * 3600000 : 120000);
+        else syncOff = Date.now() + (r.code === 400 ? 6 * 3600000 : 60000);
       } catch {
-        syncOff = Date.now() + 120000;
+        syncOff = Date.now() + 60000;
       } finally {
         syncing = null;
       }
     })();
   }
-  await Promise.race([syncing, new Promise<void>(res => setTimeout(res, 4000))]);
+  await Promise.race([syncing, new Promise<void>(res => setTimeout(res, 5000))]);
 }
 
 async function panelLogin(action: string, payload: Record<string, any>): Promise<HttpResult & { error?: string }> {

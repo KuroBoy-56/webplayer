@@ -362,7 +362,7 @@ export function saveProgress(p: Progress, force: boolean) {
   }
   lastSent.set(id, now);
   const { order, ...body } = p;
-  cloudPost({ action: 'save', ...body, platform: 'vega', device: read('device_id') });
+  cloudPost({ action: 'save', ...body, platform: 'vega', device: deviceId() });
 }
 
 export function removeProgress(title: string) {

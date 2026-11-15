@@ -29,7 +29,7 @@ import { resetEngine } from './api/media';
 import { setStreamFlip } from './api/xtream';
 import { bindReportContext, installCrashReporter } from './api/report';
 import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppState } from './state';
-import { deviceBlocked, onCacheClear, panelAnswered, panelCheckMac, panelLineGone, registerPending, sessionVerdict } from './api/panel';
+import { deviceBlocked, deviceSync, onCacheClear, panelAnswered, panelCheckMac, panelLineGone, registerPending, sessionVerdict } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
 installCrashReporter();
@@ -124,8 +124,9 @@ function App() {
   useEffect(() => {
     const started = Date.now();
     let timer: ReturnType<typeof setTimeout> | null = null;
-    // (2.1.6: el identificador del equipo que no cambia al reinstalar, antes de la primera pantalla)
-    loadStorage().then(prepareDeviceId).then(() => {
+    // (2.1.6: el identificador del equipo que no cambia al reinstalar, antes de la primera pantalla; 2.5.0: y el número
+    // que el panel tiene registrado para este equipo, para que la primera pantalla ya muestre el definitivo)
+    loadStorage().then(prepareDeviceId).then(() => deviceSync().catch(() => {})).then(() => {
       // marca guardada del distribuidor antes de la primera pantalla
       applyBrand();
       const logged = restoreSession();
