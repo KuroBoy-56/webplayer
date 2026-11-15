@@ -349,6 +349,28 @@ test('varios fallos nativos no cambian la ruta de un título nuevo ni la de un a
   await c.destroy();
 });
 
+test('2.6.6: el lector no pudo desde el segundo guardado (error del reproductor): una vez desde el principio con el lector y un aviso; si tampoco, el de Amazon',async()=>{
+  const {c,video,hooks}=setup();
+  const url='https://fixture.invalid/movie/u/p/incompleto.mkv';
+  c.load(url,57,false);
+  assert.equal(mkvs.length,1);assert.equal(mkvs[0].at,57);
+  c.vodError('error del reproductor 3');await tick();
+  assert.equal(mkvs.length,2,'otra vez el lector');assert.equal(mkvs[1].at,0,'desde el principio');
+  assert.notEqual(video.src,url,'no el de Amazon todavía');
+  assert.ok(toasts.some(m=>m.includes('desde el principio')),toasts.join(' | '));
+  // otra vez error del reproductor: ya se probó desde el principio, ahora el de Amazon
+  c.vodError('error del reproductor 3');await tick();
+  assert.equal(mkvs.length,2);assert.equal(video.src,url,'ahora sí el de Amazon');
+  assert.deepEqual(hooks.failures,[]);
+  await c.destroy();
+  // un error que no es del reproductor (p. ej. «sin imagen en 85 s») no reinicia desde el principio
+  const s2=setup();
+  s2.c.load('https://fixture.invalid/movie/u/p/lento.mkv',300,false);
+  s2.c.vodError('sin imagen en 85 s');await tick();
+  assert.equal(mkvs.length,1);assert.equal(s2.video.src,'https://fixture.invalid/movie/u/p/lento.mkv');
+  await s2.c.destroy();
+});
+
 test('Continuar viendo nativo (respaldo si el lector no puede) espera avance real tras saltar al segundo guardado',async()=>{
   const {c,video,hooks}=setup();
   c.load('https://fixture.invalid/episode.mkv',214,false);

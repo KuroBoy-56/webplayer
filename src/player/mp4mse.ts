@@ -1172,7 +1172,11 @@ export class Mp4Mse {
         // (en segundo plano, idxwarm.ts: entero siempre; nadie espera la primera imagen)
         const one = total <= Math.max(need + wr, 6291456) ? total : Math.max(need, Math.round(total * 0.6));
         // (en segundo plano, idxwarm.ts: de a 2 MB; nadie espera la primera imagen y la navegación no se traba)
-        const want = this.idxOnly ? Math.min(total, 2097152) : Math.min(total, single ? one : Math.ceil(need / 3));
+        // 2.6.6: sin la carrera con el final del archivo (líneas de 2-3 conexiones) la primera tanda trae el índice entero
+        // (hasta 8 MB; si es más grande, el 85 %) repartido entre las conexiones: con 2 idiomas hace falta ~80 % del índice
+        // y con el 40 % quedaba otra tanda, otra espera del servidor (aviso: «indice=4.4MB en 11.2s empezo_con=3.6/4.4MB»)
+        const cover = tailP ? need : total <= 8388608 ? total : Math.max(need, Math.round(total * 0.85));
+        const want = this.idxOnly ? Math.min(total, 2097152) : Math.min(total, single ? one : Math.ceil(cover / Math.max(1, Math.min(this.mra.par, lineLimit() === 2 ? 2 : 3))));
         if (this.idxOnly) this.mra.fixed = 2097152;
         // una sola conexión: solo lo que se lee, nada por adelantado (otro pedido a la vez lo rechaza el servidor)
         if (single) {

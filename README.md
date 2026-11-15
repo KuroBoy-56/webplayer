@@ -207,6 +207,14 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.6) **Continuar viendo que no podía y apertura más rápida**: (1) si el lector falla con un error del reproductor al
+  continuar desde un segundo guardado (aviso «No se pudo reproducir (movie)»: un MKV de 343 MB sin índice que se pueda
+  leer, «motivo=pedido 416», que salta por proporción del archivo), prueba una vez desde el principio con el lector y un
+  aviso, antes del reproductor de Amazon (que con MKV daba error 4) — `Playback.fromStart`; (2) el índice (Cues) de un
+  MKV que dice estar más allá del final del archivo (archivo incompleto en el servidor) ya no se pide (`cuesIn`: una
+  espera de ~2 s para nada); (3) MP4 en líneas de 2-3 conexiones (sin la carrera con el final del archivo): la primera
+  tanda del índice lo trae entero (hasta 8 MB; si no, el 85 %) repartido entre las conexiones; con 2 idiomas hacía falta
+  ~80 % y con el 40 % quedaba otra espera del servidor (aviso: «indice=4.4MB en 11.2s empezo_con=3.6/4.4MB»).
 - (2.6.5) **Películas que cerraban la app: se quita el cambio de la 2.1.7**: desde la 2.1.7, cuando el lector no podía dar
   el audio (Dolby), la app destruía el reproductor y creaba uno nuevo para el de Amazon, y ahí la app se cerraba (en el
   simulador, justo después de empezar la película). Además Continuar viendo de un título con ese audio abría directo con

@@ -244,7 +244,7 @@ export class MkvMse {
     this.tracks = auds.map(x => ({ lang: x.lang, codec: x.codec }));
     this.onHeader();
     // Continuar viendo: el índice (al final del archivo) se pide ya, mientras se abre el reproductor
-    if (at > 0.5 && !m.cues && m.cuesPos > 0) this.cuesP = readCues((o, l) => this.get(o, l), m).then(c => (m.cues = c));
+    if (at > 0.5 && !m.cues && this.cuesIn(m)) this.cuesP = readCues((o, l) => this.get(o, l), m).then(c => (m.cues = c));
     if (!vt) return 'sin video';
     if (vt.compressed) return 'video con compresión de cabecera';
     const ve = videoOf(vt);
@@ -349,7 +349,7 @@ export class MkvMse {
   async indexOnly(): Promise<MkvX | null> {
     const m: MkvX | null = await readMkvHeader((o, l) => this.get(o, l));
     if (!m || !this.alive) return null;
-    if (!m.cues && m.cuesPos > 0) {
+    if (!m.cues && this.cuesIn(m)) {
       try {
         m.cues = await readCues((o, l) => this.get(o, l), m);
       } catch {
@@ -360,6 +360,12 @@ export class MkvMse {
     rememberMkv(this.url, m, this.size);
     if (this.size > 0) saveText(this.url, 'k', this.size, () => packMkv(m));
     return m;
+  }
+
+  // 2.6.6: el índice (Cues) está dentro del archivo. Un MKV incompleto en el servidor dice tenerlo más allá del final:
+  // pedirlo daba «pedido 416» (una espera de ~2 s para nada); sin él se salta por proporción del archivo
+  private cuesIn(m: MkvX): boolean {
+    return m.cuesPos > 0 && (!(this.size > 0) || m.cuesPos < this.size - 4);
   }
 
   fileSize(): number {
@@ -388,7 +394,7 @@ export class MkvMse {
     setTimeout(async () => {
       const m = this.index;
       if (!this.alive || !m || !this.size) return;
-      if (!m.cues && m.cuesPos > 0 && !this.ra.single) {
+      if (!m.cues && this.cuesIn(m) && !this.ra.single) {
         this.ra.hold = true;
         try {
           m.cues = await readCues((o, l) => this.get(o, l), m);
@@ -471,7 +477,7 @@ export class MkvMse {
     let at = m.firstCluster;
     if (t > 0.5) {
       if (!m.cues && this.cuesP) await this.cuesP.catch(() => null);
-      if (!m.cues && m.cuesPos > 0) m.cues = await readCues((o, l) => this.get(o, l), m);
+      if (!m.cues && this.cuesIn(m)) m.cues = await readCues((o, l) => this.get(o, l), m);
       const cue = this.cueFor(t);
       if (cue > 0) at = cue;
       else if (m.duration > 0 && this.size > 0) at = Math.max(m.firstCluster, Math.floor((t / m.duration) * this.size) - 2097152);

@@ -204,6 +204,7 @@ const en = {
   "No se pudo guardar el PIN en el panel": "Couldn't save the PIN to the panel",
   "No se pudo iniciar el reproductor.": "Couldn't start the player.",
   "Ocurrió un error y se volvió atrás: {x}": "Something went wrong and the app went back: {x}",
+  "No se pudo continuar desde donde quedó: empieza desde el principio.": "Couldn’t resume where you left off: starting from the beginning.",
   "No se pudo iniciar sesión": "Couldn't sign in",
   "No compatible con el dispositivo": "Not compatible with this device",
   "No se pudo registrar": "Couldn't register",

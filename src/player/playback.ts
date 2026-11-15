@@ -188,6 +188,8 @@ export class Playback {
   private resettingVod = false;
   private nativeTried = false;
   private readerTried = false;
+  // 2.6.6: ya se probó desde el principio (no se pudo desde el segundo guardado)
+  private fromStartTried = false;
   private staleIndexRetried = false;
   private seekIssuedAt = 0;
   private resumeSample: number | null = null;
@@ -275,6 +277,7 @@ export class Playback {
     this.nativeTried = false;
     this.readerTried = false;
     this.staleIndexRetried = false;
+    this.fromStartTried = false;
     this.mkvBody = false;
     this.mp4Why = '';
     this.nativeNote = '';
@@ -695,8 +698,22 @@ export class Playback {
       this.mp4Index = null;
       this.mkvIndex = null;
       this.direct(pos, 'reader');
+    } else if (this.fromStart(pos, why)) {
+      // desde el principio con el lector
     } else if (!this.nativeTried && !nativeLost.has(fileKey(this.url)) && nativeVodAllowed(this.url)) this.direct(pos, 'native');
     else this.failVod(pos, why);
+  }
+
+  // 2.6.6: el lector no pudo desde el segundo guardado (error del reproductor: un MKV sin índice que se pueda leer salta
+  // por proporción del archivo; aviso «No se pudo reproducir (movie)» con «motivo=pedido 416»): antes de rendirse, una vez
+  // desde el principio con el lector (mismo reproductor), con un aviso. Mejor ver la película que un error.
+  private fromStart(pos: number, why: string): boolean {
+    if (pos <= 5 || this.fromStartTried || !readerFile.test(this.url) || !/error del reproductor/.test(why)) return false;
+    this.fromStartTried = true;
+    this.mp4Why = why + (this.mse ? ' ' + this.mse.diag() : '') + ' · desde el principio';
+    this.hooks.toast(t('No se pudo continuar desde donde quedó: empieza desde el principio.'));
+    this.direct(0, 'reader');
+    return true;
   }
 
   private openAdaptive(at: number): void {
