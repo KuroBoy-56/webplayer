@@ -65,6 +65,9 @@ id = "com.amazon.devconf.privilege.accessibility"
 id = "com.amazon.network.service"
 
 [[wants.privilege]]
+id = "com.amazon.network.privilege.net-info"
+
+[[wants.privilege]]
 id = "com.amazon.network.privilege.restricted-net-info"
 
 [offers]
