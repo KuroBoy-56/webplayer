@@ -23,6 +23,9 @@ export interface VideoPlayer {
   setSurfaceHandle(h: string): void;
   clearSurfaceHandle(h: string): void;
   setCaptionViewHandle(h: string): void;
+  // traspaso entre la miniatura de TV en vivo y la pantalla grande (src/player/preview-session.ts): el video sigue en la
+  // página, en el mismo lugar y sonando, hasta que la otra superficie lo toma (sin cerrarlo ni abrir el canal otra vez)
+  park?(): void;
 }
 
 const g = globalThis as any;
@@ -142,6 +145,46 @@ function tvSource(v: any): void {
   });
 }
 
+// ---------- traspaso sin cortes (miniatura ↔ pantalla grande) ----------
+//
+// Quitar el <video> de la página lo pausa (el motor lo detiene y en el televisor puede soltar el reproductor de LG): en el
+// traspaso nunca sale de la página. Mientras la otra pantalla se dibuja queda «estacionado» encima de todo, en el mismo
+// lugar y del mismo tamaño en que se veía, y la superficie nueva lo mueve con un solo appendChild (mover un nodo de un
+// lugar a otro de la página no lo pausa). Si nadie lo toma en 1,5 s se oculta (el que lo ofreció lo cierra a los 4-5 s).
+let parkBox: HTMLElement | null = null;
+let parkTimer: ReturnType<typeof setTimeout> | null = null;
+
+function parkVideo(v: HTMLElement): void {
+  if (!v.isConnected) return;
+  const r = v.getBoundingClientRect();
+  if (!parkBox) {
+    parkBox = document.createElement('div');
+    parkBox.id = 'mpx-park';
+    document.body.appendChild(parkBox);
+  }
+  const w = r.width > 1 ? r.width : window.innerWidth;
+  const h = r.height > 1 ? r.height : window.innerHeight;
+  const x = r.width > 1 ? r.left : 0;
+  const y = r.height > 1 ? r.top : 0;
+  parkBox.style.cssText =
+    'position:fixed;left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;overflow:hidden;pointer-events:none;z-index:2147483000;background:#000';
+  (v as any).mpxWasPlaying = !(v as any).paused;
+  parkBox.appendChild(v);
+  if (parkTimer) clearTimeout(parkTimer);
+  parkTimer = setTimeout(() => {
+    parkTimer = null;
+    if (parkBox && parkBox.childNodes.length > 0) parkBox.style.visibility = 'hidden';
+  }, 1500);
+}
+
+// el video salió del estacionamiento (lo tomó una superficie o se cerró): la caja se oculta
+function unpark(): void {
+  if (!parkBox || parkBox.childNodes.length > 0) return;
+  if (parkTimer) clearTimeout(parkTimer);
+  parkTimer = null;
+  parkBox.style.cssText = 'display:none';
+}
+
 function htmlPlayer(): VideoPlayer {
   const v = document.createElement('video') as any;
   v.setAttribute('playsinline', '');
@@ -189,14 +232,34 @@ function htmlPlayer(): VideoPlayer {
         v.load();
       } catch {}
       v.remove();
+      unpark();
     },
     setSurfaceHandle(h: string) {
-      document.getElementById(h)?.appendChild(v);
+      const el = document.getElementById(h);
+      if (!el) return;
+      const parked = !!parkBox && v.parentElement === parkBox;
+      if (v.parentElement !== el) el.appendChild(v);
+      if (!parked) return;
+      unpark();
+      // en televisores con un motor más viejo, mover el <video> lo pausa: sigue sonando
+      if (v.mpxWasPlaying && v.paused) {
+        try {
+          const p = v.play();
+          if (p && p.catch) p.catch(() => {});
+        } catch {}
+      }
     },
-    clearSurfaceHandle() {
+    // solo si el video sigue en esa superficie: la miniatura que se desmonta después de entregarlo a la pantalla grande
+    // (o al revés) ya no lo quita de la superficie nueva
+    clearSurfaceHandle(h?: string) {
+      if (h && v.parentElement && v.parentElement.id !== h) return;
       v.remove();
+      unpark();
     },
     setCaptionViewHandle() {},
+    park() {
+      parkVideo(v);
+    },
   });
 }
 

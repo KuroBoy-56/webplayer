@@ -233,6 +233,12 @@ export class Playback {
 
   constructor(private v: VideoPlayer, private hooks: Hooks) {}
 
+  // la pantalla grande se queda con el reproductor de la miniatura de TV en vivo (o vuelve a ella): desde ahora los avisos
+  // van a quien lo tiene (preview-session.ts)
+  setHooks(h: Hooks): void {
+    this.hooks = h;
+  }
+
   // ---------- fuente ----------
 
   load(url: string, resume: number, live: boolean): void {

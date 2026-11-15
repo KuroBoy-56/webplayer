@@ -1,13 +1,14 @@
 // Vista previa del canal en TV en vivo (como Roku): al quedarse 2,5 s sobre un canal empieza a reproducirse en el
-// cuadro de la derecha (donde estaba el logo). Al moverse a otro canal se corta; con OK se abre a pantalla completa
-// (antes se apaga la vista previa: no se usan dos conexiones de la línea a la vez). Mientras carga, el logo.
+// cuadro de la derecha (donde estaba el logo). Al moverse a otro canal se corta. Con OK otra vez la pantalla grande se
+// queda con este mismo reproductor (sin cortar el canal ni abrirlo de nuevo, como Roku y Vega OS) y al salir de la
+// pantalla grande el reproductor vuelve aquí igual (preview-session.ts). Mientras carga, el logo.
 import { KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { LIVE_FORMATS, liveFormatStart, liveUrl, otherScheme, streamFlip } from '../api/xtream';
 import { Item } from '../data/catalog';
 import { Playback } from '../player/playback';
-import { registerLivePreview, waitForLivePreview } from '../player/preview-session';
+import { dropReturn, offerPreview, registerLivePreview, takeReturn, waitForLivePreview } from '../player/preview-session';
 import { getState } from '../state';
 import { px, themed } from '../theme';
 
@@ -30,16 +31,47 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
     let closed: Promise<void> | null = null;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let reader: ReturnType<typeof setTimeout> | undefined;
-    const onPlaying = () => alive && setPlaying(true);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // dirección del canal (la pantalla grande hereda el reproductor solo si abre esta misma)
+    let url = '';
+    // ya suena: también para el reproductor (hasPlayed): la pantalla grande que lo hereda sabe que el canal ya se ve, y el
+    // respaldo de los 12 s (lector de la app) ya no reabre un canal que el televisor está mostrando
+    const onPlaying = () => {
+      if (!alive) return;
+      setPlaying(true);
+      c?.onPlaying();
+    };
     // televisor (LG): su reproductor no abrió el canal o no da imagen en 12 s: el lector de la app (en otros equipos no hace nada)
     let readerUrl = '';
     const toReader = () => {
       if (alive && c && !c.hasPlayed() && readerUrl) c.liveReader(readerUrl);
     };
+    // OK otra vez: la pantalla grande se queda con este reproductor (sin cerrarlo ni abrir el canal de nuevo), también si
+    // todavía conecta: abrir el canal otra vez mientras el servidor sigue contando la conexión de la miniatura puede dar
+    // «línea en uso» en líneas de una conexión
+    const give = (): boolean => {
+      if (!alive || closed || !v || !c) return false;
+      alive = false;
+      if (timer) clearTimeout(timer);
+      if (retry) clearTimeout(retry);
+      if (reader) clearTimeout(reader);
+      const player = v;
+      try {
+        player.removeEventListener('playing', onPlaying);
+        player.removeEventListener('error', toReader);
+        // el video sigue en la página, en su lugar y sonando, hasta que la pantalla grande pone su superficie
+        if (player.park) player.park();
+        else if (surface.current) player.clearSurfaceHandle(surface.current);
+      } catch { /* sigue igual */ }
+      video.current = null;
+      closed = Promise.resolve();
+      offerPreview({ url, v: player, c, at: Date.now() });
+      return true;
+    };
     const stop = (): Promise<void> => {
       if (closed) return closed;
       alive = false;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       if (retry) clearTimeout(retry);
       if (reader) clearTimeout(reader);
       setPlaying(false);
@@ -59,7 +91,32 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
       })();
       return closed;
     };
-    const timer = setTimeout(async () => {
+    const hooks = { toast: () => {}, status: () => {}, changed: () => {}, subText: () => {}, fatal: () => {} };
+    // Se vuelve de la pantalla grande con este canal sonando: la miniatura se queda con ese mismo reproductor (solo cambia
+    // la superficie, como Roku): sin cortar el canal ni abrirlo otra vez
+    const back = takeReturn(channel.id);
+    if (back) {
+      v = back.v;
+      c = back.c;
+      const fmt = LIVE_FORMATS[liveFormatStart()];
+      const u = liveUrl(s, channel.id, fmt);
+      url = streamFlip() ? otherScheme(u) : u;
+      readerUrl = fmt === 'direct' ? '' : url.replace(/\.ts(\?|$)/i, '.m3u8$1');
+      initializing = Promise.resolve();
+      video.current = v;
+      setPlaying(true);
+      try {
+        v.addEventListener('playing', onPlaying);
+        v.addEventListener('error', toReader);
+        if (surface.current) v.setSurfaceHandle(surface.current);
+        c.setHooks(hooks);
+        if (v.paused) void v.play();
+      } catch { /* sigue igual: si quedó mal, el error del reproductor lo vuelve a abrir */ }
+      return registerLivePreview(stop, give);
+    }
+    timer = setTimeout(async () => {
+      // el reproductor que volvió de la pantalla grande era de otro canal: se cierra antes de abrir este
+      dropReturn();
       await waitForLivePreview();
       if (!alive) return;
       try {
@@ -72,10 +129,10 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
         v.addEventListener('playing', onPlaying);
         v.addEventListener('error', toReader);
         if (surface.current) v.setSurfaceHandle(surface.current);
-        c = new Playback(v, { toast: () => {}, status: () => {}, changed: () => {}, subText: () => {}, fatal: () => {} });
+        c = new Playback(v, hooks);
         const fmt = LIVE_FORMATS[liveFormatStart()];
         const u = liveUrl(s, channel.id, fmt);
-        const url = streamFlip() ? otherScheme(u) : u;
+        url = streamFlip() ? otherScheme(u) : u;
         readerUrl = fmt === 'direct' ? '' : url.replace(/\.ts(\?|$)/i, '.m3u8$1');
         c.load(url, 0, true);
         // sin imagen en 15 s con audio MP2 / AC-3 que el equipo no decodifica: el canal otra vez solo con el video
@@ -86,9 +143,9 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
         }, 15000);
       } catch { void stop(); }
     }, delay);
-    const unregister = registerLivePreview(stop);
+    const unregister = registerLivePreview(stop, give);
     return () => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       unregister();
     };
   }, [channel, active]);

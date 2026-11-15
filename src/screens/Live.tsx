@@ -1,14 +1,15 @@
 // TV en vivo: categorías, canales y la miniatura con la guía (EPG). Pasar por los canales y las carpetas no cambia nada
 // (sin conexiones ni redibujos a cada paso): OK en una carpeta muestra sus canales; OK en un canal lo pone en la
-// miniatura (punto rojo) y OK otra vez en ese canal lo abre en pantalla grande. Al cerrar el canal el foco vuelve a él.
+// miniatura (punto rojo) y OK otra vez en ese canal lo abre en pantalla grande con el mismo reproductor de la miniatura
+// (sin cortes, como Roku y Vega OS). Al cerrar el canal vuelve a la miniatura igual y el foco vuelve a él.
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem } from '../actions';
 import { channelEpg, EpgEntry } from '../api/xtream';
 import PinDialog from '../components/PinDialog';
-import LivePreview, { stopLivePreview } from '../components/LivePreview';
+import LivePreview from '../components/LivePreview';
 import { ScrollingText } from '../components/ScrollingText';
-import { takeLastLive } from '../player/preview-session';
+import { handPreview, markLiveOrigin, takeLastLive } from '../player/preview-session';
 import { Button, Focusable, Message, Spinner } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
 import { clock, digits, nowSec } from '../lib/util';
@@ -132,7 +133,11 @@ export default function Live({ active = true }: { active?: boolean }) {
       setFocused(channel);
       return;
     }
-    void stopLivePreview();
+    // la pantalla grande se queda con el reproductor de la miniatura (sin cortar el canal ni abrirlo otra vez); si todavía
+    // no tenía reproductor, se cierra como siempre
+    handPreview();
+    // la miniatura queda debajo: al salir de la pantalla grande recibe de vuelta el reproductor
+    markLiveOrigin();
     openItem(nav, channel, channels);
   }, [nav, channels]);
   const renderCh = useCallback(

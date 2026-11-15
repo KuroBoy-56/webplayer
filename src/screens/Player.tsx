@@ -2,13 +2,14 @@
 // resolución ni de bitrate (4K si el equipo y el archivo lo tienen).
 // Películas y episodios: continuar donde quedó, adelantar/retroceder, audio y subtítulos (con el
 // motor del panel cuando el equipo no puede: player/playback.ts), siguiente episodio automático.
-// TV en vivo: cambio de canal con arriba/abajo y guía.
+// TV en vivo: cambio de canal con arriba/abajo, la lista de la carpeta (OK) y guía. Abierto desde TV en vivo hereda el
+// reproductor de la miniatura y al salir se lo devuelve (sin cortes, como Roku y Vega OS: player/preview-session.ts).
 import { HWEvent, useTVEventHandler } from '@amazon-devices/react-native-kepler';
 import { KeplerCaptionsView, KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { reportError } from '../api/report';
 import { engineDenied, warmTracks } from '../api/media';
 import { viaDns } from '../lib/securedns';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveFormatStart, liveUrl, movieUrl, otherScheme, setLiveFormat, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
@@ -16,8 +17,8 @@ import { Button, Focusable, Loader } from '../components/ui';
 import { Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
-import { MenuItem, Playback } from '../player/playback';
-import { setLastLive, stopLivePreview } from '../player/preview-session';
+import { Hooks, MenuItem, Playback } from '../player/playback';
+import { dropReturn, offerReturn, setLastLive, stopLivePreview, takeLiveOrigin, takePreview } from '../player/preview-session';
 import { prefetchList, prefetchRange } from '../player/prefetch';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
@@ -59,6 +60,12 @@ export default function Player({ params }: { params: PlayParams }) {
   const controlsFocus = useRef(false);
   controlsFocus.current = controlsFocused;
   const [error, setError] = useState('');
+  const errorRef = useRef('');
+  errorRef.current = error;
+  // abierto desde TV en vivo (OK en el canal de la miniatura): al salir, el reproductor vuelve a la miniatura
+  const [fromLive] = useState(() => params.kind === 'live' && takeLiveOrigin());
+  // al cerrarse: el canal sigue sonando y vuelve a la miniatura (se decide antes de quitar la pantalla, useLayoutEffect)
+  const returning = useRef(false);
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [menuMode, setMenuMode] = useState<'audio' | 'all'>('all');
   const [audioLabel, setAudioLabel] = useState('');
@@ -370,10 +377,31 @@ export default function Player({ params }: { params: PlayParams }) {
   const chListRef = useRef(false);
   chListRef.current = chList;
 
+  // Al salir con el canal sonando (abierto desde TV en vivo): el video se queda en la página, en su lugar, antes de que se
+  // quite esta pantalla (quitarlo de la página lo pausaría); el cierre de abajo se lo da a la miniatura
+  useLayoutEffect(
+    () => () => {
+      const v = video.current;
+      const c = ctl.current;
+      if (!fromLive || params.kind !== 'live' || !v || !c || !ready.current || errorRef.current || zapTimer.current || !c.hasPlayed()) return;
+      returning.current = true;
+      try {
+        v.park?.();
+      } catch {
+        // sigue igual
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   useEffect(() => {
-    const v = new VideoPlayer();
+    // el canal que ya suena en la miniatura: la pantalla grande se queda con ese reproductor (sin cerrarlo ni abrir el
+    // canal de nuevo; solo cambia la superficie), como Roku y Vega OS
+    const inherited = params.kind === 'live' ? takePreview(urlFor(indexRef.current)) : null;
+    const v = inherited ? inherited.v : new VideoPlayer();
     video.current = v;
-    const c = new Playback(v, {
+    const hooks: Hooks = {
       toast: showToast,
       status: setWork,
       changed: () => {
@@ -400,7 +428,9 @@ export default function Player({ params }: { params: PlayParams }) {
         liveNote.current = 'HLS: ' + why;
         onErrorRef.current();
       },
-    });
+    };
+    const c = inherited ? inherited.c : new Playback(v, hooks);
+    if (inherited) c.setHooks(hooks);
     ctl.current = c;
     let alive = true;
     let initialized = false;
@@ -808,8 +838,13 @@ export default function Player({ params }: { params: PlayParams }) {
       if (menuOpen.current) showMenu(c.menu());
     };
 
-    stopLivePreview()
-      .then(() => {
+    // un reproductor que volvía a la miniatura y nadie tomó se cierra antes de abrir este
+    if (!inherited) dropReturn();
+    const begin: Promise<void> = inherited
+      ? Promise.resolve().then(() => {
+        initialized = true;
+      })
+      : stopLivePreview().then(() => {
         if (!alive) return;
         // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
         const first = dnsUrl.current && dnsUrl.current.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
@@ -821,7 +856,8 @@ export default function Player({ params }: { params: PlayParams }) {
         else if (!live && /\.(mp4|m4v|mov)(\?|$)/i.test(first)) prefetchRange(first, 0, 65536);
         initializing = v.initialize().then(() => { initialized = true; });
         return initializing;
-      })
+      });
+    begin
       .then(() => {
         if (!alive) return;
         ready.current = true;
@@ -838,6 +874,27 @@ export default function Player({ params }: { params: PlayParams }) {
         (v as any).textTracks?.addEventListener?.('addtrack', onTrack);
         if (surface.current) v.setSurfaceHandle(surface.current);
         if (captions.current) v.setCaptionViewHandle(captions.current);
+        if (inherited) {
+          vod.current = { idx: indexRef.current, checked: false, waited: false, extFixed: false, stage: 0, retried: false, gone: false, inUse: false, format: false, srv: 0, acct: '', attempts: [], live: null, xui: null };
+          // ya suena: se quita el «cargando» y sigue igual (abrirlo otra vez pediría el canal con la conexión de la
+          // miniatura todavía contada)
+          if (c.hasPlayed()) {
+            if (v.paused) void v.play();
+            onPlaying();
+            return;
+          }
+          // la miniatura todavía conectaba: sigue con esa misma conexión; si en 25 s no suena, los pasos de siempre
+          setBuffering(true);
+          setStatus(t('Conectando con el canal…'));
+          const i = indexRef.current;
+          startDog.current = setTimeout(() => {
+            startDog.current = null;
+            if (!alive || indexRef.current !== i || !ctl.current || ctl.current.hasPlayed()) return;
+            liveNote.current = 'sin imagen en 25 s (miniatura)';
+            onErrorRef.current();
+          }, 25000);
+          return;
+        }
         load(indexRef.current, firstResume.current);
       })
       .catch(() => alive && setError(t('No se pudo iniciar el reproductor.')));
@@ -846,6 +903,36 @@ export default function Player({ params }: { params: PlayParams }) {
       alive = false;
       loadRev.current++;
       if (params.kind === 'live') setLastLive((params.channels[indexRef.current] || params.channel)?.id || '');
+      // Se vuelve a TV en vivo con el canal sonando: la miniatura se queda con este mismo reproductor (solo cambia de
+      // superficie, como Roku y Vega OS): el canal no se corta ni se abre otra vez (preview-session.ts)
+      const backCh = returning.current && params.kind === 'live' ? params.channels[indexRef.current] || params.channel : null;
+      if (backCh) {
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+        if (toastTimer.current) clearTimeout(toastTimer.current);
+        if (zapTimer.current) clearTimeout(zapTimer.current);
+        zapTimer.current = null;
+        if (startDog.current) clearTimeout(startDog.current);
+        startDog.current = null;
+        try {
+          v.removeEventListener('loadedmetadata', onMeta);
+          v.removeEventListener('timeupdate', onTime);
+          v.removeEventListener('playing', onPlaying);
+          v.removeEventListener('waiting', onWaiting);
+          v.removeEventListener('pause', onPause);
+          v.removeEventListener('ended', onEnded);
+          v.removeEventListener('error', onError);
+          (v as any).audioTracks?.removeEventListener?.('addtrack', onTrack);
+          (v as any).audioTracks?.removeEventListener?.('change', onTrack);
+          (v as any).textTracks?.removeEventListener?.('addtrack', onTrack);
+        } catch {
+          // sigue igual
+        }
+        offerReturn(backCh.id, v, c);
+        video.current = null;
+        ctl.current = null;
+        ready.current = false;
+        return;
+      }
       try {
         save(true);
         released = c.destroy();
@@ -960,7 +1047,9 @@ export default function Player({ params }: { params: PlayParams }) {
   const leave = () => {
     leaving.current = true;
     try {
-      if (ready.current) video.current?.pause();
+      // canal abierto desde TV en vivo: sigue sonando y vuelve a la miniatura (sin pausa: se cortaría un momento); si
+      // al cerrarse no puede volver (error, sin sonar), el cierre lo detiene igual
+      if (ready.current && !(live && fromLive)) video.current?.pause();
     } catch {
       // ya estaba detenido
     }
