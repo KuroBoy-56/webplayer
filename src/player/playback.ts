@@ -6,6 +6,7 @@ import { Engine, engineDenied, fileTracks, knownNow, knownTracks, mediaEngine, s
 import { t } from '../lib/i18n';
 import { imageSub, langKey, langName, numbered, sameLang, trackLang } from '../lib/lang';
 import { osBefore2, osVersion } from '../lib/osversion';
+import { onSimulator } from '../lib/simulator';
 import { Probe, stopProbe } from '../lib/probe';
 import { UA } from '../lib/http';
 import { pref, readJson, setPref, writeJson } from '../lib/storage';
@@ -55,8 +56,9 @@ const manifestFile = /\.(m3u8|mpd)([?#]|$)/i;
 type VodRoute = 'native' | 'reader' | 'adaptive' | 'panel';
 
 export function nativeVodAllowed(url: string): boolean {
+  // 2.6.9: en el simulador (Vega Virtual Device) nunca: el reproductor de Amazon cerraba la app (lib/simulator.ts)
   return !manifestFile.test(url) && nativeHttpOk(url)
-    && (!/^http:/i.test(url) || !osBefore2());
+    && (!/^http:/i.test(url) || !osBefore2()) && !onSimulator();
 }
 
 // Idioma que el usuario eligió para ESTE título (menú de audio): se usa al volver a abrirlo (también «Continuar viendo»).
@@ -827,6 +829,8 @@ export class Playback {
     this.stopHls();
     this.clearSeek();
     this.mp4Why ||= why;
+    // (2.6.9: en el simulador el reproductor de Amazon no se usa: que el aviso al panel lo diga)
+    if (onSimulator() && !this.mp4Why.includes('simulador')) this.mp4Why += ' · simulador: sin el reproductor de Amazon';
     this.hooks.vodStarting?.(at);
     if (this.hooks.vodFailed) this.hooks.vodFailed(at);
     else this.hooks.fatal(t('No se pudo reproducir este contenido.'));

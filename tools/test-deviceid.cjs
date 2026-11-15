@@ -269,6 +269,18 @@ test('2.6.3: Vega Virtual Device: la función de Amazon corta la MAC («02:15:FF
     assert.equal((await panel.panelCheckMac(dev.deviceId()))?.user, 'vvd', step);
   }
   assert.match(dev.deviceDiag(), /Amazon: error .*NotSupportedError/);
+  // 2.6.9: el simulador queda reconocido (el reproductor de Amazon no se usa para películas y series)
+  const sim = require('../src/lib/simulator.ts');
+  assert.equal(sim.onSimulator(), true);
+  sim.setSimulator(false);
+});
+
+test('2.6.9: un Fire TV real (identificador de Amazon y MAC de fábrica) no es el simulador', async () => {
+  reset();
+  const sim = require('../src/lib/simulator.ts');
+  sim.setSimulator(false);
+  await open();
+  assert.equal(sim.onSimulator(), false);
 });
 
 test('2.6.3: Fire TV real: una MAC cortada por Amazon NO se usa (varios equipos tendrían el mismo número): el identificador de Amazon', async () => {

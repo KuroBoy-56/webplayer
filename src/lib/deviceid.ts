@@ -13,6 +13,7 @@
 // de este equipo (api/login.php «device_id» con "fixed"; con la MAC real, "hard": el panel pasa a la MAC la línea que
 // el equipo tenía con un número anterior y desde entonces el número es la MAC).
 import { read, storageLoaded, write } from './storage';
+import { setSimulator } from './simulator';
 
 // MAC real de esta apertura (6 pares) y el número que sale del identificador de Amazon (8 pares); '' si no los dio.
 // localMac: una MAC «administrada localmente» (máquina virtual): solo si no hay ninguna de las otras dos
@@ -51,7 +52,10 @@ export function macHex(raw: unknown): string {
   if (typeof raw !== 'string') return '';
   const t = raw.trim().toUpperCase();
   // MAC por defecto de los emuladores (Android / Vega Virtual Device): 02:15:B2:00:00:00, igual en todos
-  if (EMU.test(t)) return '0215B2000000';
+  if (EMU.test(t)) {
+    setSimulator(true);
+    return '0215B2000000';
+  }
   const parts = t.split(/[:\-\s.]+/).filter(Boolean);
   if (parts.length === 6) {
     const out = parts.map(p => (/^[0-9A-F]{1,2}$/.test(p) ? p.padStart(2, '0') : /^F{6}[0-9A-F]{2}$/.test(p) ? p.slice(-2) : ''));
@@ -288,6 +292,11 @@ async function vendorDeviceId(): Promise<string> {
       diag.amz = 'sin respuesta';
     } catch (e: any) {
       diag.amz = 'error ' + String(e?.message || e).slice(0, 40);
+      // el identificador de Amazon no existe: el simulador (en un Fire TV siempre está)
+      if (/NotSupported/i.test(String(e?.message || e))) {
+        setSimulator(true);
+        return '';
+      }
     }
     await new Promise<void>(r => setTimeout(r, 300));
   }

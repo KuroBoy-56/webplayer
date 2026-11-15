@@ -620,6 +620,34 @@ test('preferencia guardada y pistas tardías se aplican en Vega incluso al reanu
   await c.destroy();
 });
 
+test('2.6.9: en el simulador (Vega Virtual Device) el reproductor de Amazon no se usa nunca para películas y series: lo que el lector no puede dar dice que no se puede, sin cerrar la app',async()=>{
+  const sim=require('../src/lib/simulator.ts');
+  sim.setSimulator(true);
+  try{
+    // un «.mp4» que el lector no puede abrir («no es MP4»): error, no el de Amazon (ahí se cerraba la app)
+    const s1=setup();
+    const url='https://fixture.invalid/movie/u/p/raro.mp4';
+    s1.c.load(url,64,false);
+    assert.equal(mp4s.length,1,'el lector');
+    s1.c.vodError('índice: no es MP4');await tick();
+    assert.notEqual(s1.video.src,url,'nunca el de Amazon');
+    assert.deepEqual(s1.hooks.failures,[64],'aviso de que no se pudo');
+    await s1.c.destroy();
+    // desde el principio en una línea de una conexión (donde antes abría directo el de Amazon): el lector
+    const s2=setup();
+    s2.c.load('https://fixture.invalid/movie/u/p/inicio.mp4',0,false);
+    assert.notEqual(s2.video.src,'https://fixture.invalid/movie/u/p/inicio.mp4');assert.equal(mp4s.length,1);
+    await s2.c.destroy();
+    // audio que el lector no da (Dolby): no pasa al de Amazon
+    const s3=setup();
+    mkvTracks=[{lang:'spa',codec:'A_EAC3'}];
+    s3.c.load('https://fixture.invalid/movie/u/p/dolby.mkv',300,false);
+    await Promise.resolve();await Promise.resolve();
+    assert.notEqual(s3.video.src,'https://fixture.invalid/movie/u/p/dolby.mkv');
+    await s3.c.destroy();
+  }finally{sim.setSimulator(false);}
+});
+
 test('2.6.8: línea de una conexión: si la ficha ya está leyendo el índice, Reproducir sigue con el lector (no abre de cero con el de Amazon)',async()=>{
   const url='https://fixture.invalid/movie/u/p/leyendo.mp4';
   // sin nada leído: el de Amazon (como siempre en estas líneas)

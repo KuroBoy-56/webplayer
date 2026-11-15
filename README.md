@@ -207,6 +207,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.9) **En el simulador la app no se cierra al reproducir**: la caja negra mostró que en el Vega Virtual Device el
+  reproductor de Amazon cerraba la app justo al entregarle un capítulo que el lector no puede dar (un «.mp4» que no es
+  MP4: «0.0s abrir · 2.3s preparando… → cierre»), daba error 4 o cortaba el audio (Dolby). El simulador se reconoce por
+  sus propias señales (MAC de los emuladores 02:15:B2:00:00:00 o el identificador de Amazon que no existe,
+  `lib/simulator.ts`) y allí las películas y series nunca se le entregan al reproductor de Amazon (`nativeVodAllowed`):
+  van con el lector de la app y lo que el lector no puede dar dice que no se puede reproducir (el aviso al panel lo
+  marca «simulador»). En un Fire TV no cambia nada.
 - (2.6.8) **Menú de idiomas sin «Buscar más pistas en el archivo» y la ficha prepara el video en líneas de una
   conexión**: (1) esa opción pasaba del reproductor de Amazon al lector en un reproductor nuevo y la app se cerraba: ya
   no está; los idiomas que el reproductor detecta salen solos y, si no detecta ninguno, «Audio predeterminado»; (2) en
