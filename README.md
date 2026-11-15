@@ -10,6 +10,13 @@ Windows, Roku y Vega OS. Un cambio en `src/` de la rama `vega-os` se trae aquí 
 compila sola en cada cambio de la rama `tizenOS` (workflow `App Tizen OS (Samsung)`), con la llave del panel
 del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
+## Novedades de la 1.2.7
+
+- **TV en vivo como Roku y Vega OS: la pantalla grande hereda la miniatura y al salir vuelve a ella, sin cortes.** OK en un canal lo pone en la miniatura; OK otra vez lo abre en pantalla grande con **el mismo reproductor** (AVPlay no se detiene ni se vuelve a abrir: solo cambia el rectángulo donde se ve, también si la miniatura todavía conectaba). Al salir con Atrás, ese mismo reproductor vuelve a la miniatura del canal que sonaba (también si se cambió con ▲▼ o con la lista de la carpeta ◀ dentro de la pantalla grande) y el foco queda en ese canal. Antes la miniatura se cerraba al abrir la pantalla grande y el canal se volvía a conectar dos veces (al entrar y al salir).
+- Cómo: `src/player/preview-session.ts` (`handPreview` / `offerPreview` / `takePreview` al agrandar, `offerReturn` / `takeReturn` / `dropReturn` al volver, `markLiveOrigin` / `takeLiveOrigin`), `LivePreview.tsx` (entrega y recibe el reproductor), `Player.tsx` (lo hereda, `setHooks`, y al cerrarse lo devuelve; Atrás ya no lo pausa), `Live.tsx` (lo mismo que webOS 1.3.18). En `web/shims/w3cmedia.tsx`: AVPlay tiene un dueño (el último `VideoPlayer` que lo abrió); uno viejo que se cierra después no lo detiene, no lo pausa ni vuelve a tapar la pantalla transparente del dueño; `clearSurfaceHandle` solo actúa en su propia superficie y la capa de subtítulos pasa a la superficie nueva. En el navegador (`<video>`), `park()` deja el video en la página mientras cambia de superficie, como en webOS.
+- Arreglo de la miniatura: ahora avisa al reproductor que ya suena (`onPlaying`); antes, a los 12 s, el respaldo del lector de la app reabría un canal que el televisor ya estaba mostrando.
+- Probado: las pantallas reales (TV en vivo + reproductor) en Chromium contra un servidor IPTV de prueba (un solo reproductor en todo el recorrido, sin pausas ni recargas), `tools/preview.test.js` y `tools/avplay-handoff.test.js` (AVPlay simulado: el traspaso no llama a `stop` / `close` / `open`). Falta verlo en un televisor Samsung.
+
 ## Novedades de la 1.2.6
 
 - **Número del equipo que no cambia al reinstalar**: el número («MAC») que queda registrado en el panel sale del **DUID** de Samsung (`webapis.productinfo.getDuid()`, el «Unique ID» de Soporte › Acerca del televisor; permiso `productinfo` en `config.xml`), que no lo guarda la app: es el mismo aunque se desinstale y se vuelva a instalar. Cambios de esta versión (`src/lib/deviceid.ts`):

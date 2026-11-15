@@ -23,6 +23,9 @@ export interface VideoPlayer {
   setSurfaceHandle(h: string): void;
   clearSurfaceHandle(h: string): void;
   setCaptionViewHandle(h: string): void;
+  // traspaso entre la miniatura de TV en vivo y la pantalla grande (src/player/preview-session.ts): el video sigue sonando
+  // donde está hasta que la otra superficie lo toma (AVPlay: sigue en su plano; <video>: no sale de la página)
+  park?(): void;
 }
 
 const g = globalThis as any;
@@ -30,16 +33,22 @@ const g = globalThis as any;
 // ---------- pantalla transparente sobre el video de AVPlay (el video va en un plano debajo de la página) ----------
 
 let cleared: { el: HTMLElement; bg: string }[] = [];
-function seeThrough(from: HTMLElement | null) {
+// el reproductor que dejó transparente el camino hasta su superficie: otro (uno viejo que se cierra después de entregar
+// AVPlay) no se lo vuelve a tapar
+let clearedBy: unknown = null;
+function seeThrough(from: HTMLElement | null, by?: unknown) {
   restore();
+  clearedBy = by ?? null;
   for (let el = from; el; el = el.parentElement) {
     cleared.push({ el, bg: el.style.getPropertyValue('background-color') });
     el.style.setProperty('background-color', 'transparent', 'important');
   }
 }
-function restore() {
+function restore(by?: unknown) {
+  if (by !== undefined && by !== clearedBy) return;
   for (const c of cleared) c.el.style.setProperty('background-color', c.bg);
   cleared = [];
+  clearedBy = null;
 }
 
 // ---------- lista de pistas con la forma de audioTracks / textTracks ----------
@@ -65,6 +74,10 @@ function info(t: any): any {
 }
 
 // ---------- AVPlay ----------
+
+// AVPlay es uno solo para toda la app: el VideoPlayer que lo abrió por última vez es el dueño. Uno viejo que se cierra
+// después (la miniatura que entregó su canal, un reproductor que nadie tomó) no detiene ni pausa el del dueño
+let avOwner: unknown = null;
 
 class AvPlayer implements VideoPlayer {
   autoplay = false;
@@ -123,7 +136,7 @@ class AvPlayer implements VideoPlayer {
     return this.time;
   }
   set currentTime(t: number) {
-    if (!this.prepared || this.dur === 0) return;
+    if (!this.prepared || this.dur === 0 || avOwner !== this) return;
     this.time = t;
     this.fire('seeking');
     try {
@@ -138,7 +151,7 @@ class AvPlayer implements VideoPlayer {
 
   play() {
     this.wantPlay = true;
-    if (!this.prepared) return Promise.resolve();
+    if (!this.prepared || avOwner !== this) return Promise.resolve();
     try {
       this.av.play();
       this.paused = false;
@@ -151,7 +164,10 @@ class AvPlayer implements VideoPlayer {
   }
   pause() {
     this.wantPlay = false;
-    if (!this.prepared) return;
+    if (!this.prepared || avOwner !== this) {
+      this.paused = true;
+      return;
+    }
     try {
       this.av.pause();
     } catch {
@@ -161,18 +177,22 @@ class AvPlayer implements VideoPlayer {
     this.fire('pause');
   }
 
-  private close() {
+  // force: abrir otro video (AVPlay se cierra aunque lo tuviera otro VideoPlayer); si no, solo si es el dueño
+  private close(force = false) {
+    if (!force && avOwner !== this) return;
     try {
       this.av.stop();
     } catch {}
     try {
       this.av.close();
     } catch {}
+    if (avOwner === this) avOwner = null;
   }
 
   private open(url: string) {
     const g0 = ++this.gen;
-    this.close();
+    this.close(true);
+    avOwner = this;
     this.url = url;
     this.error = null;
     this.prepared = false;
@@ -362,11 +382,13 @@ class AvPlayer implements VideoPlayer {
     this.gen++;
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.close();
-    restore();
+    restore(this);
   }
   setSurfaceHandle(h: string) {
     this.host = document.getElementById(h);
-    seeThrough(this.host);
+    seeThrough(this.host, this);
+    // la capa de subtítulos pasa a la superficie nueva (miniatura ↔ pantalla grande con el mismo reproductor)
+    if (this.host && this.subEl && this.subEl.parentElement !== this.host) this.host.appendChild(this.subEl);
     if (this.host && !this.subEl) {
       const d = document.createElement('div');
       d.style.cssText =
@@ -377,16 +399,57 @@ class AvPlayer implements VideoPlayer {
     }
     this.layout();
   }
-  clearSurfaceHandle() {
+  // solo si sigue en esa superficie (la miniatura que se desmonta después de entregar el canal no lo toca)
+  clearSurfaceHandle(h?: string) {
+    if (h && this.host && this.host.id !== h) return;
     this.subEl?.remove();
     this.subEl = null;
     this.host = null;
-    restore();
+    restore(this);
   }
   setCaptionViewHandle() {}
+  // traspaso miniatura ↔ pantalla grande: AVPlay sigue sonando en su plano, en el mismo rectángulo, hasta que la otra
+  // superficie pone el suyo (setDisplayRect); nada se detiene ni se vuelve a abrir
+  park() {}
 }
 
 // ---------- <video> (navegador / emulador sin AVPlay) ----------
+
+// Traspaso sin cortes: quitar el <video> de la página lo pausa; en el traspaso queda «estacionado» encima de todo, en el
+// mismo lugar y tamaño, y la superficie nueva lo mueve con un solo appendChild (como webOS). Si nadie lo toma en 1,5 s
+// se oculta.
+let parkBox: HTMLElement | null = null;
+let parkTimer: ReturnType<typeof setTimeout> | null = null;
+
+function parkVideo(v: HTMLElement): void {
+  if (!v.isConnected) return;
+  const r = v.getBoundingClientRect();
+  if (!parkBox) {
+    parkBox = document.createElement('div');
+    parkBox.id = 'mpx-park';
+    document.body.appendChild(parkBox);
+  }
+  const w = r.width > 1 ? r.width : window.innerWidth;
+  const h = r.height > 1 ? r.height : window.innerHeight;
+  const x = r.width > 1 ? r.left : 0;
+  const y = r.height > 1 ? r.top : 0;
+  parkBox.style.cssText =
+    'position:fixed;left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;overflow:hidden;pointer-events:none;z-index:2147483000;background:#000';
+  (v as any).mpxWasPlaying = !(v as any).paused;
+  parkBox.appendChild(v);
+  if (parkTimer) clearTimeout(parkTimer);
+  parkTimer = setTimeout(() => {
+    parkTimer = null;
+    if (parkBox && parkBox.childNodes.length > 0) parkBox.style.visibility = 'hidden';
+  }, 1500);
+}
+
+function unpark(): void {
+  if (!parkBox || parkBox.childNodes.length > 0) return;
+  if (parkTimer) clearTimeout(parkTimer);
+  parkTimer = null;
+  parkBox.style.cssText = 'display:none';
+}
 
 function htmlPlayer(): VideoPlayer {
   const v = document.createElement('video') as any;
@@ -401,14 +464,31 @@ function htmlPlayer(): VideoPlayer {
         v.load();
       } catch {}
       v.remove();
+      unpark();
     },
     setSurfaceHandle(h: string) {
-      document.getElementById(h)?.appendChild(v);
+      const el = document.getElementById(h);
+      if (!el) return;
+      const parked = !!parkBox && v.parentElement === parkBox;
+      if (v.parentElement !== el) el.appendChild(v);
+      if (!parked) return;
+      unpark();
+      if (v.mpxWasPlaying && v.paused) {
+        try {
+          const p = v.play();
+          if (p && p.catch) p.catch(() => {});
+        } catch {}
+      }
     },
-    clearSurfaceHandle() {
+    clearSurfaceHandle(h?: string) {
+      if (h && v.parentElement && v.parentElement.id !== h) return;
       v.remove();
+      unpark();
     },
     setCaptionViewHandle() {},
+    park() {
+      parkVideo(v);
+    },
   });
 }
 
