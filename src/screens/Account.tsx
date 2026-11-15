@@ -14,6 +14,7 @@ import { pref, setPref } from '../lib/storage';
 import { brand, brandName, distChoice } from '../lib/tenant';
 import { dateText, dateTimeText, demoLength } from '../lib/util';
 import { useNav } from '../nav';
+import { deviceDiag } from '../lib/deviceid';
 import { deviceId, loadCatalog, loadCloud, logout, refreshCatalog, resetTenant, showNotice, useAppState } from '../state';
 import { C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
@@ -138,7 +139,7 @@ export default function Account() {
           </View>
           <View style={s.macBox}>
             <Text style={s.macLabel}>{t('Código del equipo (MAC)')}</Text>
-            <Text style={s.mac}>{deviceId()}</Text>
+            <Text style={s.mac}>{deviceId() || deviceDiag()}</Text>
           </View>
         </View>
       ) : null}

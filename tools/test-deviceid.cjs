@@ -201,17 +201,57 @@ test('2.6.0: nunca un número inventado: sin MAC ni identificador de Amazon no h
   assert.equal(again.dev.deviceId(), 'AB:CD:EF:01:23:45:67:89');
 });
 
-test('2.6.0: solo una MAC grabada de fábrica (una al azar del sistema no sirve); la que empieza en 00 pasa a 10', async () => {
+test('2.6.1: MAC grabada de fábrica antes que el identificador de Amazon; una MAC local solo si no hay ninguna de las dos', async () => {
   reset();
-  wifiMac = 'DA:A1:19:00:11:22'; // administrada localmente (al azar)
-  const { dev } = await open();
-  assert.equal(dev.deviceId(), V());
+  wifiMac = 'DA:A1:19:00:11:22'; // administrada localmente (máquina virtual / al azar)
+  let { dev } = await open();
+  assert.equal(dev.deviceId(), V(), 'con el de Amazon, la MAC local no se usa');
+  // Vega Virtual Device: sin el identificador de Amazon, la MAC de su tarjeta virtual
+  reset();
+  wifiMac = '52:54:00:12:34:56';
+  vendor = UUID('00000000-0000-0000-0000-000000000000');
+  ({ dev } = await open());
+  assert.equal(dev.deviceId(), '52:54:00:12:34:56');
+  assert.equal(disk.get('latmpx:device_id_src'), 'a');
+  assert.equal(dev.hardId(), false, 'una MAC local no es «hard»');
   assert.equal(dev.macId('00:FC:8B:12:34:56'), '10:FC:8B:12:34:56');
   assert.equal(dev.macId('f0-27-2d-aa-bb-cc'), REAL);
+  assert.equal(dev.macRank('f0-27-2d-aa-bb-cc'), 2);
+  assert.equal(dev.macRank('52:54:00:12:34:56'), 1);
   assert.equal(dev.macId('00:00:00:00:00:00'), '');
   assert.equal(dev.macId('01:00:5E:00:00:01'), '', 'multicast');
-  assert.equal(dev.macId('02:00:00:00:00:00'), '');
   assert.equal(dev.macId(undefined), '');
+});
+
+test('2.6.1: el identificador de Amazon se lee en cualquier forma en que llegue', async () => {
+  reset();
+  const { dev } = await open();
+  const want = dev.idFromUuid('6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b');
+  const b = [0x6f,0x1c,0x2a,0x3b,0x4d,0x5e,0x4f,0x60,0x8a,0x7b,0x9c,0x0d,0x1e,0x2f,0x3a,0x4b];
+  assert.equal(dev.idFromUuid({ bytes: b }), want);
+  assert.equal(dev.idFromUuid({ bytes: Uint8Array.from(b) }), want, 'arreglo tipado');
+  assert.equal(dev.idFromUuid(Object.fromEntries(b.map((v, i) => [String(i), v]))), want, 'objeto con índices');
+  assert.equal(dev.idFromUuid({ bytes: Object.fromEntries(b.map((v, i) => [String(i), v])) }), want);
+  assert.equal(dev.idFromUuid({ uuid: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b' }), want);
+  assert.equal(dev.idFromUuid({ toString: () => '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b' }), want);
+  assert.equal(dev.idFromUuid({ bytes: [1, 2, 3] }), '');
+  assert.equal(dev.idFromUuid({}), '');
+  assert.equal(dev.idFromUuid(String({ bytes: [] })), '');
+});
+
+test('2.6.1: sin ningún número, la pantalla muestra qué contestó el sistema', async () => {
+  reset();
+  macDenied = true;
+  vendor = UUID('00000000-0000-0000-0000-000000000000');
+  const { dev } = await open();
+  assert.equal(dev.deviceId(), '');
+  assert.match(dev.deviceDiag(), /MAC: .*sin permiso/);
+  assert.match(dev.deviceDiag(), /Amazon: en ceros/);
+  reset();
+  vendor = { weird: true };
+  macDenied = true;
+  const again = await open();
+  assert.match(again.dev.deviceDiag(), /Amazon: forma object \{"weird":true\}/);
 });
 
 test('panel sin la función (viejo): el número guardado o la MAC real, sin preguntar en cada pedido', async () => {

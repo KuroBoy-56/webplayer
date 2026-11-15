@@ -207,6 +207,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.1) **Vega Virtual Device y diagnóstico del número**: en el simulador la 2.6.0 quedaba sin número («Missing
+  device identifier»): el sistema no dio la MAC ni el identificador de Amazon. Ahora: (1) una MAC «administrada
+  localmente» (la de la tarjeta de red de una máquina virtual) sirve como último recurso, después de la MAC de fábrica y
+  del identificador de Amazon (clave `a…`, no es «hard»); (2) se piden todas las interfaces (Wi-Fi, cable, cualquiera, la
+  activa y la 0); (3) el identificador de Amazon se lee en cualquier forma en que llegue (lista, arreglo tipado, objeto
+  con índices, texto); (4) sin ningún número, el inicio de sesión y Cuenta muestran qué contestó el sistema
+  (`deviceDiag`: «MAC: 3:sin permiso · Amazon: en ceros», etc.) y la pantalla se actualiza sola cuando llega.
 - (2.6.0) **El número del equipo es la MAC real del Fire TV; nunca uno inventado**: la app lee la MAC de la tarjeta
   Wi-Fi (o de red por cable si no hay Wi-Fi) con la función oficial de Amazon `NetworkManager.getMacAddress()`
   (`@amazon-devices/keplerscript-netmgr-lib`; en `manifest.toml` el servicio `com.amazon.network.service` y el permiso

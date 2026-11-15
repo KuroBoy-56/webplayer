@@ -11,6 +11,7 @@ import { hasMasterKey } from '../lib/aes';
 import { t, tmdbLang } from '../lib/i18n';
 import { DNS_OPTIONS, dnsChoice, setDnsChoice } from '../lib/securedns';
 import { read, write } from '../lib/storage';
+import { deviceDiag } from '../lib/deviceid';
 import { APP_ID, features, scoped, tenantCode } from '../lib/tenant';
 import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
@@ -48,6 +49,13 @@ export default function Login() {
   const [assigned, setAssigned] = useState<Line[]>([]);
   const passRef = useRef<TextInput>(null);
   const dev = deviceId();
+  // 2.6.1: sin número del equipo todavía (el sistema tarda o no lo dio): se vuelve a mirar cada 3 s
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (dev) return;
+    const id = setInterval(() => setTick(n => n + 1), 3000);
+    return () => clearInterval(id);
+  }, [dev]);
   // pantalla falsa del panel (equipo nuevo): hasta escribir el código o hasta que lo registren
   const [fake, setFake] = useState<Fake | null>(null);
   // primera consulta al panel (línea del equipo y pantalla falsa) en curso: la pantalla falsa, si el
@@ -300,9 +308,11 @@ export default function Login() {
           ) : null}
           {review ? null : (
             <Text style={s.device}>
-              {t('Código del equipo:')} {dev}   ·   {t('Versión:')} {APP_VERSION}
+              {t('Código del equipo:')} {dev || '-'}   ·   {t('Versión:')} {APP_VERSION}
             </Text>
           )}
+          {/* 2.6.1: sin número del equipo, qué contestó el sistema (para saber por qué) */}
+          {!dev && !review ? <Text style={s.device}>{deviceDiag()}</Text> : null}
         </View>
         <View style={s.dist}>
           <Button label={t('Cambiar distribuidor')} small last onPress={changeDist} />
