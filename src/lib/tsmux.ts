@@ -160,6 +160,7 @@ export class TsMux {
         if (k < 0) return this.wait('sin cuadro clave');
         aus = aus.slice(k);
         this.ref = aus[0].dts;
+        this.first = aus[0].dts;
         this.startPts = aus[0].pts;
         this.off = -aus[0].dts;
         frames = frames.filter(f => f.pts >= 0 && this.fix(f.pts) >= this.startPts);
@@ -167,6 +168,7 @@ export class TsMux {
         const f0 = frames.find(f => f.pts >= 0);
         if (!f0) return this.wait('sin audio');
         this.ref = f0.pts;
+        this.first = f0.pts;
         this.off = -f0.pts;
       }
       this.started = true;
@@ -216,6 +218,13 @@ export class TsMux {
       this.aNext = null;
       this.dirty = true;
     }
+  }
+
+  // (2.6.10, lector de MPEG-TS de películas: tsvod.ts) marca (90 kHz) del primer cuadro entregado, que queda en 0 en lo
+  // entregado; null si todavía no empezó (ref no sirve: se mueve con cada segmento)
+  private first: number | null = null;
+  firstDts(): number | null {
+    return this.started ? this.first : null;
   }
 
   // el canal trae video (los de solo audio no tienen cuadros que contar)

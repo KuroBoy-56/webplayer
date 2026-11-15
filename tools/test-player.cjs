@@ -48,13 +48,27 @@ class Mp4 {
   constructor(v,url,index=-1,cache=null){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=cache||new Uint8Array([1]);this.noAudio=false;this.tracks=[{lang:'spa',codec:'mp4a'},{lang:'eng',codec:'mp4a'}];mp4s.push(this);}
   cancelPlay(){}
   busy(){return false;}
-  async start(at){this.at=at;if(this.url.includes('mkvbody'))return 'índice: el archivo es MKV';if(this.url.includes('noindex'))return 'índice: sin contestar en 30 s';this.v.currentTime=at;this.v.paused=false;this.onTracks();return '';}
+  async start(at){this.at=at;if(this.url.includes('mkvbody'))return 'índice: el archivo es MKV';if(this.url.includes('tsbody'))return 'índice: el archivo es MPEG-TS';if(this.url.includes('noindex'))return 'índice: sin contestar en 30 s';this.v.currentTime=at;this.v.paused=false;this.onTracks();return '';}
   // 2.1.0: con el índice entero cambia de idioma con lo ya bajado (las pruebas «inplace»); si no, se abre de nuevo
   switchAudio(i){if(!this.url.includes('inplace'))return false;this.audioIdx=i;this.switched=(this.switched||0)+1;return true;}
   // subtítulos de texto dentro del MP4 (las pruebas «mp4subs»)
   subList(){return this.url.includes('mp4subs')?[{id:'0',lang:'spa',codec:'tx3g',name:'',def:false,forced:false}]:[];}
   diag(){return '[lector de prueba]';}
   subCues(n){return this.url.includes('mp4subs')&&n===0?(this.cues||(this.cues=[{s:0,e:5,text:'hola'}])):null;}
+  destroy(){}
+}
+// (2.6.10) lector de MPEG-TS de prueba: noaudio en la dirección = audio que el equipo no acepta (solo el video)
+const tsFiles = new Set();
+let tsvods = [];
+class TsVod {
+  constructor(v,url,index=-1){this.v=v;this.url=url;this.audioIdx=index<0?0:index;this.index=null;this.noAudio=url.includes('noaudio');this.tracks=[{lang:'spa',codec:'aac'},{lang:'eng',codec:'aac'}];this.why='';tsvods.push(this);}
+  cancelPlay(){}
+  busy(){return false;}
+  async start(at){this.at=at;this.v.currentTime=at;this.v.paused=false;this.onTracks();return '';}
+  subCues(){return null;}
+  subList(){return [];}
+  seekTo(t){this.v.currentTime=t;}
+  diag(){return '[mpeg-ts de prueba]';}
   destroy(){}
 }
 class Mkv {
@@ -98,6 +112,7 @@ Module._load = function(request,parent,isMain){
   if(request==='../lib/i18n'||request==='./i18n') return {t:(key,vars)=>key.replace(/\{(\w+)\}/g,(m,k)=>vars?.[k]??m)};
   if(request==='../api/report') return {reportError:()=>{}};
   if(request==='./shaka') return {ShakaPlayback:Shaka};
+  if(request==='./tsvod') return {TsVodMse:TsVod,NOT_MP4_TS:'el archivo es MPEG-TS',noteTs:u=>tsFiles.add(u.replace(/^https?:\/\//,'')),tsKnown:u=>tsFiles.has(u.replace(/^https?:\/\//,''))};
   if(request==='./mp4mse') return {Mp4Mse:Mp4,NOT_MP4_MKV:'el archivo es MKV',STALE_INDEX:'índice guardado viejo',mp4Ready:u=>ready.has(u),mp4Known:u=>known.has(u),dropWarm:u=>dropped.push(u)};
   if(request==='./mkvmse') return {MkvMse:Mkv,mkvKnown:()=>false,mkvReady:u=>mkvReady.has(u),dropMkvWarm:()=>{}};
   if(request==='./hls') return {PanelHls};
@@ -110,7 +125,7 @@ const {APP_VERSION} = require('../src/version.ts');
 const noNative = () => { memory['native_live_'+APP_VERSION]='no'; };
 after(()=>{Module._load=originalLoad;if(previousTs)require.extensions['.ts']=previousTs;else delete require.extensions['.ts'];});
 function setup({tracks=[],subs=[],cached=null,os='2.0.0'}={}){
-  memory={};noNative();calls=[];probe=cached;shakas=[];mp4s=[];mkvs=[];toasts=[];release=null;firmware=os;
+  memory={};noNative();calls=[];probe=cached;shakas=[];mp4s=[];mkvs=[];tsvods=[];tsFiles.clear();toasts=[];release=null;firmware=os;
   engineAvailable=false;panelError='';denied='';
   mkvTracks=[{lang:'spa',codec:'A_AAC'},{lang:'eng',codec:'A_AAC'}];
   const video={
@@ -618,6 +633,36 @@ test('preferencia guardada y pistas tardías se aplican en Vega incluso al reanu
   assert.equal(mp4s.length,readers,'las pistas del de Amazon no vuelven a abrir el lector');
   assert.deepEqual(calls,[]);
   await c.destroy();
+});
+
+test('2.6.10: un «.mp4» que es MPEG-TS (capítulos DUAL) lo abre el lector de MPEG-TS desde el segundo guardado, también en el simulador; con audio que no se acepta, el video sin sonido y un aviso',async()=>{
+  const sim=require('../src/lib/simulator.ts');
+  sim.setSimulator(true);
+  try{
+    const {c,video,hooks}=setup();
+    const url='https://fixture.invalid/series/u/p/tsbody-rivales.mp4';
+    c.load(url,64,false);
+    assert.equal(mp4s.length,1);
+    await tick();
+    assert.equal(tsvods.length,1,'el lector de MPEG-TS');assert.equal(tsvods[0].at,64);
+    assert.notEqual(video.src,url,'nunca el de Amazon en el simulador');
+    assert.deepEqual(hooks.failures,[]);
+    assert.match(c.vodMode(),/lector ts/);
+    // otra vez el mismo archivo: directo al lector de MPEG-TS (sin probar el de MP4)
+    await c.destroy();
+    const s2=setup();tsFiles.add(url.replace(/^https?:\/\//,''));
+    s2.c.load(url,10,false);
+    assert.equal(mp4s.length,0);assert.equal(tsvods.length,1);
+    await s2.c.destroy();
+    // audio que el equipo no acepta: sigue el video y avisa
+    const s3=setup();
+    s3.c.load('https://fixture.invalid/series/u/p/tsbody-noaudio.mp4',0,false);
+    await tick();await tick();
+    assert.equal(tsvods.length,1);assert.equal(tsvods[0].noAudio,true);
+    assert.deepEqual(s3.hooks.failures,[]);
+    assert.ok(toasts.some(m=>m.includes('el video sigue sin sonido')),toasts.join(' | '));
+    await s3.c.destroy();
+  }finally{sim.setSimulator(false);}
 });
 
 test('2.6.9: en el simulador (Vega Virtual Device) el reproductor de Amazon no se usa nunca para películas y series: lo que el lector no puede dar dice que no se puede, sin cerrar la app',async()=>{

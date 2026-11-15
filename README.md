@@ -207,6 +207,16 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.10) **Lector de MPEG-TS para películas y series** (`src/player/tsvod.ts`): hay capítulos «.mp4» que por dentro son
+  MPEG-TS (los «DUAL», con dos audios); el lector de MP4 no los abría («no es MP4») y solo los abría el reproductor de
+  Amazon (en el simulador: cierre, error 4 o audio cortado). El lector de MP4 los reconoce (sincronía 0x47 cada 188
+  bytes, `NOT_MP4_TS`) y el reproductor los abre con el lector de MPEG-TS: el mismo conversor de los canales (`TsMux`:
+  H.264 + AAC / MP3 / AC-3 a MP4 fragmentado), por pedazos de ~1 MB con pedidos Range (los paquetes del cuadro que queda
+  a medias se guardan para el pedazo siguiente: ningún cuadro se pierde), duración por la última marca del archivo,
+  salto al segundo guardado por proporción del archivo (con hasta dos ajustes) y la línea de tiempo del archivo
+  (`timestampOffset`). Audio que el equipo no acepta (E-AC-3, o el que MSE rechace): solo el video, sin sonido, con un
+  aviso; lo mismo en MP4 / MKV con audio que el lector no da y sin la conversión del panel. Un «no es MP4» de otro formato
+  lleva sus primeros bytes en el aviso. Pruebas: `tools/test-tsvod.cjs` (MPEG-TS fabricado en la prueba).
 - (2.6.9) **En el simulador la app no se cierra al reproducir**: la caja negra mostró que en el Vega Virtual Device el
   reproductor de Amazon cerraba la app justo al entregarle un capítulo que el lector no puede dar (un «.mp4» que no es
   MP4: «0.0s abrir · 2.3s preparando… → cierre»), daba error 4 o cortaba el audio (Dolby). El simulador se reconoce por

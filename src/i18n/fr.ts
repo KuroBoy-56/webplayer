@@ -385,6 +385,7 @@ const fr: Record<Key, string> = {
   "Buscar más pistas en el archivo": "Rechercher d’autres pistes dans le fichier",
   "No se pudo continuar donde quedó": "Impossible de reprendre là où vous vous êtes arrêté",
   "Video no disponible": "Vidéo non disponible",
+  "Este audio no se puede reproducir en este equipo: el video sigue sin sonido.": "Cet audio ne peut pas être lu sur cet appareil : la vidéo continue sans son.",
   "Este video ya no está en el servidor de tu proveedor ({x}).": "Cette vidéo n’est plus sur le serveur de votre fournisseur ({x}).",
   "Línea no activa": "Ligne inactive",
   "Error de comunicación con el servidor": "Erreur de communication avec le serveur",

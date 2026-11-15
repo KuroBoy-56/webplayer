@@ -17,6 +17,7 @@ import { dropWarm, mp4Known, mp4Ready, Mp4Mse, NOT_MP4_MKV, STALE_INDEX } from '
 import { hostStats, isSingle, lineLimit } from './rangeget';
 import { dropPrefetch } from './prefetch';
 import { dropMkvWarm, MkvMse, mkvKnown, mkvReady } from './mkvmse';
+import { noteTs, NOT_MP4_TS, tsKnown, TsVodMse } from './tsvod';
 import { Mkv } from './mkvparse';
 import { reportError } from '../api/report';
 import { ShakaPlayback } from './shaka';
@@ -133,7 +134,7 @@ export class Playback {
   private probing = false;
   private remux: { a: number; label: string } | null = null;
   private hls: PanelHls | null = null;
-  private mse: Mp4Mse | MkvMse | null = null;
+  private mse: Mp4Mse | MkvMse | TsVodMse | null = null;
   private mkvIndex: Mkv | null = null;
   private wantNote = '';
   // por qué la lectura propia del MP4 no siguió (va al reporte)
@@ -510,16 +511,19 @@ export class Playback {
     this.readerTried = true;
     const g = this.gen;
     const mkv = /\.mkv([?#]|$)/i.test(this.url) || this.mkvBody || mkvKnown(this.url);
+    // 2.6.10: un «.mp4» que es MPEG-TS: el lector de MPEG-TS
+    const ts = !mkv && tsKnown(this.url);
     const want = this.mp4Audio;
     const language = want < 0 ? this.readerLang || titleLangOf(this.url) : '';
-    const m = mkv ? new MkvMse(this.v, this.url, want, this.mkvIndex, language)
+    const m = ts ? new TsVodMse(this.v, this.url, want)
+      : mkv ? new MkvMse(this.v, this.url, want, this.mkvIndex, language)
       : Mp4Mse.open(this.v, this.url, want, this.mp4Index, language);
     this.mse = m;
     const active = () => g === this.gen && this.mse === m;
     m.onHeader = () => {
       if (!active()) return;
       if (m instanceof MkvMse) this.probe = m.probe() || this.probe;
-      else {
+      else if (m instanceof Mp4Mse) {
         if (m.index) this.mp4Index = m.index;
         this.readerSubs(m);
         this.shareReaderTracks(m);
@@ -532,11 +536,11 @@ export class Playback {
       if (m instanceof MkvMse) {
         this.mkvIndex = m.index;
         this.probe = m.probe() || this.probe;
-      } else {
+      } else if (m instanceof Mp4Mse) {
         this.mp4Index = m.index;
         this.readerSubs(m);
       }
-      this.shareReaderTracks(m);
+      if (!(m instanceof TsVodMse)) this.shareReaderTracks(m);
       if (this.mp4Paused) {
         this.mp4Paused = false;
         m.cancelPlay();
@@ -564,6 +568,10 @@ export class Playback {
         if (!mkv && err.includes(NOT_MP4_MKV)) {
           this.mkvBody = true;
           this.direct(this.resumePos(), 'reader');
+        } else if (!mkv && !ts && err.includes(NOT_MP4_TS)) {
+          // 2.6.10: MPEG-TS con extensión .mp4: el lector de MPEG-TS (antes solo el reproductor de Amazon)
+          noteTs(this.url);
+          this.direct(this.resumePos(), 'reader');
         } else this.readerGaveUp(err);
         return;
       }
@@ -590,7 +598,11 @@ export class Playback {
       if (lost >= 0 && !this.audioRemuxTried.has(lost)) {
         this.audioRemuxTried.add(lost);
         const label = this.audioItems().find(i => i.mp4 === lost)?.label || t('Audio predeterminado');
-        void this.toRemux(lost, label, true, t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: label }), this.resumePos());
+        void this.toRemux(lost, label, true, t('Este equipo no reproduce el audio {x}: se prepara con el panel…', { x: label }), this.resumePos()).then(ok => {
+          // 2.6.10: sin el panel, sigue el video sin sonido (en el simulador, el audio Dolby; en un Fire TV suena con el
+          // reproductor de Amazon)
+          if (!ok && active() && m.noAudio) this.hooks.toast(t('Este audio no se puede reproducir en este equipo: el video sigue sin sonido.'));
+        });
       }
     }).catch(() => {
       if (active()) this.readerGaveUp('no se pudo preparar el archivo');
@@ -866,7 +878,7 @@ export class Playback {
   // Amazon (reproductor_amazon=): http_rechazado (el sistema no admite http en modo directo: Vega OS antes de 2.0),
   // error, lento (no empezó en sus plazos), abrió o no_probado
   vodMode(): string {
-    const m = this.vodNative ? 'nativo' : this.mse ? 'lector ' + (this.mse instanceof MkvMse ? 'mkv ' : 'mp4 ') + this.mse.diag() : this.shaka ? 'shaka' : this.remux ? 'panel' : 'directo';
+    const m = this.vodNative ? 'nativo' : this.mse ? 'lector ' + (this.mse instanceof MkvMse ? 'mkv ' : this.mse instanceof TsVodMse ? 'ts ' : 'mp4 ') + this.mse.diag() : this.shaka ? 'shaka' : this.remux ? 'panel' : 'directo';
     const amazon = this.nativeNote || (!nativeHttpOk(this.url) ? 'http_rechazado' : nativeKnownGood('vod') ? 'abre_en_este_equipo' : 'no_probado');
     return m + (this.mp4Why ? ' (' + this.mp4Why + ')' : '') + ' reproductor_amazon=' + amazon;
   }
@@ -1503,7 +1515,7 @@ export class Playback {
     this.hooks.toast(what === 'sub' ? t('Subtítulo no compatible con este equipo: es necesario encender el servidor.') : t('Audio no compatible con este equipo: es necesario encender el servidor.'));
     const ext = (this.url.match(/\.([A-Za-z0-9]{2,5})(\?|$)/) || [])[1] || '?';
     reportError('playback', what === 'sub' ? 'Subtítulo no compatible sin servidor' : 'Audio no compatible sin servidor',
-      'motivo=' + msg + ' archivo=' + ext + ' lector=' + (this.shaka ? 'shaka' : this.mse ? (this.mse instanceof MkvMse ? 'mkv' : 'mp4') : 'directo') + (this.wantNote ? ' pedido=' + this.wantNote : ''), 'Reproductor');
+      'motivo=' + msg + ' archivo=' + ext + ' lector=' + (this.shaka ? 'shaka' : this.mse ? (this.mse instanceof MkvMse ? 'mkv' : this.mse instanceof TsVodMse ? 'ts' : 'mp4') : 'directo') + (this.wantNote ? ' pedido=' + this.wantNote : ''), 'Reproductor');
   }
 
   // true = el panel empezó a preparar el video. note: aviso que se muestra solo si el motor está

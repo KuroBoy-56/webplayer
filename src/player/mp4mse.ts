@@ -5,6 +5,7 @@
 // No pasa por la VPS: solo el cambio de idioma la usa. Saltos (◀▶, Continuar viendo) desde el cuadro clave anterior.
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { hostStats, rangeGet, RangeState } from './rangeget';
+import { looksTs, NOT_MP4_TS } from './tsvod';
 import { lineLimit, ReadAhead } from './readahead';
 import { dropIndex, hasIndex, loadIndex, saveIndex, saved, STALE_INDEX, fromBase64, toBase64 } from './indexstore';
 import { shareIndex, sharedIndex, sharedStale } from './sharedindex';
@@ -1087,8 +1088,14 @@ export class Mp4Mse {
         this.why = NOT_MP4_MKV;
         return null;
       }
+      // 2.6.10: MPEG-TS con extensión .mp4 (capítulos «DUAL» de algunos proveedores): el lector de MPEG-TS (tsvod.ts)
+      if (looksTs(win)) {
+        this.why = NOT_MP4_TS;
+        return null;
+      }
       if (!/^[a-z0-9 ]{4}$/i.test(typ(win, 4))) {
-        this.why = 'no es MP4';
+        // (2.6.10: con los primeros bytes, para saber qué formato es)
+        this.why = 'no es MP4 (' + Array.from(win.subarray(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ') + ')';
         return null;
       }
     }

@@ -384,6 +384,7 @@ const en = {
   "Buscar más pistas en el archivo": "Find more tracks in this file",
   "No se pudo continuar donde quedó": "Could not resume where you left off",
   "Video no disponible": "Video not available",
+  "Este audio no se puede reproducir en este equipo: el video sigue sin sonido.": "This audio can’t be played on this device: the video continues without sound.",
   "Este video ya no está en el servidor de tu proveedor ({x}).": "This video is no longer on your provider’s server ({x}).",
   "Línea no activa": "Line not active",
   "Error de comunicación con el servidor": "Server communication error",
