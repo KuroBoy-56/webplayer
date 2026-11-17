@@ -70,7 +70,6 @@ import com.latmpx.player.data.Store
 import com.latmpx.player.data.Tenant
 import com.latmpx.player.data.Tmdb
 import com.latmpx.player.data.Xtream
-import com.latmpx.player.ui.components.tvTextInput
 import com.latmpx.player.ui.components.AppButton
 import com.latmpx.player.ui.components.Chip
 import com.latmpx.player.ui.components.DnsButton
@@ -101,6 +100,11 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
     // ojito: ver la contraseña en texto o volver a ocultarla
     var showPass by remember { mutableStateOf(false) }
     val eyeFocus = remember { FocusRequester() }
+    // 1.5.0: en TV el control llega a los recuadros de Usuario y Contraseña sin abrir el teclado (OK lo abre,
+    // TvTextFieldBox); «Siguiente» del teclado pasa de Usuario a Contraseña y de Contraseña a «Iniciar sesión»
+    val userField = com.latmpx.player.ui.components.rememberTvField()
+    val passField = com.latmpx.player.ui.components.rememberTvField()
+    val loginKb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     var demoUsed by remember { mutableStateOf(Store.demoUsed) }
     val firstFocus = remember { FocusRequester() }
     var posters by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -250,15 +254,44 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                             icon = Icons.Filled.Download, onClick = onDownloads)
                     }
                     
+                    com.latmpx.player.ui.components.TvTextFieldBox(userField, Modifier.fillMaxWidth()) { fieldModifier ->
                     OutlinedTextField(
                         value = user, onValueChange = { user = it }, label = { Text(stringResource(R.string.username)) }, singleLine = true, colors = fieldColors,
-                        keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Next)), modifier = Modifier.fillMaxWidth().then(Modifier.tvTextInput()),
+                        keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(imeAction = ImeAction.Next)),
+                        keyboardActions = KeyboardActions(
+                            onNext = { if (tv) passField.edit() else defaultKeyboardAction(ImeAction.Next) },
+                            onPrevious = { if (tv) { loginKb?.hide(); userField.leave() } else defaultKeyboardAction(ImeAction.Previous) },
+                        ),
+                        interactionSource = userField.interaction,
+                        modifier = fieldModifier,
                     )
+                    }
+                    // TV: derecha desde la contraseña (el recuadro o el campo) va al ojito
+                    com.latmpx.player.ui.components.TvTextFieldBox(
+                        passField,
+                        Modifier.fillMaxWidth().then(if (tv) Modifier.onPreviewKeyEvent { e ->
+                            if (e.key == androidx.compose.ui.input.key.Key.DirectionRight && e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                runCatching { eyeFocus.requestFocus() }; true
+                            } else false
+                        } else Modifier),
+                    ) { fieldModifier ->
                     OutlinedTextField(
                         value = pass, onValueChange = { pass = it }, label = { Text(stringResource(R.string.password)) }, singleLine = true, colors = fieldColors,
                         visualTransformation = if (showPass) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
-                            androidx.compose.material3.IconButton(onClick = { showPass = !showPass }, modifier = Modifier.focusRequester(eyeFocus)) {
+                            androidx.compose.material3.IconButton(
+                                onClick = { showPass = !showPass },
+                                modifier = Modifier.focusRequester(eyeFocus).then(if (tv) Modifier.onPreviewKeyEvent { e ->
+                                    // TV: desde el ojito, izquierda vuelve a la contraseña, arriba a Usuario y abajo a «Iniciar sesión»
+                                    if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) false
+                                    else when (e.key) {
+                                        androidx.compose.ui.input.key.Key.DirectionLeft -> { passField.leave(); true }
+                                        androidx.compose.ui.input.key.Key.DirectionUp -> { userField.leave(); true }
+                                        androidx.compose.ui.input.key.Key.DirectionDown -> { runCatching { firstFocus.requestFocus() }; true }
+                                        else -> false
+                                    }
+                                } else Modifier),
+                            ) {
                                 androidx.compose.material3.Icon(
                                     if (showPass) androidx.compose.material.icons.Icons.Filled.VisibilityOff else androidx.compose.material.icons.Icons.Filled.Visibility,
                                     stringResource(if (showPass) R.string.hide_password else R.string.show_password), tint = Color.White,
@@ -266,16 +299,16 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                             }
                         },
                         keyboardOptions = com.latmpx.player.ui.components.tvKeyboard(KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)),
-                        keyboardActions = KeyboardActions(onDone = { }),
-                        modifier = Modifier.fillMaxWidth()
-                            // TV: derecha desde la contraseña va al ojito (el campo se queda con las flechas)
-                            .then(if (tv) Modifier.onPreviewKeyEvent { e ->
-                                if (e.key == androidx.compose.ui.input.key.Key.DirectionRight && e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
-                                    runCatching { eyeFocus.requestFocus() }; true
-                                } else false
-                            } else Modifier)
-                            .then(Modifier.tvTextInput()),
+                        // TV: Listo / Siguiente cierran el teclado y llevan a «Iniciar sesión»; Anterior vuelve a Usuario
+                        keyboardActions = KeyboardActions(
+                            onDone = { if (tv) { loginKb?.hide(); runCatching { firstFocus.requestFocus() } } },
+                            onNext = { if (tv) { loginKb?.hide(); runCatching { firstFocus.requestFocus() } } else defaultKeyboardAction(ImeAction.Next) },
+                            onPrevious = { if (tv) userField.edit() else defaultKeyboardAction(ImeAction.Previous) },
+                        ),
+                        interactionSource = passField.interaction,
+                        modifier = fieldModifier,
                     )
+                    }
                     
                     if (!review) Column(Modifier.fillMaxWidth().background(Color(0x33FFFFFF), RoundedCornerShape(4.dp)).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(stringResource(R.string.mac_code_remote), color = NfGray2, fontSize = 12.sp)
