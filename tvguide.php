@@ -172,34 +172,45 @@ include "header.php";
     @media (max-width: 1100px) { .tv-wrap { grid-template-columns: 190px 270px 1fr; } }
     @media (max-width: 899px) {
         .nf-live .nf-mobile-pills { display: none; }
-        /* Teléfono, como una app: la pantalla no se desplaza; arriba el reproductor y el canal, abajo la lista de canales
-           con su propio desplazamiento. Al bajar por los canales la guía se pliega (queda lo que se transmite ahora, en
-           una línea) y al volver al principio de la lista se despliega, las dos cosas con una animación suave. Así la
-           página nunca cambia de alto mientras se desplaza (antes el reproductor saltaba y parpadeaba en el iPhone). */
-        .tv-wrap { display: flex; flex-direction: column; margin-top: var(--nf-header); padding: 0; gap: 0; overflow: hidden;
-            height: calc(100vh - var(--nf-header) - var(--nf-tabbar) - env(safe-area-inset-bottom));
-            height: calc(100dvh - var(--nf-header) - var(--nf-tabbar) - env(safe-area-inset-bottom)); }
-        .tv-main { order: -1; flex: none; position: relative; z-index: 2; background: var(--nf-bg); gap: 0; }
-        /* en horizontal el reproductor no tapa la lista (como mucho media pantalla; en vertical no cambia nada) */
-        .tv-player { border-radius: 0; max-height: 50vh; max-height: 50dvh; }
+        /* Teléfono, como una app: la página no se desplaza. Arriba quedan fijos el reproductor (16:9) y el canal; abajo,
+           una sola zona que se desplaza con el dedo: la guía y, debajo, la carpeta y los canales. Al subir por los
+           canales la guía se va hacia arriba con el propio desplazamiento del teléfono (nada cambia de alto, no hay
+           saltos ni parpadeos), la carpeta queda fija arriba de la lista y bajo el nombre del canal aparece lo que se
+           transmite ahora; al volver al principio la guía baja otra vez. La zona queda fija entre la barra de arriba y
+           la de abajo (las dos son fijas), así calza con cualquier barra de Safari. */
+        .nf-live .nf-main { min-height: 0; }
+        .tv-wrap { position: fixed; top: var(--nf-header); left: 0; right: 0; bottom: calc(var(--nf-tabbar) + env(safe-area-inset-bottom));
+            height: auto; margin: 0; display: flex; flex-direction: column; padding: 0; gap: 0; overflow: hidden; }
+        .tv-main { order: -1; flex: none; background: var(--nf-bg); gap: 0; }
+        /* siempre 16:9 (el reproductor pide height: 100%, que aquí lo estiraría); en horizontal como mucho media pantalla */
+        .tv-main .tv-player { height: auto; border-radius: 0; max-height: 50vh; max-height: 50dvh; }
+        /* pantalla completa propia del iPhone: toda la pantalla y por encima de las barras */
+        .tv-main .tv-player.nfp-fakefs { max-height: none; }
+        .tv-wrap:has(.nfp-fakefs) { z-index: 100000; }
         .tv-info { padding: 8px 12px; }
         .tv-info h2 { font-size: 16px; }
-        .tv-epg { display: none; min-height: 0; flex: none; }
-        .tv-main.has-epg .tv-epg { display: block; max-height: 30vh; border-radius: 0; opacity: 1; transform: translateY(0);
-            transition: max-height .32s cubic-bezier(.2, .8, .2, 1), opacity .22s ease, transform .32s cubic-bezier(.2, .8, .2, 1); }
-        .tv-main.compact.has-epg .tv-epg { max-height: 0; opacity: 0; transform: translateY(-8px); }
-        .tv-main.has-now .tv-now { display: block; max-height: 0; opacity: 0; margin-top: 0;
-            transition: max-height .32s cubic-bezier(.2, .8, .2, 1), opacity .25s ease .06s, margin-top .32s ease; }
-        .tv-main.compact.has-now .tv-now { max-height: 20px; opacity: 1; margin-top: 2px; }
         .tv-cats { display: none; }
         .tv-col { border-radius: 0; background: transparent; }
         .tv-list { overflow: visible; }
-        .tv-chcol { display: block; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+        .tv-chcol { display: block; position: relative; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto;
+            -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+        /* la guía (dentro de la zona que se desplaza): el programa de ahora y los 2 siguientes */
+        .tv-epg { display: none; min-height: 0; }
+        .tv-wrap.has-epg .tv-epg { display: flex; }
+        .tv-chcol .tv-prog.past, .tv-chcol .tv-prog.later { display: none; }
         /* la carpeta queda fija arriba de la lista */
         .tv-mcat { display: block; position: sticky; top: 0; z-index: 3; background: var(--nf-bg); padding: 10px 12px 8px; }
+        /* lo que se transmite ahora, bajo el nombre del canal cuando la guía ya no se ve: solo se desvanece y se desliza
+           (nada cambia de alto) */
+        .tv-ttl { position: relative; }
+        .tv-info h2 { transition: transform .3s cubic-bezier(.2, .8, .2, 1); }
+        .tv-now { display: block; position: absolute; left: 0; right: 0; top: 100%; margin: 0; opacity: 0; transform: translateY(4px);
+            pointer-events: none; transition: opacity .25s ease, transform .3s cubic-bezier(.2, .8, .2, 1); }
+        .tv-wrap.compact.has-now .tv-info h2 { transform: translateY(-9px); }
+        .tv-wrap.compact.has-now .tv-now { opacity: 1; transform: translateY(-9px); }
     }
     @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
-        .tv-main.has-epg .tv-epg, .tv-main.has-now .tv-now { transition: none; }
+        .tv-info h2, .tv-now { transition: none; }
     }
 </style>
 
@@ -271,65 +282,69 @@ document.addEventListener('DOMContentLoaded', function () {
         state.cat = cat;
         Array.prototype.forEach.call(document.querySelectorAll('.tv-cat'), function (x) { x.classList.toggle('active', x.getAttribute('data-id') === cat); });
         document.getElementById('catSel').value = cat;
-        // teléfono con la guía plegada: sigue plegada mientras carga la carpeta (la lista queda corta un momento)
-        hold = typeof phone === 'function' && phone() && compact;
+        // teléfono: si la guía ya no se veía, la carpeta nueva empieza en su primer canal con la guía arriba, fuera de la
+        // vista; mientras carga la lista guarda su alto (así nada salta)
+        var top = phone() ? epgEl.offsetHeight : 0, keep = phone() && chCol.scrollTop >= top;
+        if (phone()) list.style.minHeight = list.offsetHeight + 'px';
+        var done = function () {
+            list.style.minHeight = '';
+            if (keep) chCol.scrollTop = top;
+            onListScroll();
+        };
         list.innerHTML = '<div class="tv-empty">' + <?php echo tj('Cargando canales...'); ?> + '</div>';
         fetch('tvguide.php?ajax=channels&category_id=' + encodeURIComponent(cat), { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
-            .then(function (d) { state.channels = d || []; renderChannels(); afterLoad(); })
-            .catch(function () { list.innerHTML = '<div class="tv-empty">' + <?php echo tj('No se pudieron cargar los canales.'); ?> + '</div>'; afterLoad(); });
-    }
-
-    // la carpeta nueva empieza en su primer canal; si es tan corta que no baja, la guía se despliega (si no, no se
-    // podría volver a abrir deslizando)
-    function afterLoad() {
-        if (!hold) return;
-        requestAnimationFrame(function () {
-            if (chCol.scrollHeight - chCol.clientHeight > 24) chCol.scrollTop = 3;
-            else setCompact(false);
-            hold = false;
-        });
+            .then(function (d) { state.channels = d || []; renderChannels(); done(); })
+            .catch(function () { list.innerHTML = '<div class="tv-empty">' + <?php echo tj('No se pudieron cargar los canales.'); ?> + '</div>'; done(); });
     }
 
     function renderEpg(epg) {
-        var box = document.getElementById('epg-list'), now = Date.now() / 1000, main = document.getElementById('tvMain');
-        main.classList.toggle('has-epg', !!(epg && epg.length));
+        var box = document.getElementById('epg-list'), now = Date.now() / 1000;
+        // teléfono con la guía arriba, fuera de la vista: la lista queda en el mismo lugar aunque la guía cambie de alto
+        var before = epgEl.offsetHeight, y = chCol.scrollTop;
+        wrap.classList.toggle('has-epg', !!(epg && epg.length));
         var cur = (epg || []).filter(function (p) { return p.s <= now && p.e > now; })[0];
-        main.classList.toggle('has-now', !!cur);
-        // la guía reducida (teléfono, al bajar por los canales): solo lo que se transmite ahora, en una línea
+        wrap.classList.toggle('has-now', !!cur);
+        // bajo el nombre del canal (teléfono, cuando la guía ya no se ve): solo lo que se transmite ahora, en una línea
         document.getElementById('tvNow').innerHTML = cur ? '<b>' + hm(cur.s) + ' - ' + hm(cur.e) + '</b>' + NF.esc(cur.t) : '';
-        if (!epg || !epg.length) { box.innerHTML = '<div class="tv-empty">' + <?php echo tj('No hay información de la guía de programas para este canal.'); ?> + '</div>'; return; }
-        box.innerHTML = epg.map(function (p) {
-            var on = p.s <= now && p.e > now, pct = on ? Math.round((now - p.s) / (p.e - p.s) * 100) : 0;
-            return '<div class="tv-prog' + (on ? ' now' : '') + '"><div class="h">' + hm(p.s) + ' - ' + hm(p.e) + '</div><div style="flex:1"><div class="t">' + NF.esc(p.t) + '</div>' + (on ? '<div class="bar"><i style="width:' + pct + '%"></i></div>' : '') + '</div></div>';
-        }).join('');
+        if (!epg || !epg.length) box.innerHTML = '<div class="tv-empty">' + <?php echo tj('No hay información de la guía de programas para este canal.'); ?> + '</div>';
+        else {
+            var next = 0;
+            box.innerHTML = epg.map(function (p) {
+                var on = p.s <= now && p.e > now, pct = on ? Math.round((now - p.s) / (p.e - p.s) * 100) : 0;
+                // en el teléfono la guía muestra el programa de ahora y los 2 siguientes (past / later quedan ocultos)
+                var cls = p.e <= now ? ' past' : (++next > 3 ? ' later' : '');
+                return '<div class="tv-prog' + (on ? ' now' : '') + cls + '"><div class="h">' + hm(p.s) + ' - ' + hm(p.e) + '</div><div style="flex:1"><div class="t">' + NF.esc(p.t) + '</div>' + (on ? '<div class="bar"><i style="width:' + pct + '%"></i></div>' : '') + '</div></div>';
+            }).join('');
+        }
+        if (phone() && y > 0) chCol.scrollTop = Math.max(0, y + epgEl.offsetHeight - before);
+        onListScroll();
     }
 
-    /* Teléfono: al bajar por la lista de canales la guía se pliega (queda lo que se transmite ahora, en una línea) y al
-       volver al principio de la lista se despliega. Mira el desplazamiento de la lista, no el de la página: la página
-       no cambia de alto y nada salta. Con pocos canales (la lista no bajaría con la guía plegada) no se pliega. */
-    var tvMain = document.getElementById('tvMain'), chCol = document.querySelector('.tv-chcol'), compact = false, ticking = false, hold = false;
-    var phone = function () { return window.innerWidth < 900; };
+    /* Teléfono: la guía va dentro de la zona que se desplaza, arriba de la carpeta y los canales (en la computadora
+       vuelve a su columna). Cuando el programa de ahora sube fuera de la vista, aparece bajo el nombre del canal. */
+    var wrap = document.querySelector('.tv-wrap'), tvMain = document.getElementById('tvMain'), chCol = document.querySelector('.tv-chcol');
+    var epgEl = document.querySelector('.tv-epg'), compact = false, ticking = false;
+    var mq = window.matchMedia('(max-width: 899px)');
+    var phone = function () { return mq.matches; };
     function setCompact(on) {
         if (compact === on) return;
         compact = on;
-        tvMain.classList.toggle('compact', on);
+        wrap.classList.toggle('compact', on);
     }
     function onListScroll() {
         ticking = false;
-        if (!phone()) { setCompact(false); return; }
-        var y = chCol.scrollTop;
-        if (!compact && y > 24) {
-            // lo que se gana al plegar la guía: si con eso la lista ya no bajaría, se queda como está
-            var epg = tvMain.querySelector('.tv-epg');
-            var gain = epg ? epg.offsetHeight : 0;
-            if (chCol.scrollHeight - chCol.clientHeight - gain > 24) setCompact(true);
-        } else if (compact && y <= 2 && !hold) {
-            setCompact(false);
-        }
+        var r = phone() && epgEl.offsetHeight ? epgEl.querySelector('.tv-prog.now') : null;
+        setCompact(!!r && chCol.scrollTop >= r.offsetTop + r.offsetHeight - 6);
     }
+    function placeEpg() {
+        if (phone()) { if (epgEl.parentNode !== chCol) chCol.insertBefore(epgEl, chCol.firstChild); }
+        else if (epgEl.parentNode !== tvMain) tvMain.appendChild(epgEl);
+        onListScroll();
+    }
+    placeEpg();
+    if (mq.addEventListener) mq.addEventListener('change', placeEpg); else if (mq.addListener) mq.addListener(placeEpg);
     chCol.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onListScroll); } }, { passive: true });
-    window.addEventListener('resize', function () { if (!phone()) setCompact(false); });
 
     function play(data) {
         state.ch = data.id;
@@ -371,8 +386,6 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('catList').addEventListener('click', function (e) { var c = e.target.closest('.tv-cat'); if (c) loadChannels(c.getAttribute('data-id')); });
     document.getElementById('catSel').addEventListener('change', function () {
         loadChannels(this.value);
-        // teléfono: la carpeta nueva empieza en su primer canal (con la guía plegada, sigue plegada si la lista es larga)
-        if (phone() && !compact) chCol.scrollTop = 0;
     });
     // el reproductor siempre está a la vista (también en el teléfono): la lista se queda donde estaba
     list.addEventListener('click', function (e) { var c = e.target.closest('.tv-ch'); if (c) openChannel(c.getAttribute('data-id'), true); });
