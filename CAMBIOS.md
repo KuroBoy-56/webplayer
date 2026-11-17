@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## TV en vivo en el teléfono: más espacio para los canales (17 de noviembre)
+- Al bajar por la lista de canales, la guía de programas se oculta y bajo el nombre del canal queda, en una línea, lo que se transmite ahora (hora y título). La carpeta (selector) queda fija justo debajo del reproductor, así se cambia de carpeta sin volver arriba; al cambiarla, la lista nueva empieza arriba. Al volver al principio de la página, la guía completa aparece otra vez.
+- Con pocos canales (la página ya no bajaría al ocultar la guía) la guía no se oculta: así no se abre y se cierra sola. En la computadora (pantallas de 900 px o más) no cambia nada.
+- Archivo: `tvguide.php`.
+
 ## Deportes igual que Android TV, Roku, Vega OS, webOS y Tizen (17 de noviembre)
 - **Pestañas** Hoy / Mañana y, si el panel las ofrece, Tablas / Selecciones / Equipos (antes Hoy y Mañana eran botones dentro de «Agenda»). Hoy incluye los que siguen en vivo; el orden es en vivo → próximos → terminados, con las disciplinas en chips y una tarjeta por fila en el teléfono. Ya no hay buscador de la agenda, fila «En vivo ahora» ni grupos por liga (como las apps).
 - **Cada tarjeta muestra el canal** que se abre (en verde si es de la lista del cliente; «Sin canal», «Por confirmar» en Equipos / Selecciones, o «Buscando…» mientras se buscan) y «En TV: …» (hasta 4). Con «Solo los canales del servidor IPTV» en el panel (`chan: "iptv"`) solo se nombran los que el cliente tiene.

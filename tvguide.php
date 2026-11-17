@@ -154,7 +154,10 @@ include "header.php";
     .tv-player .ph svg { width: 54px; height: 54px; opacity: .5; }
     .tv-info { display: flex; align-items: center; gap: 12px; padding: 0 4px; }
     .tv-info img { width: 64px; height: 42px; object-fit: contain; background: #0d0d0d; border-radius: 4px; }
-    .tv-info h2 { margin: 0; font-size: 20px; color: #fff; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tv-info h2 { margin: 0; font-size: 20px; color: #fff; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tv-ttl { flex: 1; min-width: 0; }
+    .tv-now { display: none; font-size: 13px; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+    .tv-now b { color: var(--nf-red); font-weight: 600; margin-right: 6px; font-variant-numeric: tabular-nums; }
     .tv-epg { flex: 1; min-height: 120px; }
     .tv-prog { display: flex; gap: 14px; padding: 10px 12px; border-bottom: 1px solid #262626; font-size: 14px; }
     .tv-prog .h { color: #999; width: 98px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
@@ -180,6 +183,12 @@ include "header.php";
         .tv-mcat { display: block; padding: 10px 12px 0; }
         .tv-col { border-radius: 0; background: transparent; }
         .tv-list { overflow: visible; }
+        /* al bajar por los canales la guía se oculta y queda el programa actual en una línea (más espacio para los canales
+           y la carpeta); al volver arriba, la guía completa. La carpeta queda fija debajo del reproductor */
+        .tv-chcol { overflow: visible; }
+        .tv-mcat { position: sticky; top: var(--tv-stick, 0px); z-index: 19; background: var(--nf-bg); padding-bottom: 8px; }
+        .tv-main.compact .tv-epg, .tv-main.compact.has-epg .tv-epg { display: none; }
+        .tv-main.compact.has-now .tv-now { display: block; }
     }
 </style>
 
@@ -194,7 +203,7 @@ include "header.php";
         </div>
     </aside>
 
-    <section class="tv-col">
+    <section class="tv-col tv-chcol">
         <div class="tv-mcat">
             <select class="nf-select" id="catSel" style="width:100%">
                 <option value="favorites">⭐ <?php echo t('Favoritos'); ?></option>
@@ -214,7 +223,7 @@ include "header.php";
         </div>
         <div class="tv-info" id="tvInfo" style="display:none">
             <img id="tvLogo" src="" alt="" onerror="this.onerror=null;this.src='assets/img/Logo.png'">
-            <h2 id="tvName"></h2>
+            <div class="tv-ttl"><h2 id="tvName"></h2><div class="tv-now" id="tvNow"></div></div>
             <button type="button" class="nf-btn-circle" id="toggleLiveFav" title="<?php echo e(t('Favorito')); ?>"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 17.3 18.2 21l-1.6-7L22 9.2l-7.2-.6L12 2 9.2 8.6 2 9.2 7.4 14l-1.6 7z"/></svg></button>
         </div>
         <div class="tv-col tv-epg">
@@ -245,6 +254,8 @@ document.addEventListener('DOMContentLoaded', function () {
         list.innerHTML = items.map(function (c) {
             return '<div class="tv-ch' + (state.ch === c.id ? ' active' : '') + '" data-id="' + NF.esc(c.id) + '"><img src="' + NF.esc(c.i) + '" alt="" loading="lazy" onerror="this.onerror=null;this.src=\'assets/img/Logo.png\'"><span>' + NF.esc(c.n) + '</span></div>';
         }).join('');
+        // otra lista de canales: se vuelve a ver si la página baja lo suficiente para reducir la guía
+        noCompact = false;
     }
 
     function loadChannels(cat) {
@@ -259,14 +270,49 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function renderEpg(epg) {
-        var box = document.getElementById('epg-list'), now = Date.now() / 1000;
-        document.getElementById('tvMain').classList.toggle('has-epg', !!(epg && epg.length));
-        if (!epg || !epg.length) { box.innerHTML = '<div class="tv-empty">' + <?php echo tj('No hay información de la guía de programas para este canal.'); ?> + '</div>'; return; }
+        var box = document.getElementById('epg-list'), now = Date.now() / 1000, main = document.getElementById('tvMain');
+        main.classList.toggle('has-epg', !!(epg && epg.length));
+        var cur = (epg || []).filter(function (p) { return p.s <= now && p.e > now; })[0];
+        main.classList.toggle('has-now', !!cur);
+        // la guía reducida (teléfono, al bajar por los canales): solo lo que se transmite ahora, en una línea
+        document.getElementById('tvNow').innerHTML = cur ? '<b>' + hm(cur.s) + ' - ' + hm(cur.e) + '</b>' + NF.esc(cur.t) : '';
+        if (!epg || !epg.length) { box.innerHTML = '<div class="tv-empty">' + <?php echo tj('No hay información de la guía de programas para este canal.'); ?> + '</div>'; stickTop(); return; }
         box.innerHTML = epg.map(function (p) {
             var on = p.s <= now && p.e > now, pct = on ? Math.round((now - p.s) / (p.e - p.s) * 100) : 0;
             return '<div class="tv-prog' + (on ? ' now' : '') + '"><div class="h">' + hm(p.s) + ' - ' + hm(p.e) + '</div><div style="flex:1"><div class="t">' + NF.esc(p.t) + '</div>' + (on ? '<div class="bar"><i style="width:' + pct + '%"></i></div>' : '') + '</div></div>';
         }).join('');
+        stickTop();
     }
+
+    /* Teléfono: al bajar por los canales la guía se oculta (queda el canal con lo que se transmite ahora, en una línea)
+       y al volver arriba se ve completa.
+       Con pocos canales (la página ya no bajaría) no se reduce: así no se abre y se cierra sola. */
+    var tvMain = document.getElementById('tvMain'), compact = false, noCompact = false, ticking = false;
+    function stickTop() {
+        // la carpeta queda fija justo debajo del reproductor y la guía (su alto cambia al reducirse)
+        if (window.innerWidth < 900) document.documentElement.style.setProperty('--tv-stick', Math.round(tvMain.getBoundingClientRect().bottom) + 'px');
+    }
+    function setCompact(on) {
+        if (compact === on) return;
+        compact = on;
+        tvMain.classList.toggle('compact', on);
+        stickTop();
+    }
+    function onScroll() {
+        ticking = false;
+        if (window.innerWidth >= 900) { setCompact(false); return; }
+        var y = window.scrollY || document.documentElement.scrollTop || 0;
+        if (!compact && !noCompact && y > 40) {
+            setCompact(true);
+            var root = document.scrollingElement || document.documentElement;
+            if (root.scrollHeight - window.innerHeight < 48) { setCompact(false); noCompact = true; }
+        } else if (compact && y < 8) {
+            setCompact(false);
+        }
+    }
+    window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+    window.addEventListener('resize', function () { stickTop(); onScroll(); });
+    if (window.ResizeObserver) new ResizeObserver(stickTop).observe(tvMain);
 
     function play(data) {
         state.ch = data.id;
@@ -306,12 +352,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.getElementById('catList').addEventListener('click', function (e) { var c = e.target.closest('.tv-cat'); if (c) loadChannels(c.getAttribute('data-id')); });
-    document.getElementById('catSel').addEventListener('change', function () { loadChannels(this.value); });
+    document.getElementById('catSel').addEventListener('change', function () {
+        loadChannels(this.value);
+        // teléfono con la guía reducida: la carpeta nueva empieza arriba de la lista (sin volver al principio de la página)
+        if (compact && window.innerWidth < 900) window.scrollTo({ top: 41 });
+    });
     list.addEventListener('click', function (e) { var c = e.target.closest('.tv-ch'); if (c) { openChannel(c.getAttribute('data-id'), true); if (window.innerWidth < 900) window.scrollTo({ top: 0, behavior: 'smooth' }); } });
     filter.addEventListener('input', renderChannels);
 
     loadChannels(state.cat || 'favorites');
     if (initial) play(initial);
+    stickTop();
 });
 </script>
 </main>
