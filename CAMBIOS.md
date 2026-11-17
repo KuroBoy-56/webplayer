@@ -4,9 +4,10 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
-## TV en vivo en el teléfono: más espacio para los canales (17 de noviembre)
-- Al bajar por la lista de canales, la guía de programas se oculta y bajo el nombre del canal queda, en una línea, lo que se transmite ahora (hora y título). La carpeta (selector) queda fija justo debajo del reproductor, así se cambia de carpeta sin volver arriba; al cambiarla, la lista nueva empieza arriba. Al volver al principio de la página, la guía completa aparece otra vez.
-- Con pocos canales (la página ya no bajaría al ocultar la guía) la guía no se oculta: así no se abre y se cierra sola. En la computadora (pantallas de 900 px o más) no cambia nada.
+## TV en vivo en el teléfono: más espacio para los canales, sin saltos (17 de noviembre)
+- Como una app: en el teléfono la pantalla no se desplaza; arriba quedan el reproductor y el canal, y abajo la lista de canales con su propio desplazamiento. La carpeta (selector) queda fija arriba de la lista.
+- Al bajar por la lista, la guía de programas se pliega con una animación suave y bajo el nombre del canal aparece, en una línea, lo que se transmite ahora (hora y título). Al volver al principio de la lista, la guía se despliega igual de suave. Como la página ya no cambia de alto mientras se desplaza, el reproductor no salta ni parpadea (la primera versión ocultaba la guía de golpe y en el iPhone el reproductor saltaba un instante).
+- Cambiar de carpeta con la guía plegada la deja plegada y la lista nueva empieza en su primer canal; si la carpeta es tan corta que no se puede desplazar, la guía se despliega. Elegir un canal ya no lleva la lista al principio. En horizontal el reproductor ocupa como mucho media pantalla. En la computadora (900 px o más) no cambia nada.
 - Archivo: `tvguide.php`.
 
 ## Deportes igual que Android TV, Roku, Vega OS, webOS y Tizen (17 de noviembre)

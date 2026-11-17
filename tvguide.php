@@ -172,23 +172,34 @@ include "header.php";
     @media (max-width: 1100px) { .tv-wrap { grid-template-columns: 190px 270px 1fr; } }
     @media (max-width: 899px) {
         .nf-live .nf-mobile-pills { display: none; }
-        .tv-wrap { display: flex; flex-direction: column; height: auto; margin-top: var(--nf-header); padding: 0; gap: 0; }
-        .tv-main { order: -1; position: sticky; top: var(--nf-header); z-index: 20; background: var(--nf-bg); gap: 0; }
-        .tv-player { border-radius: 0; max-height: none; }
+        /* Teléfono, como una app: la pantalla no se desplaza; arriba el reproductor y el canal, abajo la lista de canales
+           con su propio desplazamiento. Al bajar por los canales la guía se pliega (queda lo que se transmite ahora, en
+           una línea) y al volver al principio de la lista se despliega, las dos cosas con una animación suave. Así la
+           página nunca cambia de alto mientras se desplaza (antes el reproductor saltaba y parpadeaba en el iPhone). */
+        .tv-wrap { display: flex; flex-direction: column; margin-top: var(--nf-header); padding: 0; gap: 0; overflow: hidden;
+            height: calc(100vh - var(--nf-header) - var(--nf-tabbar) - env(safe-area-inset-bottom));
+            height: calc(100dvh - var(--nf-header) - var(--nf-tabbar) - env(safe-area-inset-bottom)); }
+        .tv-main { order: -1; flex: none; position: relative; z-index: 2; background: var(--nf-bg); gap: 0; }
+        /* en horizontal el reproductor no tapa la lista (como mucho media pantalla; en vertical no cambia nada) */
+        .tv-player { border-radius: 0; max-height: 50vh; max-height: 50dvh; }
         .tv-info { padding: 8px 12px; }
         .tv-info h2 { font-size: 16px; }
-        .tv-epg { display: none; }
-        .tv-main.has-epg .tv-epg { display: block; max-height: 30vh; border-radius: 0; }
+        .tv-epg { display: none; min-height: 0; flex: none; }
+        .tv-main.has-epg .tv-epg { display: block; max-height: 30vh; border-radius: 0; opacity: 1; transform: translateY(0);
+            transition: max-height .32s cubic-bezier(.2, .8, .2, 1), opacity .22s ease, transform .32s cubic-bezier(.2, .8, .2, 1); }
+        .tv-main.compact.has-epg .tv-epg { max-height: 0; opacity: 0; transform: translateY(-8px); }
+        .tv-main.has-now .tv-now { display: block; max-height: 0; opacity: 0; margin-top: 0;
+            transition: max-height .32s cubic-bezier(.2, .8, .2, 1), opacity .25s ease .06s, margin-top .32s ease; }
+        .tv-main.compact.has-now .tv-now { max-height: 20px; opacity: 1; margin-top: 2px; }
         .tv-cats { display: none; }
-        .tv-mcat { display: block; padding: 10px 12px 0; }
         .tv-col { border-radius: 0; background: transparent; }
         .tv-list { overflow: visible; }
-        /* al bajar por los canales la guía se oculta y queda el programa actual en una línea (más espacio para los canales
-           y la carpeta); al volver arriba, la guía completa. La carpeta queda fija debajo del reproductor */
-        .tv-chcol { overflow: visible; }
-        .tv-mcat { position: sticky; top: var(--tv-stick, 0px); z-index: 19; background: var(--nf-bg); padding-bottom: 8px; }
-        .tv-main.compact .tv-epg, .tv-main.compact.has-epg .tv-epg { display: none; }
-        .tv-main.compact.has-now .tv-now { display: block; }
+        .tv-chcol { display: block; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+        /* la carpeta queda fija arriba de la lista */
+        .tv-mcat { display: block; position: sticky; top: 0; z-index: 3; background: var(--nf-bg); padding: 10px 12px 8px; }
+    }
+    @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
+        .tv-main.has-epg .tv-epg, .tv-main.has-now .tv-now { transition: none; }
     }
 </style>
 
@@ -254,19 +265,30 @@ document.addEventListener('DOMContentLoaded', function () {
         list.innerHTML = items.map(function (c) {
             return '<div class="tv-ch' + (state.ch === c.id ? ' active' : '') + '" data-id="' + NF.esc(c.id) + '"><img src="' + NF.esc(c.i) + '" alt="" loading="lazy" onerror="this.onerror=null;this.src=\'assets/img/Logo.png\'"><span>' + NF.esc(c.n) + '</span></div>';
         }).join('');
-        // otra lista de canales: se vuelve a ver si la página baja lo suficiente para reducir la guía
-        noCompact = false;
     }
 
     function loadChannels(cat) {
         state.cat = cat;
         Array.prototype.forEach.call(document.querySelectorAll('.tv-cat'), function (x) { x.classList.toggle('active', x.getAttribute('data-id') === cat); });
         document.getElementById('catSel').value = cat;
+        // teléfono con la guía plegada: sigue plegada mientras carga la carpeta (la lista queda corta un momento)
+        hold = typeof phone === 'function' && phone() && compact;
         list.innerHTML = '<div class="tv-empty">' + <?php echo tj('Cargando canales...'); ?> + '</div>';
         fetch('tvguide.php?ajax=channels&category_id=' + encodeURIComponent(cat), { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
-            .then(function (d) { state.channels = d || []; renderChannels(); })
-            .catch(function () { list.innerHTML = '<div class="tv-empty">' + <?php echo tj('No se pudieron cargar los canales.'); ?> + '</div>'; });
+            .then(function (d) { state.channels = d || []; renderChannels(); afterLoad(); })
+            .catch(function () { list.innerHTML = '<div class="tv-empty">' + <?php echo tj('No se pudieron cargar los canales.'); ?> + '</div>'; afterLoad(); });
+    }
+
+    // la carpeta nueva empieza en su primer canal; si es tan corta que no baja, la guía se despliega (si no, no se
+    // podría volver a abrir deslizando)
+    function afterLoad() {
+        if (!hold) return;
+        requestAnimationFrame(function () {
+            if (chCol.scrollHeight - chCol.clientHeight > 24) chCol.scrollTop = 3;
+            else setCompact(false);
+            hold = false;
+        });
     }
 
     function renderEpg(epg) {
@@ -276,43 +298,38 @@ document.addEventListener('DOMContentLoaded', function () {
         main.classList.toggle('has-now', !!cur);
         // la guía reducida (teléfono, al bajar por los canales): solo lo que se transmite ahora, en una línea
         document.getElementById('tvNow').innerHTML = cur ? '<b>' + hm(cur.s) + ' - ' + hm(cur.e) + '</b>' + NF.esc(cur.t) : '';
-        if (!epg || !epg.length) { box.innerHTML = '<div class="tv-empty">' + <?php echo tj('No hay información de la guía de programas para este canal.'); ?> + '</div>'; stickTop(); return; }
+        if (!epg || !epg.length) { box.innerHTML = '<div class="tv-empty">' + <?php echo tj('No hay información de la guía de programas para este canal.'); ?> + '</div>'; return; }
         box.innerHTML = epg.map(function (p) {
             var on = p.s <= now && p.e > now, pct = on ? Math.round((now - p.s) / (p.e - p.s) * 100) : 0;
             return '<div class="tv-prog' + (on ? ' now' : '') + '"><div class="h">' + hm(p.s) + ' - ' + hm(p.e) + '</div><div style="flex:1"><div class="t">' + NF.esc(p.t) + '</div>' + (on ? '<div class="bar"><i style="width:' + pct + '%"></i></div>' : '') + '</div></div>';
         }).join('');
-        stickTop();
     }
 
-    /* Teléfono: al bajar por los canales la guía se oculta (queda el canal con lo que se transmite ahora, en una línea)
-       y al volver arriba se ve completa.
-       Con pocos canales (la página ya no bajaría) no se reduce: así no se abre y se cierra sola. */
-    var tvMain = document.getElementById('tvMain'), compact = false, noCompact = false, ticking = false;
-    function stickTop() {
-        // la carpeta queda fija justo debajo del reproductor y la guía (su alto cambia al reducirse)
-        if (window.innerWidth < 900) document.documentElement.style.setProperty('--tv-stick', Math.round(tvMain.getBoundingClientRect().bottom) + 'px');
-    }
+    /* Teléfono: al bajar por la lista de canales la guía se pliega (queda lo que se transmite ahora, en una línea) y al
+       volver al principio de la lista se despliega. Mira el desplazamiento de la lista, no el de la página: la página
+       no cambia de alto y nada salta. Con pocos canales (la lista no bajaría con la guía plegada) no se pliega. */
+    var tvMain = document.getElementById('tvMain'), chCol = document.querySelector('.tv-chcol'), compact = false, ticking = false, hold = false;
+    var phone = function () { return window.innerWidth < 900; };
     function setCompact(on) {
         if (compact === on) return;
         compact = on;
         tvMain.classList.toggle('compact', on);
-        stickTop();
     }
-    function onScroll() {
+    function onListScroll() {
         ticking = false;
-        if (window.innerWidth >= 900) { setCompact(false); return; }
-        var y = window.scrollY || document.documentElement.scrollTop || 0;
-        if (!compact && !noCompact && y > 40) {
-            setCompact(true);
-            var root = document.scrollingElement || document.documentElement;
-            if (root.scrollHeight - window.innerHeight < 48) { setCompact(false); noCompact = true; }
-        } else if (compact && y < 8) {
+        if (!phone()) { setCompact(false); return; }
+        var y = chCol.scrollTop;
+        if (!compact && y > 24) {
+            // lo que se gana al plegar la guía: si con eso la lista ya no bajaría, se queda como está
+            var epg = tvMain.querySelector('.tv-epg');
+            var gain = epg ? epg.offsetHeight : 0;
+            if (chCol.scrollHeight - chCol.clientHeight - gain > 24) setCompact(true);
+        } else if (compact && y <= 2 && !hold) {
             setCompact(false);
         }
     }
-    window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
-    window.addEventListener('resize', function () { stickTop(); onScroll(); });
-    if (window.ResizeObserver) new ResizeObserver(stickTop).observe(tvMain);
+    chCol.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onListScroll); } }, { passive: true });
+    window.addEventListener('resize', function () { if (!phone()) setCompact(false); });
 
     function play(data) {
         state.ch = data.id;
@@ -354,15 +371,15 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('catList').addEventListener('click', function (e) { var c = e.target.closest('.tv-cat'); if (c) loadChannels(c.getAttribute('data-id')); });
     document.getElementById('catSel').addEventListener('change', function () {
         loadChannels(this.value);
-        // teléfono con la guía reducida: la carpeta nueva empieza arriba de la lista (sin volver al principio de la página)
-        if (compact && window.innerWidth < 900) window.scrollTo({ top: 41 });
+        // teléfono: la carpeta nueva empieza en su primer canal (con la guía plegada, sigue plegada si la lista es larga)
+        if (phone() && !compact) chCol.scrollTop = 0;
     });
-    list.addEventListener('click', function (e) { var c = e.target.closest('.tv-ch'); if (c) { openChannel(c.getAttribute('data-id'), true); if (window.innerWidth < 900) window.scrollTo({ top: 0, behavior: 'smooth' }); } });
+    // el reproductor siempre está a la vista (también en el teléfono): la lista se queda donde estaba
+    list.addEventListener('click', function (e) { var c = e.target.closest('.tv-ch'); if (c) openChannel(c.getAttribute('data-id'), true); });
     filter.addEventListener('input', renderChannels);
 
     loadChannels(state.cat || 'favorites');
     if (initial) play(initial);
-    stickTop();
 });
 </script>
 </main>
