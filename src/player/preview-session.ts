@@ -112,9 +112,23 @@ export function stopLivePreview(): Promise<void> {
 // solo el último: al cambiar rápido con ▲▼, el canal de paso (que no llegó a iniciarse) se cerraba al instante y el
 // siguiente arrancaba mientras el anterior todavía se cerraba: pantalla negra y el canal se volvía a cargar
 let playerReleased: Promise<void> = Promise.resolve();
+// 2.6.11: los mismos cierres con un tope mucho mayor (15 s cada uno). Películas y series esperan aquí antes de iniciar
+// un reproductor nuevo (el lector después del reproductor de Amazon, reintentar, el episodio siguiente, volver del
+// segundo plano): con un servidor lento el de Amazon puede tardar más de 5 s en soltar el archivo y, si el nuevo se
+// iniciaba mientras tanto, había dos reproductores a la vez con un solo decodificador (la app se cerraba)
+let playerReleasedLong: Promise<void> = Promise.resolve();
+const LONG_CLOSE_MS = 15000;
 export function playerClosing(p: Promise<void>): void {
-  const capped = Promise.race([p.then(() => {}, () => {}), new Promise<void>(r => setTimeout(r, 5000))]);
+  const settled = p.then(() => {}, () => {});
+  const capped = Promise.race([settled, new Promise<void>(r => setTimeout(r, 5000))]);
   playerReleased = Promise.all([playerReleased, capped]).then(() => {});
+  const long = Promise.race([settled, new Promise<void>(r => setTimeout(r, LONG_CLOSE_MS))]);
+  playerReleasedLong = Promise.all([playerReleasedLong, long]).then(() => {});
+}
+
+// espera a que se cierren de verdad los reproductores anteriores (como mucho maxMs): true si se cerraron todos
+export function waitPlayersClosed(maxMs: number): Promise<boolean> {
+  return Promise.race([playerReleasedLong.then(() => true), new Promise<boolean>(r => setTimeout(() => r(false), maxMs))]);
 }
 
 export function waitForLivePreview(): Promise<void> {

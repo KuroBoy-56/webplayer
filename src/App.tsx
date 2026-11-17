@@ -30,7 +30,7 @@ import { setStreamFlip } from './api/xtream';
 import { bindReportContext, installCrashReporter, reportError, setRecover } from './api/report';
 import ScreenGuard from './components/ScreenGuard';
 import { bbClose, bbPending } from './lib/blackbox';
-import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppState } from './state';
+import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppSelector } from './state';
 import { deviceBlocked, deviceSync, onCacheClear, panelAnswered, panelCheckMac, panelLineGone, registerPending, sessionVerdict } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
@@ -67,7 +67,7 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
 
 // aviso corto encima de todas las pantallas (p. ej. "No disponible en la DEMO")
 function Notice() {
-  const { notice } = useAppState();
+  const notice = useAppSelector(x => x.notice);
   if (!notice) return null;
   return (
     <View style={s.notice} pointerEvents="none">

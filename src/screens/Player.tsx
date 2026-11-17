@@ -19,7 +19,7 @@ import { useListScroll } from '../lib/listscroll';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { Hooks, MenuItem, nativeLivePlanned, Playback, seedTitleLang, titlePlayHint } from '../player/playback';
-import { dropReturn, offerReturn, playerClosing, setLastLive, stopLivePreview, takeLiveOrigin, takePreview, waitForLivePreview } from '../player/preview-session';
+import { dropReturn, offerReturn, playerClosing, setLastLive, stopLivePreview, takeLiveOrigin, takePreview, waitForLivePreview, waitPlayersClosed } from '../player/preview-session';
 import { dropPrefetch, prefetchList, prefetchRange } from '../player/prefetch';
 import { hasHandoff } from '../player/livehls';
 import { vodKnown, warmStop } from '../player/warm';
@@ -861,10 +861,18 @@ export default function Player({ params }: { params: PlayParams }) {
     if (!inherited) dropReturn();
     // conexiones de la línea, antes del primer pedido por adelantado (en una línea de una conexión es uno solo)
     setLineMax(Number(getState().session?.max) || 0);
+    // 2.6.11: películas y series, un solo reproductor a la vez: el nuevo se inicia cuando el anterior terminó de cerrarse
+    // (hasta 15 s; antes como mucho 5 s). Los pasos van a la caja negra: si la app se cerrara al iniciar el nuevo, el
+    // panel lo sabría
+    const waitFrom = Date.now();
     const begin: Promise<void> = inherited
       ? Promise.resolve()
-      : stopLivePreview().then(waitForLivePreview).then(() => {
+      : stopLivePreview().then(waitForLivePreview).then(() => (live ? true : waitPlayersClosed(15000))).then(closed => {
         if (!alive) return;
+        if (!live && session > 0) {
+          const waited = (Date.now() - waitFrom) / 1000;
+          bbStep('reproductor nuevo' + (waited >= 1 ? ' (esperó ' + waited.toFixed(1) + 's al anterior)' : '') + (closed ? '' : ' (el anterior no terminó de cerrarse)'), true);
+        }
         // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
         const first = dnsUrl.current?.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
         warmStop(live ? undefined : first);
@@ -892,7 +900,10 @@ export default function Player({ params }: { params: PlayParams }) {
           preUrl = first;
           prefetchRange(first, 0, requestedResume.current <= 5 && singleFor(first) ? MP4_HEAD : 65536);
         }
-        initializing = v.initialize().then(() => { initialized = true; });
+        initializing = v.initialize().then(() => {
+          initialized = true;
+          if (!live && session > 0) bbStep('reproductor nuevo listo');
+        });
         return initializing;
       });
     begin

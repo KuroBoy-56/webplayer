@@ -1,6 +1,6 @@
 // Piezas de Deportes (igual que Roku): chips, fila de partido, menú «¿Dónde quieres verlo?» con los canales del
 // cliente en verde, teclado para buscar, ficha del equipo (Entendido / Más detalles) y lector del texto completo.
-import React, { memo, useRef, useState } from 'react';
+import React, { memo, useCallback, useRef, useState } from 'react';
 import { Image, Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { HWEvent, useTVEventHandler } from '@amazon-devices/react-native-kepler';
 import { t } from '../lib/i18n';
@@ -36,9 +36,11 @@ export type EvRow = {
 
 // preferred / onFocusKey: Deportes vuelve a poner el foco en el evento que se abrió (al volver del canal o al bajar
 // desde el menú de arriba)
-export const EventRow = memo(function EventRow({ r, onPress, preferred, onFocusKey }: { r: EvRow; onPress: () => void; preferred?: boolean; onFocusKey?: (k: string) => void }) {
+// onOpen recibe el evento y es la misma función en cada dibujo: la agenda no vuelve a dibujar todas sus filas por nada
+export const EventRow = memo(function EventRow({ r, onPress, onOpen, preferred, onFocusKey }: { r: EvRow; onPress?: () => void; onOpen?: (r: EvRow) => void; preferred?: boolean; onFocusKey?: (k: string) => void }) {
+  const press = useCallback(() => (onOpen ? onOpen(r) : onPress?.()), [onOpen, onPress, r]);
   return (
-    <Focusable onPress={onPress} preferred={preferred} onFocus={onFocusKey ? () => onFocusKey(r.key) : undefined} style={f => [s.ev, f && s.evF]}>
+    <Focusable onPress={press} preferred={preferred} onFocus={onFocusKey ? () => onFocusKey(r.key) : undefined} style={f => [s.ev, f && s.evF]}>
       {f => (
         <>
           <Text style={[s.time, r.live && s.timeLive, f && !r.live && { color: C.onFocus }]} numberOfLines={2}>

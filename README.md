@@ -207,6 +207,28 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.11) **Cierres que no eran cierres, un solo reproductor a la vez y navegación más fluida**:
+  - Caja negra (`lib/blackbox.ts`): desde la 2.6.5 la limpieza del reproductor al pasar a segundo plano (Inicio del
+    control, otra app, el televisor apagado) escribía otra vez la caja («se cierra el reproductor») y, si después el
+    Fire TV cerraba la app en segundo plano (normal), en la apertura siguiente llegaba al panel como «La app se cerró
+    sola durante la reproducción». Ahora en segundo plano no se guarda nada (los pasos quedan en memoria: «segundo
+    plano», «vuelve del segundo plano») y al volver se guarda otra vez: un cierre desde ahí sí es un error.
+  - Un solo reproductor a la vez en películas y series (`player/preview-session.ts`, `waitPlayersClosed`): el
+    reproductor nuevo (el lector después del de Amazon, reintentar, el episodio siguiente, volver del segundo plano)
+    se inicia cuando el anterior terminó de cerrarse de verdad, hasta 15 s (antes como mucho 5 s: con un servidor lento
+    el de Amazon tarda más en soltar el archivo y había dos reproductores con un solo decodificador). La caja negra
+    anota «reproductor nuevo (esperó …)» y «reproductor nuevo listo». Los canales en vivo siguen igual (5 s).
+  - Fluidez: Inicio, Series y Películas se arman una vez por catálogo y se reusan al volver a la sección
+    (`catalog.ts`, `memoRows`; se rehacen si cambian las listas, el control parental, la lista de la semana, el idioma
+    o el día); «los n primeros» sin ordenar toda la lista (mismo resultado, claves de orden leídas una vez). Con 40.000
+    películas y 15.000 series (en la computadora): Inicio 173 → 83 ms la primera vez y ~0 ms al volver; Películas 90 →
+    17 ms. Las tarjetas reciben siempre las mismas funciones (`Tiles.tsx`, `Grid.tsx`, agenda de Deportes): al mover el
+    foco solo se dibujan las dos que cambian; las filas de carátulas saben dónde va cada tarjeta sin medirlas
+    (`getItemLayout`). La portada cambia de fondo cuando el foco se detiene 220 ms (antes 120 ms) y se dibuja solo si
+    cambia lo que muestra; de lado en la misma fila no se vuelve a pedir el desplazamiento vertical. Las pantallas
+    escuchan solo lo que usan del estado (un aviso ya no vuelve a dibujar Inicio, Deportes, Buscar ni la ficha).
+  - Pruebas: `tools/test-blackbox.cjs`, `tools/test-interface.cjs` (espera del reproductor anterior),
+    `tools/test-catalog.cjs` (nueva).
 - (2.6.10) **Lector de MPEG-TS para películas y series** (`src/player/tsvod.ts`): hay capítulos «.mp4» que por dentro son
   MPEG-TS (los «DUAL», con dos audios); el lector de MP4 no los abría («no es MP4») y solo los abría el reproductor de
   Amazon (en el simulador: cierre, error 4 o audio cortado). El lector de MP4 los reconoce (sincronía 0x47 cada 188

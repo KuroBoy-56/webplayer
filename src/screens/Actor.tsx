@@ -5,7 +5,7 @@ import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { Person, personWithCatalog } from '../api/tmdb';
 import { Button, Message, Spinner } from '../components/ui';
 import { ymd } from '../lib/util';
-import { useAppState } from '../state';
+import { useAppSelector } from '../state';
 import { C, px, themed } from '../theme';
 import { t } from '../lib/i18n';
 import { ItemGrid } from './Grid';
@@ -43,7 +43,7 @@ function Chunk({ text }: { text: string }) {
 }
 
 export default function Actor({ personId, name, active }: { personId: number; name: string; active?: boolean }) {
-  const st = useAppState();
+  const catalogRev = useAppSelector(x => x.catalogRev);
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
   const [bioOpen, setBioOpen] = useState(false);
@@ -58,7 +58,7 @@ export default function Actor({ personId, name, active }: { personId: number; na
     return () => {
       alive = false;
     };
-  }, [personId, st.catalogRev]);
+  }, [personId, catalogRev]);
 
   if (loading && !person) return <Spinner label={t('Buscando la filmografía de {x}', { x: name })} />;
   if (!person) return <Message text={t('No se encontró información de {x}.', { x: name })} />;

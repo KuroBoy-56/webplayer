@@ -2,7 +2,7 @@
 // Con el foco en los botones de la portada (Reproducir / Más información / Mi lista) las filas asoman abajo; al bajar
 // a las filas, la portada muestra el título enfocado (fondo, nombre, año y sinopsis) y la fila enfocada queda
 // siempre en el mismo lugar, con las de abajo asomando. Arriba desde la primera fila vuelve a los botones.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem, openSpecial, playMovie } from '../actions';
 import { Button, Message, Spinner } from '../components/ui';
@@ -15,7 +15,7 @@ import { Art, heroArt, heroArtList, savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
 import { idleStep, onFocusWin, Win } from '../lib/rowwindow';
 import { useNav } from '../nav';
-import { progressEpisodeId, progressSeriesId, resumePosition, getState, isFav, toggleFav, useAppState } from '../state';
+import { progressEpisodeId, progressSeriesId, resumePosition, getState, isFav, toggleFav, useAppSelector } from '../state';
 import { episodeUrl, lineFree, movieUrl } from '../api/xtream';
 import { idxWarmList } from '../player/idxwarm';
 import { t } from '../lib/i18n';
@@ -41,7 +41,8 @@ const withArt = (x: Item, a: Art): Item => ({
   rating: x.rating || Number(a.rating) || 0,
 });
 
-function Billboard({ info, compact }: { info: Info; compact: boolean }) {
+// 2.6.11: solo se vuelve a dibujar cuando cambia lo que muestra (antes con cada cambio de la pantalla de Inicio)
+const Billboard = memo(function Billboard({ info, compact }: { info: Info; compact: boolean }) {
   const it = info.item;
   const art = it?.backdrop || '';
   const artSrc = useMemo(() => (art ? backdropSources(art) : []), [art]);
@@ -90,19 +91,25 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
       </View>
     </View>
   );
-}
+});
 
 export default function Browse({ section, active = true }: { section: 'home' | 'series' | 'movies'; active?: boolean }) {
   const nav = useNav();
-  const st = useAppState();
+  // solo lo que usa la pantalla (2.6.11: antes cualquier cambio del estado, como un aviso o la hora de la demo, volvía a
+  // dibujar Inicio entero)
+  const loadedKinds = useAppSelector(x => x.loaded);
+  const catalogRev = useAppSelector(x => x.catalogRev);
+  const loadError = useAppSelector(x => x.error);
+  const stProgress = useAppSelector(x => x.progress);
+  const stFavorites = useAppSelector(x => x.favorites);
   // el distribuidor puede no separar su contenido por plataformas
   const brandRev = useBrandRev();
   const platforms = features().platforms;
-  const ready = section === 'home' ? st.loaded.vod || st.loaded.series : section === 'series' ? st.loaded.series : st.loaded.vod;
+  const ready = section === 'home' ? loadedKinds.vod || loadedKinds.series : section === 'series' ? loadedKinds.series : loadedKinds.vod;
   // con otra pantalla encima (ficha, reproductor) Continuar viendo y Mi lista quedan como estaban: el reproductor guarda
   // el avance cada 30 s y cada guardado volvía a dibujar todas las filas de abajo; al volver se ponen al día
-  const kept = useRef({ progress: st.progress, favorites: st.favorites });
-  if (active) kept.current = { progress: st.progress, favorites: st.favorites };
+  const kept = useRef({ progress: stProgress, favorites: stFavorites });
+  if (active) kept.current = { progress: stProgress, favorites: stFavorites };
   const { progress, favorites } = kept.current;
 
   // las filas del catálogo solo se rehacen cuando llega una lista nueva
@@ -110,7 +117,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     if (!ready) return { rows: [] as Row[], hero: null as Item | null, heroes: [] as Item[] };
     return section === 'home' ? catalog.home(platforms) : catalog.browse(section === 'series' ? 'series' : 'vod');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, section, st.catalogRev, platforms, brandRev]);
+  }, [ready, section, catalogRev, platforms, brandRev]);
 
   // Continuar viendo y Mi lista (del panel) solo en Inicio, después de las plataformas, con «Ver todo» al final
   const rows = useMemo(() => {
@@ -202,6 +209,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     };
   }, [base.heroes, active]);
   const hero = heroes.length ? heroes[heroIdx % heroes.length] : firstHero;
+  const heroInfo = useMemo<Info>(() => ({ item: hero }), [hero]);
   const [inRows, setInRows] = useState(false);
   // cambia de destacado cada 8 s solo con la portada a la vista (no recorriendo las filas)
   useEffect(() => {
@@ -218,6 +226,8 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     if (!inRowsRef.current) setInfo({ item: hero });
   }, [hero]);
   const list = useRef<ScrollView>(null);
+  // fila a la que está llevada la lista: de lado dentro de la misma fila no se vuelve a pedir el desplazamiento (2.6.11)
+  const scrolledRow = useRef(-1);
   // filas montadas (src/lib/rowwindow.ts): las de junto al foco al momento, las demás de a una en los momentos quietos
   const [win, setWin] = useState<Win>({ lo: 0, hi: 3 });
   const lastFocusAt = useRef(0);
@@ -240,6 +250,10 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     }
     return out;
   }, [rows]);
+  // filas nuevas (p. ej. llega Continuar viendo): el foco siguiente vuelve a llevar la lista a su lugar
+  useEffect(() => {
+    scrolledRow.current = -1;
+  }, [offsets]);
 
   // Al volver de la ficha (o del reproductor) el foco vuelve a la tarjeta que se abrió, en su fila (2.0.15). Antes la
   // pantalla se mostraba otra vez sin nada enfocado y el foco caía en el menú de arriba. Como ItemGrid (Buscar, Ver todo):
@@ -256,6 +270,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     const lc = lastCard.current;
     if (lc && inRowsRef.current && lc.row < rows.length) {
       setWin(w => onFocusWin(w, lc.row, rows.length));
+      scrolledRow.current = lc.row;
       list.current?.scrollTo({ y: offsets[lc.row] || 0, animated: false });
       setBack(b => ({ row: lc.row, key: lc.key, n: (b?.n || 0) + 1 }));
     } else setHeroRev(r => r + 1);
@@ -276,7 +291,10 @@ export default function Browse({ section, active = true }: { section: 'home' | '
       // como el ejemplo de Amazon (vega-scrolling-sample): la lista no se desplaza sola (scrollEnabled false) y la app la
       // lleva a la fila enfocada con una animación nativa. Antes Vega desplazaba la lista por su cuenta al bajar y después
       // la app la movía otra vez (doble desplazamiento: el «jale» al bajar; al subir no pasaba)
-      list.current?.scrollTo({ y: offsets[i] || 0, animated: true });
+      if (scrolledRow.current !== i) {
+        scrolledRow.current = i;
+        list.current?.scrollTo({ y: offsets[i] || 0, animated: true });
+      }
       if (timer.current) clearTimeout(timer.current);
       if (artTimer.current) clearTimeout(artTimer.current);
       focused.current = isItem(x) ? x : null;
@@ -299,7 +317,9 @@ export default function Browse({ section, active = true }: { section: 'home' | '
         else if (x.kind === 'platform') setInfo({ item: null, title: x.label, plot: t('Todo el contenido de {x}: películas y series detectadas en tus categorías.', { x: x.label }) });
         else if (x.kind === 'genre') setInfo({ item: null, title: x.label, plot: t('Películas y series de {x}.', { x: x.label }) });
         else setInfo({ item: null, title: rows[i]?.title || x.label, plot: t('Ver todo el contenido de esta fila.') });
-      }, 120);
+        // 2.6.11: cuando el foco se detiene un momento (antes 120 ms): recorriendo las tarjetas la portada no cambia su
+        // fondo grande a cada paso, que era lo que más pesaba al navegar
+      }, 220);
     },
     [offsets, rows],
   );
@@ -312,6 +332,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     setRowIdx(0);
     setWin(w => onFocusWin(w, 0, rows.length));
     setInfo({ item: hero });
+    scrolledRow.current = -1;
     list.current?.scrollTo({ y: 0, animated: true });
   };
 
@@ -336,7 +357,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
   const selectItem = useCallback((it: Item) => openItem(nav, it), [nav]);
   const selectSpecial = useCallback((sp: Special) => openSpecial(nav, sp), [nav]);
 
-  if (!ready) return <Spinner label={st.error || t('Cargando el catálogo…')} />;
+  if (!ready) return <Spinner label={loadError || t('Cargando el catálogo…')} />;
   if (!rows.length) return <Message text={t('No hay contenido para mostrar.')} />;
 
   const fav = hero ? isFav(hero.kind, hero.id) : false;
@@ -345,7 +366,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
 
   return (
     <View style={s.root}>
-      <Billboard info={inRows ? info : { item: hero }} compact={inRows} />
+      <Billboard info={inRows ? info : heroInfo} compact={inRows} />
       {!inRows && heroes.length > 1 ? (
         <View style={s.dots} pointerEvents="none">
           {heroes.map((h, i) => (

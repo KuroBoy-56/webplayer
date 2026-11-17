@@ -1,6 +1,6 @@
 {
   "name": "latmpxvega",
-  "version": "2.6.10",
+  "version": "2.6.11",
   "private": true,
   "scripts": {
     "start": "react-native start",
@@ -13,6 +13,8 @@
     "test:vod": "node --test tools/test-vod.cjs",
     "test:idxwarm": "node --test tools/test-idxwarm.cjs",
     "test:deviceid": "node --test tools/test-deviceid.cjs",
+    "test:catalog": "node --test tools/test-catalog.cjs",
+    "test:blackbox": "node --test tools/test-blackbox.cjs",
     "bundle:check": "react-native bundle --entry-file index.js --platform kepler --dev false --bundle-output build/check/main.js --assets-dest build/check/assets",
     "build:release": "react-native build-vega --build-type Release",
     "build:debug": "react-native build-vega --build-type Debug",

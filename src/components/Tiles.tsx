@@ -1,5 +1,6 @@
 // Portadas, tarjetas de plataformas/géneros y filas horizontales estilo Netflix.
 import React, { memo, useCallback, useMemo } from 'react';
+import type { ListRenderItem } from 'react-native';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { isItem, Item, Row, Special } from '../data/catalog';
 import { t } from '../lib/i18n';
@@ -12,6 +13,8 @@ import { posterSources } from '../lib/images';
 export const posterW = () => px(210);
 export const posterH = () => px(315);
 
+// 2.6.11: onPress / onFocus reciben la tarjeta y son las mismas en cada dibujo de la fila: al mover el foco solo se
+// vuelven a dibujar las dos tarjetas que cambian (antes cada fila volvía a dibujar todas sus tarjetas)
 export const PosterTile = memo(function PosterTile({
   item,
   onPress,
@@ -22,8 +25,8 @@ export const PosterTile = memo(function PosterTile({
   preferred,
 }: {
   item: Item;
-  onPress: () => void;
-  onFocus?: () => void;
+  onPress: (it: Item) => void;
+  onFocus?: (it: Item) => void;
   progress?: number;
   rank?: number;
   wide?: boolean;
@@ -31,12 +34,14 @@ export const PosterTile = memo(function PosterTile({
 }) {
   const w = wide ? px(300) : posterW();
   const h = wide ? px(169) : posterH();
+  const press = useCallback(() => onPress(item), [onPress, item]);
+  const focus = useMemo(() => (onFocus ? () => onFocus(item) : undefined), [onFocus, item]);
   // carátula del panel (o la de TMDB por el título si el servidor no tiene) y, si no carga, la original
   const src = useMemo(() => posterSources(item.kind, item.poster, item.name, item.year, item.tm), [item.kind, item.poster, item.name, item.year, item.tm]);
   return (
     <View style={rank ? s.rankWrap : undefined}>
       {rank ? <Text style={s.rank}>{rank}</Text> : null}
-      <Focusable onPress={onPress} onFocus={onFocus} preferred={preferred} style={f => [s.tile, { width: w, height: h }, f && s.tileF]}>
+      <Focusable onPress={press} onFocus={focus} preferred={preferred} style={f => [s.tile, { width: w, height: h }, f && s.tileF]}>
         <View style={s.fill}>
           <Text style={s.fallback} numberOfLines={4}>
             {item.name}
@@ -53,7 +58,9 @@ export const PosterTile = memo(function PosterTile({
   );
 });
 
-export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus, preferred }: { sp: Special; onPress: () => void; onFocus?: () => void; preferred?: boolean }) {
+export const SpecialTile = memo(function SpecialTile({ sp, onPress: pressSp, onFocus: focusSp, preferred }: { sp: Special; onPress: (sp: Special) => void; onFocus?: (sp: Special) => void; preferred?: boolean }) {
+  const onPress = useCallback(() => pressSp(sp), [pressSp, sp]);
+  const onFocus = useMemo(() => (focusSp ? () => focusSp(sp) : undefined), [focusSp, sp]);
   if (sp.kind === 'platform') {
     return (
       // mosaico 16:9 como Roku: la imagen entera (las de plataformas son 16:9), fondo oscuro y borde fino. Con ancho y
@@ -126,6 +133,34 @@ export const RowView = memo(function RowView({
     onFocusAny?.(x);
     if (rowIndex !== undefined) onFocusRow?.(rowIndex, x);
   }, [onFocusItem, onFocusAny, rowIndex, onFocusRow]);
+  const hasFocus = !!(onFocusItem || onFocusAny || onFocusRow);
+  const focusTile = hasFocus ? focus : undefined;
+  const isTop10 = row.type === 'top10';
+  // la misma función de dibujo mientras no cambie lo que usa (FlatList no vuelve a dibujar las tarjetas por nada)
+  const renderTile = useCallback<ListRenderItem<Item | Special>>(
+    ({ item: x, index }) =>
+      isItem(x) ? (
+        <PosterTile
+          item={x}
+          rank={isTop10 ? index + 1 : undefined}
+          progress={progressOf?.(x)}
+          preferred={focusPref && x.kind + x.id === focusKey}
+          onPress={onItem}
+          onFocus={focusTile}
+        />
+      ) : (
+        <SpecialTile sp={x} preferred={focusPref && x.kind + x.key === focusKey} onPress={onSpecial} onFocus={focusTile} />
+      ),
+    [isTop10, progressOf, focusPref, focusKey, onItem, onSpecial, focusTile],
+  );
+  // filas de tarjetas del mismo ancho (carátulas y «Ver todo»): la lista sabe dónde va cada una sin medirlas
+  const uniform = useMemo(() => !isTop10 && row.type === 'poster' && row.items.every(x => isItem(x) || x.kind === 'more'), [row, isTop10]);
+  const itemLayout = useMemo(() => {
+    if (!uniform) return undefined;
+    const len = posterW() + px(16);
+    const lead = SIDE;
+    return (_: unknown, index: number) => ({ length: len, offset: lead + len * index, index });
+  }, [uniform]);
   return (
     <View style={[s.row, { height: rowHeight(row) - px(18) }]}>
       {row.title ? <Text style={s.rowTitle} numberOfLines={1}>{row.title}</Text> : <View style={{ height: px(4) }} />}
@@ -144,20 +179,10 @@ export const RowView = memo(function RowView({
         // una pantalla de tarjetas a cada lado de lo visible (antes dos): con muchas filas montadas eran cientos de
         // carátulas a la vez y el Fire TV se trababa al recorrerlas
         windowSize={3}
-        renderItem={({ item: x, index }) =>
-          isItem(x) ? (
-            <PosterTile
-              item={x}
-              rank={row.type === 'top10' ? index + 1 : undefined}
-              progress={progressOf?.(x)}
-              preferred={focusPref && x.kind + x.id === focusKey}
-              onPress={() => onItem(x)}
-              onFocus={onFocusItem || onFocusAny || onFocusRow ? () => focus(x) : undefined}
-            />
-          ) : (
-            <SpecialTile sp={x} preferred={focusPref && x.kind + x.key === focusKey} onPress={() => onSpecial(x)} onFocus={onFocusAny || onFocusRow ? () => focus(x) : undefined} />
-          )
-        }
+        // las tarjetas que faltan se agregan de a pocas (sin juntar trabajo con la tecla siguiente)
+        maxToRenderPerBatch={4}
+        getItemLayout={itemLayout}
+        renderItem={renderTile}
       /> : null}
     </View>
   );

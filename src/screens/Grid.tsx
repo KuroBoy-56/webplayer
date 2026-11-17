@@ -1,5 +1,5 @@
 // "Ver todo": cuadrícula de una plataforma, género, categoría o lo más reciente.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { openItem } from '../actions';
 import { Focusable, Message } from '../components/ui';
@@ -8,7 +8,7 @@ import { catalog, Item } from '../data/catalog';
 import { continueItems, favItems } from '../data/personal';
 import { fold } from '../lib/util';
 import { useNav } from '../nav';
-import { useAppState } from '../state';
+import { useAppSelector } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
@@ -54,6 +54,16 @@ export function ItemGrid({ items, header, channels, active, focusFirst }: { item
     return focusKey(k);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusFirst, items.length > 0]);
+  // 2.6.11: las mismas funciones en cada dibujo: al mover el foco o cambiar «preferred» solo se dibujan las fichas que
+  // cambian (antes toda la pantalla de fichas)
+  const markFocus = useCallback((it: Item) => {
+    last.current = it.kind + it.id;
+  }, []);
+  const open = useCallback((it: Item) => openItem(nav, it, channels ? items.filter(x => x.kind === 'live') : undefined), [nav, channels, items]);
+  const renderTile = useCallback(
+    ({ item }: { item: Item }) => <PosterTile item={item} preferred={item.kind + item.id === pref} onFocus={markFocus} onPress={open} />,
+    [pref, markFocus, open],
+  );
   return (
     <FlatList
       ref={list}
@@ -68,14 +78,8 @@ export function ItemGrid({ items, header, channels, active, focusFirst }: { item
       // una pantalla por encima y otra por debajo de lo visible (antes dos): menos carátulas montadas a la vez
       windowSize={3}
       getItemLayout={header ? undefined : (_, i) => ({ length: rowH, offset: rowH * i, index: i })}
-      renderItem={({ item }) => (
-        <PosterTile
-          item={item}
-          preferred={item.kind + item.id === pref}
-          onFocus={() => (last.current = item.kind + item.id)}
-          onPress={() => openItem(nav, item, channels ? items.filter(x => x.kind === 'live') : undefined)}
-        />
-      )}
+      maxToRenderPerBatch={COLS}
+      renderItem={renderTile}
     />
   );
 }
@@ -91,12 +95,14 @@ function MagnifierIcon({ color }: { color: string }) {
 }
 
 export default function Grid({ title, mode, keyName, kind, active }: { title: string; mode: 'cat' | 'platform' | 'genre' | 'recent' | 'continue' | 'mylist'; keyName: string; kind?: 'vod' | 'series'; active: boolean }) {
-  const st = useAppState();
+  const progress = useAppSelector(x => x.progress);
+  const favorites = useAppSelector(x => x.favorites);
+  const catalogRev = useAppSelector(x => x.catalogRev);
   // «Ver todo» de Continuar viendo y de Mi lista: lo guardado en el panel, del más reciente al más antiguo
   const items = useMemo(
-    () => (mode === 'continue' ? continueItems(st.progress, kind, 3000) : mode === 'mylist' ? favItems(st.favorites, 3000) : catalog.grid(mode, keyName, kind)),
+    () => (mode === 'continue' ? continueItems(progress, kind, 3000) : mode === 'mylist' ? favItems(favorites, 3000) : catalog.grid(mode, keyName, kind)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mode, keyName, kind, st.catalogRev, mode === 'continue' ? st.progress : mode === 'mylist' ? st.favorites : null],
+    [mode, keyName, kind, catalogRev, mode === 'continue' ? progress : mode === 'mylist' ? favorites : null],
   );
   const name = mode === 'cat' && kind ? catalog.k[kind]?.cats.find(c => c.id === keyName)?.name || title : title;
   const canSearch = mode === 'platform';

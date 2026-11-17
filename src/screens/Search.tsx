@@ -6,13 +6,14 @@ import { StyleSheet, Text, View } from 'react-native';
 import KeyboardModal from '../components/KeyboardModal';
 import { Focusable } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
-import { useAppState } from '../state';
+import { useAppSelector } from '../state';
 import { alpha, C, px, SIDE, themed } from '../theme';
 import { t } from '../lib/i18n';
 import { ItemGrid } from './Grid';
 
 export default function Search({ active }: { active: boolean }) {
-  const st = useAppState();
+  const catalogRev = useAppSelector(x => x.catalogRev);
+  const liveLoaded = useAppSelector(x => x.loaded.live);
   const [q, setQ] = useState('');
   const [typing, setTyping] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
@@ -24,7 +25,7 @@ export default function Search({ active }: { active: boolean }) {
   useEffect(() => {
     const id = setTimeout(() => setItems(q.trim().length >= 2 ? catalog.search(q) : []), typing ? 250 : 0);
     return () => clearTimeout(id);
-  }, [q, st.catalogRev, st.loaded.live, typing]);
+  }, [q, catalogRev, liveLoaded, typing]);
 
   const close = (v: string) => {
     setQ(v);

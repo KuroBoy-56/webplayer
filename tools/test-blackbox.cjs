@@ -89,6 +89,53 @@ test('salir del reproductor o pasar a segundo plano no cuenta como cierre', asyn
   assert.equal(disk.has('latmpx:bb_play'), true);
 });
 
+test('2.6.11: Inicio del control durante una película (el reproductor se cierra en segundo plano) y el sistema cierra la app: no llega como cierre', async () => {
+  disk = new Map();
+  let { bb } = await fresh();
+  bb.bbOpen('kind=movie titulo=Maléfica');
+  bb.bbStep('pos=80/5848s', true);
+  // Player.tsx: AppState «background» -> bbPause y, después, la limpieza del reproductor (foreground = false)
+  bb.bbPause();
+  bb.bbStep('se cierra el reproductor', true);
+  await tick();
+  assert.equal(disk.has('latmpx:bb_play'), false, 'nada guardado en segundo plano');
+  // el Fire TV cierra la app en segundo plano (normal): en la apertura siguiente no hay nada que mandar
+  ({ bb } = await fresh());
+  assert.equal(bb.bbPending(), '');
+});
+
+test('2.6.11: al volver del segundo plano se guarda otra vez, con los pasos de mientras tanto (un cierre ahí sí es un error)', async () => {
+  disk = new Map();
+  let { bb } = await fresh();
+  bb.bbOpen('kind=episode titulo=El Señor de los Cielos');
+  bb.bbStep('pos=2367/2582s', true);
+  bb.bbPause();
+  bb.bbStep('se cierra el reproductor', true);
+  bb.bbResume();
+  bb.bbOpen('kind=episode titulo=El Señor de los Cielos continuar=2367');
+  await tick();
+  ({ bb } = await fresh());
+  const got = bb.bbPending();
+  assert.match(got, /segundo plano/);
+  assert.match(got, /se cierra el reproductor/);
+  assert.match(got, /vuelve del segundo plano/);
+  assert.match(got, /abrir kind=episode/);
+  assert.ok(got.indexOf('segundo plano') < got.indexOf('se cierra el reproductor'), 'en el orden en que pasaron');
+});
+
+test('2.6.11: segundo plano y salir del reproductor: la caja queda lista para la próxima película', async () => {
+  disk = new Map();
+  let { bb } = await fresh();
+  bb.bbOpen('kind=movie titulo=A');
+  bb.bbPause();
+  bb.bbClose();
+  bb.bbOpen('kind=movie titulo=B');
+  bb.bbStep('reproduciendo', true);
+  await tick();
+  ({ bb } = await fresh());
+  assert.match(bb.bbPending(), /titulo=B/, 'después de cerrar, la caja guarda de nuevo');
+});
+
 test('error de JavaScript: va al panel y la app vuelve atrás en lugar de cerrarse; muchos seguidos, se cierra como antes', async () => {
   disk = new Map();
   sent.length = 0;

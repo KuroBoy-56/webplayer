@@ -3,7 +3,7 @@
 import { imgPath, Kind } from '../api/xtream';
 import { fold, float, isAdult, shuffle, str } from '../lib/util';
 import { pref, readJson } from '../lib/storage';
-import { Key, t } from '../lib/i18n';
+import { Key, lang, t } from '../lib/i18n';
 import { buildTitleIndex, lookupTitle, TitleIndex } from '../lib/titles';
 import { TopEntry, weekShuffle, weekTop } from './top10';
 
@@ -120,6 +120,43 @@ class Catalog {
     this.k = {};
     this.tIdx = {};
     this.folded = {};
+    this.rowsMemo.clear();
+  }
+
+  // ---------- filas ya armadas (2.6.11) ----------
+  // Inicio, Series y Películas se arman una vez por catálogo y se reusan al volver a la sección: antes cada cambio de
+  // sección en el menú rehacía todas las filas (con un catálogo grande, cerca de un segundo de la app trabada en el
+  // Fire TV). Se rehacen solas si cambia algo de lo que las arma: las listas del servidor, el control parental, la lista
+  // de la semana, el idioma o el día.
+  private rowsMemo = new Map<string, { sig: unknown[]; out: unknown }>();
+  private rowsSig(): unknown[] {
+    return [this.k.vod, this.k.series, this.unlocked, pref('hide_adult', '1'), (readJson<string[]>('blocked_cats') || []).join(','), weekTop(), lang(), Math.floor(Date.now() / 86400000)];
+  }
+  private memoRows<T>(key: string, make: () => T): T {
+    const sig = this.rowsSig();
+    const c = this.rowsMemo.get(key);
+    if (c && c.sig.length === sig.length && c.sig.every((x, i) => x === sig[i])) return c.out as T;
+    const out = make();
+    this.rowsMemo.set(key, { sig, out });
+    return out;
+  }
+
+  // claves de orden de cada título (fecha y calificación) leídas una sola vez por lista (antes en cada orden)
+  private sortKeys = new WeakMap<KindData, Partial<Record<'added' | 'rating', Float64Array>>>();
+  private keysOf(kind: Kind, by: 'added' | 'rating'): Float64Array {
+    const d = this.k[kind]!;
+    let c = this.sortKeys.get(d);
+    if (!c) {
+      c = {};
+      this.sortKeys.set(d, c);
+    }
+    let a = c[by];
+    if (!a) {
+      a = new Float64Array(d.items.length);
+      for (let i = 0; i < d.items.length; i++) a[i] = d.items[i] ? this.sortKey(kind, d.items[i], by) : 0;
+      c[by] = a;
+    }
+    return a;
   }
 
   // ---------- Top 10 de la semana ----------
@@ -233,14 +270,41 @@ class Catalog {
     return float(kind === 'series' ? it.last_modified : it.added);
   }
 
+  // los n primeros por fecha o calificación (de mayor a menor; con el mismo valor, en el orden de idx, igual que ordenar
+  // todo y cortar). 2.6.11: sin ordenar la lista entera cuando se piden pocos (30 de 40.000)
   top(kind: Kind, idx: number[], by: 'added' | 'rating', n: number): number[] {
     const d = this.k[kind];
-    if (!d) return [];
-    return idx
-      .map(i => ({ i, v: this.sortKey(kind, d.items[i], by) }))
-      .sort((a, b) => b.v - a.v)
-      .slice(0, n)
-      .map(p => p.i);
+    if (!d || n <= 0) return [];
+    const keys = this.keysOf(kind, by);
+    // muchos (las cuadrículas «Ver todo», hasta 3000): ordenar todo sigue siendo lo más rápido
+    if (n >= idx.length || n > 256) {
+      return idx
+        .map(i => ({ i, v: keys[i] }))
+        .sort((a, b) => b.v - a.v)
+        .slice(0, n)
+        .map(p => p.i);
+    }
+    const bi: number[] = [];
+    const bv: number[] = [];
+    for (const i of idx) {
+      const v = keys[i];
+      if (bi.length === n && !(v > bv[n - 1])) continue;
+      // después de todos los que valen lo mismo o más (los iguales quedan en su orden)
+      let lo = 0;
+      let hi = bi.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (bv[mid] >= v) lo = mid + 1;
+        else hi = mid;
+      }
+      bi.splice(lo, 0, i);
+      bv.splice(lo, 0, v);
+      if (bi.length > n) {
+        bi.pop();
+        bv.pop();
+      }
+    }
+    return bi;
   }
 
   items(kind: Kind, idx: number[], max = 100000): Item[] {
@@ -260,6 +324,10 @@ class Catalog {
   // «Lo mejor de…» de 5 plataformas, Series para ti, los géneros y Películas para ti; «Ver todo» al final de cada fila.
   // platforms: false = el distribuidor no separa su contenido por plataformas (sin fila ni filas por plataforma)
   home(platforms = true): { rows: Row[]; hero: Item | null; heroes: Item[] } {
+    return this.memoRows('home:' + platforms, () => this.buildHome(platforms));
+  }
+
+  private buildHome(platforms: boolean): { rows: Row[]; hero: Item | null; heroes: Item[] } {
     const rows: Row[] = [];
     let hero: Item | null = null;
     const vodIdx = this.allIdx('vod');
@@ -369,6 +437,10 @@ class Catalog {
 
   // ---------- películas / series ----------
   browse(kind: 'vod' | 'series'): { rows: Row[]; hero: Item | null; heroes: Item[] } {
+    return this.memoRows('browse:' + kind, () => this.buildBrowse(kind));
+  }
+
+  private buildBrowse(kind: 'vod' | 'series'): { rows: Row[]; hero: Item | null; heroes: Item[] } {
     const rows: Row[] = [];
     const d = this.k[kind];
     if (!d) return { rows, hero: null, heroes: [] };

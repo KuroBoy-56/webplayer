@@ -901,6 +901,41 @@ test('pantalla grande: cambiar rápido con ▲▼ espera todos los cierres pendi
   assert.equal(ready, true);
 });
 
+test('2.6.11: películas y series: el reproductor nuevo espera el cierre real del anterior (más de 5 s), hasta 15 s', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+  let slowDone;
+  // el reproductor de Amazon tarda 8 s en soltar el archivo (servidor lento)
+  previews.playerClosing(new Promise(resolve => { slowDone = resolve; }));
+  let capped = false;
+  let full = null;
+  previews.waitForLivePreview().then(() => { capped = true; });
+  previews.waitPlayersClosed(15000).then(ok => { full = ok; });
+  t.mock.timers.tick(5100);
+  await flush();
+  assert.equal(capped, true, 'los canales siguen esperando como mucho 5 s');
+  assert.equal(full, null, 'películas y series todavía esperan');
+  t.mock.timers.tick(2900);
+  slowDone();
+  await flush();
+  assert.equal(full, true, 'se inicia apenas se cerró el anterior');
+  // un cierre que nunca termina: se sigue a los 15 s (como mucho), avisando que no se cerró
+  previews.playerClosing(new Promise(() => {}));
+  let stuck = null;
+  previews.waitPlayersClosed(15000).then(ok => { stuck = ok; });
+  t.mock.timers.tick(14900);
+  await flush();
+  assert.equal(stuck, null);
+  t.mock.timers.tick(200);
+  await flush();
+  assert.equal(stuck, false);
+  // sin nada pendiente (el cierre trabado ya venció su tope): al instante
+  let now = null;
+  previews.waitPlayersClosed(15000).then(ok => { now = ok; });
+  await flush();
+  assert.equal(now, true);
+  t.mock.timers.reset();
+});
 test('canal: empieza en el primer IDR del segmento (no en un cuadro I cualquiera: imagen verde o quieta al abrir)', () => {
   const { startIndex } = require('../src/lib/tsmux.ts');
   const au = (type, key, pts = 100) => ({ pts, dts: pts, key, nals: [new Uint8Array([type, 0x88])] });

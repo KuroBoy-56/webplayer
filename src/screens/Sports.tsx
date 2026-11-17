@@ -13,7 +13,7 @@ import { matchSports, panelToday, SportMatch, SportsData } from '../data/sports'
 import { Ev, fetchSports, fetchTables, Fixtures, League, liveById, loadFixtures, localSports, localTables, searchChannels, sportsEpg } from '../data/sportsPanel';
 import { int, nowSec, str } from '../lib/util';
 import { useNav } from '../nav';
-import { useAppState } from '../state';
+import { useAppSelector } from '../state';
 import { t } from '../lib/i18n';
 import { px, SIDE, themed } from '../theme';
 import SportsTables from './SportsTables';
@@ -69,7 +69,9 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
       refocus();
     }
   };
-  const st = useAppState();
+  // solo lo que usa (antes cualquier cambio del estado, p. ej. un aviso, volvía a dibujar toda la agenda)
+  const liveLoaded = useAppSelector(x => x.loaded.live);
+  const catalogRev = useAppSelector(x => x.catalogRev);
   const [data, setData] = useState<SportsData | null>(cache?.data || null);
   const [err, setErr] = useState('');
   const [tab, setTab] = useState<Tab>(0);
@@ -170,7 +172,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
 
   // canal de cada partido (agenda de hoy y mañana y en vivo)
   const found = useMemo(() => {
-    if (!data || !st.loaded.live) return null;
+    if (!data || !liveLoaded) return null;
     const now = nowSec();
     const today = panelToday(data, now);
     const events = (data.events as Ev[]).filter(e => {
@@ -179,7 +181,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
     });
     return matchSports({ ...data, events });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, st.loaded.live, st.catalogRev]);
+  }, [data, liveLoaded, catalogRev]);
 
   // además, la guía del panel: el canal que tiene el partido en su programación a esa hora
   useEffect(() => {
@@ -204,14 +206,14 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
   // los partidos de Equipos / Selecciones también buscan su canal (mismas reglas)
   const matchMore = useCallback(
     (events: Ev[]) => {
-      if (!data || !st.loaded.live) return;
+      if (!data || !liveLoaded) return;
       const want = events.filter(e => !found?.map[str(e.id)] && !extra[str(e.id)]);
       if (!want.length) return;
       const r = matchSports({ ...data, events: want });
       setExtra(x => ({ ...x, ...r.map }));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, st.loaded.live, found, extra],
+    [data, liveLoaded, found, extra],
   );
 
   const sayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -262,7 +264,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
       const lgInfo = fx?.leagues?.[str(e.l)];
       const ch = m?.best || null;
       let chan = t('Sin canal');
-      if (!st.loaded.live || !found) chan = t('Buscando…');
+      if (!liveLoaded || !found) chan = t('Buscando…');
       else if (ch) chan = ch.name;
       else if (withDate) chan = t('Por confirmar');
       return {
@@ -283,7 +285,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, resolve, fx, iptv, st.loaded.live, found],
+    [data, resolve, fx, iptv, liveLoaded, found],
   );
 
   const folder = (prefix: string) => {
@@ -350,6 +352,14 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
     opts.push({ title: t('Buscar canal, equipo o evento…'), onPress: () => (setMenu(null), setTyping(names[0] || '')) });
     setMenu({ title: str(e.h) && str(e.a) ? (str(e.hn) || str(e.h)) + ' vs ' + (str(e.an) || str(e.a)) : str(e.ev), sub: t('¿Dónde quieres verlo?'), opts });
   };
+  // la misma función para todas las filas (lee la versión actual de open): la agenda no vuelve a dibujar sus filas por nada
+  const openRef = useRef(open);
+  openRef.current = open;
+  const openRow = useCallback((r: EvRow) => openRef.current(r.e), []);
+  const renderEvent = useCallback(
+    ({ item: r }: { item: EvRow }) => <EventRow r={r} preferred={r.key === target.key} onFocusKey={focusKey} onOpen={openRow} />,
+    [target, focusKey, openRow],
+  );
 
   const sportKeys = useMemo(() => {
     const keys: string[] = [];
@@ -434,7 +444,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
               windowSize={7}
               contentContainerStyle={{ paddingHorizontal: SIDE, paddingBottom: px(100) }}
               extraData={target}
-              renderItem={({ item: r }) => <EventRow r={r} preferred={r.key === target.key} onFocusKey={focusKey} onPress={() => open(r.e)} />}
+              renderItem={renderEvent}
             />
           ) : (
             <Message text={t('No hay partidos para mostrar.')} />

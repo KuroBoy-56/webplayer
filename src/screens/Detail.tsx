@@ -15,13 +15,15 @@ import { backdropSources, posterSources } from '../lib/images';
 import { catalog, Item } from '../data/catalog';
 import { savedArt } from '../data/heroart';
 import { useNav } from '../nav';
-import { getState, isFav, playHintFor, progressEpisodeId, progressMovie, progressSeries, resumePosition, toggleFav, useAppState } from '../state';
+import { getState, isFav, playHintFor, progressEpisodeId, progressMovie, progressSeries, resumePosition, toggleFav, useAppSelector } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
 export default function Detail({ item, active }: { item: Item; active: boolean }) {
   const nav = useNav();
-  const st = useAppState();
+  // el avance y Mi lista (botones Continuar / Mi lista y la barra de cada episodio); antes cualquier cambio del estado
+  const progress = useAppSelector(x => x.progress);
+  useAppSelector(x => x.favorites);
   const [vod, setVod] = useState<VodInfo | null>(null);
   const [ser, setSer] = useState<SeriesInfo | null>(null);
   const [season, setSeason] = useState(0);
@@ -145,7 +147,6 @@ export default function Detail({ item, active }: { item: Item; active: boolean }
     [info, item, wide],
   );
   const fav = isFav(item.kind, item.id);
-  void st.rev;
 
   const similar = useMemo(() => {
     // solo los primeros de la categoría (antes se armaba la categoría entera, miles de fichas)
@@ -234,7 +235,7 @@ export default function Detail({ item, active }: { item: Item; active: boolean }
               contentContainerStyle={{ paddingHorizontal: SIDE, paddingRight: px(200) }}
               style={{ marginTop: px(16) }}
               renderItem={({ item: e, index }) => {
-                const p = st.progress.find(x => progressEpisodeId(x) === e.id);
+                const p = progress.find(x => progressEpisodeId(x) === e.id);
                 return (
                   <Focusable onFocus={() => warmEp(e.id, e.ext)} onPress={() => playEpisodes(nav, item, eps, index, resumePosition(p))} style={f => [s.ep, f && s.epF]}>
                     <View style={s.epImgBox}>
