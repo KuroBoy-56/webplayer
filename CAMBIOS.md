@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Distribuidor aislado: su video nunca pasa por este hosting (17 de noviembre)
+- En el panel, Distribuidores › Editar › **«Solo sus recursos»**. El panel lo manda en `tenant_config` (`features.hosting_video = false`) y la web deja de entregar el video de ese distribuidor por este hosting: ni la fuente de respaldo de `proxy.php` (varios audios en http) ni el último recurso con la web en https. `proxy.php` además le responde 403 (enlaces viejos guardados incluidos).
+- Su video va directo del servidor IPTV, o por su VDS propia si la tiene (el panel ya no le da el puente por la VPS del dueño). Con la web en https y un servidor IPTV solo http, sin VDS propia, se abre `play.php` por http; con «Forzar HTTPS», el reproductor muestra el error con «Abrir en VLC».
+- El dueño (Omitir), los demás distribuidores y una copia de la configuración guardada antes de esta versión siguen exactamente igual.
+- Archivos: `includes/core.php` (`wp_play_sources`), `includes/tenant.php` (`wp_hosting_video_ok`), `proxy.php`. **Panel:** `panel_usuarios.php`, `includes/tenant_schema.php`, `includes/tenant_admin.php`, `includes/media_remote.php`, `includes/tenant_api.php`, `api/vidx.php` (subir el panel primero).
+
 ## Cada navegador queda en el panel con su IP y se puede bloquear (13 de noviembre, noche)
 - **Registro:** un navegador no deja leer la MAC del equipo, así que la web le da a cada navegador su propio identificador (`WEB-` + 16 caracteres, cookie `wp_dev` de 5 años) y manda también su IP real. Lo manda cifrado al panel (acción `web_device` de `login.php`) al iniciar sesión y, mientras se usa la web, como mucho cada 10 minutos (`includes/web_device.php`, desde `session.php`). Con Cloudflare (o el Worker) delante la IP es la del visitante; además va la IP de la conexión, para que una cabecera inventada no esquive un bloqueo.
 - **En el panel:** Clientes › «Web player: navegadores registrados» (navegador, IP, usuario, último acceso). El dueño ve todos; un distribuidor los suyos si tiene la web player; sus revendedores, los de sus clientes. **Bloquear navegador** o **Bloquear IP** los pasa a la lista negra de ese ID.

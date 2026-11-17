@@ -25,6 +25,11 @@ if (!wp_verify_signed($url) || !isset($_GET['e'])) {
         exit;
     }
 }
+// distribuidor con «Solo sus recursos» (panel): este hosting no le entrega video (enlaces viejos guardados incluidos)
+if (!wp_hosting_video_ok()) {
+    http_response_code(403);
+    exit;
+}
 if ($url === null) {
     // compatibilidad con enlaces antiguos ?url=base64, sólo hacia las DNS configuradas
     $legacy = isset($_GET['url']) ? base64_decode((string)$_GET['url'], true) : false;

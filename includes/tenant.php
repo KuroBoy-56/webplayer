@@ -198,6 +198,8 @@ function wp_tenant_normalize(array $j)
             // motor de audio y subtítulos (ffmpeg del hosting): el dueño se lo quita al distribuidor en el panel
             'ffmpeg' => !array_key_exists('ffmpeg', $f) || !empty($f['ffmpeg']),
             'platforms' => !array_key_exists('platforms', $f) || !empty($f['platforms']),
+            // «Solo sus recursos» del panel (Distribuidores): false = el video nunca pasa por este hosting (proxy.php)
+            'hosting_video' => !array_key_exists('hosting_video', $f) || !empty($f['hosting_video']),
         ],
         'recheck_after' => max(600, (int)($j['recheck_after'] ?? 21600)),
     ];
@@ -300,6 +302,18 @@ function wp_tenant_feature($name)
 {
     $cfg = wp_tenant_cfg();
     return $cfg === null || !empty($cfg['features'][$name]);
+}
+
+/**
+ * ¿Este hosting puede entregar el video (proxy.php)? No para un distribuidor con «Solo sus recursos» en el panel: su
+ * web nunca usa los recursos del dueño (ni su VPS, que ya niega el panel, ni este hosting); el video va directo del
+ * servidor IPTV o por su VDS propia. Con Omitir, o una copia guardada antes de esta versión (sin el campo): sí.
+ */
+function wp_hosting_video_ok()
+{
+    $cfg = wp_tenant_cfg();
+    $f = is_array($cfg['features'] ?? null) ? $cfg['features'] : [];
+    return $cfg === null || !array_key_exists('hosting_video', $f) || !empty($f['hosting_video']);
 }
 
 /** Cierra la sesión de PHP (al cambiar de distribuidor o cuando el panel lo corta). */

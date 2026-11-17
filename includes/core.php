@@ -503,6 +503,9 @@ function wp_play_sources($kind, $id, array $exts, $allowProxy = true)
     $out = [];
     $extra = [];
     $https = wp_is_https();
+    // distribuidor con «Solo sus recursos» (panel): el video nunca pasa por este hosting (ni como último recurso)
+    $hostOk = wp_hosting_video_ok();
+    if (!$hostOk) $allowProxy = false;
     $multi = null;
     foreach ($exts as $x) {
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
@@ -530,7 +533,7 @@ function wp_play_sources($kind, $id, array $exts, $allowProxy = true)
             continue;
         }
         $out[] = ['url' => $u, 'engine' => $engine, 'ext' => $x];
-        if ($vod) {
+        if ($vod && $hostOk) {
             // fuente de respaldo por el hosting. Si ya se sabe que trae varios audios, el motor MP4 arranca con ella.
             // Si no (alt), solo se usa cuando el navegador descubre varios audios (iPhone) o si lo directo falla.
             $p = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
