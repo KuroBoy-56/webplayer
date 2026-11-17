@@ -1,4 +1,5 @@
-/* Deportes › Tablas, Selecciones y Equipos (igual que Roku, Vega, Android, Windows e iPhone).
+/* Deportes › pestañas Hoy / Mañana (la agenda, sportsschedule.php) y Tablas, Selecciones y Equipos (igual que Android TV,
+ * Roku, Vega OS, webOS, Tizen, Android e iPhone).
  * Tablas: región, división y liga de las tablas del panel; al tocar un equipo se abre su ficha («Entendido» /
  * «Más detalles»). Equipos: los partidos de los próximos 21 días de un equipo (también en español, con los alias del
  * panel) o de un país, y los últimos 5 buscados. Selecciones: todas, cada competición y «Selección femenina».
@@ -35,13 +36,12 @@
 
     window.NFSports = function (ctx) {
         var tabsBox = $('#spTabs');
-        if (!tabsBox) return;
+        if (!tabsBox) return null;
         var x = ctx.extra || {};
-        var tabs = [['agenda', tr('Agenda')]];
+        var tabs = [['today', tr('Hoy')], ['tomorrow', tr('Mañana')]];
         if (x.tables) tabs.push(['tables', tr('Tablas')]);
         if (x.nat) tabs.push(['nations', tr('Selecciones')]);
         if (x.fixtures) tabs.push(['teams', tr('Equipos')]);
-        if (tabs.length < 2) return;
         var minutes = function (sp) { return ((ctx.meta || {})[sp] || {}).d || 120; };
         var alias = ctx.alias || {};
         var panes = { agenda: $('#spAgenda'), tables: $('#spTables'), fx: $('#spFx') };
@@ -52,13 +52,15 @@
         tabsBox.addEventListener('click', function (ev) { var b = ev.target.closest('[data-tab]'); if (b) show(b.getAttribute('data-tab'), true); });
 
         function show(t, push) {
-            if (!tabs.some(function (x) { return x[0] === t; })) t = 'agenda';
+            if (!tabs.some(function (x) { return x[0] === t; })) t = 'today';
             cur = t;
             [].forEach.call(tabsBox.querySelectorAll('[data-tab]'), function (b) { var on = b.getAttribute('data-tab') === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-            panes.agenda.hidden = t !== 'agenda';
+            var agenda = t === 'today' || t === 'tomorrow';
+            panes.agenda.hidden = !agenda;
             panes.tables.hidden = t !== 'tables';
             panes.fx.hidden = t !== 'teams' && t !== 'nations';
-            if (push) try { history.replaceState(null, '', t === 'agenda' ? location.pathname + location.search : '#' + t); } catch (e) {}
+            if (agenda && ctx.day) ctx.day(t === 'tomorrow' ? 1 : 0);
+            if (push) try { history.replaceState(null, '', t === 'today' ? location.pathname + location.search : '#' + t); } catch (e) {}
             if (t === 'tables') tables.load();
             if (t === 'teams' || t === 'nations') fx.load();
         }
@@ -331,5 +333,7 @@
 
         var start = (location.hash || '').replace('#', '');
         show(start, false);
+        // los canales de los partidos de Equipos / Selecciones llegaron: se vuelve a dibujar solo la lista
+        return { refresh: function () { if (cur === 'teams' || cur === 'nations') fx.list(); } };
     };
 })();
