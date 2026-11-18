@@ -49,7 +49,18 @@ function wp_line_guard(array $sess)
     // la clave de la caché es una huella (nunca el usuario ni la contraseña en el nombre del archivo)
     $ck = 'line|' . hash('sha256', $server . "\n" . $user . "\n" . $pass);
     if (wp_cache_get($ck, WP_LINE_CHECK_TTL) === 'ok') return;
-    $body = wp_http_get($server . '/player_api.php?username=' . urlencode($user) . '&password=' . urlencode($pass), 8);
+    if (!empty($sess['xt_client'])) {
+        // modo navegador (includes/xt_client.php): los datos de la cuenta los trae el navegador del usuario, nunca el
+        // hosting; mientras no llegan se usa la copia anterior
+        $acc = wp_cache_get(xt_cache_key('', []), WP_LINE_CHECK_TTL, $old);
+        if ($acc === null) {
+            wp_xt_need('', [], false);
+            $acc = $old;
+        }
+        $body = is_array($acc) ? json_encode($acc) : null;
+    } else {
+        $body = wp_http_get($server . '/player_api.php?username=' . urlencode($user) . '&password=' . urlencode($pass), 8);
+    }
     $state = wp_line_state($body);
     if ($state === null) return;
     if ($state === '') {

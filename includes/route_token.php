@@ -105,6 +105,18 @@ function wp_route_begin()
     }
     if (function_exists('header_register_callback')) {
         header_register_callback(function () {
+            // modo navegador: si la página espera datos del navegador, no se redirige (sale «Cargando…» y después
+            // la misma página se vuelve a pedir, ya con los datos)
+            if (function_exists('wp_xt_blocking') && wp_xt_client() && wp_xt_blocking()) {
+                foreach (headers_list() as $h) {
+                    if (stripos($h, 'Location:') === 0) {
+                        header_remove('Location');
+                        http_response_code(200);
+                        header('Cache-Control: no-store');
+                    }
+                }
+                return;
+            }
             foreach (headers_list() as $h) {
                 if (stripos($h, 'Location:') === 0) {
                     $to = trim(substr($h, 9));
@@ -120,6 +132,8 @@ function wp_route_begin()
 /** Reescribe los enlaces de una página HTML (las respuestas JSON y los archivos no se tocan). */
 function wp_route_rewrite($html)
 {
+    // modo navegador (includes/xt_client.php): «Cargando…» si la página espera datos del navegador, o su script
+    if (function_exists('wp_xt_output')) $html = wp_xt_output($html);
     foreach (headers_list() as $h) {
         if (stripos($h, 'Content-Type:') === 0 && stripos($h, 'text/html') === false) return $html;
     }

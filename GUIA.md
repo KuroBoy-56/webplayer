@@ -25,6 +25,28 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 
 **Dominio propio con un Worker (opcional):** el cliente entra por un dominio nuevo (el tuyo o el de cada distribuidor, sin límite) y el dominio original de la web responde **403 Forbidden**. El Worker (`cloudflare/edge-worker.js`) abre la web por dentro con un secreto; la web (`includes/edge.php`) solo atiende con ese secreto y toma el dominio y la IP real del cliente. Cada secreto puede llevar el número de un distribuidor: en su dominio la web queda fija en él. Se configura con `'edge_keys'` (y `'edge_block'` para probar) en `includes/panel_secret.php`; sin eso la web funciona exactamente igual. Paso a paso con dibujos: **`docs/GUIA-WORKER.html`** (ábrelo en tu PC; en el hosting `docs/` y `cloudflare/` están bloqueados).
 
+## Modo navegador (el navegador le pide al servidor IPTV, nunca el hosting)
+
+`includes/xt_client.php`, `xtfill.php` y `assets/nf/xtfill.js`. Se elige al iniciar sesión:
+
+- `login.php` (`step=servers`) le da al navegador las direcciones en orden. Con la web en https, solo las https.
+- El navegador hace `fetch` directo a `player_api.php` (CORS) y manda lo que contestó (`step=client`). La sesión queda con `xt_client = 1`.
+- Si no pudo leer ninguno, el formulario sigue como siempre: lo prueba el hosting. `xt_skip` le dice qué servidores ya dijeron que no y `xt_why` va en el reporte.
+- `xtcors|<servidor>`: el hosting lo comprueba una sola vez con un pedido válido. Con ese dato, una respuesta que el navegador no puede leer es «usuario o contraseña incorrectos» y no se prueba por el hosting.
+
+Con `xt_client`:
+
+- `xt_get_raw()` / `xt_multi()` nunca le piden al servidor IPTV. Usan lo guardado; si está vencido, lo usan igual y anotan una renovación en segundo plano (`wp_xt_need(…, false)`); si falta, lo piden al navegador (`wp_xt_need(…, true)`).
+- `wp_route_rewrite()` llama a `wp_xt_output()`. Si falta algo, la página sale como «Cargando…» (`wp_xt_loader()`); el navegador lo trae, lo sube a `xtfill.php?id=` y vuelve a cargar. En JSON sale `{"xtneed": […]}`: `xtfill.js` envuelve `fetch`, lo trae y repite el pedido.
+- Mientras una página espera, `wp_cache_set()` no guarda nada de lo que calcula (solo `xtneed|` / `xtbg|`).
+- `xtfill.php` solo acepta lo que pidió esa misma sesión y lo guarda con `xt_cache_key()`, que lleva una huella de la contraseña.
+- `wp_line_guard()` usa los datos de la cuenta que trajo el navegador, y `wp_file_tracks()` no lee archivos del servidor IPTV.
+- Si el navegador no puede, `xtfill.php?fail=1` pasa la sesión al hosting (`wp_xt_disable()`, con aviso al panel una vez al día por servidor).
+
+Regla para el código nuevo: todo pedido al servidor IPTV va por `xt_get()` / `xt_multi()`, nunca con `wp_http_get()`
+directo, para que funcione el modo navegador. Prueba: sección «Modo navegador» de `tools/profiles_web_test.php` del
+panel. Ahí el servidor IPTV de prueba anota quién le pide cada cosa.
+
 ## Inicio de sesión: en qué orden se prueban las DNS
 
 `login.php` + `includes/login_probe.php`. Todos los usuarios de la web salen con la IP del hosting y cada DNS donde el

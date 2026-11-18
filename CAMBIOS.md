@@ -4,6 +4,18 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Modo navegador: cada usuario le pide al servidor IPTV con su propia IP — versión 2.7.0 (18 de noviembre, séptima parte)
+- **Antes:** el hosting le pedía al servidor IPTV el inicio de sesión, el catálogo, las fichas, los canales y la cuenta de **todos** los usuarios, siempre con la misma IP. XUI la bloqueaba por exceso de pedidos o por intentos fallidos (protección contra flood), y nadie podía entrar por la web.
+- **Ahora:**
+  - **Inicio de sesión:** el navegador prueba el usuario directo en el servidor IPTV con la IP del cliente, de a una DNS (la última primero).
+  - **Catálogo, fichas, canales y cuenta:** si la web necesita algo del servidor IPTV, el navegador lo trae y se lo pasa a la web, que lo guarda como siempre. Lo que falta sale con un «Cargando…» corto; lo vencido se muestra y el navegador lo renueva por detrás. El hosting no le pide nada al servidor IPTV.
+- **Necesita** que el servidor IPTV dé permiso al navegador (CORS; XUI lo da con un usuario válido) y, con la web en https, que el servidor tenga https válido.
+- **Si no se puede**, la web sigue por el hosting como antes y avisa al panel (Errores de las apps): «el navegador no pudo…».
+- **Contraseña equivocada:** en un servidor que ya dio permiso, el navegador se da cuenta solo y el hosting no hace ningún intento fallido.
+- Seguridad: la caché de cada línea va separada por una huella de la contraseña, así nadie puede dejar datos falsos en la de otro. La primera vez que un navegador entra por un servidor, el hosting comprueba el permiso con un solo pedido válido.
+- Sin cambios en el video, que ya iba directo del servidor IPTV al navegador: el hosting sigue solo como último recurso. El modo navegador tampoco deja al hosting leer el comienzo de los videos para buscar idiomas.
+- Archivos: `includes/xt_client.php`, `xtfill.php`, `assets/nf/xtfill.js` (nuevos), `login.php`, `includes/core.php`, `includes/route_token.php`, `includes/line_guard.php`, `includes/file_tracks.php`. El panel no cambia.
+
 ## Inicio de sesión con número de distribuidor: sin bloqueos de XUI — versión 2.6.3 (18 de noviembre, sexta parte)
 - **Caso:** con el distribuidor 228729 (LATAM +) salía «El servidor de video no está dejando entrar a la web…». Eso pasa cuando todas las DNS rechazan la conexión del hosting. La causa más común es que XUI bloqueó la IP del hosting por intentos fallidos: con número de distribuidor la web probaba a la vez todas sus DNS (y las del dueño si no está aislado), y cada una donde el usuario no existe le contaba un intento fallido a la IP del hosting, la misma para todos.
 - **Ahora:** primero la DNS con la que ese usuario entró la última vez (sola). Si no, las demás **de a una**, empezando por el servidor donde más usuarios de ese distribuidor entraron, hasta la primera que acepta. Un servidor que no contesta no cuenta; pasados 20 s, el resto va a la vez.

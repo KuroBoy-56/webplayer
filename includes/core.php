@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.6.3');
+define('WP_VERSION', '2.7.0');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -195,6 +195,9 @@ function wp_cache_get($key, $ttl, &$stale = null)
 
 function wp_cache_set($key, $data)
 {
+    // modo navegador: esta página espera datos del navegador y no se va a mostrar (sale «Cargando…»): lo que calculó
+    // con datos vacíos no se guarda (si no, quedaría vacío hasta que venza)
+    if (function_exists('wp_xt_blocking') && wp_xt_blocking() && strpos($key, 'xtneed|') !== 0 && strpos($key, 'xtbg|') !== 0) return;
     $file = wp_cache_dir('data') . '/' . md5($key) . '.json';
     $tmp = $file . '.' . getmypid() . '.tmp';
     if (@file_put_contents($tmp, json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) !== false) {
@@ -328,7 +331,9 @@ function xt_url($action = null, array $params = [])
 function xt_cache_key($action, array $params)
 {
     $u = wp_user();
-    return 'xt|' . $u['server'] . '|' . $u['username'] . '|' . $action . '|' . http_build_query($params);
+    // con una huella de la contraseña: en el modo navegador (includes/xt_client.php) la web guarda lo que trae el
+    // navegador, y alguien con una contraseña inventada nunca llena la caché de la línea de otro
+    return 'xt|' . $u['server'] . '|' . $u['username'] . '|' . substr(sha1('wpx|' . $u['password']), 0, 10) . '|' . $action . '|' . http_build_query($params);
 }
 
 /**
@@ -349,6 +354,16 @@ function xt_get_raw($action, array $params = [], $ttl = 600, $timeout = 15)
     if (isset($memo[$key])) return $memo[$key];
     $data = wp_cache_get($key, $ttl, $stale);
     if ($data !== null) return $memo[$key] = $data;
+    // modo navegador (includes/xt_client.php): el hosting nunca le pide al servidor IPTV. Lo vencido se usa y el
+    // navegador lo renueva después; lo que falta se le pide al navegador antes de mostrar la página
+    if (wp_xt_client()) {
+        if (is_array($stale)) {
+            wp_xt_need($action, $params, false);
+            return $memo[$key] = $stale;
+        }
+        wp_xt_need($action, $params, true);
+        return $memo[$key] = [];
+    }
     // Bloqueo: si otra petición ya está descargando lo mismo, se espera y se reutiliza
     $lock = @fopen(wp_cache_dir('data') . '/' . md5($key) . '.lock', 'c');
     if ($lock) {
@@ -382,6 +397,10 @@ function xt_multi(array $reqs, $ttl = 86400, $timeout = 10)
         $data = wp_cache_get($ck, $ttl, $stale);
         if ($data !== null) {
             $out[$k] = $data;
+        } elseif (wp_xt_client()) {
+            // modo navegador: lo trae el navegador (includes/xt_client.php)
+            wp_xt_need($r[0], $r[1], !is_array($stale));
+            $out[$k] = is_array($stale) ? $stale : [];
         } else {
             $missing[$k] = xt_url($r[0], $r[1]);
             $stales[$k] = $stale;
@@ -1449,3 +1468,5 @@ require_once __DIR__ . '/media_core.php';
 require_once __DIR__ . '/audio_probe.php';
 require_once __DIR__ . '/profiles.php';
 require_once __DIR__ . '/kids.php';
+require_once __DIR__ . '/login_probe.php';
+require_once __DIR__ . '/xt_client.php';

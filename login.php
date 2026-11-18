@@ -40,6 +40,53 @@ function getMoviesFromPanel($pages = 4)
     return $movies;
 }
 
+/**
+ * Entra con la línea en el servidor $srv (['url', 'id', 'name']) y contesta el JSON del login. $client = el navegador
+ * probó el usuario directo en el servidor IPTV (modo navegador, includes/xt_client.php): el hosting no le pide nada.
+ */
+function wp_login_finish($username, $password, array $srv, array $matchUi, $dist_code, $lastKey, $client = false)
+{
+    // la próxima vez esta DNS va primero y sola (un solo intento al servidor IPTV), y el servidor sube en el orden
+    // de los demás usuarios de este distribuidor
+    wp_cache_set($lastKey, $srv['url']);
+    wp_login_hit($srv['url'], $dist_code);
+    // el navegador queda en el panel (Clientes › Web player, con su IP); si su distribuidor bloqueó este navegador
+    // o esta IP, no entra (includes/web_device.php)
+    require_once __DIR__ . '/includes/web_device.php';
+    $dev_blocked = wp_web_device_check($username, $srv['url'], $dist_code);
+    if ($dev_blocked !== null) {
+        echo json_encode(['success' => false, 'message' => $dev_blocked]);
+        exit;
+    }
+    session_regenerate_id(true);
+    $_SESSION["username"] = $username;
+    $_SESSION["password"] = $password;
+    $_SESSION["server"] = $srv['url'];
+    $_SESSION["server_id"] = $srv['id'];
+    $_SESSION["server_name"] = $srv['name'];
+    // Distribuidor de esta sesión ('' = Omitir); el guardián lo revisa en cada página
+    $_SESSION['dist'] = $dist_code;
+    // Token del panel para "Continuar viendo" y "Mi lista" (uno por número de distribuidor)
+    $_SESSION[wp_panel_token_key()] = wp_panel_auth($username, $password, $srv['url']);
+    // Línea DEMO según el panel ("demo": true): un login normal la quita
+    $_SESSION['is_demo'] = !empty($GLOBALS['wp_panel_auth_demo']);
+    // perfiles (includes/profiles.php): conexiones de la línea y, en cada inicio de sesión, «¿Quién está viendo?»
+    $_SESSION['max_conn'] = (int)($matchUi['max_connections'] ?? 0);
+    // modo navegador: el navegador de cada usuario le pide todo al servidor IPTV con su propia IP
+    $_SESSION['xt_client'] = $client ? 1 : 0;
+    unset($_SESSION['wp_prof']);
+    wp_rate_reset('login');
+
+    // Sólo se recuerda el usuario (nunca la contraseña en una cookie)
+    wp_setcookie("username", $username, time() + 30 * 86400);
+    if (isset($_COOKIE['password'])) {
+        wp_setcookie("password", '', time() - 3600);
+    }
+    // al inicio con un token (la dirección nunca muestra el nombre de la página)
+    echo json_encode(['success' => true, 'redirect' => wp_route_url('homex')]);
+    exit;
+}
+
 /* ---------- Login: sólo usuario y contraseña, se prueba en todas las DNS ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["password"])) {
     header('Content-Type: application/json; charset=utf-8');
@@ -50,7 +97,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         echo json_encode(['success' => false, 'message' => t('Escribe tu usuario y contraseña.')]);
         exit;
     }
-    if (wp_rate_limited('login', 15, 300)) {
+    $step = (string)($_POST['step'] ?? '');
+    if ($step !== 'servers' && wp_rate_limited('login', 15, 300)) {
         echo json_encode(['success' => false, 'message' => t('Demasiados intentos. Espera unos minutos e inténtalo de nuevo.')]);
         exit;
     }
@@ -120,6 +168,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
     }
     $lastKey = 'lastdns|' . sha1(strtolower($username));
     $lastUrl = wp_cache_get($lastKey, 120 * 86400);
+    // el navegador ya probó estos servidores y contestaron que el usuario no está ahí: el hosting no los vuelve a
+    // probar (cada intento fallido desde la IP del hosting le cuenta a XUI)
+    $xtSkip = array_filter(explode(',', (string)($_POST['xt_skip'] ?? '')));
+    if ($xtSkip && $step === '') {
+        $notSkipped = function ($s) use ($xtSkip) { return !in_array(wp_login_endpoint(preg_replace('~^https://~i', 'http://', $s['url'])), $xtSkip, true); };
+        $first = array_values(array_filter($first, $notSkipped));
+        $later = array_values(array_filter($later, $notSkipped));
+    }
+
+    // modo navegador (includes/xt_client.php): el navegador prueba el usuario directo en el servidor IPTV, con la IP del
+    // cliente y de a una DNS (assets/nf/login abajo). 'servers' = en qué orden; 'client' = lo que contestó el servidor.
+    // Si el navegador no pudo leer ninguno (sin permiso CORS, la web en https y el servidor solo en http), el
+    // formulario sigue como siempre (lo prueba el hosting).
+    if ($step === 'servers') {
+        echo json_encode(['success' => true, 'cands' => wp_xt_login_cands($first, $later, $lastUrl, $dist_code)], JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+    if ($step === 'client') {
+        $base = rtrim((string)($_POST['server'] ?? ''), '/');
+        $srvFor = null;
+        $corsKey = '';
+        foreach (wp_xt_login_cands($first, $later, $lastUrl, $dist_code) as $c) {
+            if (!in_array($base, $c['u'], true)) continue;
+            foreach ($first as $f) {
+                if (wp_login_endpoint($f['url']) === $c['k']) $srvFor = $f;
+            }
+            $corsKey = $c['k'];
+        }
+        $info = json_decode((string)($_POST['info'] ?? ''), true);
+        $ui = is_array($info) && is_array($info['user_info'] ?? null) ? $info['user_info'] : null;
+        if ($srvFor === null || $ui === null || (int)($ui['auth'] ?? 0) !== 1 || strcasecmp((string)($ui['status'] ?? ''), 'Active') !== 0) {
+            echo json_encode(['success' => false, 'message' => t('No se pudo iniciar sesión.')]);
+            exit;
+        }
+        // este servidor deja leer al navegador (CORS): se recuerda para los próximos inicios de sesión. Lo que dice el
+        // navegador no alcanza (podría inventarlo): la primera vez el hosting lo comprueba con un solo pedido
+        if ($corsKey !== '' && !wp_cache_get('xtcors|' . $corsKey, 180 * 86400) && wp_xt_cors_check($base, $username, $password)) {
+            wp_cache_set('xtcors|' . $corsKey, 1);
+        }
+        wp_login_finish($username, $password, ['url' => $base, 'id' => $srvFor['id'] ?? '', 'name' => $srvFor['name'] ?? ''], $ui, $dist_code, $lastKey, true);
+    }
     $okWhen = function ($k, $body) {
         $j = json_decode($body, true);
         return isset($j['user_info']['auth']) && (int)$j['user_info']['auth'] === 1
@@ -218,44 +307,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
     }
 
     if ($match !== null) {
-        $srv = $servers[$match];
-        // la próxima vez esta DNS va primero y sola (un solo intento al servidor IPTV), y el servidor sube en el orden
-        // de los demás usuarios de este distribuidor
-        wp_cache_set($lastKey, $srv['url']);
-        wp_login_hit($srv['url'], $dist_code);
-        // el navegador queda en el panel (Clientes › Web player, con su IP); si su distribuidor bloqueó este navegador
-        // o esta IP, no entra (includes/web_device.php)
-        require_once __DIR__ . '/includes/web_device.php';
-        $dev_blocked = wp_web_device_check($username, $srv['url'], $dist_code);
-        if ($dev_blocked !== null) {
-            echo json_encode(['success' => false, 'message' => $dev_blocked]);
-            exit;
+        // entró por el hosting porque el navegador no pudo leer el servidor IPTV: que el panel lo sepa (una vez al día)
+        $xtWhy = trim((string)($_POST['xt_why'] ?? ''));
+        $xtHost = (string)parse_url($servers[$match]['url'], PHP_URL_HOST);
+        if ($xtWhy !== '' && $xtHost !== '' && !wp_cache_get('xtoff|' . $xtHost, 86400)) {
+            wp_cache_set('xtoff|' . $xtHost, 1);
+            wp_panel_report('warning', 'Web player: el navegador no pudo probar el usuario directo en ' . $xtHost . '; entró por el hosting'
+                . ($dist_code !== '' ? ' (distribuidor ' . $dist_code . ')' : ''),
+                'Lo que vio el navegador: ' . mb_substr($xtWhy, 0, 600) . "\nSin permiso CORS del servidor IPTV, o la web en https y el servidor solo en http. Ver docs/LOGIN-SERVIDORES.md del panel.", 'Login');
         }
-        session_regenerate_id(true);
-        $_SESSION["username"] = $username;
-        $_SESSION["password"] = $password;
-        $_SESSION["server"] = $srv['url'];
-        $_SESSION["server_id"] = $srv['id'];
-        $_SESSION["server_name"] = $srv['name'];
-        // Distribuidor de esta sesión ('' = Omitir); el guardián lo revisa en cada página
-        $_SESSION['dist'] = $dist_code;
-        // Token del panel para "Continuar viendo" y "Mi lista" (uno por número de distribuidor)
-        $_SESSION[wp_panel_token_key()] = wp_panel_auth($username, $password, $srv['url']);
-        // Línea DEMO según el panel ("demo": true): un login normal la quita
-        $_SESSION['is_demo'] = !empty($GLOBALS['wp_panel_auth_demo']);
-        // perfiles (includes/profiles.php): conexiones de la línea y, en cada inicio de sesión, «¿Quién está viendo?»
-        $_SESSION['max_conn'] = (int)($matchUi['max_connections'] ?? 0);
-        unset($_SESSION['wp_prof']);
-        wp_rate_reset('login');
-
-        // Sólo se recuerda el usuario (nunca la contraseña en una cookie)
-        wp_setcookie("username", $username, time() + 30 * 86400);
-        if (isset($_COOKIE['password'])) {
-            wp_setcookie("password", '', time() - 3600);
-        }
-        // al inicio con un token (la dirección nunca muestra el nombre de la página)
-        echo json_encode(['success' => true, 'redirect' => wp_route_url('homex')]);
-        exit;
+        wp_login_finish($username, $password, $servers[$match], $matchUi, $dist_code, $lastKey);
     }
 
     if ($states) {
@@ -284,6 +345,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         }
     }
     if (!$anyReply) {
+        // el navegador ya vio que el usuario no está en los servidores que sí contestan: es la contraseña, no la red
+        if ($xtSkip) {
+            echo json_encode(['success' => false, 'message' => t('Usuario o contraseña incorrectos.')]);
+            exit;
+        }
         // ningún servidor contestó: al panel con lo que pasó en cada uno (Errores de las apps)
         // todos rechazaron la conexión al instante (curl 7): el servidor IPTV o su firewall no deja entrar al hosting
         // (XUI bloquea la IP que junta intentos fallidos o demasiadas conexiones: todos los usuarios de la web salen
@@ -557,6 +623,103 @@ $dist_step = $dist_view['step'];
     });
 
     // ---- Iniciar sesión ----
+    function fail(msg) {
+        showError(msg);
+        btn.classList.remove('loading');
+        btn.disabled = false;
+    }
+    function done(data) {
+        if (data.success) {
+            btn.querySelector('.lbl').textContent = <?php echo tj('Entrando...'); ?>;
+            window.location.href = data.redirect;
+        } else if (data.dist) {
+            try { localStorage.removeItem('wp_dist_brand'); } catch (e) {}
+            btn.classList.remove('loading');
+            btn.disabled = false;
+            showDistError(data.message || <?php echo tj('Escribe tu número de distribuidor.'); ?>);
+            showStep('dist');
+        } else {
+            fail(data.message || <?php echo tj('No se pudo iniciar sesión.'); ?>);
+        }
+    }
+    // El usuario directo en el servidor IPTV desde el navegador: de a una DNS (primero la última del usuario), parando en
+    // la primera que contesta. {ok: dirección, info} | {state} | {no, unreach, skip, why}
+    function tryDirect(u, p) {
+        var fd = new FormData();
+        fd.append('username', u);
+        fd.append('password', p);
+        fd.append('step', 'servers');
+        return post(fd).then(function (d) {
+            var res = { no: false, unreach: [], skip: [], why: '' }, why = [];
+            if (!d || !d.success || !d.cands || !window.fetch) return res;
+            var i = 0;
+            function next() {
+                if (i >= d.cands.length) {
+                    res.why = why.join(' | ');
+                    return res;
+                }
+                var c = d.cands[i++], j = 0, reached = false;
+                function variant() {
+                    if (j >= c.u.length) {
+                        if (!reached) res.unreach.push(c.k);
+                        return next();
+                    }
+                    var base = c.u[j++];
+                    var ctl = window.AbortController ? new AbortController() : null;
+                    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 12000);
+                    return fetch(base + '/player_api.php?username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p),
+                        { mode: 'cors', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', signal: ctl ? ctl.signal : undefined })
+                        .then(function (rs) { return rs.text(); })
+                        .then(function (txt) {
+                            clearTimeout(timer);
+                            reached = true;
+                            var js = null;
+                            try { js = JSON.parse(txt); } catch (e) {}
+                            var ui = js && js.user_info;
+                            if (ui && +ui.auth === 1) {
+                                if (String(ui.status || '').toLowerCase() === 'active') return { ok: base, info: txt };
+                                return { state: ui.status || 'disabled' };
+                            }
+                            // el usuario no está en este servidor (JSON con auth 0, o la página de error de XUI)
+                            if ((js && 'user_info' in js) || /INVALID_CREDENTIALS|INVALID_USER/.test(txt)) {
+                                res.no = true;
+                                res.skip.push(c.k);
+                                return next();
+                            }
+                            if (/EXPIRED/.test(txt)) return { state: 'expired' };
+                            if (/BANNED|DISABLED|BLOCKED/.test(txt)) return { state: 'disabled' };
+                            why.push(base + ': respuesta no válida');
+                            return variant();
+                        }, function (e) {
+                            clearTimeout(timer);
+                            if (e && e.name === 'AbortError') {
+                                why.push(base + ': sin respuesta');
+                                return variant();
+                            }
+                            // no dejó leer: en un servidor que ya dio permiso CORS a un navegador eso es que el usuario o
+                            // la contraseña no son de ahí (si contesta); en los demás no se sabe (se prueba por el hosting)
+                            if (!c.c) {
+                                why.push(base + ': sin permiso CORS o sin conexión');
+                                return variant();
+                            }
+                            return fetch(base + '/player_api.php?username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p),
+                                { mode: 'no-cors', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' })
+                                .then(function () {
+                                    reached = true;
+                                    res.no = true;
+                                    res.skip.push(c.k);
+                                    return next();
+                                }, function () {
+                                    why.push(base + ': sin conexión');
+                                    return variant();
+                                });
+                        });
+                }
+                return variant();
+            }
+            return next();
+        }, function () { return { no: false, unreach: [], skip: [], why: 'panel' }; });
+    }
     form.addEventListener('submit', function (ev) {
         ev.preventDefault();
         err.hidden = true;
@@ -571,27 +734,35 @@ $dist_step = $dist_view['step'];
             else localStorage.removeItem('wp_user');
         } catch (e) {}
 
-        post(new FormData(form))
-        .then(function (data) {
-            if (data.success) {
-                btn.querySelector('.lbl').textContent = <?php echo tj('Entrando...'); ?>;
-                window.location.href = data.redirect;
-            } else if (data.dist) {
-                try { localStorage.removeItem('wp_dist_brand'); } catch (e) {}
-                btn.classList.remove('loading');
-                btn.disabled = false;
-                showDistError(data.message || <?php echo tj('Escribe tu número de distribuidor.'); ?>);
-                showStep('dist');
-            } else {
-                showError(data.message || <?php echo tj('No se pudo iniciar sesión.'); ?>);
-                btn.classList.remove('loading');
-                btn.disabled = false;
+        // modo navegador: primero el navegador prueba el usuario directo en el servidor IPTV (con la IP del cliente, de
+        // a una DNS); solo si no puede leer ninguno, lo prueba el hosting como siempre (includes/xt_client.php)
+        var u = user.value.trim(), p = pass.value.trim();
+        tryDirect(u, p).then(function (r) {
+            if (r.ok) {
+                var fd = new FormData();
+                fd.append('username', u);
+                fd.append('password', p);
+                fd.append('step', 'client');
+                fd.append('server', r.ok);
+                fd.append('info', r.info);
+                return post(fd).then(done);
             }
-        })
-        .catch(function () {
-            showError(<?php echo tj('Error de conexión. Inténtalo de nuevo.'); ?>);
-            btn.classList.remove('loading');
-            btn.disabled = false;
+            if (r.state) {
+                var st = String(r.state).toLowerCase();
+                fail(st === 'expired' ? <?php echo tj('Tu cuenta está vencida. Renueva tu suscripción para seguir viendo.'); ?>
+                    : <?php echo tj('Tu cuenta está deshabilitada. Contacta a soporte.'); ?>);
+                return;
+            }
+            if (r.no && !r.unreach.length) {
+                fail(<?php echo tj('Usuario o contraseña incorrectos.'); ?>);
+                return;
+            }
+            var fd2 = new FormData(form);
+            if (r.why) fd2.append('xt_why', r.why);
+            if (r.skip.length) fd2.append('xt_skip', r.skip.join(','));
+            return post(fd2).then(done);
+        }).catch(function () {
+            fail(<?php echo tj('Error de conexión. Inténtalo de nuevo.'); ?>);
         });
     });
 })();

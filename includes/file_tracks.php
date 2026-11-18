@@ -69,7 +69,8 @@ function wp_file_tracks($url, $target = '', $read = true, $panelWait = 2)
         }
         wp_cache_set('ftracks_miss|' . md5($url), 1);
     }
-    if (!$read) { $memo[$ck] = false; return null; }
+    // modo navegador (includes/xt_client.php): el hosting no lee el archivo del servidor IPTV (solo lo que sabe el panel)
+    if (!$read || (function_exists('wp_xt_client') && wp_xt_client())) { $memo[$ck] = false; return null; }
     $r = new WpRangeReader($target, 10);
     $t = wp_read_tracks($r);
     if (!$t || $r->failed || !$t['audio']) {
