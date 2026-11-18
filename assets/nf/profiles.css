@@ -5,7 +5,7 @@
    ========================================================== */
 .pf-body { background: #000; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; }
 /* avatares grandes: lo más que deja la altura con los 5 perfiles y «Administrar perfiles» sin desplazarse */
-.pf-root { position: relative; min-height: 100vh; min-height: 100dvh; --av: clamp(56px, min(13vh, 18vh - 52px), 170px); }
+.pf-root { position: relative; min-height: 100vh; min-height: 100dvh; --av: clamp(60px, min(13vh, 18vh - 52px), 170px); }
 
 /* fondo: alta calidad (Full HD, y el original 4K en pantallas grandes), con aparición suave */
 .pf-bg {
@@ -24,8 +24,10 @@
 /* arriba: Salir a la izquierda, el logo a la derecha */
 .pf-top {
     position: fixed; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
-    padding: calc(14px + env(safe-area-inset-top)) 4% 14px;
+    padding: calc(14px + env(safe-area-inset-top)) 4% 14px; pointer-events: none;
 }
+/* la barra va encima de la columna de perfiles: solo sus botones reciben el toque (en vertical «Administrar perfiles» está en esta fila) */
+.pf-top > * { pointer-events: auto; }
 .pf-exit {
     display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px;
     background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.35); color: #fff; font-size: 14px; font-weight: 600;
@@ -52,13 +54,14 @@
     display: flex; align-items: center; gap: 22px; width: 100%; padding: 6px 12px 6px 6px; border: 0; border-radius: 14px;
     background: transparent; color: #b3b3b3; cursor: pointer; text-align: left; font: inherit; transition: background .2s, color .2s;
 }
-.pf-item:hover, .pf-item:focus-visible { background: rgba(255,255,255,.09); color: #fff; outline: none; }
+/* el perfil del puntero (o del teclado) solo se agranda y su nombre se pone blanco: sin recuadro ni borde */
+.pf-item:hover, .pf-item:focus-visible { color: #fff; outline: none; }
 .pf-av {
     position: relative; flex: none; width: var(--av); height: var(--av); border-radius: 10px; overflow: hidden; background: #333;
     box-shadow: 0 0 0 0 transparent; transition: box-shadow .2s, transform .2s; display: grid; place-items: center;
 }
 .pf-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pf-item:hover .pf-av, .pf-item:focus-visible .pf-av { box-shadow: 0 0 0 3px #fff; transform: scale(1.04); }
+.pf-item:hover .pf-av, .pf-item:focus-visible .pf-av { transform: scale(1.1); }
 .pf-name { font-size: clamp(18px, 1.15vw + 1.25vh, 34px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* perfil infantil: la etiqueta junto al nombre (en el celular, sobre el avatar) */
 .pf-kids-av { display: none; }
@@ -145,9 +148,14 @@
 .pf-avbtn .pf-edit { display: grid; font-size: 22px; opacity: .85; }
 .pf-avbtn:hover .pf-edit, .pf-avbtn:focus-visible .pf-edit { opacity: 1; }
 .pf-avbtn:focus-visible { box-shadow: 0 0 0 3px #fff; outline: none; }
-.pf-avgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px; margin: 16px 0 4px; max-height: 270px; overflow-y: auto; padding: 4px; }
+/* filas de medida fija: con max-height, Safari (iPhone, iPad, Mac) achica las filas automáticas para que todo entre y
+   los cuadros se encimaban */
+.pf-avgrid {
+    display: grid; grid-template-columns: repeat(auto-fill, 64px); grid-auto-rows: 64px; justify-content: space-between;
+    gap: 10px; margin: 16px 0 4px; max-height: 270px; overflow-y: auto; padding: 4px;
+}
 .pf-avgrid[hidden] { display: none; }
-.pf-avopt { aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 0; padding: 0; background: #333; cursor: pointer; }
+.pf-avopt { width: 64px; height: 64px; border-radius: 8px; overflow: hidden; border: 0; padding: 0; background: #333; cursor: pointer; }
 .pf-avopt img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pf-avopt:hover, .pf-avopt:focus-visible { box-shadow: 0 0 0 3px rgba(255,255,255,.75); outline: none; }
 .pf-avopt.on { box-shadow: 0 0 0 3px #fff; }
@@ -171,7 +179,9 @@
 
 /* ---------- celular vertical: el destacado arriba, dos por fila y el último centrado ---------- */
 @media (orientation: portrait) and (max-width: 899px) {
-    .pf-root { --av: min(28vw, 150px); }
+    /* tan grandes como dejan el ancho y el alto: los 5 perfiles (tres filas) siguen sin desplazarse */
+    .pf-root { --av: min(28vw, 150px, calc((78vh - 190px) / 3)); }
+    @supports (height: 1svh) { .pf-root { --av: min(28vw, 150px, calc((78svh - 190px) / 3)); } }
     .pf-bg { position: absolute; height: 22vh; height: 22svh; object-position: center 25%; }
     .pf-shade {
         position: absolute; height: 22vh; height: 22svh; bottom: auto;
@@ -205,7 +215,7 @@
 }
 /* celular horizontal: los perfiles en fila */
 @media (max-height: 520px) and (orientation: landscape) {
-    .pf-root { --av: clamp(52px, 22vh, 96px); }
+    .pf-root { --av: clamp(48px, min(22vh, 16.4vw - 28px), 96px); }
     .pf-side { width: auto; justify-content: center; padding: 58px 4% 14px; }
     .pf-title { font-size: 20px; line-height: 40px; top: calc(8px + env(safe-area-inset-top)); max-width: calc(100vw - 260px); }
     .pf-ver { bottom: calc(8px + env(safe-area-inset-bottom)); font-size: 11px; }
@@ -221,6 +231,8 @@
     .pf-top { padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: 8px; }
     .pf-exit { min-height: 34px; font-size: 13px; }
     .pf-logo { height: 30px; }
+    /* la ventana mide poco más que la lista de avatares: un solo desplazamiento (el de la ventana), no uno dentro de otro */
+    .pf-avgrid { max-height: none; overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) {
     .pf-bg, .pf-item, .pf-av { transition: none; }

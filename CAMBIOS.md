@@ -11,7 +11,7 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 - Una ficha, el reproductor o un enlace a algo que no es para niños (por ejemplo desde otro equipo) vuelve al inicio.
 - Guarda lo suyo aparte como cualquier perfil (Continuar viendo y Mi lista).
 - Las reglas del filtro las manda el panel (las mismas para todas las apps; una filtración se arregla en el panel sin tocar la web). La web trae una copia por si el panel no contesta.
-- **Perfiles más grandes** en «¿Quién está viendo?»: avatares de unos 140 px en 1080p (antes 112; hasta 170 en pantallas grandes) y nombres más grandes; en el celular vertical hasta 150 px y en horizontal hasta 96. Los 5 siguen entrando sin desplazarse.
+- **Perfiles más grandes** en «¿Quién está viendo?» (más que en 2.5.1): avatares de unos 140 px en 1080p y hasta 170 en pantallas grandes, y nombres más grandes; en el celular vertical hasta 150 px y en horizontal hasta 96. Los 5 siguen entrando sin desplazarse. Se mantienen los arreglos de 2.5.1 a 2.5.4 («Administrar perfiles» al toque, avatares sin encimarse en Safari, el mouse solo agranda el perfil).
 - La versión que se ve abajo a la izquierda pasa a **2.6.0**.
 - Archivos: `includes/kids.php` (nuevo), `includes/core.php`, `includes/profiles.php`, `header.php`, `api.php`, `perfiles.php`, `Movie_description.php`, `seriesvideo.php`, `video_player.php`, `tvguide.php`, `sportsschedule.php`, `assets/nf/profiles.css`, `assets/nf/profiles.js`, `assets/nf/app.css`, `includes/lang/en.php`, `pt.php`, `fr.php` (y `login.php`, `play.php`, `includes/tenant_guard.php`: solo la versión del CSS). **Panel:** subir primero `includes/kids_rules.php`, `includes/profiles.php` y `api/profiles.php`.
 

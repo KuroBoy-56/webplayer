@@ -107,6 +107,11 @@
         });
     });
     if (manageBtn) manageBtn.addEventListener('click', function () { managing = !managing; render(); });
+    // con el mouse se agranda solo el perfil del puntero: el que tenía el foco al abrir la página lo suelta
+    list.addEventListener('mouseover', function (e) {
+        var b = e.target.closest ? e.target.closest('.pf-item') : null, a = d.activeElement;
+        if (b && a && a !== b && list.contains(a)) a.blur();
+    });
 
     // flechas: entre los perfiles (en el celular, de dos en dos hacia arriba y abajo)
     list.addEventListener('keydown', function (e) {
