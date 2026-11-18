@@ -212,6 +212,8 @@
     .pf-top { padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: 8px; }
     .pf-exit { min-height: 34px; font-size: 13px; }
     .pf-logo { height: 30px; }
+    /* la ventana mide poco más que la lista de avatares: un solo desplazamiento (el de la ventana), no uno dentro de otro */
+    .pf-avgrid { max-height: none; overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) {
     .pf-bg, .pf-item, .pf-av { transition: none; }
