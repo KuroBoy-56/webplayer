@@ -207,6 +207,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.6.12) **La lupa de las plataformas abre el teclado de la app** («Ver todo» de Netflix, Disney+, etc.), como Buscar e
+  Iniciar sesión: era el último lugar con un `TextInput` (el campo del sistema se quedaba con las flechas y, al volver a la
+  lupa con el control, el teclado podía abrirse solo, el mismo error que se vio en Android TV). OK en la lupa abre
+  `KeyboardModal`, las carátulas se filtran mientras se escribe y al cerrarlo (Listo o Atrás) el foco baja a la primera;
+  lo escrito queda junto a la lupa (✕ lo borra). `Grid.tsx`. Los `TextInput` que quedan son a propósito: el PIN y
+  «Buscar canal…» de Deportes se abren justo para escribir.
 - (2.6.11) **Cierres que no eran cierres, un solo reproductor a la vez y navegación más fluida**:
   - Caja negra (`lib/blackbox.ts`): desde la 2.6.5 la limpieza del reproductor al pasar a segundo plano (Inicio del
     control, otra app, el televisor apagado) escribía otra vez la caja («se cierra el reproductor») y, si después el
