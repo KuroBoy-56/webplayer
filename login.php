@@ -303,7 +303,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
               . ($dist_code !== '' ? ' (distribuidor ' . $dist_code . ')' : '')
             : 'Login de la web player: ningún servidor IPTV contestó',
             implode(' | ', $seen) . "\nServidores: " . implode(', ', $ips)
-            . ($refused ? "\n" . $diag['text'] . "\nIP del hosting de la web: la que el panel muestra en este reporte." : ''), 'Login');
+            . ($refused ? "\n" . $diag['text'] : ''), 'Login');
         // conexión rechazada en todas: no es la conexión del cliente sino el servidor IPTV, que no deja entrar a la web
         echo json_encode(['success' => false, 'message' => !$refused
             ? t('No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.')

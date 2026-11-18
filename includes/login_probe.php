@@ -133,7 +133,7 @@ function wp_login_diagnose(array $urls)
     $why = [
         'hosting_port' => 'El HOSTING de la web no deja salir conexiones al puerto ' . $badPort . ' (firewall del hosting): pide al hosting abrir ese puerto de salida o usa una DNS en el puerto 80 / 8080.',
         'server_refuses' => 'El servidor IPTV contesta en otros puertos pero rechaza a la IP del hosting en el de la lista: XUI bloqueó la IP (protección contra flood) o un firewall. En XUI › IPs bloqueadas, desbloquéala y agrégala a las IP excluidas.',
-        'server_down' => 'El servidor IPTV no deja conectar a la IP del hosting en ningún puerto: está caído o bloqueó la IP del hosting en su firewall. Revisa desde otro equipo y en XUI › IPs bloqueadas.',
+        'server_down' => 'El servidor IPTV no deja conectar a la IP del hosting en ningún puerto: está caído o bloqueó la IP del hosting (XUI o su firewall). La «Prueba desde el panel» de abajo dice cuál de las dos.',
         'unknown' => 'No se pudo saber la causa.',
     ];
     $res = ['cause' => $cause, 'port' => $badPort, 'text' => $why[$cause] . "\n" . implode("\n", $lines)];
