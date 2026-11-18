@@ -24,3 +24,40 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 **Cloudflare solo para los dominios:** la web, el panel y los dominios de tus distribuidores pueden estar en Cloudflare (nube naranja para esconder la IP de Hostinger y proteger el dominio principal, o gris si prefieres el SSL de Hostinger). El registro de la **VPS / VDS va con nube gris** (solo DNS): así el video nunca pasa por Cloudflare.
 
 **Dominio propio con un Worker (opcional):** el cliente entra por un dominio nuevo (el tuyo o el de cada distribuidor, sin límite) y el dominio original de la web responde **403 Forbidden**. El Worker (`cloudflare/edge-worker.js`) abre la web por dentro con un secreto; la web (`includes/edge.php`) solo atiende con ese secreto y toma el dominio y la IP real del cliente. Cada secreto puede llevar el número de un distribuidor: en su dominio la web queda fija en él. Se configura con `'edge_keys'` (y `'edge_block'` para probar) en `includes/panel_secret.php`; sin eso la web funciona exactamente igual. Paso a paso con dibujos: **`docs/GUIA-WORKER.html`** (ábrelo en tu PC; en el hosting `docs/` y `cloudflare/` están bloqueados).
+
+## Perfiles (para quien siga el código)
+
+Contrato con el panel, reglas, estado de cada app y cómo seguir: **`docs/PERFILES.md` del panel** (repo `panelweb`).
+Esta web es la implementación de referencia para las demás apps.
+
+- **Solo con los perfiles encendidos** por el dueño (panel › Perfiles). Apagados, en una DEMO o con una sola conexión
+  en la línea, la web queda exactamente como antes.
+- **`includes/profiles.php`** (lo carga `includes/core.php`):
+  - Estado en la sesión, `$_SESSION['wp_prof']`: `on`, `max`, el perfil elegido (`id`, `name`, `avatar`), el
+    principal (`main_name`, `main_avatar`), `at` (última pregunta al panel: como mucho cada 10 min, `WP_PROF_TTL`) y
+    `down` (el panel no contestó: no se pide perfil). `acct` lo ata a la línea y al número de distribuidor.
+  - `wp_prof_api()` llama a `api/profiles.php` con el token de la sesión (el navegador nunca lo ve).
+  - `wp_prof_gate()`, desde `session.php`: si la línea elige perfil y todavía no lo eligió, una navegación a una de las
+    páginas de `WP_PROF_GATED` va primero a `perfiles.php?next=<token de la página pedida>`. Las cargas en segundo plano
+    no se redirigen.
+  - `wp_prof_select()` comprueba el PIN en el panel (`pin_check`) antes de guardar el perfil en la sesión.
+  - `wp_prof_id()` es el perfil que va como `profile` a `api/progress.php` (`includes/panel.php`: `wp_panel_userdata()` y
+    `wp_panel_post()`); con 410 `wp_prof_gone()` lo olvida y la página siguiente vuelve a la pantalla de perfiles.
+  - `wp_prof_highlight()`: lo más destacado de la semana (`api/tmdb.php?path=trending/all/week` del panel, con la clave
+    del distribuidor o la del dueño con Omitir, 6 h en caché); el fondo va en Full HD y el original 4K por `srcset`.
+- **`perfiles.php`** (en `WP_ROUTE_PAGES`, al final de la lista; nunca se cambia el orden porque el número va dentro
+  de los tokens) y **`assets/nf/profiles.css` / `profiles.js`**: la pantalla, el PIN, administrar y agregar. Las
+  acciones van por `fetch` (POST) a la misma dirección y `wp_prof_post()` las pasa al panel. Token propio contra CSRF
+  (`wp_prof_csrf()`).
+- **Ojo:** `wp_route_rewrite()` convierte en token cualquier texto entre comillas igual al nombre de una página (por
+  ejemplo `"profiles"` como clave de un JSON dentro de la página). Por eso la página es `perfiles.php`.
+- `login.php` guarda las conexiones de la línea (`max_conn`, que el panel usa mientras no las sepa) y borra `wp_prof`:
+  cada inicio de sesión vuelve a pedir el perfil. `includes/line_guard.php` mantiene `max_conn` al día.
+- `includes/handoff.php` + `play.php`: el perfil viaja en el enlace cifrado del reproductor http (`pf`).
+- `header.php`: con perfiles encendidos el avatar del perfil va a la izquierda (menú con «Cambiar perfil» y
+  «Administrar perfiles»), el menú en el centro y el logo a la derecha; en el celular el avatar también va en «Mi
+  cuenta» de la barra de abajo. `myaccount.php` muestra el perfil con sus botones.
+- Textos: `t('…')` en PHP y `tr('…')` en `assets/nf/*.js` (se buscan solos); las traducciones en
+  `includes/lang/{en,pt,fr}.php`.
+- **Prueba:** desde el repo del panel, `WP_DIR=/ruta/a/esta/web php tools/profiles_web_test.php` (Chromium contra una
+  copia del panel con datos inventados).
