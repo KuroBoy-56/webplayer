@@ -53,13 +53,14 @@
     display: flex; align-items: center; gap: 18px; width: 100%; padding: 6px 10px 6px 6px; border: 0; border-radius: 12px;
     background: transparent; color: #b3b3b3; cursor: pointer; text-align: left; font: inherit; transition: background .2s, color .2s;
 }
-.pf-item:hover, .pf-item:focus-visible { background: rgba(255,255,255,.09); color: #fff; outline: none; }
+/* el perfil del puntero (o del teclado) solo se agranda y su nombre se pone blanco: sin recuadro ni borde */
+.pf-item:hover, .pf-item:focus-visible { color: #fff; outline: none; }
 .pf-av {
     position: relative; flex: none; width: var(--av); height: var(--av); border-radius: 8px; overflow: hidden; background: #333;
     box-shadow: 0 0 0 0 transparent; transition: box-shadow .2s, transform .2s; display: grid; place-items: center;
 }
 .pf-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pf-item:hover .pf-av, .pf-item:focus-visible .pf-av { box-shadow: 0 0 0 3px #fff; transform: scale(1.04); }
+.pf-item:hover .pf-av, .pf-item:focus-visible .pf-av { transform: scale(1.1); }
 .pf-name { font-size: clamp(17px, 1.2vw + 1.2vh, 26px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .pf-lock { font-size: 14px; color: #8c8c8c; flex: none; }
 .pf-add .pf-av { background: rgba(255,255,255,.06); border: 2px dashed rgba(255,255,255,.45); font-size: calc(var(--av) * .34); color: #bbb; }

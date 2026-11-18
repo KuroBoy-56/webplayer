@@ -56,11 +56,11 @@ $pf_cfg = [
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
     <link rel="stylesheet" href="assets/nf/app.css?v=12">
-    <link rel="stylesheet" href="assets/nf/profiles.css?v=5">
+    <link rel="stylesheet" href="assets/nf/profiles.css?v=6">
     <?php echo wp_tenant_css($pf_dist); ?>
     <?php echo wp_i18n_script(); ?>
     <script>window.PF=<?php echo json_encode($pf_cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;</script>
-    <script src="assets/nf/profiles.js?v=2" defer></script>
+    <script src="assets/nf/profiles.js?v=3" defer></script>
 </head>
 <body class="pf-body">
 <div class="pf-root" id="pfRoot">
