@@ -23,6 +23,10 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 `appinfo.json` y el `viewport` de `index.html`, que `npm run build:hd` (`tools/build-webos.js --hd`) deja en
 `dist-hd/`. `npm run build` sigue armando la Full HD en `dist/`.
 
+## Novedades de la 1.3.19
+
+- **La lupa de las plataformas abre el teclado de la app** («Ver todo» de Netflix, Disney+, etc.), como Buscar e Iniciar sesión. Era el último lugar con el campo de texto del televisor LG: el teclado del sistema se quedaba con las flechas y, al volver a la lupa con el control, podía abrirse solo (el mismo error que se vio en Android TV). Ahora: OK en la lupa abre el teclado de la app, las carátulas se filtran mientras se escribe y, al cerrarlo con Listo o con Atrás, el foco baja a la primera; lo escrito queda junto a la lupa (✕ lo borra). `Grid.tsx` (`KeyboardModal`, `focusFirst`). Probado en Chromium con la pantalla real y el control simulado: ningún campo del sistema en todo el recorrido. Falta verlo en un televisor LG.
+
 ## Novedades de la 1.3.18
 
 - **TV en vivo como Roku y Vega OS: la pantalla grande hereda la miniatura y al salir vuelve a ella, sin cortes.** OK en un canal lo pone en la miniatura; OK otra vez lo abre en pantalla grande con **el mismo reproductor** (no se cierra ni se vuelve a pedir el canal: la imagen y el sonido siguen, también si la miniatura todavía conectaba). Al salir con Atrás, ese mismo reproductor vuelve a la miniatura del canal que sonaba (también si se cambió con ▲▼ o con la lista de la carpeta ◀ dentro de la pantalla grande) y el foco queda en ese canal. Antes la miniatura se cerraba al abrir la pantalla grande y el canal se volvía a conectar dos veces (al entrar y al salir).
