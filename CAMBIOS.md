@@ -4,6 +4,14 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Perfiles con número de distribuidor — versión 2.6.1 (18 de noviembre, cuarta parte)
+- Revisado todo con un distribuidor (número, logo, nombre y colores propios): inicio de sesión, «¿Quién está viendo?», la barra, el perfil infantil y un cambio de marca hecho en el panel (llega a la web en su revisión de cada 10 minutos, también a la pantalla de perfiles y a la marca guardada en el navegador). Los avatares que se ofrecen son los del distribuidor.
+- **«¿Quién está viendo?» con los colores del distribuidor:** fondo, sombras sobre el destacado, cuadros de los diálogos, foco y el interruptor «Perfil infantil» toman su paleta (antes la pantalla quedaba negra). Con Omitir sigue igual (negro y blanco).
+- «Eliminar perfil» queda siempre en rojo (con el acento del distribuidor podía verse verde o azul, como un botón de aceptar).
+- **Celular vertical con un logo ancho:** «Administrar perfiles» se corre según el ancho del logo y, si el texto no entra, queda solo el lápiz (antes un logo ancho lo tapaba).
+- **Perfil infantil:** al cambiar de perfil ya no queda de fondo el último destacado que vio otro perfil, y si el inicio no tiene destacados no se muestra el collage de «Bienvenido» (tiene carátulas para adultos). Ese «Bienvenido» ya no usa el logo de MPX con un distribuidor (en el celular se recortaba su logo).
+- Archivos: `perfiles.php`, `includes/profiles.php`, `includes/core.php` (versión), `assets/nf/profiles.css`, `assets/nf/profiles.js`, `homex.php`. El panel no cambia.
+
 ## Perfil infantil y perfiles más grandes — versión 2.6.0 (18 de noviembre, tercera parte)
 - **Al agregar un perfil, el interruptor «Perfil infantil»** (solo al crearlo; después no se cambia: para quitarlo se elimina y se crea otro). El perfil lleva la etiqueta **«Niños»** en la pantalla de perfiles y en la barra.
 - **Con un perfil infantil se ve solo contenido para niños y de Disney** en todas partes: Inicio, Películas, Series, Explorar, búsqueda, Top 10, plataformas y actores. Entra lo de las categorías de niños, animación, familia y Disney, y lo que el servidor marca como «Familia» o «Infantil»; nunca lo que esté en una categoría de adultos, terror, anime, Marvel, Star Wars o Star (aunque también esté en una de niños), ni la animación para adultos o el anime para adolescentes (Padre de familia, Rick y Morty, Los Simpson, Deadpool, Loki…).

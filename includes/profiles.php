@@ -237,6 +237,18 @@ function wp_prof_select($id, $pin = '')
  * login. ['title', 'rating', 'year', 'kind', 'backdrop' (original)] o null sin clave. Caché de 6 horas por
  * distribuidor e idioma.
  */
+/**
+ * Colores del distribuidor en «¿Quién está viendo?»: fondo, sombras, cuadros, foco y el interruptor con los de su
+ * paleta. '' con Omitir o sin colores (el negro y blanco de siempre). Los valores ya vienen validados (#RRGGBB).
+ */
+function wp_prof_theme_css(array $cfg = null)
+{
+    $p = wp_tenant_palette($cfg);
+    if ($p === null) return '';
+    return '<style id="pf-dist">:root{--pf-bg:' . $p['bg'] . ';--pf-bg-rgb:' . implode(',', wp_hex_rgb($p['bg'])) . ';--pf-card:' . $p['surface']
+        . ';--pf-focus:' . $p['focus'] . ';--pf-on:' . $p['accent'] . '}</style>';
+}
+
 function wp_prof_highlight()
 {
     $base = wp_panel_base();

@@ -3,7 +3,9 @@
    Horizontal: perfiles en columna a la izquierda y de fondo lo más destacado de la semana (TMDB).
    Vertical (celular): el destacado arriba, dos perfiles por fila y el último centrado.
    ========================================================== */
-.pf-body { background: #000; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; }
+/* con un distribuidor con colores, perfiles.php define --pf-bg / --pf-bg-rgb / --pf-card / --pf-focus / --pf-on
+   (wp_prof_theme_css); con Omitir quedan el negro y el blanco de siempre */
+.pf-body { background: var(--pf-bg, #000); min-height: 100vh; min-height: 100dvh; overflow-x: hidden; }
 /* avatares grandes: lo más que deja la altura con los 5 perfiles y «Administrar perfiles» sin desplazarse */
 .pf-root { position: relative; min-height: 100vh; min-height: 100dvh; --av: clamp(60px, min(13vh, 18vh - 52px), 170px); }
 
@@ -16,9 +18,9 @@
 .pf-shade {
     position: fixed; inset: 0; z-index: 1; pointer-events: none;
     background:
-        linear-gradient(90deg, rgba(0,0,0,.94) 0%, rgba(0,0,0,.86) 24%, rgba(0,0,0,.5) 44%, rgba(0,0,0,.08) 64%, rgba(0,0,0,0) 76%),
-        linear-gradient(0deg, rgba(0,0,0,.7) 0%, rgba(0,0,0,0) 32%),
-        linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 18%);
+        linear-gradient(90deg, rgba(var(--pf-bg-rgb, 0,0,0),.94) 0%, rgba(var(--pf-bg-rgb, 0,0,0),.86) 24%, rgba(var(--pf-bg-rgb, 0,0,0),.5) 44%, rgba(var(--pf-bg-rgb, 0,0,0),.08) 64%, rgba(var(--pf-bg-rgb, 0,0,0),0) 76%),
+        linear-gradient(0deg, rgba(var(--pf-bg-rgb, 0,0,0),.7) 0%, rgba(var(--pf-bg-rgb, 0,0,0),0) 32%),
+        linear-gradient(180deg, rgba(var(--pf-bg-rgb, 0,0,0),.55) 0%, rgba(var(--pf-bg-rgb, 0,0,0),0) 18%);
 }
 
 /* arriba: Salir a la izquierda, el logo a la derecha */
@@ -72,9 +74,9 @@
 .pf-switch-row input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .pf-tog { position: relative; flex: none; width: 52px; height: 30px; border-radius: 999px; background: #4a4a4a; transition: background .2s; }
 .pf-tog::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform .2s; }
-.pf-switch-row input:checked + .pf-tog { background: #2ecc71; }
+.pf-switch-row input:checked + .pf-tog { background: var(--pf-on, #2ecc71); }
 .pf-switch-row input:checked + .pf-tog::after { transform: translateX(22px); }
-.pf-switch-row input:focus-visible + .pf-tog { box-shadow: 0 0 0 3px #fff; }
+.pf-switch-row input:focus-visible + .pf-tog { box-shadow: 0 0 0 3px var(--pf-focus, #fff); }
 .pf-lock { font-size: 14px; color: #8c8c8c; flex: none; }
 .pf-add .pf-av { background: rgba(255,255,255,.06); border: 2px dashed rgba(255,255,255,.45); font-size: calc(var(--av) * .34); color: #bbb; }
 .pf-add:hover .pf-av, .pf-add:focus-visible .pf-av { color: #fff; border-color: #fff; }
@@ -92,7 +94,7 @@
 .pf-btn-main { background: #fff; color: #000; border-color: #fff; }
 .pf-btn-main:hover, .pf-btn-main:focus-visible { background: #e6e6e6; color: #000; }
 .pf-btn-danger { border-color: rgba(229,9,20,.7); color: #ff8a8a; }
-.pf-btn-danger:hover, .pf-btn-danger:focus-visible { background: var(--nf-red); border-color: var(--nf-red); color: #fff; }
+.pf-btn-danger:hover, .pf-btn-danger:focus-visible { background: #e50914; border-color: #e50914; color: #fff; }
 .pf-btn[disabled] { opacity: .5; cursor: default; }
 .pf-manage { align-self: flex-start; margin-top: 2.4vh; }
 .pf-managing .pf-manage { background: #fff; color: #000; border-color: #fff; }
@@ -121,7 +123,7 @@
 }
 .pf-modal[hidden] { display: none; }
 .pf-card {
-    width: min(560px, 100%); max-height: calc(100dvh - 32px); overflow: auto; background: #181818; color: #e5e5e5;
+    width: min(560px, 100%); max-height: calc(100dvh - 32px); overflow: auto; background: var(--pf-card, #181818); color: #e5e5e5;
     border: 1px solid #333; border-radius: 12px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.7); animation: nfFade .18s ease;
 }
 .pf-card h2 { margin: 0 0 16px; font-size: 22px; color: #fff; }
@@ -133,7 +135,7 @@
     width: 230px; max-width: 100%; height: 64px; font-size: 34px; letter-spacing: 22px; text-indent: 22px; text-align: center;
     background: #262626; border: 2px solid #4a4a4a; border-radius: 10px; color: #fff; outline: none;
 }
-.pf-pin:focus { border-color: #fff; }
+.pf-pin:focus { border-color: var(--pf-focus, #fff); }
 .pf-link { background: none; border: 0; color: #b3b3b3; text-decoration: underline; cursor: pointer; font: inherit; font-size: 14px; padding: 10px 4px; }
 .pf-link:hover, .pf-link:focus-visible { color: #fff; outline: none; }
 .pf-field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
@@ -142,12 +144,12 @@
     width: 100%; min-height: 46px; padding: 0 14px; background: #262626; border: 1px solid #4a4a4a; border-radius: 6px;
     color: #fff; font: inherit; font-size: 16px; outline: none;
 }
-.pf-input:focus { border-color: #fff; }
+.pf-input:focus { border-color: var(--pf-focus, #fff); }
 .pf-edit-top { display: flex; align-items: center; gap: 18px; }
 .pf-avbtn { --av: 96px; border: 0; padding: 0; cursor: pointer; }
 .pf-avbtn .pf-edit { display: grid; font-size: 22px; opacity: .85; }
 .pf-avbtn:hover .pf-edit, .pf-avbtn:focus-visible .pf-edit { opacity: 1; }
-.pf-avbtn:focus-visible { box-shadow: 0 0 0 3px #fff; outline: none; }
+.pf-avbtn:focus-visible { box-shadow: 0 0 0 3px var(--pf-focus, #fff); outline: none; }
 /* filas de medida fija: con max-height, Safari (iPhone, iPad, Mac) achica las filas automáticas para que todo entre y
    los cuadros se encimaban */
 .pf-avgrid {
@@ -158,7 +160,7 @@
 .pf-avopt { width: 64px; height: 64px; border-radius: 8px; overflow: hidden; border: 0; padding: 0; background: #333; cursor: pointer; }
 .pf-avopt img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pf-avopt:hover, .pf-avopt:focus-visible { box-shadow: 0 0 0 3px rgba(255,255,255,.75); outline: none; }
-.pf-avopt.on { box-shadow: 0 0 0 3px #fff; }
+.pf-avopt.on { box-shadow: 0 0 0 3px var(--pf-focus, #fff); }
 .pf-sec { border-top: 1px solid #2e2e2e; margin-top: 18px; padding-top: 14px; }
 .pf-sec h3 { margin: 0 0 10px; font-size: 15px; color: #fff; display: flex; align-items: center; gap: 8px; }
 .pf-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -185,10 +187,12 @@
     .pf-bg { position: absolute; height: 22vh; height: 22svh; object-position: center 25%; }
     .pf-shade {
         position: absolute; height: 22vh; height: 22svh; bottom: auto;
-        background: linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,.55) 66%, #000 100%);
+        background: linear-gradient(180deg, rgba(var(--pf-bg-rgb, 0,0,0),.5) 0%, rgba(var(--pf-bg-rgb, 0,0,0),0) 30%, rgba(var(--pf-bg-rgb, 0,0,0),.55) 66%, var(--pf-bg, #000) 100%);
     }
     .pf-top { position: absolute; padding-left: 14px; padding-right: 14px; }
-    .pf-logo { height: 30px; }
+    /* el logo de un distribuidor puede ser ancho: se limita y «Administrar perfiles» se corre según su ancho (--pf-logo-w,
+       lo pone profiles.js); si el texto no entra queda solo el lápiz */
+    .pf-logo { height: 30px; max-width: 34vw; object-fit: contain; }
     .pf-exit { min-height: 36px; padding: 0 13px; font-size: 13px; }
     .pf-hl { position: absolute; top: calc(22svh - 66px); bottom: auto; left: 16px; right: 16px; max-width: none; text-align: left; }
     .pf-hl-t { font-size: 20px; }
@@ -206,10 +210,12 @@
     .pf-lock { margin-top: -2px; }
     /* «Administrar perfiles» arriba, junto al logo (como la app de Netflix): los 5 perfiles entran sin desplazarse */
     .pf-manage {
-        position: absolute; top: calc(14px + env(safe-area-inset-top)); right: 58px; margin: 0; z-index: 6;
-        min-height: 36px; padding: 0 12px; font-size: 13px; max-width: calc(100vw - 190px); border-radius: 999px;
+        position: absolute; top: calc(14px + env(safe-area-inset-top)); right: calc(var(--pf-logo-w, 30px) + 28px); margin: 0; z-index: 6;
+        min-height: 36px; padding: 0 12px; font-size: 13px; max-width: calc(100vw - var(--pf-logo-w, 30px) - 160px); border-radius: 999px;
     }
     .pf-manage span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-manage.pf-icon-only { padding: 0; width: 36px; }
+    .pf-manage.pf-icon-only span { display: none; }
     .pf-msg { text-align: center; }
     .pf-actions { justify-content: center; }
 }

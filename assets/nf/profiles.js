@@ -10,6 +10,9 @@
     var modal = d.getElementById('pfModal'), card = d.getElementById('pfCard'), titleEl = d.getElementById('pfTitle');
     var managing = !!C.manage, busy = false, lastFocus = null;
     var pins = {}; // PIN ya comprobado en esta página (para editar un perfil bloqueado)
+    // al cambiar de perfil no se arrastra el último destacado del inicio (app.js lo deja de fondo mientras carga):
+    // un perfil infantil nunca ve un instante el banner que vio otro perfil
+    try { sessionStorage.removeItem('nf_hero_bg'); } catch (e) { /* sin almacenamiento */ }
 
     /* fondo: si una dirección falla, la siguiente */
     var bg = d.getElementById('pfBg');
@@ -82,10 +85,30 @@
         root.classList.toggle('pf-managing', managing);
         if (titleEl) titleEl.textContent = managing ? tr('Administrar perfiles') : tr('¿Quién está viendo?');
         if (manageBtn) manageBtn.innerHTML = managing ? '<span>' + esc(tr('Listo')) + '</span>' : '<i class="fas fa-pen" aria-hidden="true"></i> <span>' + esc(tr('Administrar perfiles')) + '</span>';
+        fitTop();
         var want = focusId ? list.querySelector('[data-id="' + cssEsc(focusId) + '"]') : null;
         if (want && !matchMedia('(hover: none)').matches) want.focus({preventScroll: true});
     }
     function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
+    /* vertical: «Administrar perfiles» va junto al logo; un logo ancho de distribuidor lo corre a la izquierda y, si el
+       texto ya no entra, queda solo el lápiz (con su nombre para el lector de pantalla) */
+    function fitTop() {
+        if (!manageBtn) return;
+        var logo = d.querySelector('.pf-logo');
+        if (logo) root.style.setProperty('--pf-logo-w', Math.ceil(logo.getBoundingClientRect().width) + 'px');
+        manageBtn.classList.remove('pf-icon-only');
+        manageBtn.removeAttribute('aria-label');
+        var s = manageBtn.querySelector('span');
+        if (s && manageBtn.querySelector('i') && getComputedStyle(manageBtn).position === 'absolute' && s.scrollWidth > s.clientWidth + 1) {
+            manageBtn.classList.add('pf-icon-only');
+            manageBtn.setAttribute('aria-label', s.textContent);
+        }
+    }
+    (function () {
+        var logo = d.querySelector('.pf-logo');
+        if (logo && !logo.complete) logo.addEventListener('load', fitTop);
+        addEventListener('resize', fitTop);
+    })();
 
     list.addEventListener('click', function (e) {
         var b = e.target.closest ? e.target.closest('.pf-item') : null;

@@ -84,6 +84,14 @@ Esta web es la implementación de referencia para las demás apps.
   Las reglas llegan del panel en `kidsRules` (`wp_kids_rules_remember()`, 30 días) y `wp_kids_rules_local()` es la
   copia de fábrica: **cópiala de `includes/kids_rules.php` del panel cuando cambien las listas.** El algoritmo y cómo
   arreglar una filtración: «Perfil infantil» en `docs/PERFILES.md` del panel. El interruptor sale solo al crear
-  (`#pfKids` en `profiles.js`, campo `kids`).
+  (`#pfKids` en `profiles.js`, campo `kids`). Al abrir `perfiles.php` se borra `nf_hero_bg` de `sessionStorage` (el fondo
+  que `app.js` deja mientras carga el destacado) para que un perfil nunca vea el banner de otro; en el inicio infantil el
+  «Bienvenido» sin destacados no usa el collage `assets/images/overlay.webp`.
+- **Con número de distribuidor**, `perfiles.php` usa su logo y nombre (`wp_brand_logo`, `wp_brand_name`), sus variables
+  (`wp_tenant_css`) y `wp_prof_theme_css()` (`includes/profiles.php`): `--pf-bg`, `--pf-bg-rgb`, `--pf-card`,
+  `--pf-focus`, `--pf-on` para el fondo, las sombras, los diálogos, el foco y el interruptor; sin paleta (Omitir) no se
+  define nada y `profiles.css` usa el negro y blanco de siempre. «Eliminar perfil» es rojo fijo. En vertical
+  `profiles.js` (`fitTop`) pone `--pf-logo-w` con el ancho del logo para correr «Administrar perfiles» y, si no entra el
+  texto, lo deja solo con el lápiz (`.pf-icon-only`, con `aria-label`).
 - **Prueba:** desde el repo del panel, `WP_DIR=/ruta/a/esta/web php tools/profiles_web_test.php` (Chromium contra una
   copia del panel con datos inventados; el servidor IPTV de prueba trae un catálogo pequeño para el perfil infantil).
