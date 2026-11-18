@@ -51,14 +51,16 @@ $pf_cfg = [
     <meta name="theme-color" content="#000000">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title><?php echo e(t('¿Quién está viendo?')); ?> - <?php echo e($sitename); ?></title>
+    <script>/* al entrar no hay transición: nunca se ve un pedazo de la página de antes (como «Top 10 de hoy» del inicio) */
+    addEventListener('pagereveal', function (e) { var v = e.viewTransition; if (!v) return; v.skipTransition(); [v.ready, v.finished, v.updateCallbackDone].forEach(function (p) { if (p && p.catch) p.catch(function () {}); }); });</script>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
     <link rel="stylesheet" href="assets/nf/app.css?v=12">
-    <link rel="stylesheet" href="assets/nf/profiles.css?v=1">
+    <link rel="stylesheet" href="assets/nf/profiles.css?v=2">
     <?php echo wp_tenant_css($pf_dist); ?>
     <?php echo wp_i18n_script(); ?>
     <script>window.PF=<?php echo json_encode($pf_cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;</script>
-    <script src="assets/nf/profiles.js?v=1" defer></script>
+    <script src="assets/nf/profiles.js?v=2" defer></script>
 </head>
 <body class="pf-body">
 <div class="pf-root" id="pfRoot">
@@ -91,7 +93,6 @@ $pf_cfg = [
 
     <?php if ($pf_hl): ?>
         <aside class="pf-hl" aria-label="<?php echo e(t('Lo más destacado de la semana')); ?>">
-            <span class="pf-hl-k"><?php echo e(t('Lo más destacado de la semana')); ?></span>
             <b class="pf-hl-t"><?php echo e($pf_hl['title']); ?></b>
             <span class="pf-hl-m">
                 <?php if ($pf_hl['rating'] > 0): ?><span class="pf-hl-r"><i class="fas fa-star" aria-hidden="true"></i> <?php echo e(number_format((float)$pf_hl['rating'], 1)); ?></span><?php endif; ?>
@@ -100,6 +101,7 @@ $pf_cfg = [
             </span>
         </aside>
     <?php endif; ?>
+    <span class="pf-ver"><?php echo e(t('Versión {v}', ['v' => WP_VERSION])); ?></span>
 </div>
 
 <div class="pf-modal" id="pfModal" role="dialog" aria-modal="true" aria-labelledby="pfModalTitle" hidden>

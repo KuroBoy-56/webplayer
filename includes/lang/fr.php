@@ -490,4 +490,5 @@ return [
     'Repite el PIN' => 'Répétez le code PIN',
     '¿Eliminar el perfil {n}?' => 'Supprimer le profil {n} ?',
     'Se quitará de todos tus equipos. Durante 7 días puedes recuperarlo con su Continuar viendo y su Mi lista creando un perfil con el mismo nombre exacto; después se borra para siempre.' => 'Il sera retiré de tous vos appareils. Pendant 7 jours, vous pouvez le récupérer, avec sa Reprise de lecture et sa Ma liste, en créant un profil avec exactement le même nom ; ensuite il est effacé définitivement.',
+    'Versión {v}' => 'Version {v}',
 ];

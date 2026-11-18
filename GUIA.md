@@ -46,7 +46,10 @@ Esta web es la implementación de referencia para las demás apps.
   - `wp_prof_highlight()`: lo más destacado de la semana (`api/tmdb.php?path=trending/all/week` del panel, con la clave
     del distribuidor o la del dueño con Omitir, 6 h en caché); el fondo va en Full HD y el original 4K por `srcset`.
 - **`perfiles.php`** (en `WP_ROUTE_PAGES`, al final de la lista; nunca se cambia el orden porque el número va dentro
-  de los tokens) y **`assets/nf/profiles.css` / `profiles.js`**: la pantalla, el PIN, administrar y agregar. Las
+  de los tokens) y **`assets/nf/profiles.css` / `profiles.js`**: la pantalla, el PIN, administrar y agregar. En
+  horizontal el título va arriba al centro, el destacado (solo nombre y calificación) abajo a la derecha y la versión de
+  la web (`WP_VERSION`, `includes/core.php`) abajo a la izquierda. Al entrar se salta la transición entre páginas
+  (`pagereveal` + `skipTransition()`; con `@view-transition { navigation: none }` Chrome deja un error en la consola). Las
   acciones van por `fetch` (POST) a la misma dirección y `wp_prof_post()` las pasa al panel. Token propio contra CSRF
   (`wp_prof_csrf()`).
 - **Ojo:** `wp_route_rewrite()` convierte en token cualquier texto entre comillas igual al nombre de una página (por

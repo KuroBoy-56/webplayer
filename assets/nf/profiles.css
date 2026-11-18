@@ -36,9 +36,15 @@
 /* columna de perfiles (los 5 entran en la pantalla) */
 .pf-side {
     position: relative; z-index: 2; width: clamp(340px, 38vw, 660px); min-height: 100vh; min-height: 100dvh;
-    display: flex; flex-direction: column; justify-content: center; padding: 84px 2vw 40px 4%;
+    display: flex; flex-direction: column; justify-content: center; padding: 84px 2vw 64px 4%;
 }
-.pf-title { margin: 0 0 2.4vh; font-size: clamp(26px, 2.6vw, 46px); font-weight: 700; color: #fff; letter-spacing: -.3px; }
+/* «¿Quién está viendo?» arriba, en el centro (horizontal) */
+.pf-title {
+    position: fixed; top: calc(10px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 6;
+    margin: 0; max-width: calc(100vw - 340px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
+    font-size: clamp(24px, 2.3vw, 42px); line-height: 48px; font-weight: 700; color: #fff; letter-spacing: -.3px;
+    text-shadow: 0 2px 12px rgba(0,0,0,.8); pointer-events: none;
+}
 .pf-msg { color: #ddd; font-size: 16px; max-width: 420px; }
 .pf-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.3vh; }
 .pf-item {
@@ -81,11 +87,16 @@
     position: fixed; right: 4%; bottom: calc(5vh + env(safe-area-inset-bottom)); z-index: 2; max-width: min(46vw, 640px);
     text-align: right; text-shadow: 0 2px 10px rgba(0,0,0,.85); pointer-events: none;
 }
-.pf-hl-k { display: block; font-size: 12px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: rgba(255,255,255,.75); margin-bottom: 6px; }
 .pf-hl-t { display: block; font-size: clamp(22px, 2.4vw, 42px); font-weight: 800; color: #fff; line-height: 1.1; }
 .pf-hl-m { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; margin-top: 8px; font-size: 15px; color: #e5e5e5; font-weight: 600; }
 .pf-hl-r { color: #fff; }
 .pf-hl-r i { color: #f5c518; margin-right: 2px; }
+
+/* versión de la app: abajo a la izquierda, chica, sin tapar «Administrar perfiles» */
+.pf-ver {
+    position: fixed; left: 4%; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 2; font-size: 13px; letter-spacing: .3px;
+    color: rgba(255,255,255,.5); pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,.8);
+}
 
 /* ventanas: PIN, editar, agregar, eliminar */
 .pf-modal {
@@ -139,7 +150,7 @@
 
 /* PC con poca altura (720p): un poco más juntos, todo entra sin desplazarse */
 @media (orientation: landscape) and (max-height: 780px) and (min-height: 521px) {
-    .pf-side { padding-top: 72px; padding-bottom: 18px; }
+    .pf-side { padding-top: 72px; padding-bottom: 48px; }
     .pf-list { gap: 1vh; }
     .pf-manage { margin-top: 2.2vh; }
 }
@@ -155,12 +166,12 @@
     .pf-top { position: absolute; padding-left: 14px; padding-right: 14px; }
     .pf-logo { height: 30px; }
     .pf-exit { min-height: 36px; padding: 0 13px; font-size: 13px; }
-    .pf-hl { position: absolute; top: calc(30svh - 84px); bottom: auto; left: 16px; right: 16px; max-width: none; text-align: left; }
-    .pf-hl-k { font-size: 11px; margin-bottom: 4px; }
+    .pf-hl { position: absolute; top: calc(30svh - 66px); bottom: auto; left: 16px; right: 16px; max-width: none; text-align: left; }
     .pf-hl-t { font-size: 20px; }
     .pf-hl-m { justify-content: flex-start; font-size: 13px; margin-top: 4px; }
     .pf-side { width: auto; min-height: 0; padding: calc(30svh + 14px) 16px calc(8px + env(safe-area-inset-bottom)); align-items: center; text-align: center; }
-    .pf-title { font-size: 22px; margin-bottom: 14px; }
+    .pf-title { position: static; transform: none; max-width: none; white-space: normal; line-height: 1.2; text-shadow: none; pointer-events: auto; font-size: 22px; margin: 0 0 14px; }
+    .pf-ver { position: absolute; left: 16px; bottom: calc(10px + env(safe-area-inset-bottom)); font-size: 12px; }
     .pf-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: min(100%, 380px); }
     .pf-list li { display: flex; justify-content: center; min-width: 0; }
     .pf-list li:last-child:nth-child(odd) { grid-column: 1 / -1; }
@@ -180,13 +191,13 @@
 @media (max-height: 520px) and (orientation: landscape) {
     .pf-root { --av: clamp(48px, 17vh, 76px); }
     .pf-side { width: auto; justify-content: center; padding: 58px 4% 14px; }
-    .pf-title { font-size: 20px; margin-bottom: 12px; }
+    .pf-title { font-size: 20px; line-height: 40px; top: calc(8px + env(safe-area-inset-top)); max-width: calc(100vw - 260px); }
+    .pf-ver { bottom: calc(8px + env(safe-area-inset-bottom)); font-size: 11px; }
     .pf-list { flex-direction: row; flex-wrap: wrap; gap: 10px 14px; max-width: 64vw; }
     .pf-item { flex-direction: column; gap: 6px; width: calc(var(--av) + 16px); padding: 4px; text-align: center; }
     .pf-name { font-size: 13px; max-width: 100%; }
     .pf-manage { margin-top: 12px; min-height: 36px; font-size: 13px; padding: 0 14px; }
     .pf-hl { bottom: 12px; max-width: 34vw; }
-    .pf-hl-k { display: none; }
     .pf-hl-t { font-size: 18px; }
     .pf-hl-m { font-size: 12px; margin-top: 4px; }
     .pf-top { padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: 8px; }

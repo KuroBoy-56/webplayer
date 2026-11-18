@@ -4,6 +4,13 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Pantalla de perfiles: título centrado y versión de la web (18 de noviembre, segunda parte)
+- En horizontal «¿Quién está viendo?» va arriba, en el centro (entre «Salir» y el logo).
+- Del destacado de la semana quedan solo el nombre y la calificación (sin la leyenda «Lo más destacado de la semana»).
+- Abajo a la izquierda, la versión de la web: **«Versión 2.5.0»** (`WP_VERSION` en `includes/core.php`), chica y sin tapar «Administrar perfiles».
+- Al entrar desde el menú ya no se ve un instante la página de antes (como el «Top 10 de hoy» del inicio): la pantalla aparece sin transición.
+- Archivos: `perfiles.php`, `assets/nf/profiles.css`, `includes/core.php`, `includes/lang/en.php`, `pt.php`, `fr.php`.
+
 ## Perfiles como Netflix (18 de noviembre)
 - **Solo cuando el dueño los enciende en el panel** (panel › Perfiles). Apagados, en una DEMO o con una sola conexión en la línea, la web queda exactamente como antes (logo a la izquierda, sin pantalla de perfiles, todo se guarda como siempre).
 - **«¿Quién está viendo?»** (`perfiles.php`): al iniciar sesión, antes de cualquier página, se elige el perfil. Horizontal: los perfiles en columna a la izquierda (los 5 caben, también en 720p), «Salir» arriba a la izquierda, el logo arriba a la derecha y de fondo lo más destacado de la semana en TMDB en alta calidad (Full HD; el original 4K en pantallas grandes) con su nombre, calificación y año abajo a la derecha, sin tapar nada. Vertical (celular): el destacado arriba, dos perfiles por fila y el último centrado, y «Administrar perfiles» arriba junto al logo para que todo entre sin desplazarse. Celular horizontal: los perfiles en fila.
