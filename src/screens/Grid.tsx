@@ -1,6 +1,7 @@
 // "Ver todo": cuadrícula de una plataforma, género, categoría o lo más reciente.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Image, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
+import KeyboardModal from '../components/KeyboardModal';
 import { openItem } from '../actions';
 import { Focusable, Message } from '../components/ui';
 import { Shade } from '../components/Shade';
@@ -101,25 +102,27 @@ export default function Grid({ title, mode, keyName, kind, active }: { title: st
   );
   const name = mode === 'cat' && kind ? catalog.k[kind]?.cats.find(c => c.id === keyName)?.name || title : title;
   const canSearch = mode === 'platform';
-  const [searching, setSearching] = useState(false);
+  // La lupa abre el teclado de la app (como Buscar e Iniciar sesión). Antes era un campo del sistema: se quedaba con las
+  // flechas y, al volver a él con el control desde las carátulas, el teclado del sistema se abría solo.
+  const [typing, setTyping] = useState(false);
   const [q, setQ] = useState('');
-  const input = useRef<TextInput>(null);
+  // al cerrar el teclado con algo escrito, el foco baja a la primera carátula
+  const [focusRev, setFocusRev] = useState(0);
   const needle = fold(q.trim());
   // de fondo, un destacado de la lista si tiene fondo propio; en plataformas, fondo liso (antes quedaba detrás la última
   // portada de Inicio, fija, que no tenía nada que ver con la plataforma)
   const banner = useMemo(() => (mode === 'platform' ? '' : items.slice(0, 40).find(it => it.backdrop)?.backdrop || ''), [items, mode]);
   const shown = useMemo(() => (needle ? items.filter(it => fold(it.name).includes(needle)) : items), [items, needle]);
 
+  // lupa: escribir; con algo escrito (✕): borrarlo
   const toggle = () => {
-    if (!searching) {
-      setSearching(true);
-      setTimeout(() => input.current?.focus(), 50);
-    } else if (q) {
-      setQ('');
-      input.current?.focus();
-    } else {
-      setSearching(false);
-    }
+    if (q) setQ('');
+    else setTyping(true);
+  };
+  const close = (v: string) => {
+    setQ(v);
+    setTyping(false);
+    if (v.trim()) setFocusRev(n => n + 1);
   };
 
   return (
@@ -136,18 +139,12 @@ export default function Grid({ title, mode, keyName, kind, active }: { title: st
         </Text>
         {canSearch ? (
           <View style={s.searchBox}>
-            {searching ? (
-              <TextInput
-                ref={input}
-                style={s.input}
-                value={q}
-                onChangeText={setQ}
-                placeholder={t('Buscar en {x}…', { x: name })}
-                placeholderTextColor={C.dim}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-              />
+            {q ? (
+              <View style={s.qBox}>
+                <Text style={s.qText} numberOfLines={1}>
+                  {q}
+                </Text>
+              </View>
             ) : null}
             <Focusable onPress={toggle} style={f => [s.magBtn, f && s.magBtnF]}>
               {f => (q ? <Text style={[s.clear, f && s.clearF]}>✕</Text> : <MagnifierIcon color={f ? C.onFocus : C.text} />)}
@@ -156,10 +153,20 @@ export default function Grid({ title, mode, keyName, kind, active }: { title: st
         ) : null}
       </View>
       {shown.length ? (
-        <ItemGrid items={shown} active={active} />
+        <ItemGrid items={shown} active={active} focusFirst={typing ? 0 : focusRev} />
       ) : (
         <Message text={needle ? t('No hay títulos que coincidan con «{q}».', { q: q.trim() }) : t('No hay títulos en esta sección.')} />
       )}
+      {typing ? (
+        <KeyboardModal
+          title={t('Buscar en {x}…', { x: name })}
+          value={q}
+          onChange={setQ}
+          // Atrás también se queda con lo escrito (como Buscar)
+          onClose={() => close(q)}
+          onDone={close}
+        />
+      ) : null}
     </View>
   );
 }
@@ -174,7 +181,8 @@ const s = themed(() =>
     head: { flexDirection: 'row', alignItems: 'center', marginHorizontal: SIDE, marginBottom: px(10), minHeight: px(80) },
     title: { flex: 1, color: C.text, fontSize: px(52), fontWeight: '800' },
     searchBox: { flexDirection: 'row', alignItems: 'center', marginLeft: px(20) },
-    input: { width: px(520), height: px(72), backgroundColor: C.card, borderRadius: px(8), color: C.text, fontSize: px(30), paddingHorizontal: px(24), marginRight: px(14) },
+    qBox: { maxWidth: px(520), height: px(72), justifyContent: 'center', backgroundColor: C.card, borderRadius: px(8), paddingHorizontal: px(24), marginRight: px(14) },
+    qText: { color: C.text, fontSize: px(30) },
     magBtn: { width: px(72), height: px(72), borderRadius: px(36), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: alpha(C.text, 0.2), backgroundColor: alpha(C.text, 0.15) },
     magBtnF: { backgroundColor: C.focus, borderColor: C.focus, transform: [{ scale: 1.1 }] },
     mag: { width: px(40), height: px(40) },
