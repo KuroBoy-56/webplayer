@@ -4,7 +4,7 @@
    Vertical (celular): el destacado arriba, dos perfiles por fila y el último centrado.
    ========================================================== */
 .pf-body { background: #000; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; }
-.pf-root { position: relative; min-height: 100vh; min-height: 100dvh; --av: clamp(54px, 10.4vh, 120px); }
+.pf-root { position: relative; min-height: 100vh; min-height: 100dvh; --av: clamp(60px, 12vh, 140px); }
 
 /* fondo: alta calidad (Full HD, y el original 4K en pantallas grandes), con aparición suave */
 .pf-bg {
@@ -23,8 +23,10 @@
 /* arriba: Salir a la izquierda, el logo a la derecha */
 .pf-top {
     position: fixed; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
-    padding: calc(14px + env(safe-area-inset-top)) 4% 14px;
+    padding: calc(14px + env(safe-area-inset-top)) 4% 14px; pointer-events: none;
 }
+/* la barra va encima de la columna de perfiles: solo sus botones reciben el toque (en vertical «Administrar perfiles» está en esta fila) */
+.pf-top > * { pointer-events: auto; }
 .pf-exit {
     display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px;
     background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.35); color: #fff; font-size: 14px; font-weight: 600;
@@ -58,7 +60,7 @@
 }
 .pf-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pf-item:hover .pf-av, .pf-item:focus-visible .pf-av { box-shadow: 0 0 0 3px #fff; transform: scale(1.04); }
-.pf-name { font-size: clamp(16px, 1.1vw + 1.1vh, 24px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pf-name { font-size: clamp(17px, 1.2vw + 1.2vh, 26px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .pf-lock { font-size: 14px; color: #8c8c8c; flex: none; }
 .pf-add .pf-av { background: rgba(255,255,255,.06); border: 2px dashed rgba(255,255,255,.45); font-size: calc(var(--av) * .34); color: #bbb; }
 .pf-add:hover .pf-av, .pf-add:focus-visible .pf-av { color: #fff; border-color: #fff; }
@@ -157,22 +159,24 @@
 
 /* ---------- celular vertical: el destacado arriba, dos por fila y el último centrado ---------- */
 @media (orientation: portrait) and (max-width: 899px) {
-    .pf-root { --av: min(23vw, 104px); }
-    .pf-bg { position: absolute; height: 30vh; height: 30svh; object-position: center 25%; }
+    /* tan grandes como dejan el ancho y el alto: los 5 perfiles (tres filas) siguen sin desplazarse */
+    .pf-root { --av: min(26vw, 118px, calc((73vh - 192px) / 3)); }
+    @supports (height: 1svh) { .pf-root { --av: min(26vw, 118px, calc((73svh - 192px) / 3)); } }
+    .pf-bg { position: absolute; height: 27vh; height: 27svh; object-position: center 25%; }
     .pf-shade {
-        position: absolute; height: 30vh; height: 30svh; bottom: auto;
+        position: absolute; height: 27vh; height: 27svh; bottom: auto;
         background: linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,.55) 66%, #000 100%);
     }
     .pf-top { position: absolute; padding-left: 14px; padding-right: 14px; }
     .pf-logo { height: 30px; }
     .pf-exit { min-height: 36px; padding: 0 13px; font-size: 13px; }
-    .pf-hl { position: absolute; top: calc(30svh - 66px); bottom: auto; left: 16px; right: 16px; max-width: none; text-align: left; }
+    .pf-hl { position: absolute; top: calc(27svh - 66px); bottom: auto; left: 16px; right: 16px; max-width: none; text-align: left; }
     .pf-hl-t { font-size: 20px; }
     .pf-hl-m { justify-content: flex-start; font-size: 13px; margin-top: 4px; }
-    .pf-side { width: auto; min-height: 0; padding: calc(30svh + 14px) 16px calc(8px + env(safe-area-inset-bottom)); align-items: center; text-align: center; }
-    .pf-title { position: static; transform: none; max-width: none; white-space: normal; line-height: 1.2; text-shadow: none; pointer-events: auto; font-size: 22px; margin: 0 0 14px; }
+    .pf-side { width: auto; min-height: 0; padding: calc(27svh + 10px) 16px calc(8px + env(safe-area-inset-bottom)); align-items: center; text-align: center; }
+    .pf-title { position: static; transform: none; max-width: none; white-space: normal; line-height: 1.2; text-shadow: none; pointer-events: auto; font-size: 22px; margin: 0 0 10px; }
     .pf-ver { position: absolute; left: 16px; bottom: calc(10px + env(safe-area-inset-bottom)); font-size: 12px; }
-    .pf-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: min(100%, 380px); }
+    .pf-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: min(100%, 380px); }
     .pf-list li { display: flex; justify-content: center; min-width: 0; }
     .pf-list li:last-child:nth-child(odd) { grid-column: 1 / -1; }
     .pf-item { flex-direction: column; gap: 6px; width: auto; max-width: 100%; padding: 4px; text-align: center; }
@@ -189,7 +193,7 @@
 }
 /* celular horizontal: los perfiles en fila */
 @media (max-height: 520px) and (orientation: landscape) {
-    .pf-root { --av: clamp(48px, 17vh, 76px); }
+    .pf-root { --av: clamp(48px, min(20vh, 12.8vw - 28px), 84px); }
     .pf-side { width: auto; justify-content: center; padding: 58px 4% 14px; }
     .pf-title { font-size: 20px; line-height: 40px; top: calc(8px + env(safe-area-inset-top)); max-width: calc(100vw - 260px); }
     .pf-ver { bottom: calc(8px + env(safe-area-inset-bottom)); font-size: 11px; }

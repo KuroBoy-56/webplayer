@@ -60,6 +60,10 @@ Esta web es la implementación de referencia para las demás apps.
 - `header.php`: con perfiles encendidos el avatar del perfil va a la izquierda (menú con «Cambiar perfil» y
   «Administrar perfiles»), el menú en el centro y el logo a la derecha; en el celular el avatar también va en «Mi
   cuenta» de la barra de abajo. `myaccount.php` muestra el perfil con sus botones.
+- `assets/nf/profiles.css`: el tamaño de los avatares es `--av` (PC hasta 140 px; vertical tan grande como dejan el
+  ancho y el alto, para que los 5 perfiles quepan sin desplazarse). En vertical «Administrar perfiles» va en la fila de
+  la barra de arriba: la barra (`.pf-top`) no recibe toques, solo sus botones (si no, en el celular y la tableta el
+  botón no respondía).
 - Textos: `t('…')` en PHP y `tr('…')` en `assets/nf/*.js` (se buscan solos); las traducciones en
   `includes/lang/{en,pt,fr}.php`.
 - **Prueba:** desde el repo del panel, `WP_DIR=/ruta/a/esta/web php tools/profiles_web_test.php` (Chromium contra una
