@@ -13,6 +13,8 @@ if ($id === '') {
     header('Location: homex.php');
     exit;
 }
+// perfil infantil: solo lo que pasa el filtro (includes/kids.php)
+wp_kids_guard($slug, $slug === 'series' ? $series_id_get : $id);
 
 $content_name = '';
 $episode_label = '';
@@ -156,7 +158,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
     <meta name="referrer" content="no-referrer">
     <title><?php echo e($content_name ?: t('Reproductor')); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=12">
+    <link rel="stylesheet" href="assets/nf/app.css?v=13">
     <link rel="stylesheet" href="assets/nf/player.css?v=9">
     <?php echo wp_i18n_script(); ?>
     <style>

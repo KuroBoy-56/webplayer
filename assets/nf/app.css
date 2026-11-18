@@ -642,3 +642,5 @@ html.nf-alert-open { overflow: hidden; }
     .nf-header--prof .nf-logo img { height: 28px; }
     .nf-header--prof .nf-avatar { width: 30px; height: 30px; }
 }
+/* perfil infantil (includes/kids.php): la etiqueta junto al nombre del perfil */
+.nf-kids-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: #111; background: linear-gradient(135deg, #ffd54f, #ff8a65); border-radius: 999px; padding: 2px 7px; vertical-align: middle; }

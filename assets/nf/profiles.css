@@ -4,7 +4,8 @@
    Vertical (celular): el destacado arriba, dos perfiles por fila y el último centrado.
    ========================================================== */
 .pf-body { background: #000; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; }
-.pf-root { position: relative; min-height: 100vh; min-height: 100dvh; --av: clamp(54px, 10.4vh, 120px); }
+/* avatares grandes: lo más que deja la altura con los 5 perfiles y «Administrar perfiles» sin desplazarse */
+.pf-root { position: relative; min-height: 100vh; min-height: 100dvh; --av: clamp(56px, min(13vh, 18vh - 52px), 170px); }
 
 /* fondo: alta calidad (Full HD, y el original 4K en pantallas grandes), con aparición suave */
 .pf-bg {
@@ -46,19 +47,31 @@
     text-shadow: 0 2px 12px rgba(0,0,0,.8); pointer-events: none;
 }
 .pf-msg { color: #ddd; font-size: 16px; max-width: 420px; }
-.pf-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.3vh; }
+.pf-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.1vh; }
 .pf-item {
-    display: flex; align-items: center; gap: 18px; width: 100%; padding: 6px 10px 6px 6px; border: 0; border-radius: 12px;
+    display: flex; align-items: center; gap: 22px; width: 100%; padding: 6px 12px 6px 6px; border: 0; border-radius: 14px;
     background: transparent; color: #b3b3b3; cursor: pointer; text-align: left; font: inherit; transition: background .2s, color .2s;
 }
 .pf-item:hover, .pf-item:focus-visible { background: rgba(255,255,255,.09); color: #fff; outline: none; }
 .pf-av {
-    position: relative; flex: none; width: var(--av); height: var(--av); border-radius: 8px; overflow: hidden; background: #333;
+    position: relative; flex: none; width: var(--av); height: var(--av); border-radius: 10px; overflow: hidden; background: #333;
     box-shadow: 0 0 0 0 transparent; transition: box-shadow .2s, transform .2s; display: grid; place-items: center;
 }
 .pf-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pf-item:hover .pf-av, .pf-item:focus-visible .pf-av { box-shadow: 0 0 0 3px #fff; transform: scale(1.04); }
-.pf-name { font-size: clamp(16px, 1.1vw + 1.1vh, 24px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pf-name { font-size: clamp(18px, 1.15vw + 1.25vh, 34px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* perfil infantil: la etiqueta junto al nombre (en el celular, sobre el avatar) */
+.pf-kids-av { display: none; }
+.pf-kids { flex: none; font-size: 12px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: #111; background: linear-gradient(135deg, #ffd54f, #ff8a65); border-radius: 999px; padding: 3px 9px; }
+.pf-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; }
+.pf-switch-row b { display: block; color: #fff; font-size: 15px; margin-bottom: 4px; }
+.pf-switch-row small { display: block; color: #9a9a9a; font-size: 13px; line-height: 1.4; }
+.pf-switch-row input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.pf-tog { position: relative; flex: none; width: 52px; height: 30px; border-radius: 999px; background: #4a4a4a; transition: background .2s; }
+.pf-tog::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.pf-switch-row input:checked + .pf-tog { background: #2ecc71; }
+.pf-switch-row input:checked + .pf-tog::after { transform: translateX(22px); }
+.pf-switch-row input:focus-visible + .pf-tog { box-shadow: 0 0 0 3px #fff; }
 .pf-lock { font-size: 14px; color: #8c8c8c; flex: none; }
 .pf-add .pf-av { background: rgba(255,255,255,.06); border: 2px dashed rgba(255,255,255,.45); font-size: calc(var(--av) * .34); color: #bbb; }
 .pf-add:hover .pf-av, .pf-add:focus-visible .pf-av { color: #fff; border-color: #fff; }
@@ -78,7 +91,7 @@
 .pf-btn-danger { border-color: rgba(229,9,20,.7); color: #ff8a8a; }
 .pf-btn-danger:hover, .pf-btn-danger:focus-visible { background: var(--nf-red); border-color: var(--nf-red); color: #fff; }
 .pf-btn[disabled] { opacity: .5; cursor: default; }
-.pf-manage { align-self: flex-start; margin-top: 3.2vh; }
+.pf-manage { align-self: flex-start; margin-top: 2.4vh; }
 .pf-managing .pf-manage { background: #fff; color: #000; border-color: #fff; }
 .pf-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 
@@ -150,6 +163,7 @@
 
 /* PC con poca altura (720p): un poco más juntos, todo entra sin desplazarse */
 @media (orientation: landscape) and (max-height: 780px) and (min-height: 521px) {
+    .pf-root { --av: clamp(56px, min(13vh, 18vh - 46px), 170px); }
     .pf-side { padding-top: 72px; padding-bottom: 48px; }
     .pf-list { gap: 1vh; }
     .pf-manage { margin-top: 2.2vh; }
@@ -157,26 +171,28 @@
 
 /* ---------- celular vertical: el destacado arriba, dos por fila y el último centrado ---------- */
 @media (orientation: portrait) and (max-width: 899px) {
-    .pf-root { --av: min(23vw, 104px); }
-    .pf-bg { position: absolute; height: 30vh; height: 30svh; object-position: center 25%; }
+    .pf-root { --av: min(28vw, 150px); }
+    .pf-bg { position: absolute; height: 22vh; height: 22svh; object-position: center 25%; }
     .pf-shade {
-        position: absolute; height: 30vh; height: 30svh; bottom: auto;
+        position: absolute; height: 22vh; height: 22svh; bottom: auto;
         background: linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,.55) 66%, #000 100%);
     }
     .pf-top { position: absolute; padding-left: 14px; padding-right: 14px; }
     .pf-logo { height: 30px; }
     .pf-exit { min-height: 36px; padding: 0 13px; font-size: 13px; }
-    .pf-hl { position: absolute; top: calc(30svh - 66px); bottom: auto; left: 16px; right: 16px; max-width: none; text-align: left; }
+    .pf-hl { position: absolute; top: calc(22svh - 66px); bottom: auto; left: 16px; right: 16px; max-width: none; text-align: left; }
     .pf-hl-t { font-size: 20px; }
     .pf-hl-m { justify-content: flex-start; font-size: 13px; margin-top: 4px; }
-    .pf-side { width: auto; min-height: 0; padding: calc(30svh + 14px) 16px calc(8px + env(safe-area-inset-bottom)); align-items: center; text-align: center; }
-    .pf-title { position: static; transform: none; max-width: none; white-space: normal; line-height: 1.2; text-shadow: none; pointer-events: auto; font-size: 22px; margin: 0 0 14px; }
+    .pf-side { width: auto; min-height: 0; padding: calc(22svh + 12px) 16px calc(6px + env(safe-area-inset-bottom)); align-items: center; text-align: center; }
+    .pf-title { position: static; transform: none; max-width: none; white-space: normal; line-height: 1.2; text-shadow: none; pointer-events: auto; font-size: 22px; margin: 0 0 12px; }
     .pf-ver { position: absolute; left: 16px; bottom: calc(10px + env(safe-area-inset-bottom)); font-size: 12px; }
-    .pf-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: min(100%, 380px); }
+    .pf-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: min(100%, 420px); }
     .pf-list li { display: flex; justify-content: center; min-width: 0; }
     .pf-list li:last-child:nth-child(odd) { grid-column: 1 / -1; }
     .pf-item { flex-direction: column; gap: 6px; width: auto; max-width: 100%; padding: 4px; text-align: center; }
-    .pf-name { font-size: 14px; max-width: 40vw; }
+    .pf-name { font-size: 16px; max-width: 40vw; }
+    .pf-item > .pf-kids { display: none; }
+    .pf-kids-av { display: block; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); font-size: 10px; padding: 2px 8px; box-shadow: 0 1px 6px rgba(0,0,0,.4); }
     .pf-lock { margin-top: -2px; }
     /* «Administrar perfiles» arriba, junto al logo (como la app de Netflix): los 5 perfiles entran sin desplazarse */
     .pf-manage {
@@ -189,13 +205,15 @@
 }
 /* celular horizontal: los perfiles en fila */
 @media (max-height: 520px) and (orientation: landscape) {
-    .pf-root { --av: clamp(48px, 17vh, 76px); }
+    .pf-root { --av: clamp(52px, 22vh, 96px); }
     .pf-side { width: auto; justify-content: center; padding: 58px 4% 14px; }
     .pf-title { font-size: 20px; line-height: 40px; top: calc(8px + env(safe-area-inset-top)); max-width: calc(100vw - 260px); }
     .pf-ver { bottom: calc(8px + env(safe-area-inset-bottom)); font-size: 11px; }
-    .pf-list { flex-direction: row; flex-wrap: wrap; gap: 10px 14px; max-width: 64vw; }
+    .pf-list { flex-direction: row; flex-wrap: wrap; gap: 10px 14px; max-width: 82vw; }
     .pf-item { flex-direction: column; gap: 6px; width: calc(var(--av) + 16px); padding: 4px; text-align: center; }
     .pf-name { font-size: 13px; max-width: 100%; }
+    .pf-item > .pf-kids { display: none; }
+    .pf-kids-av { display: block; position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); font-size: 9px; padding: 1px 6px; }
     .pf-manage { margin-top: 12px; min-height: 36px; font-size: 13px; padding: 0 14px; }
     .pf-hl { bottom: 12px; max-width: 34vw; }
     .pf-hl-t { font-size: 18px; }

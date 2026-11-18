@@ -27,7 +27,10 @@ $wp_server_name = !empty($_SESSION['server_id']) ? t('Servidor {n}', ['n' => $_S
 // Marca del distribuidor (Omitir: logo, nombre y colores de siempre)
 $wp_dist_cfg = wp_tenant_cfg();
 $wp_dist_pal = wp_tenant_palette($wp_dist_cfg);
-$wp_show_sports = wp_tenant_feature('sports');
+// perfil infantil (includes/kids.php): sin Deportes, y TV en vivo solo si la lista tiene canales para niños
+$wp_kids = wp_kids_on();
+$wp_show_sports = wp_tenant_feature('sports') && !$wp_kids;
+$wp_show_live = !$wp_kids || wp_kids_has_live();
 // Perfiles (includes/profiles.php): encendidos, el avatar del perfil va a la izquierda, el menú en el centro y el logo a
 // la derecha; apagados (o en una DEMO) la barra de siempre
 $wp_pv = wp_prof_view();
@@ -52,7 +55,7 @@ if (!function_exists('wp_nav_cls')) {
     <title><?php echo e($page_title); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
-    <link rel="stylesheet" href="assets/nf/app.css?v=12">
+    <link rel="stylesheet" href="assets/nf/app.css?v=13">
     <?php echo wp_tenant_css($wp_dist_cfg); ?>
     <?php if (wp_panel_tenant() !== '' || wp_dist_choice() === 'skip') echo wp_brand_store_script($wp_dist_cfg); ?>
     <script>window.NF={demo:<?php echo $wp_demo ? 'true' : 'false'; ?>,imgErr:function(i){i.onerror=null;i.src='assets/nf/noposter.svg';i.classList.add('ok');var c=i.closest&&i.closest('.nf-card');if(c)c.classList.add('noimg');}};</script>
@@ -80,7 +83,7 @@ if (!function_exists('wp_nav_cls')) {
             </button>
             <div class="nf-menu" role="menu">
                 <?php if ($wp_pv['on']): ?>
-                <div class="who"><b><?php echo e($wp_pv['name'] !== '' ? $wp_pv['name'] : $username); ?></b><?php echo $wp_server_name ? e(t('Servidor: {s}', ['s' => $wp_server_name])) : ''; ?></div>
+                <div class="who"><b><?php echo e($wp_pv['name'] !== '' ? $wp_pv['name'] : $username); ?><?php if ($wp_kids): ?> <span class="nf-kids-tag"><?php echo e(t('Niños')); ?></span><?php endif; ?></b><?php echo $wp_server_name ? e(t('Servidor: {s}', ['s' => $wp_server_name])) : ''; ?></div>
                 <?php if ($wp_pv['many']): ?>
                 <a href="perfiles.php"><i class="fas fa-user-friends"></i> <?php echo t('Cambiar perfil'); ?></a>
                 <a href="perfiles.php?manage=1"><i class="fas fa-pen"></i> <?php echo t('Administrar perfiles'); ?></a>
@@ -103,7 +106,7 @@ if (!function_exists('wp_nav_cls')) {
             <li><a href="homex.php"<?php echo wp_nav_cls('home'); ?>><?php echo t('Inicio'); ?></a></li>
             <li><a href="seriesondemand.php"<?php echo wp_nav_cls('series'); ?>><?php echo t('Series'); ?></a></li>
             <li><a href="moviesondemand.php"<?php echo wp_nav_cls('movies'); ?>><?php echo t('Películas'); ?></a></li>
-            <li><a href="tvguide.php"<?php echo wp_nav_cls('live'); ?>><?php echo t('TV en vivo'); ?></a></li>
+            <?php if ($wp_show_live): ?><li><a href="tvguide.php"<?php echo wp_nav_cls('live'); ?>><?php echo t('TV en vivo'); ?></a></li><?php endif; ?>
             <?php if ($wp_show_sports): ?><li><a href="sportsschedule.php"<?php echo wp_nav_cls('sports'); ?>><?php echo t('Deportes'); ?></a></li><?php endif; ?>
             <li><a href="browse.php"<?php echo wp_nav_cls('browse'); ?>><?php echo t('Explorar'); ?></a></li>
         </ul>
@@ -137,7 +140,7 @@ if (!function_exists('wp_nav_cls')) {
     <a href="homex.php"<?php echo wp_nav_cls('home'); ?>><?php echo wp_icon('home'); ?><span><?php echo t('Inicio'); ?></span></a>
     <a href="seriesondemand.php"<?php echo wp_nav_cls('series'); ?>><?php echo wp_icon('series'); ?><span><?php echo t('Series'); ?></span></a>
     <a href="moviesondemand.php"<?php echo wp_nav_cls('movies'); ?>><?php echo wp_icon('film'); ?><span><?php echo t('Películas'); ?></span></a>
-    <a href="tvguide.php"<?php echo wp_nav_cls('live'); ?>><?php echo wp_icon('live'); ?><span><?php echo t('En vivo'); ?></span></a>
+    <?php if ($wp_show_live): ?><a href="tvguide.php"<?php echo wp_nav_cls('live'); ?>><?php echo wp_icon('live'); ?><span><?php echo t('En vivo'); ?></span></a><?php endif; ?>
     <a href="myaccount.php"<?php echo ($nav_active === 'account' || $nav_active === 'settings') ? ' class="active"' : ''; ?>><?php echo $wp_pv_img !== '' ? '<img class="nf-tab-av" src="' . e($wp_pv_img) . '" alt="">' : wp_icon('user'); ?><span><?php echo t('Mi cuenta'); ?></span></a>
 </nav>
 

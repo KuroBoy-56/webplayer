@@ -4,6 +4,17 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Perfil infantil y perfiles más grandes — versión 2.6.0 (18 de noviembre, tercera parte)
+- **Al agregar un perfil, el interruptor «Perfil infantil»** (solo al crearlo; después no se cambia: para quitarlo se elimina y se crea otro). El perfil lleva la etiqueta **«Niños»** en la pantalla de perfiles y en la barra.
+- **Con un perfil infantil se ve solo contenido para niños y de Disney** en todas partes: Inicio, Películas, Series, Explorar, búsqueda, Top 10, plataformas y actores. Entra lo de las categorías de niños, animación, familia y Disney, y lo que el servidor marca como «Familia» o «Infantil»; nunca lo que esté en una categoría de adultos, terror, anime, Marvel, Star Wars o Star (aunque también esté en una de niños), ni la animación para adultos o el anime para adolescentes (Padre de familia, Rick y Morty, Los Simpson, Deadpool, Loki…).
+- **TV en vivo** solo con las categorías de niños de la lista (Infantiles, Kids, Disney, Cartoon Network…); si la lista no tiene ninguna, TV en vivo desaparece del menú. **Deportes** no aparece.
+- Una ficha, el reproductor o un enlace a algo que no es para niños (por ejemplo desde otro equipo) vuelve al inicio.
+- Guarda lo suyo aparte como cualquier perfil (Continuar viendo y Mi lista).
+- Las reglas del filtro las manda el panel (las mismas para todas las apps; una filtración se arregla en el panel sin tocar la web). La web trae una copia por si el panel no contesta.
+- **Perfiles más grandes** en «¿Quién está viendo?»: avatares de unos 140 px en 1080p (antes 112; hasta 170 en pantallas grandes) y nombres más grandes; en el celular vertical hasta 150 px y en horizontal hasta 96. Los 5 siguen entrando sin desplazarse.
+- La versión que se ve abajo a la izquierda pasa a **2.6.0**.
+- Archivos: `includes/kids.php` (nuevo), `includes/core.php`, `includes/profiles.php`, `header.php`, `api.php`, `perfiles.php`, `Movie_description.php`, `seriesvideo.php`, `video_player.php`, `tvguide.php`, `sportsschedule.php`, `assets/nf/profiles.css`, `assets/nf/profiles.js`, `assets/nf/app.css`, `includes/lang/en.php`, `pt.php`, `fr.php` (y `login.php`, `play.php`, `includes/tenant_guard.php`: solo la versión del CSS). **Panel:** subir primero `includes/kids_rules.php`, `includes/profiles.php` y `api/profiles.php`.
+
 ## Pantalla de perfiles: título centrado y versión de la web (18 de noviembre, segunda parte)
 - En horizontal «¿Quién está viendo?» va arriba, en el centro (entre «Salir» y el logo).
 - Del destacado de la semana quedan solo el nombre y la calificación (sin la leyenda «Lo más destacado de la semana»).

@@ -62,6 +62,8 @@
     /* ---------- lista ---------- */
     function avatarHtml(p, cls) {
         return '<span class="pf-av' + (cls ? ' ' + cls : '') + '"><img src="' + esc(p.img) + '" alt="" onerror="this.onerror=null;this.src=\'assets/nf/noposter.svg\'">'
+            // en el celular la etiqueta «Niños» va sobre el avatar (no suma una línea y los 5 perfiles siguen entrando)
+            + (p.kids ? '<span class="pf-kids pf-kids-av" aria-hidden="true">' + esc(tr('Niños')) + '</span>' : '')
             + '<span class="pf-edit" aria-hidden="true"><i class="fas fa-pen"></i></span></span>';
     }
     function render(focusId) {
@@ -69,6 +71,7 @@
         S.profiles.forEach(function (p) {
             h += '<li><button type="button" class="pf-item" data-id="' + esc(p.id) + '" aria-label="' + esc(managing ? tr('Editar {n}', {n: p.name}) : p.name) + '">'
                 + avatarHtml(p) + '<span class="pf-name">' + esc(p.name) + '</span>'
+                + (p.kids ? '<span class="pf-kids">' + esc(tr('Niños')) + '</span>' : '')
                 + (p.locked ? '<i class="fas fa-lock pf-lock" title="' + esc(tr('Protegido con PIN')) + '"></i>' : '') + '</button></li>';
         });
         if (S.canCreate) {
@@ -226,11 +229,17 @@
                 + '<label class="pf-check"><input type="checkbox" id="pfPinOn"> ' + esc(tr('Pedir un PIN de 4 números para entrar a este perfil')) + '</label>'
                 + '<div class="pf-row" id="pfPinNew" hidden>' + pinInputs() + '</div></div>';
         }
+        var kidsSec = p ? (p.kids ? '<div class="pf-sec"><p class="pf-note" style="margin:0!important"><span class="pf-kids">' + esc(tr('Niños')) + '</span> '
+                + esc(tr('Perfil infantil: solo contenido para niños. Se elige al crear el perfil y no se cambia.')) + '</p></div>' : '')
+            : '<div class="pf-sec"><label class="pf-switch-row"><span><b>' + esc(tr('Perfil infantil')) + '</b><small>'
+                + esc(tr('Solo películas y series para niños y Disney. Sin Deportes; TV en vivo solo con canales infantiles (si tu lista no tiene, no aparece). Se elige ahora: después no se cambia.'))
+                + '</small></span><input type="checkbox" id="pfKids" role="switch"><span class="pf-tog" aria-hidden="true"></span></label></div>';
         open('<h2 id="pfModalTitle">' + esc(p ? tr('Editar perfil') : tr('Agregar perfil')) + '</h2>'
             + '<div class="pf-edit-top"><button type="button" class="pf-av pf-avbtn" id="pfAvBtn" aria-label="' + esc(tr('Cambiar avatar')) + '">'
             + '<img id="pfAvImg" src="' + esc(shown(avatar)) + '" alt="" onerror="this.onerror=null;this.src=\'assets/nf/noposter.svg\'"><span class="pf-edit" aria-hidden="true"><i class="fas fa-pen"></i></span></button>'
             + '<div class="pf-field"><label for="pfName">' + esc(tr('Nombre')) + '</label><input class="pf-input" id="pfName" maxlength="20" autocomplete="off" value="' + esc(p ? p.name : '') + '"' + (p ? '' : ' autofocus') + '></div></div>'
             + '<div class="pf-avgrid" id="pfAvGrid" hidden>' + grid + '</div>'
+            + kidsSec
             + pinSec
             + (p ? '' : '<p class="pf-note">' + esc(tr('Si eliminaste un perfil hace menos de 7 días, créalo con el mismo nombre exacto y volverá con su Continuar viendo y su Mi lista.')) + '</p>')
             + '<p class="pf-err" role="alert"></p>'
@@ -279,7 +288,8 @@
             var cur = p ? (pins[p.id] || '') : '';
             var chain;
             if (!p) {
-                chain = post({action: 'create', name: name, avatar: avatar}).then(function (r) {
+                var kidsEl = d.getElementById('pfKids');
+                chain = post({action: 'create', name: name, avatar: avatar, kids: kidsEl && kidsEl.checked ? '1' : ''}).then(function (r) {
                     if (!r.ok || !newPin) return r;
                     var made = null;
                     S.profiles.forEach(function (x) { if (x.name === name) made = x; });

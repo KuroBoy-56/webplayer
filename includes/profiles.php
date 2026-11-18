@@ -32,7 +32,7 @@ function wp_prof_acct()
 function wp_prof_empty()
 {
     return ['acct' => wp_prof_acct(), 'on' => false, 'max' => 1, 'at' => 0, 'id' => '', 'name' => '', 'avatar' => '',
-        'main_name' => '', 'main_avatar' => '', 'down' => false];
+        'main_name' => '', 'main_avatar' => '', 'down' => false, 'kids' => false];
 }
 
 /** Lo guardado en la sesión. */
@@ -81,6 +81,8 @@ function wp_prof_api($body = null, &$code = null)
         if (!is_array($j)) return null;
         if (!empty($j['token']) && is_string($j['token']) && $j['token'] !== $token) wp_panel_store_token($j['token']);
         unset($j['token']);
+        // perfil infantil: las reglas del filtro que manda el panel (includes/kids.php)
+        if (isset($j['kidsRules']) && function_exists('wp_kids_rules_remember')) wp_kids_rules_remember($j['kidsRules']);
         return $j;
     }
     return null;
@@ -107,6 +109,7 @@ function wp_prof_apply(array $s, array $j)
     $s['main_avatar'] = $main ? (string)$main['avatar'] : '';
     if (!$s['on']) {
         $s['id'] = $s['name'] = $s['avatar'] = '';
+        $s['kids'] = false;
         return $s;
     }
     if ($s['id'] !== '') {
@@ -114,9 +117,11 @@ function wp_prof_apply(array $s, array $j)
         if ($p === null) {
             // eliminado en otro equipo, o la línea bajó de conexiones: otra vez la pantalla de perfiles
             $s['id'] = $s['name'] = $s['avatar'] = '';
+            $s['kids'] = false;
         } else {
             $s['name'] = (string)$p['name'];
             $s['avatar'] = (string)$p['avatar'];
+            $s['kids'] = !empty($p['kids']);
         }
     }
     return $s;
@@ -165,6 +170,7 @@ function wp_prof_gone()
 {
     $s = wp_prof_state();
     $s['id'] = $s['name'] = $s['avatar'] = '';
+    $s['kids'] = false;
     $s['at'] = 0;
     wp_prof_save($s);
 }
@@ -173,10 +179,10 @@ function wp_prof_gone()
 function wp_prof_view()
 {
     $s = wp_prof_state();
-    if (wp_is_demo() || empty($s['on'])) return ['on' => false, 'name' => '', 'avatar' => '', 'many' => false];
+    if (wp_is_demo() || empty($s['on'])) return ['on' => false, 'name' => '', 'avatar' => '', 'many' => false, 'kids' => false];
     $main = $s['id'] === '' || $s['id'] === 'main';
     return ['on' => true, 'name' => $main ? (string)$s['main_name'] : (string)$s['name'],
-        'avatar' => $main ? (string)$s['main_avatar'] : (string)$s['avatar'], 'many' => wp_prof_needed($s)];
+        'avatar' => $main ? (string)$s['main_avatar'] : (string)$s['avatar'], 'many' => wp_prof_needed($s), 'kids' => !$main && !empty($s['kids'])];
 }
 
 /**
@@ -220,6 +226,7 @@ function wp_prof_select($id, $pin = '')
     $s['id'] = (string)$p['id'];
     $s['name'] = (string)$p['name'];
     $s['avatar'] = (string)$p['avatar'];
+    $s['kids'] = !empty($p['kids']);
     wp_prof_save($s);
     return [true, $s];
 }
@@ -276,7 +283,7 @@ function wp_prof_public(array $j, array $s)
     foreach ((array)($j['profiles'] ?? []) as $p) {
         if (!is_array($p)) continue;
         $out['profiles'][] = ['id' => (string)($p['id'] ?? ''), 'name' => (string)($p['name'] ?? ''), 'avatar' => (string)($p['avatar'] ?? ''),
-            'img' => wp_prof_img($p['avatar'] ?? ''), 'locked' => !empty($p['locked']), 'main' => !empty($p['main'])];
+            'img' => wp_prof_img($p['avatar'] ?? ''), 'locked' => !empty($p['locked']), 'main' => !empty($p['main']), 'kids' => !empty($p['kids'])];
     }
     foreach ((array)($j['avatars'] ?? []) as $a) {
         if (is_string($a) && $a !== '') $out['avatars'][] = ['u' => $a, 's' => wp_prof_img($a)];
@@ -299,7 +306,7 @@ function wp_prof_post(array $in)
         return ['ok' => true, 'go' => wp_prof_next_ok($next) ? $next : wp_route_url('homex')];
     }
     $fields = [
-        'create' => ['name', 'avatar'],
+        'create' => ['name', 'avatar', 'kids'],
         'update' => ['id', 'name', 'avatar', 'pin'],
         'delete' => ['id', 'pin'],
         'pin_set' => ['id', 'new_pin', 'pin'],

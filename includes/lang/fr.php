@@ -491,4 +491,8 @@ return [
     '¿Eliminar el perfil {n}?' => 'Supprimer le profil {n} ?',
     'Se quitará de todos tus equipos. Durante 7 días puedes recuperarlo con su Continuar viendo y su Mi lista creando un perfil con el mismo nombre exacto; después se borra para siempre.' => 'Il sera retiré de tous vos appareils. Pendant 7 jours, vous pouvez le récupérer, avec sa Reprise de lecture et sa Ma liste, en créant un profil avec exactement le même nom ; ensuite il est effacé définitivement.',
     'Versión {v}' => 'Version {v}',
+    'Niños' => 'Enfants',
+    'Perfil infantil' => 'Profil enfant',
+    'Perfil infantil: solo contenido para niños. Se elige al crear el perfil y no se cambia.' => 'Profil enfant : uniquement du contenu pour enfants. Il se choisit à la création du profil et ne change plus.',
+    'Solo películas y series para niños y Disney. Sin Deportes; TV en vivo solo con canales infantiles (si tu lista no tiene, no aparece). Se elige ahora: después no se cambia.' => 'Uniquement des films et séries pour enfants et Disney. Pas de Sports ; la TV en direct seulement avec des chaînes pour enfants (si votre liste n’en a pas, elle n’apparaît pas). À choisir maintenant : impossible de changer ensuite.',
 ];

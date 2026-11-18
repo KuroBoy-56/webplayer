@@ -10,6 +10,8 @@ if (!$id) {
     header('Location: seriesondemand.php');
     exit;
 }
+// perfil infantil: solo lo que pasa el filtro (includes/kids.php)
+wp_kids_guard('series', $id);
 
 $series_data = xt_get('get_series_info', ['series_id' => $id], 21600);
 $series_info = is_array($series_data['info'] ?? null) ? $series_data['info'] : [];

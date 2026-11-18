@@ -62,5 +62,23 @@ Esta web es la implementación de referencia para las demás apps.
   cuenta» de la barra de abajo. `myaccount.php` muestra el perfil con sus botones.
 - Textos: `t('…')` en PHP y `tr('…')` en `assets/nf/*.js` (se buscan solos); las traducciones en
   `includes/lang/{en,pt,fr}.php`.
+- **Perfil infantil** (`includes/kids.php`, lo carga `includes/core.php` después de `profiles.php`): con un perfil
+  `kids` elegido (`wp_kids_on()`) se filtra **en el origen**, así cualquier página nueva que use estas funciones ya
+  sale filtrada:
+  - `wp_catalog()` → `wp_kids_catalog()` sobre `wp_catalog_raw()` (películas y series; 30 min en caché aparte,
+    `kidscat|…`);
+  - `wp_categories()` → `wp_kids_categories()` sobre `wp_categories_raw()` (solo las que tienen algo permitido; en
+    vivo, solo las infantiles);
+  - `xt_get('get_live_streams')` → `wp_kids_live_filter()` sobre `xt_get_raw()` (solo canales de categorías
+    infantiles).
+  Las cachés guardan siempre lo que manda el servidor IPTV, sin filtrar. **Una página nueva que lea el catálogo con
+  `wp_catalog_raw()`, `wp_categories_raw()` o `xt_get_raw()` se salta el filtro**: usar las funciones de siempre.
+  `wp_kids_guard($tipo, $id)` en `Movie_description.php`, `seriesvideo.php` y `video_player.php` manda al inicio lo
+  que no pasa; `tvguide.php` (sin canales infantiles) y `sportsschedule.php` también; `header.php` esconde Deportes y
+  TV en vivo (`$wp_show_sports`, `$wp_show_live`). El destacado de `api.php` lleva `|kids` en su clave.
+  Las reglas llegan del panel en `kidsRules` (`wp_kids_rules_remember()`, 30 días) y `wp_kids_rules_local()` es la
+  copia de fábrica: **cópiala de `includes/kids_rules.php` del panel cuando cambien las listas.** El algoritmo y cómo
+  arreglar una filtración: «Perfil infantil» en `docs/PERFILES.md` del panel. El interruptor sale solo al crear
+  (`#pfKids` en `profiles.js`, campo `kids`).
 - **Prueba:** desde el repo del panel, `WP_DIR=/ruta/a/esta/web php tools/profiles_web_test.php` (Chromium contra una
-  copia del panel con datos inventados).
+  copia del panel con datos inventados; el servidor IPTV de prueba trae un catálogo pequeño para el perfil infantil).

@@ -8,6 +8,8 @@ if ($id === '') {
     header('Location: moviesondemand.php');
     exit;
 }
+// perfil infantil: solo lo que pasa el filtro (includes/kids.php)
+wp_kids_guard('movie', $id);
 
 $channel_api = xt_get('get_vod_info', ['vod_id' => $id], 21600);
 $info = is_array($channel_api["info"] ?? null) ? $channel_api["info"] : [];

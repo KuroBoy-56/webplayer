@@ -4,6 +4,11 @@ include "config.php";
 
 // Los canales favoritos se guardan en el panel (api/progress.php)
 $fav_file = null;
+// perfil infantil sin categorías de niños en la lista: no hay TV en vivo (con alguna, solo esas: includes/kids.php)
+if (wp_kids_on() && !wp_kids_has_live() && !isset($_GET['ajax'])) {
+    header('Location: homex.php');
+    exit;
+}
 
 function tv_fav_channels($username, $fav_file)
 {

@@ -177,7 +177,8 @@ switch ($action) {
         out(['live' => is_array($live) ? count($live) : null, 'movie' => count(wp_catalog('movie')), 'series' => count(wp_catalog('series'))]);
 
     case 'hero':
-        $ck = 'hero|' . $type . '|' . $platform . '|' . xt_cache_key('', []);
+        // el perfil infantil tiene su propio destacado (includes/kids.php)
+        $ck = 'hero|' . $type . '|' . $platform . '|' . xt_cache_key('', []) . (wp_kids_on() ? '|kids' : '');
         $cached = wp_cache_get($ck, 1200);
         if (is_array($cached) && $cached) out(['items' => wp_hero_kind($cached)]);
 

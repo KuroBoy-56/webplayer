@@ -1,8 +1,8 @@
 <?php
 include "session.php";
 include "config.php";
-// el distribuidor puede tener la sección de deportes apagada
-if (!wp_tenant_feature('sports')) {
+// el distribuidor puede tener la sección de deportes apagada; un perfil infantil no tiene Deportes
+if (!wp_tenant_feature('sports') || wp_kids_on()) {
     header('Location: homex');
     exit;
 }

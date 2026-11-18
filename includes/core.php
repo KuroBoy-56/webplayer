@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.5.0');
+define('WP_VERSION', '2.6.0');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -331,8 +331,18 @@ function xt_cache_key($action, array $params)
     return 'xt|' . $u['server'] . '|' . $u['username'] . '|' . $action . '|' . http_build_query($params);
 }
 
-/** Llamada a la API con caché. Si el servidor falla se usa la última copia guardada. */
+/**
+ * Llamada a la API con caché. Si el servidor falla se usa la última copia guardada. Con un perfil infantil
+ * (includes/kids.php) los canales en vivo llegan ya filtrados (la caché guarda siempre la respuesta completa).
+ */
 function xt_get($action, array $params = [], $ttl = 600, $timeout = 15)
+{
+    $data = xt_get_raw($action, $params, $ttl, $timeout);
+    if ($action === 'get_live_streams' && is_array($data) && function_exists('wp_kids_on') && wp_kids_on()) return wp_kids_live_filter($data);
+    return $data;
+}
+
+function xt_get_raw($action, array $params = [], $ttl = 600, $timeout = 15)
 {
     static $memo = [];
     $key = xt_cache_key($action, $params);
@@ -857,7 +867,14 @@ function wp_kw_match($text, array $keywords)
     return false;
 }
 
+/** Categorías de películas, series o en vivo (con un perfil infantil, solo las que tienen algo para niños). */
 function wp_categories($type)
+{
+    $cats = wp_categories_raw($type);
+    return function_exists('wp_kids_on') && wp_kids_on() ? wp_kids_categories($type, $cats) : $cats;
+}
+
+function wp_categories_raw($type)
 {
     $action = $type === 'series' ? 'get_series_categories' : ($type === 'live' ? 'get_live_categories' : 'get_vod_categories');
     $cats = xt_get($action, [], 1800);
@@ -879,6 +896,13 @@ function wp_category_names($type)
  * series: [id, name, icon, cat, cats, added, rating, genre, year]
  */
 function wp_catalog($type)
+{
+    $list = wp_catalog_raw($type);
+    // perfil infantil: solo lo que pasa el filtro (includes/kids.php); la caché guarda siempre el catálogo completo
+    return function_exists('wp_kids_on') && wp_kids_on() ? wp_kids_catalog($type, $list) : $list;
+}
+
+function wp_catalog_raw($type)
 {
     static $memo = [];
     if (isset($memo[$type])) return $memo[$type];
@@ -1424,3 +1448,4 @@ require_once __DIR__ . '/doh.php';
 require_once __DIR__ . '/media_core.php';
 require_once __DIR__ . '/audio_probe.php';
 require_once __DIR__ . '/profiles.php';
+require_once __DIR__ . '/kids.php';
