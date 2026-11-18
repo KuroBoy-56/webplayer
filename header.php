@@ -36,6 +36,9 @@ $wp_show_live = !$wp_kids || wp_kids_has_live();
 $wp_pv = wp_prof_view();
 $wp_pv_img = $wp_pv['on'] && $wp_pv['avatar'] !== '' ? wp_img($wp_pv['avatar'], '') : '';
 $wp_pv_initial = $wp_pv['on'] && $wp_pv['name'] !== '' ? mb_substr($wp_pv['name'], 0, 1, 'UTF-8') : $wp_user_initial;
+// el avatar (arriba a la izquierda) solo en Inicio, Películas y Series; en las fichas, TV en vivo, Deportes y lo demás
+// solo el logo, arriba a la derecha (el perfil sigue en «Mi cuenta» de la barra de abajo del celular)
+$wp_pv_here = $wp_pv['on'] && in_array($wp_script, ['homex', 'home', 'moviesondemand', 'seriesondemand', 'movies', 'series'], true);
 
 if (!function_exists('wp_nav_cls')) {
     function wp_nav_cls($k)
@@ -100,7 +103,7 @@ if (!function_exists('wp_nav_cls')) {
         </div>
 <?php $wp_profile_html = ob_get_clean(); ?>
 <header class="nf-header<?php echo $wp_pv['on'] ? ' nf-header--prof' : ''; ?>" id="nfHeader">
-<?php echo $wp_pv['on'] ? $wp_profile_html : $wp_logo_html; ?>
+<?php echo $wp_pv_here ? $wp_profile_html : ($wp_pv['on'] ? '' : $wp_logo_html); ?>
     <nav>
         <ul class="nf-nav">
             <li><a href="homex.php"<?php echo wp_nav_cls('home'); ?>><?php echo t('Inicio'); ?></a></li>

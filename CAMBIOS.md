@@ -4,6 +4,10 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## El avatar del perfil solo en Inicio, Películas y Series — versión 2.7.1 (18 de noviembre, octava parte)
+- Con perfiles, el avatar de arriba a la izquierda (con «Cambiar perfil») sale solo en **Inicio, Películas y Series** (también en las listas por categoría). En las fichas, TV en vivo, Deportes, Explorar y Mi cuenta queda solo el logo arriba a la derecha. En el celular el perfil sigue en «Mi cuenta» de la barra de abajo.
+- Archivos: `header.php`, `includes/core.php` (versión).
+
 ## Modo navegador: cada usuario le pide al servidor IPTV con su propia IP — versión 2.7.0 (18 de noviembre, séptima parte)
 - **Antes:** el hosting le pedía al servidor IPTV el inicio de sesión, el catálogo, las fichas, los canales y la cuenta de **todos** los usuarios, siempre con la misma IP. XUI la bloqueaba por exceso de pedidos o por intentos fallidos (protección contra flood), y nadie podía entrar por la web.
 - **Ahora:**
