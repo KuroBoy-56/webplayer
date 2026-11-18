@@ -31,6 +31,10 @@ $password = (string)($d['pwd'] ?? '');
 wp_panel_set_tenant((string)($d['dt'] ?? ''));
 $_SESSION = ['server' => $get_dns, 'username' => $username, 'password' => $password, 'dist' => wp_panel_tenant(), wp_panel_token_key() => (string)($d['pt'] ?? ''),
     'is_demo' => !empty($d['dm'])];
+// el perfil de la página que abrió el enlace (sin preguntar al panel: play.php no tiene pantalla de perfiles)
+if (!empty($d['pf']) && is_string($d['pf'])) {
+    $_SESSION['wp_prof'] = ['on' => true, 'max' => 2, 'at' => time(), 'id' => $d['pf']] + wp_prof_empty();
+}
 $demo = wp_is_demo();
 
 /* ---------- Guardar progreso (misma lógica que save_progress.php) ---------- */
@@ -69,7 +73,7 @@ $media_cfg = $live ? null : wp_media_cfg($kind, $id, $exts, (string)($d['vlcExt'
     <meta name="referrer" content="no-referrer">
     <title><?php echo e($title ?: t('Reproductor')); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=11">
+    <link rel="stylesheet" href="assets/nf/app.css?v=12">
     <link rel="stylesheet" href="assets/nf/player.css?v=9">
     <?php echo wp_i18n_script(); ?>
     <style>

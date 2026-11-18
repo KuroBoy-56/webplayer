@@ -52,6 +52,8 @@ function wp_handoff_url(array $v)
         'pt' => wp_panel_token(),
         'dt' => wp_panel_tenant(),
         'dm' => wp_is_demo() ? 1 : 0,
+        // perfil elegido (includes/profiles.php): Continuar viendo se guarda en ese perfil
+        'pf' => wp_prof_id(),
     ]);
     if ($tok === '') return '';
     $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');

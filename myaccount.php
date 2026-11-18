@@ -45,6 +45,10 @@ include "header.php";
     .ac-lang { background: #1a1a1a; border-radius: 8px; padding: 16px 18px; margin-bottom: 26px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     .ac-lang label { color: #fff; font-weight: 700; display: flex; align-items: center; gap: 10px; }
     .ac-lang label i { color: var(--nf-red); }
+    .ac-pv { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .ac-pv img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; flex: none; }
+    .ac-pv small { display: block; color: #8c8c8c; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+    .ac-pv b { color: #fff; font-size: 20px; }
     @media (max-width: 600px) { .ac-row { flex-wrap: wrap; } .ac-row .d { width: 100%; } }
 </style>
 <div class="nf-page account-wrapper">
@@ -66,6 +70,15 @@ include "header.php";
             <div class="ac-item"><small><?php echo t('Distribuidor'); ?></small><b><?php echo e(($dist_cfg && $dist_cfg['name'] ? $dist_cfg['name'] . ' ' : '') . '(' . $dist_code . ')'); ?></b></div>
             <?php endif; ?>
         </div>
+        <?php $ac_pv = wp_prof_view(); if ($ac_pv['on']): ?>
+        <div class="ac-lang ac-prof">
+            <span class="ac-pv"><?php if ($ac_pv['avatar'] !== ''): ?><img src="<?php echo e(wp_img($ac_pv['avatar'], '')); ?>" alt=""><?php endif; ?><span><small><?php echo t('Perfil'); ?></small><b><?php echo e($ac_pv['name']); ?></b></span></span>
+            <?php if ($ac_pv['many']): ?><span class="ac-acts" style="margin:0">
+                <a class="nf-btn nf-btn-dark" href="perfiles.php"><i class="fas fa-user-friends"></i> <?php echo t('Cambiar perfil'); ?></a>
+                <a class="nf-btn nf-btn-dark" href="perfiles.php?manage=1"><i class="fas fa-pen"></i> <?php echo t('Administrar perfiles'); ?></a>
+            </span><?php endif; ?>
+        </div>
+        <?php endif; ?>
         <div class="ac-acts">
             <a class="nf-btn nf-btn-dark" href="settings.php"><i class="fas fa-cog"></i> <?php echo t('Ajustes'); ?></a>
             <a class="nf-btn nf-btn-dark" href="logout.php?dist=1" data-noprefetch onclick="try{localStorage.removeItem('wp_dist_brand')}catch(e){}"><i class="fas fa-exchange-alt"></i> <?php echo t('Cambiar distribuidor'); ?></a>
@@ -73,7 +86,7 @@ include "header.php";
         </div>
         <div class="ac-lang"><label for="acLang"><i class="fas fa-globe"></i> <?php echo t('Idioma de la app'); ?></label><?php echo str_replace('<select ', '<select id="acLang" ', wp_lang_select()); ?></div>
         <div class="ac-hist history-section">
-            <h3><?php echo t('Continuar viendo'); ?></h3>
+            <h3><?php echo t('Continuar viendo'); ?><?php if ($ac_pv['on'] && $ac_pv['name'] !== ''): ?> <small style="color:#8c8c8c;font-weight:400">· <?php echo e($ac_pv['name']); ?></small><?php endif; ?></h3>
             <?php if ($acc_demo): ?>
                 <div class="nf-empty" style="padding:30px"><?php echo t('No disponible en la DEMO.'); ?></div>
             <?php elseif ($history_items): ?>

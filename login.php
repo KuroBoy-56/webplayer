@@ -164,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
     if (!$hit && $later && !array_filter($responses, function ($b) { return $b !== null; })) $ask($later);
 
     $match = null;
+    $matchUi = [];
     $anyReply = false;
     $states = [];
     // servidores XUI en «Debug Mode»: con usuario o contraseña mal escritos (o la cuenta vencida, bloqueada…) contestan
@@ -192,7 +193,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         if (isset($ui['auth']) && (int)$ui['auth'] === 1) {
             $st = (string)($ui['status'] ?? '');
             if (strcasecmp($st, 'Active') === 0) {
-                if ($match === null || $i < $match) $match = $i;
+                if ($match === null || $i < $match) {
+                    $match = $i;
+                    $matchUi = $ui;
+                }
             } else {
                 $states[] = $st;
             }
@@ -223,6 +227,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         $_SESSION[wp_panel_token_key()] = wp_panel_auth($username, $password, $srv['url']);
         // Línea DEMO según el panel ("demo": true): un login normal la quita
         $_SESSION['is_demo'] = !empty($GLOBALS['wp_panel_auth_demo']);
+        // perfiles (includes/profiles.php): conexiones de la línea y, en cada inicio de sesión, «¿Quién está viendo?»
+        $_SESSION['max_conn'] = (int)($matchUi['max_connections'] ?? 0);
+        unset($_SESSION['wp_prof']);
         wp_rate_reset('login');
 
         // Sólo se recuerda el usuario (nunca la contraseña en una cookie)
@@ -318,7 +325,7 @@ $dist_step = $dist_view['step'];
     <title><?php echo $brand_name !== '' ? e($brand_name) : 'LatMpx - WebPlayer'; ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="preconnect" href="https://image.tmdb.org">
-    <link rel="stylesheet" href="assets/nf/app.css?v=11">
+    <link rel="stylesheet" href="assets/nf/app.css?v=12">
     <?php echo wp_i18n_script(); ?>
     <?php echo wp_tenant_css($dist_cfg); ?>
     <style>

@@ -54,6 +54,10 @@ function wp_line_guard(array $sess)
     if ($state === null) return;
     if ($state === '') {
         wp_cache_set($ck, 'ok');
+        // conexiones de la línea (perfiles, includes/profiles.php)
+        $j = json_decode((string)$body, true);
+        $n = (int)($j['user_info']['max_connections'] ?? 0);
+        if ($n > 0 && $n !== (int)($sess['max_conn'] ?? 0)) wp_panel_session_set('max_conn', $n);
         return;
     }
     wp_tenant_logout();

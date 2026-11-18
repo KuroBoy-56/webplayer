@@ -17,7 +17,7 @@ const WP_ROUTE_TTL = 7 * 86400;
 // páginas que se navegan (el orden no se cambia: el número va dentro de los tokens; las nuevas, al final)
 const WP_ROUTE_PAGES = ['homex.php', 'home.php', 'browse.php', 'movies.php', 'series.php', 'moviesondemand.php', 'seriesondemand.php',
     'Movie_description.php', 'seriesvideo.php', 'video_player.php', 'tvguide.php', 'sportsschedule.php', 'actor.php', 'myaccount.php',
-    'settings.php', 'diag.php', 'estado.php', 'logout.php', 'playlist.php', 'play.php', 'oops.php', 'renew.php'];
+    'settings.php', 'diag.php', 'estado.php', 'logout.php', 'playlist.php', 'play.php', 'oops.php', 'renew.php', 'perfiles.php'];
 
 function wp_route_key()
 {

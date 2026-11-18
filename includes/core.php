@@ -1421,3 +1421,4 @@ require_once __DIR__ . '/handoff.php';
 require_once __DIR__ . '/doh.php';
 require_once __DIR__ . '/media_core.php';
 require_once __DIR__ . '/audio_probe.php';
+require_once __DIR__ . '/profiles.php';

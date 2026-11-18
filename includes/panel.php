@@ -375,6 +375,7 @@ function wp_panel_call($endpoint, $body = null, $timeout = 8)
             wp_panel_set_demo(!empty($GLOBALS['wp_panel_auth_demo']));
         }
         $res = wp_panel_request($endpoint, $body, ['Authorization: Bearer ' . $token], $timeout, $code);
+        $GLOBALS['wp_panel_code'] = $code;
         if ($code === 401 && $try === 0) {
             $token = '';
             continue;
@@ -413,8 +414,12 @@ function wp_panel_userdata($refresh = false)
 {
     static $memo = null;
     if ($memo !== null && !$refresh) return $memo;
-    // parámetro único: ninguna caché del hosting puede devolver un progreso viejo
-    $j = wp_panel_call('progress.php?v=2&_=' . str_replace('.', '', (string)microtime(true)), null, 6);
+    // parámetro único: ninguna caché del hosting puede devolver un progreso viejo; «profile» = el perfil elegido
+    // (includes/profiles.php; sin él, el principal)
+    $pid = wp_prof_id();
+    $j = wp_panel_call('progress.php?v=2' . ($pid !== '' ? '&profile=' . rawurlencode($pid) : '') . '&_=' . str_replace('.', '', (string)microtime(true)), null, 6);
+    // el perfil se eliminó en otro equipo: la próxima página vuelve a «¿Quién está viendo?»
+    if ($j === null && $pid !== '' && (int)($GLOBALS['wp_panel_code'] ?? 0) === 410) wp_prof_gone();
     wp_panel_remember_tmdb($j);
     // línea DEMO (el panel la marca también aquí): se recuerda en la sesión
     if (is_array($j) && !empty($j['demo'])) wp_panel_set_demo(true);
@@ -436,7 +441,12 @@ function wp_panel_post($action, array $data)
         $GLOBALS['wp_panel_last_error'] = 'cuenta DEMO (no se guarda)';
         return false;
     }
-    $j = wp_panel_call('progress.php', ['action' => $action, 'platform' => WP_APP_ID, 'client_ip' => wp_client_ip()] + $data, 8);
+    $pid = wp_prof_id();
+    $j = wp_panel_call('progress.php', ['action' => $action, 'platform' => WP_APP_ID, 'client_ip' => wp_client_ip()] + ($pid !== '' ? ['profile' => $pid] : []) + $data, 8);
+    if ($j === null && $pid !== '' && (int)($GLOBALS['wp_panel_code'] ?? 0) === 410) {
+        wp_prof_gone();
+        $GLOBALS['wp_panel_last_error'] = 'el perfil ya no existe';
+    }
     if (is_array($j) && empty($j['success'])) $GLOBALS['wp_panel_last_error'] = 'respuesta: ' . substr(json_encode($j, JSON_UNESCAPED_UNICODE), 0, 120);
     elseif ($j === null && empty($GLOBALS['wp_panel_last_error'])) $GLOBALS['wp_panel_last_error'] = 'sin respuesta o token rechazado';
     return is_array($j) && !empty($j['success']);

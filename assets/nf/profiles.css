@@ -1,0 +1,199 @@
+/* ==========================================================
+   «¿Quién está viendo?» (profiles.php, assets/nf/profiles.js)
+   Horizontal: perfiles en columna a la izquierda y de fondo lo más destacado de la semana (TMDB).
+   Vertical (celular): el destacado arriba, dos perfiles por fila y el último centrado.
+   ========================================================== */
+.pf-body { background: #000; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; }
+.pf-root { position: relative; min-height: 100vh; min-height: 100dvh; --av: clamp(54px, 10.4vh, 120px); }
+
+/* fondo: alta calidad (Full HD, y el original 4K en pantallas grandes), con aparición suave */
+.pf-bg {
+    position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 70% 30%;
+    opacity: 0; transition: opacity .8s ease; z-index: 0; user-select: none; pointer-events: none;
+}
+.pf-bg.ok { opacity: 1; }
+.pf-shade {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background:
+        linear-gradient(90deg, rgba(0,0,0,.94) 0%, rgba(0,0,0,.86) 24%, rgba(0,0,0,.5) 44%, rgba(0,0,0,.08) 64%, rgba(0,0,0,0) 76%),
+        linear-gradient(0deg, rgba(0,0,0,.7) 0%, rgba(0,0,0,0) 32%),
+        linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 18%);
+}
+
+/* arriba: Salir a la izquierda, el logo a la derecha */
+.pf-top {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
+    padding: calc(14px + env(safe-area-inset-top)) 4% 14px;
+}
+.pf-exit {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px;
+    background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.35); color: #fff; font-size: 14px; font-weight: 600;
+    transition: background .2s, border-color .2s;
+}
+.pf-exit:hover, .pf-exit:focus-visible { background: rgba(255,255,255,.16); border-color: #fff; }
+.pf-logo { height: 40px; width: auto; display: block; filter: drop-shadow(0 2px 6px rgba(0,0,0,.6)); }
+
+/* columna de perfiles (los 5 entran en la pantalla) */
+.pf-side {
+    position: relative; z-index: 2; width: clamp(340px, 38vw, 660px); min-height: 100vh; min-height: 100dvh;
+    display: flex; flex-direction: column; justify-content: center; padding: 84px 2vw 40px 4%;
+}
+.pf-title { margin: 0 0 2.4vh; font-size: clamp(26px, 2.6vw, 46px); font-weight: 700; color: #fff; letter-spacing: -.3px; }
+.pf-msg { color: #ddd; font-size: 16px; max-width: 420px; }
+.pf-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.3vh; }
+.pf-item {
+    display: flex; align-items: center; gap: 18px; width: 100%; padding: 6px 10px 6px 6px; border: 0; border-radius: 12px;
+    background: transparent; color: #b3b3b3; cursor: pointer; text-align: left; font: inherit; transition: background .2s, color .2s;
+}
+.pf-item:hover, .pf-item:focus-visible { background: rgba(255,255,255,.09); color: #fff; outline: none; }
+.pf-av {
+    position: relative; flex: none; width: var(--av); height: var(--av); border-radius: 8px; overflow: hidden; background: #333;
+    box-shadow: 0 0 0 0 transparent; transition: box-shadow .2s, transform .2s; display: grid; place-items: center;
+}
+.pf-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-item:hover .pf-av, .pf-item:focus-visible .pf-av { box-shadow: 0 0 0 3px #fff; transform: scale(1.04); }
+.pf-name { font-size: clamp(16px, 1.1vw + 1.1vh, 24px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pf-lock { font-size: 14px; color: #8c8c8c; flex: none; }
+.pf-add .pf-av { background: rgba(255,255,255,.06); border: 2px dashed rgba(255,255,255,.45); font-size: calc(var(--av) * .34); color: #bbb; }
+.pf-add:hover .pf-av, .pf-add:focus-visible .pf-av { color: #fff; border-color: #fff; }
+
+/* administrar: un lápiz sobre cada avatar */
+.pf-edit { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); color: #fff; font-size: calc(var(--av) * .28); }
+.pf-root:not(.pf-managing) .pf-list .pf-edit { display: none; }
+
+.pf-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 22px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,.55); background: rgba(0,0,0,.35); color: #ddd; font: inherit; font-size: 15px; font-weight: 600;
+    letter-spacing: .3px; cursor: pointer; transition: background .2s, color .2s, border-color .2s;
+}
+.pf-btn:hover, .pf-btn:focus-visible { color: #fff; border-color: #fff; background: rgba(255,255,255,.12); outline: none; }
+.pf-btn-main { background: #fff; color: #000; border-color: #fff; }
+.pf-btn-main:hover, .pf-btn-main:focus-visible { background: #e6e6e6; color: #000; }
+.pf-btn-danger { border-color: rgba(229,9,20,.7); color: #ff8a8a; }
+.pf-btn-danger:hover, .pf-btn-danger:focus-visible { background: var(--nf-red); border-color: var(--nf-red); color: #fff; }
+.pf-btn[disabled] { opacity: .5; cursor: default; }
+.pf-manage { align-self: flex-start; margin-top: 3.2vh; }
+.pf-managing .pf-manage { background: #fff; color: #000; border-color: #fff; }
+.pf-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+
+/* lo más destacado de la semana: abajo a la derecha, sin tapar los perfiles */
+.pf-hl {
+    position: fixed; right: 4%; bottom: calc(5vh + env(safe-area-inset-bottom)); z-index: 2; max-width: min(46vw, 640px);
+    text-align: right; text-shadow: 0 2px 10px rgba(0,0,0,.85); pointer-events: none;
+}
+.pf-hl-k { display: block; font-size: 12px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: rgba(255,255,255,.75); margin-bottom: 6px; }
+.pf-hl-t { display: block; font-size: clamp(22px, 2.4vw, 42px); font-weight: 800; color: #fff; line-height: 1.1; }
+.pf-hl-m { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; margin-top: 8px; font-size: 15px; color: #e5e5e5; font-weight: 600; }
+.pf-hl-r { color: #fff; }
+.pf-hl-r i { color: #f5c518; margin-right: 2px; }
+
+/* ventanas: PIN, editar, agregar, eliminar */
+.pf-modal {
+    position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px;
+    background: rgba(0,0,0,.74); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.pf-modal[hidden] { display: none; }
+.pf-card {
+    width: min(560px, 100%); max-height: calc(100dvh - 32px); overflow: auto; background: #181818; color: #e5e5e5;
+    border: 1px solid #333; border-radius: 12px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.7); animation: nfFade .18s ease;
+}
+.pf-card h2 { margin: 0 0 16px; font-size: 22px; color: #fff; }
+.pf-card p { margin: 0 0 12px; color: #cfcfcf; line-height: 1.45; }
+.pf-err { color: #ff7b7b; min-height: 1.2em; font-size: 14px; margin: 8px 0 0 !important; }
+.pf-pinbox { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; justify-content: center; margin: 6px 0 4px; }
+.pf-pinbox .pf-av { --av: 72px; }
+.pf-pin {
+    width: 230px; max-width: 100%; height: 64px; font-size: 34px; letter-spacing: 22px; text-indent: 22px; text-align: center;
+    background: #262626; border: 2px solid #4a4a4a; border-radius: 10px; color: #fff; outline: none;
+}
+.pf-pin:focus { border-color: #fff; }
+.pf-link { background: none; border: 0; color: #b3b3b3; text-decoration: underline; cursor: pointer; font: inherit; font-size: 14px; padding: 10px 4px; }
+.pf-link:hover, .pf-link:focus-visible { color: #fff; outline: none; }
+.pf-field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.pf-field label { font-size: 13px; color: #b3b3b3; }
+.pf-input {
+    width: 100%; min-height: 46px; padding: 0 14px; background: #262626; border: 1px solid #4a4a4a; border-radius: 6px;
+    color: #fff; font: inherit; font-size: 16px; outline: none;
+}
+.pf-input:focus { border-color: #fff; }
+.pf-edit-top { display: flex; align-items: center; gap: 18px; }
+.pf-avbtn { --av: 96px; border: 0; padding: 0; cursor: pointer; }
+.pf-avbtn .pf-edit { display: grid; font-size: 22px; opacity: .85; }
+.pf-avbtn:hover .pf-edit, .pf-avbtn:focus-visible .pf-edit { opacity: 1; }
+.pf-avbtn:focus-visible { box-shadow: 0 0 0 3px #fff; outline: none; }
+.pf-avgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px; margin: 16px 0 4px; max-height: 270px; overflow-y: auto; padding: 4px; }
+.pf-avgrid[hidden] { display: none; }
+.pf-avopt { aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 0; padding: 0; background: #333; cursor: pointer; }
+.pf-avopt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-avopt:hover, .pf-avopt:focus-visible { box-shadow: 0 0 0 3px rgba(255,255,255,.75); outline: none; }
+.pf-avopt.on { box-shadow: 0 0 0 3px #fff; }
+.pf-sec { border-top: 1px solid #2e2e2e; margin-top: 18px; padding-top: 14px; }
+.pf-sec h3 { margin: 0 0 10px; font-size: 15px; color: #fff; display: flex; align-items: center; gap: 8px; }
+.pf-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pf-row[hidden] { display: none; }
+.pf-row .pf-input::placeholder { letter-spacing: normal; }
+.pf-row .pf-input { width: 150px; flex: 0 0 auto; letter-spacing: 6px; text-align: center; }
+.pf-check { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; color: #ddd; font-size: 15px; min-height: 40px; }
+.pf-check input { width: 20px; height: 20px; accent-color: var(--nf-red); }
+.pf-note { font-size: 13px; color: #9a9a9a; margin-top: 8px !important; }
+
+/* PC con poca altura (720p): un poco más juntos, todo entra sin desplazarse */
+@media (orientation: landscape) and (max-height: 780px) and (min-height: 521px) {
+    .pf-side { padding-top: 72px; padding-bottom: 18px; }
+    .pf-list { gap: 1vh; }
+    .pf-manage { margin-top: 2.2vh; }
+}
+
+/* ---------- celular vertical: el destacado arriba, dos por fila y el último centrado ---------- */
+@media (orientation: portrait) and (max-width: 899px) {
+    .pf-root { --av: min(23vw, 104px); }
+    .pf-bg { position: absolute; height: 30vh; height: 30svh; object-position: center 25%; }
+    .pf-shade {
+        position: absolute; height: 30vh; height: 30svh; bottom: auto;
+        background: linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,.55) 66%, #000 100%);
+    }
+    .pf-top { position: absolute; padding-left: 14px; padding-right: 14px; }
+    .pf-logo { height: 30px; }
+    .pf-exit { min-height: 36px; padding: 0 13px; font-size: 13px; }
+    .pf-hl { position: absolute; top: calc(30svh - 84px); bottom: auto; left: 16px; right: 16px; max-width: none; text-align: left; }
+    .pf-hl-k { font-size: 11px; margin-bottom: 4px; }
+    .pf-hl-t { font-size: 20px; }
+    .pf-hl-m { justify-content: flex-start; font-size: 13px; margin-top: 4px; }
+    .pf-side { width: auto; min-height: 0; padding: calc(30svh + 14px) 16px calc(8px + env(safe-area-inset-bottom)); align-items: center; text-align: center; }
+    .pf-title { font-size: 22px; margin-bottom: 14px; }
+    .pf-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: min(100%, 380px); }
+    .pf-list li { display: flex; justify-content: center; min-width: 0; }
+    .pf-list li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+    .pf-item { flex-direction: column; gap: 6px; width: auto; max-width: 100%; padding: 4px; text-align: center; }
+    .pf-name { font-size: 14px; max-width: 40vw; }
+    .pf-lock { margin-top: -2px; }
+    /* «Administrar perfiles» arriba, junto al logo (como la app de Netflix): los 5 perfiles entran sin desplazarse */
+    .pf-manage {
+        position: absolute; top: calc(14px + env(safe-area-inset-top)); right: 58px; margin: 0; z-index: 6;
+        min-height: 36px; padding: 0 12px; font-size: 13px; max-width: calc(100vw - 190px); border-radius: 999px;
+    }
+    .pf-manage span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-msg { text-align: center; }
+    .pf-actions { justify-content: center; }
+}
+/* celular horizontal: los perfiles en fila */
+@media (max-height: 520px) and (orientation: landscape) {
+    .pf-root { --av: clamp(48px, 17vh, 76px); }
+    .pf-side { width: auto; justify-content: center; padding: 58px 4% 14px; }
+    .pf-title { font-size: 20px; margin-bottom: 12px; }
+    .pf-list { flex-direction: row; flex-wrap: wrap; gap: 10px 14px; max-width: 64vw; }
+    .pf-item { flex-direction: column; gap: 6px; width: calc(var(--av) + 16px); padding: 4px; text-align: center; }
+    .pf-name { font-size: 13px; max-width: 100%; }
+    .pf-manage { margin-top: 12px; min-height: 36px; font-size: 13px; padding: 0 14px; }
+    .pf-hl { bottom: 12px; max-width: 34vw; }
+    .pf-hl-k { display: none; }
+    .pf-hl-t { font-size: 18px; }
+    .pf-hl-m { font-size: 12px; margin-top: 4px; }
+    .pf-top { padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: 8px; }
+    .pf-exit { min-height: 34px; font-size: 13px; }
+    .pf-logo { height: 30px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .pf-bg, .pf-item, .pf-av { transition: none; }
+}
+.pf-item.pf-busy { opacity: .6; pointer-events: none; }

@@ -30,6 +30,8 @@ if (!defined('WP_SESSION_LOADED')) {
     $username = $wp_sess['username'];
     $password = $wp_sess['password'];
     $_SESSION = $wp_sess;
+    // perfiles (includes/profiles.php): si la línea elige perfil y todavía no lo eligió, primero «¿Quién está viendo?»
+    wp_prof_gate();
     // direcciones con tokens: ninguna página muestra su nombre de archivo (includes/route_token.php)
     wp_route_begin();
 }

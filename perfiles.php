@@ -1,0 +1,109 @@
+<?php
+/*
+ * «¿Quién está viendo?»: la pantalla de perfiles (includes/profiles.php). Elegir un perfil, administrarlos (nombre,
+ * avatar, PIN, eliminar) y crear otro. Todo se guarda en el panel (api/profiles.php); la web solo recuerda en la
+ * sesión el perfil elegido. Horizontal: perfiles en columna a la izquierda y de fondo lo más destacado de la semana
+ * en TMDB; vertical (celular): dos por fila y el último centrado.
+ */
+include __DIR__ . '/session.php';
+include __DIR__ . '/config.php';
+
+// acciones (assets/nf/profiles.js): siempre JSON
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo json_encode(wp_prof_post($_POST), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
+    exit;
+}
+
+$pf_next = (string)($_GET['next'] ?? '');
+$pf_go = wp_prof_next_ok($pf_next) ? $pf_next : wp_route_url('homex');
+list($pf_s, $pf_j) = wp_prof_refresh(true);
+// perfiles apagados, una sola conexión o DEMO: no hay nada que elegir
+if (is_array($pf_j) && !wp_prof_needed($pf_s)) {
+    header('Cache-Control: no-store');
+    header('Location: ' . $pf_go, true, 302);
+    exit;
+}
+$pf_state = is_array($pf_j) ? wp_prof_public($pf_j, $pf_s) : null;
+$pf_dist = wp_tenant_cfg();
+$pf_hl = wp_prof_highlight();
+$pf_bg = [];
+if ($pf_hl) {
+    // fondo en alta calidad: Full HD (caché de imágenes del panel o TMDB w1280) y el original (4K) para pantallas grandes
+    $orig = $pf_hl['backdrop'];
+    $srcs = wp_backdrop_sources($orig);
+    $fhd = (count($srcs) > 1) ? $srcs[0] : wp_img(preg_replace('~/t/p/original/~', '/t/p/w1280/', $orig), '');
+    $pf_bg = ['fhd' => $fhd, 'w' => count($srcs) > 1 ? 1920 : 1280, 'orig' => wp_img($orig, '')];
+}
+$pf_cfg = [
+    'state' => $pf_state,
+    'csrf' => wp_prof_csrf(),
+    'next' => wp_prof_next_ok($pf_next) ? $pf_next : '',
+    'manage' => !empty($_GET['manage']),
+];
+?>
+<!DOCTYPE html>
+<html lang="<?php echo wp_lang(); ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#000000">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title><?php echo e(t('¿Quién está viendo?')); ?> - <?php echo e($sitename); ?></title>
+    <link rel="icon" href="assets/img/Favicon.ico">
+    <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
+    <link rel="stylesheet" href="assets/nf/app.css?v=12">
+    <link rel="stylesheet" href="assets/nf/profiles.css?v=1">
+    <?php echo wp_tenant_css($pf_dist); ?>
+    <?php echo wp_i18n_script(); ?>
+    <script>window.PF=<?php echo json_encode($pf_cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;</script>
+    <script src="assets/nf/profiles.js?v=1" defer></script>
+</head>
+<body class="pf-body">
+<div class="pf-root" id="pfRoot">
+    <?php if ($pf_bg): ?>
+        <img class="pf-bg" id="pfBg" alt="" decoding="async" fetchpriority="high"
+             src="<?php echo e($pf_bg['fhd']); ?>"
+             srcset="<?php echo e($pf_bg['fhd'] . ' ' . $pf_bg['w'] . 'w, ' . $pf_bg['orig'] . ' 3840w'); ?>" sizes="100vw"
+             data-fb="<?php echo e(json_encode(array_values(array_unique([$pf_bg['orig'], $pf_bg['fhd']])), JSON_UNESCAPED_SLASHES)); ?>">
+    <?php endif; ?>
+    <div class="pf-shade"></div>
+
+    <header class="pf-top">
+        <a class="pf-exit" href="logout.php" data-noprefetch><i class="fas fa-sign-out-alt" aria-hidden="true"></i> <span><?php echo e(t('Salir')); ?></span></a>
+        <img class="pf-logo" src="<?php echo e(wp_brand_logo($pf_dist)); ?>" alt="<?php echo e(wp_brand_name('Logo', $pf_dist)); ?>" onerror="this.onerror=null;this.src='assets/img/Logo.png'">
+    </header>
+
+    <main class="pf-side">
+        <h1 class="pf-title" id="pfTitle"><?php echo e(t('¿Quién está viendo?')); ?></h1>
+        <?php if ($pf_state === null): ?>
+            <p class="pf-msg"><?php echo e(t('No se pudieron cargar los perfiles. Puedes entrar con el perfil principal o intentarlo de nuevo.')); ?></p>
+            <div class="pf-actions">
+                <a class="pf-btn pf-btn-main" href="<?php echo e($pf_go); ?>"><?php echo e(t('Entrar')); ?></a>
+                <a class="pf-btn" href="perfiles.php"><?php echo e(t('Reintentar')); ?></a>
+            </div>
+        <?php else: ?>
+            <ul class="pf-list" id="pfList" aria-labelledby="pfTitle"></ul>
+            <button type="button" class="pf-btn pf-manage" id="pfManage"><i class="fas fa-pen" aria-hidden="true"></i> <span><?php echo e(t('Administrar perfiles')); ?></span></button>
+        <?php endif; ?>
+    </main>
+
+    <?php if ($pf_hl): ?>
+        <aside class="pf-hl" aria-label="<?php echo e(t('Lo más destacado de la semana')); ?>">
+            <span class="pf-hl-k"><?php echo e(t('Lo más destacado de la semana')); ?></span>
+            <b class="pf-hl-t"><?php echo e($pf_hl['title']); ?></b>
+            <span class="pf-hl-m">
+                <?php if ($pf_hl['rating'] > 0): ?><span class="pf-hl-r"><i class="fas fa-star" aria-hidden="true"></i> <?php echo e(number_format((float)$pf_hl['rating'], 1)); ?></span><?php endif; ?>
+                <?php if ($pf_hl['year'] !== ''): ?><span><?php echo e($pf_hl['year']); ?></span><?php endif; ?>
+                <span><?php echo e($pf_hl['kind'] === 'tv' ? t('Serie') : t('Película')); ?></span>
+            </span>
+        </aside>
+    <?php endif; ?>
+</div>
+
+<div class="pf-modal" id="pfModal" role="dialog" aria-modal="true" aria-labelledby="pfModalTitle" hidden>
+    <div class="pf-card" id="pfCard"></div>
+</div>
+</body>
+</html>
