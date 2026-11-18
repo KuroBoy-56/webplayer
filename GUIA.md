@@ -25,6 +25,15 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 
 **Dominio propio con un Worker (opcional):** el cliente entra por un dominio nuevo (el tuyo o el de cada distribuidor, sin límite) y el dominio original de la web responde **403 Forbidden**. El Worker (`cloudflare/edge-worker.js`) abre la web por dentro con un secreto; la web (`includes/edge.php`) solo atiende con ese secreto y toma el dominio y la IP real del cliente. Cada secreto puede llevar el número de un distribuidor: en su dominio la web queda fija en él. Se configura con `'edge_keys'` (y `'edge_block'` para probar) en `includes/panel_secret.php`; sin eso la web funciona exactamente igual. Paso a paso con dibujos: **`docs/GUIA-WORKER.html`** (ábrelo en tu PC; en el hosting `docs/` y `cloudflare/` están bloqueados).
 
+## Inicio de sesión: en qué orden se prueban las DNS
+
+`login.php` + `includes/login_probe.php`. Todos los usuarios de la web salen con la IP del hosting y cada DNS donde el
+usuario no existe le cuenta a XUI un intento fallido: XUI termina bloqueando la IP (protección contra flood). Por eso:
+la última DNS del usuario sola; después de a una (`wp_login_order()`, los servidores más usados por distribuidor) hasta
+la primera que acepta; https solo si en http nadie contestó. Si todas rechazan la conexión, `wp_login_diagnose()`
+averigua si es el hosting (puerto de salida), XUI (IP bloqueada) o el servidor, y va en el reporte al panel. La regla
+para todas las apps y cómo leer el reporte: `docs/LOGIN-SERVIDORES.md` del panel.
+
 ## Perfiles (para quien siga el código)
 
 Contrato con el panel, reglas, estado de cada app y cómo seguir: **`docs/PERFILES.md` del panel** (repo `panelweb`).

@@ -4,6 +4,14 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Inicio de sesión con número de distribuidor: sin bloqueos de XUI — versión 2.6.3 (18 de noviembre, sexta parte)
+- **Caso:** con el distribuidor 228729 (LATAM +) salía «El servidor de video no está dejando entrar a la web…». Eso pasa cuando todas las DNS rechazan la conexión del hosting. La causa más común es que XUI bloqueó la IP del hosting por intentos fallidos: con número de distribuidor la web probaba a la vez todas sus DNS (y las del dueño si no está aislado), y cada una donde el usuario no existe le contaba un intento fallido a la IP del hosting, la misma para todos.
+- **Ahora:** primero la DNS con la que ese usuario entró la última vez (sola). Si no, las demás **de a una**, empezando por el servidor donde más usuarios de ese distribuidor entraron, hasta la primera que acepta. Un servidor que no contesta no cuenta; pasados 20 s, el resto va a la vez.
+- **Si igual rechazan todas**, la web averigua la causa en unos segundos (si el hosting no deja salir por ese puerto, si XUI bloqueó la IP del hosting o si el servidor no deja conectar en ningún puerto) y la manda al panel (**Errores de las apps**), con qué hacer.
+- Si es el hosting, el cliente ve: «La web no puede conectarse con el servidor de video por ahora (no es tu conexión). Ya le avisamos al administrador; mientras tanto puedes usar nuestras apps.».
+- Guía completa (y la regla para las demás apps): `docs/LOGIN-SERVIDORES.md` del panel.
+- Archivos: `login.php`, `includes/login_probe.php` (nuevo), `includes/core.php` (versión), `includes/lang/en.php`, `pt.php`, `fr.php`. El panel no cambia.
+
 ## Perfil infantil con la clasificación de TMDB — versión 2.6.2 (18 de noviembre, quinta parte)
 - **Arreglo:** en el perfil infantil aparecían telenovelas y dramas como «Mírame así, el camino de Noa», porque TMDB les pone el género «Familia».
 - Ahora cada título queda **seguro**, **dudoso** o **fuera**:

@@ -219,6 +219,7 @@ return [
     'No hay partidos con estos filtros' => 'Aucun match avec ces filtres',
     'No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.' => 'Impossible de se connecter aux serveurs. Vérifiez votre connexion et réessayez.',
     'El servidor de video no está dejando entrar a la web en este momento (no es tu conexión). Inténtalo de nuevo en unos minutos.' => 'Le serveur vidéo ne laisse pas entrer le site pour le moment (ce n’est pas votre connexion). Réessayez dans quelques minutes.',
+    'La web no puede conectarse con el servidor de video por ahora (no es tu conexión). Ya le avisamos al administrador; mientras tanto puedes usar nuestras apps.' => 'Le site ne parvient pas à se connecter au serveur vidéo pour le moment (ce n’est pas votre connexion). Nous avons déjà prévenu l’administrateur ; en attendant, vous pouvez utiliser nos applications.',
     'El servidor rechazó el inicio de sesión ({c}). Inténtalo de nuevo en unos minutos.' => 'Le serveur a refusé la connexion ({c}). Réessayez dans quelques minutes.',
     'No se encontraron resultados.' => 'Aucun résultat.',
     'No se encontró información de este actor.' => 'Aucune information trouvée pour cet acteur.',

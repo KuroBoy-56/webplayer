@@ -158,8 +158,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
             }
         }
     }
-    // 2) las demás (una por servidor real), en paralelo
-    if (empty($hit)) $hit = $ask(array_values($rest));
+    // 2) las demás (una por servidor real) de a una, primero la que más usuarios de este distribuidor usan, hasta la
+    //    primera que acepta (includes/login_probe.php): probarlas todas a la vez sumaba un intento fallido en cada XUI
+    //    donde el usuario no existe y terminaba con la IP del hosting bloqueada. Un servidor que no contesta no cuenta;
+    //    pasados 20 s el resto va a la vez para no hacer esperar de más.
+    require_once __DIR__ . '/includes/login_probe.php';
+    if (empty($hit)) {
+        $rest = wp_login_order(array_values($rest), $dist_code);
+        $t0 = microtime(true);
+        while ($rest && empty($hit)) {
+            if (microtime(true) - $t0 > 20) {
+                $hit = $ask($rest);
+                break;
+            }
+            $hit = $ask([array_shift($rest)]);
+        }
+    }
     // 3) https solo si en http ningún servidor contestó nada (conexión rechazada, sin respuesta)
     if (!$hit && $later && !array_filter($responses, function ($b) { return $b !== null; })) $ask($later);
 
@@ -205,8 +219,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
 
     if ($match !== null) {
         $srv = $servers[$match];
-        // la próxima vez esta DNS va primero y sola (un solo intento al servidor IPTV)
+        // la próxima vez esta DNS va primero y sola (un solo intento al servidor IPTV), y el servidor sube en el orden
+        // de los demás usuarios de este distribuidor
         wp_cache_set($lastKey, $srv['url']);
+        wp_login_hit($srv['url'], $dist_code);
         // el navegador queda en el panel (Clientes › Web player, con su IP); si su distribuidor bloqueó este navegador
         // o esta IP, no entra (includes/web_device.php)
         require_once __DIR__ . '/includes/web_device.php';
@@ -273,20 +289,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         // (XUI bloquea la IP que junta intentos fallidos o demasiadas conexiones: todos los usuarios de la web salen
         // con la IP del hosting). El panel agrega esa IP al reporte.
         $refused = $fails && count(array_filter($fails, function ($f) { return strpos((string)$f, 'curl 7 ') === 0; })) === count($fails);
+        // ¿el hosting no deja salir por ese puerto, o el servidor no deja entrar a la IP del hosting? (unos segundos)
+        $diag = $refused ? wp_login_diagnose(array_map(function ($s) { return $s['url']; }, $servers)) : null;
         $ips = [];
         foreach ($servers as $srv) {
             $h = (string)parse_url($srv['url'], PHP_URL_HOST);
             if ($h !== '' && !isset($ips[$h])) $ips[$h] = $h . ' → ' . (wp_resolve_ip($h) ?: 'sin IP');
         }
         wp_panel_report('error', $refused
-            ? 'Login de la web player: el servidor IPTV rechaza la conexión del hosting (¿IP del hosting bloqueada en XUI?)'
+            ? ($diag['cause'] === 'hosting_port'
+                ? 'Login de la web player: el hosting de la web no deja salir al puerto ' . $diag['port'] . ' del servidor IPTV'
+                : 'Login de la web player: el servidor IPTV rechaza la conexión del hosting (¿IP del hosting bloqueada en XUI?)')
+              . ($dist_code !== '' ? ' (distribuidor ' . $dist_code . ')' : '')
             : 'Login de la web player: ningún servidor IPTV contestó',
             implode(' | ', $seen) . "\nServidores: " . implode(', ', $ips)
-            . ($refused ? "\nRevisa en XUI «IPs bloqueadas» la IP del hosting de la web (abajo) y agrégala a las IP excluidas de la protección contra flood." : ''), 'Login');
+            . ($refused ? "\n" . $diag['text'] . "\nIP del hosting de la web: la que el panel muestra en este reporte." : ''), 'Login');
         // conexión rechazada en todas: no es la conexión del cliente sino el servidor IPTV, que no deja entrar a la web
-        echo json_encode(['success' => false, 'message' => $refused
-            ? t('El servidor de video no está dejando entrar a la web en este momento (no es tu conexión). Inténtalo de nuevo en unos minutos.')
-            : t('No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.')]);
+        echo json_encode(['success' => false, 'message' => !$refused
+            ? t('No pudimos conectar con los servidores. Revisa tu conexión e inténtalo de nuevo.')
+            : ($diag['cause'] === 'hosting_port'
+                ? t('La web no puede conectarse con el servidor de video por ahora (no es tu conexión). Ya le avisamos al administrador; mientras tanto puedes usar nuestras apps.')
+                : t('El servidor de video no está dejando entrar a la web en este momento (no es tu conexión). Inténtalo de nuevo en unos minutos.'))]);
         exit;
     }
     echo json_encode(['success' => false, 'message' => t('Usuario o contraseña incorrectos.')]);
