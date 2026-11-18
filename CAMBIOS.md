@@ -4,6 +4,16 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Perfil infantil con la clasificación de TMDB — versión 2.6.2 (18 de noviembre, quinta parte)
+- **Arreglo:** en el perfil infantil aparecían telenovelas y dramas como «Mírame así, el camino de Noa», porque TMDB les pone el género «Familia».
+- Ahora cada título queda **seguro**, **dudoso** o **fuera**:
+  - **Seguro:** está en una categoría de niños o su género es infantil, o animación con familia. Se ve, salvo que TMDB diga que no es para niños.
+  - **Dudoso:** «Familia» sola, una categoría de Disney o de familia, o un género como Telenovela. Se ve solo cuando TMDB confirma que es para niños: clasificación hasta 7 años (G, PG, TV-Y, TV-G, TV-PG, AA, A…).
+- La web le pide al panel la clasificación (`api/kids_rate.php`) después de mostrar la página, sin hacerla esperar, y la guarda por distribuidor. Lo dudoso aparece a medida que llegan las respuestas.
+- Sin clave de TMDB del distribuidor, o si el panel no contesta, se ve solo lo seguro.
+- Las reglas de fábrica pasan a la versión 2 del panel.
+- Archivos: `includes/kids.php`, `includes/core.php` (versión). **Panel:** `api/kids_rate.php`, `includes/kids_rate.php`, `includes/kids_rules.php` (subir primero).
+
 ## Perfiles con número de distribuidor — versión 2.6.1 (18 de noviembre, cuarta parte)
 - Revisado todo con un distribuidor (número, logo, nombre y colores propios): inicio de sesión, «¿Quién está viendo?», la barra, el perfil infantil y un cambio de marca hecho en el panel (llega a la web en su revisión de cada 10 minutos, también a la pantalla de perfiles y a la marca guardada en el navegador). Los avatares que se ofrecen son los del distribuidor.
 - **«¿Quién está viendo?» con los colores del distribuidor:** fondo, sombras sobre el destacado, cuadros de los diálogos, foco y el interruptor «Perfil infantil» toman su paleta (antes la pantalla quedaba negra). Con Omitir sigue igual (negro y blanco).

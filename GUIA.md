@@ -84,7 +84,11 @@ Esta web es la implementación de referencia para las demás apps.
   Las reglas llegan del panel en `kidsRules` (`wp_kids_rules_remember()`, 30 días) y `wp_kids_rules_local()` es la
   copia de fábrica: **cópiala de `includes/kids_rules.php` del panel cuando cambien las listas.** El algoritmo y cómo
   arreglar una filtración: «Perfil infantil» en `docs/PERFILES.md` del panel. El interruptor sale solo al crear
-  (`#pfKids` en `profiles.js`, campo `kids`). Al abrir `perfiles.php` se borra `nf_hero_bg` de `sessionStorage` (el fondo
+  (`#pfKids` en `profiles.js`, campo `kids`). **Con TMDB (2.6.2):** `wp_kids_item_level()` deja cada título seguro /
+  dudoso / fuera; `wp_kids_rate_schedule()` pide al panel (`api/kids_rate.php`) los que no tienen veredicto, después de
+  contestar la página (cada 15 s como mucho por distribuidor; sin PHP-FPM / LiteSpeed solo 150 por vez para no demorar);
+  `wp_kids_rate_map()` guarda `ok` / `no` / `?` por distribuidor (`kids|rate`) y `kids|raterev` hace que el catálogo
+  infantil (`kidscat2|…`) se vuelva a armar. Lo dudoso se ve solo con `ok`; lo que dice `no` nunca. Al abrir `perfiles.php` se borra `nf_hero_bg` de `sessionStorage` (el fondo
   que `app.js` deja mientras carga el destacado) para que un perfil nunca vea el banner de otro; en el inicio infantil el
   «Bienvenido» sin destacados no usa el collage `assets/images/overlay.webp`.
 - **Con número de distribuidor**, `perfiles.php` usa su logo y nombre (`wp_brand_logo`, `wp_brand_name`), sus variables
