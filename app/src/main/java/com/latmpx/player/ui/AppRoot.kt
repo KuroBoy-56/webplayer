@@ -53,6 +53,8 @@ import com.latmpx.player.data.Item
 import com.latmpx.player.data.Kind
 import com.latmpx.player.data.Cloud
 import com.latmpx.player.data.PanelEpg
+import com.latmpx.player.data.Kids
+import com.latmpx.player.data.Profiles
 import com.latmpx.player.data.Store
 import com.latmpx.player.data.Tenant
 import com.latmpx.player.data.Xtream
@@ -106,6 +108,7 @@ fun AppRoot() {
         Store.logout() // antes de Tenant.clear(): borra el token de este distribuidor
         Tenant.clear()
         Alerts.reset(); alert.value = null; Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear()
+        Profiles.choose(null); state.profilesOpen = null; state.profileReady = false
         state.stack.clear(); state.tab = Tab.HOME; state.session = null
         distMsg.value = msg
         gate.value = Gate.CHOOSE
@@ -163,16 +166,11 @@ fun AppRoot() {
     // después, en segundo plano, el del servidor si la copia ya es vieja o no existe
     LaunchedEffect(state.session) {
         val s = state.session ?: return@LaunchedEffect
-        launch { Cloud.load() } // continuar viendo y favoritos desde el panel (no bloquea la pantalla)
+        // Continuar viendo y Mi lista se leen cuando el perfil ya está elegido (más abajo)
         launch { alert.value = Alerts.forLaunch(s) } // aviso del panel (bienvenida o vencimiento)
         val kinds = listOf(Kind.MOVIE, Kind.SERIES, Kind.LIVE)
-        fun put(kind: Kind, cats: List<Category>, items: List<Item>) {
-            when (kind) {
-                Kind.MOVIE -> { if (cats.isNotEmpty()) state.movieCats = cats; state.movies = items }
-                Kind.SERIES -> { if (cats.isNotEmpty()) state.seriesCats = cats; state.series = items }
-                Kind.LIVE -> { if (cats.isNotEmpty()) state.liveCats = cats; state.live = items }
-            }
-        }
+        // el catálogo completo queda en AppState; lo que se ve lo arma state.putCatalog (perfil infantil: Kids.kt)
+        suspend fun put(kind: Kind, cats: List<Category>, items: List<Item>) = state.putCatalog(kind, cats, items)
         state.catalogLoading = true
         val saved = kinds.map { k -> async { k to Xtream.cached(s, k) } }.awaitAll()
         saved.forEach { (k, c) -> if (c != null) put(k, c.first, c.second) }
@@ -186,6 +184,57 @@ fun AppRoot() {
         state.loading = false
         state.catalogLoading = false
     }
+    // perfiles (docs/PERFILES.md del panel): al entrar se leen. Apagados, una sola conexión, DEMO o el panel sin respuesta
+    // en 12 s: directo al principal, como siempre (la app nunca se queda esperando). Si no, «¿Quién está viendo?».
+    LaunchedEffect(state.session) {
+        val s = state.session ?: return@LaunchedEffect
+        state.profileReady = false
+        state.profilesOpen = null
+        Profiles.choose(null)
+        Kids.resetPending()
+        if (Store.demo) { state.profileReady = true; return@LaunchedEffect }
+        val r = kotlinx.coroutines.withTimeoutOrNull(12_000L) { Profiles.load(s.maxCons.toIntOrNull() ?: 0) }
+        if (state.session !== s) return@LaunchedEffect
+        val st = (r as? Profiles.Result.Ok)?.state
+        if (st != null && st.enabled && st.max > 1 && st.profiles.isNotEmpty()) {
+            state.profilesData = st
+            state.profilesFromAccount = false
+            state.profilesOpen = false
+        } else state.profileReady = true
+    }
+    // Continuar viendo y Mi lista del perfil elegido (y otra vez al cambiar de perfil)
+    LaunchedEffect(state.session, state.profileReady, Profiles.current) {
+        if (state.session != null && state.profileReady) Cloud.load()
+    }
+    // perfil infantil: lo que se ve se arma otra vez al cambiar de perfil y al llegar veredictos de TMDB
+    LaunchedEffect(Profiles.current, Kids.rev) { state.applyKids() }
+    // lo dudoso se le pregunta al panel en segundo plano (api/kids_rate.php), nunca esperando para mostrar la pantalla
+    LaunchedEffect(state.session, Profiles.current) {
+        Kids.resetPending()
+        var rounds = 0
+        while (state.session != null && Profiles.kids && rounds < 60) {
+            kotlinx.coroutines.delay(if (rounds == 0) 2_000L else 4_000L)
+            val more = runCatching { Kids.askPending() }.getOrDefault(false)
+            rounds++
+            if (!more) kotlinx.coroutines.delay(30_000L)
+        }
+    }
+    // el panel contestó 410: el perfil elegido ya no existe (eliminado en otro equipo): otra vez a la pantalla de perfiles
+    LaunchedEffect(Profiles.gone) {
+        if (Profiles.gone == 0 || state.session == null) return@LaunchedEffect
+        val s = state.session ?: return@LaunchedEffect
+        val r = Profiles.load(s.maxCons.toIntOrNull() ?: 0)
+        // sin respuesta del panel: la última lista (nunca se pasa solo al principal: podía ser un perfil infantil)
+        val st = (r as? Profiles.Result.Ok)?.state ?: state.profilesData
+        Profiles.choose(null)
+        Cloud.clear()
+        if (st != null && st.enabled && st.max > 1 && st.profiles.isNotEmpty()) {
+            state.stack.clear(); state.tab = Tab.HOME
+            state.profilesData = st
+            state.profilesFromAccount = false
+            state.profilesOpen = false
+        }
+    }
     // al volver a la app: si el dueño quitó la línea de este equipo en el panel, se vuelve al inicio de sesión
     val lastPanelCheck = remember { mutableLongStateOf(System.currentTimeMillis()) }
     fun revalidate(gap: Long = 15 * 60_000L) {
@@ -197,7 +246,8 @@ fun AppRoot() {
             // sin conexión o error del panel no se cierra la sesión; solo cuando el panel deja de dar una línea que antes dio
             // a este equipo (Panel.lineGone) o el equipo está en la lista negra
             if (((c.error == null && c.value == null && com.latmpx.player.data.Panel.lineGone) || com.latmpx.player.data.Panel.blocked != null) && state.session === s) {
-                Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
+                Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME
+                Profiles.choose(null); state.profilesOpen = null; state.profileReady = false; state.session = null
             }
         }
     }
@@ -213,7 +263,7 @@ fun AppRoot() {
     LifecycleResumeEffect(Unit) {
         state.refresh++
         revalidate()
-        if (state.session != null) scope.launch { Cloud.load() }
+        if (state.session != null && state.profileReady) scope.launch { Cloud.load() }
         if (booted.value && Tenant.active && (Tenant.due() || Tenant.brand?.expired() == true)) guard()
         onPauseOrDispose { }
     }
@@ -237,9 +287,32 @@ fun AppRoot() {
                 Xtream.clearCache()
                 state.session = s
             }
+            // «¿Quién está viendo?» (al entrar, desde Cuenta o después de un 410)
+            state.profilesOpen != null -> com.latmpx.player.ui.screens.ProfilesScreen(
+                state,
+                onChosen = { p ->
+                    scope.launch {
+                        Profiles.choose(p)
+                        Cloud.clear()
+                        // perfil infantil: el catálogo se recorta antes de dejar la pantalla de perfiles (nunca se ve el completo)
+                        state.applyKids()
+                        state.stack.clear(); state.tab = Tab.HOME
+                        state.profilesOpen = null
+                        state.profileReady = true
+                    }
+                },
+                onBack = { if (state.profilesFromAccount && Profiles.current != null) state.profilesOpen = null else (ctx as? android.app.Activity)?.finishAffinity() },
+                onLogout = {
+                    scope.launch {
+                        Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME
+                        Profiles.choose(null); state.profilesOpen = null; state.profileReady = false; state.session = null
+                    }
+                },
+            )
             else -> MainShell(state, onLogout = {
                 scope.launch {
-                    Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME; state.session = null
+                    Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME
+                    Profiles.choose(null); state.profileReady = false; state.session = null
                 }
             }, onChangeDistributor = { wipe(null) })
         }
@@ -302,7 +375,8 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
                 Tab.MOVIES -> CatalogScreen(state, Kind.MOVIE)
                 Tab.SERIES -> CatalogScreen(state, Kind.SERIES)
                 Tab.LIVE -> LiveScreen(state)
-                Tab.SPORTS -> if (Tenant.sportsEnabled) SportsScreen(state) else HomeScreen(state)
+                // el perfil infantil nunca tiene Deportes
+                Tab.SPORTS -> if (Tenant.sportsEnabled && !Profiles.kids) SportsScreen(state) else HomeScreen(state)
                 Tab.MYLIST -> MyListScreen(state)
                 Tab.SEARCH -> SearchScreen(state)
                 Tab.ACCOUNT -> AccountScreen(state, onLogout, onChangeDistributor)
@@ -318,7 +392,8 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
             ) {
                 LogoHeader(height = 30.dp)
                 Spacer(Modifier.height(18.dp))
-                Tab.entries.filter { it != Tab.SPORTS || Tenant.sportsEnabled }.forEach { t ->
+                // perfil infantil: sin Deportes, y sin TV en vivo si la lista no tiene canales de niños
+                Tab.entries.filter { (it != Tab.SPORTS || (Tenant.sportsEnabled && !Profiles.kids)) && (it != Tab.LIVE || !state.hideLive) }.forEach { t ->
                     val sel = state.tab == t && top == null
                     FocusBox(onClick = { state.stack.clear(); state.tab = t }, shape = RoundedCornerShape(10.dp), focusScale = 1.1f) { f ->
                         Column(
@@ -335,7 +410,8 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
         }
     } else {
         // teléfono: barra inferior como la app de Netflix
-        val phoneTabs = listOf(Tab.HOME, Tab.SERIES, Tab.MOVIES, Tab.LIVE, Tab.ACCOUNT)
+        // perfil infantil sin canales de niños: sin TV en vivo
+        val phoneTabs = listOf(Tab.HOME, Tab.SERIES, Tab.MOVIES, Tab.LIVE, Tab.ACCOUNT).filter { it != Tab.LIVE || !state.hideLive }
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) { content() }
             if (!state.immersive) NavigationBar(containerColor = Color(0xFF0B0B0B), tonalElevation = 0.dp) {

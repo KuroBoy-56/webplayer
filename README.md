@@ -15,7 +15,13 @@
 App nativa en Kotlin con la misma lógica y el mismo diseño que el reproductor web (rama `main`).
 La app para Android TV / Google TV / TV Box está en la rama `android-tv` (descarga en Releases > `apk-tv-latest`).
 
-- **Teléfono:** pantalla vertical con barra inferior como la app de Netflix. El reproductor gira a horizontal.
+- **Teléfono:** pantalla vertical con barra inferior como la app de Netflix. **El reproductor (1.4.0) sigue en vertical, como
+  la web player:** el video arriba en 16:9 con controles compactos (atrás, -10 / reproducir / +10, barra y el botón de
+  pantalla completa) y debajo el título, las opciones (pantalla completa, audio y subtítulos, velocidad, siguiente) y la
+  lista de capítulos de la serie. Solo con el botón **Pantalla completa** o **girando el teléfono** pasa a horizontal (el
+  video a toda la pantalla, como antes); en horizontal «Salir de pantalla completa» vuelve a vertical. Con el giro
+  automático bloqueado manda solo el botón (`PlayerActivity.toggleFullscreen`, `PortraitPanel` en `PlayerUi.kt`;
+  `screenOrientation="fullUser"` en el manifiesto, antes `sensorLandscape`).
 - **Reproductor:** ExoPlayer (Media3) con decodificador FFmpeg. Reproduce Dolby AC3/E-AC3, DTS, TrueHD, MKV, AVI, TS, HLS y más directo en el equipo, sin convertir en el hosting.
   - Selector de audio y subtítulos.
   - Idioma del equipo por defecto.
@@ -128,6 +134,18 @@ Al abrir la app por primera vez sale **Número de distribuidor** (mismo diseño 
 - **Fondo de pósters:** solo con lo que entrega `api/tmdb.php` del panel en ese momento (sin copia guardada ni clave de respaldo); con `tmdb_key_not_set` o error, fondo negro.
 - **Borrado de caché remoto** (`data/CacheClear.kt`): `check_mac` manda `"cc"` (última orden aplicada, 0 = ninguna) y el panel responde `"cache_clear"`. Sin nada guardado (`cache_clear_seen`) se guarda en silencio; un número mayor se guarda primero, sale el aviso ~3 s, se borran catálogo (`filesDir/catalog`), carátulas de TMDB y `cacheDir` (imágenes de Coil) y la app se reinicia. No se tocan sesión, distribuidor, ajustes ni descargas. Con listas de `auth.php` (Omitir) `check_mac` se pide igual en segundo plano.
 
+## Perfiles y perfil infantil (1.4.0)
+
+Contrato completo: `docs/PERFILES.md` del panel. Todo en `data/Profiles.kt`, `data/Kids.kt` (+ `KidsRules.kt`) y `ui/screens/ProfilesScreen.kt` (+ `ProfilesField.kt`); textos en `res/values*/strings_profiles.xml` (es, en, pt, fr). Estos archivos son iguales en las 6 variantes (salvo `ProfilesField.kt`: en TV usa `TvTextFieldBox`).
+
+- **«¿Quién está viendo?»** (`ui/screens/ProfilesScreen.kt`) al iniciar sesión y en cada arranque, si el dueño encendió los perfiles (panel › Perfiles) y la línea tiene más de una conexión (`GET api/profiles.php` con `max` = las conexiones de `player_api.php`). En vertical: el destacado de la semana de TMDB arriba (solo nombre y calificación), el título sobre los perfiles, **dos por fila y el quinto centrado**, «Administrar perfiles» debajo, «Salir» arriba a la izquierda (cierra la sesión), logo arriba a la derecha y la versión abajo a la izquierda; con el celular girado o en tableta, como la web horizontal (perfiles en columna a la izquierda). Con número de distribuidor, su logo, sus colores y sus avatares. Apagados, una conexión, DEMO o el panel sin respuesta en 12 s: directo al principal, como siempre.
+- **Barra de arriba (Inicio, Series, Películas):** «Para <perfil>» y el avatar del perfil (con «Niños» si es infantil); su menú y **Cuenta** tienen «Cambiar perfil» y «Administrar perfiles».
+- **PIN** de 4 números con un teclado en pantalla (control y dedo); se comprueba en el panel (`pin_check`) y **nunca se guarda en el equipo**. «¿Olvidaste el PIN?» lo quita con la contraseña de la línea (`pin_reset`).
+- **Administrar:** el lápiz de cada perfil abre el editor (avatar de la lista `avatars` del panel, nombre de 1 a 20 caracteres, bloquear / cambiar / quitar el PIN y «Eliminar perfil» siempre en rojo, nunca en el principal; se recupera 7 días creando otro con el mismo nombre exacto). Un perfil bloqueado pide el PIN antes de editarlo. «Agregar perfil» solo con `canCreate`, con el interruptor **«Perfil infantil»** (solo al crear).
+- **`profile` en cada llamada a `api/progress.php`** (`data/Cloud.kt`): Continuar viendo, Mi lista y los canales favoritos son de cada perfil y se leen otra vez al cambiar. Con **410** (el perfil se eliminó en otro equipo) vuelve a la pantalla de perfiles.
+- **Perfil infantil:** el catálogo completo queda guardado como siempre y `AppState.putCatalog` / `applyKids` arman lo que se ve con las reglas del panel (`kidsRules`, guardadas en el equipo; copia de fábrica v2): Inicio, Series, Películas, Buscar, Top 10, actores y Mi lista solo con lo permitido; TV en vivo solo las categorías de niños (si no hay, desaparece) y sin Deportes. Lo dudoso se pregunta en segundo plano a `api/kids_rate.php` (clasificación de edad de TMDB, de a 400): lo seguro se ve salvo que TMDB diga «no» y lo dudoso solo con «ok»; los veredictos se guardan por distribuidor. Una ficha que no pasa el filtro no se abre (`AppState.push`).
+- **Inicio de sesión de a un servidor** (`data/Xtream.kt`, `login`; regla de `docs/LOGIN-SERVIDORES.md` del panel): primero la DNS con la que ese usuario entró la última vez en el equipo, después de a una en el orden del panel, una vez por servidor, http primero y https solo si en http no contestó XUI, parando en la primera que acepta; pasados 20 s lo que falta va a la vez. Si no contesta ninguna, se avisa al panel (Errores de las apps) con cada DNS.
+
 ## Datos que viven en el panel
 
 Todas estas llamadas usan un token: la app hace `POST progress.php {"action":"auth","user","pass"}` una vez y guarda solo el token (30 días). Si vence, pide otro.
@@ -135,6 +153,8 @@ Todas estas llamadas usan un token: la app hace `POST progress.php {"action":"au
 | Endpoint | Uso en la app |
 |---|---|
 | `api/progress.php` | **Continuar viendo** y **Mi lista / canales favoritos**. `GET ?v=2` → `{progress, favorites}`; `POST` `save`, `delete`, `fav_add`, `fav_remove`. Mismo formato que la web: película por nombre (`type: movie`), serie una sola entrada por serie (`type: episode`, `id` del episodio, `seriesId`). Al 95 % se borra. Nada de esto queda solo en el equipo. |
+| `api/profiles.php` | **Perfiles** (ver arriba): `GET ?lang&max` → la lista; `POST` `create`, `update`, `delete`, `pin_set`, `pin_clear`, `pin_check`, `pin_reset`. |
+| `api/kids_rate.php` | **Perfil infantil:** clasificación de edad de TMDB de los títulos dudosos (`POST {items:[{q, t, id \| n, y}]}`, de a 400). |
 | `api/epg.php` | Guía de respaldo: primero `get_short_epg` del proveedor; si un canal no trae guía, `POST {channels:[{id, epg, name}]}` en lotes de hasta 400 canales. |
 | `api/login.php` (lista negra) | **1.3.3:** si el distribuidor (o el dueño con Omitir) bloqueó este equipo en la **Lista negra** del panel, `login.php` responde 403 `device_blocked` (`Panel.blocked`): el inicio de sesión muestra el aviso sin usar líneas guardadas (`auth.php`) ni la pantalla falsa, una cuenta escrita o la Autodemo no entran y la consulta de cada 10 min cierra la sesión abierta. |
 | Reproductor (canales en vivo) | **1.3.4:** en los canales ya no hay botones de canal anterior / siguiente ni de pausa en pantalla: el canal cambia con ▲▼ del control remoto (siempre, también con la información a la vista) o deslizando hacia arriba (siguiente) / abajo (anterior) en la pantalla; un toque muestra u oculta la información. Películas y series siguen con −10 s, pausa y +10 s. |

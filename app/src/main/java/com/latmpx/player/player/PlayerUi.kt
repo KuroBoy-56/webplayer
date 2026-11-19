@@ -10,6 +10,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -99,6 +104,10 @@ enum class PlayerPanel { TRACKS, SPEED, EPISODES }
 
 /** Estado de la interfaz del reproductor (lo actualiza PlayerActivity desde ExoPlayer). */
 class PlayerUiModel(val player: ExoPlayer, val live: Boolean, val tv: Boolean) {
+    /** celular en vertical (como la web): el video arriba con controles compactos y el resto debajo (PortraitPanel) */
+    var portrait by mutableStateOf(false)
+    /** imagen en imagen: siempre el video solo, a pantalla completa en su ventana */
+    var inPip by mutableStateOf(false)
     var title by mutableStateOf("")
     var subtitle by mutableStateOf("")
     var visible by mutableStateOf(true)
@@ -139,6 +148,8 @@ class PlayerActions(
     val resize: (Int) -> Unit,
     /** imagen en imagen (solo celular con Android 8 o más) */
     val pip: (() -> Unit)? = null,
+    /** celular: pantalla completa (gira a horizontal) o volver a vertical */
+    val fullscreen: (() -> Unit)? = null,
 )
 
 data class TrackOption(val label: String, val selected: Boolean, val apply: () -> Unit)
@@ -284,9 +295,10 @@ fun PlayerOverlay(m: PlayerUiModel, a: PlayerActions) {
         AnimatedVisibility(m.visible && m.panel == null, enter = fadeIn(), exit = fadeOut()) {
             if (m.locked) LockedLayer(m) else Controls(m, a)
         }
-        NextEpisodeCard(m, a, Modifier.align(Alignment.BottomEnd).padding(end = 32.dp, bottom = 96.dp))
+        // en vertical la tarjeta del siguiente capítulo y los paneles van debajo del video, a toda la pantalla (PortraitPanel)
+        if (!m.portrait) NextEpisodeCard(m, a, Modifier.align(Alignment.BottomEnd).padding(end = 32.dp, bottom = 96.dp))
         ExitVideoDialog(m, a)
-        m.panel?.let { Panel(m, a, it) }
+        if (!m.portrait) m.panel?.let { Panel(m, a, it) }
         m.toast?.let { t ->
             Text(t, color = Color.White, fontSize = 15.sp, modifier = Modifier.align(Alignment.TopCenter).padding(top = 28.dp)
                 .background(Color(0xE6141414), RoundedCornerShape(8.dp)).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp)).padding(horizontal = 18.dp, vertical = 10.dp))
@@ -305,6 +317,7 @@ private fun LockedLayer(m: PlayerUiModel) {
 
 @Composable
 private fun Controls(m: PlayerUiModel, a: PlayerActions) {
+    if (m.portrait) { CompactControls(m, a); return }
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(m.focusTick) { if (m.tv) runCatching { playFocus.requestFocus() } }
     Box(Modifier.fillMaxSize()) {
@@ -349,8 +362,71 @@ private fun Controls(m: PlayerUiModel, a: PlayerActions) {
                     a.resize(next); m.poke()
                 }
                 if (m.hasNext && !m.live) Pill(Icons.Filled.SkipNext, stringResource(R.string.next_episode)) { a.next() }
+                // celular en horizontal: volver a vertical
+                if (!m.tv) a.fullscreen?.let { fs -> Pill(Icons.Filled.FullscreenExit, stringResource(R.string.exit_fullscreen)) { fs(); m.poke() } }
             }
         }
+    }
+}
+
+/** celular en vertical: controles compactos sobre el video (16:9 arriba de la pantalla) */
+@Composable
+private fun CompactControls(m: PlayerUiModel, a: PlayerActions) {
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().background(Color(0x66000000)))
+        CtrlButton(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), Modifier.align(Alignment.TopStart).padding(4.dp), big = false) { a.back() }
+        Row(Modifier.align(Alignment.TopEnd).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (m.live) Badge(stringResource(R.string.live_badge), Red)
+            if (m.quality.isNotEmpty()) { Spacer(Modifier.width(6.dp)); Badge(m.quality, Color(0x33FFFFFF)) }
+            a.pip?.let { enter -> Spacer(Modifier.width(4.dp)); CtrlButton(Icons.Filled.PictureInPictureAlt, stringResource(R.string.pip), big = false) { enter() } }
+        }
+        if (!m.live) Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            CtrlButton(Icons.Filled.Replay10, stringResource(R.string.rewind_10), big = false) { m.player.seekBack(); m.poke() }
+            CtrlButton(if (m.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, stringResource(if (m.playing) R.string.pause else R.string.play)) { m.toggle() }
+            CtrlButton(Icons.Filled.Forward10, stringResource(R.string.forward_10), big = false) { m.player.seekForward(); m.poke() }
+        }
+        Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { if (!m.live && m.duration > 0) SeekBar(m) }
+            a.fullscreen?.let { fs -> CtrlButton(Icons.Filled.Fullscreen, stringResource(R.string.fullscreen), big = false) { fs() } }
+        }
+    }
+}
+
+/**
+ * Celular en vertical (como la web player): debajo del video el título, las opciones (audio y subtítulos, velocidad,
+ * capítulos, siguiente, pantalla completa) y la lista de capítulos de la serie. Pantalla completa (o girar el teléfono)
+ * pasa a horizontal. Los paneles (idiomas, velocidad, capítulos) se abren aquí, a toda la pantalla.
+ */
+@Composable
+fun PortraitPanel(m: PlayerUiModel, a: PlayerActions, modifier: Modifier) {
+    Box(modifier) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Text(m.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (m.subtitle.isNotBlank()) Text(m.subtitle, color = Dim, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                a.fullscreen?.let { fs -> Pill(Icons.Filled.Fullscreen, stringResource(R.string.fullscreen)) { fs() } }
+                Pill(Icons.Filled.Subtitles, stringResource(R.string.audio_subs)) { m.panel = PlayerPanel.TRACKS }
+                if (!m.live) Pill(Icons.Filled.Speed, stringResource(R.string.speed_x, speedLabel(m.speed))) { m.panel = PlayerPanel.SPEED }
+                if (m.hasNext && !m.live) Pill(Icons.Filled.SkipNext, stringResource(R.string.next_episode)) { a.next() }
+            }
+            if (m.episodes.size > 1 && !m.live) {
+                Text(stringResource(R.string.episodes), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp, bottom = 6.dp))
+                m.episodes.forEachIndexed { i, t ->
+                    val cur = i == m.index
+                    Row(
+                        Modifier.fillMaxWidth().clickable { if (!cur) a.pickEpisode(i) }
+                            .background(if (cur) Color(0x26FFFFFF) else Color.Transparent, RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (cur) Icon(Icons.Filled.PlayArrow, null, tint = Red, modifier = Modifier.size(18.dp).padding(end = 2.dp))
+                        Text(t, color = if (cur) Color.White else Dim, fontSize = 14.sp, fontWeight = if (cur) FontWeight.Bold else FontWeight.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+        NextEpisodeCard(m, a, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 24.dp))
+        m.panel?.let { Panel(m, a, it) }
     }
 }
 

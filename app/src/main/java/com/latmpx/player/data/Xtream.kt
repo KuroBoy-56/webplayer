@@ -30,43 +30,103 @@ object Xtream {
         data class Fail(val message: String) : LoginResult()
     }
 
-    /** Prueba el usuario en cada DNS del panel (en orden) y se queda con el primero que responda. */
+    /**
+     * Prueba el usuario en las DNS del panel con la regla de docs/LOGIN-SERVIDORES.md del panel (para que XUI no bloquee
+     * la IP: muchas redes comparten una IP entre miles de clientes):
+     *  1. primero la DNS con la que este usuario entró la última vez en este equipo, sola;
+     *  2. después de a una, en el orden del panel, parando en la primera que acepta (nunca todas a la vez);
+     *  3. una sola vez por servidor (mismo host y puerto);
+     *  4. http primero; https solo si en http no contestó XUI (nunca los dos a la vez para el mismo servidor);
+     *  5. la que no contesta no cuenta como intento; pasados 20 s, lo que falta va a la vez;
+     *  6. si no contestó ninguna, se avisa al panel (Errores de las apps) con cada DNS y lo que pasó.
+     */
     suspend fun login(dns: List<Pair<String, String>>, user: String, pass: String): LoginResult {
-        val noServer = tr(R.string.err_server_offline)
-        var lastMsg = noServer
-        for ((name, rawUrl) in dns) {
-            // el panel (https) cambia http:// por https:// en las direcciones de los servidores IPTV; muchos
-            // solo responden en http (p. ej. el puerto 8080). Si no contesta, se prueba el otro protocolo.
-            var probe = Session(name, normalize(rawUrl), user, pass, "")
-            var r = Net.get(api(probe))
-            var j = r.json()
+        val st = LoginState(tr(R.string.err_server_offline))
+        val servers = loginOrder(dns, user)
+        val started = System.currentTimeMillis()
+        var rest = emptyList<Pair<String, String>>()
+        for ((i, sv) in servers.withIndex()) {
+            if (System.currentTimeMillis() - started > 20_000) { rest = servers.drop(i); break }
+            tryServer(sv.first, sv.second, user, pass, st)?.let { ok -> Store.setLastDns(user, ok.base); return LoginResult.Ok(ok) }
+        }
+        if (rest.isNotEmpty()) {
+            android.util.Log.i("LatMpx", "login: pasaron 20 s, ${rest.size} servidores a la vez")
+            val found = coroutineScope { rest.map { sv -> async { tryServer(sv.first, sv.second, user, pass, st) } }.awaitAll() }.firstOrNull { it != null }
+            if (found != null) { Store.setLastDns(user, found.base); return LoginResult.Ok(found) }
+        }
+        if (st.rank == 0) {
+            ErrorReport.report("network", "Android: ningún servidor IPTV contestó al iniciar sesión", synchronized(st) { st.log.joinToString("\n") }, "Inicio de sesión")
+        }
+        return LoginResult.Fail(st.message)
+    }
+
+    /** el mensaje más útil de lo que contestaron los servidores (rank 3 = cómo está la cuenta, 2 = usuario o contraseña, 1 = otra cosa) */
+    private class LoginState(var message: String) {
+        var rank = 0
+        val log = ArrayList<String>()
+        @Synchronized fun err(r: Int, msg: String) { if (r > rank) { rank = r; message = msg } }
+    }
+
+    /** sin repetir el mismo servidor (host y puerto de su versión http) y la última DNS buena del usuario primero */
+    private fun loginOrder(dns: List<Pair<String, String>>, user: String): List<Pair<String, String>> {
+        val seen = HashSet<String>()
+        val out = ArrayList<Pair<String, String>>()
+        for ((name, raw) in dns) {
+            val base = normalize(raw)
+            if (seen.add(serverKey(base))) out += name to base
+        }
+        val last = Store.lastDns(user)
+        if (last.isNotEmpty()) {
+            val k = serverKey(normalize(last))
+            val i = out.indexOfFirst { serverKey(it.second) == k }
+            if (i > 0) out.add(0, out.removeAt(i))
+        }
+        return out
+    }
+
+    private fun serverKey(base: String): String = tries(base).first().substringAfter("://").substringBefore('/').lowercase().removeSuffix(":80")
+
+    /** los intentos de un servidor: http primero y https después (un https con su propio puerto, tal cual) */
+    private fun tries(base: String): List<String> {
+        if (base.startsWith("https://", true)) {
+            val hp = base.substring(8).substringBefore('/')
+            if (hp.contains(':') && !hp.endsWith(":443")) return listOf(base)
+            return listOf(otherScheme(base), base)
+        }
+        return listOf(base, otherScheme(base))
+    }
+
+    /** un servidor (http y, si no contestó XUI, https): la sesión si acepta la cuenta; si no, null */
+    private suspend fun tryServer(name: String, base: String, user: String, pass: String, st: LoginState): Session? {
+        for (b in tries(base)) {
+            val probe = Session(name, b, user, pass, "")
+            val r = Net.get(api(probe))
+            val j = r.json()
             log(probe.base, r, j)
-            if (j == null) {
-                val alt = probe.copy(base = otherScheme(probe.base))
-                val r2 = Net.get(api(alt))
-                val j2 = r2.json()
-                log(alt.base, r2, j2)
-                if (j2 != null || (r.code == 0 && r2.code > 0)) { probe = alt; r = r2; j = j2 }
+            val xui = xuiError(r.body)
+            synchronized(st) { st.log += "${b.substringAfter("://")} -> " + if (r.code > 0) "http ${r.code}" + (if (j == null && xui == null) " (no es XUI)" else "") else "sin respuesta" }
+            if (xui != null) {
+                st.err(if (xui == "INVALID_CREDENTIALS") 2 else 3, xuiMessage(xui))
+                android.util.Log.i("LatMpx", "login rechazado por XUI: $xui")
+                return null
             }
             if (j == null) {
-                // el servidor respondió pero no con la cuenta: XUI dice el motivo; si no, el código HTTP
-                val xui = xuiError(r.body)
-                if (xui != null) { lastMsg = xuiMessage(xui); android.util.Log.i("LatMpx", "login rechazado por XUI: $xui"); continue }
-                if (r.code > 0 && lastMsg == noServer) lastMsg = tr(R.string.err_server_refused, r.code)
+                // no contestó (o no es XUI): se prueba el otro protocolo del mismo servidor
+                if (r.code > 0) st.err(1, tr(R.string.err_server_refused, r.code))
                 continue
             }
             val ui = j.optJSONObject("user_info")
-            if (ui == null || ui.i("auth") != 1) { lastMsg = tr(R.string.err_bad_credentials); continue }
+            if (ui == null || ui.i("auth") != 1) { st.err(2, tr(R.string.err_bad_credentials)); return null }
             val status = ui.s("status")
-            if (status.isNotEmpty() && !status.equals("Active", true)) { lastMsg = tr(R.string.err_account_status, status); continue }
+            if (status.isNotEmpty() && !status.equals("Active", true)) { st.err(3, tr(R.string.err_account_status, status)); return null }
             val exp = ui.s("exp_date").toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: tr(R.string.unlimited)
             val c = ui.s("created_at")
             val created = c.toLongOrNull()?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(it * 1000) } ?: c.takeIf { it.isNotBlank() } ?: tr(R.string.unknown)
             val active = ui.s("active_cons").takeIf { it.isNotBlank() } ?: "0"
             val max = ui.s("max_connections").takeIf { it.isNotBlank() } ?: "0"
-            return LoginResult.Ok(probe.copy(expires = exp, createdAt = created, activeCons = active, maxCons = max, expTs = ui.s("exp_date").toLongOrNull() ?: 0L))
+            return probe.copy(expires = exp, createdAt = created, activeCons = active, maxCons = max, expTs = ui.s("exp_date").toLongOrNull() ?: 0L)
         }
-        return LoginResult.Fail(lastMsg)
+        return null
     }
 
     /** registro (adb logcat -s LatMpx): servidor, código HTTP y si llegó la cuenta; nunca usuario ni contraseña */
@@ -189,6 +249,7 @@ object Xtream {
             backdrop = Posters.clean(o.optJSONArray("backdrop_path")?.optString(0).orEmpty()),
             cast = if (kind == Kind.LIVE) "" else o.s("cast").ifEmpty { o.s("actors") },
             tm = if (kind == Kind.LIVE) "" else o.s("tmdb").ifEmpty { o.s("tmdb_id") }.filter(Char::isDigit).takeIf { it.isNotEmpty() && it != "0" }.orEmpty(),
+            genre = if (kind == Kind.LIVE) "" else o.s("genre").take(80),
         )
     }
 
