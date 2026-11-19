@@ -2,9 +2,10 @@
 // control remoto. Perfiles en columna a la izquierda (los 5 entran), «Salir» arriba a la izquierda, el logo arriba a la
 // derecha, el título arriba al centro, «Administrar perfiles» debajo de los perfiles, de fondo lo más destacado de la
 // semana de TMDB con solo su nombre y su calificación (abajo a la derecha) y la versión abajo a la izquierda.
-// El fondo: 15 a 20 destacados a pantalla completa que pasan cada 5 s (al final vuelve al primero, BackdropSlides), con
-// degradados del color del tema a la izquierda, abajo y arriba. Antes la imagen medía 1600×900 pegada arriba a la
-// derecha y en Vega se veían sus bordes izquierdo e inferior como líneas rectas.
+// El fondo: 15 a 20 destacados que pasan cada 10 s (al final vuelve al primero, BackdropSlides) en una caja arriba a la
+// derecha (1320×742, 16:9), con el color del tema entrando suave por su borde izquierdo (donde están los perfiles) y por
+// abajo (la versión y el nombre del destacado quedan sobre el color liso). En Vega los degradados no se veían: Shade
+// dibujaba la imagen del paquete de 4 px de alto (o de ancho) cuando el estilo no traía las dos medidas.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Image, Modal, StyleSheet, Text, View } from 'react-native';
 import { fetchProfiles, Profile, profileAction, ProfilesData } from '../api/profiles';
@@ -37,7 +38,7 @@ export default function Profiles({ from, manage, active }: { from: 'start' | 'me
   const [forgot, setForgot] = useState<Ask | null>(null);
   const [exitAsk, setExitAsk] = useState(false);
   const [hls, setHls] = useState<Highlight[]>([]);
-  // el destacado que entra (cambia cada 5 s) y el que ya se ve (su nombre y su calificación, abajo a la derecha)
+  // el destacado que entra (cambia cada 10 s) y el que ya se ve (su nombre y su calificación, abajo a la derecha)
   const [hi, setHi] = useState(0);
   const [shownHi, setShownHi] = useState(-1);
   const [focusId, setFocusId] = useState(() => getState().profile?.id || lastProfileId());
@@ -56,7 +57,7 @@ export default function Profiles({ from, manage, active }: { from: 'start' | 'me
     }
   }, [from]);
 
-  // cada 5 s el siguiente destacado; después del último, otra vez el primero (solo con la pantalla a la vista)
+  // cada 10 s el siguiente destacado; después del último, otra vez el primero (solo con la pantalla a la vista)
   useEffect(() => {
     if (!active || hls.length < 2) return;
     const id = setInterval(() => setHi(i => (i + 1) % hls.length), SLIDE_MS);
@@ -158,7 +159,9 @@ export default function Profiles({ from, manage, active }: { from: 'start' | 'me
 
   return (
     <View style={s.root}>
-      {hls.length ? <BackdropSlides items={hls} index={hi} onShown={setShownHi} /> : null}
+      <View style={s.bgBox} pointerEvents="none">
+        {hls.length ? <BackdropSlides items={hls} index={hi} onShown={setShownHi} /> : null}
+      </View>
       <Shade side="left" style={s.shadeLeft} />
       <Shade side="bottom" style={s.shadeBottom} />
       <Shade side="top" style={s.shadeTop} />
@@ -256,14 +259,20 @@ export default function Profiles({ from, manage, active }: { from: 'start' | 'me
   );
 }
 
+// la imagen de fondo: 16:9 arriba a la derecha (en una pantalla de 1920×1080 empieza en x = 600 y termina en y = 742)
+const BG_W = 1320;
+const BG_H = 742;
+
 const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg, overflow: 'hidden' },
-    // el fondo cubre toda la pantalla (BackdropSlides): el color del tema entra suave desde la izquierda (perfiles), desde
-    // abajo (nombre del destacado y versión) y desde arriba (título), sin ningún borde recto
-    shadeLeft: { position: 'absolute', top: 0, bottom: 0, left: 0, width: px(1380) },
-    shadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(480) },
-    shadeTop: { position: 'absolute', left: 0, right: 0, top: 0, height: px(260), opacity: 0.85 },
+    // el fondo (BackdropSlides) en una caja arriba a la derecha; los degradados con las dos medidas siempre (Shade) y
+    // opacos justo en los bordes izquierdo e inferior de la imagen: nunca se ve un borde recto y los perfiles, la versión
+    // y el nombre del destacado quedan sobre el color del tema
+    bgBox: { position: 'absolute', top: 0, right: 0, width: px(BG_W), height: px(BG_H), overflow: 'hidden' },
+    shadeLeft: { position: 'absolute', top: 0, right: px(BG_W - 760), width: px(760), height: px(BG_H) },
+    shadeBottom: { position: 'absolute', top: px(BG_H - 400), right: 0, width: px(BG_W), height: px(400) },
+    shadeTop: { position: 'absolute', top: 0, right: 0, width: px(BG_W), height: px(220), opacity: 0.8 },
     top: { position: 'absolute', top: px(36), left: SIDE, right: SIDE, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     exit: { flexDirection: 'row', alignItems: 'center', height: px(60), paddingHorizontal: px(24), borderRadius: px(30), borderWidth: px(2), borderColor: alpha(C.text, 0.4), backgroundColor: alpha('#000000', 0.45) },
     exitF: { backgroundColor: C.focus, borderColor: C.focus, transform: [{ scale: 1.05 }] },

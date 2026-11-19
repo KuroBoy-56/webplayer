@@ -21,6 +21,14 @@ export function shadeCss(side: 'left' | 'bottom' | 'top', color: string): string
 }
 
 export function Shade({ side, style }: { side: 'left' | 'bottom' | 'top'; style: StyleProp<ImageStyle> }) {
-  if (Platform.OS !== 'web') return <Image source={IMG[side]} style={[style, { tintColor: C.bg }]} resizeMode="stretch" />;
+  // en Vega la imagen va dentro de una caja con el tamaño pedido: una imagen del paquete sin alto (o ancho) en su estilo
+  // toma el de su archivo (4 px) aunque tenga top y bottom, y el degradado no se veía
+  if (Platform.OS !== 'web') {
+    return (
+      <View pointerEvents="none" style={style as any}>
+        <Image source={IMG[side]} style={{ width: '100%', height: '100%', tintColor: C.bg }} resizeMode="stretch" />
+      </View>
+    );
+  }
   return <View pointerEvents="none" style={[style as any, { backgroundImage: shadeCss(side, C.bg) } as any]} />;
 }

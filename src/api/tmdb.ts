@@ -205,7 +205,7 @@ export type Highlight = { title: string; rating: number; year: string; kind: 'mo
 let hlCache: { lang: string; at: number; list: Highlight[] } | null = null;
 
 // Lo más destacado de la semana en TMDB (trending de películas y series): el fondo de «¿Quién está viendo?» va pasando
-// por 15 a 20 títulos (BackdropSlides, 5 s cada uno). Página 1 y, si no llegan a 15 con fondo, la 2. 6 h en memoria.
+// por 15 a 20 títulos (BackdropSlides, 10 s cada uno). Página 1 y, si no llegan a 15 con fondo, la 2. 6 h en memoria.
 export async function weekHighlights(): Promise<Highlight[]> {
   const lang = tmdbLang();
   if (hlCache && hlCache.lang === lang && Date.now() - hlCache.at < 6 * 3600000) return hlCache.list;

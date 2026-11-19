@@ -1,16 +1,16 @@
 // Fondo de «¿Quién está viendo?» (docs/PERFILES.md del panel, sección 6): lo más destacado de la semana en TMDB (15 a
-// 20 títulos, weekHighlights) a pantalla completa. Profiles.tsx cambia el índice cada 5 s y, al llegar al último, vuelve
-// al primero. La imagen nueva aparece con un fundido sobre la anterior recién cuando ya cargó (si no carga, queda la
-// anterior y se prueba la siguiente dirección: Full HD del panel → TMDB). Cubre toda la pantalla, así nunca se ven sus
-// bordes rectos: los degradados del color del tema van encima (Shade, en Profiles.tsx).
+// 20 títulos, weekHighlights). Profiles.tsx cambia el índice cada 10 s y, al llegar al último, vuelve al primero. La
+// imagen nueva aparece con un fundido sobre la anterior recién cuando ya cargó (si no carga, queda la anterior y se
+// prueba la siguiente dirección: Full HD del panel → TMDB). Llena la caja que le da Profiles.tsx (arriba a la derecha),
+// con los degradados del color del tema encima en sus bordes izquierdo e inferior (Shade).
 import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, Image, Platform, StyleSheet, View } from 'react-native';
 import { Highlight } from '../api/tmdb';
 import { backdropSources } from '../lib/images';
 
 const WEB = Platform.OS === 'web';
-/** cada fondo se ve 5 s */
-export const SLIDE_MS = 5000;
+/** cada fondo se ve 10 s */
+export const SLIDE_MS = 10000;
 const FADE_MS = 700;
 
 export function BackdropSlides({ items, index, onShown }: { items: Highlight[]; index: number; onShown?: (i: number) => void }) {

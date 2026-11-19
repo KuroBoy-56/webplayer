@@ -25,6 +25,12 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 
 ## Novedades de la 1.4.0
 
+- (1.4.2) **Fondo de «¿Quién está viendo?» más chico, con degradado y cada 10 s:** la imagen ya no cubre toda la
+  pantalla: va en una caja de 1320×742 (16:9) arriba a la derecha y el color del tema entra suave por su borde izquierdo
+  (donde están los perfiles), por abajo y un poco por arriba; la versión y el nombre del destacado quedan sobre el color
+  liso. En Vega los degradados no se veían: `Shade` dibujaba la imagen del paquete con la medida de su archivo (4 px de
+  alto o de ancho) cuando el estilo no traía alto y ancho; ahora va dentro de una caja con el tamaño pedido (eso también
+  arregla el degradado de la barra de arriba en Vega). Cada destacado se ve **10 s** (antes 5).
 - (1.4.1) **Fondo de «¿Quién está viendo?» sin bordes rectos y con los destacados de la semana:** la imagen cubre toda la
   pantalla (antes medía 1600×900 pegada arriba a la derecha y en el televisor se veían sus bordes izquierdo e inferior como
   líneas rectas) y el color del tema entra suave desde la izquierda, abajo y arriba (`Shade`). Van pasando **15 a 20
