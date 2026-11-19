@@ -165,9 +165,11 @@ object Panel {
 
     /** Activa el equipo con usuario, contraseña y el DNS elegido. */
     // validated: la app ya entró con esta línea en el servidor IPTV (el panel la registra aunque él no llegue a ese servidor)
-    suspend fun submitUrl(deviceId: String, user: String, pass: String, dns: String, validated: Boolean = false, expTs: Long = 0L): Answer<Unit> {
+    // replace: el cliente escribió usuario y contraseña; el panel deja el equipo solo con esta línea (quita la anterior)
+    suspend fun submitUrl(deviceId: String, user: String, pass: String, dns: String, validated: Boolean = false, expTs: Long = 0L, replace: Boolean = false): Answer<Unit> {
         val payload = device(deviceId).put("username", user).put("password", pass).put("url", dns)
         if (validated) payload.put("validated", 1).put("exp_date", expTs)
+        if (replace) payload.put("replace", 1)
         val a = login("submit_url", payload)
         val r = a.value ?: return Answer(null, a.error)
         val j = r.json()
