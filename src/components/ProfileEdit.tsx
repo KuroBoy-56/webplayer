@@ -187,15 +187,15 @@ export default function ProfileEdit({ p, data, pin, onSaved, onDeleted, onClose 
     );
   }
 
+  // el teclado y el PIN se abren en lugar de esta ventana (nunca una ventana dentro de otra: en Vega puede quedarse con
+  // el foco); lo escrito sigue aquí al volver
+  if (kb) return <KeyboardModal title={t('Nombre')} value={name} onDone={v => { setName(v.slice(0, 20)); setKb(false); }} onClose={() => setKb(false)} />;
+  if (pinStep) return <ProfilePin key={pinStep} title={pinStep === 'new' ? t('Escribe el PIN nuevo (4 números)') : t('Repite el PIN')} onSubmit={pinDone} onClose={() => setPinStep('')} />;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.back}>
         <View style={s.box}>{body}</View>
       </View>
-      {kb ? <KeyboardModal title={t('Nombre')} value={name} onDone={v => { setName(v.slice(0, 20)); setKb(false); }} onClose={() => setKb(false)} /> : null}
-      {pinStep ? (
-        <ProfilePin key={pinStep} title={pinStep === 'new' ? t('Escribe el PIN nuevo (4 números)') : t('Repite el PIN')} onSubmit={pinDone} onClose={() => setPinStep('')} />
-      ) : null}
     </Modal>
   );
 }
