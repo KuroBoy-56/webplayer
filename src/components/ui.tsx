@@ -16,14 +16,26 @@ type FocusProps = {
   children: React.ReactNode | ((focused: boolean) => React.ReactNode);
   preferred?: boolean;
   disabled?: boolean;
+  // a dónde va el foco con izquierda / derecha aunque otro elemento esté más cerca (p. ej. del menú de arriba a una
+  // carátula que quedó detrás de la barra al bajar por las filas): en Vega el elemento (nextFocusLeft/Right del foco
+  // del sistema) y en los televisores con la app web su nombre (focusId, que lee web/spatial.ts)
+  nodeRef?: (node: any) => void;
+  nextLeft?: any;
+  nextRight?: any;
+  focusId?: string;
+  nextLeftId?: string;
+  nextRightId?: string;
 };
 
-export function Focusable({ onPress, onFocus, onBlur, style, children, preferred, disabled }: FocusProps) {
+export function Focusable({ onPress, onFocus, onBlur, style, children, preferred, disabled, nodeRef, nextLeft, nextRight, focusId, nextLeftId, nextRightId }: FocusProps) {
   const [focused, setFocused] = useState(false);
+  const dataSet = focusId || nextLeftId || nextRightId ? { focusId, nextLeft: nextLeftId, nextRight: nextRightId } : undefined;
   return (
     <Pressable
+      ref={nodeRef}
       focusable={!disabled}
       hasTVPreferredFocus={preferred}
+      {...({ nextFocusLeft: nextLeft || undefined, nextFocusRight: nextRight || undefined, dataSet } as any)}
       onPress={onPress}
       onFocus={() => {
         setFocused(true);

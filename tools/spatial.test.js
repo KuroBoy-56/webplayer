@@ -31,3 +31,10 @@ test('nunca hacia atrás', () => {
 test('del menú de arriba a la fila de abajo aunque no estén alineados', () => {
   assert.ok(Number.isFinite(score('down', R(204, 30, 76, 50), R(80, 500, 260, 56))));
 });
+
+test('del menú a la izquierda: una carátula detrás de la barra queda más cerca que el avatar (por eso «Inicio» lleva data-next-left)', () => {
+  const inicio = R(600, 27, 110, 56);
+  const avatar = R(80, 23, 64, 64);
+  const detras = R(320, -150, 220, 330);
+  assert.ok(score('left', inicio, detras) < score('left', inicio, avatar));
+});
