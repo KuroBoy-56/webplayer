@@ -4,6 +4,8 @@ import { http, json } from '../lib/http';
 import { t } from '../lib/i18n';
 import { digits, enc, int, nowSec, parseIso, str } from '../lib/util';
 import { cloud, Server, Session } from './panel';
+import { reportError } from './report';
+import { read, write } from '../lib/storage';
 
 export function api(s: { base: string; user: string; pass: string }, action = '', extra = ''): string {
   let u = s.base + '/player_api.php?username=' + enc(s.user) + '&password=' + enc(s.pass);
@@ -61,60 +63,93 @@ export function xuiMessage(code: string): string {
 // (https) manda los servidores IPTV con https:// y muchos solo responden en http (p. ej. puerto 8080):
 // cada servidor se prueba también con el otro protocolo, así la app nunca se queda sin entrar por eso.
 // offline = ningún servidor contestó (ni aceptó ni rechazó la cuenta)
+// Inicio de sesión en las DNS del panel con la regla de docs/LOGIN-SERVIDORES.md del panel (que XUI no bloquee la IP):
+// primero la DNS con la que este usuario entró la última vez en el equipo, después de a una en el orden del panel y
+// parando en la primera que acepta; una sola vez por servidor (host y puerto); https solo si en http no contestó nadie;
+// un servidor que no contesta no cuenta como intento, y pasados 20 s lo que falta va a la vez. Si ninguno contesta, se
+// avisa al panel (Errores de las apps) con cada DNS.
+type Try = { session?: Session; error?: string; answered: boolean; note: string };
+
 export async function loginAll(input: Server[], user: string, pass: string): Promise<{ session?: Session; error?: string; offline?: boolean }> {
   if (!input.length) return { error: t('El panel no devolvió servidores. Inténtalo de nuevo.') };
+  const lastKey = 'login_dns|' + user.trim().toLowerCase();
+  const last = read(lastKey);
   const seen = new Set<string>();
-  const servers: Server[] = [];
+  let list: { name: string; plain: string; secure: string }[] = [];
   for (const sv of input) {
-    for (const base of [sv.base, otherScheme(sv.base)]) {
-      const k = base.toLowerCase();
-      if (!seen.has(k)) {
-        seen.add(k);
-        servers.push({ name: sv.name, base });
-      }
-    }
+    const isHttps = /^https:\/\//i.test(sv.base);
+    const plain = isHttps ? otherScheme(sv.base) : sv.base;
+    const k = plain.replace(/^[a-z]+:\/\//i, '').replace(/\/.*$/, '').toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    list.push({ name: sv.name, plain, secure: otherScheme(plain) });
   }
-  const ctrl = new AbortController();
+  const lk = last.replace(/^[a-z]+:\/\//i, '').replace(/\/.*$/, '').toLowerCase();
+  list = [...list.filter(x => x.plain.replace(/^[a-z]+:\/\//i, '').replace(/\/.*$/, '').toLowerCase() === lk), ...list.filter(x => x.plain.replace(/^[a-z]+:\/\//i, '').replace(/\/.*$/, '').toLowerCase() !== lk)];
   const none = t('No se pudo conectar con ningún servidor');
   let lastErr = none;
-  return new Promise(resolve => {
-    let pending = servers.length;
-    let done = false;
-    const finish = () => {
-      pending--;
-      if (pending === 0 && !done) {
-        done = true;
-        resolve({ error: lastErr, offline: lastErr === none });
-      }
-    };
-    for (const sv of servers) {
-      // servidores XUI lentos: hasta 30 s (con 15 s una línea buena podía quedarse sin entrar)
-      http(api({ base: sv.base, user, pass }), { timeout: 30000, signal: ctrl.signal }).then(r => {
-        if (done) return;
-        const j = json(r);
-        const ui = j && typeof j === 'object' ? j.user_info : null;
-        if (ui && int(ui.auth) === 1) {
-          const st = str(ui.status);
-          if (!st || st.toLowerCase() === 'active') {
-            done = true;
-            ctrl.abort();
-            resolve({ session: sessionFrom(sv, user, pass, ui) });
-            return;
-          }
-          lastErr = t('Tu cuenta está {st}', { st });
-        } else if (ui && lastErr === none) {
-          lastErr = t('Usuario o contraseña incorrectos');
-        } else if (!ui && xuiError(r.body)) {
-          lastErr = xuiMessage(xuiError(r.body));
-        } else if (!ui && r.code > 0 && lastErr === none) {
-          // el servidor respondió pero no con la cuenta (línea bloqueada, vencida o servidor caído)
-          lastErr = t('El servidor no aceptó la conexión (código {code})', { code: r.code });
-        }
-        console.log('[LatMpx] login ' + sv.base.replace(/^[a-z]+:\/\//i, '') + ' -> http ' + r.code + (ui ? ' auth=' + str(ui.auth) + ' status=' + str(ui.status) : ' sin JSON'));
-        finish();
-      });
+  const notes: string[] = [];
+  const ctrl = new AbortController();
+
+  const one = async (name: string, base: string): Promise<Try> => {
+    const r = await http(api({ base, user, pass }), { timeout: 15000, signal: ctrl.signal });
+    const j = json(r);
+    const ui = j && typeof j === 'object' ? j.user_info : null;
+    console.log('[LatMpx] login ' + base.replace(/^[a-z]+:\/\//i, '') + ' -> http ' + r.code + (ui ? ' auth=' + str(ui.auth) + ' status=' + str(ui.status) : ' sin JSON'));
+    if (r.code === 0) return { answered: false, note: base + ': no contestó' };
+    if (ui && int(ui.auth) === 1) {
+      const st = str(ui.status);
+      if (!st || st.toLowerCase() === 'active') return { answered: true, session: sessionFrom({ name, base }, user, pass, ui), note: '' };
+      return { answered: true, error: t('Tu cuenta está {st}', { st }), note: base + ': ' + st };
     }
-  });
+    if (ui) return { answered: true, error: t('Usuario o contraseña incorrectos'), note: base + ': usuario o contraseña incorrectos' };
+    if (xuiError(r.body)) return { answered: true, error: xuiMessage(xuiError(r.body)), note: base + ': XUI ' + xuiError(r.body) };
+    // el servidor respondió pero no con la cuenta (línea bloqueada, vencida o servidor caído)
+    return { answered: true, error: t('El servidor no aceptó la conexión (código {code})', { code: r.code }), note: base + ': http ' + r.code };
+  };
+  // http primero; https solo si http no contestó (nunca los dos a la vez: serían dos intentos para XUI)
+  const server = async (sv: { name: string; plain: string; secure: string }): Promise<Try> => {
+    const a = await one(sv.name, sv.plain);
+    if (a.answered || ctrl.signal.aborted) return a;
+    notes.push(a.note);
+    return one(sv.name, sv.secure);
+  };
+  const keep = (r: Try) => {
+    if (r.note) notes.push(r.note);
+    // «usuario o contraseña incorrectos» no tapa un mensaje más claro de otro servidor (cuenta vencida, XUI…)
+    if (r.error && (lastErr === none || lastErr === t('Usuario o contraseña incorrectos'))) lastErr = r.error;
+  };
+  const done = (sv: { plain: string }, r: Try) => {
+    ctrl.abort();
+    write(lastKey, sv.plain);
+    return { session: r.session! };
+  };
+
+  const started = Date.now();
+  for (let i = 0; i < list.length; i++) {
+    // pasados 20 s lo que falta va a la vez, para no hacer esperar de más
+    if (Date.now() - started > 20000 && list.length - i > 1) {
+      const rest = list.slice(i);
+      const won = await new Promise<{ sv: typeof rest[0]; r: Try } | null>(resolve => {
+        let left = rest.length;
+        for (const sv of rest) {
+          server(sv).then(r => {
+            if (r.session) return resolve({ sv, r });
+            keep(r);
+            if (--left === 0) resolve(null);
+          });
+        }
+      });
+      if (won) return done(won.sv, won.r);
+      break;
+    }
+    const r = await server(list[i]);
+    if (r.session) return done(list[i], r);
+    keep(r);
+  }
+  // ningún servidor contestó: al panel (Errores de las apps), con lo que dijo cada DNS
+  if (lastErr === none) reportError('network', 'Login: ningún servidor contestó (' + list.length + ' DNS)', notes.join('\n'), 'login');
+  return { error: lastErr, offline: lastErr === none };
 }
 
 export type Kind = 'vod' | 'series' | 'live';

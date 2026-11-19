@@ -14,7 +14,7 @@ import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-nati
 import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveFormatStart, liveUrl, movieUrl, otherScheme, setLiveFormat, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
 import { Button, Focusable, Loader } from '../components/ui';
-import { Item } from '../data/catalog';
+import { catalog, Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
 import { Hooks, MenuItem, Playback } from '../player/playback';
@@ -23,7 +23,7 @@ import { prefetchList, prefetchRange } from '../player/prefetch';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
 import { probeTracks } from '../lib/probe';
-import { getState, isFav, saveProgress, toggleFav } from '../state';
+import { getState, isFav, saveProgress, showNotice, toggleFav } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
 
@@ -41,7 +41,7 @@ function serverText(r: StreamCheck, live: boolean): string {
 // alto de cada canal de la lista (fijo: la lista abre ya en el canal que suena)
 const CH_ROW = 76;
 
-export default function Player({ params }: { params: PlayParams }) {
+function PlayerScreen({ params }: { params: PlayParams }) {
   const nav = useNav();
   const video = useRef<VideoPlayer | null>(null);
   const ctl = useRef<Playback | null>(null);
@@ -1496,3 +1496,21 @@ const s = themed(() =>
     nextRow: { flexDirection: 'row', gap: px(20), marginTop: px(24) },
   }),
 );
+
+// perfil infantil: lo que no pasa el filtro no se reproduce aunque llegue por otro camino
+function playAllowed(p: PlayParams): boolean {
+  if (p.kind === 'live') return catalog.allowed('live', p.channel.id);
+  if (p.kind === 'episode') return catalog.allowed('series', p.seriesId);
+  return catalog.allowed('vod', p.queue[p.index]?.id || '');
+}
+
+export default function Player({ params }: { params: PlayParams }) {
+  const nav = useNav();
+  const blocked = !playAllowed(params);
+  React.useEffect(() => {
+    if (!blocked) return;
+    showNotice(t('No disponible en este perfil'));
+    nav.pop();
+  }, [blocked, nav]);
+  return blocked ? null : <PlayerScreen params={params} />;
+}

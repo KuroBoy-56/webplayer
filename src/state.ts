@@ -2,7 +2,11 @@
 // sincronizados con api/progress.php del panel igual que la web, Android y Roku.
 import { loadWeekTop } from './data/top10';
 import { useSyncExternalStore } from 'react';
-import { bindSession, cloud, forgetCloud, onPanelDemo, panelTenantConfig, Session } from './api/panel';
+import { bindProfile, bindSession, cloud, forgetCloud, lineKey, onPanelDemo, panelTenantConfig, Session } from './api/panel';
+import { fetchProfiles, Profile, ProfilesData } from './api/profiles';
+import type { Route } from './nav';
+import { loadKidsRules, rememberKidsRules } from './lib/kids';
+import { onVerdicts } from './data/kidsrate';
 import { Kind, loadKind, setStreamFlip } from './api/xtream';
 import { catalog } from './data/catalog';
 import { json } from './lib/http';
@@ -43,6 +47,13 @@ type State = {
   // aviso corto encima de todo (p. ej. "No disponible en la DEMO")
   notice: string;
   catalogRev: number;
+  // perfiles (api/profiles.ts): lo último que dijo el panel (null = no se sabe o la línea no tiene) y el elegido
+  profiles: ProfilesData | null;
+  profile: Profile | null;
+  // sube cuando el panel dice que el perfil ya no existe (App vuelve a «¿Quién está viendo?»)
+  profileGone: number;
+  // el menú de arriba se esconde mientras se recorren las filas de Inicio, Series y Películas (como Android)
+  menuHidden: boolean;
   rev: number;
 };
 
@@ -58,6 +69,10 @@ let state: State = {
   demoDuration: 0,
   notice: '',
   catalogRev: 0,
+  profiles: null,
+  profile: null,
+  profileGone: 0,
+  menuHidden: false,
   rev: 0,
 };
 
@@ -90,6 +105,64 @@ export function useAppSelector<T>(select: (snapshot: State) => T): T {
 
 bindSession(() => state.session);
 onPanelDemo(markDemo);
+bindProfile(() => state.profile?.id || '', () => {
+  catalog.setKids(false);
+  set({ profile: null, progress: [], favorites: [], profileGone: state.profileGone + 1, catalogRev: state.catalogRev + 1 });
+  // la lista otra vez del panel (sin el perfil que ya no está)
+  const ses = state.session;
+  fetchProfiles(Number(ses?.max) || 0).then(d => d && state.session === ses && setProfiles(d)).catch(() => {});
+});
+// veredictos nuevos de TMDB para el perfil infantil: se rehacen las filas
+onVerdicts(() => {
+  if (!catalog.kidsOn) return;
+  catalog.refreshKids();
+  refreshCatalog();
+});
+
+// ---------- perfiles ----------
+
+// lo que dijo el panel (las listas del perfil infantil se guardan para la próxima vez)
+export function setProfiles(data: ProfilesData | null) {
+  if (data?.kidsRules) rememberKidsRules(data.kidsRules);
+  const cur = state.profile && data?.enabled ? data.profiles.find(p => p.id === state.profile!.id) || null : state.profile;
+  set({ profiles: data, profile: cur });
+}
+
+// ¿la línea elige perfil? (perfiles encendidos y más de una conexión)
+export function profilesNeeded(): boolean {
+  const d = state.profiles;
+  return !!d && d.enabled && d.max > 1 && d.profiles.length > 0 && !state.demo;
+}
+
+// último perfil elegido en este equipo para esta línea (el foco de la pantalla de perfiles empieza ahí)
+export function lastProfileId(): string {
+  return read('pf_last|' + lineKey());
+}
+
+// el perfil elegido: Continuar viendo y Mi lista se leen otra vez (son de cada perfil) y el infantil filtra el catálogo
+export function chooseProfile(p: Profile) {
+  write('pf_last|' + lineKey(), p.id);
+  if (p.kids) loadKidsRules();
+  catalog.setKids(p.kids);
+  set({ profile: p, progress: [], favorites: [], catalogRev: state.catalogRev + 1 });
+  loadCloud();
+}
+
+// adónde va la app con la sesión iniciada: «¿Quién está viendo?» si la línea elige perfil; si no, Inicio. Si el panel
+// no contesta en 8 s se entra con el principal (nunca se queda esperando)
+export async function enterRoute(): Promise<Route> {
+  const ses = state.session;
+  if (!ses) return { name: 'login' };
+  if (state.demo) return { name: 'main' };
+  const data = await Promise.race([fetchProfiles(Number(ses.max) || 0).catch(() => null), new Promise<null>(r => setTimeout(() => r(null), 8000))]);
+  if (state.session !== ses) return { name: 'login' };
+  setProfiles(data);
+  return profilesNeeded() ? { name: 'profiles', from: 'start' } : { name: 'main' };
+}
+
+export function setMenuHidden(hidden: boolean) {
+  if (state.menuHidden !== hidden) set({ menuHidden: hidden });
+}
 
 // La sesión vive solo en memoria: el usuario y la contraseña nunca se guardan en el equipo. Cada vez
 // que se abre la app el inicio de sesión le pide la línea al panel y la comprueba en el servidor IPTV.
@@ -106,7 +179,8 @@ export function setSession(s: Session, demo = false, demoExpires = 0, demoDurati
   deviceRegistered();
   forgetCloud();
   setStreamFlip(false);
-  set({ session: s, progress: [], favorites: [], demo, demoExpires: demo ? demoExpires : 0, demoDuration: demo ? demoDuration : 0 });
+  catalog.setKids(false);
+  set({ session: s, progress: [], favorites: [], demo, demoExpires: demo ? demoExpires : 0, demoDuration: demo ? demoDuration : 0, profiles: null, profile: null, menuHidden: false });
 }
 
 // el panel dijo "demo": true (progress.php): desde ahora la sesión es una DEMO
@@ -133,7 +207,8 @@ export function logout() {
   forgetCloud();
   catalog.clear();
   catalog.unlocked = false;
-  set({ session: null, loaded: { vod: false, series: false, live: false }, loading: '', error: '', progress: [], favorites: [], demo: false, demoExpires: 0, demoDuration: 0 });
+  catalog.setKids(false);
+  set({ session: null, loaded: { vod: false, series: false, live: false }, loading: '', error: '', progress: [], favorites: [], demo: false, demoExpires: 0, demoDuration: 0, profiles: null, profile: null, menuHidden: false });
 }
 
 // ---------- catálogo ----------
@@ -188,7 +263,12 @@ function progressSeconds(e: any): number {
 export async function loadCloud() {
   // la DEMO no tiene Continuar viendo ni Mi lista
   if (state.demo) return;
+  // la línea elige perfil y todavía no lo eligió: nada (serían los del principal)
+  if (profilesNeeded() && !state.profile) return;
+  const pid = state.profile?.id || '';
   const j = json(await cloud('progress.php', 'GET', { v: '2' }));
+  // se cambió de perfil mientras tanto: esto era del anterior
+  if ((state.profile?.id || '') !== pid) return;
   // caché de carátulas del panel (el dueño la puede apagar): apagada, imágenes directo a los servidores
   if (j && typeof j === 'object' && typeof j.img === 'boolean') setImgCache(j.img);
   if (!j || typeof j !== 'object' || state.demo) return;
