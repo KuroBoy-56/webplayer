@@ -25,6 +25,13 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 
 ## Novedades de la 1.4.0
 
+- (1.4.1) **Fondo de «¿Quién está viendo?» sin bordes rectos y con los destacados de la semana:** la imagen cubre toda la
+  pantalla (antes medía 1600×900 pegada arriba a la derecha y en el televisor se veían sus bordes izquierdo e inferior como
+  líneas rectas) y el color del tema entra suave desde la izquierda, abajo y arriba (`Shade`). Van pasando **15 a 20
+  títulos** del trending semanal de TMDB (películas y series con fondo, sin repetir; la página 2 solo si en la 1 no
+  llegan a 15), **5 s cada uno**, con un fundido de 0,7 s que empieza cuando la imagen nueva ya cargó, y después del
+  último vuelve el primero (`src/components/BackdropSlides.tsx`, `weekHighlights` en `src/api/tmdb.ts`). El nombre y la
+  calificación de abajo a la derecha son los del fondo que se ve. Prueba: `npm test (tools/highlights.test.js)`.
 - **Perfiles como Netflix** (con los perfiles encendidos en el panel y una línea de 2 o más conexiones; contrato en
   `docs/PERFILES.md` del panel). Al entrar, **«¿Quién está viendo?»**: perfiles en columna a la izquierda (los 5 entran),
   el título arriba al centro, «Salir» arriba a la izquierda, el logo arriba a la derecha, «Administrar perfiles» debajo

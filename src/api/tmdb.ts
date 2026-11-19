@@ -202,22 +202,37 @@ export async function personWithCatalog(personId: number): Promise<Person | null
 }
 
 export type Highlight = { title: string; rating: number; year: string; kind: 'movie' | 'tv'; backdrop: string };
-let hlCache: { lang: string; at: number; h: Highlight | null } | null = null;
+let hlCache: { lang: string; at: number; list: Highlight[] } | null = null;
 
-// lo más destacado de la semana en TMDB (fondo de «¿Quién está viendo?», como la web player): 6 h en memoria
-export async function weekHighlight(): Promise<Highlight | null> {
+// Lo más destacado de la semana en TMDB (trending de películas y series): el fondo de «¿Quién está viendo?» va pasando
+// por 15 a 20 títulos (BackdropSlides, 5 s cada uno). Página 1 y, si no llegan a 15 con fondo, la 2. 6 h en memoria.
+export async function weekHighlights(): Promise<Highlight[]> {
   const lang = tmdbLang();
-  if (hlCache && hlCache.lang === lang && Date.now() - hlCache.at < 6 * 3600000) return hlCache.h;
-  const j = await get('trending/all/week', 'language=' + lang).catch(() => null);
-  let h: Highlight | null = null;
-  for (const r of j && Array.isArray(j.results) ? j.results : []) {
-    if (!r || !str(r.backdrop_path) || (r.media_type !== 'movie' && r.media_type !== 'tv')) continue;
-    const title = str(r.title) || str(r.name);
-    if (!title) continue;
-    const date = str(r.release_date) || str(r.first_air_date);
-    h = { title, rating: Math.round((Number(r.vote_average) || 0) * 10) / 10, year: date.slice(0, 4), kind: r.media_type, backdrop: IMG + 'w1280' + str(r.backdrop_path) };
-    break;
+  if (hlCache && hlCache.lang === lang && Date.now() - hlCache.at < 6 * 3600000) return hlCache.list;
+  const list: Highlight[] = [];
+  const seen = new Set<string>();
+  let ok = false;
+  for (const page of [1, 2]) {
+    if (list.length >= 15) break;
+    const j = await get('trending/all/week', 'language=' + lang + '&page=' + page).catch(() => null);
+    if (!j) break;
+    ok = true;
+    for (const r of Array.isArray(j.results) ? j.results : []) {
+      if (list.length >= 20) break;
+      if (!r || !str(r.backdrop_path) || (r.media_type !== 'movie' && r.media_type !== 'tv')) continue;
+      const title = str(r.title) || str(r.name);
+      const key = r.media_type + ':' + str(r.id);
+      if (!title || seen.has(key)) continue;
+      seen.add(key);
+      const date = str(r.release_date) || str(r.first_air_date);
+      list.push({ title, rating: Math.round((Number(r.vote_average) || 0) * 10) / 10, year: date.slice(0, 4), kind: r.media_type, backdrop: IMG + 'w1280' + str(r.backdrop_path) });
+    }
   }
-  if (j) hlCache = { lang, at: Date.now(), h };
-  return h;
+  if (ok) hlCache = { lang, at: Date.now(), list };
+  return list;
+}
+
+// el primero (lo que usaba la pantalla antes de pasar por varios)
+export async function weekHighlight(): Promise<Highlight | null> {
+  return (await weekHighlights())[0] || null;
 }
