@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- perfiles y perfil infantil (docs/PERFILES.md del panel); el mismo archivo en las 6 variantes -->
+<resources>
+    <string name="prof_no_panel">Impossible de se connecter au panneau</string>
+    <string name="prof_failed">Impossible de terminer. Réessaie.</string>
+    <string name="prof_kids">Enfants</string>
+    <string name="prof_switch">Changer de profil</string>
+    <string name="prof_manage">Gérer les profils</string>
+    <string name="prof_who">Qui regarde ?</string>
+    <string name="prof_done">Terminé</string>
+    <string name="prof_version">Version %1$s</string>
+    <string name="prof_pin_of">Code PIN de %1$s</string>
+    <string name="prof_forgot">PIN oublié ?</string>
+    <string name="prof_forgot_desc">Saisis le mot de passe de ta ligne pour retirer le code PIN.</string>
+    <string name="prof_line_pass">Mot de passe de la ligne</string>
+    <string name="prof_pin_removed_of">Le code PIN de %1$s a été retiré</string>
+    <string name="prof_remove_pin">Retirer le code PIN</string>
+    <string name="prof_logout_q">Se déconnecter ?</string>
+    <string name="prof_logout_desc">Ta progression et ta liste restent enregistrées sur le panneau.</string>
+    <string name="prof_edit">Modifier</string>
+    <string name="prof_add">Ajouter un profil</string>
+    <string name="prof_edit_title">Modifier le profil</string>
+    <string name="prof_change_avatar">Changer d\'avatar</string>
+    <string name="prof_name">Nom</string>
+    <string name="prof_kids_profile">Profil enfant</string>
+    <string name="prof_kids_desc">Uniquement du contenu pour enfants et Disney, sans Sports. Se choisit à la création du profil et ne se change pas ensuite.</string>
+    <string name="prof_kids_info">Ce profil est un profil enfant : uniquement du contenu pour enfants. Cela se choisit seulement à la création du profil.</string>
+    <string name="prof_pin_change">Changer le code PIN</string>
+    <string name="prof_pin_remove">Retirer le code PIN</string>
+    <string name="prof_pin_lock">Verrouiller avec un code PIN</string>
+    <string name="prof_delete">Supprimer le profil</string>
+    <string name="prof_pick_avatar">Choisis un avatar</string>
+    <string name="prof_pin_new">Saisis un code PIN à 4 chiffres</string>
+    <string name="prof_pin_confirm">Confirme le code PIN</string>
+    <string name="prof_pin_mismatch">Les codes PIN ne correspondent pas</string>
+    <string name="prof_delete_q">Supprimer le profil « %1$s » ?</string>
+    <string name="prof_delete_desc">Son Reprendre et sa Ma liste sont supprimés. Pendant 7 jours, tu peux le récupérer en créant un autre profil avec exactement le même nom.</string>
+    <string name="prof_name_rule">Le nom doit faire de 1 à 20 caractères, sans &lt; ni &gt;.</string>
+    <string name="prof_created">Profil « %1$s » créé</string>
+    <string name="prof_saved">Modifications enregistrées</string>
+    <string name="prof_deleted">Profil « %1$s » supprimé</string>
+</resources>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- perfiles y perfil infantil (docs/PERFILES.md del panel); el mismo archivo en las 6 variantes -->
+<resources>
+    <string name="prof_no_panel">Não foi possível conectar ao painel</string>
+    <string name="prof_failed">Não foi possível concluir. Tente de novo.</string>
+    <string name="prof_kids">Infantil</string>
+    <string name="prof_switch">Trocar perfil</string>
+    <string name="prof_manage">Gerenciar perfis</string>
+    <string name="prof_who">Quem está assistindo?</string>
+    <string name="prof_done">Concluído</string>
+    <string name="prof_version">Versão %1$s</string>
+    <string name="prof_pin_of">PIN de %1$s</string>
+    <string name="prof_forgot">Esqueceu o PIN?</string>
+    <string name="prof_forgot_desc">Digite a senha da sua linha para remover o PIN.</string>
+    <string name="prof_line_pass">Senha da linha</string>
+    <string name="prof_pin_removed_of">O PIN de %1$s foi removido</string>
+    <string name="prof_remove_pin">Remover o PIN</string>
+    <string name="prof_logout_q">Sair da conta?</string>
+    <string name="prof_logout_desc">Seu progresso e sua lista ficam salvos no painel.</string>
+    <string name="prof_edit">Editar</string>
+    <string name="prof_add">Adicionar perfil</string>
+    <string name="prof_edit_title">Editar perfil</string>
+    <string name="prof_change_avatar">Mudar avatar</string>
+    <string name="prof_name">Nome</string>
+    <string name="prof_kids_profile">Perfil infantil</string>
+    <string name="prof_kids_desc">Só conteúdo infantil e da Disney, sem Esportes. É escolhido ao criar o perfil e não pode ser mudado depois.</string>
+    <string name="prof_kids_info">Este perfil é infantil: só conteúdo para crianças. Só pode ser escolhido ao criar o perfil.</string>
+    <string name="prof_pin_change">Mudar PIN</string>
+    <string name="prof_pin_remove">Remover PIN</string>
+    <string name="prof_pin_lock">Bloquear com PIN</string>
+    <string name="prof_delete">Excluir perfil</string>
+    <string name="prof_pick_avatar">Escolha um avatar</string>
+    <string name="prof_pin_new">Digite um PIN de 4 números</string>
+    <string name="prof_pin_confirm">Confirme o PIN</string>
+    <string name="prof_pin_mismatch">Os PINs não coincidem</string>
+    <string name="prof_delete_q">Excluir o perfil “%1$s”?</string>
+    <string name="prof_delete_desc">Seu Continuar assistindo e sua Minha lista são apagados. Durante 7 dias dá para recuperá-lo criando outro perfil com exatamente o mesmo nome.</string>
+    <string name="prof_name_rule">O nome deve ter de 1 a 20 caracteres, sem &lt; nem &gt;.</string>
+    <string name="prof_created">Perfil “%1$s” criado</string>
+    <string name="prof_saved">Alterações salvas</string>
+    <string name="prof_deleted">Perfil “%1$s” excluído</string>
+</resources>

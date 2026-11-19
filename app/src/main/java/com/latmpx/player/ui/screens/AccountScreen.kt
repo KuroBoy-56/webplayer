@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayCircle
@@ -239,6 +240,11 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
         
         Text(stringResource(R.string.app_settings), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
         Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2A), Color(0xFF1A1A1A))), RoundedCornerShape(12.dp)).border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp)).padding(vertical = 8.dp)) {
+            // perfiles (docs/PERFILES.md del panel): cambiar y administrar
+            com.latmpx.player.data.Profiles.current?.let { p ->
+                SettingsItem(Icons.Filled.AccountCircle, stringResource(R.string.prof_switch), p.name) { state.openProfiles(false) }
+                SettingsItem(Icons.Filled.Settings, stringResource(R.string.prof_manage), "") { state.openProfiles(true) }
+            }
             SettingsItem(Icons.Filled.Lock, stringResource(R.string.parental_control), stringResource(R.string.parental_control_desc)) {
                 pinValue = com.latmpx.player.data.Store.parentalPin
                 // siempre se pide el PIN al abrir (antes se quedaba en el menú ya desbloqueado)
