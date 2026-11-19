@@ -207,6 +207,12 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.7.2) **Fondo de «¿Quién está viendo?» más chico, con degradado y cada 10 s:** la imagen ya no cubre toda la
+  pantalla: va en una caja de 1320×742 (16:9) arriba a la derecha y el color del tema entra suave por su borde izquierdo
+  (donde están los perfiles), por abajo y un poco por arriba; la versión y el nombre del destacado quedan sobre el color
+  liso. En Vega los degradados no se veían: `Shade` dibujaba la imagen del paquete con la medida de su archivo (4 px de
+  alto o de ancho) cuando el estilo no traía alto y ancho; ahora va dentro de una caja con el tamaño pedido (eso también
+  arregla el degradado de la barra de arriba en Vega). Cada destacado se ve **10 s** (antes 5).
 - (2.7.1) **Fondo de «¿Quién está viendo?» sin bordes rectos y con los destacados de la semana:** la imagen cubre toda la
   pantalla (antes medía 1600×900 pegada arriba a la derecha y en Vega se veían sus bordes izquierdo e inferior como
   líneas rectas) y el color del tema entra suave desde la izquierda, abajo y arriba (`Shade`). Van pasando **15 a 20
