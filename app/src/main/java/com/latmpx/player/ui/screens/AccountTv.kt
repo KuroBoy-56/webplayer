@@ -113,11 +113,7 @@ fun AccountTv(
         // ajustes (margen a la izquierda y arriba: la fila enfocada crece un poco y no se corta)
         Column(Modifier.weight(1f).padding(start = 13.dp).verticalScroll(rememberScrollState()).padding(start = 12.dp, top = 3.dp, bottom = 30.dp, end = sidePad())) {
             Text(stringResource(R.string.settings), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(bottom = 9.dp))
-            // perfiles (docs/PERFILES.md del panel): cambiar y administrar, arriba de todo
-            com.latmpx.player.data.Profiles.current?.let { p ->
-                Setting(stringResource(R.string.prof_switch), p.name) { state.openProfiles(false) }
-                Setting(stringResource(R.string.prof_manage), "") { state.openProfiles(true) }
-            }
+            // perfiles: Cambiar perfil y Administrar perfiles están en el submenú del avatar de la barra (como Vega y Roku)
             Setting(stringResource(R.string.app_language), languageChoiceLabel(), onLang)
             Setting(stringResource(R.string.parental_control), stringResource(R.string.parental_control_desc), onParental)
             Setting(stringResource(R.string.stream_format), when (streamFormat) { "ts" -> "MPEG-TS (.ts)"; "auto" -> stringResource(R.string.automatic); else -> "HLS (.m3u8)" }, onStreamFormat)
