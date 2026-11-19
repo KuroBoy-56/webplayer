@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.7.4');
+define('WP_VERSION', '2.7.5');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -387,7 +387,9 @@ function xt_get_raw($action, array $params = [], $ttl = 600, $timeout = 15)
 }
 
 /** Varias llamadas en paralelo con caché. $reqs = [key => [action, params]] */
-function xt_multi(array $reqs, $ttl = 86400, $timeout = 10)
+/** Varios pedidos al servidor IPTV a la vez. En el modo navegador lo que falta lo trae el navegador: con $wait la página
+ *  lo espera («Cargando…» / {"xtneed"}); sin $wait se usa lo que ya está y lo demás se trae por detrás. */
+function xt_multi(array $reqs, $ttl = 86400, $timeout = 10, $wait = true)
 {
     $out = [];
     $missing = [];
@@ -399,7 +401,7 @@ function xt_multi(array $reqs, $ttl = 86400, $timeout = 10)
             $out[$k] = $data;
         } elseif (wp_xt_client()) {
             // modo navegador: lo trae el navegador (includes/xt_client.php)
-            wp_xt_need($r[0], $r[1], !is_array($stale));
+            wp_xt_need($r[0], $r[1], $wait && !is_array($stale));
             $out[$k] = is_array($stale) ? $stale : [];
         } else {
             $missing[$k] = xt_url($r[0], $r[1]);

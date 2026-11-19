@@ -143,9 +143,14 @@ function wp_route_rewrite($html)
     $html = preg_replace_callback('~\b(href|action|formaction)=(["\'])((?:\./)?(?:' . $pages . ')(?:\.php)?(?:\?[^"\'<>\s]*)?(?:#[^"\'<>\s]*)?)\2~',
         function ($m) { return $m[1] . '=' . $m[2] . wp_route_url($m[3]) . $m[2]; }, $html);
     // direcciones completas entre comillas dobles (configuración del reproductor en JSON): nunca un pedazo que se
-    // concatena en JavaScript ("…?id=" + id)
+    // concatena en JavaScript ("…?id=" + id) ni una palabra suelta sin .php ni ?… (un dato como "series")
     // (con & escrito como \u0026 por JSON_HEX_AMP)
     $html = preg_replace_callback('~(?<=[:,\[(]|[:,\[(] )"((?:\./)?(?:' . $pages . ')(?:\.php)?(?:\?(?:[^"\'<>\s\\\\]|\\\\u0026)*)?)"(?!\s*\+)~',
-        function ($m) { return '"' . wp_route_url(str_replace('\\u0026', '&', $m[1])) . '"'; }, $html);
+        function ($m) {
+            // una palabra sola ("series", "movie"…) es un dato, no una dirección: el tipo del destacado de Series y de
+            // Explorar llegaba a api.php cambiado por un token y salían películas o todo el catálogo
+            if (strpos($m[1], '.php') === false && strpos($m[1], '?') === false) return $m[0];
+            return '"' . wp_route_url(str_replace('\\u0026', '&', $m[1])) . '"';
+        }, $html);
     return $html;
 }

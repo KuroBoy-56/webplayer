@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## El destacado de Inicio, Películas y Series vuelve a verse — versión 2.7.5 (19 de noviembre, cuarta parte)
+- **Destacado vacío en el modo navegador (2.7.0):** el destacado elegía títulos al azar en cada pedido. Cuando el navegador traía sus fichas del servidor IPTV y la página repetía el pedido, salían otros títulos, volvía a pedir otras fichas y el destacado nunca aparecía (Inicio mostraba «Bienvenido» y en Películas / Series quedaba oculto). Ahora los títulos elegidos se guardan 20 minutos y, si alguno ya tiene su ficha, el destacado sale enseguida y el resto se trae por detrás.
+- **Series y Explorar › Series mostraban películas o todo el catálogo:** la palabra «series» del script de la página se cambiaba por un enlace con token (como si fuera la página series.php) y api.php no sabía qué tipo se pedía. Ahora solo se cambian direcciones (con .php o ?…), nunca una palabra suelta.
+- Archivos: `api.php`, `includes/core.php`, `includes/route_token.php`, `includes/core.php` (versión).
+
 ## Fondo de «¿Quién está viendo?» como Netflix en el televisor — versión 2.7.4 (19 de noviembre, tercera parte)
 - En horizontal la imagen vuelve a ocupar **toda la pantalla** (en la caja arriba a la derecha quedaba chica y con demasiado color liso). El color del tema entra con un **degradado suave desde el borde izquierdo** hasta un poco más de la mitad (más oscuro en el borde; detrás de los perfiles la imagen se sigue viendo, más oscura) y **abajo y arriba solo un sombreado leve**. Los nombres de los perfiles llevan una sombra para leerse siempre. En vertical (celular) sigue igual. Cada destacado se sigue viendo 10 s.
 - Archivos: `perfiles.php`, `assets/nf/profiles.css`, `includes/core.php` (versión).

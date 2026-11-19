@@ -182,21 +182,36 @@ switch ($action) {
         $cached = wp_cache_get($ck, 1200);
         if (is_array($cached) && $cached) out(['items' => wp_hero_kind($cached)]);
 
-        $pool = [];
-        $types = $type === 'all' ? ['movie', 'series'] : [$type];
-        foreach ($types as $t) {
-            $list = $platform ? wp_filter($t, $platform, '', '', '', 'recent') : wp_catalog($t);
-            if (!$platform) usort($list, function ($a, $b) { return $b['added'] <=> $a['added']; });
-            $list = array_slice(array_values(array_filter($list, function ($i) { return $i['icon'] !== ''; })), 0, 150);
-            shuffle($list);
-            foreach (array_slice($list, 0, 8) as $it) { $it['t'] = $t; $pool[] = $it; }
+        // los títulos elegidos se guardan 20 min: en el modo navegador la página repite el pedido después de que el
+        // navegador trae sus fichas, y con otra elección al azar volvía a pedir otras y el destacado nunca aparecía
+        $pk = 'heropool|' . $ck;
+        $pool = wp_cache_get($pk, 1200);
+        if (!is_array($pool) || !$pool) {
+            $pool = [];
+            $types = $type === 'all' ? ['movie', 'series'] : [$type];
+            foreach ($types as $t) {
+                $list = $platform ? wp_filter($t, $platform, '', '', '', 'recent') : wp_catalog($t);
+                if (!$platform) usort($list, function ($a, $b) { return $b['added'] <=> $a['added']; });
+                $list = array_slice(array_values(array_filter($list, function ($i) { return $i['icon'] !== ''; })), 0, 150);
+                shuffle($list);
+                foreach (array_slice($list, 0, 8) as $it) { $it['t'] = $t; $pool[] = $it; }
+            }
+            shuffle($pool);
+            if ($pool) wp_cache_set($pk, $pool);
         }
-        shuffle($pool);
         $reqs = [];
         foreach ($pool as $k => $it) {
             $reqs[$k] = $it['t'] === 'series' ? ['get_series_info', ['series_id' => $it['id']]] : ['get_vod_info', ['vod_id' => $it['id']]];
         }
-        $infos = xt_multi($reqs, 86400, 8);
+        // primero lo que ya está guardado (en el modo navegador lo que falta se trae por detrás); solo si no hay ninguna
+        // ficha con fondo se espera al navegador
+        $infos = xt_multi($reqs, 86400, 8, false);
+        $withBd = 0;
+        foreach ($infos as $inf) {
+            $bd = $inf['info']['backdrop_path'] ?? '';
+            if (is_array($bd) ? !empty($bd[0]) : $bd !== '') $withBd++;
+        }
+        if (!$withBd) $infos = xt_multi($reqs, 86400, 8);
         $items = [];
         foreach ($pool as $k => $it) {
             $info = $infos[$k]['info'] ?? [];
