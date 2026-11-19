@@ -4,9 +4,11 @@ import UIKit
 
 /**
  * TV en vivo igual que la app de Android en celular (y tvguide.php de la web): arriba (fijo) la miniatura
- * del canal elegido, el canal con su favorito y la guía de programas; debajo el selector de categorías,
- * el buscador y la lista de canales con lo que se emite ahora. Tocar un canal lo reproduce en la miniatura;
- * la pantalla completa se abre con su botón o al girar el teléfono (volver a vertical la cierra).
+ * del canal elegido y el canal con su favorito; abajo, una sola lista que se desplaza con el dedo: la guía de
+ * programas (el de ahora y los 2 siguientes) y, debajo, la categoría (fija arriba al bajar), el buscador y los
+ * canales con lo que se emite ahora. Al bajar por los canales la guía se va hacia arriba con la lista y bajo el
+ * nombre del canal aparece, en una línea, lo que se transmite ahora; al volver al principio la guía baja otra vez.
+ * Tocar un canal lo reproduce en la miniatura; la pantalla completa se abre con su botón o al girar el teléfono.
  */
 struct LiveView: View {
     @EnvironmentObject var state: AppState
@@ -23,6 +25,11 @@ struct LiveView: View {
     @State private var resumeTick = 0
     @State private var guide: [EpgEntry]?
     @State private var now = Date().timeIntervalSince1970
+    /// el programa de ahora ya subió fuera de la vista (va bajo el nombre del canal)
+    @State private var compact = false
+    /// la guía entera está arriba, fuera de la vista
+    @State private var guideAway = false
+    @State private var scrollTarget: String?
 
     static let favs = "__favs", all = "__all"
     private var phone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
@@ -72,9 +79,8 @@ struct LiveView: View {
                     .frame(width: boxWidth(g.size), height: boxWidth(g.size) * 9 / 16)
                     .frame(maxWidth: .infinity)
                     .background(Color.black)
-                if let ch = ch { selectedRow(ch) }
-                if let gl = guide, ch != nil, !gl.isEmpty { guidePanel(gl, maxH: g.size.height * 0.24) }
-                channelList(list)
+                if let ch = ch { selectedRow(ch, nowProg: nowProg) }
+                channelList(list, progs: ch == nil ? [] : Array((guide ?? []).filter { $0.end > now }.prefix(3)))
             }
         }
         .background(LiveColors.bg.ignoresSafeArea())
@@ -156,38 +162,70 @@ struct LiveView: View {
     }
 
     /* ---------- partes ---------- */
-    private func channelList(_ list: [Item]) -> some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                catMenu
-                HStack(alignment: .lastTextBaseline, spacing: 6) {
-                    Text(tr("Canales")).font(.system(size: 16, weight: .bold)).foregroundColor(.white)
-                    if !list.isEmpty { Text("(\(list.count))").font(.system(size: 12)).foregroundColor(LiveColors.empty) }
-                    Spacer()
-                }.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
-                filterField
-                if state.loading && state.live.isEmpty {
-                    LoadingView(text: tr("Cargando canales…")).padding(.top, 20)
-                } else if list.isEmpty {
-                    Text(tr(currentCat == LiveView.favs && q.trimmed.isEmpty ? "Aún no tienes canales favoritos." : "No hay canales en esta sección."))
-                        .font(.system(size: 14)).foregroundColor(LiveColors.empty).multilineTextAlignment(.center).padding(16)
+    private func channelList(_ list: [Item], progs: [EpgEntry]) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: 0).id("liveGuideTop")
+                    guideBlock(progs)
+                    Color.clear.frame(height: 0).id("liveListTop")
+                    // la categoría queda fija arriba de la lista al bajar por los canales
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        Section(header: catMenu) {
+                            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                                Text(tr("Canales")).font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                                if !list.isEmpty { Text("(\(list.count))").font(.system(size: 12)).foregroundColor(LiveColors.empty) }
+                                Spacer()
+                            }.padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 10)
+                            filterField
+                            if state.loading && state.live.isEmpty {
+                                LoadingView(text: tr("Cargando canales…")).padding(.top, 20)
+                            } else if list.isEmpty {
+                                Text(tr(currentCat == LiveView.favs && q.trimmed.isEmpty ? "Aún no tienes canales favoritos." : "No hay canales en esta sección."))
+                                    .font(.system(size: 14)).foregroundColor(LiveColors.empty).multilineTextAlignment(.center).padding(16)
+                            }
+                            ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
+                                LiveRow(channel: c, index: i, shown: list, active: c.id == selId, fav: cloud.isFav(c.key), now: now)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { select(c) }
+                                    .onLongPressGesture(minimumDuration: 0.5) { toggleFav(c) }
+                            }
+                        }
+                    }.padding(.bottom, 16)
                 }
-                ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
-                    LiveRow(channel: c, index: i, shown: list, active: c.id == selId, fav: cloud.isFav(c.key), now: now)
-                        .contentShape(Rectangle())
-                        .onTapGesture { select(c) }
-                        .onLongPressGesture(minimumDuration: 0.5) { toggleFav(c) }
-                }
-            }.padding(.bottom, 16)
+            }
+            .coordinateSpace(name: "liveList")
+            .scrollDismissesKeyboard(.immediately)
+            .onPreferenceChange(LiveGuideNowKey.self) { b in let c = b.map { $0 <= 6 } ?? false; if c != compact { compact = c } }
+            .onPreferenceChange(LiveGuideBottomKey.self) { b in if (b <= 0.5) != guideAway { guideAway = b <= 0.5 } }
+            .onChange(of: scrollTarget) { t in
+                guard let t else { return }
+                scrollTarget = nil
+                proxy.scrollTo(t, anchor: .top)
+            }
         }
-        .scrollDismissesKeyboard(.immediately)
     }
 
-    private func selectedRow(_ ch: Item) -> some View {
+    private func selectedRow(_ ch: Item, nowProg: EpgEntry?) -> some View {
         let on = cloud.isFav(ch.key)
+        // con la guía fuera de la vista el nombre sube un poco y debajo aparece lo de ahora (nada cambia de alto)
+        let showNow = compact && nowProg != nil
         return HStack(spacing: 12) {
             ChannelLogo(url: ch.poster).frame(width: 64, height: 42).clipShape(RoundedRectangle(cornerRadius: 4))
-            Text(ch.name).font(.system(size: 16, weight: .bold)).foregroundColor(.white).lineLimit(1)
+            ZStack(alignment: .leading) {
+                Text(ch.name).font(.system(size: 16, weight: .bold)).foregroundColor(.white).lineLimit(1)
+                    .offset(y: showNow ? -9 : 0)
+                if let np = nowProg {
+                    HStack(spacing: 0) {
+                        Text("\(hm(np.start)) - \(hm(np.end))  ").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.accent)
+                        Text(np.title).font(.system(size: 12)).foregroundColor(Color(hex: 0xCCCCCC)).lineLimit(1)
+                    }
+                    .offset(y: showNow ? 10 : 14)
+                    .opacity(showNow ? 1 : 0)
+                }
+            }
+            .frame(height: 42)
+            .animation(.easeOut(duration: 0.3), value: showNow)
             Spacer(minLength: 8)
             Button { toggleFav(ch) } label: {
                 Image(systemName: "star.fill").font(.system(size: 19)).foregroundColor(on ? Theme.p.onAccent : .white)
@@ -199,23 +237,37 @@ struct LiveView: View {
         .padding(.horizontal, 12).padding(.vertical, 8)
     }
 
-    private func guidePanel(_ l: [EpgEntry], maxH: CGFloat) -> some View {
+    /** la guía dentro de la lista: el programa de ahora y los 2 siguientes (siempre está, con alto 0 si no hay guía) */
+    private func guideBlock(_ l: [EpgEntry]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(tr("Guía de programas")).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
-                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
-            ScrollView {
-                LazyVStack(spacing: 0) { ForEach(l, id: \.self) { p in ProgramRow(program: p, now: now) } }
+            if !l.isEmpty {
+                Text(tr("Guía de programas")).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                    .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
+                ForEach(l, id: \.self) { p in
+                    ProgramRow(program: p, now: now)
+                        .background(GeometryReader { g in
+                            Color.clear.preference(key: LiveGuideNowKey.self,
+                                                   value: p.start <= now && p.end > now ? g.frame(in: .named("liveList")).maxY : nil)
+                        })
+                }
             }
         }
-        .frame(height: min(maxH, 36 + CGFloat(l.count) * 52), alignment: .top)
-        .frame(maxWidth: .infinity)
-        .background(LiveColors.col)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(l.isEmpty ? Color.clear : LiveColors.col)
+        .background(LiveGuideAnchor())
+        .background(GeometryReader { g in
+            Color.clear.preference(key: LiveGuideBottomKey.self, value: g.frame(in: .named("liveList")).maxY)
+        })
     }
 
     private var catMenu: some View {
         Menu {
             ForEach(cats, id: \.id) { c in
-                Button { cat = c.id } label: { if c.id == currentCat { Label(c.name, systemImage: "checkmark") } else { Text(c.name) } }
+                Button {
+                    // la categoría nueva empieza en su primer canal; si la guía ya no se veía, sigue fuera de la vista
+                    scrollTarget = guideAway ? "liveListTop" : "liveGuideTop"
+                    cat = c.id
+                } label: { if c.id == currentCat { Label(c.name, systemImage: "checkmark") } else { Text(c.name) } }
             }
         } label: {
             HStack {
@@ -228,7 +280,8 @@ struct LiveView: View {
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(hex: 0x555555), lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 4))
         }
-        .padding(.horizontal, 12).padding(.top, 10)
+        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 8)
+        .background(LiveColors.bg)
     }
 
     private var filterField: some View {
