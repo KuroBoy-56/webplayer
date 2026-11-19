@@ -33,9 +33,13 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
     (`catalog.kidsOn`), así el principal nunca ve el catálogo recortado.
   - **Barra con perfiles:** el avatar del perfil a la izquierda («Cambiar perfil», «Administrar perfiles», «Cuenta»), el
     menú al centro y el logo a la derecha. Con los perfiles apagados, una conexión o una DEMO, la app es la de siempre.
-- **Barra de arriba sin franja negra:** en Inicio, Series y Películas el menú va encima del destacado solo con un
-  degradado suave detrás de las letras (como Android TV) y **se esconde al bajar** a las filas (sube y se desvanece);
-  vuelve al subir o con Atrás.
+- **Barra de arriba sin franja negra** (solo con los perfiles encendidos por el dueño en el panel): en Inicio, Series y
+  Películas el menú va encima del destacado solo con un degradado suave detrás de las letras (como Android TV) y **se
+  esconde al bajar** a las filas (sube y se desvanece); vuelve al subir o con Atrás.
+- **Todo lo nuevo solo con los perfiles encendidos:** apagados (o una línea DEMO), la app, la barra (con su franja) y
+  el inicio de sesión son los de siempre. Si la última vez estaban apagados, después de iniciar sesión la app entra a
+  Inicio enseguida (sin esperar al panel) y lo que conteste el panel vale para el próximo inicio: si el dueño los
+  enciende, se ven desde la próxima vez que se abra la app, nunca con un salto en pleno uso (`pf_on|<línea>`).
 - **Inicio de sesión de a una DNS** (regla de `docs/LOGIN-SERVIDORES.md` del panel, para que XUI no bloquee la IP):
   primero la DNS con la que ese usuario entró la última vez en el televisor, después de a una y parando en la primera
   que acepta, una vez por servidor, https solo si en http no contestó nadie, y pasados 20 s lo que falta a la vez. Si
