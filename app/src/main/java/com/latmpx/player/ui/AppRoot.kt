@@ -101,10 +101,13 @@ fun AppRoot() {
     val offlineDownloads = remember { mutableStateOf(false) }
     /** tema de prueba del panel (Auto-Demo o una cuenta del tema): sin sesión, sin registro y sin caché */
     val review = remember { mutableStateOf<com.latmpx.player.data.Panel.Review?>(null) }
+    /** se cerró sesión a mano: el inicio de sesión no pregunta al panel ni entra solo hasta volver a abrir la app */
+    val manualLogout = androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
     // "Cambiar distribuidor" o número cortado por el panel: se borra el número, su marca, la sesión y el token
     fun wipe(msg: String?) {
         Store.logout() // antes de Tenant.clear(): borra el token de este distribuidor
+        manualLogout.value = false
         Tenant.clear()
         Alerts.reset(); alert.value = null; Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear()
         Profiles.choose(null); state.profilesOpen = null; state.profileReady = false
@@ -280,9 +283,10 @@ fun AppRoot() {
                 state.session = Store.session()
             }
             gate.value == Gate.RETRY -> TenantRetryScreen(retryMsg.value, checking.value, onRetry = { guard() }, onChange = { wipe(null) })
-            state.session == null && review.value != null -> com.latmpx.player.ui.screens.ReviewScreen(review.value!!) { review.value = null }
+            state.session == null && review.value != null -> com.latmpx.player.ui.screens.ReviewScreen(review.value!!) { manualLogout.value = true; review.value = null }
             state.session == null && offlineDownloads.value -> com.latmpx.player.ui.screens.DownloadsScreen { offlineDownloads.value = false }
-            state.session == null -> LoginScreen(onDownloads = { offlineDownloads.value = true }, onChangeDistributor = { wipe(null) }, onReview = { review.value = it }) { s ->
+            state.session == null -> LoginScreen(autoCheck = !manualLogout.value, onDownloads = { offlineDownloads.value = true }, onChangeDistributor = { wipe(null) }, onReview = { review.value = it }) { s ->
+                manualLogout.value = false
                 lastPanelCheck.longValue = System.currentTimeMillis()
                 Store.saveSession(s)
                 Xtream.clearCache()
@@ -305,6 +309,7 @@ fun AppRoot() {
                 onBack = { if (state.profilesFromAccount && Profiles.current != null) state.profilesOpen = null else (ctx as? android.app.Activity)?.finishAffinity() },
                 onLogout = {
                     scope.launch {
+                        manualLogout.value = true
                         Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME
                         Profiles.choose(null); state.profilesOpen = null; state.profileReady = false; state.session = null
                     }
@@ -312,6 +317,7 @@ fun AppRoot() {
             )
             else -> MainShell(state, onLogout = {
                 scope.launch {
+                    manualLogout.value = true
                     Store.logout(); Alerts.reset(); alert.value = null; Xtream.clearCache(); CatalogCache.clear(); Cloud.clear(); PanelEpg.clear(); state.stack.clear(); state.tab = Tab.HOME
                     Profiles.choose(null); state.profileReady = false; state.session = null
                 }

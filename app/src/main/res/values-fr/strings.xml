@@ -189,6 +189,8 @@
     <string name="login_enter_credentials">Saisissez votre identifiant et votre mot de passe</string>
     <string name="login_no_servers">Le panneau n\'a aucun serveur disponible</string>
     <string name="login_activating">Activation…</string>
+    <string name="check_activation">Vérifier l\'activation</string>
+    <string name="login_not_activated">Cet appareil n\'est pas encore activé. Donnez le code ci-dessous à votre distributeur.</string>
     <string name="autodemo">Démo auto</string>
     <string name="login_creating_demo">Création de la démo…</string>
     <string name="resume">Reprendre</string>
