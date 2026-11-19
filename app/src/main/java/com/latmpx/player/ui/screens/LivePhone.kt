@@ -11,6 +11,9 @@ import android.os.Build
 import android.provider.Settings
 import android.view.OrientationEventListener
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -47,15 +51,18 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
@@ -63,7 +70,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -108,6 +114,7 @@ import com.latmpx.player.ui.theme.NfGray
 import com.latmpx.player.ui.theme.NfGray2
 import com.latmpx.player.ui.theme.NfRed
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -120,11 +127,14 @@ private val TvEmpty = Color(0xFF888888)
 
 /**
  * TV en vivo para celular, igual que tvguide.php de la web en pantallas pequeñas:
- * arriba (fijo) el reproductor, el canal elegido con su favorito y la guía de programas;
- * debajo el selector de categorías, el buscador y la lista de canales con lo que se emite ahora.
+ * arriba (fijo) el reproductor y el canal elegido con su favorito; abajo, una sola lista que se desplaza con el dedo:
+ * la guía de programas (el de ahora y los 2 siguientes) y, debajo, la categoría (fija arriba al bajar), el buscador y
+ * los canales con lo que se emite ahora. Al bajar por los canales la guía se va hacia arriba con la lista y bajo el
+ * nombre del canal aparece, en una línea, lo que se transmite ahora; al volver al principio la guía baja otra vez.
  * Al tocar un canal se reproduce en la miniatura de arriba; la pantalla completa se abre solo con su botón
  * o al girar el teléfono (atrás o volver a vertical regresa a la miniatura).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>) {
     val s = state.session ?: return
@@ -257,8 +267,21 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
         value = g.take(15)
     }
     val nowProg = guide?.firstOrNull { it.start <= now && it.end > now }
-    val epgMax = (LocalConfiguration.current.screenHeightDp * 0.24f).dp
+    // la guía va dentro de la lista: el programa de ahora y los 2 siguientes (como la web en el teléfono)
+    val progs = if (sel == null) emptyList() else guide.orEmpty().filter { it.end > now }.take(3)
+    val guideItems = if (progs.isEmpty()) 0 else progs.size + 1
+    val nowKey = nowProg?.takeIf { p -> progs.any { it.start == p.start } }?.let { "g${it.start}" }
     val listState = rememberLazyListState()
+    // el programa de ahora ya subió fuera de la vista: aparece bajo el nombre del canal
+    val compact by remember(nowKey) {
+        derivedStateOf {
+            if (nowKey == null) false else {
+                val r = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == nowKey }
+                if (r != null) r.offset + r.size <= 6 else listState.firstVisibleItemIndex > 0
+            }
+        }
+    }
+    val scope = rememberCoroutineScope()
 
     Column(Modifier.fillMaxSize().background(if (full) Color.Black else NfBg)) {
         /* ---------- reproductor (miniatura 16:9 o pantalla completa, mismo reproductor) ---------- */
@@ -275,7 +298,19 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     ChannelLogo(sel.poster, Modifier.size(64.dp, 42.dp), RoundedCornerShape(4.dp))
                     Spacer(Modifier.width(12.dp))
-                    Text(sel.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    // con la guía fuera de la vista el nombre sube un poco y debajo aparece lo de ahora (nada cambia de alto)
+                    val t by animateFloatAsState(if (compact && nowProg != null) 1f else 0f, tween(300), label = "now")
+                    Box(Modifier.weight(1f).height(42.dp)) {
+                        Text(sel.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.align(Alignment.CenterStart).offset(y = (-9 * t).dp))
+                        val np = nowProg
+                        if (np != null && t > 0f) {
+                            Row(Modifier.align(Alignment.CenterStart).offset(y = (13 - 4 * t).dp).alpha(t)) {
+                                Text("${hm(np.start)} - ${hm(np.end)}  ", color = NfRed, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(np.title, color = Color(0xFFCCCCCC), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
                     Spacer(Modifier.width(8.dp))
                     val on = remember(sel.key, favTick, Cloud.rev) { Cloud.isFav(sel.key) }
                     Box(
@@ -288,22 +323,19 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
                 }
             }
 
-            /* ---------- guía de programas (solo si el canal la tiene) ---------- */
-            val g = guide
-            if (sel != null && !g.isNullOrEmpty()) {
-                Column(Modifier.fillMaxWidth().heightIn(max = epgMax).background(TvCol)) {
-                    Text(stringResource(R.string.program_guide), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 6.dp))
-                    LazyColumn(Modifier.fillMaxWidth()) {
-                        items(g) { p -> ProgramRow(p, now) }
-                    }
-                }
-            }
-
-            /* ---------- categorías, buscador y canales ---------- */
+            /* ---------- guía (solo si el canal la tiene), categorías, buscador y canales: una sola lista ---------- */
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
-                item(key = "cat") {
+                if (guideItems > 0) {
+                    item(key = "gtitle") {
+                        Text(stringResource(R.string.program_guide), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth().background(TvCol).padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 6.dp))
+                    }
+                    items(progs, key = { "g${it.start}" }) { p -> Box(Modifier.background(TvCol)) { ProgramRow(p, now) } }
+                }
+                // la categoría queda fija arriba de la lista al bajar por los canales
+                stickyHeader(key = "cat") {
                     val catName = cats.firstOrNull { it.first == cat }?.second ?: stringResource(R.string.categories)
-                    Box(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp)) {
+                    Box(Modifier.fillMaxWidth().background(NfBg).padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 8.dp)) {
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(Color.Black)
                                 .border(1.dp, Color(0xFF555555), RoundedCornerShape(4.dp))
@@ -320,7 +352,12 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
                             cats.forEach { (k, n) ->
                                 DropdownMenuItem(
                                     text = { Text(n, color = if (k == cat) Color.White else Color(0xFFCCCCCC), fontWeight = if (k == cat) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    onClick = { cat = k; catOpen = false },
+                                    onClick = {
+                                        // la categoría nueva empieza en su primer canal; si la guía ya no se veía, sigue fuera de la vista
+                                        val away = guideItems > 0 && listState.firstVisibleItemIndex >= guideItems
+                                        cat = k; catOpen = false
+                                        scope.launch { listState.scrollToItem(if (away) guideItems else 0) }
+                                    },
                                     modifier = Modifier.background(if (k == cat) NfRed else Color.Transparent),
                                 )
                             }
@@ -328,7 +365,7 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
                     }
                 }
                 item(key = "head") {
-                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
                         Text(stringResource(R.string.channels), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         if (shown.isNotEmpty()) Text("  (${shown.size})", color = TvEmpty, fontSize = 12.sp)
                     }
