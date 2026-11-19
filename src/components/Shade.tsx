@@ -1,12 +1,14 @@
 // Degradado del color de fondo del tema sobre las imágenes grandes (portada, ficha, «Ver todo»): 'left' opaco a la
 // izquierda, 'bottom' opaco abajo. En los televisores con la app web (LG, Samsung) es un degradado CSS suave: la imagen
 // teñida (tintColor) de react-native-web es un filtro SVG que la tele dibuja por bloques (líneas rectas y recuadros
-// sombreados), y la rampa lineal marcaba una línea donde empezaba. En Vega, la imagen del paquete teñida como siempre.
+// sombreados), y la rampa lineal marcaba una línea donde empezaba. En Vega, una imagen del paquete teñida con la misma curva.
 import React from 'react';
 import { Image, ImageStyle, Platform, StyleProp, View } from 'react-native';
 import { alpha, C } from '../theme';
 
-const IMG = { left: require('../../assets/image/grad_left.png'), bottom: require('../../assets/image/grad_bottom.png'), top: require('../../assets/image/grad_top.png') };
+// blancos con la misma curva suave que el CSS de la web (tintColor les pone el color del tema): con la rampa lineal de
+// grad_*.png se notaba una línea donde terminaba el degradado
+const IMG = { left: require('../../assets/image/shade_left.png'), bottom: require('../../assets/image/shade_bottom.png'), top: require('../../assets/image/shade_top.png') };
 
 // curva suave (smoothstep): sin escalón visible donde empieza ni donde termina el degradado
 const STOPS = [0, 0.12, 0.25, 0.38, 0.5, 0.62, 0.75, 0.88, 1];

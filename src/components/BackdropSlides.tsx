@@ -1,8 +1,8 @@
 // Fondo de «¿Quién está viendo?» (docs/PERFILES.md del panel, sección 6): lo más destacado de la semana en TMDB (15 a
 // 20 títulos, weekHighlights). Profiles.tsx cambia el índice cada 10 s y, al llegar al último, vuelve al primero. La
 // imagen nueva aparece con un fundido sobre la anterior recién cuando ya cargó (si no carga, queda la anterior y se
-// prueba la siguiente dirección: Full HD del panel → TMDB). Llena la caja que le da Profiles.tsx (arriba a la derecha),
-// con los degradados del color del tema encima en sus bordes izquierdo e inferior (Shade).
+// prueba la siguiente dirección: Full HD del panel → TMDB). Llena la caja que le da Profiles.tsx (toda la pantalla), con
+// los degradados del color del tema encima: a la izquierda y un sombreado leve abajo y arriba (Shade).
 import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, Image, Platform, StyleSheet, View } from 'react-native';
 import { Highlight } from '../api/tmdb';
