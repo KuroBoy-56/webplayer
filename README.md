@@ -6,6 +6,14 @@
 > La rama `android` (con la comprobación) es para compilar con Android Studio e instalar
 > el APK directo. El APK de esta rama queda en Releases › `apk-tienda-latest`. Al cambiar la otra rama, trae aquí los cambios
 > (`git merge android`) sin tocar `STORE_BUILD`.
+>
+> **Paquete AAB (desde la 1.4.0):** el workflow compila también el **`.aab`** (Android App Bundle, el formato que pide Google
+> Play) firmado con la **llave de subida** (secretos `PLAY_UPLOAD_KEYSTORE` en base64, `PLAY_UPLOAD_STORE_PASSWORD`,
+> `PLAY_UPLOAD_KEY_ALIAS`, `PLAY_UPLOAD_KEY_PASSWORD`, los mismos de las ramas `play-store`), en Releases › `aab-tienda-latest`. El APK
+> sigue igual que antes (Releases › `apk-tienda-latest`). Sin los secretos el .aab sale con la llave de depuración y las tiendas no lo
+> aceptan. También se puede hacer en Android Studio: **Build › Generate Signed App Bundle** (elige tu llave de subida).
+> Para traer cambios de la rama `android` se aplica el mismo commit (`git cherry-pick`): las ramas no comparten historia
+> reciente y un merge da conflictos.
 
 **Marca:** la app se llama **MPX Player** (`app_name`; el paquete sigue siendo `com.latmpx.player` para que se actualice sobre la instalada). Logo, icono, banner de TV e imágenes de las plataformas (Netflix, Disney+, HBO Max, Prime Video, Marvel, Apple TV+, Paramount+, DC, Navidad, Halloween) están en `res/drawable-nodpi`, `res/mipmap-xxxhdpi` y `res/drawable-*`.
 

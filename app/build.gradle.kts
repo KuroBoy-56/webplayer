@@ -13,6 +13,12 @@ val localProps: Properties = Properties().apply {
 }
 // llave maestra AES de login.php (hex de 64 caracteres). Única fuente: local.properties (nunca en el repositorio).
 val panelMasterKey: String = localProps.getProperty("panel.master_key") ?: ""
+// Paquete .aab para las tiendas (Google Play, Amazon): se firma con la llave de subida (upload key) solo al compilarlo con
+// -Pmpx.upload=true (el workflow lo hace en bundleRelease); el APK de esta rama sigue firmado como siempre. La llave nunca
+// va en el repositorio: el workflow la escribe desde los secretos en local.properties (upload.store_file,
+// upload.store_password, upload.key_alias, upload.key_password). En Android Studio: Build › Generate Signed App Bundle.
+val uploadStore: String = localProps.getProperty("upload.store_file") ?: ""
+val useUpload: Boolean = uploadStore.isNotEmpty() && findProperty("mpx.upload")?.toString() == "true"
 
 android {
     namespace = "com.latmpx.player"
@@ -27,13 +33,22 @@ android {
         buildConfigField("String", "PANEL_MASTER_KEY", "\"$panelMasterKey\"")
     }
 
+    signingConfigs {
+        if (uploadStore.isNotEmpty()) create("upload") {
+            storeFile = file(uploadStore)
+            storePassword = localProps.getProperty("upload.store_password")
+            keyAlias = localProps.getProperty("upload.key_alias")
+            keyPassword = localProps.getProperty("upload.key_password")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // para pruebas firma con la clave de depuración; para publicar crea tu propia clave en Build > Generate Signed APK
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (useUpload) "upload" else "debug")
         }
     }
     compileOptions {
