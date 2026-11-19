@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -84,7 +85,9 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = {}, onReview: (Panel.Review) -> Unit = {}, onLogged: (Session) -> Unit) {
+// autoCheck = false: se acaba de cerrar sesión a mano; no se pregunta al panel ni se entra solo (eso solo al abrir la
+// app). La línea del equipo se pide con «Verificar activación».
+fun LoginScreen(autoCheck: Boolean = true, onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = {}, onReview: (Panel.Review) -> Unit = {}, onLogged: (Session) -> Unit) {
     val ctx = LocalContext.current
     val tv = LocalIsTv.current
     val deviceId = remember { Device.id(ctx) }
@@ -181,8 +184,10 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
     var review by remember { mutableStateOf(false) }
     LaunchedEffect(Tenant.code) { demoConfigured = Panel.demoConfigured(deviceId); review = Panel.reviewOffered }
     LaunchedEffect(Unit) {
-        resolve()
-        if (lines.isEmpty() && !Store.fakeUnlocked) fake = Panel.fakeScreen
+        if (autoCheck) {
+            resolve()
+            if (lines.isEmpty() && !Store.fakeUnlocked) fake = Panel.fakeScreen
+        } else busy = false
         // la pantalla falsa (si el panel la tiene activada) es lo primero que se ve: el inicio de sesión
         // no aparece hasta que el panel respondió
         checking = false
@@ -305,7 +310,7 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                             status = tr(R.string.login_activating)
                             // validated: el panel la registra aunque él no reciba respuesta del servidor IPTV; 503 = no la
                             // registró por eso (panel viejo), se entra igual con la línea que este equipo ya validó
-                            val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), ses.base, validated = true, expTs = ses.expTs)
+                            val r = Panel.submitUrl(deviceId, user.trim(), pass.trim(), ses.base, validated = true, expTs = ses.expTs, replace = true)
                             if (r.value == null && r.code != 503) { err = r.error; return@act }
                             if (!resolve() && err == null) connect(Panel.Line(ses.dnsName, ses.base, user.trim(), pass.trim()))
                         }
@@ -357,6 +362,10 @@ fun LoginScreen(onDownloads: () -> Unit = {}, onChangeDistributor: () -> Unit = 
                         } else {
                             Spacer(Modifier.weight(1f))
                         }
+                    }
+                    // como Roku: pregunta al panel si este equipo ya tiene una línea (check_mac) y, si la tiene, entra
+                    if (!review) AppButton(stringResource(R.string.check_activation), Modifier.fillMaxWidth(), icon = Icons.Filled.VerifiedUser, minHeight = 44.dp, fontSize = 15.sp) {
+                        act { if (!resolve() && err == null) err = tr(R.string.login_not_activated) }
                     }
                     if (busy) {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
