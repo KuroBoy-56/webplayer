@@ -12,6 +12,10 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
 ## Novedades de la 1.3.0 (lo mismo que webOS 1.4.0)
 
+- (1.3.5) **Avatares redondeados:** el avatar del perfil de la barra, los de «¿Quién está viendo?» y los del editor llevan el
+  radio también en la imagen (`borderRadius` en el `Image`): en Vega la caja redondeada con `overflow: hidden` no
+  siempre recortaba la imagen de adentro y el avatar se veía cuadrado. El oscurecido de «Administrar perfiles» y la
+  etiqueta «Niños» siguen la misma curva.
 - (1.3.4) **Foco del menú de arriba que se iba a las filas:** después de bajar por las filas y volver al menú con Atrás,
   izquierda desde «Inicio» bajaba a una carátula (las filas de arriba quedan detrás de la barra, a la misma altura y más
   cerca que el avatar) y para llegar al avatar (Cambiar perfil, Administrar perfiles, Cuenta) había que subir toda la
