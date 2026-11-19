@@ -282,6 +282,11 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
         }
     }
     val scope = rememberCoroutineScope()
+    // con la lista arriba del todo, la guía que llega (abrir TV en vivo, canal sin guía antes) se ve: la lista no se
+    // queda en la categoría dejándola fuera de la vista
+    val atTop by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 } }
+    val topBefore = atTop
+    LaunchedEffect(guideItems > 0) { if (guideItems > 0 && topBefore) listState.scrollToItem(0) }
 
     Column(Modifier.fillMaxSize().background(if (full) Color.Black else NfBg)) {
         /* ---------- reproductor (miniatura 16:9 o pantalla completa, mismo reproductor) ---------- */
