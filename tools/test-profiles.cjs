@@ -1,0 +1,111 @@
+// Perfil infantil (src/lib/kids.ts, docs/PERFILES.md del panel, sección 5) e inicio de sesión de a una DNS
+// (loginAll en src/api/xtream.ts, docs/LOGIN-SERVIDORES.md del panel). `npm run test:profiles`
+const { test, after } = require('node:test');
+const assert = require('node:assert');
+const Module = require('node:module');
+const fs = require('node:fs');
+const ts = require('typescript');
+const originalLoad = Module._load;
+const previousTs = require.extensions['.ts'];
+require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true }, fileName: filename,
+}).outputText, filename);
+// el almacenamiento, el idioma y la red del equipo se cambian por piezas de prueba
+const mem = new Map();
+const storage = { read: (k, d = '') => (mem.has(k) ? mem.get(k) : d), write: (k, v) => void mem.set(k, v), readJson: k => (mem.has(k) ? JSON.parse(mem.get(k)) : null), writeJson: (k, v) => void mem.set(k, JSON.stringify(v)) };
+Module._load = function (request, parent, isMain) {
+  if (request === './storage' || request === '../lib/storage') return storage;
+  if (request === './i18n' || request === '../lib/i18n') return { t: (k, p) => { let s = k; for (const x in p || {}) s = s.split('{' + x + '}').join(p[x]); return s; }, lang: () => 'es' };
+  if (request === '../lib/http') return { http: (...x) => globalThis.__http(...x), json: r => { try { return JSON.parse(r.body); } catch { return null; } } };
+  if (request === './panel') return { cloud: async () => ({ code: 0, body: '', ok: false }) };
+  return originalLoad.call(this, request, parent, isMain);
+};
+after(() => {
+  Module._load = originalLoad;
+  if (previousTs) require.extensions['.ts'] = previousTs; else delete require.extensions['.ts'];
+});
+const kids = require('../src/lib/kids.ts');
+
+test('perfil infantil: clase de cada categoría por su nombre', () => {
+  assert.strictEqual(kids.catClass('INFANTILES'), 'kids');
+  assert.strictEqual(kids.catClass('ANIMADAS'), 'kids');
+  assert.strictEqual(kids.catClass('DISNEY+'), 'disney');
+  assert.strictEqual(kids.catClass('PELÍCULAS DE FAMILIA'), 'family');
+  assert.strictEqual(kids.catClass('TERROR'), 'block');
+  assert.strictEqual(kids.catClass('MARVEL'), 'block');
+  assert.strictEqual(kids.catClass('ADULTOS +18'), 'block');
+  assert.strictEqual(kids.catClass('ESTRENOS 2024'), '');
+  // «para niños» salva una categoría bloqueada
+  assert.strictEqual(kids.catClass('ANIME INFANTIL'), 'kids');
+  // TV en vivo: solo las de niños (familia no cuenta)
+  assert.strictEqual(kids.catClass('INFANTILES', true), 'kids');
+  assert.strictEqual(kids.catClass('DEPORTES', true), '');
+});
+
+test('perfil infantil: nivel de cada título (tabla de ejemplos del panel)', () => {
+  const L = (name, genre, cats) => kids.itemLevel(name, genre, cats.map(c => kids.catClass(c)));
+  assert.strictEqual(L('Toy Story 4', '', ['INFANTILES']), 'strong');
+  assert.strictEqual(L('Shrek', 'Animación, Comedia', ['ANIMADAS']), 'strong');
+  assert.strictEqual(L('Moana 2', 'Animación, Familia', ['DISNEY+']), 'strong');
+  assert.strictEqual(L('Frozen II', '', ['DISNEY+']), 'weak');
+  assert.strictEqual(L('Mírame así, el camino de Noa', 'Comedia, Familia, Telenovela', ['SERIES NUEVAS']), 'weak');
+  assert.strictEqual(L('Rick y Morty: la película', 'Animación, Comedia', ['ANIMADAS']), '');
+  assert.strictEqual(L('Deadpool & Wolverine', 'Acción, Comedia', ['ESTRENOS 2024']), '');
+  assert.strictEqual(L('Thor: amor y trueno', '', ['MARVEL']), '');
+  assert.strictEqual(L('Loki', '', ['DISNEY+']), '');
+  // lo dudoso solo con el «ok» de TMDB; lo seguro salvo que TMDB diga «no»
+  assert.strictEqual(kids.ratePass('weak', ''), false);
+  assert.strictEqual(kids.ratePass('weak', 'ok'), true);
+  assert.strictEqual(kids.ratePass('strong', ''), true);
+  assert.strictEqual(kids.ratePass('strong', 'no'), false);
+  assert.strictEqual(kids.blockedName('Canal XXX'), true);
+  assert.strictEqual(kids.blockedName('Disney Channel'), false);
+});
+
+test('perfil infantil: clave para TMDB por id o por nombre y año, de hasta 64 caracteres', () => {
+  assert.strictEqual(kids.rateKey('vod', 'Toy Story 4', '2019', '301528'), 'm:301528');
+  const k = kids.rateKey('series', 'Bluey', '2018', '');
+  assert.match(k, /^sn:[0-9a-f]{16}$/);
+  assert.strictEqual(kids.rateKey('series', 'BLUEY', '2018', ''), k);
+});
+
+test('inicio de sesión: de a una DNS, sin repetir servidor, https solo si http no contestó, la última buena primero', async () => {
+  const xt = require('../src/api/xtream.ts');
+  const calls = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const ok = JSON.stringify({ user_info: { auth: 1, status: 'Active', exp_date: '0', max_connections: '2' } });
+  const no = JSON.stringify({ user_info: { auth: 0 } });
+  globalThis.__http = async url => {
+    const host = url.replace(/^([a-z]+:\/\/[^/]+).*$/, '$1');
+    calls.push(host);
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise(r => setTimeout(r, 5));
+    inFlight--;
+    if (host === 'http://caido.com') return { code: 0, body: '', ok: false };
+    if (host === 'https://caido.com') return { code: 0, body: '', ok: false };
+    if (host === 'http://otro.com') return { code: 200, body: no, ok: true };
+    if (host === 'http://bueno.com') return { code: 200, body: ok, ok: true };
+    return { code: 0, body: '', ok: false };
+  };
+  const list = [
+    { name: 'A', base: 'http://caido.com' },
+    { name: 'B', base: 'https://otro.com' },
+    { name: 'B2', base: 'http://otro.com' },
+    { name: 'C', base: 'http://bueno.com' },
+    { name: 'D', base: 'http://nunca.com' },
+  ];
+  const r = await xt.loginAll(list, 'Juan', 'clave');
+  assert.ok(r.session, 'entra con el que acepta');
+  assert.deepStrictEqual(calls, ['http://caido.com', 'https://caido.com', 'http://otro.com', 'http://bueno.com']);
+  assert.strictEqual(maxInFlight, 1, 'nunca dos a la vez');
+  calls.length = 0;
+  const again = await xt.loginAll(list, 'juan', 'clave');
+  assert.ok(again.session);
+  assert.deepStrictEqual(calls, ['http://bueno.com'], 'la próxima vez, primero la que funcionó');
+  calls.length = 0;
+  const bad = await xt.loginAll(list.slice(0, 3), 'otro', 'x');
+  assert.strictEqual(bad.session, undefined);
+  assert.match(bad.error, /incorrect/i);
+});

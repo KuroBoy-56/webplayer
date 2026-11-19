@@ -140,7 +140,8 @@ const indexCache = new WeakMap<object, TitleIndex>();
 function indexFor(kind: 'vod' | 'series'): TitleIndex | null {
   const d = catalog.k[kind];
   if (!d) return null;
-  let idx = indexCache.get(d.items);
+  // por vista del catálogo (la del perfil infantil comparte la lista de items con la completa)
+  let idx = indexCache.get(d);
   if (!idx) {
     const rows: { id: string; name: string; year: string }[] = [];
     d.index.forEach((i, id) => {
@@ -148,7 +149,7 @@ function indexFor(kind: 'vod' | 'series'): TitleIndex | null {
       rows.push({ id, name: str(it?.name), year: str(it?.year) || str(it?.releaseDate).slice(0, 4) || str(it?.release_date).slice(0, 4) });
     });
     idx = buildTitleIndex(rows);
-    indexCache.set(d.items, idx);
+    indexCache.set(d, idx);
   }
   return idx;
 }
@@ -198,4 +199,25 @@ export async function personWithCatalog(personId: number): Promise<Person | null
     photo: j.profile_path ? IMG + 'w300' + j.profile_path : '',
     items,
   };
+}
+
+export type Highlight = { title: string; rating: number; year: string; kind: 'movie' | 'tv'; backdrop: string };
+let hlCache: { lang: string; at: number; h: Highlight | null } | null = null;
+
+// lo más destacado de la semana en TMDB (fondo de «¿Quién está viendo?», como la web player): 6 h en memoria
+export async function weekHighlight(): Promise<Highlight | null> {
+  const lang = tmdbLang();
+  if (hlCache && hlCache.lang === lang && Date.now() - hlCache.at < 6 * 3600000) return hlCache.h;
+  const j = await get('trending/all/week', 'language=' + lang).catch(() => null);
+  let h: Highlight | null = null;
+  for (const r of j && Array.isArray(j.results) ? j.results : []) {
+    if (!r || !str(r.backdrop_path) || (r.media_type !== 'movie' && r.media_type !== 'tv')) continue;
+    const title = str(r.title) || str(r.name);
+    if (!title) continue;
+    const date = str(r.release_date) || str(r.first_air_date);
+    h = { title, rating: Math.round((Number(r.vote_average) || 0) * 10) / 10, year: date.slice(0, 4), kind: r.media_type, backdrop: IMG + 'w1280' + str(r.backdrop_path) };
+    break;
+  }
+  if (j) hlCache = { lang, at: Date.now(), h };
+  return h;
 }

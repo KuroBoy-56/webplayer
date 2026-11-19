@@ -907,7 +907,7 @@ test('Continuar viendo conserva avances recientes y reconoce el episodio de un r
     if (parent?.filename.endsWith('/src/state.ts')) {
       const stubs = {
         './api/panel':{
-          bindSession(){},forgetCloud(){},onPanelDemo(){},
+          bindSession(){},forgetCloud(){},onPanelDemo(){},bindProfile(){},lineKey(){return '';},
           cloud(_file, method, body){
             if (method==='GET') return new Promise(resolve=>{respond=resolve;});
             posts.push(body);
@@ -916,7 +916,11 @@ test('Continuar viendo conserva avances recientes y reconoce el episodio de un r
         },
         './api/xtream':{setStreamFlip(){}},
         './data/top10':{},
-        './data/catalog':{catalog:{clear(){}}},
+        './data/catalog':{catalog:{clear(){},setKids(){},refreshKids(){},kidsOn:false}},
+        // perfiles (2.7.0): sin panel de perfiles en la prueba
+        './api/profiles':{fetchProfiles:async()=>null},
+        './lib/kids':{loadKidsRules(){},rememberKidsRules(){}},
+        './data/kidsrate':{bindKidsRate(){},onVerdicts(){}},
         './lib/images':{setImgCache(){}},
         './lib/i18n':{t:key=>key},
         './lib/http':{json:response=>JSON.parse(response.body)},

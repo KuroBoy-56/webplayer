@@ -15,7 +15,7 @@ import { deviceDiag } from '../lib/deviceid';
 import { APP_ID, features, scoped, tenantCode } from '../lib/tenant';
 import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
-import { deviceId, resetTenant, setSession } from '../state';
+import { deviceId, enterRoute, resetTenant, setSession } from '../state';
 import { alpha, C, px, themed } from '../theme';
 import { APP_VERSION } from '../version';
 
@@ -189,7 +189,11 @@ export default function Login() {
     setBusy('');
     if (r.session) {
       setSession(r.session, demo, demoExpires, demoDuration);
-      nav.reset({ name: 'main' });
+      // perfiles: «¿Quién está viendo?» antes de Inicio (si la línea los tiene)
+      setBusy(t('Entrando…'));
+      const to = await enterRoute();
+      setBusy('');
+      nav.reset(to);
     } else {
       setError(r.error || t('No se pudo iniciar sesión'));
     }

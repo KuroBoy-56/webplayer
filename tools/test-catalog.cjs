@@ -18,6 +18,9 @@ Module._load = function (request, parent, isMain) {
   if (request === '../lib/storage') return { pref: (k, d) => (store.has(k) ? store.get(k) : d), readJson: k => (store.has(k) ? JSON.parse(store.get(k)) : null), read: () => '', write() {} };
   if (request === '../lib/i18n' || request === './i18n') return { t: k => k, lang: () => appLang };
   if (request === './top10') return { weekTop: () => week, weekShuffle: a => a };
+  // perfil infantil (2.7.0): la prueba es del catálogo completo
+  if (request === './kidsrate') return { askVerdicts() {}, verdict: () => '' };
+  if (request === '../lib/kids') return { catClass: () => '', itemLevel: () => '', ratePass: () => false, rateKey: () => '', blockedName: () => false };
   if (/\.png$/.test(request)) return 1;
   if (request === 'react-native') return { Platform: { OS: 'kepler', constants: {} } };
   return originalLoad.call(this, request, parent, isMain);

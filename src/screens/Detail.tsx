@@ -15,11 +15,11 @@ import { backdropSources, posterSources } from '../lib/images';
 import { catalog, Item } from '../data/catalog';
 import { savedArt } from '../data/heroart';
 import { useNav } from '../nav';
-import { getState, isFav, playHintFor, progressEpisodeId, progressMovie, progressSeries, resumePosition, toggleFav, useAppSelector } from '../state';
+import { getState, isFav, playHintFor, progressEpisodeId, progressMovie, progressSeries, resumePosition, showNotice, toggleFav, useAppSelector } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
-export default function Detail({ item, active }: { item: Item; active: boolean }) {
+function DetailScreen({ item, active }: { item: Item; active: boolean }) {
   const nav = useNav();
   // el avance y Mi lista (botones Continuar / Mi lista y la barra de cada episodio); antes cualquier cambio del estado
   const progress = useAppSelector(x => x.progress);
@@ -342,3 +342,16 @@ const s = themed(() =>
     actorChar: { color: C.dim, fontSize: px(20), marginTop: px(2), textAlign: 'center' },
   }),
 );
+
+// perfil infantil: lo que no pasa el filtro no se abre aunque llegue por otro camino (Continuar viendo de otro equipo,
+// la página de un actor…): vuelve a la pantalla anterior
+export default function Detail({ item, active }: { item: Item; active: boolean }) {
+  const nav = useNav();
+  const blocked = !catalog.allowed(item.kind, item.id);
+  React.useEffect(() => {
+    if (!blocked) return;
+    showNotice(t('No disponible en este perfil'));
+    nav.pop();
+  }, [blocked, nav]);
+  return blocked ? null : <DetailScreen item={item} active={active} />;
+}

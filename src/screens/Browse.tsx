@@ -15,7 +15,7 @@ import { Art, heroArt, heroArtList, savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
 import { idleStep, onFocusWin, Win } from '../lib/rowwindow';
 import { useNav } from '../nav';
-import { progressEpisodeId, progressSeriesId, resumePosition, getState, isFav, toggleFav, useAppSelector } from '../state';
+import { progressEpisodeId, progressSeriesId, resumePosition, getState, isFav, setMenuHidden, toggleFav, useAppSelector } from '../state';
 import { episodeUrl, lineFree, movieUrl } from '../api/xtream';
 import { idxWarmList } from '../player/idxwarm';
 import { t } from '../lib/i18n';
@@ -211,6 +211,11 @@ export default function Browse({ section, active = true }: { section: 'home' | '
   const hero = heroes.length ? heroes[heroIdx % heroes.length] : firstHero;
   const heroInfo = useMemo<Info>(() => ({ item: hero }), [hero]);
   const [inRows, setInRows] = useState(false);
+  // recorriendo las filas el menú de arriba se esconde (Main), como Android TV
+  useEffect(() => {
+    if (active) setMenuHidden(inRows);
+  }, [active, inRows]);
+  useEffect(() => () => setMenuHidden(false), []);
   // cambia de destacado cada 8 s solo con la portada a la vista (no recorriendo las filas)
   useEffect(() => {
     if (!active || inRows || heroes.length < 2) return;

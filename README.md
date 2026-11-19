@@ -207,6 +207,30 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.7.0) **Perfiles como Netflix** (lo mismo que webOS 1.4.0 y Tizen 1.3.0; contrato en `docs/PERFILES.md` del panel). Con
+  los perfiles encendidos en el panel y una línea de 2 o más conexiones, al entrar sale **«¿Quién está viendo?»**:
+  perfiles en columna a la izquierda (los 5 entran), el título arriba al centro, «Salir» arriba a la izquierda, el logo
+  arriba a la derecha, «Administrar perfiles» debajo, de fondo lo más destacado de la semana de TMDB con solo su nombre y
+  su calificación, y la versión abajo a la izquierda; el foco empieza en el último perfil usado en el Fire TV.
+  - PIN de 4 números con un teclado numérico de la app (se comprueba en el panel y nunca se guarda en el equipo),
+    «¿Olvidaste el PIN?» con la contraseña de la línea; agregar / editar / eliminar con `KeyboardModal` y la lista de
+    avatares del panel (`src/screens/Profiles.tsx`, `src/components/ProfileEdit.tsx`, `ProfilePin.tsx`). El teclado y
+    el PIN se abren en lugar de la ventana de edición, nunca una ventana dentro de otra.
+  - `profile` en cada llamada a `progress.php` (`cloud()` en `src/api/panel.ts`) y 410 → otra vez «¿Quién está
+    viendo?»; Continuar viendo y Mi lista por perfil.
+  - **Perfil infantil:** vista filtrada del catálogo (`src/lib/kids.ts` con las listas del panel y su copia de fábrica,
+    `src/data/kidsrate.ts` con la clasificación de TMDB de `api/kids_rate.php` en segundo plano), sin Deportes, TV en
+    vivo solo con categorías de niños, y fichas, reproductor y canales (`PlayerLive`) que no abren lo que no pasa.
+  - **Barra:** con perfiles, el avatar a la izquierda («Cambiar perfil», «Administrar perfiles», «Cuenta»), el menú al
+    centro y el logo a la derecha. En Inicio, Series y Películas **sin la franja negra** (solo un degradado suave detrás
+    de las letras, como Android TV) y **se esconde al bajar** a las filas (sube y se desvanece con el `Animated` nativo);
+    vuelve al subir o con Atrás.
+  - **Inicio de sesión de a una DNS** (`loginAll`, regla de `docs/LOGIN-SERVIDORES.md` del panel): la última DNS buena
+    primero, de a una, una vez por servidor, https solo si http no contestó, a la vez pasados 20 s y aviso al panel si no
+    contesta ninguna. Antes probaba todas las DNS en http y https a la vez.
+  - Pruebas: `npm run test:profiles` (nuevo), `test:player` y `test:catalog` con las piezas de prueba de los módulos
+    nuevos; el código de Vega compilado con react-native-web y probado en Chromium contra un panel de prueba (los mismos
+    recorridos que webOS). Falta verlo en un Fire TV con Vega OS.
 - (2.6.12) **La lupa de las plataformas abre el teclado de la app** («Ver todo» de Netflix, Disney+, etc.), como Buscar e
   Iniciar sesión: era el último lugar con un `TextInput` (el campo del sistema se quedaba con las flechas y, al volver a la
   lupa con el control, el teclado podía abrirse solo, el mismo error que se vio en Android TV). OK en la lupa abre
