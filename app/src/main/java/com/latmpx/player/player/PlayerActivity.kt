@@ -23,6 +23,12 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.CaptionStyleCompat
@@ -177,11 +183,27 @@ class PlayerActivity : ComponentActivity() {
             zap = { d -> zap(d) },
             resize = { r -> view.resizeMode = r; ui2.resize = r; Store.resizeMode = r },
             pip = if (pip.supported) ({ ui2.panel = null; pip.enter() }) else null,
+            fullscreen = if (!tv) ({ toggleFullscreen() }) else null,
         )
         setContent {
+            // celular en vertical (como la web player): el video arriba en 16:9 y debajo el título y las opciones; en
+            // horizontal (botón de pantalla completa o girando el teléfono) el video a pantalla completa como siempre
+            val conf = androidx.compose.ui.platform.LocalConfiguration.current
+            val portrait = !tv && !ui2.inPip && conf.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+            androidx.compose.runtime.SideEffect { if (ui2.portrait != portrait) ui2.portrait = portrait }
             Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
-                AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
-                PlayerOverlay(ui2, actions)
+                // el mismo AndroidView en los dos modos (solo cambia su tamaño): el video no se corta al girar
+                Box(
+                    if (portrait) Modifier.fillMaxWidth().displayCutoutPadding().aspectRatio(16f / 9f)
+                    else Modifier.fillMaxSize(),
+                ) {
+                    AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
+                    PlayerOverlay(ui2, actions)
+                }
+                if (portrait) PortraitPanel(
+                    ui2, actions,
+                    Modifier.fillMaxSize().displayCutoutPadding().padding(top = (conf.screenWidthDp * 9f / 16f).dp).navigationBarsPadding(),
+                )
             }
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -202,6 +224,42 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    /* ---------------- vertical / pantalla completa (celular) ---------------- */
+
+    /** pantalla completa pedida con el botón: 1 = horizontal, 2 = vertical, 0 = manda el giro del teléfono */
+    private var lockedTo = 0
+    private var orientListener: android.view.OrientationEventListener? = null
+
+    /** ¿el usuario tiene el giro automático encendido? */
+    private fun autoRotate(): Boolean = runCatching {
+        android.provider.Settings.System.getInt(contentResolver, android.provider.Settings.System.ACCELEROMETER_ROTATION) == 1
+    }.getOrDefault(false)
+
+    /**
+     * Botón de pantalla completa: en vertical pasa a horizontal y en horizontal vuelve a vertical (como YouTube y la web).
+     * Con el giro automático encendido, cuando el teléfono queda en esa posición el giro vuelve a mandar: girarlo después
+     * cambia de modo. Con el giro bloqueado, solo el botón cambia.
+     */
+    private fun toggleFullscreen() {
+        val land = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        lockedTo = if (land) 2 else 1
+        requestedOrientation = if (land) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        if (!autoRotate()) return
+        val l = orientListener ?: object : android.view.OrientationEventListener(this) {
+            override fun onOrientationChanged(deg: Int) {
+                if (deg == ORIENTATION_UNKNOWN || lockedTo == 0) return
+                val portraitNow = deg <= 25 || deg >= 335
+                val landNow = deg in 65..115 || deg in 245..295
+                if ((lockedTo == 2 && portraitNow) || (lockedTo == 1 && landNow)) {
+                    lockedTo = 0
+                    requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+                    disable()
+                }
+            }
+        }.also { orientListener = it }
+        if (l.canDetectOrientation()) l.enable()
+    }
 
     private fun showToast(t: String) { if (::ui2.isInitialized) ui2.toast = t }
 
@@ -559,7 +617,7 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        if (::ui2.isInitialized) { ui2.visible = !isInPictureInPictureMode; ui2.panel = null }
+        if (::ui2.isInitialized) { ui2.visible = !isInPictureInPictureMode; ui2.panel = null; ui2.inPip = isInPictureInPictureMode }
         // se cerró la ventanita con la X (la actividad queda detenida): se sale del reproductor
         if (!isInPictureInPictureMode && lifecycle.currentState == androidx.lifecycle.Lifecycle.State.CREATED) finish()
     }
@@ -571,6 +629,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        orientListener?.disable()
         open = (open - 1).coerceAtLeast(0)
         if (::pip.isInitialized) pip.unregister()
         ui.removeCallbacksAndMessages(null)
