@@ -4,6 +4,16 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.0.10
+
+- **Cerrar sesión no vuelve a entrar solo:** después de cerrar sesión (Cuenta o el tema de prueba) el inicio de sesión no
+  le pregunta al panel ni entra solo. La entrada automática solo pasa al abrir la app (cerrarla del todo y volver a
+  abrirla).
+- **Botón «Verificar activación»** en el inicio de sesión (como Roku): pregunta al panel (check_mac) si el equipo tiene
+  una línea y, si la tiene, entra; si no, avisa que el equipo aún no está activado.
+- **La MAC queda con el usuario nuevo:** al entrar escribiendo usuario y contraseña la app manda `replace: 1` en
+  `submit_url` y el panel deja el equipo solo con esa línea (`App/RootView.swift`, `UI/LoginView.swift`, `Data/Panel.swift`).
+
 ## Novedades de la 1.0.9
 
 - **TV en vivo como la web player en el teléfono:** arriba quedan fijos la miniatura y el canal; abajo, una sola lista

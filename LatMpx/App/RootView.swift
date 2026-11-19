@@ -19,6 +19,8 @@ struct RootView: View {
     @State private var checking = false
     @State private var alert: Alerts.Alert?
     @State private var lastPanelCheck = Date()
+    /** se cerró sesión a mano: el inicio de sesión no pregunta al panel ni entra solo hasta volver a abrir la app */
+    @State private var manualLogout = false
 
     var body: some View {
         ZStack {
@@ -35,16 +37,17 @@ struct RootView: View {
             } else if gate == .retry {
                 TenantRetryView(message: retryMsg, busy: checking, onRetry: guardTenant, onChange: { wipe(nil) })
             } else if state.session == nil, let rv = state.review {
-                ReviewView(review: rv) { NativePlayer.shared.close(); state.play = nil; state.review = nil }
+                ReviewView(review: rv) { manualLogout = true; NativePlayer.shared.close(); state.play = nil; state.review = nil }
             } else if state.session == nil {
-                LoginView(onLogged: { s in
+                LoginView(autoCheck: !manualLogout, onLogged: { s in
+                    manualLogout = false
                     lastPanelCheck = Date()
                     Store.saveSession(s)
                     Xtream.clearCache()
                     state.session = s
                 }, onChangeDistributor: { wipe(nil) })
             } else {
-                MainView(onLogout: logout, onChangeDistributor: { wipe(nil) })
+                MainView(onLogout: { manualLogout = true; logout() }, onChangeDistributor: { wipe(nil) })
                     .id(lang.choice)
             }
             if let a = alert, state.session != nil {
@@ -126,6 +129,7 @@ struct RootView: View {
 
     /** "Cambiar distribuidor" o número cortado: se borra el número, su marca, la sesión y el token */
     private func wipe(_ msg: String?) {
+        manualLogout = false
         Store.logout()
         tenant.clear()
         clearAll()

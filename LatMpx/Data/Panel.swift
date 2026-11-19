@@ -162,10 +162,12 @@ enum Panel {
         return Answer(value: arr.compactMap { ($0 as? String)?.trimmed }.filter { !$0.isEmpty })
     }
 
-    /** Activa el equipo con usuario, contraseña y el DNS elegido. */
-    static func submitUrl(user: String, pass: String, dns: String) async -> Answer<Bool> {
+    /** Activa el equipo con usuario, contraseña y el DNS elegido. replace: el cliente escribió usuario y contraseña; el
+     *  panel deja el equipo solo con esta línea (quita la anterior). */
+    static func submitUrl(user: String, pass: String, dns: String, replace: Bool = false) async -> Answer<Bool> {
         var p = device()
         p["username"] = user; p["password"] = pass; p["url"] = dns
+        if replace { p["replace"] = 1 }
         let a = await login("submit_url", p)
         guard let r = a.value else { return Answer(value: nil, error: a.error) }
         noteBlocked(r)

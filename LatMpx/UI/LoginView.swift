@@ -6,6 +6,9 @@ import SwiftUI
  * Logo arriba, la caja en el medio y la firma del distribuidor abajo.
  */
 struct LoginView: View {
+    /** false: se acaba de cerrar sesión a mano; no se pregunta al panel ni se entra solo (eso solo al abrir la app). La
+     *  línea del equipo se pide con «Verificar activación». */
+    var autoCheck = true
     let onLogged: (Session) -> Void
     /** «Cambiar distribuidor»: vuelve a la pantalla «Número de distribuidor» */
     let onChangeDistributor: () -> Void
@@ -61,8 +64,10 @@ struct LoginView: View {
             started = true
             Task { posters = await Tmdb.nowPlaying() }
             Task { demoConfigured = await Panel.demoConfigured(); review = Panel.reviewOffered }
-            _ = await resolve()
-            if lines.isEmpty && !Store.fakeUnlocked { fake = Panel.fakeScreen }
+            if autoCheck {
+                _ = await resolve()
+                if lines.isEmpty && !Store.fakeUnlocked { fake = Panel.fakeScreen }
+            } else { busy = false }
             checking = false
             if lines.isEmpty && PanelCrypto.hasKey, let d = await Panel.fetchDns().value { dns = d }
             if posters.isEmpty { posters = await Tmdb.nowPlaying() }
@@ -134,6 +139,12 @@ struct LoginView: View {
                             AppButton(text: tr("Autodemo"), icon: "gift.fill", primary: false) { act { await demo() } }
                         }
                         DnsButton(fill: true)
+                    }
+                }
+                // como Roku: pregunta al panel si este equipo ya tiene una línea (check_mac) y, si la tiene, entra
+                if !review {
+                    AppButton(text: tr("Verificar activación"), icon: "checkmark.shield", primary: false) {
+                        act { if !(await resolve()) && err == nil { err = tr("Este equipo aún no está activado. Dale el código de abajo a tu distribuidor.") } }
                     }
                 }
             }
@@ -238,7 +249,7 @@ struct LoginView: View {
         guard let server = dns.first else { if err == nil { err = tr("El panel no tiene servidores disponibles") }; return }
         status = tr("Activando…")
         fromAutodemo = false
-        let r = await Panel.submitUrl(user: u, pass: p, dns: server)
+        let r = await Panel.submitUrl(user: u, pass: p, dns: server, replace: true)
         if r.value == nil { err = r.error; return }
         if !(await resolve()) && err == nil { await connect(Panel.Line(name: tr("Servidor %d", 1), base: Xtream.normalize(server), user: u, pass: p)) }
     }
