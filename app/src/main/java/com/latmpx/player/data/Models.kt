@@ -22,6 +22,8 @@ data class Item(
     val cast: String = "",
     /** id de TMDB que manda el servidor IPTV (tmdb / tmdb_id): la carátula del panel es una por título */
     val tm: String = "",
+    /** género que manda el servidor IPTV (solo si lo manda): lo usa el perfil infantil (Kids.kt) */
+    val genre: String = "",
 ) : java.io.Serializable {
     /** clave única para progreso y favoritos */
     val key: String get() = "${kind.name.lowercase()}:$id"

@@ -92,7 +92,13 @@ object Cloud {
     suspend fun load() {
         // demo: no hay "Continuar viendo" ni "Mi lista"
         if (Store.demo) { withContext(Dispatchers.Main) { synchronized(lock) { progress.clear(); favs.clear() }; rev++ }; return }
-        val r = call { t -> Net.get(api() + "?v=2&play=1&token=" + enc(t)) } ?: return
+        // perfiles: Continuar viendo y Mi lista del perfil elegido (sin profile, los del principal)
+        val prof = Profiles.param()
+        val r = call { t -> Net.get(api() + "?v=2&play=1&token=" + enc(t) + (if (prof.isNotEmpty()) "&profile=" + enc(prof) else "")) } ?: return
+        // 410: ese perfil ya no existe (eliminado en otro equipo o la línea bajó de conexiones): a la pantalla de perfiles
+        if (r.code == 410) { Profiles.onGone(prof); return }
+        // mientras tanto se eligió otro perfil: esto ya no es suyo
+        if (prof != Profiles.param()) return
         val j = r.json() ?: return
         // caché de carátulas del panel (el dueño la puede apagar): apagada, imágenes directo a los servidores
         if (j.has("img")) PanelImg.on = j.optBoolean("img", true)
@@ -207,7 +213,13 @@ object Cloud {
 
     private fun post(body: JSONObject) {
         if (Store.demo) return // la demo no escribe nada en el panel
-        io.launch { call { t -> Net.postJson(api(), JSONObject(body.toString()).put("token", t)) } }
+        // el perfil de cuando se hizo el cambio (no se manda a otro perfil si se cambia mientras tanto)
+        val prof = Profiles.param()
+        if (prof.isNotEmpty() && !body.has("profile")) body.put("profile", prof)
+        io.launch {
+            val r = call { t -> Net.postJson(api(), JSONObject(body.toString()).put("token", t)) }
+            if (r?.code == 410) Profiles.onGone(prof)
+        }
     }
 
     /* ---------- favoritos (Mi lista y canales favoritos) ---------- */
