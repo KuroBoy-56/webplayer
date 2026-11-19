@@ -156,12 +156,25 @@ export function chooseProfile(p: Profile) {
 }
 
 // adónde va la app con la sesión iniciada: «¿Quién está viendo?» si la línea elige perfil; si no, Inicio. Si el panel
-// no contesta en 8 s se entra con el principal (nunca se queda esperando)
+// no contesta en 6 s se entra con el principal (nunca se queda esperando)
 export async function enterRoute(): Promise<Route> {
   const ses = state.session;
   if (!ses) return { name: 'login' };
   if (state.demo) return { name: 'main' };
-  const data = await Promise.race([fetchProfiles(Number(ses.max) || 0).catch(() => null), new Promise<null>(r => setTimeout(() => r(null), 8000))]);
+  // si la última vez el dueño tenía los perfiles apagados, Inicio enseguida como siempre (sin esperar al panel); lo que
+  // conteste ahora queda guardado y, si los encendió, se ven desde el próximo inicio (nunca un salto en pleno uso)
+  const onKey = 'pf_on|' + lineKey();
+  const ask = fetchProfiles(Number(ses.max) || 0)
+    .catch(() => null)
+    .then(d => {
+      if (d) write(onKey, d.enabled ? '1' : '0');
+      return d;
+    });
+  if (read(onKey) === '0') {
+    ask.then(d => d && !d.enabled && state.session === ses && setProfiles(d));
+    return { name: 'main' };
+  }
+  const data = await Promise.race([ask, new Promise<null>(r => setTimeout(() => r(null), 6000))]);
   if (state.session !== ses) return { name: 'login' };
   setProfiles(data);
   return profilesNeeded() ? { name: 'profiles', from: 'start' } : { name: 'main' };

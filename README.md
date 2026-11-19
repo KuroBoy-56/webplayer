@@ -225,6 +225,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
     centro y el logo a la derecha. En Inicio, Series y Películas **sin la franja negra** (solo un degradado suave detrás
     de las letras, como Android TV) y **se esconde al bajar** a las filas (sube y se desvanece con el `Animated` nativo);
     vuelve al subir o con Atrás.
+  - **Todo lo nuevo solo con los perfiles encendidos por el dueño en el panel:** apagados (o una línea DEMO), la app,
+    la barra (con su franja, sin esconderse) y el inicio de sesión son los de siempre. Si la última vez estaban
+    apagados, después de iniciar sesión se entra a Inicio enseguida (sin esperar al panel) y lo que conteste vale para
+    el próximo inicio, nunca con un salto en pleno uso (`pf_on|<línea>`).
   - **Inicio de sesión de a una DNS** (`loginAll`, regla de `docs/LOGIN-SERVIDORES.md` del panel): la última DNS buena
     primero, de a una, una vez por servidor, https solo si http no contestó, a la vez pasados 20 s y aviso al panel si no
     contesta ninguna. Antes probaba todas las DNS en http y https a la vez.

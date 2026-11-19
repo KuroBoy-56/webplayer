@@ -97,7 +97,10 @@ export default function Main({ active }: { active: boolean }) {
   }, [section, kids, noLive]);
 
   // menú escondido mientras se recorren las filas (Browse lo marca); en las demás secciones siempre se ve
-  const overlay = OVERLAY.includes(section);
+  // todo lo nuevo de la barra (sin franja, escondida al bajar) solo con los perfiles encendidos por el dueño en el panel;
+  // apagados, la barra de siempre
+  const profilesOn = useAppSelector(st => !!st.profiles?.enabled);
+  const overlay = profilesOn && OVERLAY.includes(section);
   const hiddenState = useAppSelector(st => st.menuHidden);
   const hidden = overlay && hiddenState && active;
   useEffect(() => {
@@ -166,7 +169,7 @@ export default function Main({ active }: { active: boolean }) {
       <View style={s.content}>
         <SectionContent section={section} active={active} back={menuRev} />
       </View>
-      <Animated.View style={[s.menu, overlay ? s.menuOver : s.menuSolid, menuMove]} pointerEvents={hidden ? 'none' : 'auto'}>
+      <Animated.View testID="topbar" style={[s.menu, !profilesOn ? s.menuClassic : overlay ? s.menuOver : s.menuSolid, menuMove]} pointerEvents={hidden ? 'none' : 'auto'}>
         {overlay ? (
           <View style={s.menuShade} pointerEvents="none">
             <Shade side="top" style={StyleSheet.absoluteFill as any} />
@@ -184,7 +187,7 @@ export default function Main({ active }: { active: boolean }) {
             <Focusable key={key + ':' + menuRev} {...focusProps(key)} onPress={() => setSection(key)} style={f => [s.item, f && s.itemF]}>
               {f => (
                 <>
-                  <Text style={[s.itemText, key === section && s.itemOn, f && s.itemTextF]}>{t(label)}</Text>
+                  <Text style={[s.itemText, overlay && s.txtShadow, key === section && s.itemOn, f && s.itemTextF]}>{t(label)}</Text>
                   {key === section && !f ? <View style={s.itemBar} /> : null}
                 </>
               )}
@@ -194,7 +197,7 @@ export default function Main({ active }: { active: boolean }) {
         </View>
         {loading ? <Text style={s.loading}>{t(loading === 'vod' ? 'Cargando películas…' : loading === 'series' ? 'Cargando series…' : 'Cargando canales…')}</Text> : null}
         {withProfiles ? null : ICONS.map(iconBtn)}
-        <Text style={s.clock}>{now}</Text>
+        <Text style={[s.clock, overlay && s.txtShadow]}>{now}</Text>
         {withProfiles ? (
           <View style={s.logoRight}>
             <Logo size={64} />
@@ -240,6 +243,9 @@ const s = themed(() =>
     menu: { position: 'absolute', left: 0, top: 0, right: 0, height: px(MENU_H), zIndex: 100, flexDirection: 'row', alignItems: 'center', paddingHorizontal: SIDE },
     // sin franja: encima del destacado solo un degradado suave detrás de las letras (como Android TV)
     menuOver: { backgroundColor: 'transparent' },
+    // perfiles apagados: la barra de siempre (franja translúcida)
+    menuClassic: { backgroundColor: alpha(C.bg, 0.7) },
+    txtShadow: { textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: px(6) },
     menuSolid: { backgroundColor: C.bg },
     menuShade: { position: 'absolute', left: 0, right: 0, top: 0, height: px(MENU_H + 60), opacity: 0.85 },
     items: { flexDirection: 'row', marginLeft: px(40), flex: 1 },
@@ -254,7 +260,7 @@ const s = themed(() =>
     pmItem: { marginBottom: px(10) },
     item: { paddingHorizontal: px(20), height: px(56), justifyContent: 'center', alignItems: 'center', borderRadius: px(28), marginRight: px(4) },
     itemF: { backgroundColor: C.focus },
-    itemText: { color: C.sub, fontSize: px(28), textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: px(6) },
+    itemText: { color: C.sub, fontSize: px(28) },
     itemOn: { color: C.text, fontWeight: '800' },
     itemTextF: { color: C.onFocus },
     icon: { width: px(60), height: px(60), borderRadius: px(30), justifyContent: 'center', alignItems: 'center', marginLeft: px(16) },
@@ -263,7 +269,7 @@ const s = themed(() =>
     iconUser: { backgroundColor: C.red },
     iconUserF: { backgroundColor: C.red, transform: [{ scale: 1.15 }], borderWidth: px(3), borderColor: C.focus },
     iconImg: { width: px(36), height: px(36) },
-    clock: { color: C.text, fontSize: px(28), marginLeft: px(28), minWidth: px(80), textAlign: 'right', textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: px(6) },
+    clock: { color: C.text, fontSize: px(28), marginLeft: px(28), minWidth: px(80), textAlign: 'right' },
     itemBar: { position: 'absolute', left: px(20), right: px(20), bottom: px(4), height: px(4), borderRadius: px(2), backgroundColor: C.red },
     loading: { color: C.sub, fontSize: px(22) },
     dlgBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },
