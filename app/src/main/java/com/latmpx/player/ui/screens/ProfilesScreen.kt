@@ -152,7 +152,7 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
     val rows = list.size + (if (canAdd) 1 else 0)
 
     Box(Modifier.fillMaxSize().background(NfBg)) {
-        // fondo: lo más destacado de la semana, 5 s cada uno (horizontal: toda la pantalla; vertical: arriba)
+        // fondo: lo más destacado de la semana, 10 s cada uno (horizontal: caja arriba a la derecha; vertical: arriba)
         ProfileBackdrops(featured, wide, if (wide) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height((conf.screenHeightDp * 0.34f).dp))
         // arriba: «Salir» a la izquierda, el título al centro (en horizontal) y el logo a la derecha
         Row(Modifier.fillMaxWidth().padding(horizontal = sidePad() + 6.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
