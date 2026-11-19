@@ -12,6 +12,13 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
 ## Novedades de la 1.3.0 (lo mismo que webOS 1.4.0)
 
+- (1.3.4) **Foco del menú de arriba que se iba a las filas:** después de bajar por las filas y volver al menú con Atrás,
+  izquierda desde «Inicio» bajaba a una carátula (las filas de arriba quedan detrás de la barra, a la misma altura y más
+  cerca que el avatar) y para llegar al avatar (Cambiar perfil, Administrar perfiles, Cuenta) había que subir toda la
+  página. Ahora izquierda desde «Inicio» va siempre al avatar y derecha desde el avatar a «Inicio» (`Focusable` con
+  `nextLeft` / `nextRight`: en Vega el `nextFocusLeft/Right` del foco del sistema, en webOS y Tizen `data-next-*` que lee
+  `web/spatial.ts`). En los extremos del menú (sin avatar a la izquierda; la lupa o el usuario a la derecha) el foco se
+  queda en el menú en vez de bajar a una carátula escondida.
 - (1.3.3) **Fondo de «¿Quién está viendo?» como Netflix en el televisor:** la imagen vuelve a ocupar toda la pantalla
   (en una caja arriba a la derecha quedaba chica y con demasiado color liso). El color del tema entra con un degradado
   suave desde el borde izquierdo (más oscuro en el borde; detrás de los perfiles la imagen se sigue viendo, más oscura)

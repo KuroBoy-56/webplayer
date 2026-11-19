@@ -88,6 +88,18 @@ export function move(dir: Dir): void {
     (remembered() || first())?.focus();
     return;
   }
+  // a dónde ir pedido por la pantalla (Focusable: data-next-left / data-next-right): gana aunque otro esté más cerca,
+  // p. ej. de «Inicio» al avatar aunque una carátula haya quedado detrás de la barra a la misma altura
+  // (si apunta a sí mismo, en esa dirección el foco se queda: el borde del menú)
+  const link = cur.getAttribute('data-next-' + dir);
+  if (link) {
+    const to = document.querySelector<HTMLElement>('[data-focus-id="' + link + '"]');
+    if (to === cur) return;
+    if (to && visible(to)) {
+      to.focus();
+      return;
+    }
+  }
   const from = cur.getBoundingClientRect();
   let best: HTMLElement | null = null;
   let bestScore = Infinity;

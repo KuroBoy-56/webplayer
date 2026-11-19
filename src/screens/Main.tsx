@@ -86,6 +86,14 @@ export default function Main({ active }: { active: boolean }) {
   const [menuRev, setMenuRev] = useState(0);
   // el foco está en el menú de arriba (se marca al enfocar un botón del menú y se quita al salir de él)
   const inMenu = useRef(false);
+  // el avatar y el primer botón del menú: izquierda desde «Inicio» va siempre al avatar y derecha desde el avatar a
+  // «Inicio». Antes, después de bajar por las filas y volver con Atrás, las carátulas de arriba quedaban detrás de la
+  // barra (en la misma altura y más cerca) y el foco bajaba a ellas en vez de ir al avatar
+  const [pfNode, setPfNode] = useState<any>(null);
+  const [firstNode, setFirstNode] = useState<any>(null);
+  // en los extremos del menú (sin avatar a la izquierda; la lupa o el usuario a la derecha) el foco se queda: no baja a
+  // una carátula escondida detrás de la barra
+  const [lastNode, setLastNode] = useState<any>(null);
   const [now, setNow] = useState(clock);
   useBrandRev();
   // el distribuidor puede no tener deportes; el perfil infantil nunca los tiene, ni TV en vivo sin canales de niños
@@ -154,10 +162,12 @@ export default function Main({ active }: { active: boolean }) {
     onBlur: () => (inMenu.current = false),
   });
   const searchIcon = ICONS[0];
+  const lastIcon: Section = withProfiles ? 'search' : 'account';
   const iconBtn = ([key, src]: [Section, any]) => (
     <Focusable
       key={key + ':' + menuRev}
       {...focusProps(key)}
+      {...(key === lastIcon ? { nodeRef: setLastNode, nextRight: lastNode, focusId: 'menu-last', nextRightId: 'menu-last' } : {})}
       onPress={() => setSection(key)}
       style={f => [s.icon, key === 'account' ? s.iconUser : key === section && s.iconOn, f && (key === 'account' ? s.iconUserF : s.iconF)]}>
       {f => <Image source={src} style={[s.iconImg, { tintColor: f && key !== 'account' ? C.onFocus : key === 'account' ? C.onAccent : '#fff' }]} resizeMode="contain" />}
@@ -176,15 +186,17 @@ export default function Main({ active }: { active: boolean }) {
           </View>
         ) : null}
         {withProfiles && profile ? (
-          <Focusable key={'pf:' + menuRev} {...focusProps('account')} preferred={false} onPress={() => setProfMenu(true)} style={f => [s.pf, f && s.pfF]}>
+          <Focusable key={'pf:' + menuRev} {...focusProps('account')} preferred={false} onPress={() => setProfMenu(true)} style={f => [s.pf, f && s.pfF]}
+            nodeRef={setPfNode} nextRight={firstNode} focusId="menu-pf" nextRightId="menu-first">
             <Image source={{ uri: profile.avatar }} style={s.pfImg} />
           </Focusable>
         ) : (
           <Logo size={64} />
         )}
         <View style={[s.items, withProfiles && s.itemsCenter]}>
-          {menu.map(([key, label]) => (
-            <Focusable key={key + ':' + menuRev} {...focusProps(key)} onPress={() => setSection(key)} style={f => [s.item, f && s.itemF]}>
+          {menu.map(([key, label], i) => (
+            <Focusable key={key + ':' + menuRev} {...focusProps(key)} onPress={() => setSection(key)} style={f => [s.item, f && s.itemF]}
+              {...(i === 0 ? { nodeRef: setFirstNode, focusId: 'menu-first', ...(withProfiles && profile ? { nextLeft: pfNode, nextLeftId: 'menu-pf' } : { nextLeft: firstNode, nextLeftId: 'menu-first' }) } : {})}>
               {f => (
                 <>
                   <Text style={[s.itemText, overlay && s.txtShadow, key === section && s.itemOn, f && s.itemTextF]}>{t(label)}</Text>
