@@ -176,6 +176,14 @@ export function bindSession(fn: () => Session | null): void {
   sessionRef = fn;
 }
 
+// perfil elegido (api/profiles.ts): va como «profile» en cada llamada a progress.php; '' o 'main' = el principal
+let profileRef: () => string = () => '';
+let profileGone: () => void = () => {};
+export function bindProfile(id: () => string, gone: () => void): void {
+  profileRef = id;
+  profileGone = gone;
+}
+
 // progress.php responde "demo": true (auth y GET ?v=2) cuando la línea es una DEMO
 let demoHook: () => void = () => {};
 export function onPanelDemo(fn: () => void): void {
@@ -228,6 +236,8 @@ export async function cloud(file: string, method: 'GET' | 'POST', payload: Recor
   const ses = sessionRef();
   let tok = await cloudToken();
   if (!tok) return { code: 0, body: '', ok: false };
+  const pid = file === 'progress.php' ? profileRef() : '';
+  if (pid && pid !== 'main') payload = { ...(payload || {}), profile: pid };
   let r: HttpResult = { code: 0, body: '', ok: false };
   for (let attempt = 1; attempt <= 2; attempt++) {
     if (method === 'GET') {
@@ -246,6 +256,8 @@ export async function cloud(file: string, method: 'GET' | 'POST', payload: Recor
   const j = json(r);
   if (j && typeof j === 'object' && str(j.token)) write(scoped('cloud_token2'), j.token);
   if (file === 'progress.php' && j && typeof j === 'object' && j.demo === true && sessionRef() === ses) demoHook();
+  // el perfil ya no existe (eliminado en otro equipo o la línea bajó de conexiones): vuelve a «¿Quién está viendo?»
+  if (pid && r.code === 410 && str(j?.code) === 'profile_gone' && sessionRef() === ses && profileRef() === pid) profileGone();
   return r;
 }
 

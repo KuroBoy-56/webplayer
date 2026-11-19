@@ -6,6 +6,8 @@ import { pref, readJson } from '../lib/storage';
 import { Key, t } from '../lib/i18n';
 import { buildTitleIndex, lookupTitle, TitleIndex } from '../lib/titles';
 import { TopEntry, weekShuffle, weekTop } from './top10';
+import { blockedName, CatClass, catClass, itemLevel, rateKey, ratePass } from '../lib/kids';
+import { askVerdicts, RateNeed, verdict } from './kidsrate';
 
 // nombre en el idioma de la app (las marcas como Netflix no están en los diccionarios y quedan igual);
 // las palabras clave (kw) siguen en español: buscan en los nombres de categoría del servidor
@@ -115,11 +117,70 @@ function tmdbId(it: any): string {
 class Catalog {
   k: Partial<Record<Kind, KindData>> = {};
   unlocked = false;
+  // perfil infantil: k tiene solo lo permitido; raw es siempre el catálogo completo del servidor (el principal nunca ve
+  // el catálogo recortado)
+  kidsOn = false;
+  private raw: Partial<Record<Kind, KindData>> = {};
 
   clear() {
     this.k = {};
+    this.raw = {};
     this.tIdx = {};
     this.folded = {};
+  }
+
+  setKids(on: boolean) {
+    this.kidsOn = on;
+    this.refreshKids();
+  }
+
+  // las listas o los veredictos de TMDB cambiaron: se vuelve a armar lo que ve el perfil infantil
+  refreshKids() {
+    for (const kind of Object.keys(this.raw) as Kind[]) this.k[kind] = this.kidsOn ? this.kidsView(kind, this.raw[kind]!) : this.raw[kind];
+    this.tIdx = {};
+  }
+
+  // ¿este título se puede abrir? (en el perfil infantil, solo lo que pasa el filtro)
+  allowed(kind: Kind, id: string): boolean {
+    return !this.kidsOn || !!this.k[kind]?.index.has(id);
+  }
+
+  // el mismo catálogo (las mismas posiciones) con solo lo permitido para niños (lib/kids.ts)
+  private kidsView(kind: Kind, d: KindData): KindData {
+    const live = kind === 'live';
+    const cls = new Map<string, CatClass>();
+    for (const c of d.cats) cls.set(c.id, catClass(c.name, live));
+    const out: KindData = { cats: [], items: d.items, byCat: new Map(), index: new Map() };
+    const need: Record<string, RateNeed> = {};
+    const idKey = kind === 'series' ? 'series_id' : 'stream_id';
+    for (const c of d.cats) {
+      const list: number[] = [];
+      for (const i of d.byCat.get(c.id) || []) {
+        const it = d.items[i];
+        const name = str(it?.name);
+        if (live) {
+          if (cls.get(c.id) !== 'kids' || blockedName(name)) continue;
+        } else {
+          const ids: string[] = Array.isArray(it?.category_ids) && it.category_ids.length ? it.category_ids.map(String) : [c.id];
+          const level = itemLevel(name, str(it?.genre), ids.map(id => cls.get(id) || ''));
+          if (!level) continue;
+          const year = str(it?.year) || str(it?.releaseDate).slice(0, 4);
+          const tm = tmdbId(it);
+          const q = rateKey(kind, name, year, tm);
+          const v = verdict(q);
+          if (!v && !need[q]) need[q] = { t: kind === 'series' ? 's' : 'm', ...(tm ? { id: tm } : { n: name, y: year }) };
+          if (!ratePass(level, v)) continue;
+        }
+        list.push(i);
+        out.index.set(str(it?.[idKey]), i);
+      }
+      if (list.length) {
+        out.cats.push(c);
+        out.byCat.set(c.id, list);
+      }
+    }
+    if (Object.keys(need).length) askVerdicts(need);
+    return out;
   }
 
   // ---------- Top 10 de la semana ----------
@@ -182,7 +243,8 @@ class Catalog {
       }
       d.byCat.get(cid)!.push(i);
     });
-    this.k[kind] = d;
+    this.raw[kind] = d;
+    this.k[kind] = this.kidsOn ? this.kidsView(kind, d) : d;
   }
 
   has(kind: Kind) {
@@ -447,9 +509,12 @@ class Catalog {
       // lo que empieza por lo buscado va primero (como Android), después el resto; hasta 80 por tipo
       const starts: number[] = [];
       const rest: number[] = [];
+      const idKey = kind === 'series' ? 'series_id' : 'stream_id';
       for (let i = 0; i < d.items.length && starts.length < 80; i++) {
         const n = names[i];
         if (!words.every(w => n.includes(w)) || !vis.has(str(d.items[i].category_id))) continue;
+        // perfil infantil: solo lo que pasó el filtro (la lista de items es la completa)
+        if (this.kidsOn && d.index.get(str(d.items[i][idKey])) !== i) continue;
         if (n.startsWith(first)) starts.push(i);
         else if (rest.length < 80) rest.push(i);
       }

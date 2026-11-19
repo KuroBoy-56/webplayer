@@ -14,11 +14,11 @@ import { catalog, Item } from '../data/catalog';
 import { savedArt } from '../data/heroart';
 import { digits } from '../lib/util';
 import { useNav } from '../nav';
-import { getState, isFav, progressMovie, progressSeries, toggleFav, useAppState } from '../state';
+import { getState, isFav, progressMovie, progressSeries, showNotice, toggleFav, useAppState } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 
-export default function Detail({ item }: { item: Item }) {
+function DetailScreen({ item }: { item: Item }) {
   const nav = useNav();
   const st = useAppState();
   const [vod, setVod] = useState<VodInfo | null>(null);
@@ -317,3 +317,16 @@ const s = themed(() =>
     actorChar: { color: C.dim, fontSize: px(20), marginTop: px(2), textAlign: 'center' },
   }),
 );
+
+// perfil infantil: lo que no pasa el filtro no se abre aunque llegue por otro camino (Continuar viendo de otro equipo,
+// la página de un actor…): vuelve a la pantalla anterior
+export default function Detail({ item }: { item: Item }) {
+  const nav = useNav();
+  const blocked = !catalog.allowed(item.kind, item.id);
+  React.useEffect(() => {
+    if (!blocked) return;
+    showNotice(t('No disponible en este perfil'));
+    nav.pop();
+  }, [blocked, nav]);
+  return blocked ? null : <DetailScreen item={item} />;
+}

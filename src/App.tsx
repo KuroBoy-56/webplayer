@@ -18,17 +18,20 @@ import Grid from './screens/Grid';
 import Login from './screens/Login';
 import Main from './screens/Main';
 import Player from './screens/Player';
+import Profiles from './screens/Profiles';
 import Review from './screens/Review';
 import { clearSportsCache } from './screens/Sports';
 import { clearTmdbCache } from './api/tmdb';
 import { resetEngine } from './api/media';
-import { setStreamFlip } from './api/xtream';
-import { bindReportContext, installCrashReporter } from './api/report';
-import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppState } from './state';
+import { onLoginUnreachable, setStreamFlip } from './api/xtream';
+import { bindReportContext, installCrashReporter, reportError } from './api/report';
+import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppSelector, useAppState } from './state';
 import { onCacheClear, panelCheckMac, panelLineGone } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
 installCrashReporter();
+// inicio de sesión: ninguna DNS contestó (docs/LOGIN-SERVIDORES.md del panel)
+onLoginUnreachable(d => reportError('network', 'Login: ningún servidor contestó', d, 'login'));
 bindReportContext(() => {
   const s = getState().session;
   return { device: deviceId(), user: s?.user || '', server: s?.base || '' };
@@ -45,6 +48,8 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
       return <Login />;
     case 'main':
       return <Main active={active} />;
+    case 'profiles':
+      return <Profiles from={route.from} manage={!!route.manage} active={active} />;
     case 'detail':
       return <Detail item={route.item} />;
     case 'actor':
@@ -145,6 +150,8 @@ function App() {
   const alertDone = useRef(false);
   useEffect(() => {
     const ses = getState().session;
+    // en «¿Quién está viendo?» el catálogo ya se va cargando; Continuar viendo y Mi lista, con el perfil elegido
+    if (top === 'profiles' && ses) loadCatalog();
     if (top === 'main' && ses) {
       loadCatalog();
       loadCloud();
@@ -158,6 +165,12 @@ function App() {
       setAlert(null);
     }
   }, [top]);
+
+  // el perfil elegido ya no existe (eliminado en otro equipo): otra vez «¿Quién está viendo?»
+  const profileGone = useAppSelector(st => st.profileGone);
+  useEffect(() => {
+    if (profileGone && getState().session) setStack([{ name: 'profiles', from: 'start' }]);
+  }, [profileGone]);
 
   // al volver a la app: Continuar viendo y Mi lista otra vez desde el panel (pudo verse en otra app)
   useEffect(() => {

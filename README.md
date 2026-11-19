@@ -10,6 +10,41 @@ Windows, Roku y Vega OS. Un cambio en `src/` de la rama `vega-os` se trae aquí 
 compila sola en cada cambio de la rama `tizenOS` (workflow `App Tizen OS (Samsung)`), con la llave del panel
 del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
+## Novedades de la 1.3.0 (lo mismo que webOS 1.4.0)
+
+- **Perfiles como Netflix** (con los perfiles encendidos en el panel y una línea de 2 o más conexiones; contrato en
+  `docs/PERFILES.md` del panel). Al entrar, **«¿Quién está viendo?»**: perfiles en columna a la izquierda (los 5 entran),
+  el título arriba al centro, «Salir» arriba a la izquierda, el logo arriba a la derecha, «Administrar perfiles» debajo
+  de los perfiles, de fondo lo más destacado de la semana de TMDB con solo su nombre y su calificación, y la versión
+  abajo a la izquierda. El foco empieza en el último perfil usado en el televisor. Todo con el control: el PIN con un
+  teclado numérico de la app y el nombre con `KeyboardModal` (nunca un campo del sistema).
+  - **PIN de 4 números** (se comprueba en el panel y nunca se guarda en el televisor) y «¿Olvidaste el PIN?» con la
+    contraseña de la línea. **Administrar:** nombre, avatar (la lista del panel), bloquear / cambiar / quitar el PIN y
+    eliminar (nunca el principal; se recupera 7 días con el mismo nombre exacto). «Agregar perfil» solo si la línea
+    admite más.
+  - **Cada perfil con lo suyo:** `profile` en cada llamada a `progress.php` (`cloud()` en `src/api/panel.ts`);
+    Continuar viendo y Mi lista se leen otra vez al cambiar. Si el perfil ya no existe (eliminado en otro equipo) el
+    panel contesta 410 y la app vuelve a «¿Quién está viendo?».
+  - **Perfil infantil** (solo al crear): solo contenido para niños y de Disney en Inicio, Películas, Series, búsqueda,
+    Top 10 y actores; TV en vivo solo con las categorías de niños (si no hay, desaparece) y sin Deportes. Lo que no pasa
+    el filtro no se abre aunque llegue por otro camino. Las listas las manda el panel (`kidsRules`, con una copia de
+    fábrica en `src/lib/kidsrules.ts`) y lo dudoso se ve solo con el visto bueno de TMDB (`api/kids_rate.php`, en
+    segundo plano: `src/data/kidsrate.ts`). El catálogo guardado es siempre el completo; el filtro es una vista aparte
+    (`catalog.kidsOn`), así el principal nunca ve el catálogo recortado.
+  - **Barra con perfiles:** el avatar del perfil a la izquierda («Cambiar perfil», «Administrar perfiles», «Cuenta»), el
+    menú al centro y el logo a la derecha. Con los perfiles apagados, una conexión o una DEMO, la app es la de siempre.
+- **Barra de arriba sin franja negra:** en Inicio, Series y Películas el menú va encima del destacado solo con un
+  degradado suave detrás de las letras (como Android TV) y **se esconde al bajar** a las filas (sube y se desvanece);
+  vuelve al subir o con Atrás.
+- **Inicio de sesión de a una DNS** (regla de `docs/LOGIN-SERVIDORES.md` del panel, para que XUI no bloquee la IP):
+  primero la DNS con la que ese usuario entró la última vez en el televisor, después de a una y parando en la primera
+  que acepta, una vez por servidor, https solo si en http no contestó nadie, y pasados 20 s lo que falta a la vez. Si
+  no contesta ninguna, se avisa al panel (Errores de las apps). Antes probaba todas las DNS, en http y https, a la vez.
+- Pruebas: `tools/profiles.test.js` (filtro infantil con los ejemplos del panel e inicio de sesión de a una DNS) y la
+  app compilada en Chromium contra un panel de prueba (pantalla, agregar con el teclado de la app, perfil infantil,
+  `profile` en `progress.php`, PIN equivocado y correcto, Mi lista por perfil, perfil eliminado en otro equipo,
+  perfiles apagados). Probado en Chromium con la versión de webOS (el mismo código); falta verlo en un televisor Samsung.
+
 ## Novedades de la 1.2.8
 
 - **La lupa de las plataformas abre el teclado de la app** («Ver todo» de Netflix, Disney+, etc.), como Buscar e Iniciar sesión. Era el último lugar con el campo de texto del televisor Samsung: el teclado del sistema se quedaba con las flechas y, al volver a la lupa con el control, podía abrirse solo (el mismo error que se vio en Android TV). Ahora: OK en la lupa abre el teclado de la app, las carátulas se filtran mientras se escribe y, al cerrarlo con Listo o con Atrás, el foco baja a la primera; lo escrito queda junto a la lupa (✕ lo borra). `Grid.tsx` (`KeyboardModal`, `focusFirst`). Probado en Chromium con la pantalla real y el control simulado: ningún campo del sistema en todo el recorrido. Falta verlo en un televisor Samsung.

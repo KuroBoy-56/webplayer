@@ -14,6 +14,8 @@ export type Route =
   | { name: 'tenant_retry'; message: string }
   | { name: 'login' }
   | { name: 'main' }
+  // «¿Quién está viendo?» (perfiles del panel): 'start' al entrar (Atrás pregunta si salir), 'menu' desde la barra
+  | { name: 'profiles'; from: 'start' | 'menu'; manage?: boolean }
   | { name: 'detail'; item: Item }
   | { name: 'actor'; personId: number; actorName: string }
   | { name: 'grid'; title: string; mode: 'cat' | 'platform' | 'genre' | 'recent' | 'continue' | 'mylist'; key: string; kind?: 'vod' | 'series' }
