@@ -209,7 +209,7 @@ const s = themed(() =>
     top: { flexDirection: 'row', alignItems: 'flex-start' },
     av: { width: px(220), height: px(220), borderRadius: px(14), overflow: 'hidden', borderWidth: px(4), borderColor: 'transparent', marginRight: px(44) },
     avF: { borderColor: C.focus, transform: [{ scale: 1.05 }] },
-    avImg: { width: '100%', height: '100%' },
+    avImg: { width: '100%', height: '100%', borderRadius: px(10) },
     avEdit: { position: 'absolute', right: px(10), bottom: px(10), width: px(56), height: px(56), borderRadius: px(28), backgroundColor: alpha('#000000', 0.65), justifyContent: 'center', alignItems: 'center' },
     avEditImg: { width: px(30), height: px(30) },
     fields: { flex: 1 },
@@ -222,6 +222,7 @@ const s = themed(() =>
     opt: { width: px(124), height: px(124), borderRadius: px(12), overflow: 'hidden', margin: px(8), borderWidth: px(4), borderColor: 'transparent' },
     optOn: { borderColor: alpha(C.text, 0.6) },
     optF: { borderColor: C.focus, transform: [{ scale: 1.08 }] },
-    optImg: { width: '100%', height: '100%' },
+    // el radio también en las imágenes: en Vega la caja redondeada no siempre las recorta
+    optImg: { width: '100%', height: '100%', borderRadius: px(8) },
   }),
 );

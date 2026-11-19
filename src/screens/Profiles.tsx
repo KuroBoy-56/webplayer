@@ -279,10 +279,11 @@ const s = themed(() =>
     item: { flexDirection: 'row', alignItems: 'center', marginBottom: px(18), alignSelf: 'flex-start', paddingRight: px(30) },
     av: { borderRadius: px(12), overflow: 'hidden', backgroundColor: C.card, borderWidth: px(4), borderColor: 'transparent' },
     avF: { borderColor: C.focus, transform: [{ scale: 1.08 }] },
-    avImg: { width: '100%', height: '100%' },
-    avEdit: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha('#000000', 0.55), justifyContent: 'center', alignItems: 'center' },
+    // el radio también en la imagen: en Vega la caja redondeada no siempre recorta la imagen y se veía cuadrada
+    avImg: { width: '100%', height: '100%', borderRadius: px(8) },
+    avEdit: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: px(8), backgroundColor: alpha('#000000', 0.55), justifyContent: 'center', alignItems: 'center' },
     avEditImg: { width: '34%', height: '34%' },
-    kids: { position: 'absolute', left: 0, right: 0, bottom: 0, textAlign: 'center', color: '#ffffff', fontSize: px(20), fontWeight: '800', paddingVertical: px(4), backgroundColor: alpha('#000000', 0.6) },
+    kids: { position: 'absolute', left: 0, right: 0, bottom: 0, textAlign: 'center', color: '#ffffff', fontSize: px(20), fontWeight: '800', paddingVertical: px(4), backgroundColor: alpha('#000000', 0.6), borderBottomLeftRadius: px(8), borderBottomRightRadius: px(8) },
     // la imagen se ve detrás (más oscura): una sombra para que los nombres se lean siempre
     name: { color: C.sub, fontSize: px(40), fontWeight: '600', marginLeft: px(30), maxWidth: px(520), textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: px(8) },
     nameF: { color: C.text, fontWeight: '800' },
