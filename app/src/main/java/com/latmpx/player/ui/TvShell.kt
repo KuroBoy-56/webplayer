@@ -170,11 +170,21 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
             .padding(horizontal = (LocalConfiguration.current.screenWidthDp * 0.04f).dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LogoHeader(height = 34.dp)
-        Spacer(Modifier.width(24.dp))
+        // perfiles (docs/PERFILES.md del panel): el avatar del perfil a la izquierda solo en Inicio, Series y Películas y el
+        // logo arriba a la derecha; sin perfiles, el logo a la izquierda como siempre
+        val prof = com.latmpx.player.data.Profiles.current
+        if (prof == null) {
+            LogoHeader(height = 34.dp)
+            Spacer(Modifier.width(24.dp))
+        } else if (state.tab in overlayTabs) {
+            com.latmpx.player.ui.screens.ProfileAvatar(prof, 40.dp)
+            Spacer(Modifier.width(20.dp))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            // sports=false del distribuidor: sin Deportes
-            tvTabs.filter { it != Tab.SPORTS || com.latmpx.player.data.Tenant.sportsEnabled }.forEach { t -> TopTab(t.label, state.tab == t, Modifier.focusRequester(tabFocus.getValue(t))) { state.billboardFocusedTab = null; state.tab = t } }
+            // sports=false del distribuidor: sin Deportes; el perfil infantil nunca tiene Deportes, y sin canales de niños
+            // tampoco TV en vivo
+            tvTabs.filter { (it != Tab.SPORTS || (com.latmpx.player.data.Tenant.sportsEnabled && !com.latmpx.player.data.Profiles.kids)) && (it != Tab.LIVE || !state.hideLive) }
+                .forEach { t -> TopTab(t.label, state.tab == t, Modifier.focusRequester(tabFocus.getValue(t))) { state.billboardFocusedTab = null; state.tab = t } }
         }
         Spacer(Modifier.weight(1f))
         Clock()
@@ -200,6 +210,10 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
             ) {
                 Text(com.latmpx.player.data.Store.shownUser(state.session).take(1).uppercase().ifEmpty { "U" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
             }
+        }
+        if (prof != null) {
+            Spacer(Modifier.width(18.dp))
+            LogoHeader(height = 30.dp)
         }
     }
 }

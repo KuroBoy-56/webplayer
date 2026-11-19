@@ -54,7 +54,8 @@ fun LiveScreen(state: AppState) {
     val ctx = LocalContext.current
     val tv = LocalIsTv.current
     // canales guardados en el equipo (AppState.live); si aún no hay copia se piden al servidor
-    val fetched by produceState<List<Item>?>(null, s, state.live.isEmpty()) { if (state.live.isEmpty()) value = Xtream.items(s, Kind.LIVE) }
+    // perfil infantil: nunca la lista completa del servidor (solo la de niños, que puede estar vacía)
+    val fetched by produceState<List<Item>?>(null, s, state.live.isEmpty()) { if (state.live.isEmpty() && !com.latmpx.player.data.Profiles.kids) value = Xtream.items(s, Kind.LIVE) }
     var cat by rememberSaveable { mutableStateOf(ALL) }
     var favTick by remember { mutableIntStateOf(0) }
     val loaded = state.live.ifEmpty { null } ?: fetched

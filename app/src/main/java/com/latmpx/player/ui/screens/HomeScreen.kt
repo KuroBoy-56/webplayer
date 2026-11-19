@@ -127,10 +127,25 @@ fun HomeScreen(state: AppState) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text(stringResource(R.string.profile), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        // con perfiles, el nombre del perfil (la línea debajo)
+                        com.latmpx.player.data.Profiles.current?.let { p -> Text(p.name, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) }
                         Text(Store.shownUser(state.session), color = Color.White, fontSize = 16.sp)
                         Text(if (Store.demo) Store.demoEndText().let { if (it.isEmpty()) "" else tr(R.string.expires_on, it) } else state.session?.dnsName ?: "", color = NfGray2, fontSize = 13.sp)
                     }
                     Divider(color = Color(0x33FFFFFF))
+                    // perfiles (docs/PERFILES.md del panel): cambiar y administrar
+                    if (com.latmpx.player.data.Profiles.current != null) {
+                        Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.openProfiles(false) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(16.dp))
+                            Text(stringResource(R.string.prof_switch), color = Color.White, fontSize = 16.sp)
+                        }
+                        Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.openProfiles(true) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Settings, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(16.dp))
+                            Text(stringResource(R.string.prof_manage), color = Color.White, fontSize = 16.sp)
+                        }
+                    }
                     Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.ACCOUNT }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(16.dp))
@@ -141,7 +156,7 @@ fun HomeScreen(state: AppState) {
                         Spacer(Modifier.width(16.dp))
                         Text(stringResource(R.string.settings), color = Color.White, fontSize = 16.sp)
                     }
-                    if (com.latmpx.player.data.Tenant.sportsEnabled) Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.SPORTS }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (com.latmpx.player.data.Tenant.sportsEnabled && !com.latmpx.player.data.Profiles.kids) Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.SPORTS }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.SportsSoccer, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(16.dp))
                         Text(stringResource(R.string.sports), color = Color.White, fontSize = 16.sp)
@@ -214,14 +229,17 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
     Column(Modifier.fillMaxWidth().background(bg).background(Brush.verticalGradient(listOf(Color(0xB3000000), Color.Transparent)))) {
         Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (current == null) {
-                Text(stringResource(R.string.for_user, Store.shownUser(state.session)), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.for_user, com.latmpx.player.data.Profiles.current?.name ?: Store.shownUser(state.session)), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             } else {
                 LogoHeader(height = 28.dp)
                 Spacer(Modifier.weight(1f))
             }
             Icon(Icons.Filled.Search, stringResource(R.string.search), tint = Color.White, modifier = Modifier.size(26.dp).clickable { state.tab = Tab.SEARCH })
             Spacer(Modifier.width(18.dp))
-            Box(Modifier.size(30.dp).clip(RoundedCornerShape(5.dp)).background(Brush.linearGradient(listOf(NfRed, if (com.latmpx.player.data.Tenant.brand?.colors == null) Color(0xFF8E0B12) else androidx.compose.ui.graphics.lerp(NfRed, Color.Black, 0.4f)))).clickable { onProfile() }, contentAlignment = Alignment.Center) {
+            // con perfiles, el avatar del perfil (con «Niños» si es infantil)
+            val prof = com.latmpx.player.data.Profiles.current
+            if (prof != null) Box(Modifier.clickable { onProfile() }) { ProfileAvatar(prof, 32.dp) }
+            else Box(Modifier.size(30.dp).clip(RoundedCornerShape(5.dp)).background(Brush.linearGradient(listOf(NfRed, if (com.latmpx.player.data.Tenant.brand?.colors == null) Color(0xFF8E0B12) else androidx.compose.ui.graphics.lerp(NfRed, Color.Black, 0.4f)))).clickable { onProfile() }, contentAlignment = Alignment.Center) {
                 Text(Store.shownUser(state.session).take(1).uppercase().ifEmpty { "U" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
         }
@@ -229,7 +247,8 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
             if (current != null) com.latmpx.player.ui.components.Chip("✕", false) { state.tab = Tab.HOME }
             com.latmpx.player.ui.components.Chip(stringResource(R.string.series), current == Tab.SERIES) { state.tab = Tab.SERIES }
             com.latmpx.player.ui.components.Chip(stringResource(R.string.movies), current == Tab.MOVIES) { state.tab = Tab.MOVIES }
-            if (com.latmpx.player.data.Tenant.sportsEnabled) com.latmpx.player.ui.components.Chip(stringResource(R.string.sports), current == Tab.SPORTS) { state.tab = Tab.SPORTS }
+            // el perfil infantil nunca tiene Deportes
+            if (com.latmpx.player.data.Tenant.sportsEnabled && !com.latmpx.player.data.Profiles.kids) com.latmpx.player.ui.components.Chip(stringResource(R.string.sports), current == Tab.SPORTS) { state.tab = Tab.SPORTS }
             com.latmpx.player.ui.components.Chip(stringResource(R.string.my_list), current == Tab.MYLIST) { state.tab = Tab.MYLIST }
         }
     }

@@ -24,6 +24,7 @@ object Store {
         p = ctx.getSharedPreferences("latmpx", Context.MODE_PRIVATE)
         p.edit().remove("session").remove("parental_pin").apply() // usuario/contraseña y PIN local de versiones anteriores
         SecureDns.select(dns)
+        Kids.init(ctx)
     }
 
     /* ---------- DNS elegido (Automático por defecto) ---------- */
@@ -228,6 +229,17 @@ object Store {
         set(v) = p.edit().putString("sub_lang", v).apply()
 
     /* ---------- último canal ---------- */
-    fun lastChannel(): Int = p.getInt("last_ch|" + scope(), 0)
-    fun setLastChannel(id: Int) = p.edit().putInt("last_ch|" + scope(), id).apply()
+    fun lastChannel(): Int = p.getInt("last_ch|" + scope() + "|" + Profiles.param(), 0)
+    fun setLastChannel(id: Int) = p.edit().putInt("last_ch|" + scope() + "|" + Profiles.param(), id).apply()
+
+    /* ---------- perfiles (docs/PERFILES.md del panel) ---------- */
+    /** último perfil elegido en este equipo con esta línea: el foco al abrir la pantalla de perfiles */
+    var lastProfile: String
+        get() = p.getString(tenantKey("last_prof|" + scope()), "") ?: ""
+        set(v) = p.edit().putString(tenantKey("last_prof|" + scope()), v).apply()
+
+    /* ---------- inicio de sesión (docs/LOGIN-SERVIDORES.md del panel) ---------- */
+    /** la DNS con la que entró cada usuario la última vez en este equipo: se prueba primero, sola */
+    fun lastDns(user: String): String = p.getString(tenantKey("last_dns|" + user.lowercase()), "") ?: ""
+    fun setLastDns(user: String, base: String) = p.edit().putString(tenantKey("last_dns|" + user.lowercase()), base).apply()
 }
