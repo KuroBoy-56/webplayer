@@ -191,6 +191,8 @@
     <string name="login_enter_credentials">Escribe tu usuario y contraseña</string>
     <string name="login_no_servers">El panel no tiene servidores disponibles</string>
     <string name="login_activating">Activando…</string>
+    <string name="check_activation">Verificar activación</string>
+    <string name="login_not_activated">Este equipo aún no está activado. Dale el código de abajo a tu distribuidor.</string>
     <string name="autodemo">Autodemo</string>
     <string name="login_creating_demo">Creando demo…</string>
     <string name="resume">Continuar</string>

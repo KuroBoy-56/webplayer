@@ -190,6 +190,8 @@
     <string name="login_enter_credentials">Digite seu usuário e senha</string>
     <string name="login_no_servers">O painel não tem servidores disponíveis</string>
     <string name="login_activating">Ativando…</string>
+    <string name="check_activation">Verificar ativação</string>
+    <string name="login_not_activated">Este aparelho ainda não está ativado. Passe o código abaixo ao seu distribuidor.</string>
     <string name="autodemo">Autodemo</string>
     <string name="login_creating_demo">Criando demo…</string>
     <string name="resume">Continuar</string>
