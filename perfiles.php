@@ -27,7 +27,7 @@ if (is_array($pf_j) && !wp_prof_needed($pf_s)) {
 }
 $pf_state = is_array($pf_j) ? wp_prof_public($pf_j, $pf_s) : null;
 $pf_dist = wp_tenant_cfg();
-// fondo: lo más destacado de la semana (15 a 20), profiles.js pasa de uno a otro cada 5 s y vuelve al primero
+// fondo: lo más destacado de la semana (15 a 20), profiles.js pasa de uno a otro cada 10 s y vuelve al primero
 $pf_bgs = array_map('wp_prof_bg', wp_prof_highlights());
 $pf_bg = $pf_bgs ? $pf_bgs[0] : [];
 $pf_cfg = [
@@ -52,12 +52,12 @@ $pf_cfg = [
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
     <link rel="stylesheet" href="assets/nf/app.css?v=13">
-    <link rel="stylesheet" href="assets/nf/profiles.css?v=11">
+    <link rel="stylesheet" href="assets/nf/profiles.css?v=12">
     <?php echo wp_tenant_css($pf_dist); ?>
     <?php echo wp_prof_theme_css($pf_dist); ?>
     <?php echo wp_i18n_script(); ?>
     <script>window.PF=<?php echo json_encode($pf_cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;</script>
-    <script src="assets/nf/profiles.js?v=8" defer></script>
+    <script src="assets/nf/profiles.js?v=9" defer></script>
 </head>
 <body class="pf-body">
 <div class="pf-root" id="pfRoot">

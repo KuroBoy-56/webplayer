@@ -9,20 +9,26 @@
 /* avatares grandes: lo más que deja la altura con los 5 perfiles y «Administrar perfiles» sin desplazarse */
 .pf-root { position: relative; min-height: 100vh; min-height: 100dvh; --av: clamp(60px, min(13vh, 18vh - 52px), 170px); }
 
-/* fondo: alta calidad (Full HD, y el original 4K en pantallas grandes), con aparición suave */
+/* fondo: alta calidad (Full HD, y el original 4K en pantallas grandes), con aparición suave. En horizontal va en una
+   caja 16:9 arriba a la derecha (69 % del ancho, como 1320×742 en 1920×1080) y no en toda la pantalla: el color del tema
+   (el del distribuidor con su número) entra suave por su borde izquierdo, donde están los perfiles, por abajo y un poco
+   por arriba; la versión y el nombre del destacado quedan sobre el color liso */
+.pf-bg, .pf-shade {
+    position: fixed; top: 0; right: 0; width: 69vw; height: 38.8vw; height: min(38.8vw, 80vh); pointer-events: none;
+}
 .pf-bg {
-    position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 70% 30%;
-    opacity: 0; transition: opacity .8s ease; z-index: 0; user-select: none; pointer-events: none;
+    object-fit: cover; object-position: center 30%;
+    opacity: 0; transition: opacity .8s ease; z-index: 0; user-select: none;
 }
 .pf-bg.ok { opacity: 1; }
 /* pase de fondos (profiles.js): la que entra va encima de la anterior, siempre debajo de los degradados */
 .pf-bg.up { z-index: 1; }
 .pf-shade {
-    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    z-index: 1;
     background:
-        linear-gradient(90deg, rgba(var(--pf-bg-rgb, 0,0,0),.94) 0%, rgba(var(--pf-bg-rgb, 0,0,0),.86) 24%, rgba(var(--pf-bg-rgb, 0,0,0),.5) 44%, rgba(var(--pf-bg-rgb, 0,0,0),.08) 64%, rgba(var(--pf-bg-rgb, 0,0,0),0) 76%),
-        linear-gradient(0deg, rgba(var(--pf-bg-rgb, 0,0,0),.7) 0%, rgba(var(--pf-bg-rgb, 0,0,0),0) 32%),
-        linear-gradient(180deg, rgba(var(--pf-bg-rgb, 0,0,0),.55) 0%, rgba(var(--pf-bg-rgb, 0,0,0),0) 18%);
+        linear-gradient(90deg, var(--pf-bg, #000) 0%, rgba(var(--pf-bg-rgb, 0,0,0),.95) 8%, rgba(var(--pf-bg-rgb, 0,0,0),.8) 20%, rgba(var(--pf-bg-rgb, 0,0,0),.52) 34%, rgba(var(--pf-bg-rgb, 0,0,0),.24) 46%, rgba(var(--pf-bg-rgb, 0,0,0),.07) 56%, rgba(var(--pf-bg-rgb, 0,0,0),0) 64%),
+        linear-gradient(0deg, var(--pf-bg, #000) 0%, rgba(var(--pf-bg-rgb, 0,0,0),.88) 10%, rgba(var(--pf-bg-rgb, 0,0,0),.58) 24%, rgba(var(--pf-bg-rgb, 0,0,0),.24) 40%, rgba(var(--pf-bg-rgb, 0,0,0),0) 56%),
+        linear-gradient(180deg, rgba(var(--pf-bg-rgb, 0,0,0),.5) 0%, rgba(var(--pf-bg-rgb, 0,0,0),0) 22%);
 }
 
 /* arriba: Salir a la izquierda, el logo a la derecha */
@@ -188,9 +194,9 @@
     /* tan grandes como dejan el ancho y el alto: los 5 perfiles (tres filas) siguen sin desplazarse */
     .pf-root { --av: min(28vw, 150px, calc((78vh - 190px) / 3)); }
     @supports (height: 1svh) { .pf-root { --av: min(28vw, 150px, calc((78svh - 190px) / 3)); } }
-    .pf-bg { position: absolute; height: 22vh; height: 22svh; object-position: center 25%; }
+    .pf-bg, .pf-shade { position: absolute; left: 0; width: 100%; height: 22vh; height: 22svh; }
+    .pf-bg { object-position: center 25%; }
     .pf-shade {
-        position: absolute; height: 22vh; height: 22svh; bottom: auto;
         background: linear-gradient(180deg, rgba(var(--pf-bg-rgb, 0,0,0),.5) 0%, rgba(var(--pf-bg-rgb, 0,0,0),0) 30%, rgba(var(--pf-bg-rgb, 0,0,0),.55) 66%, var(--pf-bg, #000) 100%);
     }
     .pf-top { position: absolute; padding-left: 14px; padding-right: 14px; }

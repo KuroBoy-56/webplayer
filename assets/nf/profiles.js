@@ -14,14 +14,14 @@
     // un perfil infantil nunca ve un instante el banner que vio otro perfil
     try { sessionStorage.removeItem('nf_hero_bg'); } catch (e) { /* sin almacenamiento */ }
 
-    /* fondo: lo más destacado de la semana en TMDB (C.bg, 15 a 20 títulos). Cada uno se ve 5 s y al llegar al último
+    /* fondo: lo más destacado de la semana en TMDB (C.bg, 15 a 20 títulos). Cada uno se ve 10 s y al llegar al último
        vuelve al primero. Dos capas: la nueva se pide en la de abajo y, cuando ya cargó, aparece con un fundido encima de
        la anterior (nunca un hueco negro). Si una dirección falla, la siguiente; si no carga ninguna, se salta ese título. */
     var bg = d.getElementById('pfBg');
     if (bg) slides(bg, Array.isArray(C.bg) ? C.bg : []);
 
     function slides(first, items) {
-        var SLIDE_MS = 5000, FADE_MS = 850;
+        var SLIDE_MS = 10000, FADE_MS = 850;
         var hl = d.getElementById('pfHl');
         var layers = [first], top = 0, idx = 0, timer = 0, gen = 0;
         function srcsOf(it) {

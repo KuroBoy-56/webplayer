@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Fondo de «¿Quién está viendo?» más chico, con degradado y cada 10 s — versión 2.7.3 (19 de noviembre, segunda parte)
+- En horizontal la imagen ya no cubre toda la pantalla: va en una caja 16:9 **arriba a la derecha** (69 % del ancho) y el color del tema (el del distribuidor con su número) entra suave por su **borde izquierdo**, donde están los perfiles, **por abajo** y un poco por arriba. Los perfiles, la versión y el nombre del destacado se leen sobre el color liso. En vertical (celular) sigue arriba, de lado a lado.
+- Cada destacado se ve **10 segundos** (antes 5).
+- Archivos: `perfiles.php`, `assets/nf/profiles.css`, `assets/nf/profiles.js`, `includes/core.php` (versión).
+
 ## Fondo de «¿Quién está viendo?» con lo más destacado de la semana — versión 2.7.2 (19 de noviembre)
 - El fondo de la pantalla de perfiles ya no es un solo título: pasa por **15 a 20 títulos** de lo más destacado de la semana en TMDB (películas y series), **5 segundos cada uno**, con un fundido suave; después del último vuelve al primero. El nombre, la calificación, el año y el tipo de abajo a la derecha cambian con la imagen.
 - Cada imagen aparece recién cuando terminó de cargar (nunca un hueco negro) y la siguiente se pide antes. Si una no carga se salta. Siempre a pantalla completa debajo de los degradados del color del tema.
