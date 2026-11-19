@@ -2,10 +2,11 @@
 // control remoto. Perfiles en columna a la izquierda (los 5 entran), «Salir» arriba a la izquierda, el logo arriba a la
 // derecha, el título arriba al centro, «Administrar perfiles» debajo de los perfiles, de fondo lo más destacado de la
 // semana de TMDB con solo su nombre y su calificación (abajo a la derecha) y la versión abajo a la izquierda.
-// El fondo: 15 a 20 destacados que pasan cada 10 s (al final vuelve al primero, BackdropSlides) en una caja arriba a la
-// derecha (1320×742, 16:9), con el color del tema entrando suave por su borde izquierdo (donde están los perfiles) y por
-// abajo (la versión y el nombre del destacado quedan sobre el color liso). En Vega los degradados no se veían: Shade
-// dibujaba la imagen del paquete de 4 px de alto (o de ancho) cuando el estilo no traía las dos medidas.
+// El fondo: 15 a 20 destacados que pasan cada 10 s (al final vuelve al primero, BackdropSlides) a pantalla completa,
+// como Netflix en el televisor: un degradado del color del tema desde el borde izquierdo (más oscuro en el borde, la
+// imagen se sigue viendo detrás de los perfiles) y un sombreado leve abajo y arriba, sin franjas de color liso. En Vega
+// los degradados no se veían: Shade dibujaba la imagen del paquete de 4 px de alto (o de ancho) cuando el estilo no
+// traía las dos medidas.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Image, Modal, StyleSheet, Text, View } from 'react-native';
 import { fetchProfiles, Profile, profileAction, ProfilesData } from '../api/profiles';
@@ -259,26 +260,21 @@ export default function Profiles({ from, manage, active }: { from: 'start' | 'me
   );
 }
 
-// la imagen de fondo: 16:9 arriba a la derecha (en una pantalla de 1920×1080 empieza en x = 600 y termina en y = 742)
-const BG_W = 1320;
-const BG_H = 742;
-
 const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg, overflow: 'hidden' },
-    // el fondo (BackdropSlides) en una caja arriba a la derecha; los degradados con las dos medidas siempre (Shade) y
-    // opacos justo en los bordes izquierdo e inferior de la imagen: nunca se ve un borde recto y los perfiles, la versión
-    // y el nombre del destacado quedan sobre el color del tema
-    bgBox: { position: 'absolute', top: 0, right: 0, width: px(BG_W), height: px(BG_H), overflow: 'hidden' },
-    shadeLeft: { position: 'absolute', top: 0, right: px(BG_W - 760), width: px(760), height: px(BG_H) },
-    shadeBottom: { position: 'absolute', top: px(BG_H - 400), right: 0, width: px(BG_W), height: px(400) },
-    shadeTop: { position: 'absolute', top: 0, right: 0, width: px(BG_W), height: px(220), opacity: 0.8 },
+    // el fondo (BackdropSlides) a pantalla completa; el degradado de la izquierda llega hasta el 65 % del ancho (opaco en
+    // el borde, a la altura de los nombres todavía se ve la imagen) y abajo / arriba solo un sombreado leve
+    bgBox: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' },
+    shadeLeft: { position: 'absolute', top: 0, bottom: 0, left: 0, width: px(1250) },
+    shadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: px(340), opacity: 0.8 },
+    shadeTop: { position: 'absolute', left: 0, right: 0, top: 0, height: px(200), opacity: 0.6 },
     top: { position: 'absolute', top: px(36), left: SIDE, right: SIDE, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     exit: { flexDirection: 'row', alignItems: 'center', height: px(60), paddingHorizontal: px(24), borderRadius: px(30), borderWidth: px(2), borderColor: alpha(C.text, 0.4), backgroundColor: alpha('#000000', 0.45) },
     exitF: { backgroundColor: C.focus, borderColor: C.focus, transform: [{ scale: 1.05 }] },
     exitImg: { width: px(30), height: px(30), marginRight: px(12) },
     exitText: { color: C.text, fontSize: px(26), fontWeight: '700' },
-    title: { position: 'absolute', top: px(40), left: px(420), right: px(420), textAlign: 'center', color: C.text, fontSize: px(50), fontWeight: '800', lineHeight: px(70) },
+    title: { position: 'absolute', top: px(40), left: px(420), right: px(420), textAlign: 'center', color: C.text, fontSize: px(50), fontWeight: '800', lineHeight: px(70), textShadowColor: 'rgba(0,0,0,0.75)', textShadowRadius: px(10) },
     side: { position: 'absolute', left: SIDE, top: px(140), bottom: px(90), width: px(820), justifyContent: 'center' },
     item: { flexDirection: 'row', alignItems: 'center', marginBottom: px(18), alignSelf: 'flex-start', paddingRight: px(30) },
     av: { borderRadius: px(12), overflow: 'hidden', backgroundColor: C.card, borderWidth: px(4), borderColor: 'transparent' },
@@ -287,7 +283,8 @@ const s = themed(() =>
     avEdit: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: alpha('#000000', 0.55), justifyContent: 'center', alignItems: 'center' },
     avEditImg: { width: '34%', height: '34%' },
     kids: { position: 'absolute', left: 0, right: 0, bottom: 0, textAlign: 'center', color: '#ffffff', fontSize: px(20), fontWeight: '800', paddingVertical: px(4), backgroundColor: alpha('#000000', 0.6) },
-    name: { color: C.sub, fontSize: px(40), fontWeight: '600', marginLeft: px(30), maxWidth: px(520) },
+    // la imagen se ve detrás (más oscura): una sombra para que los nombres se lean siempre
+    name: { color: C.sub, fontSize: px(40), fontWeight: '600', marginLeft: px(30), maxWidth: px(520), textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: px(8) },
     nameF: { color: C.text, fontWeight: '800' },
     lock: { width: px(30), height: px(30), marginLeft: px(16), tintColor: C.sub },
     add: { backgroundColor: alpha(C.text, 0.06), borderStyle: 'dashed', borderColor: alpha(C.text, 0.45), justifyContent: 'center', alignItems: 'center' },
