@@ -280,13 +280,16 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
     )
 }
 
+/** esquinas del avatar: proporcionales al tamaño como la web (10 px en ~150 px), nunca menos de 6 dp */
+fun avatarCorner(size: Dp): Dp = maxOf(6.dp, size * 0.08f)
+
 /** avatar del perfil (imagen del panel) con la etiqueta «Niños» si es infantil; también lo usa la barra superior */
 @Composable
 fun ProfileAvatar(p: Profiles.Profile, size: Dp) {
     Box(Modifier.size(size), contentAlignment = Alignment.BottomCenter) {
         AsyncImage(
             model = p.avatar, contentDescription = p.name, contentScale = ContentScale.Crop,
-            modifier = Modifier.size(size).clip(RoundedCornerShape(6.dp)).background(Color(0xFF333333)),
+            modifier = Modifier.size(size).clip(RoundedCornerShape(avatarCorner(size))).background(Color(0xFF333333)),
         )
         if (p.kids) Text(
             stringResource(R.string.prof_kids), color = NfOnRed, fontSize = (size.value * 0.16f).coerceIn(9f, 16f).sp, fontWeight = FontWeight.Bold, maxLines = 1,
@@ -300,7 +303,7 @@ fun ProfileAvatar(p: Profiles.Profile, size: Dp) {
 private fun AvatarBox(p: Profiles.Profile, size: Dp, manage: Boolean) {
     Box(Modifier.size(size)) {
         ProfileAvatar(p, size)
-        if (manage) Box(Modifier.size(size).background(Color(0x99000000), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
+        if (manage) Box(Modifier.size(size).background(Color(0x99000000), RoundedCornerShape(avatarCorner(size))), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Edit, stringResource(R.string.prof_edit), tint = Color.White, modifier = Modifier.size(size * 0.32f))
         }
         if (p.locked) Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(size * 0.24f).background(Color(0xCC000000), CircleShape), contentAlignment = Alignment.Center) {
@@ -328,7 +331,7 @@ private fun ProfileRow(p: Profiles.Profile, size: Dp, manage: Boolean, modifier:
 private fun AddRow(size: Dp, onClick: () -> Unit) {
     FocusBox(onClick = onClick, shape = RoundedCornerShape(10.dp), focusScale = 1.05f) { f ->
         Row(Modifier.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(size).background(Color(0xFF2A2A2A), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(size).background(Color(0xFF2A2A2A), RoundedCornerShape(avatarCorner(size))), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Add, null, tint = Color.White, modifier = Modifier.size(size * 0.4f))
             }
             Text(stringResource(R.string.prof_add), color = if (f) Color.White else Color(0xFFB3B3B3), fontSize = (size.value * 0.2f).coerceIn(16f, 26f).sp, fontWeight = if (f) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 18.dp))
@@ -351,7 +354,7 @@ private fun ProfileTile(p: Profiles.Profile, size: Dp, manage: Boolean, modifier
 private fun AddTile(size: Dp, onClick: () -> Unit) {
     FocusBox(onClick = onClick, shape = RoundedCornerShape(10.dp)) { f ->
         Column(Modifier.width(size + 8.dp).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(size).background(Color(0xFF2A2A2A), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(size).background(Color(0xFF2A2A2A), RoundedCornerShape(avatarCorner(size))), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Add, null, tint = Color.White, modifier = Modifier.size(size * 0.4f))
             }
             Text(stringResource(R.string.prof_add), color = if (f) Color.White else Color(0xFFB3B3B3), fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
