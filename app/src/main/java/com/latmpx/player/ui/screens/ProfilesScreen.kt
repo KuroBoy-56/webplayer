@@ -46,7 +46,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -67,7 +66,6 @@ import com.latmpx.player.data.Profiles
 import com.latmpx.player.tr
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.components.AppButton
-import com.latmpx.player.ui.components.ChainImage
 import com.latmpx.player.ui.components.FocusBox
 import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.components.LogoHeader
@@ -105,7 +103,7 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
     var forgot by remember { mutableStateOf<Profiles.Profile?>(null) }
     var edit by remember { mutableStateOf<EditTarget?>(null) }
     var askLogout by remember { mutableStateOf(false) }
-    val featured by produceState<Profiles.Featured?>(null) { value = runCatching { Profiles.featured() }.getOrNull() }
+    val featured by produceState(emptyList<Profiles.Featured>()) { value = runCatching { Profiles.featuredList() }.getOrDefault(emptyList()) }
 
     fun toast(msg: String) = android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
 
@@ -154,20 +152,8 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
     val rows = list.size + (if (canAdd) 1 else 0)
 
     Box(Modifier.fillMaxSize().background(NfBg)) {
-        // fondo: lo más destacado de la semana (horizontal: toda la pantalla; vertical: arriba)
-        featured?.let { f ->
-            val mod = if (wide) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height((conf.screenHeightDp * 0.34f).dp)
-            Box(mod) {
-                ChainImage(remember(f.image) { com.latmpx.player.data.PanelImg.backdropSources(f.image) }, Modifier.fillMaxSize())
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x99000000), Color.Transparent, Color(0xCC141414), NfBg))))
-                if (wide) Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xF2141414), Color(0x99141414), Color.Transparent))))
-                // solo su nombre y su calificación, abajo a la derecha, sin tapar nada
-                Column(Modifier.align(Alignment.BottomEnd).padding(horizontal = 24.dp, vertical = if (wide) 22.dp else 10.dp), horizontalAlignment = Alignment.End) {
-                    Text(f.name, color = Color.White, fontSize = if (wide) 20.sp else 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (f.rating.isNotEmpty()) Text("★ ${f.rating}", color = Color(0xFFF5C518), fontSize = if (wide) 15.sp else 12.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
+        // fondo: lo más destacado de la semana, 5 s cada uno (horizontal: toda la pantalla; vertical: arriba)
+        ProfileBackdrops(featured, wide, if (wide) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height((conf.screenHeightDp * 0.34f).dp))
         // arriba: «Salir» a la izquierda, el título al centro (en horizontal) y el logo a la derecha
         Row(Modifier.fillMaxWidth().padding(horizontal = sidePad() + 6.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             AppButton(stringResource(R.string.exit), minHeight = 40.dp, fontSize = 14.sp) { askLogout = true }
