@@ -25,6 +25,13 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 
 ## Novedades de la 1.4.0
 
+- (1.4.6) **Cerrar sesión no vuelve a entrar solo y botón «Verificar activación» (como Roku):** después de cerrar sesión
+  (Cuenta, «Salir» de «¿Quién está viendo?» o el tema de prueba) el inicio de sesión no le pregunta al panel ni entra
+  solo; la entrada automática solo pasa al abrir la app. **Verificar activación** pregunta al panel (`check_mac`) si el
+  equipo tiene una línea y, si la tiene, entra; si no, avisa que el equipo aún no está activado. Al entrar escribiendo
+  usuario y contraseña la app manda `replace: 1` en `submit_url` y el panel deja la MAC solo con el usuario nuevo
+  (`signedOutByHand` / `logoutByHand` en `src/state.ts`, `src/screens/Login.tsx`, `panelSubmit` en `src/api/panel.ts`).
+  Probado en Chromium contra un panel de prueba (abrir, sin activar, activar, cerrar sesión, otro usuario, volver a abrir).
 - (1.4.5) **Avatares redondeados:** el avatar del perfil de la barra, los de «¿Quién está viendo?» y los del editor llevan el
   radio también en la imagen (`borderRadius` en el `Image`): en Vega la caja redondeada con `overflow: hidden` no
   siempre recortaba la imagen de adentro y el avatar se veía cuadrado. El oscurecido de «Administrar perfiles» y la

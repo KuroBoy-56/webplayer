@@ -58,6 +58,8 @@ const en = {
   "Ciencia ficción": "Sci-fi",
   "Comedia": "Comedy",
   "Comprobando el equipo en el panel…": "Checking this device with the panel…",
+  "Verificar activación": "Check activation",
+  "Este equipo aún no está activado. Dale el código de abajo a tu distribuidor.": "This device isn't activated yet. Give the code below to your distributor.",
   "Comprobando el número…": "Checking the number…",
   "Comprobando…": "Checking…",
   "Conectando con el canal…": "Connecting to the channel…",

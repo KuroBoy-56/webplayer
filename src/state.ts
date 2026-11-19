@@ -192,6 +192,7 @@ export function restoreSession(): boolean {
 export function setSession(s: Session, demo = false, demoExpires = 0, demoDuration = 0) {
   // sesión iniciada con el identificador actual: el panel ya lo tiene registrado con la línea
   deviceRegistered();
+  byHand = false;
   forgetCloud();
   setStreamFlip(false);
   catalog.setKids(false);
@@ -215,6 +216,17 @@ export function showNotice(msg: string) {
     noticeTimer = null;
     set({ notice: '' });
   }, 3500);
+}
+
+// se cerró sesión a mano (Cuenta, «¿Quién está viendo?», tema de prueba): el inicio de sesión no pregunta al panel ni
+// entra solo hasta volver a abrir la app (solo en memoria; al abrirla otra vez entra sola como siempre)
+let byHand = false;
+export function signedOutByHand(): boolean {
+  return byHand;
+}
+export function logoutByHand() {
+  logout();
+  byHand = true;
 }
 
 export function logout() {
@@ -414,6 +426,7 @@ export function setPanelPin(pin: string) {
 // "Cambiar distribuidor" o número que dejó de valer: cierra sesión y borra número y marca
 export function resetTenant() {
   logout();
+  byHand = false;
   clearTenant();
 }
 

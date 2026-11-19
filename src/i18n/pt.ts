@@ -59,6 +59,8 @@ const pt: Record<Key, string> = {
   "Ciencia ficción": "Ficção científica",
   "Comedia": "Comédia",
   "Comprobando el equipo en el panel…": "Verificando o aparelho no painel…",
+  "Verificar activación": "Verificar ativação",
+  "Este equipo aún no está activado. Dale el código de abajo a tu distribuidor.": "Este aparelho ainda não está ativado. Passe o código abaixo ao seu distribuidor.",
   "Comprobando el número…": "Verificando o número…",
   "Comprobando…": "Verificando…",
   "Conectando con el canal…": "Conectando ao canal…",

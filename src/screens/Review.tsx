@@ -8,7 +8,9 @@ import { panelScheme, type Review as ReviewData, type ReviewVideo } from '../api
 import { Focusable, Logo } from '../components/ui';
 import { t } from '../lib/i18n';
 import { useNav } from '../nav';
+import { logoutByHand } from '../state';
 import { alpha, px } from '../theme';
+
 
 type Page = 'home' | 'movies' | 'series' | 'settings';
 
@@ -49,7 +51,7 @@ export default function Review({ data }: { data: ReviewData }) {
         </View>
       ) : page === 'settings' ? (
         <View style={s.settings}>
-          <Focusable preferred onPress={() => nav.reset({ name: 'login' })} style={f => [s.logout, f && s.logoutF]}>
+          <Focusable preferred onPress={() => { logoutByHand(); nav.reset({ name: 'login' }); }} style={f => [s.logout, f && s.logoutF]}>
             <Text style={s.logoutText}>{t('Cerrar sesión')}</Text>
           </Focusable>
         </View>

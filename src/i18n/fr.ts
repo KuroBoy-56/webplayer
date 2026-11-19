@@ -59,6 +59,8 @@ const fr: Record<Key, string> = {
   "Ciencia ficción": "Science-fiction",
   "Comedia": "Comédie",
   "Comprobando el equipo en el panel…": "Vérification de l'appareil auprès du panneau…",
+  "Verificar activación": "Vérifier l'activation",
+  "Este equipo aún no está activado. Dale el código de abajo a tu distribuidor.": "Cet appareil n'est pas encore activé. Donnez le code ci-dessous à votre distributeur.",
   "Comprobando el número…": "Vérification du numéro…",
   "Comprobando…": "Vérification…",
   "Conectando con el canal…": "Connexion à la chaîne…",
