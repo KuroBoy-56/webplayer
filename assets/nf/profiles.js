@@ -14,19 +14,116 @@
     // un perfil infantil nunca ve un instante el banner que vio otro perfil
     try { sessionStorage.removeItem('nf_hero_bg'); } catch (e) { /* sin almacenamiento */ }
 
-    /* fondo: si una dirección falla, la siguiente */
+    /* fondo: lo más destacado de la semana en TMDB (C.bg, 15 a 20 títulos). Cada uno se ve 5 s y al llegar al último
+       vuelve al primero. Dos capas: la nueva se pide en la de abajo y, cuando ya cargó, aparece con un fundido encima de
+       la anterior (nunca un hueco negro). Si una dirección falla, la siguiente; si no carga ninguna, se salta ese título. */
     var bg = d.getElementById('pfBg');
-    if (bg) {
+    if (bg) slides(bg, Array.isArray(C.bg) ? C.bg : []);
+
+    function slides(first, items) {
+        var SLIDE_MS = 5000, FADE_MS = 850;
+        var hl = d.getElementById('pfHl');
+        var layers = [first], top = 0, idx = 0, timer = 0, gen = 0;
+        function srcsOf(it) {
+            var l = [];
+            [it.fhd, it.orig].forEach(function (u) { if (u && l.indexOf(u) < 0) l.push(u); });
+            return l;
+        }
+        // la primera ya viene en el HTML (src + srcset del primer título)
         var fb = [];
-        try { fb = JSON.parse(bg.getAttribute('data-fb') || '[]'); } catch (e) { fb = []; }
-        var showBg = function () { bg.classList.add('ok'); };
-        bg.addEventListener('load', showBg);
-        bg.addEventListener('error', function () {
-            bg.removeAttribute('srcset');
-            var next = fb.shift();
-            if (next && next !== bg.getAttribute('src')) bg.src = next; else if (next) bg.src = fb.shift() || ''; else bg.style.display = 'none';
+        try { fb = JSON.parse(first.getAttribute('data-fb') || '[]'); } catch (e) { fb = []; }
+        first.addEventListener('load', function onFirst() {
+            if (first.getAttribute('data-i') !== null) return; // ya es una capa del pase
+            first.classList.add('ok');
+            schedule();
         });
-        if (bg.complete && bg.naturalWidth) showBg();
+        first.addEventListener('error', function onFirstErr() {
+            if (first.getAttribute('data-i') !== null) return;
+            first.removeAttribute('srcset');
+            var next = fb.shift();
+            if (next && next === first.getAttribute('src')) next = fb.shift();
+            if (next) first.src = next; else { first.classList.remove('ok'); schedule(); }
+        });
+        if (first.complete && first.naturalWidth) { first.classList.add('ok'); schedule(); }
+        if (items.length < 2) return;
+        // segunda capa, detrás de los degradados (antes de .pf-shade)
+        var second = d.createElement('img');
+        second.className = 'pf-bg';
+        second.alt = '';
+        second.setAttribute('decoding', 'async');
+        second.setAttribute('aria-hidden', 'true');
+        first.parentNode.insertBefore(second, first.nextSibling);
+        layers.push(second);
+
+        function schedule() {
+            if (items.length < 2 || timer) return;
+            timer = setTimeout(function () { timer = 0; advance(1); }, SLIDE_MS);
+            prefetch((idx + 1) % items.length);
+        }
+        function prefetch(i) {
+            var it = items[i];
+            if (!it || !it.fhd) return;
+            var im = new Image();
+            im.sizes = '100vw';
+            if (it.orig && it.orig !== it.fhd) im.srcset = it.fhd + ' ' + (it.w || 1920) + 'w, ' + it.orig + ' 3840w';
+            im.src = it.fhd;
+        }
+        // pone el título i en la capa de abajo y, cuando cargó, la sube con el fundido; tries = cuántos se saltaron
+        function advance(tries) {
+            if (tries > items.length) return; // ninguno carga (sin red): queda el último que se vio
+            if (d.hidden) { d.addEventListener('visibilitychange', function back() { if (d.hidden) return; d.removeEventListener('visibilitychange', back); advance(tries); }); return; }
+            var i = (idx + 1) % items.length, it = items[i], my = ++gen;
+            var under = layers[1 - top], over = layers[top];
+            var urls = srcsOf(it);
+            under.onload = function () {
+                if (my !== gen) return;
+                under.onload = under.onerror = null;
+                // un cuadro dibujada en 0 antes del fundido (si ya estaba guardada, el fundido igual se ve)
+                requestAnimationFrame(function () {
+                    requestAnimationFrame(function () {
+                        if (my !== gen) return;
+                        under.classList.add('up', 'ok');
+                        over.classList.remove('up');
+                        top = 1 - top;
+                        idx = i;
+                        caption(it);
+                        setTimeout(function () { if (my === gen) over.classList.remove('ok'); }, FADE_MS + 50);
+                        schedule();
+                    });
+                });
+            };
+            under.onerror = function () {
+                if (my !== gen) return;
+                under.removeAttribute('srcset');
+                var next = urls.shift();
+                if (next && next === under.getAttribute('src')) next = urls.shift();
+                if (next) { under.src = next; return; }
+                under.onload = under.onerror = null;
+                idx = i; // no carga: se salta
+                advance(tries + 1);
+            };
+            under.classList.remove('ok', 'up');
+            under.removeAttribute('data-fb');
+            under.setAttribute('data-i', String(i));
+            under.sizes = '100vw';
+            if (it.orig && it.orig !== it.fhd) under.srcset = it.fhd + ' ' + (it.w || 1920) + 'w, ' + it.orig + ' 3840w';
+            else under.removeAttribute('srcset');
+            urls.shift();
+            under.src = it.fhd || it.orig || '';
+        }
+        // título, nota, año y tipo abajo a la derecha, con un fundido corto
+        function caption(it) {
+            if (!hl) return;
+            hl.classList.add('pf-hl-off');
+            setTimeout(function () {
+                var m = '';
+                if (it.r > 0) m += '<span class="pf-hl-r"><i class="fas fa-star" aria-hidden="true"></i> ' + esc(Number(it.r).toFixed(1)) + '</span>';
+                if (it.y) m += '<span>' + esc(it.y) + '</span>';
+                m += '<span>' + esc((C.kinds || {})[it.k] || '') + '</span>';
+                hl.innerHTML = '<b class="pf-hl-t">' + esc(it.t) + '</b><span class="pf-hl-m">' + m + '</span>';
+                hl.classList.remove('pf-hl-off');
+            }, 220);
+        }
     }
     if (!S || !list) return;
 

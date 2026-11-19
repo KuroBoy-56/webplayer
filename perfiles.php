@@ -27,20 +27,16 @@ if (is_array($pf_j) && !wp_prof_needed($pf_s)) {
 }
 $pf_state = is_array($pf_j) ? wp_prof_public($pf_j, $pf_s) : null;
 $pf_dist = wp_tenant_cfg();
-$pf_hl = wp_prof_highlight();
-$pf_bg = [];
-if ($pf_hl) {
-    // fondo en alta calidad: Full HD (caché de imágenes del panel o TMDB w1280) y el original (4K) para pantallas grandes
-    $orig = $pf_hl['backdrop'];
-    $srcs = wp_backdrop_sources($orig);
-    $fhd = (count($srcs) > 1) ? $srcs[0] : wp_img(preg_replace('~/t/p/original/~', '/t/p/w1280/', $orig), '');
-    $pf_bg = ['fhd' => $fhd, 'w' => count($srcs) > 1 ? 1920 : 1280, 'orig' => wp_img($orig, '')];
-}
+// fondo: lo más destacado de la semana (15 a 20), profiles.js pasa de uno a otro cada 5 s y vuelve al primero
+$pf_bgs = array_map('wp_prof_bg', wp_prof_highlights());
+$pf_bg = $pf_bgs ? $pf_bgs[0] : [];
 $pf_cfg = [
     'state' => $pf_state,
     'csrf' => wp_prof_csrf(),
     'next' => wp_prof_next_ok($pf_next) ? $pf_next : '',
     'manage' => !empty($_GET['manage']),
+    'bg' => $pf_bgs,
+    'kinds' => ['tv' => t('Serie'), 'movie' => t('Película')],
 ];
 ?>
 <!DOCTYPE html>
@@ -56,12 +52,12 @@ $pf_cfg = [
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
     <link rel="stylesheet" href="assets/nf/app.css?v=13">
-    <link rel="stylesheet" href="assets/nf/profiles.css?v=10">
+    <link rel="stylesheet" href="assets/nf/profiles.css?v=11">
     <?php echo wp_tenant_css($pf_dist); ?>
     <?php echo wp_prof_theme_css($pf_dist); ?>
     <?php echo wp_i18n_script(); ?>
     <script>window.PF=<?php echo json_encode($pf_cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;</script>
-    <script src="assets/nf/profiles.js?v=7" defer></script>
+    <script src="assets/nf/profiles.js?v=8" defer></script>
 </head>
 <body class="pf-body">
 <div class="pf-root" id="pfRoot">
@@ -92,13 +88,13 @@ $pf_cfg = [
         <?php endif; ?>
     </main>
 
-    <?php if ($pf_hl): ?>
-        <aside class="pf-hl" aria-label="<?php echo e(t('Lo más destacado de la semana')); ?>">
-            <b class="pf-hl-t"><?php echo e($pf_hl['title']); ?></b>
+    <?php if ($pf_bg): ?>
+        <aside class="pf-hl" id="pfHl" aria-label="<?php echo e(t('Lo más destacado de la semana')); ?>">
+            <b class="pf-hl-t"><?php echo e($pf_bg['t']); ?></b>
             <span class="pf-hl-m">
-                <?php if ($pf_hl['rating'] > 0): ?><span class="pf-hl-r"><i class="fas fa-star" aria-hidden="true"></i> <?php echo e(number_format((float)$pf_hl['rating'], 1)); ?></span><?php endif; ?>
-                <?php if ($pf_hl['year'] !== ''): ?><span><?php echo e($pf_hl['year']); ?></span><?php endif; ?>
-                <span><?php echo e($pf_hl['kind'] === 'tv' ? t('Serie') : t('Película')); ?></span>
+                <?php if ($pf_bg['r'] > 0): ?><span class="pf-hl-r"><i class="fas fa-star" aria-hidden="true"></i> <?php echo e(number_format((float)$pf_bg['r'], 1)); ?></span><?php endif; ?>
+                <?php if ($pf_bg['y'] !== ''): ?><span><?php echo e($pf_bg['y']); ?></span><?php endif; ?>
+                <span><?php echo e($pf_bg['k'] === 'tv' ? t('Serie') : t('Película')); ?></span>
             </span>
         </aside>
     <?php endif; ?>

@@ -15,6 +15,8 @@
     opacity: 0; transition: opacity .8s ease; z-index: 0; user-select: none; pointer-events: none;
 }
 .pf-bg.ok { opacity: 1; }
+/* pase de fondos (profiles.js): la que entra va encima de la anterior, siempre debajo de los degradados */
+.pf-bg.up { z-index: 1; }
 .pf-shade {
     position: fixed; inset: 0; z-index: 1; pointer-events: none;
     background:
@@ -105,6 +107,8 @@
     position: fixed; right: 4%; bottom: calc(5vh + env(safe-area-inset-bottom)); z-index: 2; max-width: min(46vw, 640px);
     text-align: right; text-shadow: 0 2px 10px rgba(0,0,0,.85); pointer-events: none;
 }
+.pf-hl { transition: opacity .22s ease; }
+.pf-hl.pf-hl-off { opacity: 0; }
 .pf-hl-t { display: block; font-size: clamp(22px, 2.4vw, 42px); font-weight: 800; color: #fff; line-height: 1.1; }
 .pf-hl-m { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; margin-top: 8px; font-size: 15px; color: #e5e5e5; font-weight: 600; }
 .pf-hl-r { color: #fff; }
@@ -242,6 +246,6 @@
     .pf-avgrid { max-height: none; overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .pf-bg, .pf-item, .pf-av { transition: none; }
+    .pf-bg, .pf-item, .pf-av, .pf-hl { transition: none; }
 }
 .pf-item.pf-busy { opacity: .6; pointer-events: none; }

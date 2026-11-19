@@ -249,29 +249,61 @@ function wp_prof_theme_css(array $cfg = null)
         . ';--pf-focus:' . $p['focus'] . ';--pf-on:' . $p['accent'] . '}</style>';
 }
 
-function wp_prof_highlight()
+/** Un título de trending/all/week de TMDB para el fondo de perfiles; null si no sirve (sin fondo, sin nombre). */
+function wp_prof_hl_item($r)
+{
+    if (!is_array($r) || empty($r['backdrop_path']) || !in_array($r['media_type'] ?? '', ['movie', 'tv'], true)) return null;
+    $title = (string)($r['title'] ?? ($r['name'] ?? ''));
+    if ($title === '') return null;
+    $date = (string)($r['release_date'] ?? ($r['first_air_date'] ?? ''));
+    return ['id' => $r['media_type'] . ':' . (string)($r['id'] ?? $title), 'title' => $title, 'rating' => round((float)($r['vote_average'] ?? 0), 1),
+        'year' => substr($date, 0, 4), 'kind' => $r['media_type'] === 'tv' ? 'tv' : 'movie',
+        'backdrop' => 'https://image.tmdb.org/t/p/original' . (string)$r['backdrop_path']];
+}
+
+/**
+ * Fondo de «¿Quién está viendo?» (docs/PERFILES.md del panel, sección 6): lo más destacado de la semana en TMDB
+ * (trending de películas y series), 15 a 20 títulos con fondo. Página 1 y, si no llegan a 15, la 2. profiles.js pasa
+ * por todos, 5 s cada uno, y al llegar al último vuelve al primero. 6 h en caché por idioma.
+ */
+function wp_prof_highlights()
 {
     $base = wp_panel_base();
-    if ($base === '') return null;
-    $ck = wp_panel_ck('prof|highlight|' . wp_lang());
+    if ($base === '') return [];
+    $ck = wp_panel_ck('prof|highlights|' . wp_lang());
     $c = wp_cache_get($ck, 21600);
-    if (is_array($c)) return $c['h'] ?? null;
-    $body = wp_http_get($base . wp_panel_tenant_query('tmdb.php?path=trending/all/week&language=' . wp_tmdb_lang()), 6);
-    $data = $body ? json_decode($body, true) : null;
-    $h = null;
-    foreach ((array)($data['results'] ?? []) as $r) {
-        if (!is_array($r) || empty($r['backdrop_path']) || !in_array($r['media_type'] ?? '', ['movie', 'tv'], true)) continue;
-        $title = (string)($r['title'] ?? ($r['name'] ?? ''));
-        if ($title === '') continue;
-        $date = (string)($r['release_date'] ?? ($r['first_air_date'] ?? ''));
-        $h = ['title' => $title, 'rating' => round((float)($r['vote_average'] ?? 0), 1), 'year' => substr($date, 0, 4),
-            'kind' => $r['media_type'] === 'tv' ? 'tv' : 'movie',
-            'backdrop' => 'https://image.tmdb.org/t/p/original' . (string)$r['backdrop_path']];
-        break;
+    if (is_array($c) && is_array($c['l'] ?? null)) return $c['l'];
+    $list = [];
+    $seen = [];
+    $ok = false;
+    foreach ([1, 2] as $page) {
+        if (count($list) >= 15) break;
+        $body = wp_http_get($base . wp_panel_tenant_query('tmdb.php?path=trending/all/week&language=' . wp_tmdb_lang() . '&page=' . $page), 6);
+        $data = $body ? json_decode($body, true) : null;
+        if (!is_array($data) || !empty($data['error'])) break;
+        $ok = true;
+        foreach ((array)($data['results'] ?? []) as $r) {
+            if (count($list) >= 20) break;
+            $h = wp_prof_hl_item($r);
+            if ($h === null || isset($seen[$h['id']])) continue;
+            $seen[$h['id']] = true;
+            unset($h['id']);
+            $list[] = $h;
+        }
     }
     // sin respuesta del panel no se guarda (se vuelve a probar en la próxima visita)
-    if (is_array($data)) wp_cache_set($ck, ['h' => $h, 'at' => time()]);
-    return $h;
+    if ($ok) wp_cache_set($ck, ['l' => $list, 'at' => time()]);
+    return $list;
+}
+
+/** Las direcciones de un fondo: Full HD (caché de imágenes del panel o TMDB w1280) y el original (4K) para pantallas grandes. */
+function wp_prof_bg(array $h)
+{
+    $orig = (string)$h['backdrop'];
+    $srcs = wp_backdrop_sources($orig);
+    $fhd = (count($srcs) > 1) ? $srcs[0] : wp_img(preg_replace('~/t/p/original/~', '/t/p/w1280/', $orig), '');
+    return ['fhd' => $fhd, 'w' => count($srcs) > 1 ? 1920 : 1280, 'orig' => wp_img($orig, ''),
+        't' => (string)$h['title'], 'r' => (float)$h['rating'], 'y' => (string)$h['year'], 'k' => $h['kind'] === 'tv' ? 'tv' : 'movie'];
 }
 
 /* ---------- pantalla de perfiles (perfiles.php): acciones por fetch ---------- */

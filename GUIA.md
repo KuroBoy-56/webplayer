@@ -74,8 +74,11 @@ Esta web es la implementación de referencia para las demás apps.
   - `wp_prof_select()` comprueba el PIN en el panel (`pin_check`) antes de guardar el perfil en la sesión.
   - `wp_prof_id()` es el perfil que va como `profile` a `api/progress.php` (`includes/panel.php`: `wp_panel_userdata()` y
     `wp_panel_post()`); con 410 `wp_prof_gone()` lo olvida y la página siguiente vuelve a la pantalla de perfiles.
-  - `wp_prof_highlight()`: lo más destacado de la semana (`api/tmdb.php?path=trending/all/week` del panel, con la clave
-    del distribuidor o la del dueño con Omitir, 6 h en caché); el fondo va en Full HD y el original 4K por `srcset`.
+  - `wp_prof_highlights()`: lo más destacado de la semana, 15 a 20 títulos con fondo (`api/tmdb.php?path=trending/all/week`
+    del panel, página 1 y la 2 si no llegan a 15, con la clave del distribuidor o la del dueño con Omitir, 6 h en caché
+    por idioma); `wp_prof_bg()` arma las direcciones de cada uno (Full HD y el original 4K por `srcset`). `profiles.js`
+    (`slides()`) pasa de uno a otro cada 5 s con un fundido entre dos capas `.pf-bg` (la nueva aparece recién cuando
+    cargó) y, después del último, vuelve al primero; el nombre de abajo a la derecha cambia con la imagen.
 - **`perfiles.php`** (en `WP_ROUTE_PAGES`, al final de la lista; nunca se cambia el orden porque el número va dentro
   de los tokens) y **`assets/nf/profiles.css` / `profiles.js`**: la pantalla, el PIN, administrar y agregar. En
   horizontal el título va arriba al centro, el destacado (solo nombre y calificación) abajo a la derecha y la versión de
