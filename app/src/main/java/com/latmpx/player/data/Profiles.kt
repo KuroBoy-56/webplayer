@@ -91,23 +91,44 @@ object Profiles {
         return Result.Ok(State(j.optBoolean("enabled"), j.optInt("max"), list, j.optBoolean("canCreate"), avatars))
     }
 
-    /** trending de la semana (películas y series) por api/tmdb.php del panel, con la clave del distribuidor */
-    suspend fun featured(): Featured? {
-        val b = PanelUrl.api("tmdb.php").toHttpUrlOrNull()?.newBuilder() ?: return null
-        b.addQueryParameter("path", "trending/all/week")
-        Tenant.tag(b)
-        b.addQueryParameter("language", Lang.tmdb)
-        val r = Net.get(b.build().toString())
-        val j = (if (r.ok) r.json() else null) ?: return null
-        val arr = j.optJSONArray("results") ?: return null
-        for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val bd = o.optString("backdrop_path")
-            if (bd.isEmpty() || bd == "null") continue
-            val name = o.optString("title").ifEmpty { o.optString("name") }
-            val v = o.optDouble("vote_average", 0.0)
-            return Featured("https://image.tmdb.org/t/p/original$bd", name, if (v > 0) String.format(java.util.Locale.US, "%.1f", v) else "")
+    private var featCache: Triple<String, Long, List<Featured>>? = null
+
+    /**
+     * Fondo de «¿Quién está viendo?» (docs/PERFILES.md del panel, sección 6): lo más destacado de la semana en TMDB
+     * (trending de películas y series por api/tmdb.php del panel, con la clave del distribuidor), 15 a 20 títulos con
+     * fondo: página 1 y, si no llegan a 15, la 2. ProfileBackdrops pasa de uno a otro cada 5 s y vuelve al primero.
+     * 6 h en memoria por idioma y distribuidor.
+     */
+    suspend fun featuredList(): List<Featured> {
+        val key = Lang.tmdb + "|" + Tenant.code
+        featCache?.let { (k, at, l) -> if (k == key && System.currentTimeMillis() - at < 6 * 3600_000L) return l }
+        val out = ArrayList<Featured>()
+        val seen = HashSet<String>()
+        var ok = false
+        for (page in 1..2) {
+            if (out.size >= 15) break
+            val b = PanelUrl.api("tmdb.php").toHttpUrlOrNull()?.newBuilder() ?: break
+            b.addQueryParameter("path", "trending/all/week")
+            Tenant.tag(b)
+            b.addQueryParameter("language", Lang.tmdb)
+            b.addQueryParameter("page", page.toString())
+            val r = Net.get(b.build().toString())
+            val j = (if (r.ok) r.json() else null) ?: break
+            val arr = j.optJSONArray("results") ?: break
+            ok = true
+            for (i in 0 until arr.length()) {
+                if (out.size >= 20) break
+                val o = arr.optJSONObject(i) ?: continue
+                val bd = o.optString("backdrop_path")
+                val kind = o.optString("media_type")
+                if (bd.isEmpty() || bd == "null" || (kind != "movie" && kind != "tv")) continue
+                val name = o.optString("title").ifEmpty { o.optString("name") }
+                if (name.isEmpty() || !seen.add(kind + ":" + o.optString("id"))) continue
+                val v = o.optDouble("vote_average", 0.0)
+                out += Featured("https://image.tmdb.org/t/p/original$bd", name, if (v > 0) String.format(java.util.Locale.US, "%.1f", v) else "")
+            }
         }
-        return null
+        if (ok) featCache = Triple(key, System.currentTimeMillis(), out)
+        return out
     }
 }
