@@ -12,6 +12,12 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
 ## Novedades de la 1.3.0 (lo mismo que webOS 1.4.0)
 
+- (1.3.3) **Fondo de «¿Quién está viendo?» como Netflix en el televisor:** la imagen vuelve a ocupar toda la pantalla
+  (en una caja arriba a la derecha quedaba chica y con demasiado color liso). El color del tema entra con un degradado
+  suave desde el borde izquierdo (más oscuro en el borde; detrás de los perfiles la imagen se sigue viendo, más oscura)
+  hasta el 65 % del ancho, y abajo y arriba solo un sombreado leve. El título y los nombres de los perfiles llevan una
+  sombra para leerse siempre. En Vega los degradados usan imágenes blancas con la misma curva suave que la web
+  (`assets/image/shade_*.png`, teñidas con el color del tema). Sigue cada 10 s.
 - (1.3.2) **Fondo de «¿Quién está viendo?» más chico, con degradado y cada 10 s:** la imagen ya no cubre toda la
   pantalla: va en una caja de 1320×742 (16:9) arriba a la derecha y el color del tema entra suave por su borde izquierdo
   (donde están los perfiles), por abajo y un poco por arriba; la versión y el nombre del destacado quedan sobre el color
