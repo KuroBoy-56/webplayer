@@ -9,15 +9,13 @@
 /* avatares grandes: lo más que deja la altura con los 5 perfiles y «Administrar perfiles» sin desplazarse */
 .pf-root { position: relative; min-height: 100vh; min-height: 100dvh; --av: clamp(60px, min(13vh, 18vh - 52px), 170px); }
 
-/* fondo: alta calidad (Full HD, y el original 4K en pantallas grandes), con aparición suave. En horizontal va en una
-   caja 16:9 arriba a la derecha (69 % del ancho, como 1320×742 en 1920×1080) y no en toda la pantalla: el color del tema
-   (el del distribuidor con su número) entra suave por su borde izquierdo, donde están los perfiles, por abajo y un poco
-   por arriba; la versión y el nombre del destacado quedan sobre el color liso */
-.pf-bg, .pf-shade {
-    position: fixed; top: 0; right: 0; width: 69vw; height: 38.8vw; height: min(38.8vw, 80vh); pointer-events: none;
-}
+/* fondo: alta calidad (Full HD, y el original 4K en pantallas grandes), con aparición suave. En horizontal a pantalla
+   completa, como Netflix en el televisor: el color del tema (el del distribuidor con su número) entra con un degradado
+   suave desde el borde izquierdo hasta el 66 % del ancho (más oscuro en el borde; detrás de los perfiles la imagen se
+   sigue viendo, más oscura) y abajo y arriba solo un sombreado leve */
+.pf-bg, .pf-shade { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
 .pf-bg {
-    object-fit: cover; object-position: center 30%;
+    object-fit: cover; object-position: 70% 30%;
     opacity: 0; transition: opacity .8s ease; z-index: 0; user-select: none;
 }
 .pf-bg.ok { opacity: 1; }
@@ -26,9 +24,9 @@
 .pf-shade {
     z-index: 1;
     background:
-        linear-gradient(90deg, var(--pf-bg, #000) 0%, rgba(var(--pf-bg-rgb, 0,0,0),.95) 8%, rgba(var(--pf-bg-rgb, 0,0,0),.8) 20%, rgba(var(--pf-bg-rgb, 0,0,0),.52) 34%, rgba(var(--pf-bg-rgb, 0,0,0),.24) 46%, rgba(var(--pf-bg-rgb, 0,0,0),.07) 56%, rgba(var(--pf-bg-rgb, 0,0,0),0) 64%),
-        linear-gradient(0deg, var(--pf-bg, #000) 0%, rgba(var(--pf-bg-rgb, 0,0,0),.88) 10%, rgba(var(--pf-bg-rgb, 0,0,0),.58) 24%, rgba(var(--pf-bg-rgb, 0,0,0),.24) 40%, rgba(var(--pf-bg-rgb, 0,0,0),0) 56%),
-        linear-gradient(180deg, rgba(var(--pf-bg-rgb, 0,0,0),.5) 0%, rgba(var(--pf-bg-rgb, 0,0,0),0) 22%);
+        linear-gradient(90deg, rgba(var(--pf-bg-rgb, 0,0,0),.97) 0%, rgba(var(--pf-bg-rgb, 0,0,0),.9) 10%, rgba(var(--pf-bg-rgb, 0,0,0),.74) 22%, rgba(var(--pf-bg-rgb, 0,0,0),.5) 36%, rgba(var(--pf-bg-rgb, 0,0,0),.26) 50%, rgba(var(--pf-bg-rgb, 0,0,0),.08) 60%, rgba(var(--pf-bg-rgb, 0,0,0),0) 66%),
+        linear-gradient(0deg, rgba(var(--pf-bg-rgb, 0,0,0),.8) 0%, rgba(var(--pf-bg-rgb, 0,0,0),.4) 14%, rgba(var(--pf-bg-rgb, 0,0,0),0) 32%),
+        linear-gradient(180deg, rgba(var(--pf-bg-rgb, 0,0,0),.45) 0%, rgba(var(--pf-bg-rgb, 0,0,0),0) 18%);
 }
 
 /* arriba: Salir a la izquierda, el logo a la derecha */
@@ -72,7 +70,8 @@
 }
 .pf-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pf-item:hover .pf-av, .pf-item:focus-visible .pf-av { transform: scale(1.1); }
-.pf-name { font-size: clamp(18px, 1.15vw + 1.25vh, 34px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* la imagen se ve detrás de los perfiles (más oscura): una sombra para que los nombres se lean siempre */
+.pf-name { font-size: clamp(18px, 1.15vw + 1.25vh, 34px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 10px rgba(0,0,0,.5); }
 /* perfil infantil: la etiqueta junto al nombre (en el celular, sobre el avatar) */
 .pf-kids-av { display: none; }
 .pf-kids { flex: none; font-size: 12px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: #111; background: linear-gradient(135deg, #ffd54f, #ff8a65); border-radius: 999px; padding: 3px 9px; }

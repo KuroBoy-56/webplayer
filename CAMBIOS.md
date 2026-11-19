@@ -4,6 +4,10 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Fondo de «¿Quién está viendo?» como Netflix en el televisor — versión 2.7.4 (19 de noviembre, tercera parte)
+- En horizontal la imagen vuelve a ocupar **toda la pantalla** (en la caja arriba a la derecha quedaba chica y con demasiado color liso). El color del tema entra con un **degradado suave desde el borde izquierdo** hasta un poco más de la mitad (más oscuro en el borde; detrás de los perfiles la imagen se sigue viendo, más oscura) y **abajo y arriba solo un sombreado leve**. Los nombres de los perfiles llevan una sombra para leerse siempre. En vertical (celular) sigue igual. Cada destacado se sigue viendo 10 s.
+- Archivos: `perfiles.php`, `assets/nf/profiles.css`, `includes/core.php` (versión).
+
 ## Fondo de «¿Quién está viendo?» más chico, con degradado y cada 10 s — versión 2.7.3 (19 de noviembre, segunda parte)
 - En horizontal la imagen ya no cubre toda la pantalla: va en una caja 16:9 **arriba a la derecha** (69 % del ancho) y el color del tema (el del distribuidor con su número) entra suave por su **borde izquierdo**, donde están los perfiles, **por abajo** y un poco por arriba. Los perfiles, la versión y el nombre del destacado se leen sobre el color liso. En vertical (celular) sigue arriba, de lado a lado.
 - Cada destacado se ve **10 segundos** (antes 5).

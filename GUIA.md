@@ -79,8 +79,9 @@ Esta web es la implementación de referencia para las demás apps.
     por idioma); `wp_prof_bg()` arma las direcciones de cada uno (Full HD y el original 4K por `srcset`). `profiles.js`
     (`slides()`) pasa de uno a otro cada 10 s con un fundido entre dos capas `.pf-bg` (la nueva aparece recién cuando
     cargó) y, después del último, vuelve al primero; el nombre de abajo a la derecha cambia con la imagen. En horizontal
-    las capas y `.pf-shade` son una caja 16:9 arriba a la derecha (69 % del ancho, como máximo 80 % del alto) con el
-    color del tema entrando por su borde izquierdo y por abajo; en vertical, arriba de lado a lado (22 % del alto).
+    las capas y `.pf-shade` van a pantalla completa, como Netflix en el televisor: el color del tema entra con un
+    degradado suave desde el borde izquierdo hasta el 66 % del ancho y abajo y arriba solo un sombreado leve; en vertical,
+    arriba de lado a lado (22 % del alto).
 - **`perfiles.php`** (en `WP_ROUTE_PAGES`, al final de la lista; nunca se cambia el orden porque el número va dentro
   de los tokens) y **`assets/nf/profiles.css` / `profiles.js`**: la pantalla, el PIN, administrar y agregar. En
   horizontal el título va arriba al centro, el destacado (solo nombre y calificación) abajo a la derecha y la versión de
