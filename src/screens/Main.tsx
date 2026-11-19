@@ -69,6 +69,12 @@ export default function Main({ active }: { active: boolean }) {
   const liveLoaded = useAppSelector(st => st.loaded.live);
   useAppSelector(st => st.catalogRev);
   const [profMenu, setProfMenu] = useState(false);
+  // primero se cierra el menú del avatar y después se abre la pantalla de perfiles: mientras se cierra, la ventana se
+  // queda con el foco y la pantalla nueva no podía poner el suyo (quedaba en «Salir»)
+  const fromMenu = (manage: boolean) => {
+    setProfMenu(false);
+    setTimeout(() => nav.push({ name: 'profiles', from: 'menu', manage }), 350);
+  };
   // la línea elige perfil y todavía no lo eligió (p. ej. al volver del distribuidor): primero «¿Quién está viendo?»
   useEffect(() => {
     if (active && profilesNeeded() && !profile) nav.reset({ name: 'profiles', from: 'start' });
@@ -200,10 +206,10 @@ export default function Main({ active }: { active: boolean }) {
           <View style={s.pm}>
             {profile ? <Text style={s.pmName} numberOfLines={1}>{profile.name}</Text> : null}
             <View style={s.pmItem}>
-              <Button label={t('Cambiar perfil')} left width={px(460)} preferred last onPress={() => { setProfMenu(false); nav.push({ name: 'profiles', from: 'menu' }); }} />
+              <Button label={t('Cambiar perfil')} left width={px(460)} preferred last onPress={() => fromMenu(false)} />
             </View>
             <View style={s.pmItem}>
-              <Button label={t('Administrar perfiles')} left width={px(460)} last onPress={() => { setProfMenu(false); nav.push({ name: 'profiles', from: 'menu', manage: true }); }} />
+              <Button label={t('Administrar perfiles')} left width={px(460)} last onPress={() => fromMenu(true)} />
             </View>
             <View style={s.pmItem}>
               <Button label={t('Cuenta')} left width={px(460)} last onPress={() => { setProfMenu(false); setSection('account'); }} />
