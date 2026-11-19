@@ -4,7 +4,6 @@ import { http, json } from '../lib/http';
 import { t } from '../lib/i18n';
 import { digits, enc, int, nowSec, parseIso, str } from '../lib/util';
 import { cloud, Server, Session } from './panel';
-import { reportError } from './report';
 import { read, write } from '../lib/storage';
 
 export function api(s: { base: string; user: string; pass: string }, action = '', extra = ''): string {
@@ -69,6 +68,12 @@ export function xuiMessage(code: string): string {
 // un servidor que no contesta no cuenta como intento, y pasados 20 s lo que falta va a la vez. Si ninguno contesta, se
 // avisa al panel (Errores de las apps) con cada DNS.
 type Try = { session?: Session; error?: string; answered: boolean; note: string };
+
+// aviso al panel cuando ninguna DNS contestó (lo conecta App con api/report.ts: este archivo no depende del reporte)
+let unreachable: (detail: string) => void = () => {};
+export function onLoginUnreachable(fn: (detail: string) => void): void {
+  unreachable = fn;
+}
 
 export async function loginAll(input: Server[], user: string, pass: string): Promise<{ session?: Session; error?: string; offline?: boolean }> {
   if (!input.length) return { error: t('El panel no devolvió servidores. Inténtalo de nuevo.') };
@@ -148,7 +153,7 @@ export async function loginAll(input: Server[], user: string, pass: string): Pro
     keep(r);
   }
   // ningún servidor contestó: al panel (Errores de las apps), con lo que dijo cada DNS
-  if (lastErr === none) reportError('network', 'Login: ningún servidor contestó (' + list.length + ' DNS)', notes.join('\n'), 'login');
+  if (lastErr === none) unreachable(list.length + ' DNS\n' + notes.join('\n'));
   return { error: lastErr, offline: lastErr === none };
 }
 

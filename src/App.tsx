@@ -23,13 +23,15 @@ import Review from './screens/Review';
 import { clearSportsCache } from './screens/Sports';
 import { clearTmdbCache } from './api/tmdb';
 import { resetEngine } from './api/media';
-import { setStreamFlip } from './api/xtream';
-import { bindReportContext, installCrashReporter } from './api/report';
+import { onLoginUnreachable, setStreamFlip } from './api/xtream';
+import { bindReportContext, installCrashReporter, reportError } from './api/report';
 import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppSelector, useAppState } from './state';
 import { onCacheClear, panelCheckMac, panelLineGone } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
 installCrashReporter();
+// inicio de sesión: ninguna DNS contestó (docs/LOGIN-SERVIDORES.md del panel)
+onLoginUnreachable(d => reportError('network', 'Login: ningún servidor contestó', d, 'login'));
 bindReportContext(() => {
   const s = getState().session;
   return { device: deviceId(), user: s?.user || '', server: s?.base || '' };
