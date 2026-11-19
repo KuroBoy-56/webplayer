@@ -96,7 +96,7 @@ object Profiles {
     /**
      * Fondo de «¿Quién está viendo?» (docs/PERFILES.md del panel, sección 6): lo más destacado de la semana en TMDB
      * (trending de películas y series por api/tmdb.php del panel, con la clave del distribuidor), 15 a 20 títulos con
-     * fondo: página 1 y, si no llegan a 15, la 2. ProfileBackdrops pasa de uno a otro cada 5 s y vuelve al primero.
+     * fondo: página 1 y, si no llegan a 15, la 2. ProfileBackdrops pasa de uno a otro cada 10 s y vuelve al primero.
      * 6 h en memoria por idioma y distribuidor.
      */
     suspend fun featuredList(): List<Featured> {
