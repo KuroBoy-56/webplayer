@@ -264,7 +264,8 @@ const s = themed(() =>
     itemsCenter: { justifyContent: 'center', alignItems: 'center', marginLeft: px(20) },
     pf: { width: px(64), height: px(64), borderRadius: px(8), overflow: 'hidden', borderWidth: px(3), borderColor: 'transparent' },
     pfF: { borderColor: C.focus, transform: [{ scale: 1.12 }] },
-    pfImg: { width: '100%', height: '100%' },
+    // el radio también en la imagen: en Vega la caja redondeada no siempre recorta la imagen y se veía cuadrada
+    pfImg: { width: '100%', height: '100%', borderRadius: px(5) },
     logoRight: { marginLeft: px(28) },
     pmBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
     pm: { position: 'absolute', top: px(100), left: SIDE, backgroundColor: alpha(C.bg2, 0.98), borderRadius: px(12), paddingVertical: px(24), paddingHorizontal: px(24), borderWidth: px(1), borderColor: alpha(C.text, 0.15) },

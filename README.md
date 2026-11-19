@@ -207,6 +207,10 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.7.5) **Avatares redondeados:** el avatar del perfil de la barra, los de «¿Quién está viendo?» y los del editor llevan el
+  radio también en la imagen (`borderRadius` en el `Image`): en Vega la caja redondeada con `overflow: hidden` no
+  siempre recortaba la imagen de adentro y el avatar se veía cuadrado. El oscurecido de «Administrar perfiles» y la
+  etiqueta «Niños» siguen la misma curva.
 - (2.7.4) **Foco del menú de arriba que se iba a las filas:** después de bajar por las filas y volver al menú con Atrás,
   izquierda desde «Inicio» bajaba a una carátula (las filas de arriba quedan detrás de la barra, a la misma altura y más
   cerca que el avatar) y para llegar al avatar (Cambiar perfil, Administrar perfiles, Cuenta) había que subir toda la
