@@ -1,10 +1,7 @@
 // Clasificación de edad de TMDB para el perfil infantil (api/kids_rate.php del panel, docs/PERFILES.md sección 5):
 // lo «dudoso» se ve solo si el panel dice 'ok'. Se pide en segundo plano (nunca se espera para mostrar una pantalla) y
 // se guarda por distribuidor; cuando llegan veredictos nuevos se vuelve a armar el catálogo infantil.
-import { cloud } from '../api/panel';
-import { json } from '../lib/http';
 import { readJson, writeJson } from '../lib/storage';
-import { scoped } from '../lib/tenant';
 import { str } from '../lib/util';
 
 export type RateNeed = { t: 'm' | 's'; id?: string; n?: string; y?: string };
@@ -14,9 +11,16 @@ const TTL: Record<string, number> = { ok: 30 * 86400, no: 30 * 86400, '?': 7 * 8
 const EVERY = 15000;
 const MAX_KEEP = 20000;
 
+// el pedido al panel y la clave por distribuidor los pone state.ts (así el catálogo no depende del panel)
+let post: (items: unknown[]) => Promise<any> = async () => null;
+let key: () => string = () => 'kids_rate';
+export function bindKidsRate(request: (items: unknown[]) => Promise<any>, storeKey: () => string): void {
+  post = request;
+  key = storeKey;
+}
+
 let map: Map | null = null;
 let mapKey = '';
-const key = () => scoped('kids_rate');
 
 function load(): Map {
   if (map && mapKey === key()) return map;
@@ -70,7 +74,7 @@ async function run(): Promise<void> {
     pending = {};
     for (let i = 0; i < all.length && i < 1200; i += 400) {
       const items = all.slice(i, i + 400).map(([q, x]) => ({ q, ...x }));
-      const j = json<any>(await cloud('kids_rate.php', 'POST', { items }));
+      const j = await post(items);
       if (!j || !j.success || !j.r || typeof j.r !== 'object') {
         // sin respuesta: se vuelve a probar en la próxima vuelta
         for (const [q, x] of all.slice(i)) pending[q] = x;

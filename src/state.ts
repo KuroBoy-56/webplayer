@@ -6,7 +6,7 @@ import { bindProfile, bindSession, cloud, forgetCloud, lineKey, onPanelDemo, pan
 import { fetchProfiles, Profile, ProfilesData } from './api/profiles';
 import type { Route } from './nav';
 import { loadKidsRules, rememberKidsRules } from './lib/kids';
-import { onVerdicts } from './data/kidsrate';
+import { bindKidsRate, onVerdicts } from './data/kidsrate';
 import { Kind, loadKind, setStreamFlip } from './api/xtream';
 import { catalog } from './data/catalog';
 import { json } from './lib/http';
@@ -112,6 +112,8 @@ bindProfile(() => state.profile?.id || '', () => {
   const ses = state.session;
   fetchProfiles(Number(ses?.max) || 0).then(d => d && state.session === ses && setProfiles(d)).catch(() => {});
 });
+// clasificación de TMDB del perfil infantil (api/kids_rate.php), guardada por distribuidor
+bindKidsRate(items => cloud('kids_rate.php', 'POST', { items }).then(r => json(r)), () => scoped('kids_rate'));
 // veredictos nuevos de TMDB para el perfil infantil: se rehacen las filas
 onVerdicts(() => {
   if (!catalog.kidsOn) return;
