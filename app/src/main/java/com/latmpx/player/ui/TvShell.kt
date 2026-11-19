@@ -170,15 +170,30 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
             .padding(horizontal = (LocalConfiguration.current.screenWidthDp * 0.04f).dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // perfiles (docs/PERFILES.md del panel): el avatar del perfil a la izquierda solo en Inicio, Series y Películas y el
-        // logo arriba a la derecha; sin perfiles, el logo a la izquierda como siempre
+        // perfiles (docs/PERFILES.md del panel): el avatar del perfil a la izquierda y el logo arriba a la derecha; sin
+        // perfiles, el logo a la izquierda como siempre
         val prof = com.latmpx.player.data.Profiles.current
+        var profMenu by remember { mutableStateOf(false) }
         if (prof == null) {
             LogoHeader(height = 34.dp)
             Spacer(Modifier.width(24.dp))
-        } else if (state.tab in overlayTabs) {
-            com.latmpx.player.ui.screens.ProfileAvatar(prof, 40.dp)
+        } else {
+            // perfiles (como Vega): el avatar en todas las secciones, con las esquinas redondeadas, se elige con el control
+            // y abre Cambiar perfil / Administrar perfiles / Cuenta. No hay ícono de cuenta: el FocusRequester de Cuenta es
+            // el del avatar (Atrás desde Cuenta vuelve aquí)
+            FocusBox(
+                onClick = { profMenu = true }, modifier = Modifier.focusRequester(tabFocus.getValue(Tab.ACCOUNT)),
+                shape = RoundedCornerShape(8.dp), focusScale = 1.12f,
+            ) { _ -> com.latmpx.player.ui.screens.ProfileAvatar(prof, 40.dp) }
             Spacer(Modifier.width(20.dp))
+        }
+        if (profMenu && prof != null) TvProfileMenu(prof.name, onDismiss = { profMenu = false }) { k ->
+            profMenu = false
+            when (k) {
+                0 -> state.openProfiles(false)
+                1 -> state.openProfiles(true)
+                else -> { state.billboardFocusedTab = null; state.tab = Tab.ACCOUNT }
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             // sports=false del distribuidor: sin Deportes; el perfil infantil nunca tiene Deportes, y sin canales de niños
@@ -197,8 +212,9 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
                 Icon(Icons.Filled.Search, stringResource(R.string.search), tint = if (f) Color.Black else Color.White, modifier = Modifier.size(24.dp))
             }
         }
-        Spacer(Modifier.width(14.dp))
-        FocusBox(
+        // sin perfiles, el ícono de cuenta (con perfiles Cuenta se abre desde el avatar)
+        if (prof == null) Spacer(Modifier.width(14.dp))
+        if (prof == null) FocusBox(
             onClick = { state.tab = Tab.ACCOUNT }, modifier = Modifier.focusRequester(tabFocus.getValue(Tab.ACCOUNT)),
             shape = RoundedCornerShape(6.dp), focusScale = 1.12f,
         ) { f ->
@@ -214,6 +230,35 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
         if (prof != null) {
             Spacer(Modifier.width(18.dp))
             LogoHeader(height = 30.dp)
+        }
+    }
+}
+
+/** Submenú del avatar (perfiles, como Vega y Roku): Cambiar perfil, Administrar perfiles, Cuenta. */
+@Composable
+private fun TvProfileMenu(name: String, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(60); runCatching { first.requestFocus() } }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color(0x8C000000)), contentAlignment = Alignment.TopStart) {
+            Column(
+                Modifier.padding(start = (LocalConfiguration.current.screenWidthDp * 0.04f).dp, top = 64.dp).widthIn(min = 260.dp, max = 340.dp)
+                    .background(Color(0xFA1F1F1F), RoundedCornerShape(12.dp)).border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(12.dp)).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(name, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                listOf(R.string.prof_switch, R.string.prof_manage, R.string.account).forEachIndexed { i, res ->
+                    FocusBox(
+                        onClick = { onPick(i) }, modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                        shape = RoundedCornerShape(8.dp), focusScale = 1.03f,
+                    ) { f ->
+                        Text(
+                            stringResource(res), color = if (f) Color.Black else Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth().background(if (f) Color.White else Color(0x1AFFFFFF), RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }
