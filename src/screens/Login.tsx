@@ -14,7 +14,7 @@ import { read, write } from '../lib/storage';
 import { APP_ID, features, scoped, tenantCode } from '../lib/tenant';
 import { shuffle, str } from '../lib/util';
 import { useNav } from '../nav';
-import { deviceId, enterRoute, resetTenant, setSession } from '../state';
+import { deviceId, enterRoute, resetTenant, setSession, signedOutByHand } from '../state';
 import { alpha, C, px, themed } from '../theme';
 import { APP_VERSION } from '../version';
 
@@ -69,6 +69,15 @@ export default function Login() {
         setDemoOk(f ? f.demo : null);
         setReview(!!f?.review);
       });
+      // después de cerrar sesión a mano no se pregunta al panel ni se entra solo (eso solo al abrir la app): la línea del
+      // equipo se pide con «Verificar activación»
+      if (signedOutByHand()) {
+        await feat;
+        if (!alive) return;
+        setChecking(false);
+        setBusy('');
+        return;
+      }
       // manda el panel: con la llave, check_mac primero (la línea que el panel le da hoy a esta MAC, demo
       // vigente incluida, con su marca DEMO). auth.php solo sin llave o si check_mac no da línea: prefiere
       // cualquier línea vieja no demo y no sabe si es demo (en Roku eso hacía rebotar el inicio).
@@ -164,7 +173,7 @@ export default function Login() {
       // usuario y contraseña escritos: el panel los registra en Cuentas oficiales y decide si entra
       // (una línea demo de otro equipo, vencida o borrada no pasa). 503 = el panel no llegó al
       // servidor IPTV, que la app sí validó.
-      const reg = await panelSubmit(dev, r.session.user, r.session.pass, r.session.base).catch(() => ({ ok: false, code: 0, error: '' }));
+      const reg = await panelSubmit(dev, r.session.user, r.session.pass, r.session.base, true).catch(() => ({ ok: false, code: 0, error: '' }));
       if (!reg.ok && reg.code !== 503) {
         setBusy('');
         setError(reg.error || t('No se pudo conectar con el panel. Revisa tu conexión a internet.'));
@@ -206,6 +215,37 @@ export default function Login() {
     const dns = await panelDnsList();
     const servers = [...(d.url ? [{ name: 'Demo', base: d.url.replace(/\/+$/, '') }] : []), ...own, ...dns];
     await enter(d.user!, d.pass!, servers.length ? servers : undefined, false, true, d.expires || 0, d.duration || 0);
+  };
+
+  // «Verificar activación» (como Roku): pregunta al panel si este equipo tiene una línea (check_mac; sin llave o sin
+  // línea, auth.php) y, si la tiene, entra con ella
+  const verify = async () => {
+    setError('');
+    setBusy(t('Comprobando el equipo en el panel…'));
+    let lines: Line[] = [];
+    let err = '';
+    if (hasMasterKey()) {
+      const ln = await panelCheckMac(dev);
+      if (ln) lines = [ln];
+    }
+    if (deviceBlocked()) {
+      setBusy('');
+      setError(deviceBlocked());
+      return;
+    }
+    if (!lines.length) {
+      const r = await panelPlaylists(dev);
+      lines = r.lines;
+      err = r.error;
+    }
+    setBusy('');
+    if (!lines.length) {
+      setError(err || t('Este equipo aún no está activado. Dale el código de abajo a tu distribuidor.'));
+      return;
+    }
+    setAssigned(lines);
+    const ln = lines[0];
+    await enter(ln.user, ln.pass, lines.filter(a => a.user === ln.user).map(a => ({ name: a.name, base: a.base })), true, ln.demo, ln.demoExpires, ln.demoDuration);
   };
 
   const enterAssigned = () => {
@@ -290,11 +330,12 @@ export default function Login() {
             {canDemo && !review ? <Button label="Autodemo" last onPress={() => !busy && demo()} /> : null}
           </View>
           {canDemo && !review ? <Text style={s.tip}>{t('¿Tu revendedor te dio un código? Escríbelo en Contraseña y pulsa Autodemo.')}</Text> : null}
-          {assigned.length && !review ? (
+          {review ? null : (
             <View style={s.btns}>
-              <Button label={t('Entrar con la cuenta de este equipo ({x})', { x: assigned[0].demo ? 'DEMO' : assigned[0].user })} small last onPress={() => !busy && enterAssigned()} />
+              {assigned.length ? <Button label={t('Entrar con la cuenta de este equipo ({x})', { x: assigned[0].demo ? 'DEMO' : assigned[0].user })} small onPress={() => !busy && enterAssigned()} /> : null}
+              <Button label={t('Verificar activación')} small last onPress={() => !busy && verify()} />
             </View>
-          ) : null}
+          )}
           {review ? null : (
             <Text style={s.device}>
               {t('Código del equipo:')} {dev}   ·   {t('Versión:')} {APP_VERSION}

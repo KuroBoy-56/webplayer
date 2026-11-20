@@ -14,7 +14,7 @@ import { pref, setPref } from '../lib/storage';
 import { brand, brandName, distChoice } from '../lib/tenant';
 import { dateText, dateTimeText, demoLength } from '../lib/util';
 import { useNav } from '../nav';
-import { deviceId, loadCatalog, loadCloud, logout, refreshCatalog, resetTenant, showNotice, useAppState } from '../state';
+import { deviceId, loadCatalog, loadCloud, logoutByHand, refreshCatalog, resetTenant, showNotice, useAppState } from '../state';
 import { C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
 
@@ -213,7 +213,7 @@ export default function Account() {
         label={t('Cerrar sesión')}
         value=""
         onPress={() => {
-          logout();
+          logoutByHand();
           nav.reset({ name: 'login' });
         }}
       />
