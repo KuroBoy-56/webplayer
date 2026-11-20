@@ -68,4 +68,10 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        // Android 14+: con la app a la vista, una descarga que siguió como tarea común pasa a ser iniciada por el usuario
+        com.latmpx.player.data.DownloadJob.promote(this)
+    }
 }

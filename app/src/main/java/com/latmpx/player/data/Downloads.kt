@@ -27,7 +27,7 @@ import kotlin.coroutines.coroutineContext
  * Descargas para ver sin internet (solo celular). Todo queda dentro de la app: los archivos van a su
  * carpeta privada (filesDir/downloads, nadie más los ve ni se pueden abrir desde fuera) y la dirección
  * del servidor nunca se muestra. Una descarga a la vez; si la conexión se corta se reanuda donde iba
- * (Range) y al abrir la app sigue lo que quedó pendiente. DownloadService mantiene la descarga con la
+ * (Range) y al abrir la app sigue lo que quedó pendiente. DownloadJob (JobScheduler) mantiene la descarga con la
  * app en segundo plano (notificación con el progreso).
  */
 object Downloads {
@@ -156,7 +156,7 @@ object Downloads {
     private fun pump() {
         if (job?.isActive == true) return
         job = scope.launch {
-            DownloadService.start(app)
+            DownloadJob.start(app)
             try {
                 while (true) {
                     val e = synchronized(lock) { list.firstOrNull { it.state == State.QUEUED } } ?: break
@@ -167,7 +167,7 @@ object Downloads {
                 }
             } finally {
                 current = null
-                DownloadService.stop(app)
+                DownloadJob.stop(app)
             }
         }
     }
@@ -267,7 +267,7 @@ object Downloads {
             list[i] = f(list[i])
         }
         changed(save)
-        DownloadService.progress(app)
+        DownloadJob.progress(app)
     }
 
     private fun changed(save: Boolean) {
