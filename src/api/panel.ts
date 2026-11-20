@@ -456,7 +456,7 @@ export function registerLater(line: { user: string; pass: string; base: string }
 export async function registerPending(deviceId: string, user: string): Promise<void> {
   const p = unregistered;
   if (!p || p.user !== user) return;
-  const r = await panelSubmit(deviceId, p.user, p.pass, p.base).catch(() => ({ ok: false, code: 0 }));
+  const r = await panelSubmit(deviceId, p.user, p.pass, p.base, true).catch(() => ({ ok: false, code: 0 }));
   // registrada, o el panel la rechazó (eso lo decide el chequeo de la línea, no esto): no se insiste
   if (unregistered === p && r.code !== 503 && r.code !== 0 && r.code < 500) unregistered = null;
 }
@@ -506,8 +506,9 @@ export async function panelSetPin(deviceId: string, oldPin: string, pin: string)
 
 // registra el equipo (código MAC) con la cuenta en el panel
 // code: respuesta HTTP del panel (0 = sin conexión)
-export async function panelSubmit(deviceId: string, user: string, pass: string, dns: string): Promise<{ ok: boolean; error?: string; code: number }> {
-  const r = await panelLogin('submit_url', { mac_address: deviceId, username: user, password: pass, url: dns });
+// replace: el cliente escribió usuario y contraseña; el panel deja el equipo solo con esta línea (quita la anterior)
+export async function panelSubmit(deviceId: string, user: string, pass: string, dns: string, replace = false): Promise<{ ok: boolean; error?: string; code: number }> {
+  const r = await panelLogin('submit_url', { mac_address: deviceId, username: user, password: pass, url: dns, ...(replace ? { replace: 1 } : {}) });
   noteBlocked(r);
   const j = json(r);
   if (r.ok && j && str(j.status) === 'ok') return { ok: true, code: r.code };

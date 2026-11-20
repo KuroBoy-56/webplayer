@@ -207,6 +207,13 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
   anterior se muestra antes que lo siguiente: sin huecos), sin esperar cuadros clave. En los MP4 con el índice al
   final, el principio del video (2 MB) se pide a la vez que el índice; si la línea rechaza pedidos a la vez, ese
   adelanto se cancela y todo sigue de a uno (`oneConn`).
+- (2.7.6) **Cerrar sesión no vuelve a entrar solo y botón «Verificar activación» (como Roku):** después de cerrar sesión
+  (Cuenta, «Salir» de «¿Quién está viendo?» o el tema de prueba) el inicio de sesión no le pregunta al panel ni entra
+  solo; la entrada automática solo pasa al abrir la app. **Verificar activación** pregunta al panel (`check_mac`) si el
+  equipo tiene una línea y, si la tiene, entra; si no, avisa que el equipo aún no está activado. Al entrar escribiendo
+  usuario y contraseña la app manda `replace: 1` en `submit_url` y el panel deja la MAC solo con el usuario nuevo
+  (`signedOutByHand` / `logoutByHand` en `src/state.ts`, `src/screens/Login.tsx`, `panelSubmit` en `src/api/panel.ts`).
+  Mismo cambio que webOS 1.4.6 y Tizen 1.3.6 (probados en Chromium contra un panel de prueba); aquí, typecheck y pruebas.
 - (2.7.5) **Avatares redondeados:** el avatar del perfil de la barra, los de «¿Quién está viendo?» y los del editor llevan el
   radio también en la imagen (`borderRadius` en el `Image`): en Vega la caja redondeada con `overflow: hidden` no
   siempre recortaba la imagen de adentro y el avatar se veía cuadrado. El oscurecido de «Administrar perfiles» y la

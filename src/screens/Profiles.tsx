@@ -20,7 +20,7 @@ import { Button, Focusable, Logo } from '../components/ui';
 import { t } from '../lib/i18n';
 import { brandName } from '../lib/tenant';
 import { useNav } from '../nav';
-import { chooseProfile, getState, lastProfileId, logout, profilesNeeded, setProfiles, showNotice, useAppSelector } from '../state';
+import { chooseProfile, getState, lastProfileId, logoutByHand, profilesNeeded, setProfiles, showNotice, useAppSelector } from '../state';
 import { alpha, C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
 
@@ -167,7 +167,7 @@ export default function Profiles({ from, manage, active }: { from: 'start' | 'me
       <Shade side="bottom" style={s.shadeBottom} />
       <Shade side="top" style={s.shadeTop} />
       <View style={s.top}>
-        <Focusable onPress={() => { logout(); nav.reset({ name: 'login' }); }} style={f => [s.exit, f && s.exitF]}>
+        <Focusable onPress={() => { logoutByHand(); nav.reset({ name: 'login' }); }} style={f => [s.exit, f && s.exitF]}>
           {f => (
             <>
               <Image source={EXIT} style={[s.exitImg, { tintColor: f ? C.onFocus : C.text }]} resizeMode="contain" />
