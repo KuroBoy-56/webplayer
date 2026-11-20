@@ -1,15 +1,16 @@
-// BackHandler de React Native con el botón Atrás del control de LG: el último que se registró
+// BackHandler de React Native con el botón Atrás del control de Hisense: el último que se registró
 // contesta primero; si nadie lo usa, se sale de la app (como en Android TV).
 type Handler = () => boolean | null | undefined;
 const handlers: Handler[] = [];
 
 export function exitApp(): void {
-  // webOS: vuelve al lanzador de LG (como Atrás en las apps del televisor); en un navegador cierra la ventana
+  // VIDAA: Hisense_Exit cierra la app y vuelve al inicio del televisor (ahí window.close no siempre hace nada); en un
+  // navegador cierra la ventana
   try {
-    const w = (globalThis as any).webOS;
-    if (w?.platformBack) return w.platformBack();
+    const exit = (globalThis as any).Hisense_Exit;
+    if (typeof exit === 'function') return void exit();
   } catch {
-    // sin webOS.js
+    // sin Hisense_Exit
   }
   window.close();
 }

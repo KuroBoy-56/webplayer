@@ -15,7 +15,7 @@ const code = esbuild.buildSync({
   format: 'cjs',
   platform: 'node',
   write: false,
-  // (los mismos que tools/build-webos.js: probe.ts lee también el índice compartido, que usa el cliente del panel)
+  // (los mismos que tools/build-vidaa.js: probe.ts lee también el índice compartido, que usa el cliente del panel)
   alias: {
     'react-native': path.join(root, 'web/shims/react-native.tsx'),
     '@amazon-devices/react-native-w3cmedia': path.join(root, 'web/shims/w3cmedia.tsx'),

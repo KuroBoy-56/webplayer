@@ -239,7 +239,7 @@ test('destrucción de Shaka termina antes de adjuntar la fuente siguiente',async
 test('pista única no provoca una petición al panel',async()=>{
   const {c}=setup({tracks:[{language:'es',enabled:true}]});c.load('https://fixture.invalid/video.avi',0,false);choose(c,'Español');assert.deepEqual(calls,[]);await c.destroy();
 });
-// Shaka solo va en Vega (en LG no se instala: tools/build-webos.js lo deja fuera)
+// Shaka solo va en Vega (en VIDAA no se instala: tools/build-vidaa.js lo deja fuera)
 let hasShaka=true;try{require.resolve('@xmldom/xmldom');}catch{hasShaka=false;}
 test('Shaka 4.16: audios sin id mantienen identidad distinta y seleccionan el idioma correcto',{skip:!hasShaka&&'Shaka solo en Vega'},()=>{
   const {ShakaPlayback}=require('../src/player/shaka.ts');

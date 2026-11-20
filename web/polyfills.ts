@@ -1,5 +1,5 @@
-// Lo mínimo que les falta a los televisores LG más viejos que soporta la app (webOS 4.x, Chromium 53):
-// se carga antes que todo lo demás (web/index.tsx). En webOS 5 o más nuevos no hace nada.
+// Lo mínimo que les falta a los televisores con un navegador viejo (Chromium 53 o parecido, como los VIDAA más
+// antiguos): se carga antes que todo lo demás (web/index.tsx). En los más nuevos no hace nada.
 /* eslint-disable no-extend-native */
 const w: any = typeof window !== 'undefined' ? window : {};
 

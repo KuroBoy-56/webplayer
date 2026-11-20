@@ -1,12 +1,9 @@
 node_modules/
 build/
 dist/
-dist-hd/
 generated/
 *.vpkg
 .DS_Store
 config/panel.key
 src/generated/
 out/
-webos/app.js
-webos/img/

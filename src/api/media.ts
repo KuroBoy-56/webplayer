@@ -1,4 +1,4 @@
-// Motor del panel para webOS (api/media_webos.php): cuando el reproductor del equipo no puede cambiar
+// Motor del panel para VIDAA (api/media_vidaa.php): cuando el reproductor del equipo no puede cambiar
 // el audio de un archivo o no sabe decodificarlo (DTS, TrueHD…), el panel lo prepara con ffmpeg
 // (video sin cambios + ese audio en AAC, HLS desde el segundo pedido); los subtítulos del archivo
 // que el equipo no muestra llegan como WebVTT. Mismo contrato que media.php de Roku.
@@ -10,7 +10,7 @@ import { Probe, probeTracks } from '../lib/probe';
 import { features } from '../lib/tenant';
 import { lang, t } from '../lib/i18n';
 
-const FILE = 'media_webos.php';
+const FILE = 'media_vidaa.php';
 
 export type Engine = { base: string; token: string };
 

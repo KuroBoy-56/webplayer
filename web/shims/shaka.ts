@@ -1,6 +1,6 @@
-// src/player/shaka.ts en el televisor: Shaka Player (con los parches de Amazon para Vega) no va en webOS. El <video>
-// del televisor abre HLS solo (src/player/playback.ts no usa Shaka con nativeFiles) y Shaka no corre en los webOS 4.x
-// (Chromium 53). tools/build-webos.js pone este archivo en lugar del de Vega; si algo lo usa, falla enseguida y el
+// src/player/shaka.ts en el televisor: Shaka Player (con los parches de Amazon para Vega) no va en VIDAA. El <video>
+// del televisor abre HLS solo (src/player/playback.ts no usa Shaka con nativeFiles) y Shaka no corre en los motores
+// viejos. tools/build-vidaa.js pone este archivo en lugar del de Vega; si algo lo usa, falla enseguida y el
 // reproductor sigue con sus otros pasos.
 export type ShakaTrack = { id: string; label: string; lang: string; codec: string; active: boolean };
 

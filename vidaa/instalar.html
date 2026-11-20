@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1920, user-scalable=no" />
+  <title>Instalar MPX Player</title>
+  <style>
+    html, body { margin: 0; background: #141414; color: #fff; font-family: sans-serif; }
+    main { max-width: 1400px; margin: 0 auto; padding: 80px 60px; }
+    h1 { font-size: 56px; margin: 0 0 24px; }
+    p, li { font-size: 30px; line-height: 1.5; color: #ddd; }
+    button { font-size: 36px; padding: 22px 60px; border: 0; border-radius: 10px; background: #e50914; color: #fff; }
+    button:focus { outline: 6px solid #fff; }
+    #msg { margin-top: 30px; font-size: 32px; }
+    code { color: #fff; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>MPX Player para VIDAA (Hisense)</h1>
+    <p>Este botón agrega MPX Player a las aplicaciones del televisor. Solo funciona si el televisor permite instalar
+      apps desde esta página (ver el README de la rama vidaaOS).</p>
+    <button id="go" autofocus>Instalar en el televisor</button>
+    <div id="msg"></div>
+    <p>Si no se puede instalar, abre la app en el navegador del televisor con la dirección <code id="url"></code>
+      y guárdala en favoritos para abrirla desde ahí.</p>
+  </main>
+  <script>
+    // dirección de la app (con sus iconos): vacía = la carpeta de esta página. Si esta página está en otra computadora,
+    // pon aquí la carpeta de la app en el panel, por ejemplo 'http://tu-panel.com/vidaa/'
+    var APP_URL = '';
+    var base = APP_URL || location.href.replace(/[^\/]*([?#].*)?$/, '');
+    if (base.charAt(base.length - 1) !== '/') base += '/';
+    document.getElementById('url').textContent = base;
+    function say(t) { document.getElementById('msg').textContent = t; }
+    document.getElementById('go').onclick = function () {
+      if (typeof window.Hisense_installApp !== 'function') {
+        say('Este televisor no deja instalar apps desde esta página. Usa la dirección de abajo en el navegador.');
+        return;
+      }
+      say('Instalando...');
+      try {
+        window.Hisense_installApp('mpxplayer', 'MPX Player', base + 'icon_big.png', base + 'icon.png', base + 'icon_big.png',
+          base + 'index.html', 'store', function (r) {
+            say(r === 0 || r === '0' || r === true ? 'Listo: MPX Player ya está en las aplicaciones del televisor.' : 'El televisor no la instaló (respuesta: ' + r + ').');
+          });
+      } catch (e) {
+        say('El televisor no la instaló: ' + e);
+      }
+    };
+  </script>
+</body>
+</html>

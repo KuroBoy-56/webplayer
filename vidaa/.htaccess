@@ -1,0 +1,7 @@
+# MPX Player para VIDAA: el televisor vuelve a preguntar por index.html y app.js en cada apertura (así toma la versión
+# nueva apenas se sube); las imágenes llevan su huella en el nombre y se guardan.
+<IfModule mod_headers.c>
+    <FilesMatch "\.(html|js)$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>

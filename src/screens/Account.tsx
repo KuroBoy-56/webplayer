@@ -217,7 +217,7 @@ export default function Account() {
           nav.reset({ name: 'login' });
         }}
       />
-      <Text style={s.ver}>{t('{x} para {p} · versión {v}', { x: brandName(), p: 'LG Smart TV (webOS)', v: APP_VERSION })}</Text>
+      <Text style={s.ver}>{t('{x} para {p} · versión {v}', { x: brandName(), p: 'Hisense Smart TV (VIDAA)', v: APP_VERSION })}</Text>
       </ScrollView>
       <ChangePinDialog
         visible={changePin}

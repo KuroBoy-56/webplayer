@@ -1,6 +1,6 @@
-// Control remoto de LG (Magic Remote o el básico): las teclas llegan como keydown. Se pasan a los
-// useTVEventHandler (como en Vega), las flechas mueven el foco (spatial.ts) y Atrás (461) va al BackHandler.
-// webOS entrega todas las teclas sin registrarlas (appinfo.json: disableBackHistoryAPI para recibir Atrás).
+// Control remoto de Hisense (VIDAA): las teclas llegan como keydown. Se pasan a los useTVEventHandler (como en Vega),
+// las flechas mueven el foco (spatial.ts) y Atrás va al BackHandler. VIDAA entrega todas las teclas sin registrarlas;
+// Atrás llega como 8 (Retroceso) en la mayoría de los modelos, 461 o 10009 en otros (y Esc en un teclado).
 import { pressBack } from './back';
 import { keepFocus, move } from './spatial';
 
@@ -19,11 +19,11 @@ export function onRemote(l: Listener): () => void {
 const EVENTS: Record<number, string> = {
   37: 'left', 38: 'up', 39: 'right', 40: 'down', 13: 'select',
   415: 'play', 19: 'pause', 413: 'pause', 412: 'rewind', 417: 'fastforward',
-  33: 'channel_up', 34: 'channel_down', 457: 'info',
+  33: 'channel_up', 34: 'channel_down', 427: 'channel_up', 428: 'channel_down', 457: 'info',
   // colores: rojo y verde abren el menú de audio y subtítulos (como TOOLS en Samsung)
   403: 'menu', 404: 'menu',
 };
-const BACK = new Set([461, 27]);
+const BACK = new Set([461, 10009, 27]);
 const ARROWS: Record<number, 'left' | 'up' | 'right' | 'down'> = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
 
 function inText(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement {
