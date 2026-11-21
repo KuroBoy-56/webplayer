@@ -8,7 +8,7 @@ import { channelEpg, EpgEntry } from '../api/xtream';
 import PinDialog from '../components/PinDialog';
 import LivePreview from '../components/LivePreview';
 import { handPreview, markLiveOrigin, takeLastLive } from '../player/preview-session';
-import { Button, Focusable, Message, Spinner } from '../components/ui';
+import { Button, ChannelLogo, Focusable, Message, Spinner } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
 import { clock, digits, nowSec } from '../lib/util';
 import { useListScroll } from '../lib/listscroll';
@@ -26,7 +26,7 @@ const ChannelRow = memo(function ChannelRow({ channel: c, index, favorite, live,
         {/* el canal que está en la miniatura */}
         <View style={[s.dot, !live && s.dotOff]} />
         <Text style={[s.chNum, f && { color: C.onFocus }]}>{c.num || index + 1}</Text>
-        <View style={s.logoBox}>{c.poster ? <Image source={{ uri: c.poster }} style={s.logo} resizeMode="contain" /> : null}</View>
+        <View style={s.logoBox}><ChannelLogo uri={c.poster} style={s.logo} /></View>
         <Text style={[s.chName, f && { color: C.onFocus }]} numberOfLines={1}>{c.name}</Text>
         {favorite ? <Text style={s.star}>★</Text> : null}
       </>}
