@@ -91,6 +91,7 @@ import com.latmpx.player.player.LivePreview
 import com.latmpx.player.player.Play
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.components.TvFocusable
+import com.latmpx.player.ui.components.channelFallback
 import com.latmpx.player.ui.theme.NfRed
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -409,7 +410,7 @@ private fun ChannelLogoBox(url: String, modifier: Modifier, transparent: Boolean
     Box(modifier.clip(RoundedCornerShape(5.dp)).background(if (transparent) Color.Transparent else LvLogo), contentAlignment = Alignment.Center) {
         AsyncImage(
             model = url.ifBlank { null }, contentDescription = null, contentScale = ContentScale.Fit,
-            placeholder = painterResource(R.drawable.logo), error = painterResource(R.drawable.logo), fallback = painterResource(R.drawable.logo),
+            placeholder = channelFallback(), error = channelFallback(), fallback = channelFallback(),
             modifier = Modifier.fillMaxSize().padding(3.dp),
         )
     }

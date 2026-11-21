@@ -197,6 +197,19 @@ fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** Imagen de un canal sin logo (o que no carga): el logo de la app solo sin distribuidor; con distribuidor el suyo y,
+ *  si no tiene, ninguna (nunca el logo de la app), como en las apps de TV y la web. */
+@Composable
+fun channelFallback(): androidx.compose.ui.graphics.painter.Painter {
+    val brand = com.latmpx.player.data.Tenant.brand
+    val url = brand?.logoUrl.orEmpty()
+    return when {
+        brand == null -> painterResource(R.drawable.logo)
+        url.isNotEmpty() -> coil3.compose.rememberAsyncImagePainter(url)
+        else -> androidx.compose.ui.graphics.painter.ColorPainter(Color.Transparent)
+    }
+}
+
 @Composable
 fun LogoHeader(modifier: Modifier = Modifier, height: Dp = 34.dp) {
     val brand = com.latmpx.player.data.Tenant.brand
