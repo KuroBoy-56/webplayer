@@ -13,7 +13,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { BackHandler, FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { channelEpg, EpgEntry, episodeUrl, LIVE_FORMATS, liveFormatStart, liveUrl, movieUrl, otherScheme, setLiveFormat, setStreamFlip, streamFlip } from '../api/xtream';
 import TrackMenu from '../components/TrackMenu';
-import { Button, Focusable, Loader } from '../components/ui';
+import { Button, ChannelLogo, Focusable, Loader } from '../components/ui';
 import { catalog, Item } from '../data/catalog';
 import { clock, hms, nowSec } from '../lib/util';
 import { PlayParams, useNav } from '../nav';
@@ -1272,7 +1272,7 @@ function PlayerScreen({ params }: { params: PlayParams }) {
       {overlay || paused ? (
         <View style={s.overlay}>
           <View style={s.topBar}>
-            {live && channel?.poster ? <Image source={{ uri: channel.poster }} style={s.chLogo} resizeMode="contain" /> : null}
+            {live && channel ? <ChannelLogo uri={channel.poster} style={s.chLogo} /> : null}
             <Text style={s.title} numberOfLines={1}>
               {title}
             </Text>
@@ -1356,7 +1356,7 @@ function PlayerScreen({ params }: { params: PlayParams }) {
                 {f => (
                   <>
                     <Text style={[s.chNum, f && s.chTextF]}>{i + 1}</Text>
-                    {c.poster ? <Image source={{ uri: c.poster }} style={s.chRowLogo} resizeMode="contain" /> : <View style={s.chRowLogo} />}
+                    <ChannelLogo uri={c.poster} style={s.chRowLogo} />
                     <Text style={[s.chName, f && s.chTextF]} numberOfLines={1}>
                       {c.name}
                     </Text>

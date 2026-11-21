@@ -25,6 +25,7 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 
 ## Novedades de la 1.4.0
 
+- (1.4.7) **Logo de la marca en los canales sin logo:** un canal en vivo sin logo, o cuyo logo no carga, muestra el logo de la marca en la lista de canales, la vista previa y el reproductor: el de la app sin distribuidor, el del distribuidor con su número y ninguno si el distribuidor no tiene logo, como la web player y Android (`ChannelLogo` en `src/components/ui.tsx`).
 - (1.4.6) **Cerrar sesión no vuelve a entrar solo y botón «Verificar activación» (como Roku):** después de cerrar sesión
   (Cuenta, «Salir» de «¿Quién está viendo?» o el tema de prueba) el inicio de sesión no le pregunta al panel ni entra
   solo; la entrada automática solo pasa al abrir la app. **Verificar activación** pregunta al panel (`check_mac`) si el
