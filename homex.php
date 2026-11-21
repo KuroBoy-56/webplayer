@@ -5,9 +5,8 @@ $page_title = t('Inicio');
 include "header.php";
 
 /* ---------- Sólo títulos que existen en el servidor IPTV actual ---------- */
-$have = ['movie' => [], 'series' => []];
-foreach (wp_catalog('movie') as $it) $have['movie'][$it['id']] = true;
-foreach (wp_catalog('series') as $it) $have['series'][$it['id']] = true;
+// los ids del catálogo, guardados aparte (includes/catalog_fast.php): no se lee el catálogo entero en cada Inicio
+$have = ['movie' => wp_catalog_ids('movie'), 'series' => wp_catalog_ids('series')];
 $in_server = function ($type, $id) use ($have) {
     // si el catálogo no cargó (servidor caído) no se oculta nada
     return !$have[$type] || isset($have[$type][(string)$id]);
@@ -102,7 +101,7 @@ $genres = wp_available_genres('all');
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    NF.api({ action: 'hero', type: 'all' }).then(function (res) {
+    NF.api({ action: 'hero', type: 'all' }, 1200000).then(function (res) {
         var items = res.items || [];
         if (!items.length) {
             // sin destacados: el collage de siempre (en un perfil infantil, ninguno: tiene carátulas para adultos); de carátula el

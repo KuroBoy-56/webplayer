@@ -34,4 +34,8 @@ if (!defined('WP_SESSION_LOADED')) {
     wp_prof_gate();
     // direcciones con tokens: ninguna página muestra su nombre de archivo (includes/route_token.php)
     wp_route_begin();
+    // páginas para mirar: el navegador las guarda 60 s (cada enlace es una dirección nueva, así que nunca se ve una
+    // vieja al entrar): la precarga al pasar el mouse sirve de verdad (antes se pedía dos veces) y «Atrás» es al
+    // instante. La sesión mandaba «no-store» a todas. Al cerrar sesión se borra (logout.php, Clear-Site-Data).
+    wp_page_cache_headers();
 }

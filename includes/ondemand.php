@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('odCat').addEventListener('change', function () {
         if (this.value) location.href = <?php echo json_encode($od_list); ?> + '?id=' + encodeURIComponent(this.value);
     });
-    NF.api({ action: 'hero', type: <?php echo json_encode($od_type); ?> }).then(function (res) {
+    NF.api({ action: 'hero', type: <?php echo json_encode($od_type); ?> }, 1200000).then(function (res) {
         if (res.items && res.items.length) NF.hero(document.getElementById('nfHero'), res.items);
         else document.getElementById('nfHero').style.display = 'none';
     }).catch(function () {});

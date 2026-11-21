@@ -230,6 +230,8 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
             // esos segundos iniciales no deben borrar el progreso que ya había
             if (resumeAt > 60 && cur < resumeAt - 60 && Date.now() - openedAt < 120000) return;
             lastSent = cur;
+            // «Atrás» a Inicio vuelve a pedirlo (Continuar viendo cambió): assets/nf/app.js
+            try { sessionStorage.setItem('nf_watch', String(Date.now())); } catch (e) {}
             var fd = new FormData();
             fd.append('id', cfg.id);
             fd.append('slug', cfg.slug);

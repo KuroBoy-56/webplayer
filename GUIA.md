@@ -25,6 +25,17 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 
 **Dominio propio con un Worker (opcional):** el cliente entra por un dominio nuevo (el tuyo o el de cada distribuidor, sin límite) y el dominio original de la web responde **403 Forbidden**. El Worker (`cloudflare/edge-worker.js`) abre la web por dentro con un secreto; la web (`includes/edge.php`) solo atiende con ese secreto y toma el dominio y la IP real del cliente. Cada secreto puede llevar el número de un distribuidor: en su dominio la web queda fija en él. Se configura con `'edge_keys'` (y `'edge_block'` para probar) en `includes/panel_secret.php`; sin eso la web funciona exactamente igual. Paso a paso con dibujos: **`docs/GUIA-WORKER.html`** (ábrelo en tu PC; en el hosting `docs/` y `cloudflare/` están bloqueados).
 
+## Número de distribuidor sin dominio propio
+
+Un distribuidor sin dominio propio usa tu web con su número. Sus clientes pueden escribirlo en la pantalla «Número de distribuidor» o entrar por su enlace **`tudominio/login?d=NÚMERO`** (también `tudominio/?d=NÚMERO`): la web queda en su número con su logo y colores, sin escribir nada (`wp_tenant_link_get()` en `includes/tenant_login.php`). Un número que el panel no conoce, vencido o sin la web vuelve a la pantalla del número con el aviso. El panel muestra el enlace en Distribuidores y en «Mi cuenta» del distribuidor cuando la dirección de la web player está puesta en Guía EPG. El número elegido viaja en cada paso del inicio de sesión (`dist_pick`), no solo en la cookie `wp_dist`.
+
+## Velocidad: caché del catálogo y del navegador (2.8.0)
+
+- **Hosting** (`includes/catalog_fast.php`): `wp_cat_derive()` guarda lo que se calcula del catálogo (filas `wp_filter_cached()`, ids `wp_catalog_ids()`, «Similares» `wp_catalog_similar()`, géneros) atado a la fecha del catálogo y sus categorías en la caché. Si el catálogo venció, sirve lo guardado y pide renovarlo sin esperar (`wp_cat_touch()`): por el hosting después de contestar (`wp_xt_refresh_later()`, con `fastcgi_finish_request` / `litespeed_finish_request`) o por el navegador en el modo navegador. Un hosting sin esas funciones sigue como antes. El perfil infantil siempre calcula (su filtro cambia a medida que llega TMDB). Para ordenar: `wp_sort_items()` (mismo orden que usort, estable).
+- **Navegador** (`assets/nf/app.js`): `NF.getJSON(url, maxAge)` / `NF.api(params, maxAge)` guardan en `localStorage` (`nfr|<NF.ck>|…`) las filas (30 min), el destacado (20 min) y la primera página de Explorar (10 min). `NF.ck` (`wp_client_cache_key()`) cambia con la sesión, el perfil, el idioma, el distribuidor y la versión. El login borra todo `nfr|`.
+- **Páginas** (`wp_page_cache_headers()`): Inicio, Películas, Series, Explorar, fichas y actores salen con `Cache-Control: private, max-age=60` (cada enlace es un token nuevo, así que nunca se ve una vieja al entrar). «Cargando…» del modo navegador es `no-store`. Los enlaces al reproductor y a la salida llevan `data-noprefetch` (lo agrega `wp_route_rewrite()`). `logout.php` manda `Clear-Site-Data: "cache"`.
+- Prueba: secciones «Número de distribuidor en tu dominio» y «Más rápida» de `tools/profiles_web_test.php` del panel.
+
 ## Modo navegador (el navegador le pide al servidor IPTV, nunca el hosting)
 
 `includes/xt_client.php`, `xtfill.php` y `assets/nf/xtfill.js`. Se elige al iniciar sesión:

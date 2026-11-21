@@ -6,6 +6,8 @@ wp_security_headers();
 
 // Pantalla "Número de distribuidor": Continuar (valida con el panel) u Omitir
 wp_tenant_login_post();
+// Enlace de un distribuidor sin dominio propio en este dominio (login?d=NNNNNN): entra ya con su número
+wp_tenant_link_get();
 
 // Pantalla falsa del panel para visitantes nuevos: el código se comprueba aquí (POST fake_unlock)
 wp_fake_unlock_post();
@@ -431,7 +433,7 @@ $dist_step = $dist_view['step'];
         /* el hueco de abajo iguala la altura a filas enteras: el -50% de la animación cae justo en una fila */
         .nf-login-wall-inner { padding-bottom: 10px; }
     </style>
-<script>try{sessionStorage.removeItem("nfAlertShown")}catch(e){}</script>
+<script>try{sessionStorage.removeItem("nfAlertShown");for(var nk=[],ni=0;ni<localStorage.length;ni++){var nx=localStorage.key(ni);if(nx&&nx.indexOf("nfr|")===0)nk.push(nx);}nk.forEach(function(k){localStorage.removeItem(k);});}catch(e){}</script>
 <?php if ($dist_cfg !== null || $dist_view['choice'] === 'skip' || ($dist_view['choice'] === '' && $dist_view['error'] !== '')) echo wp_brand_store_script($dist_cfg); ?>
 </head>
 <body class="nf-login-page" data-step="<?php echo e($dist_step); ?>" data-brand="<?php echo $dist_cfg !== null ? '1' : ($dist_view['code'] !== '' ? 'cache' : '0'); ?>">
@@ -566,6 +568,10 @@ $dist_step = $dist_view['step'];
         derr.hidden = false;
     }
 
+    function distPick() {
+        var h = form.querySelector('input[name=dist_pick]');
+        return h ? h.value : '';
+    }
     function post(data) {
         return fetch(window.location.pathname, {
             method: 'POST',
@@ -649,6 +655,9 @@ $dist_step = $dist_view['step'];
         fd.append('username', u);
         fd.append('password', p);
         fd.append('step', 'servers');
+        // el número de distribuidor elegido va en cada paso (no solo en la cookie): con un navegador que no la guardó,
+        // el modo navegador no se saltaba y el login quedaba en manos del hosting
+        fd.append('dist_pick', distPick());
         return post(fd).then(function (d) {
             var res = { no: false, unreach: [], skip: [], why: '' }, why = [];
             if (!d || !d.success || !d.cands || !window.fetch) return res;
@@ -743,6 +752,7 @@ $dist_step = $dist_view['step'];
                 fd.append('username', u);
                 fd.append('password', p);
                 fd.append('step', 'client');
+                fd.append('dist_pick', distPick());
                 fd.append('server', r.ok);
                 fd.append('info', r.info);
                 return post(fd).then(done);

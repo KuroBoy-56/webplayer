@@ -16,10 +16,11 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.7.5');
+define('WP_VERSION', '2.8.0');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
+require_once __DIR__ . '/catalog_fast.php';
 
 
 /**
@@ -364,6 +365,9 @@ function xt_get_raw($action, array $params = [], $ttl = 600, $timeout = 15)
         wp_xt_need($action, $params, true);
         return $memo[$key] = [];
     }
+    // los catálogos grandes vencidos se usan ya y se renuevan después de contestar (includes/catalog_fast.php): antes
+    // cada 30 min una página esperaba que el hosting bajara el catálogo entero del servidor IPTV
+    if (is_array($stale) && $stale && wp_xt_refresh_later($action, $params, $timeout)) return $memo[$key] = $stale;
     // Bloqueo: si otra petición ya está descargando lo mismo, se espera y se reutiliza
     $lock = @fopen(wp_cache_dir('data') . '/' . md5($key) . '.lock', 'c');
     if ($lock) {
@@ -930,8 +934,25 @@ function wp_catalog_raw($type)
     $key = 'slim2|' . $type . '|' . xt_cache_key('', []);
     $data = wp_cache_get($key, 1800, $stale);
     if ($data !== null) return $memo[$type] = $data;
+    $act = $type === 'series' ? 'get_series' : 'get_vod_streams';
+    // vencido y el catálogo completo también: se usa el ligero de antes y los dos se renuevan después de contestar
+    // (includes/catalog_fast.php). Así nadie espera a que se lea el catálogo completo (20-40 MB).
+    $rawAge = time() - (int)@filemtime(wp_cache_file_of(xt_cache_key($act, [])));
+    if (is_array($stale) && $stale && $rawAge > 1800 && wp_xt_refresh_later($act, [], 40)) return $memo[$type] = $stale;
 
-    $raw = xt_get($type === 'series' ? 'get_series' : 'get_vod_streams', [], 1800, 40);
+    $raw = xt_get($act, [], 1800, 40);
+    $slim = wp_catalog_slim($type, $raw);
+    if ($slim) {
+        wp_cache_set($key, $slim);
+    } elseif (is_array($stale)) {
+        $slim = $stale;
+    }
+    return $memo[$type] = $slim;
+}
+
+/** El catálogo ligero de la respuesta de get_vod_streams / get_series. */
+function wp_catalog_slim($type, $raw)
+{
     $slim = [];
     if (is_array($raw)) {
         foreach ($raw as $it) {
@@ -973,12 +994,7 @@ function wp_catalog_raw($type)
             }
         }
     }
-    if ($slim) {
-        wp_cache_set($key, $slim);
-    } elseif (is_array($stale)) {
-        $slim = $stale;
-    }
-    return $memo[$type] = $slim;
+    return $slim;
 }
 
 /** Género guardado al abrir fichas (aprendizaje progresivo). */
@@ -1065,12 +1081,13 @@ function wp_filter($type, $platform = '', $genre = '', $cat = '', $q = '', $sort
         }
     }
 
+    // el mismo orden que usort, mucho más rápido (includes/catalog_fast.php)
     if ($sort === 'az') {
-        usort($result, function ($a, $b) { return strnatcasecmp($a['name'], $b['name']); });
+        wp_sort_items($result, 'name');
     } elseif ($sort === 'rating') {
-        usort($result, function ($a, $b) { return $b['rating'] <=> $a['rating']; });
+        wp_sort_items($result, 'rating');
     } elseif ($sort === 'recent') {
-        usort($result, function ($a, $b) { return $b['added'] <=> $a['added']; });
+        wp_sort_items($result, 'added');
     }
     return $result;
 }
@@ -1115,6 +1132,19 @@ function wp_available_platforms()
 }
 
 function wp_available_genres($type = 'all')
+{
+    // se calcula una vez por catálogo (recorre las series): includes/catalog_fast.php
+    $types = $type === 'all' ? ['movie', 'series'] : [$type === 'series' ? 'series' : 'movie'];
+    $keys = wp_cat_derive('avgen|' . $type, $types, function () use ($type) { return array_keys(wp_available_genres_calc($type)); });
+    $all = wp_genres();
+    $out = [];
+    foreach ((array)$keys as $k) {
+        if (isset($all[$k])) $out[$k] = $all[$k];
+    }
+    return $out;
+}
+
+function wp_available_genres_calc($type = 'all')
 {
     $out = [];
     $names = [];

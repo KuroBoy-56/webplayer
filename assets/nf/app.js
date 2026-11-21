@@ -51,13 +51,62 @@
         })();
     };
 
-    NF.api = function (params) {
+    /* ---------------- Caché del navegador (filas, destacado, primera página de Explorar) ---------------- */
+    // Lo ya cargado queda en este navegador (localStorage), atado a la sesión, el perfil y el idioma (NF.ck, header.php):
+    // al recargar o al volver se dibuja al instante y, si tiene más de 5 minutos, se pide otra vez por detrás para la
+    // próxima. Al iniciar sesión otra vez (otra NF.ck) lo anterior se borra; el login también lo borra.
+    var CK = 'nfr|' + (NF.ck || '') + '|', FRESH = 300000;
+    function cacheGet(k, maxAge) {
+        if (!NF.ck) return null;
+        try {
+            var v = JSON.parse(localStorage.getItem(CK + k) || 'null');
+            if (v && v.t && Date.now() - v.t < maxAge) return v;
+        } catch (e) {}
+        return null;
+    }
+    function cachePrune(all) {
+        try {
+            var del = [];
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (k && k.indexOf('nfr|') === 0 && (all || k.indexOf(CK) !== 0)) del.push(k);
+            }
+            del.forEach(function (k) { localStorage.removeItem(k); });
+        } catch (e) {}
+    }
+    function cacheSet(k, d) {
+        if (!NF.ck) return;
+        var s = JSON.stringify({ t: Date.now(), d: d });
+        try { localStorage.setItem(CK + k, s); } catch (e) {
+            cachePrune(true); // lleno: se empieza de cero
+            try { localStorage.setItem(CK + k, s); } catch (e2) {}
+        }
+    }
+    NF.cachePrune = cachePrune;
+    // JSON de la web; con maxAge (ms) se usa lo guardado si es más nuevo que eso
+    NF.getJSON = function (url, maxAge) {
+        var hit = maxAge ? cacheGet(url, maxAge) : null;
+        function net() {
+            return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(function (r) {
+                    if (r.status === 401) { location.href = 'login'; throw new Error('auth'); }
+                    return r.json();
+                })
+                .then(function (j) {
+                    if (maxAge && j && !j.error && !j.xtneed && j.items && j.items.length) cacheSet(url, j);
+                    return j;
+                });
+        }
+        if (hit) {
+            if (Date.now() - hit.t > FRESH) setTimeout(function () { net().catch(function () {}); }, 2000);
+            return Promise.resolve(hit.d);
+        }
+        return net();
+    };
+
+    NF.api = function (params, maxAge) {
         var q = Object.keys(params).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
-        return fetch('api.php?' + q, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(function (r) {
-                if (r.status === 401) { location.href = 'login'; throw new Error('auth'); }
-                return r.json();
-            });
+        return NF.getJSON('api.php?' + q, maxAge || 0);
     };
 
     NF.card = function (c, progress) {
@@ -201,9 +250,8 @@
     function loadRow(slider) {
         if (slider._loaded) return;
         slider._loaded = true;
-        var src = slider.getAttribute('data-src');
-        fetch(src, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(function (r) { return r.json(); })
+        // guardada 30 min en este navegador: al recargar o volver, al instante
+        NF.getJSON(slider.getAttribute('data-src'), 1800000)
             .then(function (data) {
                 var items = (data && data.items) || [];
                 if (!items.length) {
@@ -248,7 +296,8 @@
             busy = true;
             if (status) status.textContent = tr('Cargando...');
             var g = gen;
-            NF.api(params()).then(function (res) {
+            // la primera página de cada filtro queda guardada 10 min en este navegador
+            NF.api(params(), page === 1 ? 600000 : 0).then(function (res) {
                 if (g !== gen) return; // se cambió el filtro mientras cargaba: esta respuesta ya no sirve
                 total = res.total || 0;
                 if (opts.onTotal) opts.onTotal(total);
@@ -481,7 +530,23 @@
         });
     }
 
+    /* «Atrás» muestra la página guardada al instante: si mientras tanto se vio algo (Continuar viendo cambió) se vuelve a
+       pedir; si pasó más de un minuto, se comprueba que la sesión siga abierta (si no, al inicio de sesión) */
+    function initBack() {
+        var t0 = Date.now();
+        window.addEventListener('pageshow', function (e) {
+            var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+            if (!e.persisted && !(nav && nav.type === 'back_forward')) return;
+            var w = 0;
+            try { w = +sessionStorage.getItem('nf_watch') || 0; } catch (x) {}
+            if (w > t0) { location.reload(); return; }
+            if (Date.now() - t0 > 60000) NF.api({ action: 'ping' }).catch(function () {});
+        });
+    }
+
     function boot() {
+        cachePrune(false);
+        initBack();
         heroLast();
         initBgs();
         initHeader();

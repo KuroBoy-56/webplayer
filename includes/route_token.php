@@ -108,6 +108,8 @@ function wp_route_begin()
             // modo navegador: si la página espera datos del navegador, no se redirige (sale «Cargando…» y después
             // la misma página se vuelve a pedir, ya con los datos)
             if (function_exists('wp_xt_blocking') && wp_xt_client() && wp_xt_blocking()) {
+                // «Cargando…» nunca se guarda (ni por la precarga)
+                header('Cache-Control: no-store');
                 foreach (headers_list() as $h) {
                     if (stripos($h, 'Location:') === 0) {
                         header_remove('Location');
@@ -141,7 +143,12 @@ function wp_route_rewrite($html)
     $pages = implode('|', array_map(function ($p) { return preg_quote(substr($p, 0, -4), '~'); }, WP_ROUTE_PAGES));
     // atributos href / action / formaction
     $html = preg_replace_callback('~\b(href|action|formaction)=(["\'])((?:\./)?(?:' . $pages . ')(?:\.php)?(?:\?[^"\'<>\s]*)?(?:#[^"\'<>\s]*)?)\2~',
-        function ($m) { return $m[1] . '=' . $m[2] . wp_route_url($m[3]) . $m[2]; }, $html);
+        function ($m) {
+            $out = $m[1] . '=' . $m[2] . wp_route_url($m[3]) . $m[2];
+            // el reproductor y la salida nunca se precargan al pasar el mouse (con el token no se ve qué página es)
+            if ($m[1] === 'href' && preg_match('~^(?:\./)?(video_player|play|logout|playlist|renew)(?:\.php)?(?:[?#]|$)~', $m[3])) $out .= ' data-noprefetch';
+            return $out;
+        }, $html);
     // direcciones completas entre comillas dobles (configuración del reproductor en JSON): nunca un pedazo que se
     // concatena en JavaScript ("…?id=" + id) ni una palabra suelta sin .php ni ?… (un dato como "series")
     // (con & escrito como \u0026 por JSON_HEX_AMP)

@@ -53,6 +53,11 @@ function out($data)
 }
 
 switch ($action) {
+    case 'ping':
+        // la sesión sigue abierta (session.php contesta 401 si no): «Atrás» a una página guardada (assets/nf/app.js)
+        header('Cache-Control: no-store');
+        out(['ok' => true]);
+
     case 'alerta':
         // Aviso del panel (Alertas): bienvenida o vencimiento, igual que en las apps
         header('Cache-Control: no-store');
@@ -128,16 +133,14 @@ switch ($action) {
     case 'row':
         $limit = max(1, min(60, (int)($_GET['limit'] ?? 30)));
         $isTop = ($_GET['sort'] ?? '') === 'top';
-        $list = wp_filter($type, $platform, $genre, $cat, '', $sort);
+        $shuffle = !empty($_GET['shuffle']);
+        // la fila sale de lo ya calculado para este catálogo (includes/catalog_fast.php): unos KB, no el catálogo entero
+        $list = wp_filter_cached($type, $platform, $genre, $cat, $sort, $isTop ? 300 : ($shuffle ? 400 : $limit))['l'];
         if ($isTop) {
-            $list = array_slice($list, 0, 300);
-            usort($list, function ($a, $b) { return $b['rating'] <=> $a['rating']; });
+            wp_sort_items($list, 'rating');
             $limit = min($limit, 10);
         }
-        if (!empty($_GET['shuffle'])) {
-            $list = array_slice($list, 0, 400);
-            shuffle($list);
-        }
+        if ($shuffle) shuffle($list);
         $items = [];
         foreach (array_slice($list, 0, $limit) as $it) $items[] = wp_card($it);
         out(['items' => $items]);
@@ -145,8 +148,15 @@ switch ($action) {
     case 'browse':
         $per = 60;
         $page = max(1, (int)($_GET['page'] ?? 1));
-        $list = wp_filter($type, $platform, $genre, $cat, $q, $sort);
-        $total = count($list);
+        if ($q === '' && $page <= 10) {
+            // las primeras 10 páginas de cada filtro quedan guardadas para este catálogo (includes/catalog_fast.php)
+            $f = wp_filter_cached($type, $platform, $genre, $cat, $sort, 600);
+            $list = $f['l'];
+            $total = (int)$f['n'];
+        } else {
+            $list = wp_filter($type, $platform, $genre, $cat, $q, $sort);
+            $total = count($list);
+        }
         $items = [];
         foreach (array_slice($list, ($page - 1) * $per, $per) as $it) $items[] = wp_card($it);
         out(['items' => $items, 'total' => $total, 'more' => $page * $per < $total]);
@@ -174,7 +184,7 @@ switch ($action) {
     case 'counts':
         // Mi cuenta: cantidad de contenido de la línea (catálogos en caché, los mismos que usa el resto de la web)
         $live = xt_get('get_live_streams', [], 1800, 25);
-        out(['live' => is_array($live) ? count($live) : null, 'movie' => count(wp_catalog('movie')), 'series' => count(wp_catalog('series'))]);
+        out(['live' => is_array($live) ? count($live) : null, 'movie' => count(wp_catalog_ids('movie')), 'series' => count(wp_catalog_ids('series'))]);
 
     case 'hero':
         // el perfil infantil tiene su propio destacado (includes/kids.php)
@@ -191,7 +201,7 @@ switch ($action) {
             $types = $type === 'all' ? ['movie', 'series'] : [$type];
             foreach ($types as $t) {
                 $list = $platform ? wp_filter($t, $platform, '', '', '', 'recent') : wp_catalog($t);
-                if (!$platform) usort($list, function ($a, $b) { return $b['added'] <=> $a['added']; });
+                if (!$platform) wp_sort_items($list, 'added');
                 $list = array_slice(array_values(array_filter($list, function ($i) { return $i['icon'] !== ''; })), 0, 150);
                 shuffle($list);
                 foreach (array_slice($list, 0, 8) as $it) { $it['t'] = $t; $pool[] = $it; }

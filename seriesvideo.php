@@ -100,18 +100,11 @@ if ($selected_season === null || !isset($eps_js[$selected_season])) {
 }
 
 /* ---------- Similares ---------- */
-$similar = [];
-$self = null;
-foreach (wp_catalog('series') as $s) {
-    if ($s['id'] === (string)$id) { $self = $s; break; }
-}
-if ($self) {
-    foreach (wp_catalog('series') as $s) {
-        if ($s['id'] !== (string)$id && array_intersect($s['cats'], $self['cats'])) $similar[] = $s;
-    }
-    shuffle($similar);
-    $similar = array_slice($similar, 0, 24);
-}
+// las 80 más nuevas de sus categorías, guardadas para este catálogo (includes/catalog_fast.php)
+$self_cat = wp_catalog_item_cats('series', $id);
+$similar = wp_catalog_similar('series', $id);
+shuffle($similar);
+$similar = array_slice($similar, 0, 24);
 
 // carátula: caché del panel (copia → img.php) → la del servidor → la de TMDB; fondo: Full HD del panel → original → carátula
 $tm_id = is_scalar($series_info['tmdb_id'] ?? ($series_info['tmdb'] ?? '')) ? (string)($series_info['tmdb_id'] ?? ($series_info['tmdb'] ?? '')) : '';
@@ -192,7 +185,7 @@ include "header.php";
     <?php
     $cards = [];
     foreach ($similar as $s) $cards[] = wp_card($s, 'series');
-    echo wp_row(t('Más series similares'), $cards, $self ? 'series.php?id=' . rawurlencode($self['cat']) : '');
+    echo wp_row(t('Más series similares'), $cards, $self_cat ? 'series.php?id=' . rawurlencode($self_cat[0]) : '');
     ?>
 </div>
 <?php endif; ?>

@@ -45,6 +45,34 @@ function wp_tenant_login_post()
     exit;
 }
 
+/**
+ * Enlace de un distribuidor en el dominio del dueño: login?d=NNNNNN (o el dominio con ?d=, index.php). Un distribuidor
+ * sin dominio propio les pasa ese enlace a sus clientes: la web queda en su número (con su logo, nombre y colores) sin
+ * escribirlo, igual que en un dominio propio, y «Cambiar distribuidor» sigue estando. Un número que el panel no conoce
+ * (o vencido, suspendido, sin la web) vuelve a la pantalla del número con el mensaje.
+ */
+function wp_tenant_link_get()
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET' || !isset($_GET['d']) || isset($_GET['dist_err'])) return;
+    if (function_exists('wp_edge_dist') && wp_edge_dist() !== null) return; // dominio propio: siempre el suyo
+    $code = preg_replace('/\D/', '', (string)$_GET['d']);
+    header('Cache-Control: no-store');
+    if (strlen($code) !== 6) {
+        header('Location: login');
+        exit;
+    }
+    if (wp_dist_choice() !== $code) {
+        $st = wp_panel_ready() ? wp_tenant_status($code) : ['state' => 'error', 'error' => 'no_key'];
+        if ($st['state'] !== 'ok') {
+            header('Location: login?dist=1&dist_err=' . rawurlencode((string)($st['error'] ?? 'offline')));
+            exit;
+        }
+        wp_tenant_switch($code);
+    }
+    header('Location: login');
+    exit;
+}
+
 /** Guarda la elección; si había una sesión de otro distribuidor, se cierra. */
 function wp_tenant_switch($choice)
 {

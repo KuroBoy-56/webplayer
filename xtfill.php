@@ -43,6 +43,12 @@ if (!is_array($json)) {
     exit;
 }
 wp_cache_set($meta['ck'], $json);
+// películas o series: el catálogo ligero queda listo ya, con lo nuevo (la próxima página no lo arma)
+if (in_array($meta['a'] ?? '', ['get_vod_streams', 'get_series'], true) && $meta['ck'] === xt_cache_key($meta['a'], [])) {
+    $type = $meta['a'] === 'get_series' ? 'series' : 'movie';
+    $slim = wp_catalog_slim($type, $json);
+    if ($slim) wp_cache_set('slim2|' . $type . '|' . xt_cache_key('', []), $slim);
+}
 // ya no hace falta renovarlo en segundo plano
 $bg = wp_cache_get('xtbg|' . $sid, 1800);
 if (is_array($bg) && isset($bg[$id])) {

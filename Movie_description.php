@@ -57,20 +57,11 @@ $play = "video_player.php?id={$id}&slug=movie&ext=" . rawurlencode($container_ex
 $warm_url = wp_tracks_warm_url('movie', $id, $container_extension); // idiomas desde la ficha (solo el panel)
 
 /* ---------- Similares (misma categoría) ---------- */
-$similar = [];
-$self = null;
-foreach (wp_catalog('movie') as $m) {
-    if ($m['id'] === $id) { $self = $m; break; }
-}
-if ($self) {
-    foreach (wp_catalog('movie') as $m) {
-        if ($m['id'] !== $id && array_intersect($m['cats'], $self['cats'])) $similar[] = $m;
-    }
-    usort($similar, function ($a, $b) { return $b['added'] <=> $a['added']; });
-    $similar = array_slice($similar, 0, 80);
-    shuffle($similar);
-    $similar = array_slice($similar, 0, 24);
-}
+// los 80 más nuevos de sus categorías, guardados para este catálogo (includes/catalog_fast.php)
+$self_cat = wp_catalog_item_cats('movie', $id);
+$similar = wp_catalog_similar('movie', $id);
+shuffle($similar);
+$similar = array_slice($similar, 0, 24);
 
 $year = substr((string)$releasedate, 0, 4);
 $page_title = $title;
@@ -142,7 +133,7 @@ include "header.php";
     <?php
     $cards = [];
     foreach ($similar as $s) $cards[] = wp_card($s, 'movie');
-    echo wp_row(t('Más títulos similares'), $cards, $self ? 'movies.php?id=' . rawurlencode($self['cat']) : '');
+    echo wp_row(t('Más títulos similares'), $cards, $self_cat ? 'movies.php?id=' . rawurlencode($self_cat[0]) : '');
     ?>
 </div>
 <?php endif; ?>
