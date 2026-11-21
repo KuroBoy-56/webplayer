@@ -42,6 +42,13 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 - **Catálogo por partes:** Inicio, Películas, Series, Explorar y las fichas definen `WP_XT_SOFT`: en el modo navegador salen al momento sin la pantalla «Cargando…» y el catálogo completo se trae por detrás (`wp_xt_soft()` en `includes/xt_client.php`, salvo en un perfil infantil). Cada fila (`api.php?action=row`) espera lo suyo; una fila de una categoría y su «Ver todo» llegan solos con `get_vod_streams&category_id=` (`wp_cat_list_quick()`) mientras llega el catálogo completo. `wp_cat_derive()` no guarda cálculos hechos sin catálogo. El navegador espera el catálogo completo hasta 3 minutos (`xtfill.js`).
 - Pruebas: `tools/web_relay_test.php` del panel (carátulas por el Worker, firma de la línea, catálogo por partes con un servidor lento).
 
+## Pósters de TMDB, orden de las claves y flechas de Plataformas (2.9.8)
+
+- `wp_tmdb_key_list()` (`includes/core.php`): claves en orden: `tmdb_key` de `includes/panel_secret.php` (o `WP_TMDB_KEY`; nunca para un distribuidor con «Solo sus recursos») y la del panel (`panel|tmdbkey`). `wp_tmdb_key()` es la primera y `wp_tmdb_keys()` (`includes/actor.php`) la lista. Una clave que TMDB rechaza (401, `status_code` 7) queda marcada un día con `wp_tmdb_key_bad()` y se usa la siguiente.
+- `NF.posters()` (`assets/nf/app.js`) corre en todas las tarjetas (antes solo en las que no tenían la caché del panel): la carátula del servidor sale al momento y el póster de TMDB (`api.php?action=posters`, `w500`) la reemplaza cuando carga. La memoria del navegador (`nfp|…`) sube los `w342` de antes a `w500`.
+- `wp_platform_tiles()` (`includes/ui.php`) arma `.nf-plats-row` con `.nf-arrow` a los lados; `setupRow()` también la maneja (desplaza `.nf-platforms`).
+- Prueba del panel: `tools/web_tmdb_panel_test.php` (orden de las claves, clave rechazada, distribuidor y «Solo sus recursos»).
+
 ## Imagen del destacado y logo de canal por marca (2.9.5)
 
 - `NF.hero()` (`assets/nf/app.js`): `art(it, cb)` prueba solo las imágenes de ese título (`background_image`, `background_fb`, `poster`, `poster_fb`; 12 s). Si ninguna carga, el título sale del carrusel y pasa el siguiente; si no carga ninguno, queda sin fondo. Un cambio pedido después anula al anterior (`seq`).

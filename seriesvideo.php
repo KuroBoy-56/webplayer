@@ -121,7 +121,9 @@ $similar = array_slice($similar, 0, 24);
 $tm_id = is_scalar($series_info['tmdb_id'] ?? ($series_info['tmdb'] ?? '')) ? (string)($series_info['tmdb_id'] ?? ($series_info['tmdb'] ?? '')) : '';
 $poster_srcs = wp_poster_sources('series', $server_img, $title, $year, $tm_id);
 $tmdb_img = wp_img($poster);
-if ($tmdb_img !== WP_NOIMG && !in_array($tmdb_img, $poster_srcs, true)) $poster_srcs[] = $tmdb_img;
+// el de TMDB (alta calidad) primero; la del servidor y la copia del panel quedan de respaldo
+if (!empty($tmdb['poster']) && $tmdb_img !== WP_NOIMG) $poster_srcs = array_values(array_unique(array_merge([$tmdb_img], $poster_srcs)));
+elseif ($tmdb_img !== WP_NOIMG && !in_array($tmdb_img, $poster_srcs, true)) $poster_srcs[] = $tmdb_img;
 $bg_srcs = array_values(array_unique(array_merge(wp_backdrop_sources($backdrop), $poster_srcs)));
 $page_title = $title;
 include "header.php";

@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Pósters de TMDB en alta calidad, clave de TMDB de `panel_secret.php` primero y flechas en Plataformas — versión 2.9.8 (21 de noviembre, undécima parte)
+- **Pósters:** las tarjetas mostraban la carátula del servidor IPTV (o su copia en el panel), muchas veces chica o de mala calidad, y el póster de TMDB solo se buscaba si todo fallaba. Ahora la tarjeta sale al momento con la del servidor y, apenas llega, el póster de TMDB en alta calidad (500 px de ancho; antes 342) la reemplaza. Sin póster en TMDB queda la del servidor. En la ficha de una película o serie el póster de TMDB va primero.
+- **Clave de TMDB:** primero la `tmdb_key` de `includes/panel_secret.php` y, si no está o TMDB la rechaza, la que manda el panel (la rechazada se salta un día). También para los distribuidores, menos los que tienen «Solo sus recursos» (solo la suya). Sin ninguna, TMDB por el panel como antes.
+- **Plataformas:** la fila de Netflix, Disney+, etc. tiene flechas a los lados como las demás filas, para moverla con el mouse en la computadora (aparecen al pasar el mouse; en el celular se desliza como siempre).
+- Archivos: `assets/nf/app.js`, `assets/nf/app.css`, `header.php`, `includes/core.php`, `includes/actor.php`, `includes/ui.php`, `Movie_description.php`, `seriesvideo.php`, `includes/panel_secret.sample.php`.
+
 ## Arreglo de la vista previa de TV en vivo con un canal en reproducción — versión 2.9.7 (21 de noviembre, décima parte)
 - **El problema de la 2.9.6:** con un canal reproduciéndose, el reproductor ocupaba todo el alto de la columna (su regla de 100 % de alto le ganaba a la vista previa) y la guía de programas quedaba fuera de la pantalla; el video se veía corrido abajo a la derecha.
 - **Ahora:** la vista previa queda en 16:9 y hasta el 46 % del alto también con el canal en reproducción, con el nombre del canal y la guía debajo. Pantalla completa sigue igual. En el celular no cambia.

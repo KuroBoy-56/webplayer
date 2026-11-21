@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.9.7');
+define('WP_VERSION', '2.9.8');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -25,33 +25,50 @@ require_once __DIR__ . '/xt_relay.php';
 
 
 /**
- * Clave de TMDB (carátulas, fondos, elenco y tráileres). No va en el código: la guardada en el panel (Ajustes del
- * dueño, o la del distribuidor con su número), que el panel manda con el token al iniciar sesión y con Continuar
- * viendo. Solo el dueño (sin número), si el panel no tiene ninguna, usa 'tmdb_key' de includes/panel_secret.php (no se
- * sube a GitHub). Un distribuidor sin clave propia usa TMDB por el panel (wp_tmdb_via_panel, 2.9.3), salvo con «Solo
- * sus recursos». Sin ninguna la web funciona igual, sin datos de TMDB.
+ * Claves de TMDB (carátulas, fondos, elenco y tráileres), en el orden en que se usan:
+ *  1. 'tmdb_key' de includes/panel_secret.php (o WP_TMDB_KEY), la del hosting de la web (no se sube a GitHub);
+ *  2. la guardada en el panel (Ajustes del dueño, o la del distribuidor con su número), que el panel manda con el token.
+ * Una clave que TMDB rechazó (401) se salta un día (wp_tmdb_key_bad) y se usa la siguiente. Un distribuidor con «Solo
+ * sus recursos» nunca usa la del hosting. Sin ninguna: TMDB por el panel (wp_tmdb_via_panel) y, sin eso, sin TMDB.
  */
-function wp_tmdb_key()
+function wp_tmdb_key_list()
 {
-    static $key = null;
-    if ($key !== null) return $key;
-    $k = '';
+    static $memo = null;
+    if ($memo) return $memo; // sin ninguna no se guarda: la del panel puede llegar más adelante en el mismo pedido
+    $own = defined('WP_TMDB_KEY') ? (string)constant('WP_TMDB_KEY') : '';
+    $file = __DIR__ . '/panel_secret.php';
+    if ($own === '' && is_file($file)) {
+        $cfg = include $file;
+        if (is_array($cfg)) $own = trim((string)($cfg['tmdb_key'] ?? ''));
+    }
+    $panel = '';
     if (function_exists('wp_panel_ck')) {
         $p = wp_cache_get(wp_panel_ck('panel|tmdbkey'), 30 * 86400, $stale);
-        $k = is_string($p) ? $p : (is_string($stale) ? $stale : '');
+        $panel = is_string($p) ? $p : (is_string($stale) ? $stale : '');
     }
-    // con número de distribuidor solo vale su clave (la que manda el panel), nunca la del servidor
+    // «Solo sus recursos»: el distribuidor nunca usa nada del dueño
     $dist = function_exists('wp_panel_tenant') && wp_panel_tenant() !== '';
-    if (!$dist && !preg_match('/^[0-9a-f]{32}$/i', $k)) {
-        $k = defined('WP_TMDB_KEY') ? (string)constant('WP_TMDB_KEY') : '';
-        $file = __DIR__ . '/panel_secret.php';
-        if ($k === '' && is_file($file)) {
-            $cfg = include $file;
-            if (is_array($cfg)) $k = trim((string)($cfg['tmdb_key'] ?? ''));
-        }
+    $cfg = $dist && function_exists('wp_tenant_cfg') ? wp_tenant_cfg() : null;
+    if (is_array($cfg) && empty($cfg['features']['hosting_video'])) $own = '';
+    $list = [];
+    foreach ([$own, $panel] as $k) {
+        $k = trim((string)$k);
+        if (preg_match('/^[0-9a-f]{32}$/i', $k) && !in_array($k, $list, true) && !wp_cache_get('tmdb|badkey|' . md5($k), 86400)) $list[] = $k;
     }
-    if (!preg_match('/^[0-9a-f]{32}$/i', $k)) return ''; // sin guardar: el panel puede mandarla después
-    return $key = $k;
+    return $memo = $list;
+}
+
+/** TMDB rechazó esta clave (401): se salta un día y va la siguiente. */
+function wp_tmdb_key_bad($key)
+{
+    if ($key !== '') wp_cache_set('tmdb|badkey|' . md5($key), 1);
+}
+
+/** La clave de TMDB en uso (la primera de wp_tmdb_key_list) o ''. */
+function wp_tmdb_key()
+{
+    $l = wp_tmdb_key_list();
+    return $l ? $l[0] : '';
 }
 
 /**
@@ -1482,7 +1499,7 @@ function wp_tmdb_posters(array $items)
         $ck = 'tmdbp2|' . $type . '|' . ($tm ?: wp_norm_title($q) . '|' . $y);
         $hit = wp_cache_get($ck, 2592000);
         if (is_array($hit) && ($hit['p'] || time() - (int)($hit['t'] ?? 0) < 172800)) {
-            if ($hit['p']) $out[$it['k']] = $hit['p'];
+            if ($hit['p']) $out[$it['k']] = str_replace('/t/p/w342/', '/t/p/w500/', $hit['p']);
             continue;
         }
         if (!$tm && $q === '') continue;
@@ -1499,8 +1516,10 @@ function wp_tmdb_posters(array $items)
             if ($body === null || $body === false || $body === '') continue; // sin respuesta: se reintenta en la próxima visita
             $j = json_decode($body, true);
             if (!is_array($j)) continue;
+            // clave rechazada (401 de TMDB): la próxima vez va la siguiente (la del panel)
+            if ((int)($j['status_code'] ?? 0) === 7 && wp_tmdb_key() !== '') { wp_tmdb_key_bad(wp_tmdb_key()); continue; }
             $r = $need[$k]['tm'] ? (!empty($j['id']) ? $j : null) : wp_tmdb_pick((array)($j['results'] ?? []), $need[$k]['q'], $need[$k]['y']);
-            $p = !empty($r['poster_path']) ? 'https://image.tmdb.org/t/p/w342' . $r['poster_path'] : '';
+            $p = !empty($r['poster_path']) ? 'https://image.tmdb.org/t/p/w500' . $r['poster_path'] : '';
             if ($p) { wp_cache_set($need[$k]['ck'], ['p' => $p, 't' => time()]); $out[$k] = $p; }
             else $slow[$k] = $need[$k];
         }
@@ -1510,7 +1529,7 @@ function wp_tmdb_posters(array $items)
             if (microtime(true) > $deadline) break;
             $r = wp_tmdb_find($n['type'], $n['n'], $n['y'], $n['tm']);
             if (!$r && $n['tm']) $r = wp_tmdb_find($n['type'], $n['n'], $n['y']); // el tmdb_id del servidor puede estar mal
-            $p = !empty($r['poster_path']) ? 'https://image.tmdb.org/t/p/w342' . $r['poster_path'] : '';
+            $p = !empty($r['poster_path']) ? 'https://image.tmdb.org/t/p/w500' . $r['poster_path'] : '';
             wp_cache_set($n['ck'], ['p' => $p, 't' => time()]);
             if ($p) $out[$k] = $p;
         }

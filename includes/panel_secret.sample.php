@@ -6,7 +6,7 @@ return [
     'master_key_hex' => '',
     // Opcional: carpeta api/ de otro panel (termina en "/"), p. ej. para pruebas.
     // 'panel_url' => 'https://mi-panel.com/api/',
-    // Opcional: clave de TMDB (32 caracteres). Sin ella se usa la que manda el panel.
+    // Opcional: clave de TMDB (32 caracteres). Se usa primero; si falta o TMDB la rechaza, la que manda el panel.
     // 'tmdb_key' => '',
     // Opcional: dominio propio con un Worker de Cloudflare (GUIA-WORKER.html). Cada secreto (32 a 128 letras y
     // números) es el EDGE_KEY de un Worker; a la derecha, '' (el cliente escribe su número o pulsa Omitir) o el

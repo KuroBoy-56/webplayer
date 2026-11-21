@@ -58,12 +58,12 @@ if (!function_exists('wp_nav_cls')) {
     <title><?php echo e($page_title); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
-    <link rel="stylesheet" href="assets/nf/app.css?v=14">
+    <link rel="stylesheet" href="assets/nf/app.css?v=15">
     <?php echo wp_tenant_css($wp_dist_cfg); ?>
     <?php if (wp_panel_tenant() !== '' || wp_dist_choice() === 'skip') echo wp_brand_store_script($wp_dist_cfg); ?>
     <script>window.NF={demo:<?php echo $wp_demo ? 'true' : 'false'; ?>,ck:<?php echo json_encode(wp_client_cache_key()); ?>,sk:<?php echo json_encode(substr(sha1(strtolower((string)parse_url(wp_user()['server'], PHP_URL_HOST))), 0, 8)); ?>,login:<?php echo json_encode(wp_login_url()); ?>,imgErr:function(i){i.onerror=null;i.src='assets/nf/noposter.svg';i.classList.add('ok');var c=i.closest&&i.closest('.nf-card');if(c)c.classList.add('noimg');}};</script>
     <?php echo wp_i18n_script(); ?>
-    <script src="assets/nf/app.js?v=14" defer></script>
+    <script src="assets/nf/app.js?v=15" defer></script>
     <script src="assets/nf/alert.js?v=5" defer></script>
     <?php if (!empty($wp_head_extra)) echo $wp_head_extra; ?>
 </head>

@@ -95,7 +95,11 @@ function wp_platform_tiles()
         }
         $o .= '</a>';
     }
-    return $o ? '<nav class="nf-platforms" aria-label="' . e(t('Plataformas')) . '">' . $o . '</nav>' : '';
+    if (!$o) return '';
+    // con flechas a los lados, como las filas (para desplazarlas con el mouse en la computadora)
+    return '<div class="nf-plats-row"><button class="nf-arrow l" type="button" aria-label="' . e(t('Anterior')) . '" hidden>' . wp_icon('left') . '</button>'
+        . '<nav class="nf-platforms" aria-label="' . e(t('Plataformas')) . '">' . $o . '</nav>'
+        . '<button class="nf-arrow r" type="button" aria-label="' . e(t('Siguiente')) . '">' . wp_icon('right') . '</button></div>';
 }
 
 function wp_footer_html()

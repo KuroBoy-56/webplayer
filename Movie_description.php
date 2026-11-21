@@ -44,7 +44,9 @@ $img_url = wp_img($img);
 // carátula: caché del panel (copia → img.php) → la del servidor → la de TMDB; fondo: Full HD del panel → original → carátula
 $tm_id = is_scalar($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) ? (string)($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) : '';
 $poster_srcs = wp_poster_sources('movie', $server_img, $title, substr((string)$releasedate, 0, 4), $tm_id);
-if ($img_url !== WP_NOIMG && !in_array($img_url, $poster_srcs, true)) $poster_srcs[] = $img_url;
+// el de TMDB (alta calidad) primero; la del servidor y la copia del panel quedan de respaldo
+if (!empty($tmdb['poster']) && $img_url !== WP_NOIMG) $poster_srcs = array_values(array_unique(array_merge([$img_url], $poster_srcs)));
+elseif ($img_url !== WP_NOIMG && !in_array($img_url, $poster_srcs, true)) $poster_srcs[] = $img_url;
 $bg_srcs = array_values(array_unique(array_merge(wp_backdrop_sources($backdrop), $poster_srcs)));
 $bg_url = $bg_srcs[0] ?? $img_url;
 

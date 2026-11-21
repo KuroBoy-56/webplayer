@@ -153,8 +153,9 @@
     };
 
     /* ---------------- Carátulas TMDB en alta calidad ----------------
-       Solo para las tarjetas sin la caché de imágenes del panel (el dueño la apagó): con ella, el panel ya entrega el
-       póster de TMDB cuando el servidor IPTV no tiene, y NF.imgErr pide TMDB solo si todo falla. */
+       En todas las tarjetas: sale al momento la del servidor IPTV (o la copia del panel) y, apenas llega, el póster de
+       TMDB en alta calidad la reemplaza (los del servidor suelen ser chicos o de mala calidad). Sin póster en TMDB queda
+       la del servidor. */
     /* carátulas de TMDB ya encontradas (públicas, sin datos de la cuenta): hasta 3000 en este navegador */
     // por servidor (NF.sk): el mismo número es otro título en otro servidor (dueño y distribuidor en el mismo navegador)
     var MEMO = 'nfp' + (NF.sk ? '|' + NF.sk : '');
@@ -173,11 +174,7 @@
     }
 
     NF.posters = function (root) {
-        var cards = $$('.nf-card[data-pk]:not([data-pd])', root || d).filter(function (a) {
-            var im = a.querySelector('img');
-            if (im && (im.hasAttribute('data-fb') || /\/api\/(imgc\/|img\.php)/.test(im.getAttribute('src') || ''))) { a.setAttribute('data-pd', '1'); return false; }
-            return true;
-        });
+        var cards = $$('.nf-card[data-pk]:not([data-pd])', root || d);
         if (!cards.length) return;
         var map = {}, known = posterMemo();
         cards.forEach(function (a) { a.setAttribute('data-pd', '1'); (map[a.getAttribute('data-pk')] = map[a.getAttribute('data-pk')] || []).push(a); });
@@ -188,7 +185,8 @@
             if (!v) return;
             // '-<día>': TMDB no la tenía; se vuelve a preguntar pasados 2 días
             if (v.charAt(0) === '-') { if (today - (+v.slice(1) || 0) < 2) delete map[k]; return; }
-            map[k].forEach(function (a) { var img = a.querySelector('img'); if (img) { img.src = v; img.classList.add('ok'); } });
+            v = v.replace('/t/p/w342/', '/t/p/w500/'); // los guardados antes, en menor calidad
+            map[k].forEach(function (a) { var img = a.querySelector('img'); if (img) { img.removeAttribute('data-fb'); img.src = v; img.classList.add('ok'); } });
             delete map[k];
         });
         var keys = Object.keys(map);
@@ -206,7 +204,7 @@
                     Object.keys(p).forEach(function (k) {
                         var im = new Image();
                         im.onload = function () {
-                            (map[k] || []).forEach(function (a) { var img = a.querySelector('img'); if (img) { img.src = p[k]; img.classList.add('ok'); } });
+                            (map[k] || []).forEach(function (a) { var img = a.querySelector('img'); if (img) { img.removeAttribute('data-fb'); img.src = p[k]; img.classList.add('ok'); } });
                         };
                         im.src = p[k];
                     });
@@ -268,7 +266,7 @@
 
     /* ---------------- Filas horizontales ---------------- */
     function setupRow(row) {
-        var slider = $('.nf-slider', row);
+        var slider = $('.nf-slider', row) || $('.nf-platforms', row);
         if (!slider || slider._nf) return;
         slider._nf = true;
         var l = $('.nf-arrow.l', row), r = $('.nf-arrow.r', row);
@@ -313,7 +311,7 @@
     }
 
     NF.initRows = function (root) {
-        $$('.nf-row', root).forEach(setupRow);
+        $$('.nf-row, .nf-plats-row', root).forEach(setupRow);
         var lazy = $$('.nf-slider[data-src]', root);
         if (!lazy.length) return;
         if (!('IntersectionObserver' in window)) { lazy.forEach(loadRow); return; }

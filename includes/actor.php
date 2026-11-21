@@ -105,16 +105,10 @@ function wp_title_lookup(array $idx, array $titles, $year)
     return null;
 }
 
-/** Clave TMDB: la del panel (llega con Continuar viendo) o la de includes/panel_secret.php. */
+/** Claves TMDB en orden: la de includes/panel_secret.php y después la del panel (wp_tmdb_key_list en core.php). */
 function wp_tmdb_keys()
 {
-    $keys = [];
-    $panel = wp_cache_get(wp_panel_ck('panel|tmdbkey'), 30 * 86400, $stale);
-    $panel = is_string($panel) ? $panel : (is_string($stale) ? $stale : '');
-    if (preg_match('/^[0-9a-f]{32}$/i', $panel)) $keys[] = $panel;
-    $own = wp_tmdb_key();
-    if ($own && !in_array($own, $keys, true)) $keys[] = $own;
-    return $keys;
+    return wp_tmdb_key_list();
 }
 
 /** GET a TMDB probando la clave del panel y luego la incorporada (o por el panel, wp_tmdb_url). Devuelve el JSON o null. */
@@ -128,7 +122,7 @@ function wp_tmdb_get($path, $query = '', $timeout = 8)
     foreach (wp_tmdb_keys() as $key) {
         $body = wp_http_get('https://api.themoviedb.org/3/' . $path . '?api_key=' . rawurlencode($key) . ($query ? '&' . $query : ''), $timeout, $code);
         if ($body === null) return null; // sin red: otra clave no ayuda
-        if ($code === 401) continue;     // clave no válida: se prueba la siguiente
+        if ($code === 401) { wp_tmdb_key_bad($key); continue; } // clave no válida: se prueba la siguiente
         $j = json_decode($body, true);
         return is_array($j) ? $j : null;
     }

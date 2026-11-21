@@ -207,10 +207,14 @@ button { font-family: inherit; }
 .nf-btn-circle.on { background: #fff; color: #000; border-color: #fff; }
 
 /* ---------- PLATAFORMAS ---------- */
+.nf-plats-row { position: relative; z-index: 4; margin-top: -9vw; margin-bottom: 8px; }
 .nf-platforms {
-    position: relative; z-index: 4; display: flex; gap: 14px; padding: 0 var(--nf-pad); margin-top: -9vw; margin-bottom: 8px;
-    overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity;
+    position: relative; display: flex; gap: 14px; padding: 0 var(--nf-pad);
+    overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; scroll-behavior: smooth;
 }
+/* flechas como las de las filas: aparecen al pasar el mouse */
+.nf-plats-row .nf-arrow { top: 0; bottom: 0; }
+.nf-plats-row:hover .nf-arrow { opacity: 1; }
 .nf-platforms::-webkit-scrollbar { display: none; }
 .nf-plat {
     flex: 0 0 auto; width: clamp(130px, 12.5vw, 210px); aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
@@ -531,7 +535,8 @@ button:disabled { cursor: progress; opacity: .85; }
     .d-only { display: none !important; }
     .nf-hero-btns.m-only { margin-top: 16px; }
 
-    .nf-platforms { margin-top: 6px; gap: 10px; }
+    .nf-plats-row { margin-top: 6px; }
+    .nf-platforms { gap: 10px; }
     .nf-plat { width: 38vw; border-radius: 8px; }
     .nf-chips { padding-top: 10px; }
     .nf-chip { font-size: 13px; padding: 6px 13px; }
