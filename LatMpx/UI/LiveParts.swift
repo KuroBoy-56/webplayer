@@ -209,15 +209,25 @@ struct ProgressLine: View {
     }
 }
 
-/** logo del canal (o el de la app si no tiene) */
+/** logo del canal; sin logo (o si no carga) el del distribuidor: el de la app solo sin distribuidor y ninguno si el
+ *  distribuidor no tiene logo, como en las apps de TV y la web */
 struct ChannelLogo: View {
+    @EnvironmentObject var tenant: Tenant
     let url: String
     var background: Color = LiveColors.logoBg
+    @State private var failed = ""
     var body: some View {
         ZStack {
             background
-            if url.isEmpty { Image("Logo").resizable().scaledToFit().padding(2) }
-            else { RemoteImage(url: url, mode: .fit, maxPixel: 200).padding(2) }
+            if !url.isEmpty && failed != url {
+                RemoteImage(url: url, mode: .fit, maxPixel: 200, onFail: { failed = url }).padding(2)
+            } else if let b = tenant.brand {
+                if !b.logoUrl.isEmpty {
+                    RemoteImage(url: b.logoUrl + (b.logoUrl.contains("?") ? "&" : "?") + "r=\(b.logoRev)", mode: .fit, maxPixel: 300).padding(2)
+                }
+            } else {
+                Image("Logo").resizable().scaledToFit().padding(2)
+            }
         }
     }
 }

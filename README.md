@@ -4,6 +4,12 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.0.11
+
+- **Logo del distribuidor en los canales sin logo:** un canal en vivo sin logo, o cuyo logo no carga, muestra el logo
+  del distribuidor (con su número). El logo de la app solo aparece sin distribuidor, y ninguno si el distribuidor no
+  tiene logo, como en las apps de TV y la web (`ChannelLogo` en `LatMpx/UI/LiveParts.swift`).
+
 ## Novedades de la 1.0.10
 
 - **Cerrar sesión no vuelve a entrar solo:** después de cerrar sesión (Cuenta o el tema de prueba) el inicio de sesión no
