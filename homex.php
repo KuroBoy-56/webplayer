@@ -103,16 +103,13 @@ $genres = wp_available_genres('all');
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    NF.api({ action: 'hero', type: 'all' }, 1200000).then(function (res) {
-        var items = res.items || [];
-        if (!items.length) {
-            // sin destacados: el collage de siempre (en un perfil infantil, ninguno: tiene carátulas para adultos); de carátula el
-            // logo propio (Omitir o distribuidor sin logo). El logo de un distribuidor suele ser ancho y en la tarjeta vertical del
-            // celular quedaba recortado: sin carátula se usa el fondo
-            items = [{ title: <?php echo tj('Bienvenido'); ?>, description: <?php echo tj('Selecciona una película o serie de nuestro catálogo para comenzar a disfrutar del contenido.'); ?>, background_image: <?php echo json_encode(wp_kids_on() ? '' : 'assets/images/overlay.webp'); ?>, poster: <?php echo json_encode(wp_brand_logo() === WP_LOGO ? WP_LOGO : '', JSON_UNESCAPED_SLASHES); ?>, play_link: 'moviesondemand.php', info_link: 'browse.php', rating: '' }];
-        }
-        NF.hero(document.getElementById('nfHero'), items);
-    }).catch(function () {});
+    // destacados como en la TV (includes/hero.php): los que ya tienen fondo al momento, los demás se suman al llegar
+    NF.heroLoad(document.getElementById('nfHero'), 'all', { empty: function () {
+        // sin ningún destacado con fondo: el collage de siempre (en un perfil infantil, ninguno: tiene carátulas para
+        // adultos); de carátula el logo propio (Omitir o distribuidor sin logo). El logo de un distribuidor suele ser
+        // ancho y en la tarjeta vertical del celular quedaba recortado: sin carátula se usa el fondo
+        NF.hero(document.getElementById('nfHero'), [{ title: <?php echo tj('Bienvenido'); ?>, description: <?php echo tj('Selecciona una película o serie de nuestro catálogo para comenzar a disfrutar del contenido.'); ?>, background_image: <?php echo json_encode(wp_kids_on() ? '' : 'assets/images/overlay.webp'); ?>, poster: <?php echo json_encode(wp_brand_logo() === WP_LOGO ? WP_LOGO : '', JSON_UNESCAPED_SLASHES); ?>, play_link: 'moviesondemand.php', info_link: 'browse.php', rating: '' }]);
+    } });
 });
 </script>
 <?php include "footer.php"; ?>

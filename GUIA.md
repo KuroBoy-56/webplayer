@@ -42,6 +42,12 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 - **Catálogo por partes:** Inicio, Películas, Series, Explorar y las fichas definen `WP_XT_SOFT`: en el modo navegador salen al momento sin la pantalla «Cargando…» y el catálogo completo se trae por detrás (`wp_xt_soft()` en `includes/xt_client.php`, salvo en un perfil infantil). Cada fila (`api.php?action=row`) espera lo suyo; una fila de una categoría y su «Ver todo» llegan solos con `get_vod_streams&category_id=` (`wp_cat_list_quick()`) mientras llega el catálogo completo. `wp_cat_derive()` no guarda cálculos hechos sin catálogo. El navegador espera el catálogo completo hasta 3 minutos (`xtfill.js`).
 - Pruebas: `tools/web_relay_test.php` del panel (carátulas por el Worker, firma de la línea, catálogo por partes con un servidor lento).
 
+## Destacados progresivos (2.9.4)
+
+- `includes/hero.php`: `wp_hero_pool()` (candidatos, 20 min; en Inicio, con un solo catálogo listo, una lista parcial de 90 s con ese), `wp_hero_art()` (fondo del servidor o de TMDB; sin red: solo lo guardado), `wp_hero_list()` (`api.php?action=hero` → `{items, pending}` al momento, sin esperar nada) y `wp_hero_one()` (`api.php?action=heroart&type=&t=&id=`: uno, con su ficha del servidor —en el modo navegador por xtneed— y TMDB).
+- `assets/nf/app.js`: `NF.heroLoad(root, type, {empty})` arranca con `items`, pide `pending` de a dos y los suma con el controlador de `NF.hero()` (`add`, cambio cada 10 s); `empty()` cuando no hay ninguno con fondo (Inicio: collage «Bienvenido»; Películas / Series: sin banner).
+- Prueba: `tools/web_relay_test.php` (Inicio con un servidor lento: el primer destacado en ~1,5 s y el carrusel se va llenando; cambio a los 10 s).
+
 ## TMDB de un distribuidor sin clave (2.9.3)
 
 - `wp_tmdb_url($path, $query)` (`includes/core.php`): directo con la clave de la línea (`wp_tmdb_key()`) o, si no hay, por el panel (`api/tmdb.php?path=…`, clave del dueño) cuando `wp_tmdb_via_panel()`: no para un distribuidor con «Solo sus recursos» (`features.hosting_video === false` de tenant_config). `wp_tmdb_on()` reemplaza los `if (!wp_tmdb_key())`. Todas las llamadas a TMDB (búsqueda, fichas, carátulas, temporadas, actores) pasan por ahí.

@@ -48,10 +48,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     // sin destacados (o sin respuesta) el banner se quita y el título baja bajo la barra (.nf-hero-none, app.css)
     var hero = document.getElementById('nfHero');
-    NF.api({ action: 'hero', type: <?php echo json_encode($od_type); ?> }, 1200000).then(function (res) {
-        if (res.items && res.items.length) NF.hero(hero, res.items);
-        else hero.classList.add('nf-hero-none');
-    }).catch(function () { hero.classList.add('nf-hero-none'); });
+    // como en la TV (includes/hero.php): los que ya tienen fondo al momento, los demás se suman al carrusel al llegar
+    NF.heroLoad(hero, <?php echo json_encode($od_type); ?>, { empty: function () { hero.classList.add('nf-hero-none'); } });
 });
 </script>
 <?php include __DIR__ . '/../footer.php'; ?>

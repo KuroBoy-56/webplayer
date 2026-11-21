@@ -220,101 +220,17 @@ switch ($action) {
         out(['eps' => wp_eps_fill($rows, wp_tmdb_season($tm['id'] ?? '', $sn), $stitle, [wp_img($bd, ''), wp_img($tm['poster'] ?: ($si['cover'] ?? ''), ''), wp_img($si['cover'] ?? '', '')])]);
 
     case 'hero':
-        // el perfil infantil tiene su propio destacado (includes/kids.php)
-        $ck = 'hero|' . $type . '|' . $platform . '|' . xt_cache_key('', []) . (wp_kids_on() ? '|kids' : '');
-        $cached = wp_cache_get($ck, 1200);
-        if (is_array($cached) && $cached) out(['items' => wp_hero_kind($cached)]);
+        // destacados como en la TV (includes/hero.php): al momento los que ya tienen fondo y la lista de los que faltan
+        require_once __DIR__ . '/includes/hero.php';
+        [$items, $pending] = wp_hero_list($type, $platform);
+        out(['items' => wp_hero_kind($items), 'pending' => $pending]);
 
-        // los títulos elegidos se guardan 20 min: en el modo navegador la página repite el pedido después de que el
-        // navegador trae sus fichas, y con otra elección al azar volvía a pedir otras y el destacado nunca aparecía
-        $pk = 'heropool|' . $ck;
-        $pool = wp_cache_get($pk, 1200);
-        if (!is_array($pool) || !$pool) {
-            $pool = [];
-            $types = $type === 'all' ? ['movie', 'series'] : [$type];
-            foreach ($types as $t) {
-                $list = $platform ? wp_filter($t, $platform, '', '', '', 'recent') : wp_catalog($t);
-                if (!$platform) wp_sort_items($list, 'added');
-                $list = array_slice(array_values(array_filter($list, function ($i) { return $i['icon'] !== ''; })), 0, 150);
-                shuffle($list);
-                foreach (array_slice($list, 0, 8) as $it) { $it['t'] = $t; $pool[] = $it; }
-            }
-            shuffle($pool);
-            if ($pool) wp_cache_set($pk, $pool);
-        }
-        $reqs = [];
-        foreach ($pool as $k => $it) {
-            $reqs[$k] = $it['t'] === 'series' ? ['get_series_info', ['series_id' => $it['id']]] : ['get_vod_info', ['vod_id' => $it['id']]];
-        }
-        // primero lo que ya está guardado (en el modo navegador lo que falta se trae por detrás); solo si no hay ninguna
-        // ficha con fondo se espera al navegador
-        $infos = xt_multi($reqs, 86400, 8, false);
-        $withBd = 0;
-        foreach ($infos as $inf) {
-            $bd = $inf['info']['backdrop_path'] ?? '';
-            if (is_array($bd) ? !empty($bd[0]) : $bd !== '') $withBd++;
-        }
-        // (una sola vez por sesión cada 2 min: si una ficha no llegó, el destacado sale con las demás y el fondo de TMDB en
-        // lugar de volver a esperar y quedar vacío)
-        $askK = 'heroask|' . session_id() . '|' . $ck;
-        if (!$withBd && !wp_cache_get($askK, 120)) {
-            wp_cache_set($askK, 1);
-            $infos = xt_multi($reqs, 86400, 8);
-        }
-        $items = [];
-        // sin fondo en el servidor (o sin su ficha): el de TMDB, como Roku, Vega y Android TV (clave de la línea, 7 días en
-        // la caché). Primero lo ya guardado; después se busca en TMDB lo que falte, hasta 4 s en total
-        $tmDeadline = microtime(true) + 4;
-        $tmFill = function (array &$info, array $it, $net) use ($tmDeadline) {
-            if (!wp_tmdb_on() || ($net && microtime(true) > $tmDeadline)) return '';
-            $tmid = is_scalar($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) ? (string)($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) : '';
-            $tmx = wp_tmdb_details($it['t'] === 'series' ? 'tv' : 'movie', $tmid !== '' ? $tmid : (string)($it['tm'] ?? ''), (string)($info['name'] ?? $it['name']), (string)($it['year'] ?? ''), !$net);
-            $bd = is_array($tmx) ? (string)($tmx['backdrop'] ?? '') : '';
-            if ($bd !== '' && trim((string)($info['plot'] ?? ($info['description'] ?? ''))) === '' && !empty($tmx['overview'])) $info['plot'] = $tmx['overview'];
-            if ($bd !== '' && empty($info['tmdb_id']) && !empty($tmx['id'])) $info['tmdb_id'] = (string)$tmx['id'];
-            return $bd;
-        };
-        $order = array_keys($pool);
-        $bds = [];
-        foreach ($order as $k) {
-            $info = $infos[$k]['info'] ?? [];
-            $infos[$k]['info'] = is_array($info) ? $info : [];
-            $bd = $infos[$k]['info']['backdrop_path'] ?? '';
-            if (is_array($bd)) $bd = $bd[0] ?? '';
-            $bds[$k] = (string)$bd !== '' ? (string)$bd : $tmFill($infos[$k]['info'], $pool[$k], false);
-        }
-        $have = count(array_filter($bds));
-        foreach ($order as $k) {
-            if ($have >= 6) break;
-            if ($bds[$k] === '' && ($bds[$k] = $tmFill($infos[$k]['info'], $pool[$k], true)) !== '') $have++;
-        }
-        foreach ($pool as $k => $it) {
-            $info = $infos[$k]['info'];
-            $bd = $bds[$k];
-            $isS = $it['t'] === 'series';
-            if (!$bd) continue;
-            if (!empty($info['genre'])) wp_genre_index_put($it['t'], $it['id'], $info['genre']);
-            $link = $isS ? 'seriesvideo.php?id=' . rawurlencode($it['id']) : 'Movie_description.php?id=' . rawurlencode($it['id']);
-            $year = substr((string)($info['releasedate'] ?? ($info['releaseDate'] ?? ($info['release_date'] ?? ''))), 0, 4);
-            $items[] = [
-                'title' => (string)($info['name'] ?? $it['name']) ?: $it['name'],
-                'description' => (string)($info['plot'] ?? ($info['description'] ?? '')),
-                'rating' => (string)($info['rating'] ?? $it['rating']),
-                'year' => $year,
-                'genre' => implode(', ', array_slice(array_map('trim', explode(',', (string)($info['genre'] ?? ''))), 0, 2)),
-                'background_image' => wp_img($bd, ''),
-                'poster' => wp_img($it['icon'], ''),
-                'bd' => $bd,
-                'icon' => $it['icon'],
-                'play_link' => $link,
-                'info_link' => $link,
-                'kind' => $isS ? 'Serie' : 'Película',
-                'tm' => is_scalar($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) ? (string)($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) : '',
-            ];
-            if (count($items) >= 6) break;
-        }
-        if ($items) wp_cache_set($ck, $items);
-        out(['items' => wp_hero_kind($items)]);
+    case 'heroart':
+        // uno de los que faltan: la página los pide de a uno y los suma al carrusel a medida que llegan
+        require_once __DIR__ . '/includes/hero.php';
+        $hid = preg_replace('/\D/', '', (string)($_GET['id'] ?? ''));
+        $hit = $hid !== '' ? wp_hero_one($type, $platform, ($_GET['t'] ?? '') === 'series' ? 'series' : 'movie', $hid) : null;
+        out(['item' => $hit ? wp_hero_kind([$hit])[0] : null]);
 
     default:
         http_response_code(400);

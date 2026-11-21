@@ -368,9 +368,10 @@
         };
     };
 
-    /* ---------------- Hero rotativo ---------------- */
+    /* ---------------- Hero rotativo ----------------
+       Como en la TV (Roku, Vega, Android TV): cambia cada 10 s y acepta destacados que llegan después (ctl.add). */
     NF.hero = function (root, items) {
-        if (!root || !items || !items.length) return;
+        if (!root || !items || !items.length) return null;
         var bgs = $$('.nf-hero-bg', root), idx = 0, cur = 0, timer;
         var dots = $('.nf-hero-dots', root);
         var ini = $('[data-h=kicker] .n', root), letter = ini ? ini.textContent : 'M'; // inicial de la marca (no la "N")
@@ -402,20 +403,65 @@
                     bgs.forEach(function (b) { b.classList.remove('on'); });
                     next.classList.add('on');
                     cur = (cur + 1) % bgs.length;
-                    if (u) try { sessionStorage.setItem('nf_hero_bg', u); } catch (e) {}
+                    // (el collage «Bienvenido» no: si no, quedaba de fondo en las demás páginas mientras llegaban sus destacados)
+                    if (u && u.indexOf('assets/images/overlay') < 0) try { sessionStorage.setItem('nf_hero_bg', u); } catch (e) {}
                 }
                 fill(it);
                 if (dots) $$('button', dots).forEach(function (b, j) { b.classList.toggle('on', j === i); });
             });
             idx = i;
         }
-        if (dots) {
-            dots.innerHTML = items.map(function (_, i) { return '<button type="button" aria-label="' + esc(tr('Destacado {n}', { n: i + 1 })) + '"></button>'; }).join('');
+        function drawDots() {
+            if (!dots) return;
+            dots.innerHTML = items.length > 1 ? items.map(function (_, i) { return '<button type="button" aria-label="' + esc(tr('Destacado {n}', { n: i + 1 })) + '"' + (i === idx ? ' class="on"' : '') + '></button>'; }).join('') : '';
             $$('button', dots).forEach(function (b, i) { b.addEventListener('click', function () { show(i); restart(); }); });
         }
-        function restart() { clearInterval(timer); if (items.length > 1) timer = setInterval(function () { if (!d.hidden) show((idx + 1) % items.length); }, 8000); }
+        function restart() { clearInterval(timer); if (items.length > 1) timer = setInterval(function () { if (!d.hidden) show((idx + 1) % items.length); }, 10000); }
+        // la imagen de un destacado nuevo se baja antes de que le toque (el cambio se ve al instante)
+        function warm(it) { if (it && it.background_image) NF.firstImage([it.background_image].concat(it.background_fb || []), function () {}); }
+        drawDots();
         show(0);
         restart();
+        return {
+            add: function (it) {
+                if (!it || items.length >= 8) return;
+                items.push(it);
+                warm(it);
+                drawDots();
+                if (items.length === 2) restart();
+            },
+            size: function () { return items.length; }
+        };
+    };
+
+    /* Destacados de una página (Inicio, Películas, Series): los que ya tienen fondo salen al momento (api.php?action=hero)
+       y los demás se piden de a dos (action=heroart) y se suman al carrusel a medida que llegan, como en la TV. Si al final
+       no hay ninguno con fondo: opts.empty(). */
+    NF.heroLoad = function (root, type, opts) {
+        opts = opts || {};
+        if (!root) return;
+        NF.api({ action: 'hero', type: type }, 600000).then(function (res) {
+            var items = ((res && res.items) || []).slice(), pend = ((res && res.pending) || []).slice(), ctl = null, busy = 0;
+            if (items.length) ctl = NF.hero(root, items);
+            function done() {
+                if (!ctl && !busy && !pend.length && opts.empty) opts.empty();
+            }
+            function next() {
+                if (!pend.length || (ctl && ctl.size() >= 6)) { done(); return; }
+                var p = pend.shift();
+                busy++;
+                NF.getJSON('api.php?action=heroart&type=' + encodeURIComponent(type) + '&t=' + encodeURIComponent(p.t) + '&id=' + encodeURIComponent(p.id))
+                    .then(function (r) {
+                        var it = r && r.item;
+                        if (!it) return;
+                        if (ctl) ctl.add(it); else ctl = NF.hero(root, [it]);
+                    })
+                    .catch(function () {})
+                    .then(function () { busy--; next(); });
+            }
+            next(); next();
+            done();
+        }).catch(function () { if (opts.empty) opts.empty(); });
     };
 
     /* ---------------- Cabecera, búsqueda, menú ---------------- */
@@ -555,6 +601,7 @@
     function heroLast() {
         var b = $('#nfHero .nf-hero-bg'), u = null;
         try { u = sessionStorage.getItem('nf_hero_bg'); } catch (e) {}
+        if (u && u.indexOf('assets/images/overlay') >= 0) u = null; // el collage de antes no cuenta como banner visto
         if (b && u && !$('#nfHero .nf-hero-bg.on')) { b.style.backgroundImage = "url('" + u + "')"; b.classList.add('on'); }
     }
 

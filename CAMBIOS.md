@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Carrusel de destacados como en la TV — versión 2.9.4 (21 de noviembre, séptima parte)
+- **El problema:** la web esperaba a tener todos los destacados listos (16 en Inicio: la ficha de cada uno del servidor y, sin fondo, la búsqueda en TMDB) antes de mostrar el primero. Con el servidor del distribuidor (por el Worker) eso tardaba tanto que en Inicio el pedido se cortaba y quedaba la imagen fija; en Películas y Series tardaba mucho, y lo que llegaba se guardaba 20 minutos aunque fuera uno solo (sin carrusel).
+- **Ahora, como en la TV (Roku, Vega, Android TV):** el destacado sale al momento con los que ya tienen su fondo y los demás se piden de a dos y se suman al carrusel a medida que llegan. En Inicio, si las series todavía no llegaron, empieza con las películas y suma las series después. Cambia solo cada 10 s, como en la TV.
+- El collage «Bienvenido» (cuando no hay ningún destacado con fondo) ya no queda de fondo en las demás páginas mientras cargan las suyas.
+- Archivos: `api.php`, `homex.php`, `includes/hero.php` (nuevo), `includes/ondemand.php`, `includes/core.php`, `header.php`, `assets/nf/app.js`.
+
 ## Carrusel de destacados del distribuidor sin clave de TMDB — versión 2.9.3 (21 de noviembre, sexta parte)
 - **El problema:** el carrusel necesita un fondo horizontal por título. Si el servidor IPTV no lo trae, la web lo busca en TMDB, pero con un distribuidor solo usaba la clave de TMDB del distribuidor: sin clave propia no había fondos y el carrusel no salía (en Inicio la imagen fija «Bienvenido»; en Películas y Series nada). Las apps de TV en ese caso usan otra clave, por eso ahí sí se veía.
 - **Ahora:** un distribuidor sin clave propia usa TMDB por el panel (`api/tmdb.php`, con tu clave y su caché de 24 h), como Roku, Vega y Android: fondos del carrusel, fichas, carátulas que faltan, capítulos y actores. Con «Solo sus recursos» no se usa nada tuyo. Con su propia clave, la suya, como antes.
