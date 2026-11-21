@@ -154,8 +154,10 @@ include "header.php";
     .tv-ch img { width: 54px; height: 36px; object-fit: contain; background: #0d0d0d; border-radius: 3px; flex-shrink: 0; }
     .tv-ch span { font-size: 14px; color: #eee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tv-main { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
-    /* vista previa en 16:9 y más chica (46 % del alto de la pantalla, antes hasta 62 %): deja lugar a la guía de programas */
-    .tv-player { position: relative; aspect-ratio: 16/9; width: min(100%, calc(46vh * 16 / 9)); align-self: center; background: #000; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+    /* vista previa en 16:9 y más chica (46 % del alto de la pantalla, antes hasta 62 %): deja lugar a la guía de programas.
+       Con .tv-main delante: el reproductor (.nfp de player.css, 100 % de alto) no la estira a toda la columna */
+    .tv-player { position: relative; aspect-ratio: 16/9; align-self: center; background: #000; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+    .tv-main .tv-player { width: min(100%, calc(46vh * 16 / 9)); height: auto; max-height: 46vh; }
     .tv-player .ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; gap: 12px; }
     .tv-player .ph svg { width: 54px; height: 54px; opacity: .5; }
     .tv-info { display: flex; align-items: center; gap: 12px; padding: 0 4px; }

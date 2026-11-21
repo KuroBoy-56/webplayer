@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Arreglo de la vista previa de TV en vivo con un canal en reproducción — versión 2.9.7 (21 de noviembre, décima parte)
+- **El problema de la 2.9.6:** con un canal reproduciéndose, el reproductor ocupaba todo el alto de la columna (su regla de 100 % de alto le ganaba a la vista previa) y la guía de programas quedaba fuera de la pantalla; el video se veía corrido abajo a la derecha.
+- **Ahora:** la vista previa queda en 16:9 y hasta el 46 % del alto también con el canal en reproducción, con el nombre del canal y la guía debajo. Pantalla completa sigue igual. En el celular no cambia.
+- Archivo: `tvguide.php`.
+
 ## Vista previa de TV en vivo más chica: más lugar para la guía — versión 2.9.6 (21 de noviembre, novena parte)
 - En la computadora la vista previa de TV en vivo ocupaba hasta el 62 % del alto de la pantalla y la guía de programas quedaba con 4 o 5 programas a la vista.
 - Ahora es un poco más chica, siempre en 16:9 y centrada (46 % del alto: en 1920×1080, 883×497 en lugar de 1241×670), y la guía muestra casi el doble (en 1920×1080 de unos 5 a 9 programas). En el celular no cambia.
