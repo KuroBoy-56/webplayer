@@ -14,7 +14,9 @@ if ($r && $r[2] !== '') {
 }
 if (!$r) {
     header('Cache-Control: no-store');
-    header('Location: ./', true, 302);
+    // sin sesión: el inicio de sesión del distribuidor con el que se entró (login?d=), no la web del dueño
+    $s = wp_session_read_close();
+    header('Location: ./' . (empty($s['username']) ? wp_login_url() : ''), true, 302);
     exit;
 }
 list($page, $query) = $r;

@@ -2,14 +2,15 @@
 /**
  * Número de distribuidor (multi-distribuidor del panel).
  *
- * - La elección se guarda en la cookie de larga duración "wp_dist": "skip" (Omitir) o el número
- *   de 6 dígitos. Sin cookie se muestra la pantalla "Número de distribuidor" en el login.
- * - "Omitir": todo funciona exactamente como antes (no se manda nada nuevo al panel).
+ * - La dirección decide (2.8.1): tudominio/login es la web del dueño (lo de «Omitir», sin pantalla de número) y
+ *   tudominio/login?d=NNNNNN la del distribuidor NNNNNN (su enlace; el panel lo muestra en su perfil mientras tenga la
+ *   web player encendida). Un dominio propio (Worker, includes/edge.php) queda siempre en su número.
  * - Con número: login.php del panel (fetch_dns), progress.php (auth), alerta.php llevan
  *   "tenant" + "app" = "web"; la marca (nombre, logo, colores) sale de la acción tenant_config.
+ * - La cookie "wp_dist" solo recuerda con qué distribuidor se entró: una sesión que venció vuelve a su web.
  * - Guardián: la configuración del distribuidor se revisa como mucho cada 10 minutos (caché
  *   compartida por número en el hosting); si el panel dice vencido, suspendido, no válido o
- *   app no vinculada, se cierra la sesión y se vuelve a pedir el número con el mensaje.
+ *   la web player apagada para ese distribuidor, se cierra la sesión y su enlace muestra el aviso.
  */
 if (defined('WP_TENANT_LOADED')) {
     return;
@@ -55,24 +56,51 @@ function wp_tenant_is_hard($code)
 /* Elección guardada (cookie)                                           */
 /* ------------------------------------------------------------------ */
 
-/** '' (sin elegir), 'skip' u 'NNNNNN'. */
+/**
+ * 'skip' (la web del dueño) u 'NNNNNN' (2.8.1: la dirección decide, ya no hay pantalla «Número de distribuidor»):
+ *  - dominio propio de un distribuidor (Worker con su secreto en panel_secret.php): siempre su número;
+ *  - la pantalla de inicio de sesión manda el número de su dirección en cada paso (dist_pick);
+ *  - la dirección: tudominio/login?d=NNNNNN (el enlace de cada distribuidor, el panel lo muestra en su perfil);
+ *  - la página de inicio de sesión sin ?d= es la web del dueño;
+ *  - en lo demás (una página sin sesión, que va al inicio de sesión): el último con el que se entró en este navegador.
+ */
 function wp_dist_choice()
 {
-    // dominio propio de un distribuidor (Worker con su secreto): siempre su número, sin la pantalla del distribuidor
     if (function_exists('wp_edge_dist') && wp_edge_dist() !== null) return wp_edge_dist();
-    $ok = function ($v) { return $v === 'skip' || preg_match('/^\d{6}$/', $v); };
-    $v = isset($_COOKIE[WP_DIST_COOKIE]) && is_string($_COOKIE[WP_DIST_COOKIE]) ? trim($_COOKIE[WP_DIST_COOKIE]) : '';
-    if ($ok($v)) return $v;
-    // la pantalla del distribuidor manda también la elección (dist_pick): sirve aunque el navegador o el
-    // hosting no hayan guardado la cookie (antes se volvía a la pantalla del distribuidor una y otra vez)
-    $p = $_POST['dist_pick'] ?? ($_GET['dist_pick'] ?? '');
-    $p = is_string($p) ? trim($p) : '';
-    if (!$ok($p)) return '';
-    wp_dist_set($p);
-    return $p;
+    $p = $_POST['dist_pick'] ?? null;
+    if (is_string($p) && ($p === 'skip' || preg_match('/^\d{6}$/', $p))) return $p;
+    $g = $_GET['d'] ?? null;
+    if (is_string($g) && preg_match('/^\d{6}$/', $g)) return $g;
+    if (basename((string)($_SERVER['SCRIPT_NAME'] ?? '')) === 'login.php') return 'skip';
+    $c = wp_dist_remembered();
+    return $c !== '' ? $c : 'skip';
 }
 
-/** Número elegido en este navegador ('' con Omitir o sin elegir). */
+/** El número con el que se entró la última vez en este navegador ('' = el dueño o ninguno). */
+function wp_dist_remembered()
+{
+    $v = isset($_COOKIE[WP_DIST_COOKIE]) && is_string($_COOKIE[WP_DIST_COOKIE]) ? trim($_COOKIE[WP_DIST_COOKIE]) : '';
+    return preg_match('/^\d{6}$/', $v) ? $v : '';
+}
+
+/**
+ * Inicio de sesión de esta web, con ?d= del distribuidor de esta sesión (o el último de este navegador): una sesión que
+ * venció, un aviso o «Cerrar sesión» vuelven a la web del distribuidor, no a la del dueño. $query: más parámetros.
+ */
+function wp_login_url($query = '')
+{
+    $code = '';
+    if (!(function_exists('wp_edge_dist') && wp_edge_dist() !== null)) {
+        $code = array_key_exists('wp_tenant_code', $GLOBALS) ? (string)$GLOBALS['wp_tenant_code'] : wp_dist_remembered();
+    }
+    $parts = [];
+    if (preg_match('/^\d{6}$/', $code)) $parts[] = 'd=' . $code;
+    $q = ltrim((string)$query, '?&');
+    if ($q !== '') $parts[] = $q;
+    return 'login' . ($parts ? '?' . implode('&', $parts) : '');
+}
+
+/** Número de esta petición ('' = el dueño). */
 function wp_dist_cookie_code()
 {
     $c = wp_dist_choice();
@@ -80,7 +108,7 @@ function wp_dist_cookie_code()
 }
 
 /**
- * Guarda la elección (1 año). Sin "secure" a propósito: no es un secreto y así la misma cookie
+ * Recuerda con qué distribuidor se entró (1 año; 'skip' = el dueño). Sin "secure" a propósito: no es un secreto y así la misma cookie
  * sirve en http y en https (una cookie secure no se puede reemplazar desde http).
  */
 function wp_dist_set($value)

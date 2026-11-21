@@ -77,7 +77,7 @@ function wp_line_guard(array $sess)
         header('Content-Type: application/json');
         echo json_encode(['error' => 'auth', 'line' => $state]);
     } else {
-        header('Location: ./login?line_err=' . rawurlencode($state));
+        header('Location: ./' . wp_login_url('line_err=' . rawurlencode($state)));
     }
     exit;
 }

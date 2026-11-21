@@ -123,6 +123,8 @@ return [
     'Error de reproducción en este navegador' => 'Erro de reprodução neste navegador',
     'Error interno: falta indicar la aplicación (app_required). Avisa a soporte.' => 'Erro interno: falta indicar o aplicativo (app_required). Avise o suporte.',
     'Es posible que el archivo esté dañado o que el servidor no lo entregue completo. Prueba abrirlo en VLC.' => 'O arquivo pode estar danificado ou o servidor pode não entregá-lo completo. Tente abrir no VLC.',
+    'Pídele el enlace de la web player a tu distribuidor.' => 'Peça ao seu distribuidor o link do web player.',
+    'Web player' => 'Web player',
     'Escribe el número de 6 dígitos que te dio tu distribuidor. Si no tienes uno, pulsa Omitir.' => 'Digite o número de 6 dígitos que o seu distribuidor te deu. Se não tiver um, toque em Pular.',
     'Escribe los 6 dígitos de tu número de distribuidor.' => 'Digite os 6 dígitos do seu número de distribuidor.',
     'Escribe tu número de distribuidor o pulsa Omitir.' => 'Digite o seu número de distribuidor ou toque em Pular.',

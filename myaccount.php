@@ -81,7 +81,6 @@ include "header.php";
         <?php endif; ?>
         <div class="ac-acts">
             <a class="nf-btn nf-btn-dark" href="settings.php"><i class="fas fa-cog"></i> <?php echo t('Ajustes'); ?></a>
-            <a class="nf-btn nf-btn-dark" href="logout.php?dist=1" data-noprefetch onclick="try{localStorage.removeItem('wp_dist_brand')}catch(e){}"><i class="fas fa-exchange-alt"></i> <?php echo t('Cambiar distribuidor'); ?></a>
             <a class="nf-btn nf-btn-dark" href="logout.php" data-noprefetch><i class="fas fa-sign-out-alt"></i> <?php echo t('Cerrar sesión'); ?></a>
         </div>
         <div class="ac-lang"><label for="acLang"><i class="fas fa-globe"></i> <?php echo t('Idioma de la app'); ?></label><?php echo str_replace('<select ', '<select id="acLang" ', wp_lang_select()); ?></div>

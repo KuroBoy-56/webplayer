@@ -4,9 +4,8 @@ require_once __DIR__ . '/includes/tenant_login.php';
 include "config.php";
 wp_security_headers();
 
-// Pantalla "Número de distribuidor": Continuar (valida con el panel) u Omitir
-wp_tenant_login_post();
-// Enlace de un distribuidor sin dominio propio en este dominio (login?d=NNNNNN): entra ya con su número
+// La dirección decide el distribuidor (includes/tenant_login.php): login = la web del dueño, login?d=NNNNNN = la del
+// distribuidor NNNNNN. Una sesión abierta de otro distribuidor se cierra al abrir su enlace.
 wp_tenant_link_get();
 
 // Pantalla falsa del panel para visitantes nuevos: el código se comprueba aquí (POST fake_unlock)
@@ -66,8 +65,10 @@ function wp_login_finish($username, $password, array $srv, array $matchUi, $dist
     $_SESSION["server"] = $srv['url'];
     $_SESSION["server_id"] = $srv['id'];
     $_SESSION["server_name"] = $srv['name'];
-    // Distribuidor de esta sesión ('' = Omitir); el guardián lo revisa en cada página
+    // Distribuidor de esta sesión ('' = la web del dueño); el guardián lo revisa en cada página. Este navegador lo
+    // recuerda: si la sesión vence, vuelve al enlace de su distribuidor (wp_login_url)
     $_SESSION['dist'] = $dist_code;
+    wp_dist_set($dist_code === '' ? 'skip' : $dist_code);
     // Token del panel para "Continuar viendo" y "Mi lista" (uno por número de distribuidor)
     $_SESSION[wp_panel_token_key()] = wp_panel_auth($username, $password, $srv['url']);
     // Línea DEMO según el panel ("demo": true): un login normal la quita
@@ -110,18 +111,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         exit;
     }
 
-    // Número de distribuidor guardado en este navegador (Omitir = como siempre)
+    // el distribuidor de la dirección de la página (dist_pick en cada paso; 'skip' = la web del dueño)
     $dist_choice = wp_dist_choice();
-    if ($dist_choice === '') {
-        echo json_encode(['success' => false, 'dist' => true, 'message' => t('Escribe tu número de distribuidor o pulsa Omitir.')]);
-        exit;
-    }
     $dist_code = $dist_choice === 'skip' ? '' : $dist_choice;
     if ($dist_code !== '') {
         $dist_st = wp_tenant_status($dist_code);
         if ($dist_st['state'] !== 'ok') {
             $hard = $dist_st['state'] === 'error' && wp_tenant_is_hard($dist_st['error']);
-            if ($hard) wp_dist_set('');
             echo json_encode(['success' => false, 'dist' => $hard, 'message' => wp_tenant_message($dist_st['error'], $dist_st['cfg'] ?? null)], JSON_UNESCAPED_UNICODE);
             exit;
         }
@@ -386,7 +382,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
 
 $dist_view = wp_tenant_login_view();
 wp_session_start();
-if (!empty($_SESSION['username']) && !empty($_SESSION['server']) && !isset($_GET['dist']) && $dist_view['error'] === '') {
+if (!empty($_SESSION['username']) && !empty($_SESSION['server']) && $dist_view['error'] === '') {
     session_write_close();
     header('Location: ' . wp_route_url('homex'));
     exit;
@@ -423,7 +419,6 @@ $dist_step = $dist_view['step'];
         .nf-btn-skip { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.45); border-radius: 4px; cursor: pointer; font-weight: 700; }
         .nf-btn-skip:hover, .nf-btn-skip:focus-visible { background: rgba(255,255,255,.12); }
         .nf-btn-red:focus-visible, .nf-btn-skip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-        #dist-code { letter-spacing: 6px; font-size: 22px; font-variant-numeric: tabular-nums; }
         .nf-dist-now { color: #b3b3b3; font-size: 14px; margin: -14px 0 18px; }
         .nf-dist-now b { color: #fff; }
         .nf-login-lang { position: absolute; top: 18px; right: 18px; z-index: 5; }
@@ -434,7 +429,7 @@ $dist_step = $dist_view['step'];
         .nf-login-wall-inner { padding-bottom: 10px; }
     </style>
 <script>try{sessionStorage.removeItem("nfAlertShown");for(var nk=[],ni=0;ni<localStorage.length;ni++){var nx=localStorage.key(ni);if(nx&&nx.indexOf("nfr|")===0)nk.push(nx);}nk.forEach(function(k){localStorage.removeItem(k);});}catch(e){}</script>
-<?php if ($dist_cfg !== null || $dist_view['choice'] === 'skip' || ($dist_view['choice'] === '' && $dist_view['error'] !== '')) echo wp_brand_store_script($dist_cfg); ?>
+<?php if ($dist_cfg !== null || $dist_view['choice'] === 'skip') echo wp_brand_store_script($dist_cfg); ?>
 </head>
 <body class="nf-login-page" data-step="<?php echo e($dist_step); ?>" data-brand="<?php echo $dist_cfg !== null ? '1' : ($dist_view['code'] !== '' ? 'cache' : '0'); ?>">
     <div class="nf-login-wall" aria-hidden="true">
@@ -452,20 +447,14 @@ $dist_step = $dist_view['step'];
     </header>
 
     <main class="nf-login-main">
-        <form id="dist-form" class="nf-login-box" method="POST" autocomplete="off" novalidate<?php echo $dist_step === 'dist' ? '' : ' hidden'; ?>>
-            <h1><?php echo t('Número de distribuidor'); ?></h1>
-            <div id="dist-error" class="nf-login-error" role="alert"<?php echo ($dist_step === 'dist' && $dist_view['error'] !== '') ? '' : ' hidden'; ?>><?php echo $dist_step === 'dist' ? e($dist_view['error']) : ''; ?></div>
-            <label class="nf-field">
-                <input type="text" id="dist-code" name="code" placeholder=" " inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" spellcheck="false" value="<?php echo e($dist_view['code']); ?>"<?php echo $dist_step === 'dist' ? ' autofocus' : ''; ?>>
-                <span><?php echo t('Número de distribuidor'); ?></span>
-            </label>
-            <button class="nf-btn-red nf-btn-block" type="submit" id="dist-btn">
-                <span class="lbl"><?php echo t('Continuar'); ?></span>
-                <span class="nf-spinner" aria-hidden="true"></span>
-            </button>
-            <button class="nf-btn-skip nf-btn-block" type="button" id="dist-skip"><?php echo t('Omitir'); ?></button>
-            <p class="nf-login-hint"><?php echo t('Escribe el número de 6 dígitos que te dio tu distribuidor. Si no tienes uno, pulsa Omitir.'); ?></p>
-        </form>
+        <?php if ($dist_step === 'blocked'): ?>
+        <!-- enlace de un distribuidor que no existe, vencido, suspendido o con la web player apagada en el panel -->
+        <div id="dist-blocked" class="nf-login-box" role="alert">
+            <h1><?php echo e($brand_name !== '' ? $brand_name : t('Web player')); ?></h1>
+            <div class="nf-login-error"><?php echo e($dist_view['error']); ?></div>
+            <p class="nf-login-hint"><?php echo t('Pídele el enlace de la web player a tu distribuidor.'); ?></p>
+        </div>
+        <?php endif; ?>
 
         <form id="login-form" class="nf-login-box" method="POST" autocomplete="on" novalidate<?php echo $dist_step === 'login' ? '' : ' hidden'; ?>>
             <input type="hidden" name="dist_pick" value="<?php echo e($dist_view['choice']); ?>">
@@ -499,7 +488,7 @@ $dist_step = $dist_view['step'];
                 <input type="checkbox" id="remember" <?php echo $remember !== '' ? 'checked' : ''; ?>> <?php echo t('Recordarme'); ?>
             </label>
             <p class="nf-login-hint"><?php echo t('Ingresa con el usuario y la contraseña de tu suscripción.'); ?>
-                <?php if (wp_edge_dist() === null): ?><button type="button" class="nf-link-btn" id="dist-change"><?php echo t('Cambiar distribuidor'); ?></button><?php endif; ?></p>
+</p>
         </form>
     </main>
 
@@ -519,10 +508,6 @@ $dist_step = $dist_view['step'];
     var pass = document.getElementById('password');
     var user = document.getElementById('username');
     var remember = document.getElementById('remember');
-    var dform = document.getElementById('dist-form');
-    var dcode = document.getElementById('dist-code');
-    var dbtn = document.getElementById('dist-btn');
-    var derr = document.getElementById('dist-error');
 
     // Sin respuesta del panel: se usa la marca guardada en este navegador (logo, nombre y colores)
     if (document.body.getAttribute('data-brand') === 'cache') {
@@ -544,16 +529,6 @@ $dist_step = $dist_view['step'];
         if (saved && !user.value) { user.value = saved; remember.checked = true; }
     } catch (e) {}
 
-    // la elección ya va en la cookie: la dirección queda limpia
-    if (location.search.indexOf('dist_pick=') !== -1 && history.replaceState) history.replaceState(null, '', 'login');
-
-    function showStep(step) {
-        dform.hidden = step !== 'dist';
-        form.hidden = step !== 'login';
-        document.body.setAttribute('data-step', step);
-        (step === 'dist' ? dcode : (user.value ? pass : user)).focus();
-    }
-
     document.getElementById('togglePassword').addEventListener('click', function () {
         pass.type = pass.type === 'password' ? 'text' : 'password';
         this.classList.toggle('on', pass.type === 'text');
@@ -562,10 +537,6 @@ $dist_step = $dist_view['step'];
     function showError(msg) {
         err.textContent = msg;
         err.hidden = false;
-    }
-    function showDistError(msg) {
-        derr.textContent = msg;
-        derr.hidden = false;
     }
 
     function distPick() {
@@ -581,53 +552,6 @@ $dist_step = $dist_view['step'];
         }).then(function (r) { return r.json(); });
     }
 
-    // ---- Número de distribuidor ----
-    dcode.addEventListener('input', function () {
-        var v = dcode.value.replace(/\D/g, '').slice(0, 6);
-        if (v !== dcode.value) dcode.value = v;
-    });
-    // sin el botón en el dominio propio de un distribuidor (número fijo)
-    var distChange = document.getElementById('dist-change');
-    if (distChange) distChange.addEventListener('click', function () {
-        derr.hidden = true;
-        showStep('dist');
-    });
-    document.getElementById('dist-skip').addEventListener('click', function () {
-        var fd = new FormData();
-        fd.append('action', 'dist_skip');
-        post(fd).then(function () {
-            try { localStorage.removeItem('wp_dist_brand'); } catch (e) {}
-            window.location.href = 'login?dist_pick=skip';
-        }).catch(function () { showDistError(<?php echo tj('Error de conexión. Inténtalo de nuevo.'); ?>); });
-    });
-    dform.addEventListener('submit', function (ev) {
-        ev.preventDefault();
-        derr.hidden = true;
-        if (!/^\d{6}$/.test(dcode.value)) {
-            showDistError(<?php echo tj('Escribe los 6 dígitos de tu número de distribuidor.'); ?>);
-            return;
-        }
-        dbtn.classList.add('loading');
-        dbtn.disabled = true;
-        var fd = new FormData();
-        fd.append('action', 'dist');
-        fd.append('code', dcode.value);
-        post(fd).then(function (data) {
-            if (data.success) {
-                try { localStorage.setItem('wp_dist_brand', JSON.stringify(data.brand)); } catch (e) {}
-                window.location.href = 'login?dist_pick=' + dcode.value;
-                return;
-            }
-            showDistError(data.message || <?php echo tj('No se pudo comprobar el número.'); ?>);
-            dbtn.classList.remove('loading');
-            dbtn.disabled = false;
-        }).catch(function () {
-            showDistError(<?php echo tj('Error de conexión. Inténtalo de nuevo.'); ?>);
-            dbtn.classList.remove('loading');
-            dbtn.disabled = false;
-        });
-    });
-
     // ---- Iniciar sesión ----
     function fail(msg) {
         showError(msg);
@@ -639,11 +563,8 @@ $dist_step = $dist_view['step'];
             btn.querySelector('.lbl').textContent = <?php echo tj('Entrando...'); ?>;
             window.location.href = data.redirect;
         } else if (data.dist) {
-            try { localStorage.removeItem('wp_dist_brand'); } catch (e) {}
-            btn.classList.remove('loading');
-            btn.disabled = false;
-            showDistError(data.message || <?php echo tj('Escribe tu número de distribuidor.'); ?>);
-            showStep('dist');
+            // el panel apagó la web player de este distribuidor (o venció) mientras la página estaba abierta: el aviso
+            location.reload();
         } else {
             fail(data.message || <?php echo tj('No se pudo iniciar sesión.'); ?>);
         }

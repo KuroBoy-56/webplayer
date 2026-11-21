@@ -25,9 +25,17 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 
 **Dominio propio con un Worker (opcional):** el cliente entra por un dominio nuevo (el tuyo o el de cada distribuidor, sin límite) y el dominio original de la web responde **403 Forbidden**. El Worker (`cloudflare/edge-worker.js`) abre la web por dentro con un secreto; la web (`includes/edge.php`) solo atiende con ese secreto y toma el dominio y la IP real del cliente. Cada secreto puede llevar el número de un distribuidor: en su dominio la web queda fija en él. Se configura con `'edge_keys'` (y `'edge_block'` para probar) en `includes/panel_secret.php`; sin eso la web funciona exactamente igual. Paso a paso con dibujos: **`docs/GUIA-WORKER.html`** (ábrelo en tu PC; en el hosting `docs/` y `cloudflare/` están bloqueados).
 
-## Número de distribuidor sin dominio propio
+## Distribuidor: la dirección decide (2.8.1)
 
-Un distribuidor sin dominio propio usa tu web con su número. Sus clientes pueden escribirlo en la pantalla «Número de distribuidor» o entrar por su enlace **`tudominio/login?d=NÚMERO`** (también `tudominio/?d=NÚMERO`): la web queda en su número con su logo y colores, sin escribir nada (`wp_tenant_link_get()` en `includes/tenant_login.php`). Un número que el panel no conoce, vencido o sin la web vuelve a la pantalla del número con el aviso. El panel muestra el enlace en Distribuidores y en «Mi cuenta» del distribuidor cuando la dirección de la web player está puesta en Guía EPG. El número elegido viaja en cada paso del inicio de sesión (`dist_pick`), no solo en la cookie `wp_dist`.
+Ya no hay pantalla «Número de distribuidor». `wp_dist_choice()` (`includes/tenant.php`):
+
+- **Dominio propio** de un distribuidor (Worker, `'edge_keys'` en `panel_secret.php`): siempre su número.
+- **`dist_pick`** en el POST: el número de la dirección de la página de inicio de sesión, en cada paso (`servers`, `client` y el del hosting).
+- **`?d=NNNNNN`**: el enlace del distribuidor (`tudominio/login?d=NNNNNN`, también `tudominio/?d=` por `index.php`). El panel lo muestra en su perfil mientras tenga la web player encendida (`tenant_webplayer_url()`).
+- **`login` sin `?d=`**: la web del dueño (lo que antes era «Omitir»).
+- Lo demás (una página sin sesión): el último distribuidor con el que se entró en este navegador (cookie `wp_dist`, la guardan `wp_login_finish()` y el guardián).
+
+`wp_login_url()` arma el inicio de sesión con el `?d=` de la sesión (o el recordado): lo usan `session.php`, `route.php`, `logout.php`, el guardián de la línea, el de navegadores bloqueados y `NF.login` en `assets/nf/app.js` (un 401). Un número que no existe, vencido, suspendido o sin la web player (el panel contesta `app_not_linked`) deja la página en `data-step="blocked"`: solo el aviso, sin formulario. Con una sesión de otro distribuidor abierta, `wp_tenant_link_get()` la cierra al abrir el enlace.
 
 ## Velocidad: caché del catálogo y del navegador (2.8.0)
 

@@ -66,7 +66,7 @@ function wp_web_device_guard(array $sess)
         header('Content-Type: application/json');
         echo json_encode(['error' => 'auth', 'line' => 'blocked']);
     } else {
-        header('Location: ./login?line_err=blocked');
+        header('Location: ./' . wp_login_url('line_err=blocked'));
     }
     exit;
 }

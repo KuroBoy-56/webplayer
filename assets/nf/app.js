@@ -89,7 +89,8 @@
         function net() {
             return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
                 .then(function (r) {
-                    if (r.status === 401) { location.href = 'login'; throw new Error('auth'); }
+                    // la sesión venció: al inicio de sesión de su distribuidor (login?d=), no al del dueño
+                    if (r.status === 401) { location.href = NF.login || 'login'; throw new Error('auth'); }
                     return r.json();
                 })
                 .then(function (j) {

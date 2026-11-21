@@ -14,7 +14,8 @@ if (!defined('WP_SESSION_LOADED')) {
             header('Content-Type: application/json');
             echo json_encode(['error' => 'auth']);
         } else {
-            header('Location: ./login');
+            // la web del distribuidor con el que se entró (login?d=), no la del dueño
+            header('Location: ./' . wp_login_url());
         }
         exit;
     }
