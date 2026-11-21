@@ -4,13 +4,14 @@
 // pantalla grande el reproductor vuelve aquí igual (preview-session.ts). Mientras carga, el logo.
 import { KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import React, { memo, useEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { LIVE_FORMATS, liveFormatStart, liveUrl, otherScheme, streamFlip } from '../api/xtream';
 import { Item } from '../data/catalog';
 import { Playback } from '../player/playback';
 import { dropReturn, offerPreview, registerLivePreview, takeReturn, waitForLivePreview } from '../player/preview-session';
 import { getState } from '../state';
 import { px, themed } from '../theme';
+import { ChannelLogo } from './ui';
 
 export { stopLivePreview } from '../player/preview-session';
 
@@ -166,9 +167,9 @@ export default memo(function LivePreview({ channel, active, delay = 2500 }: { ch
           }}
         />
       ) : null}
-      {!playing && channel?.poster ? (
+      {!playing && channel ? (
         <View style={s.logoWrap}>
-          <Image source={{ uri: channel.poster }} style={s.logo} resizeMode="contain" />
+          <ChannelLogo uri={channel.poster} style={s.logo} />
         </View>
       ) : null}
     </View>

@@ -191,6 +191,19 @@ export function Message({ text }: { text: string }) {
   );
 }
 
+// logo de un canal en vivo; sin logo (o si no carga) el de la marca: el de la app solo sin distribuidor, el del
+// distribuidor con su número y ninguno si el distribuidor no tiene logo (como la web player y Android)
+export function ChannelLogo({ uri, style }: { uri?: string; style: any }) {
+  useBrandRev();
+  const [failed, setFailed] = useState('');
+  if (uri && failed !== uri) return <Image source={{ uri }} style={style} resizeMode="contain" onError={() => setFailed(uri)} />;
+  if (brand()) {
+    const logo = brandLogo();
+    return logo ? <Image source={{ uri: logo }} style={style} resizeMode="contain" /> : <View style={style} />;
+  }
+  return <Image source={require('../../assets/image/logo.png')} style={style} resizeMode="contain" />;
+}
+
 // logo de la app o el del distribuidor. Un distribuidor sin logo (o si no carga) muestra su
 // nombre: nunca el logo de la app.
 export function Logo({ size = 120 }: { size?: number }) {
