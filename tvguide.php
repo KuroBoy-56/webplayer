@@ -154,7 +154,8 @@ include "header.php";
     .tv-ch img { width: 54px; height: 36px; object-fit: contain; background: #0d0d0d; border-radius: 3px; flex-shrink: 0; }
     .tv-ch span { font-size: 14px; color: #eee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tv-main { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
-    .tv-player { position: relative; aspect-ratio: 16/9; max-height: 62vh; background: #000; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+    /* vista previa en 16:9 y más chica (46 % del alto de la pantalla, antes hasta 62 %): deja lugar a la guía de programas */
+    .tv-player { position: relative; aspect-ratio: 16/9; width: min(100%, calc(46vh * 16 / 9)); align-self: center; background: #000; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
     .tv-player .ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; gap: 12px; }
     .tv-player .ph svg { width: 54px; height: 54px; opacity: .5; }
     .tv-info { display: flex; align-items: center; gap: 12px; padding: 0 4px; }
@@ -188,7 +189,7 @@ include "header.php";
             height: auto; margin: 0; display: flex; flex-direction: column; padding: 0; gap: 0; overflow: hidden; }
         .tv-main { order: -1; flex: none; background: var(--nf-bg); gap: 0; }
         /* siempre 16:9 (el reproductor pide height: 100%, que aquí lo estiraría); en horizontal como mucho media pantalla */
-        .tv-main .tv-player { height: auto; border-radius: 0; max-height: 50vh; max-height: 50dvh; }
+        .tv-main .tv-player { width: 100%; height: auto; border-radius: 0; max-height: 50vh; max-height: 50dvh; }
         /* pantalla completa propia del iPhone: toda la pantalla y por encima de las barras */
         .tv-main .tv-player.nfp-fakefs { max-height: none; }
         .tv-wrap:has(.nfp-fakefs) { z-index: 100000; }

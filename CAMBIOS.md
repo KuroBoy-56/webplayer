@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Vista previa de TV en vivo más chica: más lugar para la guía — versión 2.9.6 (21 de noviembre, novena parte)
+- En la computadora la vista previa de TV en vivo ocupaba hasta el 62 % del alto de la pantalla y la guía de programas quedaba con 4 o 5 programas a la vista.
+- Ahora es un poco más chica, siempre en 16:9 y centrada (46 % del alto: en 1920×1080, 883×497 en lugar de 1241×670), y la guía muestra casi el doble (en 1920×1080 de unos 5 a 9 programas). En el celular no cambia.
+- Archivo: `tvguide.php`.
+
 ## Imagen del destacado y logo de los canales del distribuidor — versión 2.9.5 (21 de noviembre, octava parte)
 - **El problema del destacado:** en Inicio, Películas y Series, cuando el fondo de un destacado no cargaba, la web cambiaba el título y la sinopsis pero dejaba la imagen del anterior: se veía siempre la misma película mientras el texto cambiaba.
 - **Ahora:** cada destacado muestra solo su propia imagen: su fondo (el del panel en Full HD o el original) y, si no carga, su carátula. Si no carga ninguna, ese título sale del carrusel y pasa el siguiente; nunca se ve la imagen de otro título.
