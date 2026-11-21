@@ -59,7 +59,10 @@ function wp_hero_pools($type, $platform)
 }
 
 /**
- * Fondo horizontal de un título: el de su ficha del servidor y, si no tiene, el de TMDB (su clave o el panel).
+ * Fondo horizontal de un título (2.9.9): primero el de TMDB en alta calidad (con el id de TMDB del servidor o del
+ * catálogo, o por nombre y año; la clave de panel_secret.php, la del panel o TMDB por el panel), como el póster de las
+ * tarjetas; el de la ficha del servidor solo si TMDB no tiene (muchos servidores ponen ahí la misma carátula, o una
+ * imagen que no carga, y se veía la carátula estirada). Con TMDB no hace falta esperar la ficha del servidor.
  * $net = false: solo lo ya guardado (sin pedir nada). Devuelve [fondo, ficha, ¿se sabe?] (se sabe = ya se buscó: con
  * fondo, o sin él en ningún lado).
  */
@@ -67,27 +70,32 @@ function wp_hero_art(array $it, $net)
 {
     $act = $it['t'] === 'series' ? 'get_series_info' : 'get_vod_info';
     $par = $it['t'] === 'series' ? ['series_id' => $it['id']] : ['vod_id' => $it['id']];
-    if ($net) {
-        $data = xt_get($act, $par, 86400, 8);
-        // modo navegador: la ficha la trae el navegador y este pedido se repite (xtneed); TMDB después, con la ficha
-        if (function_exists('wp_xt_blocking') && wp_xt_blocking()) return ['', [], false];
-    } else {
-        $data = wp_cache_get(xt_cache_key($act, $par), 86400, $stale);
-        if ($data === null) $data = $stale;
+    // la ficha del servidor si ya está guardada (su id de TMDB, sinopsis y género; y el fondo de respaldo)
+    $data = wp_cache_get(xt_cache_key($act, $par), 86400, $stale);
+    if ($data === null) $data = $stale;
+    $info = is_array($data) && is_array($data['info'] ?? null) ? $data['info'] : [];
+    // 1. TMDB
+    if (wp_tmdb_on()) {
+        $tmid = is_scalar($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) ? (string)($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) : '';
+        $tmx = wp_tmdb_details($it['t'] === 'series' ? 'tv' : 'movie', $tmid !== '' ? $tmid : (string)($it['tm'] ?? ''), (string)($info['name'] ?? $it['name']), (string)($it['year'] ?? ''), !$net);
+        if (is_array($tmx) && (string)($tmx['backdrop'] ?? '') !== '') {
+            if (trim((string)($info['plot'] ?? ($info['description'] ?? ''))) === '' && !empty($tmx['overview'])) $info['plot'] = $tmx['overview'];
+            if (empty($info['tmdb_id']) && !empty($tmx['id'])) $info['tmdb_id'] = (string)$tmx['id'];
+            return [(string)$tmx['backdrop'], $info, true];
+        }
+        if (!is_array($tmx)) return ['', $info, false]; // TMDB todavía no se buscó (lo busca action=heroart)
     }
-    if (!is_array($data)) return ['', [], false];
-    $info = is_array($data['info'] ?? null) ? $data['info'] : [];
+    // 2. el de la ficha del servidor
+    if (!is_array($data)) {
+        if (!$net) return ['', [], false];
+        $data = xt_get($act, $par, 86400, 8);
+        // modo navegador: la ficha la trae el navegador y este pedido se repite (xtneed)
+        if (function_exists('wp_xt_blocking') && wp_xt_blocking()) return ['', [], false];
+        $info = is_array($data) && is_array($data['info'] ?? null) ? $data['info'] : [];
+    }
     $bd = $info['backdrop_path'] ?? '';
     if (is_array($bd)) $bd = $bd[0] ?? '';
-    $bd = is_string($bd) ? trim($bd) : '';
-    if ($bd !== '' || !wp_tmdb_on()) return [$bd, $info, true];
-    $tmid = is_scalar($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) ? (string)($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) : '';
-    $tmx = wp_tmdb_details($it['t'] === 'series' ? 'tv' : 'movie', $tmid !== '' ? $tmid : (string)($it['tm'] ?? ''), (string)($info['name'] ?? $it['name']), (string)($it['year'] ?? ''), !$net);
-    if (!is_array($tmx)) return ['', $info, false]; // TMDB todavía no se buscó
-    $bd = (string)($tmx['backdrop'] ?? '');
-    if ($bd !== '' && trim((string)($info['plot'] ?? ($info['description'] ?? ''))) === '' && !empty($tmx['overview'])) $info['plot'] = $tmx['overview'];
-    if ($bd !== '' && empty($info['tmdb_id']) && !empty($tmx['id'])) $info['tmdb_id'] = (string)$tmx['id'];
-    return [$bd, $info, true];
+    return [is_string($bd) ? trim($bd) : '', $info, true];
 }
 
 /** Un destacado para la página (antes de wp_hero_kind). */
@@ -97,12 +105,14 @@ function wp_hero_item(array $it, array $info, $bd)
     if (!empty($info['genre'])) wp_genre_index_put($it['t'], $it['id'], $info['genre']);
     $link = $isS ? 'seriesvideo.php?id=' . rawurlencode($it['id']) : 'Movie_description.php?id=' . rawurlencode($it['id']);
     $year = substr((string)($info['releasedate'] ?? ($info['releaseDate'] ?? ($info['release_date'] ?? ''))), 0, 4);
+    // (con el fondo de TMDB puede no estar la ficha del servidor: año y género del catálogo)
+    if ($year === '') $year = (string)($it['year'] ?? '');
     return [
         'title' => (string)($info['name'] ?? $it['name']) ?: $it['name'],
         'description' => (string)($info['plot'] ?? ($info['description'] ?? '')),
         'rating' => (string)($info['rating'] ?? $it['rating']),
         'year' => $year,
-        'genre' => implode(', ', array_slice(array_map('trim', explode(',', (string)($info['genre'] ?? ''))), 0, 2)),
+        'genre' => implode(', ', array_slice(array_map('trim', explode(',', (string)($info['genre'] ?? ($it['genre'] ?? '')))), 0, 2)),
         'background_image' => wp_img($bd, ''),
         'poster' => wp_img($it['icon'], ''),
         'bd' => $bd,

@@ -65,16 +65,62 @@ function tv_epg($id, $name)
     return array_slice($out, 0, 15);
 }
 
-function tv_channel_data($id, $username, $fav_file)
+/**
+ * Nombre y logo de cada canal [id => [nombre, logo]], guardado aparte mientras la lista de canales no cambie: abrir un
+ * canal no lee ni recorre la lista entera (2.9.9).
+ */
+function tv_channel_map()
 {
-    $info = null;
-    $all = xt_get('get_live_streams', [], 1800, 25);
+    static $memo = null;
+    if ($memo !== null) return $memo;
+    $src = wp_cache_file_of(xt_cache_key('get_live_streams', []));
+    $ver = (int)@filemtime($src);
+    $ck = 'livemap|' . xt_cache_key('', []);
+    $hit = wp_cache_get($ck, 86400);
+    if ($ver > 0 && is_array($hit) && ($hit['v'] ?? 0) === $ver) return $memo = (array)$hit['m'];
+    // la lista completa (sin el filtro del perfil infantil: el mapa es el mismo para todos los perfiles de la línea)
+    $all = xt_get_raw('get_live_streams', [], 1800, 25);
+    $m = [];
     if (is_array($all)) {
         foreach ($all as $c) {
-            if (is_array($c) && (string)($c['stream_id'] ?? '') === (string)$id) { $info = $c; break; }
+            if (is_array($c) && isset($c['stream_id'])) $m[(string)$c['stream_id']] = [(string)($c['name'] ?? ''), (string)($c['stream_icon'] ?? '')];
         }
     }
-    $name = $info['name'] ?? t('Canal');
+    $ver = (int)@filemtime($src);
+    if ($m && $ver > 0) wp_cache_set($ck, ['v' => $ver, 'm' => $m]);
+    return $memo = $m;
+}
+
+/**
+ * Nombre y logo de un canal elegido en la lista (2.9.9): la página manda el nombre (n) y el logo que ya muestra (l, la
+ * dirección firmada de img.php), así abrir un canal no descarga la lista completa de canales del servidor IPTV (con
+ * miles de canales eso eran los 3 a 5 s). Sin esos datos (enlace directo ?id=), el mapa de canales.
+ */
+function tv_channel_row($id)
+{
+    $n = trim((string)preg_replace('/[\x00-\x1F\x7F]+/u', ' ', (string)($_GET['n'] ?? '')));
+    if ($n === '' || !isset($_GET['n'])) return tv_channel_map()[(string)$id] ?? null;
+    if (function_exists('mb_substr')) $n = mb_substr($n, 0, 150, 'UTF-8'); else $n = substr($n, 0, 150);
+    // el logo original, solo si la firma de img.php es la nuestra
+    $icon = '';
+    $q = parse_url((string)($_GET['l'] ?? ''), PHP_URL_QUERY);
+    if (is_string($q)) {
+        parse_str($q, $lq);
+        $u = isset($lq['u']) ? (string)wp_b64u_dec((string)$lq['u']) : '';
+        if ($u !== '' && preg_match('~^https?://~i', $u) && isset($lq['s']) && hash_equals(wp_sign($u), (string)$lq['s'])) $icon = $u;
+    }
+    return [$n, $icon];
+}
+
+/**
+ * Datos para abrir un canal. Sin la guía (2.9.9): esa llega aparte (ajax=epg) y el canal arranca sin esperarla. Con
+ * $fav = false tampoco se pregunta al panel si es favorito (la página ya tiene la lista de favoritos).
+ */
+function tv_channel_data($id, $username, $fav_file, $fav = true)
+{
+    $row = tv_channel_row($id);
+    $info = $row ? ['name' => $row[0], 'stream_icon' => $row[1]] : null;
+    $name = ($info['name'] ?? '') !== '' ? $info['name'] : t('Canal');
     $settings = isset($_COOKIE["settings_array"]) ? json_decode($_COOKIE["settings_array"], true) : [];
     $pref = (isset($settings["stream_type"]) && $settings["stream_type"] === 'ts') ? 'ts' : 'm3u8';
     $order = $pref === 'ts' ? ['ts', 'm3u8'] : ['m3u8', 'ts'];
@@ -96,8 +142,7 @@ function tv_channel_data($id, $username, $fav_file)
         'stream' => wp_is_demo() ? '' : wp_stream_url('live', $id, $pref),
         'vlcPc' => wp_is_demo() ? '' : 'playlist.php?' . http_build_query(['id' => (string)$id, 'slug' => 'live', 'ext' => $pref, 'title' => $name]),
         'diag' => 'diag.php?slug=live&id=' . rawurlencode((string)$id),
-        'fav' => wp_is_favorite('live', $id),
-        'epg' => tv_epg($id, $name),
+        'fav' => $fav ? wp_is_favorite('live', $id) : null,
     ];
 }
 
@@ -112,7 +157,12 @@ if (isset($_GET['ajax'])) {
         }
         echo json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     } elseif ($_GET['ajax'] === 'channel') {
-        echo json_encode(tv_channel_data(preg_replace('/[^0-9]/', '', (string)($_GET['id'] ?? '')), $username, $fav_file), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        echo json_encode(tv_channel_data(preg_replace('/[^0-9]/', '', (string)($_GET['id'] ?? '')), $username, $fav_file, false), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    } elseif ($_GET['ajax'] === 'epg') {
+        // la guía del canal, aparte: el video ya arrancó
+        $eid = preg_replace('/[^0-9]/', '', (string)($_GET['id'] ?? ''));
+        $row = $eid !== '' ? tv_channel_row($eid) : null;
+        echo json_encode(['id' => $eid, 'epg' => $eid !== '' ? tv_epg($eid, $row ? $row[0] : '') : []], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
     exit;
 }
@@ -130,6 +180,8 @@ $selectedCategoryId = isset($_GET['category_id']) ? (string)$_GET['category_id']
 $categories = wp_categories('live');
 if ($selectedCategoryId === '' && !$id) $selectedCategoryId = tv_fav_channels($username, $fav_file) ? 'favorites' : (string)($categories[0]['category_id'] ?? '');
 $initial = $id ? tv_channel_data($id, $username, $fav_file) : null;
+// los canales favoritos, una vez: al cambiar de canal no se le vuelve a preguntar al panel (2.9.9)
+$live_favs = array_values(array_map(function ($f) { return (string)$f['stream_id']; }, wp_user_favorites('live')));
 $use_vlc = (isset($_COOKIE["use_vlc"]) && !wp_is_demo()) ? $_COOKIE["use_vlc"] : "0";
 
 $page_title = t('TV en vivo');
@@ -160,6 +212,9 @@ include "header.php";
     .tv-main .tv-player { width: min(100%, calc(46vh * 16 / 9)); height: auto; max-height: 46vh; }
     .tv-player .ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; gap: 12px; }
     .tv-player .ph svg { width: 54px; height: 54px; opacity: .5; }
+    /* canal recién elegido: «Cargando canal...» mientras llegan sus fuentes (2.9.9) */
+    .tv-player .tv-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; color: #ccc; font-size: 15px; background: #000; }
+    .tv-player .tv-wait .nf-spinner { display: inline-block; }
     .tv-info { display: flex; align-items: center; gap: 12px; padding: 0 4px; }
     .tv-info img { width: 64px; height: 42px; object-fit: contain; background: #0d0d0d; border-radius: 4px; }
     .tv-info h2 { margin: 0; font-size: 20px; color: #fff; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -270,7 +325,7 @@ include "header.php";
 // imagen de un canal sin logo: la de la marca (el logo del dueño solo con Omitir)
 var CH_FB = <?php echo json_encode(wp_channel_fallback(), JSON_UNESCAPED_SLASHES); ?>;
 document.addEventListener('DOMContentLoaded', function () {
-    var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [] };
+    var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [], seq: 0, favs: <?php echo json_encode($live_favs); ?> };
     var initial = <?php echo json_encode($initial, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG); ?>;
     var useVLC = <?php echo json_encode($use_vlc === '1'); ?>;
     var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -356,19 +411,46 @@ document.addEventListener('DOMContentLoaded', function () {
     if (mq.addEventListener) mq.addEventListener('change', placeEpg); else if (mq.addListener) mq.addListener(placeEpg);
     chCol.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onListScroll); } }, { passive: true });
 
+    // el canal elegido queda marcado en la lista (sin volver a dibujarla entera: con miles de canales eso demoraba)
+    function markActive(id) {
+        Array.prototype.forEach.call(list.querySelectorAll('.tv-ch.active'), function (x) { x.classList.remove('active'); });
+        var el = list.querySelector('.tv-ch[data-id="' + String(id).replace(/[^0-9A-Za-z_-]/g, '') + '"]');
+        if (el) el.classList.add('active');
+    }
+
+    // nombre y logo del canal que la página ya tiene: el servidor no descarga la lista completa para saberlos (2.9.9)
+    function chq(c) {
+        return c ? '&n=' + encodeURIComponent(c.n || '') + '&l=' + encodeURIComponent(c.i || '') : '';
+    }
+
+    // la guía de un canal, aparte (2.9.9): el video arranca sin esperarla
+    function loadEpg(id, my, c) {
+        fetch('tvguide.php?ajax=epg&id=' + encodeURIComponent(id) + chq(c), { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { if (my === state.seq && d) renderEpg(d.epg || []); })
+            .catch(function () { if (my === state.seq) renderEpg([]); });
+    }
+
     function play(data) {
         state.ch = data.id;
-        renderChannels();
+        markActive(data.id);
         document.getElementById('tvInfo').style.display = '';
         document.getElementById('tvName').textContent = data.name;
         document.getElementById('tvLogo').src = data.logo;
         var fav = document.getElementById('toggleLiveFav');
-        fav.classList.toggle('on', !!data.fav);
+        var isFav = data.fav === null || data.fav === undefined ? state.favs.indexOf(String(data.id)) >= 0 : !!data.fav;
+        fav.classList.toggle('on', isFav);
         fav.onclick = function () {
             NF.fav(fav, { id: data.id, type: 'live', title: data.name, poster: data.poster });
+            // la lista de favoritos de la página sigue al botón
+            setTimeout(function () {
+                var on = fav.classList.contains('on'), k = state.favs.indexOf(String(data.id));
+                if (on && k < 0) state.favs.push(String(data.id));
+                if (!on && k >= 0) state.favs.splice(k, 1);
+            }, 300);
             if (state.cat === 'favorites') setTimeout(function () { loadChannels('favorites'); }, 400);
         };
-        renderEpg(data.epg);
+        if (data.epg) renderEpg(data.epg);
         if (isMobile && useVLC) { NFPlayer.openVlc({ live: true, vlcUrl: data.vlc, streamUrl: data.stream, vlcPc: data.vlcPc }); return; }
         var box = document.getElementById('tvPlayer');
         if (state.player) state.player.destroy();
@@ -383,14 +465,30 @@ document.addEventListener('DOMContentLoaded', function () {
         state.player = new NFPlayer(box, { live: true, title: data.name, sources: data.sources, vlcUrl: data.vlc, streamUrl: data.stream, vlcPc: data.vlcPc, diagUrl: data.diag, fallbackUrl: data.http });
     }
 
+    /* Elegir un canal (2.9.9): queda marcado al instante con su nombre y logo, el canal anterior se corta y se ve
+       «Cargando»; el video arranca apenas llegan sus fuentes y la guía llega aparte. Antes todo esperaba la respuesta del
+       servidor con la guía incluida (3 a 5 s). Si se elige otro canal mientras tanto, solo vale el último. */
     function openChannel(id, push) {
-        fetch('tvguide.php?ajax=channel&id=' + encodeURIComponent(id), { credentials: 'same-origin' })
+        var my = ++state.seq;
+        var c = state.channels.filter(function (x) { return x.id === id; })[0];
+        state.ch = id;
+        markActive(id);
+        document.getElementById('tvInfo').style.display = '';
+        if (c) { document.getElementById('tvName').textContent = c.n; document.getElementById('tvLogo').src = c.i; }
+        var box = document.getElementById('tvPlayer');
+        if (state.player) { try { state.player.destroy(); } catch (e) {} }
+        state.player = null;
+        box.innerHTML = '<div class="tv-wait"><span class="nf-spinner"></span><span>' + NF.esc(<?php echo tj('Cargando canal...'); ?>) + '</span></div>';
+        document.getElementById('epg-list').innerHTML = '<div class="tv-empty">' + NF.esc(<?php echo tj('Cargando guía...'); ?>) + '</div>';
+        fetch('tvguide.php?ajax=channel&id=' + encodeURIComponent(id) + chq(c), { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (d) {
+                if (my !== state.seq) return; // ya se eligió otro canal
                 play(d);
                 if (push) history.replaceState(null, '', location.pathname + '?_r=1&id=' + encodeURIComponent(id) + '&slug=live&category_id=' + encodeURIComponent(state.cat));
             })
-            .catch(function () { NF.toast(<?php echo tj('No se pudo abrir el canal'); ?>); });
+            .catch(function () { if (my === state.seq) { box.innerHTML = ''; NF.toast(<?php echo tj('No se pudo abrir el canal'); ?>); } });
+        loadEpg(id, my, c);
     }
 
     document.getElementById('catList').addEventListener('click', function (e) { var c = e.target.closest('.tv-cat'); if (c) loadChannels(c.getAttribute('data-id')); });
@@ -402,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function () {
     filter.addEventListener('input', renderChannels);
 
     loadChannels(state.cat || 'favorites');
-    if (initial) play(initial);
+    if (initial) { play(initial); loadEpg(initial.id, state.seq); }
 });
 </script>
 </main>

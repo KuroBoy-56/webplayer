@@ -498,4 +498,6 @@ return [
     'Perfil infantil' => 'Perfil infantil',
     'Perfil infantil: solo contenido para niños. Se elige al crear el perfil y no se cambia.' => 'Perfil infantil: só conteúdo para crianças. É escolhido ao criar o perfil e não muda.',
     'Solo películas y series para niños y Disney. Sin Deportes; TV en vivo solo con canales infantiles (si tu lista no tiene, no aparece). Se elige ahora: después no se cambia.' => 'Só filmes e séries para crianças e Disney. Sem Esportes; TV ao vivo só com canais infantis (se a sua lista não tiver, não aparece). Escolha agora: depois não muda.',
+    'Cargando canal...' => 'Carregando canal...',
+    'Cargando guía...' => 'Carregando guia...',
 ];
