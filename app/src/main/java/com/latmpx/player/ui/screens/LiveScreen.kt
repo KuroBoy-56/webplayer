@@ -36,6 +36,7 @@ import com.latmpx.player.data.Xtream
 import com.latmpx.player.player.Play
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.components.Chip
+import com.latmpx.player.ui.components.channelFallback
 import com.latmpx.player.ui.components.FocusBox
 import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.theme.NfBg
@@ -115,7 +116,7 @@ private fun ChannelRow(ch: Item, num: Int, onClick: () -> Unit, onLong: () -> Un
     FocusBox(onClick = onClick, onLongClick = onLong, onFocus = onFocus, focusScale = 1.02f, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) { foc ->
         Row(Modifier.fillMaxWidth().background(if (foc) Color(0x33FFFFFF) else Color.Transparent).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("", color = NfGray2, fontSize = 14.sp, modifier = Modifier.width(36.dp))
-            AsyncImage(model = ch.poster, contentDescription = null, modifier = Modifier.size(50.dp, 36.dp), placeholder = androidx.compose.ui.res.painterResource(R.drawable.logo))
+            AsyncImage(model = ch.poster, contentDescription = null, modifier = Modifier.size(50.dp, 36.dp), placeholder = channelFallback(), error = channelFallback(), fallback = channelFallback())
             Spacer(Modifier.width(12.dp))
             Text(ch.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Icon(if (f) Icons.Filled.Star else Icons.Filled.StarBorder, null, tint = if (f) NfRed else Color(0x80FFFFFF), modifier = Modifier.size(20.dp).clickable { onLong() }.padding(2.dp))

@@ -109,6 +109,7 @@ import com.latmpx.player.data.Xtream
 import com.latmpx.player.player.Play
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.components.FocusBox
+import com.latmpx.player.ui.components.channelFallback
 import com.latmpx.player.ui.theme.NfBg
 import com.latmpx.player.ui.theme.NfGray
 import com.latmpx.player.ui.theme.NfGray2
@@ -445,7 +446,7 @@ private fun PhonePlayerBox(
             // logo del canal mientras arranca (o para empezar a ver)
             AsyncImage(
                 model = ch.poster, contentDescription = null, contentScale = ContentScale.Fit,
-                placeholder = painterResource(R.drawable.logo), error = painterResource(R.drawable.logo),
+                placeholder = channelFallback(), error = channelFallback(),
                 modifier = Modifier.fillMaxWidth(0.42f).aspectRatio(16f / 9f),
             )
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x33000000), Color(0x22000000), Color(0xCC000000)))))
@@ -624,7 +625,7 @@ private fun ChannelLogo(url: String, modifier: Modifier, shape: RoundedCornerSha
     Box(modifier.clip(shape).background(TvLogoBg), contentAlignment = Alignment.Center) {
         AsyncImage(
             model = url.ifBlank { null }, contentDescription = null, contentScale = ContentScale.Fit,
-            placeholder = painterResource(R.drawable.logo), error = painterResource(R.drawable.logo), fallback = painterResource(R.drawable.logo),
+            placeholder = channelFallback(), error = channelFallback(), fallback = channelFallback(),
             modifier = Modifier.fillMaxSize().padding(2.dp),
         )
     }
