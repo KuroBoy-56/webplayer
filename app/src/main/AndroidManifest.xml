@@ -11,6 +11,9 @@
     <!-- app exclusiva para Android TV / Google TV / TV Box (la de celular está en la rama android) -->
     <uses-feature android:name="android.software.leanback" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- screenOrientation="landscape" hace que Android dé por obligatoria la pantalla horizontal y Play Console dejaba
+         fuera televisores que no la declaran: la app es solo horizontal, pero no la exige -->
+    <uses-feature android:name="android.hardware.screen.landscape" android:required="false" />
 
     <application
         android:name=".App"
