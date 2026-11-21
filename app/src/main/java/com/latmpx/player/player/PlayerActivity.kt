@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.CaptionStyleCompat
@@ -187,11 +186,13 @@ class PlayerActivity : ComponentActivity() {
         )
         setContent {
             // celular en vertical (como la web player): el video arriba en 16:9 y debajo el título y las opciones; en
-            // horizontal (botón de pantalla completa o girando el teléfono) el video a pantalla completa como siempre
-            val conf = androidx.compose.ui.platform.LocalConfiguration.current
-            val portrait = !tv && !ui2.inPip && conf.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
-            androidx.compose.runtime.SideEffect { if (ui2.portrait != portrait) ui2.portrait = portrait }
-            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
+            // horizontal (botón de pantalla completa o girando el teléfono) el video a pantalla completa como siempre.
+            // Vertical = la ventana es más alta que ancha, medida aquí: la orientación que informa el sistema
+            // (LocalConfiguration) en algunos teléfonos llega tarde o no se actualiza al pasar a pantalla completa, y el
+            // título con «Pantalla completa / Audio y subtítulos / Velocidad» quedaba encima del video en horizontal
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
+                val portrait = !tv && !ui2.inPip && maxHeight > maxWidth
+                androidx.compose.runtime.SideEffect { if (ui2.portrait != portrait) ui2.portrait = portrait }
                 // el mismo AndroidView en los dos modos (solo cambia su tamaño): el video no se corta al girar
                 Box(
                     if (portrait) Modifier.fillMaxWidth().displayCutoutPadding().aspectRatio(16f / 9f)
@@ -202,7 +203,8 @@ class PlayerActivity : ComponentActivity() {
                 }
                 if (portrait) PortraitPanel(
                     ui2, actions,
-                    Modifier.fillMaxSize().displayCutoutPadding().padding(top = (conf.screenWidthDp * 9f / 16f).dp).navigationBarsPadding(),
+                    // debajo del video: el ancho de esta misma ventana (no el de la configuración del sistema)
+                    Modifier.fillMaxSize().displayCutoutPadding().padding(top = maxWidth * 9f / 16f).navigationBarsPadding(),
                 )
             }
         }
