@@ -37,7 +37,7 @@ function wp_hero_kind(array $items)
             if ($ps) { $it['poster'] = array_shift($ps); $it['poster_fb'] = $ps; }
         }
         unset($it['bd'], $it['icon']);
-        if (wp_lang() === 'es' || !wp_tmdb_key() || microtime(true) > $deadline) continue;
+        if (wp_lang() === 'es' || !wp_tmdb_on() || microtime(true) > $deadline) continue;
         $isS = strpos((string)($it['play_link'] ?? ''), 'seriesvideo') === 0;
         $tm = wp_tmdb_details($isS ? 'tv' : 'movie', $it['tm'] ?? '', (string)($it['title'] ?? ''), (string)($it['year'] ?? ''));
         $it['description'] = wp_tmdb_plot($tm, (string)($it['description'] ?? ''));
@@ -217,7 +217,7 @@ switch ($action) {
             $rows[] = ['id' => (string)($ep['id'] ?? ''), 'num' => (int)($ep['episode_num'] ?? 0), 'title' => (string)($ep['title'] ?? ''),
                 'plot' => (string)($ei['plot'] ?? ''), 'src' => wp_img($ei['movie_image'] ?? ($ei['cover_big'] ?? ''), '')];
         }
-        out(['eps' => wp_eps_fill($rows, wp_tmdb_season($tm['id'] ?? '', $sn), $stitle, [wp_img($bd, ''), wp_img($tm['poster'] ?: ($si['cover'] ?? ''), '')])]);
+        out(['eps' => wp_eps_fill($rows, wp_tmdb_season($tm['id'] ?? '', $sn), $stitle, [wp_img($bd, ''), wp_img($tm['poster'] ?: ($si['cover'] ?? ''), ''), wp_img($si['cover'] ?? '', '')])]);
 
     case 'hero':
         // el perfil infantil tiene su propio destacado (includes/kids.php)
@@ -254,13 +254,19 @@ switch ($action) {
             $bd = $inf['info']['backdrop_path'] ?? '';
             if (is_array($bd) ? !empty($bd[0]) : $bd !== '') $withBd++;
         }
-        if (!$withBd) $infos = xt_multi($reqs, 86400, 8);
+        // (una sola vez por sesión cada 2 min: si una ficha no llegó, el destacado sale con las demás y el fondo de TMDB en
+        // lugar de volver a esperar y quedar vacío)
+        $askK = 'heroask|' . session_id() . '|' . $ck;
+        if (!$withBd && !wp_cache_get($askK, 120)) {
+            wp_cache_set($askK, 1);
+            $infos = xt_multi($reqs, 86400, 8);
+        }
         $items = [];
         // sin fondo en el servidor (o sin su ficha): el de TMDB, como Roku, Vega y Android TV (clave de la línea, 7 días en
         // la caché). Primero lo ya guardado; después se busca en TMDB lo que falte, hasta 4 s en total
         $tmDeadline = microtime(true) + 4;
         $tmFill = function (array &$info, array $it, $net) use ($tmDeadline) {
-            if (!wp_tmdb_key() || ($net && microtime(true) > $tmDeadline)) return '';
+            if (!wp_tmdb_on() || ($net && microtime(true) > $tmDeadline)) return '';
             $tmid = is_scalar($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) ? (string)($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) : '';
             $tmx = wp_tmdb_details($it['t'] === 'series' ? 'tv' : 'movie', $tmid !== '' ? $tmid : (string)($it['tm'] ?? ''), (string)($info['name'] ?? $it['name']), (string)($it['year'] ?? ''), !$net);
             $bd = is_array($tmx) ? (string)($tmx['backdrop'] ?? '') : '';

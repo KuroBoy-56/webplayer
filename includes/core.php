@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.9.2');
+define('WP_VERSION', '2.9.3');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -28,7 +28,8 @@ require_once __DIR__ . '/xt_relay.php';
  * Clave de TMDB (carátulas, fondos, elenco y tráileres). No va en el código: la guardada en el panel (Ajustes del
  * dueño, o la del distribuidor con su número), que el panel manda con el token al iniciar sesión y con Continuar
  * viendo. Solo el dueño (sin número), si el panel no tiene ninguna, usa 'tmdb_key' de includes/panel_secret.php (no se
- * sube a GitHub). Sin ninguna la web funciona igual, sin datos de TMDB.
+ * sube a GitHub). Un distribuidor sin clave propia usa TMDB por el panel (wp_tmdb_via_panel, 2.9.3), salvo con «Solo
+ * sus recursos». Sin ninguna la web funciona igual, sin datos de TMDB.
  */
 function wp_tmdb_key()
 {
@@ -51,6 +52,39 @@ function wp_tmdb_key()
     }
     if (!preg_match('/^[0-9a-f]{32}$/i', $k)) return ''; // sin guardar: el panel puede mandarla después
     return $key = $k;
+}
+
+/**
+ * Sin clave propia (un distribuidor que no puso la suya): TMDB por el panel (api/tmdb.php, con la clave del dueño y su
+ * caché de 24 h), como Roku, Vega y Android, que también la buscan ahí. Nunca para un distribuidor con «Solo sus
+ * recursos» (Distribuidores del panel): ese usa solo lo suyo.
+ */
+function wp_tmdb_via_panel()
+{
+    static $on = null;
+    if ($on !== null) return $on;
+    if (wp_tmdb_key() !== '' || !function_exists('wp_panel_base') || wp_panel_base() === '') return $on = false;
+    $cfg = function_exists('wp_tenant_cfg') ? wp_tenant_cfg() : null;
+    return $on = !(is_array($cfg) && empty($cfg['features']['hosting_video']));
+}
+
+/** ¿Hay TMDB para esta línea (su clave o el panel)? */
+function wp_tmdb_on()
+{
+    return wp_tmdb_key() !== '' || wp_tmdb_via_panel();
+}
+
+/** Dirección de TMDB para $path ('search/movie', 'tv/123/season/1'…) con $query: directa con la clave o por el panel. */
+function wp_tmdb_url($path, $query = '')
+{
+    $path = trim((string)$path, '/');
+    $query = ltrim((string)$query, '&');
+    if (wp_tmdb_key() !== '') return 'https://api.themoviedb.org/3/' . $path . '?api_key=' . wp_tmdb_key() . ($query !== '' ? '&' . $query : '');
+    if (!wp_tmdb_via_panel() || !preg_match('~^[a-z0-9_/]{1,80}$~i', $path)) return '';
+    $base = wp_panel_base();
+    // el hosting llega al panel solo por http (SSL quitado o vencido): igual que wp_panel_request
+    if (wp_cache_get('panel|mode', 3600) === 2 && stripos($base, 'https://') === 0) $base = 'http://' . substr($base, 8);
+    return $base . 'tmdb.php?path=' . $path . ($query !== '' ? '&' . $query : '');
 }
 
 // Duración de los enlaces firmados del proxy (segundos)
@@ -1311,19 +1345,17 @@ function wp_tmdb_pick(array $results, $q, $year)
  */
 function wp_tmdb_find($type, $name, $year = '', $tmdbId = '')
 {
-    if (!wp_tmdb_key()) return null;
+    if (!wp_tmdb_on()) return null;
     list($q, $y2) = wp_tmdb_parse($name);
     $year = preg_replace('/\D/', '', (string)$year) ?: $y2;
     $tmdbId = preg_replace('/\D/', '', (string)$tmdbId);
     $ck = 'tmdbf2|' . $type . '|' . ($tmdbId ? 'id' . $tmdbId : wp_norm_title($q) . '|' . $year);
     $hit = wp_cache_get($ck, 2592000);
     if (is_array($hit) && ($hit['r'] || time() - (int)($hit['t'] ?? 0) < 172800)) return $hit['r'];
-    $base = 'https://api.themoviedb.org/3/';
-    $key = 'api_key=' . wp_tmdb_key();
     $r = null;
     $netOk = false;
     if ($tmdbId) {
-        $body = wp_http_get($base . $type . '/' . $tmdbId . '?' . $key . '&language=es-MX', 6);
+        $body = wp_http_get(wp_tmdb_url($type . '/' . $tmdbId, 'language=es-MX'), 6);
         $netOk = $body !== null;
         $j = $body ? json_decode($body, true) : null;
         if (is_array($j) && !empty($j['id'])) $r = $j;
@@ -1337,8 +1369,8 @@ function wp_tmdb_find($type, $name, $year = '', $tmdbId = '')
         }
         $tries[] = [$type === 'tv' ? 'movie' : 'tv', $q, ''];
         foreach ($tries as $tr) {
-            $url = $base . 'search/' . $tr[0] . '?' . $key . '&language=es-MX&include_adult=false&query=' . urlencode($tr[1])
-                . ($tr[2] ? ($tr[0] === 'tv' ? '&first_air_date_year=' : '&primary_release_year=') . (int)$tr[2] : '');
+            $url = wp_tmdb_url('search/' . $tr[0], 'language=es-MX&include_adult=false&query=' . urlencode($tr[1])
+                . ($tr[2] ? ($tr[0] === 'tv' ? '&first_air_date_year=' : '&primary_release_year=') . (int)$tr[2] : ''));
             $body = wp_http_get($url, 6);
             if ($body === null) continue;
             $netOk = true;
@@ -1366,8 +1398,8 @@ function wp_tmdb_search($type, $title, $year = '')
  */
 function wp_tmdb_details($type, $tmdbId, $title, $year = '', $cacheOnly = false)
 {
-    // sin clave para este distribuidor (o el dueño): nada de TMDB, tampoco lo que otro dejó en la caché
-    if (!wp_tmdb_key()) return ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', 'ol' => '', '_t' => time()];
+    // sin clave para este distribuidor (ni el panel, con «Solo sus recursos»): nada de TMDB, tampoco lo de la caché
+    if (!wp_tmdb_on()) return ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', 'ol' => '', '_t' => time()];
     $tl = wp_tmdb_lang();
     $l2 = substr($tl, 0, 2);
     $ck = 'tmdbd4|' . $tl . '|' . $type . '|' . (preg_replace('/\D/', '', (string)$tmdbId) ?: wp_norm_title(wp_tmdb_clean_title($title)) . '|' . $year);
@@ -1376,12 +1408,11 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '', $cacheOnly = false)
     // $cacheOnly: solo lo ya guardado (el destacado no espera a TMDB por lo que todavía no buscó)
     if ($cacheOnly) return null;
     $d = ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', 'ol' => '', '_t' => time()];
-    if (!wp_tmdb_key()) return $d;
+    if (!wp_tmdb_on()) return $d;
     $r = wp_tmdb_find($type, $title, $year, $tmdbId);
     if (!$r) { wp_cache_set($ck, $d); return $d; }
     $rtype = $r['_type'] ?? $type;
-    $body = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $r['id'] . '?api_key=' . wp_tmdb_key()
-        . '&language=' . $tl . '&append_to_response=credits,aggregate_credits,videos,images&include_video_language=' . $l2 . ',es,en,null&include_image_language=' . $l2 . ',es,en,null', 7);
+    $body = wp_http_get(wp_tmdb_url($rtype . '/' . $r['id'], 'language=' . $tl . '&append_to_response=credits,aggregate_credits,videos,images&include_video_language=' . $l2 . ',es,en,null&include_image_language=' . $l2 . ',es,en,null'), 7);
     $j = $body ? json_decode($body, true) : null;
     $inLang = is_array($j) && !empty($j['id']); // ficha en el idioma de la app (si no, el resultado de la búsqueda es-MX)
     if (!$inLang) $j = $r;
@@ -1397,7 +1428,7 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '', $cacheOnly = false)
     if ($d['overview'] === '') {
         // sin descripción en ese idioma: español de España (si es español) y luego inglés
         foreach (array_diff($l2 === 'es' ? ['es-ES', 'en-US'] : ['en-US'], [$tl]) as $lang) {
-            $b2 = wp_http_get('https://api.themoviedb.org/3/' . $rtype . '/' . $j['id'] . '?api_key=' . wp_tmdb_key() . '&language=' . $lang, 5);
+            $b2 = wp_http_get(wp_tmdb_url($rtype . '/' . $j['id'], 'language=' . $lang), 5);
             $j2 = $b2 ? json_decode($b2, true) : null;
             if (!empty($j2['overview'])) { $d['overview'] = trim($j2['overview']); $d['ol'] = $lang; break; }
         }
@@ -1439,7 +1470,7 @@ function wp_tmdb_plot(array $tmdb, $serverPlot)
  */
 function wp_tmdb_posters(array $items)
 {
-    if (!wp_tmdb_key()) return []; // sin clave: tampoco las carátulas que otro dejó en la caché
+    if (!wp_tmdb_on()) return []; // sin clave (ni el panel): tampoco las carátulas que otro dejó en la caché
     $out = [];
     $need = [];
     $slow = [];
@@ -1456,12 +1487,12 @@ function wp_tmdb_posters(array $items)
         }
         if (!$tm && $q === '') continue;
         $url = $tm
-            ? 'https://api.themoviedb.org/3/' . $type . '/' . $tm . '?api_key=' . wp_tmdb_key() . '&language=es-MX'
-            : 'https://api.themoviedb.org/3/search/' . $type . '?api_key=' . wp_tmdb_key() . '&language=es-MX&include_adult=false&query=' . urlencode($q)
-                . ($y ? ($type === 'tv' ? '&first_air_date_year=' : '&primary_release_year=') . (int)$y : '');
+            ? wp_tmdb_url($type . '/' . $tm, 'language=es-MX')
+            : wp_tmdb_url('search/' . $type, 'language=es-MX&include_adult=false&query=' . urlencode($q)
+                . ($y ? ($type === 'tv' ? '&first_air_date_year=' : '&primary_release_year=') . (int)$y : ''));
         $need[$it['k']] = ['ck' => $ck, 'url' => $url, 'tm' => $tm, 'q' => $q, 'y' => $y, 'type' => $type, 'n' => $it['n'] ?? ''];
     }
-    if ($need && wp_tmdb_key()) {
+    if ($need && wp_tmdb_on()) {
         $urls = [];
         foreach ($need as $k => $n) $urls[$k] = $n['url'];
         foreach (wp_http_multi($urls, 6) as $k => $body) {

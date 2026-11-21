@@ -4,6 +4,13 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Carrusel de destacados del distribuidor sin clave de TMDB — versión 2.9.3 (21 de noviembre, sexta parte)
+- **El problema:** el carrusel necesita un fondo horizontal por título. Si el servidor IPTV no lo trae, la web lo busca en TMDB, pero con un distribuidor solo usaba la clave de TMDB del distribuidor: sin clave propia no había fondos y el carrusel no salía (en Inicio la imagen fija «Bienvenido»; en Películas y Series nada). Las apps de TV en ese caso usan otra clave, por eso ahí sí se veía.
+- **Ahora:** un distribuidor sin clave propia usa TMDB por el panel (`api/tmdb.php`, con tu clave y su caché de 24 h), como Roku, Vega y Android: fondos del carrusel, fichas, carátulas que faltan, capítulos y actores. Con «Solo sus recursos» no se usa nada tuyo. Con su propia clave, la suya, como antes.
+- **El carrusel ya no espera dos veces:** si una ficha no llegó del servidor, sale con las demás (y el fondo de TMDB) en lugar de volver a esperar y quedar vacío.
+- **Capítulos:** si las imágenes de TMDB no cargan, el último respaldo es la carátula del servidor.
+- Archivos: `api.php`, `seriesvideo.php`, `includes/core.php`, `includes/episodes.php`, `includes/actor.php`.
+
 ## Carrusel de destacados, vista previa de capítulos, idiomas y subtítulos — versión 2.9.2 (21 de noviembre, quinta parte)
 - **Carrusel de destacados como en la TV:** si el servidor no daba la ficha de un solo título (error o respuesta rota), la web se «rendía» y pasaba la sesión al hosting; con un servidor que bloquea al hosting (el del distribuidor) el destacado quedaba con una sola imagen fija y las fichas podían fallar. Ahora una ficha que falla queda vacía 10 minutos y lo demás sigue; la sesión solo pasa al hosting si el navegador no pudo leer **nada** del servidor. Además, sin fondo en el servidor se usa el de TMDB (como Roku, Vega y Android TV), primero lo ya guardado y hasta 4 s de búsqueda.
 - **Vista previa de los capítulos:** la imagen de cada capítulo del servidor (por el Worker si hace falta) → la foto del capítulo en TMDB → el fondo de la serie → su carátula. Si el servidor solo trae «Episodio 2» o «Serie - S01E02», o no trae sinopsis, se usan las de TMDB. Las demás temporadas se completan al elegirlas.

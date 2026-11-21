@@ -3,7 +3,8 @@
  * Vista previa de los capítulos de una serie (web player 2.9.2), como Roku, Vega y Android TV: la imagen del capítulo
  * del servidor IPTV (por el puente del Worker si el navegador no puede cargarla) → la foto del capítulo en TMDB → el
  * fondo de la serie → su carátula. Si el servidor no trae el nombre o la sinopsis del capítulo, los de TMDB.
- * TMDB: /tv/{id}/season/{n} con la clave de la línea (la del distribuidor o la del dueño), 7 días en la caché.
+ * TMDB: /tv/{id}/season/{n} con la clave de la línea (la del distribuidor o la del dueño) o por el panel
+ * (wp_tmdb_url), 7 días en la caché.
  */
 if (defined('WP_EPISODES_LOADED')) {
     return;
@@ -15,12 +16,12 @@ function wp_tmdb_season($tvId, $season, $wait = 5)
 {
     $tvId = preg_replace('/\D/', '', (string)$tvId);
     $season = (int)$season;
-    if ($tvId === '' || $season < 0 || !wp_tmdb_key()) return [];
+    if ($tvId === '' || $season < 0 || !wp_tmdb_on()) return [];
     $tl = wp_tmdb_lang();
     $ck = 'tmdbseason1|' . $tl . '|' . $tvId . '|' . $season;
     $hit = wp_cache_get($ck, 604800);
     if (is_array($hit)) return $hit;
-    $body = wp_http_get('https://api.themoviedb.org/3/tv/' . $tvId . '/season/' . $season . '?api_key=' . wp_tmdb_key() . '&language=' . $tl, $wait);
+    $body = wp_http_get(wp_tmdb_url('tv/' . $tvId . '/season/' . $season, 'language=' . $tl), $wait);
     $j = $body ? json_decode($body, true) : null;
     if (!is_array($j)) return []; // sin respuesta: se vuelve a preguntar la próxima vez
     $out = [];

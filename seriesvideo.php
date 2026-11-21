@@ -103,7 +103,8 @@ if ($selected_season === null || !isset($eps_js[$selected_season])) {
 }
 // la temporada que se ve, con las fotos, nombres y sinopsis de TMDB que falten; las demás al elegirlas (api.php?action=eps)
 require_once __DIR__ . '/includes/episodes.php';
-$ep_art = [wp_img($backdrop, ''), wp_img($poster, '')];
+// (al final la carátula del servidor: si TMDB no carga, igual hay imagen)
+$ep_art = [wp_img($backdrop, ''), wp_img($poster, ''), wp_img($server_img, '')];
 $tmdb_tv = (string)($tmdb['id'] ?? '');
 foreach ($eps_js as $sn => $rows) {
     $eps_js[$sn] = wp_eps_fill($rows, (string)$sn === (string)$selected_season ? wp_tmdb_season($tmdb_tv, $sn) : [], $title, $ep_art);

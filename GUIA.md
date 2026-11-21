@@ -42,6 +42,12 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 - **Catálogo por partes:** Inicio, Películas, Series, Explorar y las fichas definen `WP_XT_SOFT`: en el modo navegador salen al momento sin la pantalla «Cargando…» y el catálogo completo se trae por detrás (`wp_xt_soft()` en `includes/xt_client.php`, salvo en un perfil infantil). Cada fila (`api.php?action=row`) espera lo suyo; una fila de una categoría y su «Ver todo» llegan solos con `get_vod_streams&category_id=` (`wp_cat_list_quick()`) mientras llega el catálogo completo. `wp_cat_derive()` no guarda cálculos hechos sin catálogo. El navegador espera el catálogo completo hasta 3 minutos (`xtfill.js`).
 - Pruebas: `tools/web_relay_test.php` del panel (carátulas por el Worker, firma de la línea, catálogo por partes con un servidor lento).
 
+## TMDB de un distribuidor sin clave (2.9.3)
+
+- `wp_tmdb_url($path, $query)` (`includes/core.php`): directo con la clave de la línea (`wp_tmdb_key()`) o, si no hay, por el panel (`api/tmdb.php?path=…`, clave del dueño) cuando `wp_tmdb_via_panel()`: no para un distribuidor con «Solo sus recursos» (`features.hosting_video === false` de tenant_config). `wp_tmdb_on()` reemplaza los `if (!wp_tmdb_key())`. Todas las llamadas a TMDB (búsqueda, fichas, carátulas, temporadas, actores) pasan por ahí.
+- Destacado: la espera por las fichas del servidor (`xt_multi` bloqueante) se hace una vez por sesión cada 2 min (`heroask|`).
+- Pruebas (panel): `tools/web_tmdb_panel_test.php` (reglas), `tools/web_relay_test.php` (carrusel con TMDB por el panel).
+
 ## Carrusel, capítulos e idiomas (2.9.2)
 
 - **Modo navegador sin rendirse por una ficha:** `xtfill.js` solo pasa la sesión al hosting (`xtfill.php?fail=1`) si el navegador no pudo leer nada del servidor (sin red o sin CORS en todos los pedidos). Una ficha (`get_vod_info`, `get_series_info`, `get_short_epg`, `get_simple_data_table`) con error HTTP o respuesta rota se marca vacía (`xtfill.php?id=…&empty=1`: vale 10 min para quien la lee con 24 h, para los demás ya vencida, así se vuelve a pedir).

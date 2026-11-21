@@ -117,9 +117,14 @@ function wp_tmdb_keys()
     return $keys;
 }
 
-/** GET a TMDB probando la clave del panel y luego la incorporada. Devuelve el JSON o null. */
+/** GET a TMDB probando la clave del panel y luego la incorporada (o por el panel, wp_tmdb_url). Devuelve el JSON o null. */
 function wp_tmdb_get($path, $query = '', $timeout = 8)
 {
+    if (!wp_tmdb_keys() && wp_tmdb_via_panel()) {
+        $body = wp_http_get(wp_tmdb_url($path, $query), $timeout);
+        $j = $body !== null ? json_decode($body, true) : null;
+        return is_array($j) && empty($j['error']) && ($j['success'] ?? true) !== false ? $j : null;
+    }
     foreach (wp_tmdb_keys() as $key) {
         $body = wp_http_get('https://api.themoviedb.org/3/' . $path . '?api_key=' . rawurlencode($key) . ($query ? '&' . $query : ''), $timeout, $code);
         if ($body === null) return null; // sin red: otra clave no ayuda
@@ -133,7 +138,7 @@ function wp_tmdb_get($path, $query = '', $timeout = 8)
 /** Persona de TMDB por id, o buscando por nombre. Caché 7 días. */
 function wp_tmdb_person($id, $name = '')
 {
-    if (!wp_tmdb_keys()) return null; // sin clave: tampoco lo que otro dejó en la caché
+    if (!wp_tmdb_keys() && !wp_tmdb_via_panel()) return null; // sin clave (ni el panel): tampoco lo de la caché
     $id = preg_replace('/\D/', '', (string)$id);
     if ($id === '' && trim($name) !== '') {
         $s = wp_tmdb_get('search/person', 'language=es-MX&include_adult=false&query=' . urlencode(trim($name)));
