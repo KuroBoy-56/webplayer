@@ -144,7 +144,7 @@ function wp_xt_output($out)
     if (!$isJson && stripos($out, '</head>') !== false) {
         $cfg = wp_xt_config() + ['bg' => wp_xt_background()];
         $tag = '<script>window.XT_CFG=' . json_encode($cfg, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) . ';</script>'
-            . '<script src="assets/nf/xtfill.js?v=2"></script>';
+            . '<script src="assets/nf/xtfill.js?v=3"></script>';
         $out = preg_replace('~</head>~i', $tag . '</head>', $out, 1);
     }
     return $out;
@@ -165,7 +165,7 @@ function wp_xt_loader(array $needs)
         . '@keyframes xt{to{transform:rotate(360deg)}}.xt-e{color:#ff8a8a;max-width:420px}</style>'
         . '<script>window.XT_CFG=' . json_encode($cfg, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) . ';window.XT_T='
         . json_encode(['err' => t('No se pudo cargar el contenido. Revisa tu conexión e inténtalo de nuevo.')], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . ';</script>'
-        . '<script src="assets/nf/xtfill.js?v=2"></script></head><body><div class="xt-l"><div class="xt-s"></div><div id="xtMsg">' . e(t('Cargando...')) . '</div></div></body></html>';
+        . '<script src="assets/nf/xtfill.js?v=3"></script></head><body><div class="xt-l"><div class="xt-s"></div><div id="xtMsg">' . e(t('Cargando...')) . '</div></div></body></html>';
 }
 
 /** El navegador no pudo leer el servidor IPTV: la sesión vuelve al hosting (y el panel se entera, una vez al día). */

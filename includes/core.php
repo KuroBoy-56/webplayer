@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.9.1');
+define('WP_VERSION', '2.9.2');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -1364,7 +1364,7 @@ function wp_tmdb_search($type, $title, $year = '')
  * 'ol' = idioma TMDB en el que llegó la sinopsis ('' si no hay).
  * La búsqueda del título sigue en es-MX (wp_tmdb_find); la ficha llega en el idioma de la app.
  */
-function wp_tmdb_details($type, $tmdbId, $title, $year = '')
+function wp_tmdb_details($type, $tmdbId, $title, $year = '', $cacheOnly = false)
 {
     // sin clave para este distribuidor (o el dueño): nada de TMDB, tampoco lo que otro dejó en la caché
     if (!wp_tmdb_key()) return ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', 'ol' => '', '_t' => time()];
@@ -1373,6 +1373,8 @@ function wp_tmdb_details($type, $tmdbId, $title, $year = '')
     $ck = 'tmdbd4|' . $tl . '|' . $type . '|' . (preg_replace('/\D/', '', (string)$tmdbId) ?: wp_norm_title(wp_tmdb_clean_title($title)) . '|' . $year);
     $d = wp_cache_get($ck, 604800);
     if (is_array($d) && ($d['id'] || time() - (int)($d['_t'] ?? 0) < 172800)) return $d;
+    // $cacheOnly: solo lo ya guardado (el destacado no espera a TMDB por lo que todavía no buscó)
+    if ($cacheOnly) return null;
     $d = ['id' => null, 'poster' => '', 'backdrop' => '', 'cast' => [], 'trailer' => '', 'overview' => '', 'ol' => '', '_t' => time()];
     if (!wp_tmdb_key()) return $d;
     $r = wp_tmdb_find($type, $title, $year, $tmdbId);

@@ -80,7 +80,8 @@ foreach ($seasons as $sn => $eps) {
             'id' => $epid,
             'num' => (int)($ep['episode_num'] ?? 0),
             'title' => (string)($ep['title'] ?? ''),
-            'img' => wp_img($epInfo['movie_image'] ?? ($epInfo['cover_big'] ?? ''), $poster ? wp_img($poster) : WP_NOIMG),
+            // vista previa: la del servidor y, si no carga, TMDB y el fondo de la serie (includes/episodes.php)
+            'src' => wp_img($epInfo['movie_image'] ?? ($epInfo['cover_big'] ?? ''), ''),
             'plot' => (string)($epInfo['plot'] ?? ''),
             'dur' => (string)($epInfo['duration'] ?? ''),
             'url' => 'video_player.php?id=' . rawurlencode($epid) . '&slug=series&ext=' . rawurlencode($ext) . '&series_id=' . $id,
@@ -99,6 +100,13 @@ foreach ($seasons as $sn => $eps) {
 }
 if ($selected_season === null || !isset($eps_js[$selected_season])) {
     $selected_season = $resume_season ?? (string)(wp_first_key($eps_js) ?? '1');
+}
+// la temporada que se ve, con las fotos, nombres y sinopsis de TMDB que falten; las demás al elegirlas (api.php?action=eps)
+require_once __DIR__ . '/includes/episodes.php';
+$ep_art = [wp_img($backdrop, ''), wp_img($poster, '')];
+$tmdb_tv = (string)($tmdb['id'] ?? '');
+foreach ($eps_js as $sn => $rows) {
+    $eps_js[$sn] = wp_eps_fill($rows, (string)$sn === (string)$selected_season ? wp_tmdb_season($tmdb_tv, $sn) : [], $title, $ep_art);
 }
 
 /* ---------- Similares ---------- */
@@ -209,13 +217,29 @@ document.addEventListener('DOMContentLoaded', function () {
         list.innerHTML = eps.map(function (ep, i) {
             return '<a class="nf-ep' + (ep.current ? ' current' : '') + '" href="' + NF.esc(ep.url) + '">' +
                 '<span class="no">' + (ep.num || (i + 1)) + '</span>' +
-                '<span class="th"><img src="' + NF.esc(ep.img) + '" alt="" loading="lazy" onerror="NF.imgErr(this)"><span class="pl">' + NF.svg.play + '</span>' +
+                '<span class="th"><img src="' + NF.esc(ep.img) + '"' + (ep.fb && ep.fb.length ? ' data-fb="' + NF.esc(JSON.stringify(ep.fb)) + '"' : '') + ' alt="" loading="lazy" onerror="NF.imgErr(this)"><span class="pl">' + NF.svg.play + '</span>' +
                 (ep.pct ? '<span class="pb"><i style="width:' + Math.max(3, ep.pct) + '%"></i></span>' : '') + '</span>' +
                 '<span class="tx"><span class="tt"><span>' + NF.esc(ep.title || <?php echo tj('Episodio {n}'); ?>.replace('{n}', ep.num || i + 1)) + '</span><span class="du">' + NF.esc(ep.dur) + '</span></span>' +
                 '<span class="ds">' + NF.esc(ep.plot) + '</span></span></a>';
         }).join('');
     }
-    if (sel) sel.addEventListener('change', function () { render(this.value); });
+    // otra temporada: se muestra al momento y se completa con TMDB (fotos, nombres y sinopsis que falten)
+    var TV = <?php echo json_encode($tmdb_tv); ?>, asked = {};
+    asked[<?php echo json_encode((string)$selected_season); ?>] = 1;
+    function more(sn) {
+        if (!TV || asked[sn]) return;
+        asked[sn] = 1;
+        NF.getJSON('api.php?action=eps&id=' + encodeURIComponent(<?php echo json_encode((string)$id); ?>) + '&s=' + encodeURIComponent(sn), 86400000).then(function (res) {
+            var by = {};
+            ((res && res.eps) || []).forEach(function (e) { by[e.id] = e; });
+            (EPS[sn] || []).forEach(function (ep) {
+                var e = by[ep.id];
+                if (e) { ep.img = e.img; ep.fb = e.fb; ep.title = e.title; ep.plot = e.plot; }
+            });
+            if (!sel || sel.value === sn) render(sn);
+        }).catch(function () {});
+    }
+    if (sel) sel.addEventListener('change', function () { render(this.value); more(this.value); });
     render(<?php echo json_encode((string)$selected_season); ?>);
 
     var fav = document.getElementById('toggleFavorite');

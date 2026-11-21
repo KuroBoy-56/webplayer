@@ -42,6 +42,14 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 - **Catálogo por partes:** Inicio, Películas, Series, Explorar y las fichas definen `WP_XT_SOFT`: en el modo navegador salen al momento sin la pantalla «Cargando…» y el catálogo completo se trae por detrás (`wp_xt_soft()` en `includes/xt_client.php`, salvo en un perfil infantil). Cada fila (`api.php?action=row`) espera lo suyo; una fila de una categoría y su «Ver todo» llegan solos con `get_vod_streams&category_id=` (`wp_cat_list_quick()`) mientras llega el catálogo completo. `wp_cat_derive()` no guarda cálculos hechos sin catálogo. El navegador espera el catálogo completo hasta 3 minutos (`xtfill.js`).
 - Pruebas: `tools/web_relay_test.php` del panel (carátulas por el Worker, firma de la línea, catálogo por partes con un servidor lento).
 
+## Carrusel, capítulos e idiomas (2.9.2)
+
+- **Modo navegador sin rendirse por una ficha:** `xtfill.js` solo pasa la sesión al hosting (`xtfill.php?fail=1`) si el navegador no pudo leer nada del servidor (sin red o sin CORS en todos los pedidos). Una ficha (`get_vod_info`, `get_series_info`, `get_short_epg`, `get_simple_data_table`) con error HTTP o respuesta rota se marca vacía (`xtfill.php?id=…&empty=1`: vale 10 min para quien la lee con 24 h, para los demás ya vencida, así se vuelve a pedir).
+- **Destacado:** `api.php?action=hero` usa el fondo del servidor y, si no hay, el de TMDB (`wp_tmdb_details(…, $cacheOnly)`: primero lo guardado, después búsquedas hasta 4 s).
+- **Capítulos:** `includes/episodes.php` (`wp_tmdb_season`, `wp_eps_fill`) arma `img` + `fb` (servidor → foto de TMDB → fondo → carátula) y completa nombre y sinopsis; `api.php?action=eps&id=&s=` hace lo mismo para otra temporada.
+- **Idiomas y subtítulos:** `wp_file_tracks()` lee la cabecera por la VPS / VDS de la línea (`wp_vps_relay`) también en el modo navegador; `video_player.php` y `play.php` siempre le dan al reproductor `tracks` cuando los audios no se saben. `player.js`: un audio que el navegador no reproduce, ya conocido o recién llegado, va a la conversión (`startTc`); sin motor (`do=status` → `ffmpeg: false` o 503) el video sigue directo con el aviso.
+- Pruebas (panel): `tools/web_relay_test.php` (carrusel con fichas que fallan, capítulos), `tools/web_tracks_test.php` (MKV con 2 audios AC3 y 2 subtítulos por la VPS), `tools/web_player_audio_test.php` (reproductor con la conversión encendida y apagada).
+
 ## Distribuidor: la dirección decide (2.8.1)
 
 Ya no hay pantalla «Número de distribuidor». `wp_dist_choice()` (`includes/tenant.php`):

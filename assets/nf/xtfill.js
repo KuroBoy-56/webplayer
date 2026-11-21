@@ -3,7 +3,8 @@
  *  - página «Cargando…» (XT_CFG.need): trae lo que falta y vuelve a cargar la página;
  *  - cargas en segundo plano de la web que contestan {"xtneed": [...]}: lo trae y repite el pedido (envuelve fetch);
  *  - XT_CFG.bg: lo vencido, que se renueva después de mostrar la página.
- * Si el navegador no puede leer el servidor IPTV (sin permiso CORS, sin red), la sesión pasa al hosting. */
+ * Si el navegador no puede leer el servidor IPTV (sin permiso CORS, sin red), la sesión pasa al hosting. Una sola ficha
+ * que el servidor no da (error, respuesta rota) no cuenta: queda vacía un rato y lo demás sigue (2.9.2). */
 (function () {
     'use strict';
     if (window.XTFill) return;
@@ -28,6 +29,13 @@
         }).then(function (r) { return r.json(); }).then(function (j) { return !!(j && j.ok); });
     }
 
+    // fichas de un título (no catálogos): si el servidor no la da, se deja vacía un rato en lugar de rendirse
+    var ITEM = /[?&]action=get_(vod_info|series_info|short_epg|simple_data_table)(&|$)/;
+    function empty(n) {
+        return nativeFetch(FILL + '?id=' + encodeURIComponent(n.id) + '&empty=1', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'text/plain', 'X-Requested-With': 'XMLHttpRequest' }, body: '' })
+            .then(function (r) { return r.json(); }).then(function (j) { return !!(j && j.ok); }, function () { return false; });
+    }
+
     // una dirección del servidor IPTV: directo desde el navegador (CORS), sin cookies ni referer
     function getOne(n) {
         if (inflight[n.id]) return inflight[n.id];
@@ -37,30 +45,37 @@
         var timer = setTimeout(function () { if (ctl) ctl.abort(); }, big ? 180000 : 60000);
         inflight[n.id] = nativeFetch(n.u, { mode: 'cors', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', signal: ctl ? ctl.signal : undefined })
             .then(function (r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status);
+                // el servidor contestó (se puede leer) pero con un error: no es «no se puede leer el servidor»
+                if (!r.ok) { var he = new Error('HTTP ' + r.status); he.http = true; throw he; }
                 return r.text();
             })
             .then(function (t) {
                 clearTimeout(timer);
-                return upload(n, t);
+                return upload(n, t).then(function (ok) { return ok || !ITEM.test(n.u) ? ok : empty(n).then(function () { return true; }); });
             }, function (e) {
                 clearTimeout(timer);
+                if (e && e.http && ITEM.test(n.u)) return empty(n).then(function () { return true; });
                 throw e;
             })
             .then(function (ok) { delete inflight[n.id]; return ok; }, function (e) { delete inflight[n.id]; throw e; });
         return inflight[n.id];
     }
 
-    // de a 2 a la vez (como una app): true si se pudo todo
+    // de a 2 a la vez (como una app). Devuelve el motivo para rendirse (pasar al hosting) solo si el navegador no pudo
+    // leer el servidor IPTV en nada (sin red o sin permiso CORS); si algo llegó, null: lo que falló se pide otra vez
+    // después (antes un solo error pasaba la sesión al hosting, y un servidor que bloquea al hosting dejaba la web vacía)
     function run(list) {
         list = (list || []).slice();
-        var bad = null;
+        var bad = null, got = 0, net = 0;
         function worker() {
             var n = list.shift();
             if (!n) return Promise.resolve();
-            return getOne(n).then(function (ok) { if (!ok && !bad) bad = 'upload'; }, function (e) { if (!bad) bad = (e && e.message) || 'fetch'; }).then(worker);
+            return getOne(n).then(function (ok) { if (ok) got++; else if (!bad) bad = 'upload'; }, function (e) {
+                if (!(e && e.http)) net++;
+                if (!bad) bad = (e && e.message) || 'fetch';
+            }).then(worker);
         }
-        return Promise.all([worker(), worker()]).then(function () { return bad; });
+        return Promise.all([worker(), worker()]).then(function () { return got === 0 && net > 0 ? bad : null; });
     }
 
     // el navegador no puede leer el servidor IPTV: la sesión sigue por el hosting (una sola vez)

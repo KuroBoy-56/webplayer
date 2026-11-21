@@ -86,7 +86,7 @@ $media_cfg = $live ? null : wp_media_cfg($kind, $id, $exts, (string)($d['vlcExt'
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=2" defer></script>
-    <script src="assets/nf/player.js?v=33" defer></script>
+    <script src="assets/nf/player.js?v=34" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -103,6 +103,8 @@ $media_cfg = $live ? null : wp_media_cfg($kind, $id, $exts, (string)($d['vlcExt'
             'demo' => $demo,
             'media' => $media_cfg,
             'mediaOff' => $media_cfg ? '' : $media_off,
+            // idiomas y subtítulos aún desconocidos: el reproductor los pide en segundo plano (tracks.php, por la VPS / VDS)
+            'tracks' => ($live || !empty($d['multi']) || !$media_cfg || !empty($media_cfg['info'])) ? '' : (string)$media_cfg['probe'],
             'vidx' => $live ? '' : wp_vidx_url($kind, $id, (string)($d['vlcExt'] ?? $ext)),
             'ext' => $ext,
             'extraMenu' => [],

@@ -118,7 +118,8 @@ $panel_tok = wp_panel_tok(); // el token de la línea (las apps usan el mismo): 
 $multi_audio = wp_content_multi_audio($kind, $id, $exts, true);
 $tracks_base = wp_proxy_url(wp_tracks_target($kind, $id, $exts), 'tracks.php') . '&x=' . rawurlencode($ext) . '&dur=' . (int)($dur_secs ?? 0);
 // pistas aún desconocidas: el reproductor las pide en segundo plano (tracks.php) sin retrasar la página
-$tracks_url = ($multi_audio === null && wp_content_direct($kind, $id, $exts)) ? $tracks_base : '';
+// (2.9.2: también cuando el video va por la VPS / VDS: el hosting lee la cabecera por ella)
+$tracks_url = $multi_audio === null ? $tracks_base : '';
 $multi_audio = $multi_audio === true;
 require_once __DIR__ . '/includes/media_admin.php';
 // el dueño puede apagar el motor de la web (Guía EPG) o quitárselo al distribuidor: entonces el video va directo
@@ -179,7 +180,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=2" defer></script>
-    <script src="assets/nf/player.js?v=33" defer></script>
+    <script src="assets/nf/player.js?v=34" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([

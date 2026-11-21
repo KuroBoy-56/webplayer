@@ -88,7 +88,11 @@
        sin abrir una conexión directa que el servidor IPTV podría contar como una pantalla más */
     NFPlayer.prototype.boot = function () {
         var self = this, m = this.o.media;
-        if (!m || this.live || m.lazy) { this.next(); return; }
+        if (!m || this.live) { this.next(); return; }
+        // un solo audio (lazy): directo, salvo que ya se sepa que el navegador no lo reproduce (Dolby, DTS, HEVC…):
+        // entonces arranca con la conversión de la VPS / VDS en lugar de sonar mudo unos segundos (2.9.2)
+        var known = m.info && m.info.audio && m.info.audio[0];
+        if (m.lazy && !((known && !canAudio(known.codec)) || (m.info && m.info.video && !videoOk(m.info.video)))) { this.next(); return; }
         var started = false;
         var go = function (j, late) {
             if (j && j.ok && !self.info) self.info = j;
@@ -611,7 +615,13 @@
         fetch(u, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
             self.log('hosting contó audios: ' + (j ? j.n : 'error'));
             // las pistas ya llegan con su idioma (del panel o de la cabecera): el menú las muestra al momento
-            if (j && j.info && j.info.audio && j.info.audio.length && !self.info) self.info = j.info;
+            if (j && j.info && j.info.audio && j.info.audio.length && !self.info) {
+                self.info = j.info;
+                // audio que este navegador no reproduce (Dolby, DTS) o video que no abre: a la conversión ya, sin esperar a
+                // notar el silencio (solo con el motor de la VPS / VDS; sin él sigue igual)
+                var a0 = j.info.audio[0];
+                if (self._media0 && !self.tc && !self.mp4 && ((a0 && !canAudio(a0.codec)) || (j.info.video && !videoOk(j.info.video)))) { self.afterProbe(); return; }
+            }
             if (!j || !(j.n > 1)) return;
             self._multi = true;
             if (self.mp4 || self.tc) return;

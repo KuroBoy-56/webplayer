@@ -198,6 +198,27 @@ switch ($action) {
         $live = xt_get('get_live_streams', [], 1800, 25);
         out(['live' => is_array($live) ? count($live) : null, 'movie' => count(wp_catalog_ids('movie')), 'series' => count(wp_catalog_ids('series'))]);
 
+    case 'eps':
+        // capítulos de una temporada con TMDB (seriesvideo.php al cambiar de temporada; includes/episodes.php)
+        require_once __DIR__ . '/includes/episodes.php';
+        $sid = preg_replace('/\D/', '', (string)($_GET['id'] ?? ''));
+        $sn = preg_replace('/\D/', '', (string)($_GET['s'] ?? ''));
+        $sd = $sid !== '' ? xt_get('get_series_info', ['series_id' => $sid], 21600) : [];
+        $si = is_array($sd['info'] ?? null) ? $sd['info'] : [];
+        $eps = is_array($sd['episodes'][$sn] ?? null) ? $sd['episodes'][$sn] : [];
+        if (!$si || !$eps) out(['eps' => []]);
+        $stitle = (string)($si['name'] ?? '');
+        $tm = wp_tmdb_details('tv', $si['tmdb_id'] ?? ($si['tmdb'] ?? ''), $stitle, substr((string)($si['releaseDate'] ?? ($si['release_date'] ?? '')), 0, 4));
+        $bd = $tm['backdrop'] ?: (is_array($si['backdrop_path'] ?? null) ? ($si['backdrop_path'][0] ?? '') : (string)($si['backdrop_path'] ?? ''));
+        $rows = [];
+        foreach ($eps as $ep) {
+            if (!is_array($ep)) continue;
+            $ei = is_array($ep['info'] ?? null) ? $ep['info'] : [];
+            $rows[] = ['id' => (string)($ep['id'] ?? ''), 'num' => (int)($ep['episode_num'] ?? 0), 'title' => (string)($ep['title'] ?? ''),
+                'plot' => (string)($ei['plot'] ?? ''), 'src' => wp_img($ei['movie_image'] ?? ($ei['cover_big'] ?? ''), '')];
+        }
+        out(['eps' => wp_eps_fill($rows, wp_tmdb_season($tm['id'] ?? '', $sn), $stitle, [wp_img($bd, ''), wp_img($tm['poster'] ?: ($si['cover'] ?? ''), '')])]);
+
     case 'hero':
         // el perfil infantil tiene su propio destacado (includes/kids.php)
         $ck = 'hero|' . $type . '|' . $platform . '|' . xt_cache_key('', []) . (wp_kids_on() ? '|kids' : '');
@@ -235,14 +256,38 @@ switch ($action) {
         }
         if (!$withBd) $infos = xt_multi($reqs, 86400, 8);
         $items = [];
-        foreach ($pool as $k => $it) {
+        // sin fondo en el servidor (o sin su ficha): el de TMDB, como Roku, Vega y Android TV (clave de la línea, 7 días en
+        // la caché). Primero lo ya guardado; después se busca en TMDB lo que falte, hasta 4 s en total
+        $tmDeadline = microtime(true) + 4;
+        $tmFill = function (array &$info, array $it, $net) use ($tmDeadline) {
+            if (!wp_tmdb_key() || ($net && microtime(true) > $tmDeadline)) return '';
+            $tmid = is_scalar($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) ? (string)($info['tmdb_id'] ?? ($info['tmdb'] ?? '')) : '';
+            $tmx = wp_tmdb_details($it['t'] === 'series' ? 'tv' : 'movie', $tmid !== '' ? $tmid : (string)($it['tm'] ?? ''), (string)($info['name'] ?? $it['name']), (string)($it['year'] ?? ''), !$net);
+            $bd = is_array($tmx) ? (string)($tmx['backdrop'] ?? '') : '';
+            if ($bd !== '' && trim((string)($info['plot'] ?? ($info['description'] ?? ''))) === '' && !empty($tmx['overview'])) $info['plot'] = $tmx['overview'];
+            if ($bd !== '' && empty($info['tmdb_id']) && !empty($tmx['id'])) $info['tmdb_id'] = (string)$tmx['id'];
+            return $bd;
+        };
+        $order = array_keys($pool);
+        $bds = [];
+        foreach ($order as $k) {
             $info = $infos[$k]['info'] ?? [];
-            if (!is_array($info)) continue;
-            $bd = $info['backdrop_path'] ?? '';
+            $infos[$k]['info'] = is_array($info) ? $info : [];
+            $bd = $infos[$k]['info']['backdrop_path'] ?? '';
             if (is_array($bd)) $bd = $bd[0] ?? '';
+            $bds[$k] = (string)$bd !== '' ? (string)$bd : $tmFill($infos[$k]['info'], $pool[$k], false);
+        }
+        $have = count(array_filter($bds));
+        foreach ($order as $k) {
+            if ($have >= 6) break;
+            if ($bds[$k] === '' && ($bds[$k] = $tmFill($infos[$k]['info'], $pool[$k], true)) !== '') $have++;
+        }
+        foreach ($pool as $k => $it) {
+            $info = $infos[$k]['info'];
+            $bd = $bds[$k];
+            $isS = $it['t'] === 'series';
             if (!$bd) continue;
             if (!empty($info['genre'])) wp_genre_index_put($it['t'], $it['id'], $info['genre']);
-            $isS = $it['t'] === 'series';
             $link = $isS ? 'seriesvideo.php?id=' . rawurlencode($it['id']) : 'Movie_description.php?id=' . rawurlencode($it['id']);
             $year = substr((string)($info['releasedate'] ?? ($info['releaseDate'] ?? ($info['release_date'] ?? ''))), 0, 4);
             $items[] = [
