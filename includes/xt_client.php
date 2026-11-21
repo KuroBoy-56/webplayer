@@ -60,6 +60,41 @@ function wp_xt_need($action, array $params, $blocking)
     }
 }
 
+/**
+ * ¿Esta página se muestra sin esperar el catálogo completo (web player 2.9.1)? Inicio, Películas, Series, Explorar y
+ * las fichas lo definen (WP_XT_SOFT): salen al momento y sus filas se llenan solas a medida que llega el catálogo, en
+ * lugar de la pantalla «Cargando…». Nunca en un perfil infantil (su filtro necesita el catálogo).
+ */
+function wp_xt_soft()
+{
+    return defined('WP_XT_SOFT') && !(function_exists('wp_kids_on') && wp_kids_on());
+}
+
+/** ¿El catálogo ligero de este tipo ya está (aunque esté vencido)? */
+function wp_catalog_have($type)
+{
+    $data = wp_cache_get('slim2|' . ($type === 'series' ? 'series' : 'movie') . '|' . xt_cache_key('', []), 1800, $stale);
+    return $data !== null || (is_array($stale) && $stale);
+}
+
+/**
+ * Los títulos de una categoría sin esperar el catálogo completo (filas y «Ver todo» de una categoría): el navegador
+ * trae solo esa categoría (unos KB) y el catálogo completo sigue llegando por detrás. null si no aplica (ya está el
+ * catálogo, no es el modo navegador o es un perfil infantil).
+ */
+function wp_cat_list_quick($type, $cat, $sort)
+{
+    if (!wp_xt_client() || $cat === '' || wp_catalog_have($type) || (function_exists('wp_kids_on') && wp_kids_on())) return null;
+    $act = $type === 'series' ? 'get_series' : 'get_vod_streams';
+    wp_xt_need($act, [], false);
+    $raw = xt_get($act, ['category_id' => $cat], 1800, 20);
+    $list = is_array($raw) ? wp_catalog_slim($type, $raw) : [];
+    if ($sort === 'recent') wp_sort_items($list, 'added');
+    elseif ($sort === 'az') wp_sort_items($list, 'name', false);
+    elseif ($sort === 'rating') wp_sort_items($list, 'rating');
+    return $list;
+}
+
 /** ¿Hay algo que la página espera del navegador? */
 function wp_xt_blocking()
 {
@@ -109,7 +144,7 @@ function wp_xt_output($out)
     if (!$isJson && stripos($out, '</head>') !== false) {
         $cfg = wp_xt_config() + ['bg' => wp_xt_background()];
         $tag = '<script>window.XT_CFG=' . json_encode($cfg, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) . ';</script>'
-            . '<script src="assets/nf/xtfill.js?v=1"></script>';
+            . '<script src="assets/nf/xtfill.js?v=2"></script>';
         $out = preg_replace('~</head>~i', $tag . '</head>', $out, 1);
     }
     return $out;
@@ -130,7 +165,7 @@ function wp_xt_loader(array $needs)
         . '@keyframes xt{to{transform:rotate(360deg)}}.xt-e{color:#ff8a8a;max-width:420px}</style>'
         . '<script>window.XT_CFG=' . json_encode($cfg, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) . ';window.XT_T='
         . json_encode(['err' => t('No se pudo cargar el contenido. Revisa tu conexión e inténtalo de nuevo.')], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . ';</script>'
-        . '<script src="assets/nf/xtfill.js?v=1"></script></head><body><div class="xt-l"><div class="xt-s"></div><div id="xtMsg">' . e(t('Cargando...')) . '</div></div></body></html>';
+        . '<script src="assets/nf/xtfill.js?v=2"></script></head><body><div class="xt-l"><div class="xt-s"></div><div id="xtMsg">' . e(t('Cargando...')) . '</div></div></body></html>';
 }
 
 /** El navegador no pudo leer el servidor IPTV: la sesión vuelve al hosting (y el panel se entera, una vez al día). */

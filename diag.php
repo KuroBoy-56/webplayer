@@ -121,10 +121,11 @@ function diag_self($url, $h2)
 $self_rows = [];
 $kind2 = $slug === 'series' ? 'series' : $slug;
 $u0 = wp_stream_url($kind2, $id, $exts[0]);
-if (wp_via_hosting($u0)) {
-    $base = (wp_is_https() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost') . rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/') . '/';
-    $self_rows[] = ['v' => 'HTTP/1.1', 'r' => diag_self($base . wp_proxy_url($u0), false)];
-    $self_rows[] = ['v' => 'HTTP/2', 'r' => diag_self($base . wp_proxy_url($u0), true)];
+// el video ya no pasa por el hosting (2.9.1): se prueba la VPS / VDS de la línea, que es la que lo entrega
+$vr0 = wp_via_hosting($u0) ? wp_vps_relay($u0) : '';
+if ($vr0 !== '') {
+    $self_rows[] = ['v' => 'HTTP/1.1', 'r' => diag_self($vr0, false)];
+    $self_rows[] = ['v' => 'HTTP/2', 'r' => diag_self($vr0, true)];
 }
 $proxy_err = @file_get_contents(wp_cache_dir('data') . '/proxy_error.txt');
 $proxy_err = $proxy_err ? implode("\n", array_slice(explode("\n", trim($proxy_err)), -3)) : '';
@@ -165,7 +166,7 @@ include "header.php";
     <div id="pxres" style="font-size:14px;color:#ccc;line-height:1.9">Probando…</div>
     <script>
     (function () {
-        var tests = <?php $kind1 = $slug === 'series' ? 'series' : $slug; $pt = []; foreach ($exts as $x) { $u = wp_stream_url($kind1, $id, $x); $pt[] = ['ext' => $x, 'url' => wp_via_hosting($u) ? wp_proxy_url($u) : $u, 'host' => wp_via_hosting($u)]; } echo json_encode($pt, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+        var tests = <?php $kind1 = $slug === 'series' ? 'series' : $slug; $pt = []; foreach ($exts as $x) { $u = wp_stream_url($kind1, $id, $x); $pt[] = ['ext' => $x, 'url' => wp_via_hosting($u) ? (wp_vps_relay($u) ?: $u) : $u, 'host' => wp_via_hosting($u)]; } echo json_encode($pt, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
         var box = document.getElementById('pxres'), out = [];
         function show() { box.innerHTML = out.join('<br>'); }
         tests.forEach(function (t, i) {

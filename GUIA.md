@@ -15,7 +15,7 @@ El navegador bloquea un video `http` dentro de una página `https`. Con SSL, el 
 
 1. La VPS / VDS con **https** (certbot) y los archivos nuevos del motor (`api/media_worker.php`, `includes/media_engine.php`, `includes/media_convert.php`, `includes/media_relay.php`). Ver `tools/vps/README.md` del panel.
 2. En hPanel activa **SSL** y, si quieres, **Forzar HTTPS**.
-3. Orden del video con la web en https: https directo del servidor IPTV (si lo tiene) → VPS / VDS de la línea → `play.php` por http (solo con Forzar HTTPS apagado) → el hosting solo como último recurso.
+3. Orden del video con la web en https: https directo del servidor IPTV (si lo tiene) → VPS / VDS de la línea → `play.php` por http (solo con Forzar HTTPS apagado). **Desde la 2.9.1 el video nunca pasa por el hosting** (`proxy.php` contesta 403 siempre): sin VPS / VDS y con Forzar HTTPS, el reproductor ofrece «Solucionar» (motor de la VPS / VDS) o VLC. El respaldo de películas y episodios y la lectura de idiomas (`tracks.php`) también van por la VPS / VDS de la línea.
 
 El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Worker de Cloudflare e `includes/https_relay.php` del hosting.
 
@@ -34,6 +34,13 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 - `wp_xt_need()` le da al navegador `wp_xt_browser_url(xt_url(…))`: lo que trae `xtfill.js` también va por el puente.
 - El Worker solo acepta `GET /xtr/<firma>.<vence>/<http|https>/<servidor:puerto>/player_api.php` con firma válida y vigente (403 si no, 404 otra ruta) y no guarda nada.
 - Prueba: `tools/web_relay_test.php` del panel (la web en https detrás del Worker de verdad, en Node, con un servidor IPTV que el hosting no encuentra).
+
+## Carátulas, token del panel y catálogo por partes (2.9.1)
+
+- **Carátulas por el puente:** `wp_xt_relay_img($url)` (`includes/xt_relay.php`) da `/xtr/<firma>.<vence semanal>/http/<servidor:puerto>/<ruta>.jpg` para una imagen http (o https del mismo servidor de la línea cuando la línea va por http). `wp_img()` la usa antes que `img.php` del hosting y `wp_poster_sources()` la pone después de la copia del panel (`imgc`) y antes de `img.php` del panel. El Worker solo la entrega si es una imagen (.jpg .png .webp .gif .bmp, tipo `image/*`, hasta 10 MB) y Cloudflare la guarda una semana.
+- **Token del panel aunque el panel no llegue al servidor IPTV:** muchos servidores bloquean la IP del hosting y del panel. `wp_panel_auth_body()` (`includes/panel.php`) firma la línea ya comprobada por la web (`wv`, `wts`, `wca`: HMAC con una llave sacada de la llave maestra). El panel (`client_web_vouch()` en `includes/client_auth.php`) la acepta solo si no pudo preguntarle al servidor, si la firma tiene menos de 10 minutos, viene de la web (`platform=web`) y el servidor está en las DNS del distribuidor; si el servidor contesta «no», sigue siendo no. Con el token llegan las carátulas del panel, la clave de TMDB, Continuar viendo, Mi lista, perfiles y la VPS / VDS del video.
+- **Catálogo por partes:** Inicio, Películas, Series, Explorar y las fichas definen `WP_XT_SOFT`: en el modo navegador salen al momento sin la pantalla «Cargando…» y el catálogo completo se trae por detrás (`wp_xt_soft()` en `includes/xt_client.php`, salvo en un perfil infantil). Cada fila (`api.php?action=row`) espera lo suyo; una fila de una categoría y su «Ver todo» llegan solos con `get_vod_streams&category_id=` (`wp_cat_list_quick()`) mientras llega el catálogo completo. `wp_cat_derive()` no guarda cálculos hechos sin catálogo. El navegador espera el catálogo completo hasta 3 minutos (`xtfill.js`).
+- Pruebas: `tools/web_relay_test.php` del panel (carátulas por el Worker, firma de la línea, catálogo por partes con un servidor lento).
 
 ## Distribuidor: la dirección decide (2.8.1)
 

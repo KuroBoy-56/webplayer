@@ -51,7 +51,7 @@ $pf_cfg = [
     addEventListener('pagereveal', function (e) { var v = e.viewTransition; if (!v) return; v.skipTransition(); [v.ready, v.finished, v.updateCallbackDone].forEach(function (p) { if (p && p.catch) p.catch(function () {}); }); });</script>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
-    <link rel="stylesheet" href="assets/nf/app.css?v=13">
+    <link rel="stylesheet" href="assets/nf/app.css?v=14">
     <link rel="stylesheet" href="assets/nf/profiles.css?v=13">
     <?php echo wp_tenant_css($pf_dist); ?>
     <?php echo wp_prof_theme_css($pf_dist); ?>

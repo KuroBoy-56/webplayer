@@ -31,7 +31,7 @@ function wp_xt_relay_sig($scheme, $hostport, $exp)
  * Base del puente para un servidor IPTV ('xtr/…/http/servidor:puerto', relativa a la web) o '' si no hay puente. Solo
  * servidores con nombre (Cloudflare no deja pedir a una IP) y sin carpeta (el Worker solo pasa /player_api.php).
  */
-function wp_xt_relay_base($url)
+function wp_xt_relay_base($url, $week = false)
 {
     if (!wp_xt_relay_on()) return '';
     $p = parse_url(rtrim((string)$url, '/'));
@@ -41,8 +41,9 @@ function wp_xt_relay_base($url)
     if (!preg_match('/^[a-z0-9.-]{1,253}$/', $host) || filter_var($host, FILTER_VALIDATE_IP) || strpos($host, '.') === false) return '';
     if (trim((string)($p['path'] ?? ''), '/') !== '') return '';
     $port = (int)($p['port'] ?? ($scheme === 'https' ? 443 : 80));
-    // vence en 2-3 días y es igual todo el día: la lista que ve el navegador y lo que manda al entrar coinciden
-    $exp = (intdiv(time(), 86400) + 3) * 86400;
+    // vence en 2-3 días y es igual todo el día: la lista que ve el navegador y lo que manda al entrar coinciden. Las
+    // imágenes ($week): igual toda la semana, así el navegador las guarda y no las vuelve a pedir cada día
+    $exp = $week ? (intdiv(time(), 604800) + 2) * 604800 : (intdiv(time(), 86400) + 3) * 86400;
     $hp = $host . ':' . $port;
     return 'xtr/' . wp_xt_relay_sig($scheme, $hp, $exp) . '.' . $exp . '/' . $scheme . '/' . $hp;
 }
@@ -81,4 +82,33 @@ function wp_xt_relay_check($base, $user, $pass)
     $body = wp_http_get($url, 15);
     $j = is_string($body) ? json_decode($body, true) : null;
     return is_array($j) && is_array($j['user_info'] ?? null) ? $j['user_info'] : null;
+}
+
+/**
+ * Una imagen del servidor IPTV (carátula, fondo) por el puente del Worker (web player 2.9.1, Worker con imágenes):
+ * con la web en https el navegador no carga una imagen http, ni una https con certificado casero o vencido, y por el
+ * hosting tampoco si el servidor bloquea su IP. Solo archivos de imagen (.jpg .png .webp .gif .bmp) de una dirección
+ * http, o https del mismo servidor de la línea cuando la línea entra por http (su https no sirve). El Worker la guarda
+ * una semana. '' sin puente o si no hace falta.
+ */
+function wp_xt_relay_img($url)
+{
+    if (!wp_xt_relay_on()) return '';
+    $p = parse_url(trim((string)$url));
+    if (!is_array($p)) return '';
+    $scheme = strtolower((string)($p['scheme'] ?? ''));
+    $host = strtolower((string)($p['host'] ?? ''));
+    $path = (string)($p['path'] ?? '');
+    if (($scheme !== 'http' && $scheme !== 'https') || $host === '' || strpos($path, '..') !== false) return '';
+    if (!preg_match('~^/[A-Za-z0-9._\~%!$&\'()*+,;=:@/-]{1,400}\.(?:jpe?g|png|webp|gif|bmp)$~i', $path)) return '';
+    $port = (int)($p['port'] ?? ($scheme === 'https' ? 443 : 80));
+    if ($scheme === 'https') {
+        $s = parse_url((string)(function_exists('wp_user') ? wp_user()['server'] : ''));
+        if (strtolower((string)($s['scheme'] ?? '')) !== 'http' || strtolower((string)($s['host'] ?? '')) !== $host) return '';
+        $scheme = 'http';
+        $port = (int)($s['port'] ?? 80);
+    }
+    $b = wp_xt_relay_base($scheme . '://' . $host . ':' . $port, true);
+    // desde la raíz: el Worker atiende /xtr/ en la raíz de su dominio (la web también está ahí)
+    return $b === '' ? '' : '/' . $b . $path;
 }

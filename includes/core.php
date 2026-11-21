@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.9.0');
+define('WP_VERSION', '2.9.1');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -363,6 +363,12 @@ function xt_get_raw($action, array $params = [], $ttl = 600, $timeout = 15)
             wp_xt_need($action, $params, false);
             return $memo[$key] = $stale;
         }
+        // catálogo completo en una página que se muestra por partes (wp_xt_soft): la página sale ya y el navegador lo
+        // trae por detrás; las filas (api.php) sí lo esperan, cada una por su lado
+        if (!$params && ($action === 'get_vod_streams' || $action === 'get_series') && wp_xt_soft()) {
+            wp_xt_need($action, $params, false);
+            return $memo[$key] = [];
+        }
         wp_xt_need($action, $params, true);
         return $memo[$key] = [];
     }
@@ -531,19 +537,17 @@ function wp_client_stream_url($kind, $id, $ext)
  * Fuentes de reproducción en orden de prueba para NFPlayer.
  * $exts = extensiones a probar (p. ej. ['mp4','mkv','m3u8']).
  *
- * Página http: el navegador lee el video directo del servidor IPTV (el hosting no trabaja). Solo si el
- * contenido trae más de una pista de audio se agrega además la fuente por el hosting (proxy.php, mismo
- * dominio): con ella el motor MP4 del reproductor puede elegir el idioma. Si falla, sigue lo directo.
- * Página https: un video http sería bloqueado (contenido mixto), así que ese video sí va por el hosting.
+ * El video nunca pasa por el hosting (2.9.1). Página http (o video https): el navegador lo lee directo del servidor
+ * IPTV y, en películas y episodios, la VPS / VDS de la línea queda de respaldo (con varios audios, el motor MP4 del
+ * reproductor elige el idioma con ella). Página https y video http (el navegador lo bloquearía): la VPS / VDS de la
+ * línea lo entrega por https; sin máquina, la página abre el reproductor por http (play.php, también directo).
  */
-function wp_play_sources($kind, $id, array $exts, $allowProxy = true)
+function wp_play_sources($kind, $id, array $exts)
 {
     $out = [];
     $extra = [];
     $https = wp_is_https();
-    // distribuidor con «Solo sus recursos» (panel): el video nunca pasa por este hosting (ni como último recurso)
-    $hostOk = wp_hosting_video_ok();
-    if (!$hostOk) $allowProxy = false;
+    // el video nunca pasa por este hosting (2.9.1): directo del servidor IPTV o por la VPS / VDS de la línea
     $multi = null;
     foreach ($exts as $x) {
         $engine = $x === 'm3u8' ? 'hls' : ($x === 'ts' ? 'mpegts' : 'native');
@@ -551,13 +555,9 @@ function wp_play_sources($kind, $id, array $exts, $allowProxy = true)
         if ($https && wp_via_hosting($u)) {
             // web en https y video http: la VPS / VDS de la línea lo entrega por https (servidor IPTV → VPS / VDS →
             // navegador, con permiso CORS; nunca por el hosting ni por Cloudflare). Si no hay máquina: play.php por http
-            // (wp_needs_handoff) y, solo si ni eso se puede ("Forzar HTTPS" encendido), el hosting como último recurso
+            // (wp_needs_handoff), que también va directo del servidor IPTV
             $vr = wp_vps_relay($u);
-            if ($vr !== '') {
-                $out[] = ['url' => $vr, 'engine' => $engine, 'ext' => $x, 'cors' => true, 'relay' => 1];
-                continue;
-            }
-            if ($allowProxy) $out[] = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
+            if ($vr !== '') $out[] = ['url' => $vr, 'engine' => $engine, 'ext' => $x, 'cors' => true, 'relay' => 1];
             continue;
         }
         if ($multi === null) $multi = wp_content_multi_audio($kind, $id, $exts, true) === true;
@@ -571,12 +571,16 @@ function wp_play_sources($kind, $id, array $exts, $allowProxy = true)
             continue;
         }
         $out[] = ['url' => $u, 'engine' => $engine, 'ext' => $x];
-        if ($vod && $hostOk) {
-            // fuente de respaldo por el hosting. Si ya se sabe que trae varios audios, el motor MP4 arranca con ella.
-            // Si no (alt), solo se usa cuando el navegador descubre varios audios (iPhone) o si lo directo falla.
-            $p = ['url' => wp_proxy_url($u), 'engine' => $engine, 'ext' => $x, 'cors' => true, 'host' => 1];
-            if (!$multi) $p['alt'] = 1;
-            $extra[] = $p;
+        if ($vod) {
+            // fuente de respaldo por la VPS / VDS de la línea (antes era el hosting). Si ya se sabe que trae varios
+            // audios, el motor MP4 arranca con ella. Si no (alt), solo se usa cuando el navegador descubre varios audios
+            // (iPhone) o si lo directo falla. Sin máquina, no hay respaldo: nunca el hosting.
+            $vr = wp_vps_relay($u);
+            if ($vr !== '') {
+                $p = ['url' => $vr, 'engine' => $engine, 'ext' => $x, 'cors' => true, 'relay' => 1];
+                if (!$multi) $p['alt'] = 1;
+                $extra[] = $p;
+            }
         }
     }
     return array_merge($out, $extra);
@@ -798,6 +802,9 @@ function wp_img($url, $fallback = WP_NOIMG)
     if ($url === '' || !preg_match('~^https?://~i', $url) || $url === 'https://image.tmdb.org/t/p/w600_and_h900_bestv2') {
         return $fallback;
     }
+    // por el puente del Worker de Cloudflare (no por el hosting): includes/xt_relay.php
+    $r = wp_xt_relay_img($url);
+    if ($r !== '') return $r;
     if (wp_is_https() && stripos($url, 'http://') === 0) {
         return wp_proxy_url($url, 'img.php');
     }

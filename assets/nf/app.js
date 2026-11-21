@@ -156,16 +156,19 @@
        Solo para las tarjetas sin la caché de imágenes del panel (el dueño la apagó): con ella, el panel ya entrega el
        póster de TMDB cuando el servidor IPTV no tiene, y NF.imgErr pide TMDB solo si todo falla. */
     /* carátulas de TMDB ya encontradas (públicas, sin datos de la cuenta): hasta 3000 en este navegador */
+    // por servidor (NF.sk): el mismo número es otro título en otro servidor (dueño y distribuidor en el mismo navegador)
+    var MEMO = 'nfp' + (NF.sk ? '|' + NF.sk : '');
+    if (NF.sk) try { localStorage.removeItem('nfp'); } catch (e) {} // la de antes, sin servidor
     function posterMemo(add) {
         var m = {};
-        try { m = JSON.parse(localStorage.getItem('nfp') || '{}') || {}; } catch (e) {}
+        try { m = JSON.parse(localStorage.getItem(MEMO) || '{}') || {}; } catch (e) {}
         if (!add) return m;
         var ks = Object.keys(add);
         if (!ks.length) return m;
         ks.forEach(function (k) { delete m[k]; m[k] = add[k]; });
         var all = Object.keys(m);
         if (all.length > 3000) all.slice(0, all.length - 3000).forEach(function (k) { delete m[k]; });
-        try { localStorage.setItem('nfp', JSON.stringify(m)); } catch (e) { try { localStorage.removeItem('nfp'); } catch (e2) {} }
+        try { localStorage.setItem(MEMO, JSON.stringify(m)); } catch (e) { try { localStorage.removeItem(MEMO); localStorage.removeItem('nfp'); } catch (e2) {} }
         return m;
     }
 

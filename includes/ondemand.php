@@ -1,6 +1,8 @@
 <?php
 /** Página "Películas" / "Series" estilo Netflix: destacado, géneros y una fila por categoría. */
 $od_type = $od_type ?? 'movie';
+// se muestra sin esperar el catálogo completo (modo navegador: las filas se llenan solas, includes/xt_client.php)
+if (!defined('WP_XT_SOFT')) define('WP_XT_SOFT', 1);
 $od_label = $od_type === 'series' ? t('Series') : t('Películas');
 $od_list = $od_type === 'series' ? 'series.php' : 'movies.php';
 $page_title = $od_label;
@@ -44,10 +46,12 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('odCat').addEventListener('change', function () {
         if (this.value) location.href = <?php echo json_encode($od_list); ?> + '?id=' + encodeURIComponent(this.value);
     });
+    // sin destacados (o sin respuesta) el banner se quita y el título baja bajo la barra (.nf-hero-none, app.css)
+    var hero = document.getElementById('nfHero');
     NF.api({ action: 'hero', type: <?php echo json_encode($od_type); ?> }, 1200000).then(function (res) {
-        if (res.items && res.items.length) NF.hero(document.getElementById('nfHero'), res.items);
-        else document.getElementById('nfHero').style.display = 'none';
-    }).catch(function () {});
+        if (res.items && res.items.length) NF.hero(hero, res.items);
+        else hero.classList.add('nf-hero-none');
+    }).catch(function () { hero.classList.add('nf-hero-none'); });
 });
 </script>
 <?php include __DIR__ . '/../footer.php'; ?>

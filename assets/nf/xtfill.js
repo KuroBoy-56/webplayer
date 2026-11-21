@@ -32,7 +32,9 @@
     function getOne(n) {
         if (inflight[n.id]) return inflight[n.id];
         var ctl = window.AbortController ? new AbortController() : null;
-        var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 60000);
+        // el catálogo completo de un servidor grande tarda más (20-40 MB): 3 minutos; lo demás, 1 minuto
+        var big = /[?&]action=get_(vod_streams|series)(&|$)/.test(n.u) && !/[?&]category_id=/.test(n.u);
+        var timer = setTimeout(function () { if (ctl) ctl.abort(); }, big ? 180000 : 60000);
         inflight[n.id] = nativeFetch(n.u, { mode: 'cors', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', signal: ctl ? ctl.signal : undefined })
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);

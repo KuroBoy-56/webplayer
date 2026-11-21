@@ -106,8 +106,8 @@ if (wp_content_direct($kind, $id, $exts) && preg_match('/iPhone|iPad|iPod|Macint
     && wp_content_multi_audio($kind, $id, $exts, true) === null) {
     wp_content_multi_audio($kind, $id, $exts);
 }
-// web https con video http: la VPS / VDS de la línea o play.php por http (el hosting solo como último recurso, abajo)
-$sources = wp_play_sources($kind, $id, $exts, false);
+// web https con video http: la VPS / VDS de la línea o play.php por http (nunca el hosting, 2.9.1)
+$sources = wp_play_sources($kind, $id, $exts);
 
 /* Motor de conversión: el del panel (api/media_web.php), SOLO en la VPS / VDS de la línea — la VDS propia del
    distribuidor si la eligió (nunca la del dueño), si no la del dueño. El hosting de la web nunca convierte.
@@ -136,10 +136,8 @@ if ($http_url !== '' && $use_vlc !== '1' && wp_needs_handoff($kind, $id, $source
     header('Location: ' . $http_url);
     exit;
 }
-// sin VPS / VDS y sin poder abrir play.php por http: el hosting entrega el video (último recurso)
-$has_relay = false;
-foreach ($sources as $s0) if (!empty($s0['relay'])) $has_relay = true;
-if (wp_is_https() && !$has_relay && ($http_url === '' || $use_vlc === '1')) $sources = wp_play_sources($kind, $id, $exts);
+// sin VPS / VDS y sin poder abrir play.php por http (Forzar HTTPS): el video no pasa por el hosting; el reproductor
+// ofrece «Solucionar» (motor de la VPS / VDS) o VLC
 
 $back_url = ($slug == 'movie') ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get;
 $download_url = '?' . http_build_query(array_merge($_GET, ['action' => 'download_file']));
@@ -158,7 +156,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
     <meta name="referrer" content="no-referrer">
     <title><?php echo e($content_name ?: t('Reproductor')); ?> - <?php echo e($sitename); ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
-    <link rel="stylesheet" href="assets/nf/app.css?v=13">
+    <link rel="stylesheet" href="assets/nf/app.css?v=14">
     <link rel="stylesheet" href="assets/nf/player.css?v=9">
     <?php echo wp_i18n_script(); ?>
     <style>

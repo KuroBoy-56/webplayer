@@ -82,6 +82,8 @@ function wp_cat_derive($name, array $types, callable $fn)
     $d = $fn();
     // la versión de después: si $fn renovó el catálogo, lo guardado va con la fecha nueva
     list($v2) = wp_cat_state($types);
+    // sin catálogo todavía (modo navegador, página por partes): no se guarda un cálculo vacío
+    if (in_array('0', explode('.', $v2), true)) return $d;
     wp_cache_set($key, ['v' => $v2, 'd' => $d]);
     return $d;
 }

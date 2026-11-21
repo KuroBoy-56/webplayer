@@ -5,7 +5,8 @@
  *   1. api/imgc/<sha1>.jpg?v=2  copia pública (la sirve el servidor web del panel, sin PHP)
  *   2. api/img.php?w=500&v=2…    el panel la achica la primera vez y, con el título, busca el póster en TMDB si el
  *                                servidor IPTV no tiene
- *   3. la dirección original     (por img.php del hosting si la web es https y la imagen http)
+ *   3. la dirección original     (con la web en https y la imagen http: por el puente del Worker de Cloudflare
+ *                                si la web se abrió por él, que va antes de img.php del panel; si no, img.php del hosting)
  *   4. TMDB por el hosting        (NF.imgErr → api.php?action=posters, solo si todo lo anterior falló)
  * Fondos de TMDB en Full HD hechos por el panel (img.php?w=1920). Si el dueño apaga la caché ("img": false de
  * progress.php ?v=2) todo va directo, como antes. El navegador nunca recibe la llave del panel: solo el token de la
@@ -98,7 +99,12 @@ function wp_poster_sources($kind, $poster, $name, $year = '', $tm = '')
     }
     if ($http) {
         $orig = wp_img($poster, '');
-        if ($orig !== '' && !in_array($orig, $out, true)) $out[] = $orig;
+        if ($orig !== '' && !in_array($orig, $out, true)) {
+            // por el puente del Worker: antes de img.php del panel (un servidor que bloquea al hosting suele bloquear
+            // también al panel, y así no se espera a que el panel falle)
+            if (strpos($orig, '/xtr/') === 0 && $out) array_splice($out, 1, 0, [$orig]);
+            else $out[] = $orig;
+        }
     }
     return $out;
 }

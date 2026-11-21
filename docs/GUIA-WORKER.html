@@ -163,8 +163,9 @@ web player responde <b>403 Forbidden</b> y nunca se ve. El video no pasa por Clo
 // Puente para servidores IPTV sin SSL (web player 2.9.0): con la web en https el navegador no deja pedir nada a un
 // servidor http (y uno con certificado vencido o casero tampoco). La web le da al navegador direcciones
 // /xtr/&lt;firma&gt;/http/&lt;servidor&gt;/player_api.php: este Worker las pide al servidor IPTV y devuelve la respuesta. Solo
-// player_api.php (inicio de sesión, catálogo, cuenta), solo GET, solo servidores que la web firmó con este mismo
-// secreto y por pocos días: nunca video ni otra cosa. El servidor IPTV ve la IP de Cloudflare, no la del hosting.
+// player_api.php (inicio de sesión, catálogo, cuenta) y, desde la 2.9.1, las imágenes de las carátulas y fondos
+// (.jpg .png .webp .gif .bmp, guardadas una semana en Cloudflare); solo GET, solo servidores que la web firmó con este
+// mismo secreto y por pocos días: nunca video ni otra cosa. El servidor IPTV ve la IP de Cloudflare, no la del hosting.
 //
 // En Cloudflare › Workers › este Worker › Settings › Variables and Secrets:
 //   ORIGIN   (Text)    la dirección de la web player ORIGINAL, por ejemplo https://webplayer.mpx.work
@@ -190,14 +191,16 @@ function same(a, b) {
   return d === 0;
 }
 
-// /xtr/&lt;firma&gt;.&lt;vence&gt;/&lt;http|https&gt;/&lt;servidor[:puerto]&gt;/player_api.php?…
+// /xtr/&lt;firma&gt;.&lt;vence&gt;/&lt;http|https&gt;/&lt;servidor[:puerto]&gt;/player_api.php?…   (o /ruta/de/la/imagen.jpg)
 async function relay(request, seen, key) {
-  const m = seen.pathname.match(/^\/xtr\/([A-Za-z0-9_-]{22})\.(\d{9,11})\/(https?)\/([A-Za-z0-9.-]{1,253}:\d{1,5})\/player_api\.php$/);
-  if (!m || request.method !== 'GET') return new Response('Not found', { status: 404 });
-  const [, sig, exp, scheme, hostport] = m;
-  if (+exp &lt; Date.now() / 1000 || !same(sig, await sign(key, 'xtr|' + scheme + '|' + hostport.toLowerCase() + '|' + exp))) {
+  const m = seen.pathname.match(/^\/xtr\/([A-Za-z0-9_-]{22})\.(\d{9,11})\/(https?)\/([A-Za-z0-9.-]{1,253}:\d{1,5})(\/player_api\.php|\/[^?#]{1,400}\.(?:jpe?g|png|webp|gif|bmp))$/i);
+  if (!m || (request.method !== 'GET' &amp;&amp; request.method !== 'HEAD')) return new Response('Not found', { status: 404 });
+  const [, sig, exp, scheme, hostport, path] = m;
+  if (+exp &lt; Date.now() / 1000 || !same(sig, await sign(key, 'xtr|' + scheme.toLowerCase() + '|' + hostport.toLowerCase() + '|' + exp))) {
     return new Response('Forbidden', { status: 403, headers: { 'Cache-Control': 'no-store' } });
   }
+  if (path.toLowerCase() !== '/player_api.php') return image(scheme.toLowerCase() + '://' + hostport + path);
+  if (request.method !== 'GET') return new Response('Not found', { status: 404 });
   let up;
   try {
     up = await fetch(scheme + '://' + hostport + '/player_api.php' + seen.search, {
@@ -217,6 +220,40 @@ async function relay(request, seen, key) {
     headers: {
       'Content-Type': up.headers.get('Content-Type') || 'application/json',
       'Cache-Control': 'no-store',
+      'X-Robots-Tag': 'noindex',
+    },
+  });
+}
+
+// carátula o fondo del servidor IPTV: solo si de verdad es una imagen (y de hasta 10 MB); Cloudflare la guarda una
+// semana, así el servidor IPTV casi no recibe pedidos
+async function image(url) {
+  const none = () =&gt; new Response('Not found', { status: 404, headers: { 'Cache-Control': 'public, max-age=3600' } });
+  let up;
+  try {
+    up = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/avif,image/webp,image/*,*/*;q=0.8' },
+      cf: { cacheEverything: true, cacheTtl: 604800, cacheTtlByStatus: { '200-299': 604800, '404': 3600, '500-599': 0 } },
+    });
+  } catch (e) {
+    return none();
+  }
+  let type = (up.headers.get('Content-Type') || '').toLowerCase().split(';')[0].trim();
+  const size = +(up.headers.get('Content-Length') || 0);
+  // algunos servidores mandan las imágenes sin tipo: el de su extensión
+  if (type === '' || type.endsWith('/octet-stream')) {
+    const ext = (url.match(/\.([a-z]+)$/i) || ['', ''])[1].toLowerCase();
+    type = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', bmp: 'image/bmp' }[ext] || '';
+  }
+  if (!up.ok || !type.startsWith('image/') || type.includes('svg') || size &gt; 10485760) return none();
+  return new Response(up.body, {
+    status: 200,
+    headers: {
+      'Content-Type': type,
+      'Cache-Control': 'public, max-age=604800, immutable',
+      'X-Content-Type-Options': 'nosniff',
       'X-Robots-Tag': 'noindex',
     },
   });
@@ -265,7 +302,7 @@ export default {
   },
 };</pre><button>Copiar</button></div>
 <ol start="4"><li>Pulsa <b>Deploy</b> (arriba a la derecha).</li></ol>
-<div class="box warn"><b>¿Ya tenías el Worker?</b> Vuelve a pegar este código y pulsa <b>Deploy</b> (web player 2.9.0): trae el <b>puente para servidores IPTV sin SSL</b>. Con él, los clientes de un servidor que solo tiene http (o un certificado casero) entran a la web en https y ven el catálogo: el navegador le pide al Worker y el Worker al servidor. Solo pasa <code>player_api.php</code> (inicio de sesión, catálogo, cuenta), nunca video. Un servidor configurado con una IP (sin nombre) no puede ir por el puente: Cloudflare no lo permite.</div>
+<div class="box warn"><b>¿Ya tenías el Worker?</b> Vuelve a pegar este código y pulsa <b>Deploy</b> (web player 2.9.1): trae el <b>puente para servidores IPTV sin SSL</b>. Con él, los clientes de un servidor que solo tiene http (o un certificado casero), o que bloquea al hosting, entran a la web en https, ven el catálogo <b>y sus carátulas</b>: el navegador le pide al Worker y el Worker al servidor. Solo pasan <code>player_api.php</code> (inicio de sesión, catálogo, cuenta) y las imágenes de carátulas y fondos (.jpg .png .webp .gif .bmp, que Cloudflare guarda una semana), nunca video. Un servidor configurado con una IP (sin nombre) no puede ir por el puente: Cloudflare no lo permite. Con el código de antes (2.9.0) todo funciona menos las carátulas guardadas en ese servidor.</div>
 <div class="box">Servidores con puerto propio (<code>:8080</code>, <code>:25461</code>…): el Worker tiene que tener la fecha de compatibilidad <b>2024-09-02 o más nueva</b> (Worker › <b>Settings</b> › <b>Runtime</b> › <b>Compatibility date</b>). Los Workers creados desde 2025 ya la tienen.</div>
 </div>
 
@@ -366,7 +403,7 @@ return [
     ],</pre><button>Copiar</button></div>
 <h3>Opción B · El distribuidor con su propia cuenta de Cloudflare</h3>
 <p>Él hace los pasos 1, 3, 4 y 5 en su cuenta. Tú le das <b>solo</b> su secreto (paso 2) y la dirección <code>ORIGIN</code>, y agregas su línea en <code>panel_secret.php</code>. <b>Nunca</b> le des la llave maestra ni otro secreto. Para quitarle el acceso, borra su línea: su dominio da 403 al instante.</p>
-<div class="box ok">No hay límite de dominios. El plan gratis de Cloudflare permite hasta 100 Workers por cuenta y 100.000 visitas de páginas por día sumando todos (el video no cuenta porque no pasa por Cloudflare). Si se te queda corto, el plan Workers Paid cuesta 5 USD al mes.</div>
+<div class="box ok">No hay límite de dominios. El plan gratis de Cloudflare permite hasta 100 Workers por cuenta y 100.000 pedidos por día sumando todos (el video no cuenta porque no pasa por Cloudflare; las carátulas de un servidor que va por el puente sí, pero el navegador de cada cliente las guarda una semana y no las vuelve a pedir). Si se te queda corto, el plan Workers Paid cuesta 5 USD al mes.</div>
 
 <h2 id="htaccess">¿Hace falta un .htaccess?</h2>
 <p><b>No.</b> Basta con <code>panel_secret.php</code>: todas las páginas de la web player (login, inicio, fichas, reproductor, <code>api.php</code>, carátulas…) pasan por PHP y responden 403 sin el secreto. Solo los archivos fijos públicos (estilos, scripts, el logo) se pueden seguir abriendo sueltos por el dominio original, pero no sirven para nada sin las páginas. El <code>.htaccess</code> que ya trae la web no se toca.</p>

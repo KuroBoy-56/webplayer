@@ -3,6 +3,8 @@
  * Explorar: filtros inteligentes por plataforma (Netflix, Disney+, HBO Max...),
  * género (Acción, Suspenso, Aventura, Anime, Drama...), tipo, categoría y búsqueda.
  */
+// se muestra sin esperar el catálogo completo (modo navegador: las filas se llenan solas, includes/xt_client.php)
+define('WP_XT_SOFT', 1);
 include "session.php";
 include "config.php";
 

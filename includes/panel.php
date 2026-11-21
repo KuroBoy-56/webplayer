@@ -267,8 +267,23 @@ function wp_panel_dns_urls()
 function wp_panel_auth_body($user, $pass, $dns = '', $code = null)
 {
     // platform + client_ip: el panel cuenta la web en el mapa y las estadísticas del Dashboard
-    return ['action' => 'auth', 'user' => (string)$user, 'pass' => (string)$pass, 'dns' => (string)$dns,
+    $b = ['action' => 'auth', 'user' => (string)$user, 'pass' => (string)$pass, 'dns' => (string)$dns,
         'platform' => WP_APP_ID, 'client_ip' => wp_client_ip()] + wp_panel_tenant_fields($code);
+    // la web ya comprobó la línea (al entrar, desde el navegador o el puente del Worker). Muchos servidores IPTV
+    // bloquean la IP del hosting y del panel: entonces el panel no puede preguntarle y no daba el token (sin carátulas
+    // del panel, TMDB, Continuar viendo ni Mi lista). Con esta firma (llave maestra) el panel la acepta, solo si no
+    // pudo preguntarle al servidor; si el servidor le dice que no, sigue siendo no (panel 2026-11: client_web_vouch)
+    $mk = wp_panel_key();
+    if ($mk !== null && $dns !== '') {
+        $ts = time();
+        $ca = (string)(int)($_SESSION['line_ca'] ?? 0);
+        $msg = implode('|', ['wv1', (string)($b['tenant'] ?? ''), (string)$user, hash('sha256', (string)$pass),
+            strtolower(trim((string)$dns)), $ca, $ts]);
+        $b['wts'] = $ts;
+        $b['wca'] = $ca;
+        $b['wv'] = hash_hmac('sha256', $msg, hash_hmac('sha256', 'web-vouch-v1', $mk, true));
+    }
+    return $b;
 }
 
 /**

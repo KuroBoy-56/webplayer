@@ -333,15 +333,13 @@ function wp_tenant_feature($name)
 }
 
 /**
- * ¿Este hosting puede entregar el video (proxy.php)? No para un distribuidor con «Solo sus recursos» en el panel: su
- * web nunca usa los recursos del dueño (ni su VPS, que ya niega el panel, ni este hosting); el video va directo del
- * servidor IPTV o por su VDS propia. Con Omitir, o una copia guardada antes de esta versión (sin el campo): sí.
+ * ¿Este hosting puede entregar el video (proxy.php)? Desde la 2.9.1, nunca: el video va directo del servidor IPTV al
+ * navegador o por la VPS / VDS de la línea (la VDS propia del distribuidor si la eligió, si no la VPS del dueño; con
+ * «Solo sus recursos» solo su VDS). Lo decide el panel (api/media_web.php?do=link). El hosting solo sirve las páginas.
  */
 function wp_hosting_video_ok()
 {
-    $cfg = wp_tenant_cfg();
-    $f = is_array($cfg['features'] ?? null) ? $cfg['features'] : [];
-    return $cfg === null || !array_key_exists('hosting_video', $f) || !empty($f['hosting_video']);
+    return false;
 }
 
 /** Cierra la sesión de PHP (al cambiar de distribuidor o cuando el panel lo corta). */

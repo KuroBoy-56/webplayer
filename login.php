@@ -69,6 +69,8 @@ function wp_login_finish($username, $password, array $srv, array $matchUi, $dist
     // recuerda: si la sesión vence, vuelve al enlace de su distribuidor (wp_login_url)
     $_SESSION['dist'] = $dist_code;
     wp_dist_set($dist_code === '' ? 'skip' : $dist_code);
+    // fecha de creación de la línea (la firma de wp_panel_auth_body: el panel une los servidores del mismo servicio)
+    $_SESSION['line_ca'] = (int)($matchUi['created_at'] ?? 0);
     // Token del panel para "Continuar viendo" y "Mi lista" (uno por número de distribuidor)
     $_SESSION[wp_panel_token_key()] = wp_panel_auth($username, $password, $srv['url']);
     // Línea DEMO según el panel ("demo": true): un login normal la quita
@@ -420,7 +422,7 @@ $dist_step = $dist_view['step'];
     <title><?php echo $brand_name !== '' ? e($brand_name) : 'LatMpx - WebPlayer'; ?></title>
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="preconnect" href="https://image.tmdb.org">
-    <link rel="stylesheet" href="assets/nf/app.css?v=13">
+    <link rel="stylesheet" href="assets/nf/app.css?v=14">
     <?php echo wp_i18n_script(); ?>
     <?php echo wp_tenant_css($dist_cfg); ?>
     <style>

@@ -71,7 +71,10 @@ function wp_file_tracks($url, $target = '', $read = true, $panelWait = 2)
     }
     // modo navegador (includes/xt_client.php): el hosting no lee el archivo del servidor IPTV (solo lo que sabe el panel)
     if (!$read || (function_exists('wp_xt_client') && wp_xt_client())) { $memo[$ck] = false; return null; }
-    $r = new WpRangeReader($target, 10);
+    // por la VPS / VDS de la línea (el servidor IPTV nunca ve al hosting); sin máquina, no se lee
+    $via = function_exists('wp_vps_relay') ? wp_vps_relay($target) : '';
+    if ($via === '') { $memo[$ck] = false; return null; }
+    $r = new WpRangeReader($via, 10);
     $t = wp_read_tracks($r);
     if (!$t || $r->failed || !$t['audio']) {
         $memo[$ck] = false;

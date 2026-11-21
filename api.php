@@ -134,6 +134,11 @@ switch ($action) {
         $limit = max(1, min(60, (int)($_GET['limit'] ?? 30)));
         $isTop = ($_GET['sort'] ?? '') === 'top';
         $shuffle = !empty($_GET['shuffle']);
+        // modo navegador sin el catálogo todavía: la fila de una categoría llega sola (includes/xt_client.php)
+        if ($cat !== '' && $platform === '' && $genre === '' && !$isTop && !$shuffle && $type !== 'all') {
+            $quick = wp_cat_list_quick($type, $cat, $sort);
+            if ($quick !== null) out(['items' => array_map(function ($it) use ($type) { return wp_card($it, $type); }, array_slice($quick, 0, $limit))]);
+        }
         // la fila sale de lo ya calculado para este catálogo (includes/catalog_fast.php): unos KB, no el catálogo entero
         $list = wp_filter_cached($type, $platform, $genre, $cat, $sort, $isTop ? 300 : ($shuffle ? 400 : $limit))['l'];
         if ($isTop) {
@@ -148,6 +153,13 @@ switch ($action) {
     case 'browse':
         $per = 60;
         $page = max(1, (int)($_GET['page'] ?? 1));
+        // «Ver todo» de una categoría en el modo navegador sin el catálogo todavía: solo esa categoría (xt_client.php)
+        $quick = ($q === '' && $cat !== '' && $platform === '' && $genre === '' && $type !== 'all') ? wp_cat_list_quick($type, $cat, $sort) : null;
+        if ($quick !== null) {
+            $items = [];
+            foreach (array_slice($quick, ($page - 1) * $per, $per) as $it) $items[] = wp_card($it, $type);
+            out(['items' => $items, 'total' => count($quick), 'more' => $page * $per < count($quick)]);
+        }
         if ($q === '' && $page <= 10) {
             // las primeras 10 páginas de cada filtro quedan guardadas para este catálogo (includes/catalog_fast.php)
             $f = wp_filter_cached($type, $platform, $genre, $cat, $sort, 600);

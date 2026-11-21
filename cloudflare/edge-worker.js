@@ -7,8 +7,9 @@
 // Puente para servidores IPTV sin SSL (web player 2.9.0): con la web en https el navegador no deja pedir nada a un
 // servidor http (y uno con certificado vencido o casero tampoco). La web le da al navegador direcciones
 // /xtr/<firma>/http/<servidor>/player_api.php: este Worker las pide al servidor IPTV y devuelve la respuesta. Solo
-// player_api.php (inicio de sesión, catálogo, cuenta), solo GET, solo servidores que la web firmó con este mismo
-// secreto y por pocos días: nunca video ni otra cosa. El servidor IPTV ve la IP de Cloudflare, no la del hosting.
+// player_api.php (inicio de sesión, catálogo, cuenta) y, desde la 2.9.1, las imágenes de las carátulas y fondos
+// (.jpg .png .webp .gif .bmp, guardadas una semana en Cloudflare); solo GET, solo servidores que la web firmó con este
+// mismo secreto y por pocos días: nunca video ni otra cosa. El servidor IPTV ve la IP de Cloudflare, no la del hosting.
 //
 // En Cloudflare › Workers › este Worker › Settings › Variables and Secrets:
 //   ORIGIN   (Text)    la dirección de la web player ORIGINAL, por ejemplo https://webplayer.mpx.work
@@ -34,14 +35,16 @@ function same(a, b) {
   return d === 0;
 }
 
-// /xtr/<firma>.<vence>/<http|https>/<servidor[:puerto]>/player_api.php?…
+// /xtr/<firma>.<vence>/<http|https>/<servidor[:puerto]>/player_api.php?…   (o /ruta/de/la/imagen.jpg)
 async function relay(request, seen, key) {
-  const m = seen.pathname.match(/^\/xtr\/([A-Za-z0-9_-]{22})\.(\d{9,11})\/(https?)\/([A-Za-z0-9.-]{1,253}:\d{1,5})\/player_api\.php$/);
-  if (!m || request.method !== 'GET') return new Response('Not found', { status: 404 });
-  const [, sig, exp, scheme, hostport] = m;
-  if (+exp < Date.now() / 1000 || !same(sig, await sign(key, 'xtr|' + scheme + '|' + hostport.toLowerCase() + '|' + exp))) {
+  const m = seen.pathname.match(/^\/xtr\/([A-Za-z0-9_-]{22})\.(\d{9,11})\/(https?)\/([A-Za-z0-9.-]{1,253}:\d{1,5})(\/player_api\.php|\/[^?#]{1,400}\.(?:jpe?g|png|webp|gif|bmp))$/i);
+  if (!m || (request.method !== 'GET' && request.method !== 'HEAD')) return new Response('Not found', { status: 404 });
+  const [, sig, exp, scheme, hostport, path] = m;
+  if (+exp < Date.now() / 1000 || !same(sig, await sign(key, 'xtr|' + scheme.toLowerCase() + '|' + hostport.toLowerCase() + '|' + exp))) {
     return new Response('Forbidden', { status: 403, headers: { 'Cache-Control': 'no-store' } });
   }
+  if (path.toLowerCase() !== '/player_api.php') return image(scheme.toLowerCase() + '://' + hostport + path);
+  if (request.method !== 'GET') return new Response('Not found', { status: 404 });
   let up;
   try {
     up = await fetch(scheme + '://' + hostport + '/player_api.php' + seen.search, {
@@ -61,6 +64,40 @@ async function relay(request, seen, key) {
     headers: {
       'Content-Type': up.headers.get('Content-Type') || 'application/json',
       'Cache-Control': 'no-store',
+      'X-Robots-Tag': 'noindex',
+    },
+  });
+}
+
+// carátula o fondo del servidor IPTV: solo si de verdad es una imagen (y de hasta 10 MB); Cloudflare la guarda una
+// semana, así el servidor IPTV casi no recibe pedidos
+async function image(url) {
+  const none = () => new Response('Not found', { status: 404, headers: { 'Cache-Control': 'public, max-age=3600' } });
+  let up;
+  try {
+    up = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/avif,image/webp,image/*,*/*;q=0.8' },
+      cf: { cacheEverything: true, cacheTtl: 604800, cacheTtlByStatus: { '200-299': 604800, '404': 3600, '500-599': 0 } },
+    });
+  } catch (e) {
+    return none();
+  }
+  let type = (up.headers.get('Content-Type') || '').toLowerCase().split(';')[0].trim();
+  const size = +(up.headers.get('Content-Length') || 0);
+  // algunos servidores mandan las imágenes sin tipo: el de su extensión
+  if (type === '' || type.endsWith('/octet-stream')) {
+    const ext = (url.match(/\.([a-z]+)$/i) || ['', ''])[1].toLowerCase();
+    type = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', bmp: 'image/bmp' }[ext] || '';
+  }
+  if (!up.ok || !type.startsWith('image/') || type.includes('svg') || size > 10485760) return none();
+  return new Response(up.body, {
+    status: 200,
+    headers: {
+      'Content-Type': type,
+      'Cache-Control': 'public, max-age=604800, immutable',
+      'X-Content-Type-Options': 'nosniff',
       'X-Robots-Tag': 'noindex',
     },
   });
