@@ -63,7 +63,7 @@ if (!function_exists('wp_nav_cls')) {
     <?php if (wp_panel_tenant() !== '' || wp_dist_choice() === 'skip') echo wp_brand_store_script($wp_dist_cfg); ?>
     <script>window.NF={demo:<?php echo $wp_demo ? 'true' : 'false'; ?>,ck:<?php echo json_encode(wp_client_cache_key()); ?>,imgErr:function(i){i.onerror=null;i.src='assets/nf/noposter.svg';i.classList.add('ok');var c=i.closest&&i.closest('.nf-card');if(c)c.classList.add('noimg');}};</script>
     <?php echo wp_i18n_script(); ?>
-    <script src="assets/nf/app.js?v=9" defer></script>
+    <script src="assets/nf/app.js?v=10" defer></script>
     <script src="assets/nf/alert.js?v=5" defer></script>
     <?php if (!empty($wp_head_extra)) echo $wp_head_extra; ?>
 </head>

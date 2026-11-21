@@ -93,7 +93,8 @@
                     return r.json();
                 })
                 .then(function (j) {
-                    if (maxAge && j && !j.error && !j.xtneed && j.items && j.items.length) cacheSet(url, j);
+                    // una fila vacía también (el servidor no tiene esos títulos: no se vuelve a preguntar en 30 min)
+                    if (maxAge && j && !j.error && !j.xtneed && j.items && (j.items.length || url.indexOf('action=row') >= 0)) cacheSet(url, j);
                     return j;
                 });
         }
@@ -131,11 +132,18 @@
             img.classList.add('ok');
             a.classList.add('noimg');
         };
+        // ya buscada en este navegador: la de TMDB al instante, o sin carátula si no tenía (2 días)
+        var today = Math.floor(Date.now() / 86400000), v = k ? posterMemo()[k] : '';
+        if (v && v.charAt(0) !== '-') { img.onerror = empty; img.src = v; return; }
+        if (v && today - (+v.slice(1) || 0) < 2) { empty(); return; }
         fetch('api.php?action=posters', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             body: JSON.stringify({ items: [{ k: k, t: k.split('|')[0], tm: a.getAttribute('data-tm') || '', y: a.getAttribute('data-y') || '', n: a.getAttribute('title') || '' }] }) })
-            .then(function (r) { return r.ok ? r.json() : { p: {} }; })
+            .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (res) {
-                var u = (res.p || {})[k];
+                if (!res) { empty(); return; }
+                var u = (res.p || {})[k], m = {};
+                m[k] = u || ('-' + today);
+                posterMemo(m);
                 if (!u) { empty(); return; }
                 img.onerror = empty;
                 img.src = u;
@@ -146,6 +154,20 @@
     /* ---------------- Carátulas TMDB en alta calidad ----------------
        Solo para las tarjetas sin la caché de imágenes del panel (el dueño la apagó): con ella, el panel ya entrega el
        póster de TMDB cuando el servidor IPTV no tiene, y NF.imgErr pide TMDB solo si todo falla. */
+    /* carátulas de TMDB ya encontradas (públicas, sin datos de la cuenta): hasta 3000 en este navegador */
+    function posterMemo(add) {
+        var m = {};
+        try { m = JSON.parse(localStorage.getItem('nfp') || '{}') || {}; } catch (e) {}
+        if (!add) return m;
+        var ks = Object.keys(add);
+        if (!ks.length) return m;
+        ks.forEach(function (k) { delete m[k]; m[k] = add[k]; });
+        var all = Object.keys(m);
+        if (all.length > 3000) all.slice(0, all.length - 3000).forEach(function (k) { delete m[k]; });
+        try { localStorage.setItem('nfp', JSON.stringify(m)); } catch (e) { try { localStorage.removeItem('nfp'); } catch (e2) {} }
+        return m;
+    }
+
     NF.posters = function (root) {
         var cards = $$('.nf-card[data-pk]:not([data-pd])', root || d).filter(function (a) {
             var im = a.querySelector('img');
@@ -153,8 +175,18 @@
             return true;
         });
         if (!cards.length) return;
-        var map = {};
+        var map = {}, known = posterMemo();
         cards.forEach(function (a) { a.setAttribute('data-pd', '1'); (map[a.getAttribute('data-pk')] = map[a.getAttribute('data-pk')] || []).push(a); });
+        // las que ya se buscaron en este navegador salen al instante (no se le vuelve a preguntar al hosting)
+        var today = Math.floor(Date.now() / 86400000);
+        Object.keys(map).forEach(function (k) {
+            var v = known[k];
+            if (!v) return;
+            // '-<día>': TMDB no la tenía; se vuelve a preguntar pasados 2 días
+            if (v.charAt(0) === '-') { if (today - (+v.slice(1) || 0) < 2) delete map[k]; return; }
+            map[k].forEach(function (a) { var img = a.querySelector('img'); if (img) { img.src = v; img.classList.add('ok'); } });
+            delete map[k];
+        });
         var keys = Object.keys(map);
         for (var i = 0; i < keys.length; i += 40) (function (chunk) {
             var items = chunk.map(function (k) {
@@ -164,7 +196,9 @@
             fetch('api.php?action=posters', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ items: items }) })
                 .then(function (r) { return r.ok ? r.json() : { p: {} }; })
                 .then(function (res) {
-                    var p = res.p || {};
+                    var p = res.p || {}, memo = {};
+                    chunk.forEach(function (k) { memo[k] = p[k] || ('-' + today); });
+                    posterMemo(memo);
                     Object.keys(p).forEach(function (k) {
                         var im = new Image();
                         im.onload = function () {
