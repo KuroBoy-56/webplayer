@@ -129,6 +129,17 @@ function wp_brand_logo(array $cfg = null)
     return wp_img($cfg['logo_url'], WP_LOGO);
 }
 
+/**
+ * Imagen de un canal en vivo sin logo (o cuyo logo no carga): el logo del dueño solo con Omitir; con distribuidor, el suyo
+ * y, si no tiene, ninguna (nunca el del dueño), como en las apps de TV.
+ */
+function wp_channel_fallback()
+{
+    if (wp_panel_tenant() === '') return WP_LOGO;
+    $cfg = wp_tenant_cfg();
+    return is_array($cfg) && !empty($cfg['logo_url']) ? wp_img($cfg['logo_url'], WP_NOIMG) : WP_NOIMG;
+}
+
 /** Lo que el navegador guarda en localStorage (solo logo, nombre y colores). */
 function wp_brand_local(array $cfg = null)
 {

@@ -392,24 +392,45 @@
             var p = $('.nf-hero-poster', root);
             if (p) NF.firstImage([it.poster].concat(it.poster_fb || [], [it.background_image]), function (u) { if (u) p.style.backgroundImage = "url('" + u + "')"; });
         }
-        function show(i) {
-            var it = items[i];
-            var next = bgs[(cur + 1) % bgs.length];
-            // fondo Full HD del panel y, si no carga, el original
-            NF.firstImage([it.background_image].concat(it.background_fb || []), function (u) {
-                // imagen que no carga: se queda el banner anterior de fondo (nunca negro)
-                if (u || !bgs.some(function (b) { return b.classList.contains('on'); })) {
-                    next.style.backgroundImage = "url('" + (u || it.background_image) + "')";
-                    bgs.forEach(function (b) { b.classList.remove('on'); });
-                    next.classList.add('on');
-                    cur = (cur + 1) % bgs.length;
-                    // (el collage «Bienvenido» no: si no, quedaba de fondo en las demás páginas mientras llegaban sus destacados)
-                    if (u && u.indexOf('assets/images/overlay') < 0) try { sessionStorage.setItem('nf_hero_bg', u); } catch (e) {}
-                }
-                fill(it);
-                if (dots) $$('button', dots).forEach(function (b, j) { b.classList.toggle('on', j === i); });
+        // fondo de un destacado: el suyo (el del panel en Full HD y el original) y, si no carga, su carátula; nunca el de otro
+        // título. cb(url) o cb(null, true) si ninguno cargó; cb(null, false) si tardó demasiado (se prueba en la próxima vuelta)
+        function art(it, cb) {
+            var done = false, t = setTimeout(function () { if (!done) { done = true; cb(null, false); } }, 12000);
+            NF.firstImage([it.background_image].concat(it.background_fb || [], it.poster ? [it.poster] : [], it.poster_fb || []), function (u) {
+                if (done) return;
+                done = true;
+                clearTimeout(t);
+                cb(u, !u);
             });
-            idx = i;
+        }
+        var seq = 0;
+        function show(i, tries) {
+            var it = items[i], my = ++seq;
+            tries = tries || 0;
+            art(it, function (u, dead) {
+                if (my !== seq) return; // ya se pidió otro
+                if (!u) {
+                    // este título no tiene imagen que cargue: va el siguiente (el que no carga ninguna sale del carrusel), así la
+                    // imagen siempre es la del título que se ve (antes quedaba la del anterior y solo cambiaba el texto)
+                    if (dead && items.length > 1) { items.splice(i, 1); if (i < idx) idx--; drawDots(); }
+                    else i++;
+                    if (items.length > 1 && tries < items.length) { show(i % items.length, tries + 1); return; }
+                    // ninguno carga: sin imagen de fondo (nunca la de otro título)
+                    bgs.forEach(function (b) { b.classList.remove('on'); });
+                    fill(items[Math.min(i, items.length - 1)]);
+                    return;
+                }
+                var next = bgs[(cur + 1) % bgs.length];
+                next.style.backgroundImage = "url('" + u + "')";
+                bgs.forEach(function (b) { b.classList.remove('on'); });
+                next.classList.add('on');
+                cur = (cur + 1) % bgs.length;
+                // (el collage «Bienvenido» no: si no, quedaba de fondo en las demás páginas mientras llegaban sus destacados)
+                if (u.indexOf('assets/images/overlay') < 0) try { sessionStorage.setItem('nf_hero_bg', u); } catch (e) {}
+                fill(it);
+                idx = items.indexOf(it);
+                if (dots) $$('button', dots).forEach(function (b, j) { b.classList.toggle('on', j === idx); });
+            });
         }
         function drawDots() {
             if (!dots) return;

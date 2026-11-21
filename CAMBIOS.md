@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Imagen del destacado y logo de los canales del distribuidor — versión 2.9.5 (21 de noviembre, octava parte)
+- **El problema del destacado:** en Inicio, Películas y Series, cuando el fondo de un destacado no cargaba, la web cambiaba el título y la sinopsis pero dejaba la imagen del anterior: se veía siempre la misma película mientras el texto cambiaba.
+- **Ahora:** cada destacado muestra solo su propia imagen: su fondo (el del panel en Full HD o el original) y, si no carga, su carátula. Si no carga ninguna, ese título sale del carrusel y pasa el siguiente; nunca se ve la imagen de otro título.
+- **Logo de los canales en vivo:** un canal sin logo, o cuyo logo no carga, muestra el logo del distribuidor con su número. El logo del dueño solo aparece con la web del dueño. Un distribuidor sin logo no ve ninguno, como en las apps de TV.
+- Archivos: `assets/nf/app.js`, `header.php`, `img.php`, `tvguide.php`, `includes/core.php`, `includes/tenant_brand.php`.
+
 ## Carrusel de destacados como en la TV — versión 2.9.4 (21 de noviembre, séptima parte)
 - **El problema:** la web esperaba a tener todos los destacados listos (16 en Inicio: la ficha de cada uno del servidor y, sin fondo, la búsqueda en TMDB) antes de mostrar el primero. Con el servidor del distribuidor (por el Worker) eso tardaba tanto que en Inicio el pedido se cortaba y quedaba la imagen fija; en Películas y Series tardaba mucho, y lo que llegaba se guardaba 20 minutos aunque fuera uno solo (sin carrusel).
 - **Ahora, como en la TV (Roku, Vega, Android TV):** el destacado sale al momento con los que ya tienen su fondo y los demás se piden de a dos y se suman al carrusel a medida que llegan. En Inicio, si las series todavía no llegaron, empieza con las películas y suma las series después. Cambia solo cada 10 s, como en la TV.

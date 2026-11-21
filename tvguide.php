@@ -249,7 +249,7 @@ include "header.php";
             <div class="ph"><?php echo wp_icon('tv'); ?><span><?php echo t('Selecciona un canal para comenzar a ver'); ?></span></div>
         </div>
         <div class="tv-info" id="tvInfo" style="display:none">
-            <img id="tvLogo" src="" alt="" onerror="this.onerror=null;this.src='assets/img/Logo.png'">
+            <img id="tvLogo" src="" alt="" onerror="this.onerror=null;this.src=<?php echo e(json_encode(wp_channel_fallback(), JSON_UNESCAPED_SLASHES)); ?>">
             <div class="tv-ttl"><h2 id="tvName"></h2><div class="tv-now" id="tvNow"></div></div>
             <button type="button" class="nf-btn-circle" id="toggleLiveFav" title="<?php echo e(t('Favorito')); ?>"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 17.3 18.2 21l-1.6-7L22 9.2l-7.2-.6L12 2 9.2 8.6 2 9.2 7.4 14l-1.6 7z"/></svg></button>
         </div>
@@ -264,6 +264,8 @@ include "header.php";
 <script src="assets/vendor/mpegts.min.js" defer></script>
 <script src="assets/nf/player.js?v=33" defer></script>
 <script>
+// imagen de un canal sin logo: la de la marca (el logo del dueño solo con Omitir)
+var CH_FB = <?php echo json_encode(wp_channel_fallback(), JSON_UNESCAPED_SLASHES); ?>;
 document.addEventListener('DOMContentLoaded', function () {
     var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [] };
     var initial = <?php echo json_encode($initial, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG); ?>;
@@ -279,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('chCount').textContent = items.length ? '(' + items.length + ')' : '';
         if (!items.length) { list.innerHTML = '<div class="tv-empty">' + (state.cat === 'favorites' ? <?php echo tj('Aún no tienes canales favoritos.'); ?> : <?php echo tj('No hay canales en esta sección.'); ?>) + '</div>'; return; }
         list.innerHTML = items.map(function (c) {
-            return '<div class="tv-ch' + (state.ch === c.id ? ' active' : '') + '" data-id="' + NF.esc(c.id) + '"><img src="' + NF.esc(c.i) + '" alt="" loading="lazy" onerror="this.onerror=null;this.src=\'assets/img/Logo.png\'"><span>' + NF.esc(c.n) + '</span></div>';
+            return '<div class="tv-ch' + (state.ch === c.id ? ' active' : '') + '" data-id="' + NF.esc(c.id) + '"><img src="' + NF.esc(c.i) + '" alt="" loading="lazy" onerror="this.onerror=null;this.src=CH_FB"><span>' + NF.esc(c.n) + '</span></div>';
         }).join('');
     }
 

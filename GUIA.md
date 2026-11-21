@@ -42,6 +42,12 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 - **Catálogo por partes:** Inicio, Películas, Series, Explorar y las fichas definen `WP_XT_SOFT`: en el modo navegador salen al momento sin la pantalla «Cargando…» y el catálogo completo se trae por detrás (`wp_xt_soft()` en `includes/xt_client.php`, salvo en un perfil infantil). Cada fila (`api.php?action=row`) espera lo suyo; una fila de una categoría y su «Ver todo» llegan solos con `get_vod_streams&category_id=` (`wp_cat_list_quick()`) mientras llega el catálogo completo. `wp_cat_derive()` no guarda cálculos hechos sin catálogo. El navegador espera el catálogo completo hasta 3 minutos (`xtfill.js`).
 - Pruebas: `tools/web_relay_test.php` del panel (carátulas por el Worker, firma de la línea, catálogo por partes con un servidor lento).
 
+## Imagen del destacado y logo de canal por marca (2.9.5)
+
+- `NF.hero()` (`assets/nf/app.js`): `art(it, cb)` prueba solo las imágenes de ese título (`background_image`, `background_fb`, `poster`, `poster_fb`; 12 s). Si ninguna carga, el título sale del carrusel y pasa el siguiente; si no carga ninguno, queda sin fondo. Un cambio pedido después anula al anterior (`seq`).
+- `wp_channel_fallback()` (`includes/tenant_brand.php`): imagen de un canal sin logo. Con Omitir es `WP_LOGO`; con distribuidor, su logo; sin logo, `WP_NOIMG`. La usan `wp_logo()`, la redirección de `img.php?…&fb=1` (con `Cache-Control: private`, porque depende del distribuidor) y el `onerror` de `tvguide.php` (`CH_FB`).
+- Pruebas del panel: `tools/web_relay_test.php` (la imagen cambia con el título) y `tools/profiles_web_test.php` (canal sin logo con y sin distribuidor).
+
 ## Destacados progresivos (2.9.4)
 
 - `includes/hero.php`: `wp_hero_pool()` (candidatos, 20 min; en Inicio, con un solo catálogo listo, una lista parcial de 90 s con ese), `wp_hero_art()` (fondo del servidor o de TMDB; sin red: solo lo guardado), `wp_hero_list()` (`api.php?action=hero` → `{items, pending}` al momento, sin esperar nada) y `wp_hero_one()` (`api.php?action=heroart&type=&t=&id=`: uno, con su ficha del servidor —en el modo navegador por xtneed— y TMDB).

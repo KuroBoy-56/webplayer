@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.9.4');
+define('WP_VERSION', '2.9.5');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -848,12 +848,12 @@ function wp_img($url, $fallback = WP_NOIMG)
 /**
  * Logo de canal: siempre pasa por img.php (caché 7 días). Así cargan también los logos
  * de servidores que bloquean el enlace directo, con certificado vencido o en http.
- * Si el logo no existe o falla, se muestra el logo del webplayer.
+ * Si el logo no existe o falla, se muestra el de la marca (wp_channel_fallback: el del dueño solo con Omitir).
  */
 function wp_logo($url)
 {
     $url = trim((string)$url);
-    if ($url === '' || !preg_match('~^https?://[^/\s]+~i', $url)) return WP_LOGO;
+    if ($url === '' || !preg_match('~^https?://[^/\s]+~i', $url)) return wp_channel_fallback();
     return wp_proxy_url($url, 'img.php') . '&fb=1';
 }
 
