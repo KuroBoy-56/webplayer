@@ -4,6 +4,15 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Puente para servidores IPTV sin SSL (web en https) — versión 2.9.0 (21 de noviembre, tercera parte)
+- **El problema:** con la web en https el navegador no deja pedir nada a un servidor IPTV que solo tiene http (o un certificado casero o vencido). Entonces todo iba por el hosting, y muchos servidores rechazan al hosting: «El servidor de video no está dejando entrar a la web».
+- **Ahora:** si la web se abre por un dominio con el **Worker de Cloudflare** (el nuevo código de `cloudflare/edge-worker.js`), el navegador le pide a la misma web `xtr/…/player_api.php` y el Worker se lo pide al servidor IPTV. Entran el inicio de sesión, el catálogo, las fichas, la cuenta y la guía. El servidor ve la IP de Cloudflare, nunca la del hosting.
+- **Seguro:** solo `player_api.php` y solo `GET`, nunca video ni otro archivo. Solo pasan los servidores que la web firmó con el secreto de ese Worker, y la firma vence en pocos días. Al entrar por el puente el hosting comprueba la línea también por el puente: una respuesta inventada desde el navegador no entra.
+- **Orden al entrar:** primero el https del servidor directo desde el navegador (si tiene uno válido), después el puente y, al final, el hosting como antes. Sin el Worker nuevo, o con la web abierta por el hosting, todo sigue igual.
+- **Límites:** un servidor configurado con una IP (sin nombre) no puede ir por el puente (Cloudflare no deja). Con un puerto propio (`:8080`), el Worker tiene que tener la fecha de compatibilidad 2024-09-02 o más nueva. El video de un servidor http sigue por la VPS / VDS del motor, como antes.
+- **Hay que volver a pegar el código del Worker** en Cloudflare (`docs/GUIA-WORKER.html`, paso 3) en cada dominio con Worker.
+- Archivos: `includes/xt_relay.php` (nuevo), `includes/edge.php`, `includes/core.php`, `includes/xt_client.php`, `login.php`, `cloudflare/edge-worker.js`, `docs/GUIA-WORKER.html`.
+
 ## La dirección decide el distribuidor (sin pantalla «Número de distribuidor») — versión 2.8.1 (21 de noviembre, segunda parte)
 - **Tu dominio es tu web:** `tudominio/login` ya no pide el número ni muestra «Omitir» ni «Cambiar distribuidor» (tampoco en Mi cuenta). Es la web de siempre del dueño.
 - **El enlace del distribuidor ya trae todo:** `tudominio/login?d=NÚMERO` (o `tudominio/?d=NÚMERO`) abre su web con su logo, nombre y colores, sin escribir nada. El panel lo muestra en el perfil del distribuidor mientras tenga la web player encendida.

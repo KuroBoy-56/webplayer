@@ -79,6 +79,10 @@ function wp_edge_boot()
     }
     $GLOBALS['wp_edge_on'] = true;
     if ($dist !== '') $GLOBALS['wp_edge_dist'] = $dist;
+    // el secreto de este Worker firma las direcciones del puente para servidores sin SSL (includes/xt_relay.php); el
+    // Worker nuevo avisa que sabe hacerlo (X-MPX-Relay). Nunca sale en una página.
+    $GLOBALS['wp_edge_key'] = $got;
+    $GLOBALS['wp_edge_relay'] = (string)($_SERVER['HTTP_X_MPX_RELAY'] ?? '') === '1';
     unset($_SERVER['HTTP_X_MPX_EDGE']);
     // el dominio que ve el cliente (las páginas, redirecciones y cookies lo usan)
     $host = strtolower((string)($_SERVER['HTTP_X_FORWARDED_HOST'] ?? ''));

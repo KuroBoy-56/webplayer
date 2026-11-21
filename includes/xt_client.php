@@ -44,7 +44,8 @@ function wp_xt_need($action, array $params, $blocking)
         if ($blocking) $needs[$id]['b'] = 1;
         return;
     }
-    $needs[$id] = ['id' => $id, 'u' => xt_url($action, $params), 'b' => $blocking ? 1 : 0];
+    // un servidor http con la web en https: por el puente del Worker (includes/xt_relay.php)
+    $needs[$id] = ['id' => $id, 'u' => wp_xt_browser_url(xt_url($action, $params)), 'b' => $blocking ? 1 : 0];
     wp_cache_set('xtneed|' . $sid . '|' . $id, ['ck' => $ck, 'a' => (string)$action]);
     if (!$blocking) {
         // lo vencido se renueva en la próxima página (también si esto fue una carga en segundo plano)
@@ -200,6 +201,10 @@ function wp_xt_login_cands(array $first, array $later, $lastUrl, $tc)
         $port = (int)($p['port'] ?? 80);
         $alt = $sec[$host] ?? ['https://' . $host . ($port !== 80 && $port !== 443 ? ':' . $port : '') . rtrim((string)($p['path'] ?? ''), '/')];
         $list = $https ? $alt : array_merge([$u], $alt);
+        // con la web en https, un servidor sin SSL (o con un certificado que el navegador rechaza) se prueba después por
+        // el puente del Worker de Cloudflare (includes/xt_relay.php): así también entra desde la IP del cliente
+        $relay = $https ? wp_xt_relay_base($u) : '';
+        if ($relay !== '') $list[] = $relay;
         $k = wp_login_endpoint($u);
         // c = este servidor ya le dio permiso CORS a un navegador: si ahora no deja leer la respuesta, es que el usuario
         // o la contraseña no son de ahí (XUI no da el permiso con datos equivocados) y no hace falta probar por el hosting

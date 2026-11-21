@@ -185,10 +185,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
     }
     if ($step === 'client') {
         $base = rtrim((string)($_POST['server'] ?? ''), '/');
+        // por el puente del Worker (servidor sin SSL, includes/xt_relay.php): la dirección real del servidor
+        $real = wp_xt_relay_target($base);
         $srvFor = null;
         $corsKey = '';
         foreach (wp_xt_login_cands($first, $later, $lastUrl, $dist_code) as $c) {
-            if (!in_array($base, $c['u'], true)) continue;
+            if ($real !== '' ? wp_login_endpoint($real) !== $c['k'] : !in_array($base, $c['u'], true)) continue;
             foreach ($first as $f) {
                 if (wp_login_endpoint($f['url']) === $c['k']) $srvFor = $f;
             }
@@ -196,9 +198,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST["username"], $_POST["p
         }
         $info = json_decode((string)($_POST['info'] ?? ''), true);
         $ui = is_array($info) && is_array($info['user_info'] ?? null) ? $info['user_info'] : null;
+        // por el puente el hosting lo comprueba él mismo, también por el puente (al servidor no llega: suele bloquear
+        // al hosting): lo que dice el navegador nunca alcanza solo
+        if ($srvFor !== null && $real !== '') $ui = wp_xt_relay_check($base, $username, $password);
         if ($srvFor === null || $ui === null || (int)($ui['auth'] ?? 0) !== 1 || strcasecmp((string)($ui['status'] ?? ''), 'Active') !== 0) {
             echo json_encode(['success' => false, 'message' => t('No se pudo iniciar sesión.')]);
             exit;
+        }
+        if ($real !== '') {
+            wp_login_finish($username, $password, ['url' => $srvFor['url'], 'id' => $srvFor['id'] ?? '', 'name' => $srvFor['name'] ?? ''], $ui, $dist_code, $lastKey, true);
         }
         // este servidor deja leer al navegador (CORS): se recuerda para los próximos inicios de sesión. Lo que dice el
         // navegador no alcanza (podría inventarlo): la primera vez el hosting lo comprueba con un solo pedido

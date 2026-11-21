@@ -25,6 +25,16 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 
 **Dominio propio con un Worker (opcional):** el cliente entra por un dominio nuevo (el tuyo o el de cada distribuidor, sin límite) y el dominio original de la web responde **403 Forbidden**. El Worker (`cloudflare/edge-worker.js`) abre la web por dentro con un secreto; la web (`includes/edge.php`) solo atiende con ese secreto y toma el dominio y la IP real del cliente. Cada secreto puede llevar el número de un distribuidor: en su dominio la web queda fija en él. Se configura con `'edge_keys'` (y `'edge_block'` para probar) en `includes/panel_secret.php`; sin eso la web funciona exactamente igual. Paso a paso con dibujos: **`docs/GUIA-WORKER.html`** (ábrelo en tu PC; en el hosting `docs/` y `cloudflare/` están bloqueados).
 
+## Puente para servidores sin SSL (2.9.0)
+
+`includes/xt_relay.php` + `cloudflare/edge-worker.js`. Solo con la web abierta por un Worker nuevo (manda `X-MPX-Relay: 1`; `wp_edge_boot()` guarda su secreto en `$GLOBALS['wp_edge_key']`) y en https:
+
+- `wp_xt_relay_base($url)` → `xtr/<firma>.<vence>/http/<servidor:puerto>`. La firma es un HMAC-SHA256 con el secreto del Worker de `xtr|esquema|servidor:puerto|vence` (base64url, 22 caracteres); vence en 2-3 días y es igual todo el día. Solo servidores con nombre y sin carpeta.
+- `wp_xt_login_cands()` agrega el puente después del https directo. En `step=client`, `wp_xt_relay_target()` da la dirección real y `wp_xt_relay_check()` comprueba la línea desde el hosting por el puente (`https://<este dominio>/xtr/…`): nunca se confía en lo que manda el navegador. La sesión queda con la dirección real del servidor.
+- `wp_xt_need()` le da al navegador `wp_xt_browser_url(xt_url(…))`: lo que trae `xtfill.js` también va por el puente.
+- El Worker solo acepta `GET /xtr/<firma>.<vence>/<http|https>/<servidor:puerto>/player_api.php` con firma válida y vigente (403 si no, 404 otra ruta) y no guarda nada.
+- Prueba: `tools/web_relay_test.php` del panel (la web en https detrás del Worker de verdad, en Node, con un servidor IPTV que el hosting no encuentra).
+
 ## Distribuidor: la dirección decide (2.8.1)
 
 Ya no hay pantalla «Número de distribuidor». `wp_dist_choice()` (`includes/tenant.php`):
