@@ -66,12 +66,23 @@ test('perfil infantil: nivel de cada título (tabla de ejemplos del panel)', () 
   assert.strictEqual(L('Toy Story 4', '', ['INFANTILES']), 'strong');
   assert.strictEqual(L('Shrek', 'Animación, Comedia', ['ANIMADAS']), 'strong');
   assert.strictEqual(L('Moana 2', 'Animación, Familia', ['DISNEY+']), 'strong');
-  assert.strictEqual(L('Frozen II', '', ['DISNEY+']), 'weak');
+  // v3: Frozen está en kids_titles (antes, en una categoría de Disney, esperaba a TMDB)
+  assert.strictEqual(L('Frozen II', '', ['DISNEY+']), 'strong');
+  assert.strictEqual(L('El diablo viste a la moda', '', ['DISNEY+']), 'weak');
   assert.strictEqual(L('Mírame así, el camino de Noa', 'Comedia, Familia, Telenovela', ['SERIES NUEVAS']), 'weak');
   assert.strictEqual(L('Rick y Morty: la película', 'Animación, Comedia', ['ANIMADAS']), '');
   assert.strictEqual(L('Deadpool & Wolverine', 'Acción, Comedia', ['ESTRENOS 2024']), '');
   assert.strictEqual(L('Thor: amor y trueno', '', ['MARVEL']), '');
   assert.strictEqual(L('Loki', '', ['DISNEY+']), '');
+  // v3: títulos de niños (kids_titles) fuera de una categoría de niños
+  assert.strictEqual(L('Shrek 2 (2004)', 'Animación, Comedia', ['ESTRENOS 2024']), 'strong');
+  assert.strictEqual(L('Paw Patrol: La película', '', ['PELICULAS']), 'strong');
+  assert.strictEqual(L('Toy Story 3', 'Animación, Familia', ['DISNEY+']), 'strong');
+  assert.strictEqual(L('Coco Chanel', '', ['ESTRENOS 2024']), '');
+  assert.strictEqual(L('Shrek 2', 'Acción, Drama', ['ESTRENOS 2024']), ''); // con un género que no es de niños no se mira
+  assert.strictEqual(L('Winnie the Pooh: Blood and Honey', '', ['ESTRENOS 2024']), '');
+  assert.strictEqual(L('Bambi: The Reckoning', 'Terror', ['ESTRENOS 2024']), '');
+  assert.strictEqual(L('Mickey 17', '', ['ESTRENOS 2024']), '');
   // lo dudoso solo con el «ok» de TMDB; lo seguro salvo que TMDB diga «no»
   assert.strictEqual(kids.ratePass('weak', ''), false);
   assert.strictEqual(kids.ratePass('weak', 'ok'), true);
