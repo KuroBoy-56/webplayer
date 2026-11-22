@@ -120,6 +120,8 @@ enum Xtream {
     private static func getMem<T>(_ k: String) -> T? { lock.locked { mem[k] as? T } }
     private static func setMem(_ k: String, _ v: Any) { lock.locked { mem[k] = v } }
     static func clearCache() { lock.lock(); mem.removeAll(); details.removeAll(); lock.unlock() }
+    /** «Actualizar catálogo»: fichas y capítulos guardados en memoria se vuelven a pedir al abrirlos (las listas las cambia refresh) */
+    static func clearDetails() { lock.lock(); details.removeAll(); lock.unlock() }
 
     static func cached(_ s: Session, _ kind: Kind) -> ([Category], [Item])? {
         guard let c = CatalogCache.load(s, kind) else { return nil }

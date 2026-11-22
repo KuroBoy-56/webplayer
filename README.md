@@ -4,6 +4,13 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.0.12
+
+- **Actualizar catálogo (como Roku):** «Mi cuenta» › **Actualizar catálogo** vuelve a bajar películas, series y canales
+  del servidor IPTV aunque la copia guardada en el equipo sea nueva, y también Continuar viendo y Mi lista del panel.
+  Lo de antes sigue en pantalla mientras baja; si el servidor no contesta un tipo, se conserva lo anterior
+  (`AppState.reloadCatalog()` en `LatMpx/App/AppState.swift`).
+
 ## Novedades de la 1.0.11
 
 - **Logo del distribuidor en los canales sin logo:** un canal en vivo sin logo, o cuyo logo no carga, muestra el logo

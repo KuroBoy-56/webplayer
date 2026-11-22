@@ -5,6 +5,12 @@ import Foundation
 
 extension L10n {
     static let en: [String: String] = [
+        // «Actualizar catálogo» como Roku (iOS 1.0.12)
+        "Actualizar catálogo": "Refresh catalog",
+        "Actualizando el catálogo…": "Refreshing the catalog…",
+        "Catálogo actualizado": "Catalog updated",
+        "No se pudo actualizar todo el catálogo; se conserva lo anterior": "Part of the catalog could not be refreshed; the previous copy is kept",
+        "Vuelve a traer películas, series y canales del servidor": "Downloads movies, series and channels again from the server",
         // Deportes como Android TV (iOS 1.0.8)
         "Busca el mejor canal automáticamente": "Finds the best channel automatically",
         "Buscando los canales, un momento…": "Looking for the channels, one moment…",
@@ -384,6 +390,12 @@ extension L10n {
     ]
 
     static let pt: [String: String] = [
+        // «Actualizar catálogo» como Roku (iOS 1.0.12)
+        "Actualizar catálogo": "Atualizar catálogo",
+        "Actualizando el catálogo…": "Atualizando o catálogo…",
+        "Catálogo actualizado": "Catálogo atualizado",
+        "No se pudo actualizar todo el catálogo; se conserva lo anterior": "Não foi possível atualizar todo o catálogo; a cópia anterior foi mantida",
+        "Vuelve a traer películas, series y canales del servidor": "Traz de novo filmes, séries e canais do servidor",
         // Deportes como Android TV (iOS 1.0.8)
         "Busca el mejor canal automáticamente": "Procura o melhor canal automaticamente",
         "Buscando los canales, un momento…": "Buscando os canais, um momento…",
@@ -731,6 +743,12 @@ extension L10n {
     ]
 
     static let fr: [String: String] = [
+        // «Actualizar catálogo» como Roku (iOS 1.0.12)
+        "Actualizar catálogo": "Actualiser le catalogue",
+        "Actualizando el catálogo…": "Actualisation du catalogue…",
+        "Catálogo actualizado": "Catalogue mis à jour",
+        "No se pudo actualizar todo el catálogo; se conserva lo anterior": "Une partie du catalogue n'a pas pu être actualisée ; l'ancienne copie est conservée",
+        "Vuelve a traer películas, series y canales del servidor": "Recharge les films, séries et chaînes depuis le serveur",
         // Deportes como Android TV (iOS 1.0.8)
         "Busca el mejor canal automáticamente": "Trouve automatiquement la meilleure chaîne",
         "Buscando los canales, un momento…": "Recherche des chaînes, un instant…",

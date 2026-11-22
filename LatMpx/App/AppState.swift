@@ -73,6 +73,8 @@ final class AppState: ObservableObject {
     @Published var toast: String?
     /** cambia cada vez que se vuelve del reproductor o cambian las carpetas bloqueadas */
     @Published var refresh = 0
+    /** Cuenta › «Actualizar catálogo» en curso (no se repite y el botón lo dice) */
+    @Published var catalogReloading = false
 
     func path(_ t: Tab) -> Binding<[Route]> {
         Binding(get: { self.stacks[t] ?? [] }, set: { self.stacks[t] = $0 })
@@ -199,6 +201,32 @@ final class AppState: ObservableObject {
         case .series: if !cats.isEmpty { seriesCats = cats }; series = items
         case .live: if !cats.isEmpty { liveCats = cats }; live = items
         }
+    }
+
+    /**
+     Cuenta › «Actualizar catálogo» (como Roku): películas, series y canales otra vez del servidor IPTV aunque la copia del
+     equipo sea nueva, y Continuar viendo / Mi lista del panel. Lo de antes sigue en pantalla mientras baja; si el servidor
+     no contesta un tipo, se conserva lo anterior de ese tipo.
+     */
+    @MainActor
+    func reloadCatalog() async {
+        guard let s = session, !catalogReloading else { return }
+        catalogReloading = true
+        defer { catalogReloading = false }
+        toast = tr("Actualizando el catálogo…")
+        Xtream.clearDetails()
+        var ok = true
+        await withTaskGroup(of: (Kind, ([Category], [Item])?).self) { g in
+            for k in [Kind.movie, .series, .live] { g.addTask { (k, await Xtream.refresh(s, k)) } }
+            for await (k, r) in g {
+                guard session == s else { continue }
+                if let r = r { put(k, r.0, r.1) } else { ok = false }
+            }
+        }
+        guard session == s else { return }
+        await Cloud.shared.load()
+        refresh += 1
+        toast = tr(ok ? "Catálogo actualizado" : "No se pudo actualizar todo el catálogo; se conserva lo anterior")
     }
 
     /** primero la copia del equipo (al instante) y después, en segundo plano, el servidor si la copia es vieja */

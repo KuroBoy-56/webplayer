@@ -67,6 +67,11 @@ struct AccountView: View {
                         // idioma de la app: automático (el del equipo) o uno fijo; se aplica al momento
                         setting("globe", tr("Idioma de la app"), L10n.label(lang.choice)) { langOpen = true }
                         Divider().background(Color(hex: 0x333333))
+                        // como Roku: vuelve a traer todo del servidor IPTV (lo nuevo que agregó el proveedor)
+                        setting("arrow.clockwise", tr("Actualizar catálogo"), state.catalogReloading ? tr("Actualizando el catálogo…") : tr("Vuelve a traer películas, series y canales del servidor")) {
+                            Task { await state.reloadCatalog() }
+                        }
+                        Divider().background(Color(hex: 0x333333))
                         setting("play.rectangle", tr("Formato de canales"), streamFormat == "ts" ? "MPEG-TS (.ts)" : "HLS (.m3u8)") {
                             streamFormat = streamFormat == "ts" ? "m3u8" : "ts"
                             Store.streamFormat = streamFormat
