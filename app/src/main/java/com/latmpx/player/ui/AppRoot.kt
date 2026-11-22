@@ -13,6 +13,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -461,7 +467,9 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
         // teléfono: barra inferior como la app de Netflix
         // perfil infantil sin canales de niños: sin TV en vivo
         val phoneTabs = listOf(Tab.HOME, Tab.SERIES, Tab.MOVIES, Tab.LIVE, Tab.ACCOUNT).filter { it != Tab.LIVE || !state.hideLive }
-        Column(Modifier.fillMaxSize()) {
+        // Android 15+ dibuja de borde a borde: el contenido empieza bajo la barra de estado (hora, señal, batería) y el
+        // buscador y el perfil quedaban tapados. Se deja ese espacio arriba; las pantallas que ya lo tenían no se duplican.
+        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))) {
             Box(Modifier.weight(1f)) { saver.SaveableStateProvider(screenKey) { content() } }
             if (!state.immersive) NavigationBar(containerColor = Color(0xFF0B0B0B), tonalElevation = 0.dp) {
                 phoneTabs.forEach { t ->
