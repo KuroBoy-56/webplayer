@@ -12,6 +12,7 @@ del secreto `PANEL_KEY` (la misma de Vega OS e iOS).
 
 ## Novedades de la 1.3.0 (lo mismo que webOS 1.4.0)
 
+- (1.3.8) **Perfil infantil con la lista de títulos para niños (reglas v3 del panel):** las reglas traen `kids_titles` (unos 700 títulos: Shrek, Toy Story, Paw Patrol, Bob Esponja, Pokémon…): un título así cuenta como de una categoría de niños aunque esté en «Estrenos», sin ganar nunca a las listas de bloqueo ni al «no» de TMDB. Se mira solo sin género o con género de niños, familia o animación (o en una categoría de Disney o familia) y se guarda por nombre (`kidsTitle()` en `src/lib/kids.ts`). La copia de fábrica `src/lib/kidsrules.ts` es la v3 del panel, generada desde `includes/kids_rules.php`.
 - (1.3.7) **Logo de la marca en los canales sin logo:** un canal en vivo sin logo, o cuyo logo no carga, muestra el logo de la marca en la lista de canales, la vista previa y el reproductor: el de la app sin distribuidor, el del distribuidor con su número y ninguno si el distribuidor no tiene logo, como la web player y Android (`ChannelLogo` en `src/components/ui.tsx`).
 - (1.3.6) **Cerrar sesión no vuelve a entrar solo y botón «Verificar activación» (como Roku):** después de cerrar sesión
   (Cuenta, «Salir» de «¿Quién está viendo?» o el tema de prueba) el inicio de sesión no le pregunta al panel ni entra
