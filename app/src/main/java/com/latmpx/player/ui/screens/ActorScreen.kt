@@ -64,8 +64,11 @@ fun ActorScreen(state: AppState, actor: Route.ActorPage) {
     val pw = posterWidth()
     var bioOpen by remember(actor) { mutableStateOf(false) }
 
+    val phone = !com.latmpx.player.ui.components.LocalIsTv.current
+    Column(Modifier.fillMaxSize().background(NfBg)) {
+    if (phone) PhoneBackButton(state, Modifier.padding(start = 4.dp, top = 8.dp))
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(pw), contentPadding = PaddingValues(start = sidePad(), end = sidePad(), top = 16.dp, bottom = 60.dp),
+        columns = GridCells.Adaptive(pw), contentPadding = PaddingValues(start = sidePad(), end = sidePad(), top = if (phone) 4.dp else 16.dp, bottom = 60.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize().background(NfBg),
     ) {
@@ -111,5 +114,6 @@ fun ActorScreen(state: AppState, actor: Route.ActorPage) {
             val pr = progress[it.key]
             PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, progress = if (pr != null && pr.duration > 0) pr.position.toFloat() / pr.duration else 0f)
         }
+    }
     }
 }

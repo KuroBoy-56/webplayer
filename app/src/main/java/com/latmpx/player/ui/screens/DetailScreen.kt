@@ -7,6 +7,7 @@ import com.latmpx.player.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -126,6 +127,7 @@ fun DetailScreen(state: AppState, media: Item) {
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize().background(NfBg)) {
         item {
             Box(Modifier.fillMaxWidth().then(if (tv) Modifier.height(300.dp) else Modifier.aspectRatio(16f / 10f))) {
@@ -311,6 +313,9 @@ fun DetailScreen(state: AppState, media: Item) {
             }
         }
         item { Spacer(Modifier.height(40.dp)) }
+    }
+    // celular: flecha «Atrás» arriba a la izquierda, como la app de Netflix (Atrás del teléfono hace lo mismo)
+    if (!tv) PhoneBackButton(state, Modifier.align(androidx.compose.ui.Alignment.TopStart).statusBarsPadding().padding(8.dp), overlay = true)
     }
 }
 
