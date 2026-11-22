@@ -326,15 +326,23 @@ include "header.php";
 var CH_FB = <?php echo json_encode(wp_channel_fallback(), JSON_UNESCAPED_SLASHES); ?>;
 // logo de un canal (2.9.10): prueba sus direcciones en orden (directo, Worker, hosting) y, si ninguna carga, el de la marca.
 // Una imagen de 1 a 3 px (logo vacío) cuenta como fallida.
+// Cada dirección que no es la primera tiene 6 s: un servidor que no contesta no deja el logo esperando (2.9.11).
 function chLogoNext(img) {
     var l = [];
     try { l = JSON.parse(img.getAttribute('data-alt') || '[]'); } catch (e) {}
-    if (l.length) { img.setAttribute('data-alt', JSON.stringify(l.slice(1))); img.src = l[0]; return; }
+    clearTimeout(img._lt);
+    if (l.length) {
+        img.setAttribute('data-alt', JSON.stringify(l.slice(1)));
+        img.src = l[0];
+        img._lt = setTimeout(function () { if (!(img.complete && img.naturalWidth) && img.getAttribute('data-alt') !== null) chLogoNext(img); }, 6000);
+        return;
+    }
     img.removeAttribute('data-alt');
     img.onerror = null;
     if (img.getAttribute('src') !== CH_FB) img.src = CH_FB;
 }
 function chLogoOk(img) {
+    clearTimeout(img._lt);
     if (img.getAttribute('data-alt') !== null && img.naturalWidth > 0 && img.naturalWidth < 4) chLogoNext(img);
 }
 function chLogoSet(img, srcs) {
@@ -342,6 +350,8 @@ function chLogoSet(img, srcs) {
     img.setAttribute('data-alt', JSON.stringify(srcs.slice(1)));
     img.onerror = function () { chLogoNext(img); };
     img.onload = function () { chLogoOk(img); };
+    // sin «Referer»: algunos servidores no entregan el logo si lo pide otra web
+    img.referrerPolicy = 'no-referrer';
     img.src = srcs[0] || CH_FB;
 }
 document.addEventListener('DOMContentLoaded', function () {
@@ -359,7 +369,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('chCount').textContent = items.length ? '(' + items.length + ')' : '';
         if (!items.length) { list.innerHTML = '<div class="tv-empty">' + (state.cat === 'favorites' ? <?php echo tj('Aún no tienes canales favoritos.'); ?> : <?php echo tj('No hay canales en esta sección.'); ?>) + '</div>'; return; }
         list.innerHTML = items.map(function (c) {
-            return '<div class="tv-ch' + (state.ch === c.id ? ' active' : '') + '" data-id="' + NF.esc(c.id) + '"><img src="' + NF.esc(c.i || CH_FB) + '" data-alt="' + NF.esc(JSON.stringify(c.j || [])) + '" alt="" loading="lazy" onerror="chLogoNext(this)" onload="chLogoOk(this)"><span>' + NF.esc(c.n) + '</span></div>';
+            return '<div class="tv-ch' + (state.ch === c.id ? ' active' : '') + '" data-id="' + NF.esc(c.id) + '"><img src="' + NF.esc(c.i || CH_FB) + '" data-alt="' + NF.esc(JSON.stringify(c.j || [])) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="chLogoNext(this)" onload="chLogoOk(this)"><span>' + NF.esc(c.n) + '</span></div>';
         }).join('');
     }
 

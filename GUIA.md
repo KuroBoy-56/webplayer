@@ -42,6 +42,14 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 - **Catálogo por partes:** Inicio, Películas, Series, Explorar y las fichas definen `WP_XT_SOFT`: en el modo navegador salen al momento sin la pantalla «Cargando…» y el catálogo completo se trae por detrás (`wp_xt_soft()` en `includes/xt_client.php`, salvo en un perfil infantil). Cada fila (`api.php?action=row`) espera lo suyo; una fila de una categoría y su «Ver todo» llegan solos con `get_vod_streams&category_id=` (`wp_cat_list_quick()`) mientras llega el catálogo completo. `wp_cat_derive()` no guarda cálculos hechos sin catálogo. El navegador espera el catálogo completo hasta 3 minutos (`xtfill.js`).
 - Pruebas: `tools/web_relay_test.php` del panel (carátulas por el Worker, firma de la línea, catálogo por partes con un servidor lento).
 
+## Logos de canales sin depender del hosting (2.9.11)
+
+- `wp_logo_sources($url)` (`includes/core.php`), en orden: el original (logo https o web en http), `wp_xt_relay_img()` (Worker; no para servidores con IP), `img.php?…&fb=2` del hosting, `wp_panel_logo_url()` (`img.php?w=200&token=` del panel: lo baja el panel, solo imágenes de 80 px o más) y, con la web en https y el logo http, la misma dirección por https. La marca (`CH_FB`) la pone la página al final.
+- `img.php`: `&fb=2` contesta 404 (`Cache-Control: private, max-age=600`; marca de falla 6 h) en lugar de redirigir a la marca, para que la página pruebe el siguiente camino; `&fb=1` sigue igual para los enlaces viejos. Si no puede guardar en `includes/cache/img`, entrega la imagen desde la memoria (antes salía vacía).
+- `wp_secret()`: si no puede guardar `includes/cache/.key.php`, usa una clave fija sacada de `master_key_hex` (antes una al azar en cada página: `img.php` respondía 403 a todo).
+- `tvguide.php`: `chLogoNext()` da 6 s a cada dirección que no es la primera; los logos van con `referrerpolicy="no-referrer"`.
+- Pruebas del panel: `tools/web_img_logo_test.php` (caché sin permiso, clave sin guardar, 404 con `&fb=2`, orden de los caminos; con la 2.9.10 fallan 4) y `tools/web_relay_test.php` (un logo que no existe en ningún lado termina en la marca en ~4 s).
+
 ## Logos de canales por el navegador y tarjetas de Deportes (2.9.10)
 
 - `wp_logo_sources($url)` (`includes/core.php`): direcciones del logo de un canal en orden: el original (solo si es https o la web va en http), `wp_xt_relay_img()` (Worker, logo http con la web en https) y `wp_logo()` (`img.php` del hosting, `&fb=1`: si falla redirige a `wp_channel_fallback()`). Sin logo: `[wp_channel_fallback()]`.

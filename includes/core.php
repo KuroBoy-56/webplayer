@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.9.10');
+define('WP_VERSION', '2.9.11');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -506,7 +506,12 @@ function wp_secret()
         if (preg_match('/([a-f0-9]{64})/', $raw, $m)) return $s = $m[1];
     }
     $s = bin2hex(random_bytes(32));
-    @file_put_contents($file, "<?php exit; ?>\n" . $s);
+    if (@file_put_contents($file, "<?php exit; ?>\n" . $s) === false || !is_file($file)) {
+        // no se pudo guardar (disco lleno o carpeta sin permiso): una clave fija sacada de la llave del panel. Una al azar
+        // cambiaría en cada página y img.php rechazaría la firma de todos los logos de canales (2.9.11)
+        $mk = function_exists('wp_panel_config') ? trim((string)(wp_panel_config()['master_key_hex'] ?? '')) : '';
+        $s = hash_hmac('sha256', 'wp-secret-v1|' . WP_ROOT, $mk !== '' ? $mk : php_uname('n') . '|' . __FILE__);
+    }
     return $s;
 }
 
@@ -875,22 +880,41 @@ function wp_logo($url)
 }
 
 /**
- * Direcciones del logo de un canal, en orden (2.9.10). Antes solo img.php del hosting: si el servidor IPTV (o el sitio
- * de los logos) bloquea o limita la IP del hosting, todos sus canales quedaban con el logo de la marca. Ahora, como en
- * las apps de TV, el navegador lo pide primero directo desde la IP del cliente (logo https, o la web en http), después
- * por el puente del Worker (logo http con la web en https) y al final por img.php del hosting, que, si tampoco puede,
- * manda el logo de la marca (wp_channel_fallback).
+ * Direcciones del logo de un canal, en orden; la página pasa a la siguiente si una no carga y, si no carga ninguna,
+ * pone el logo de la marca (wp_channel_fallback). Antes todo dependía de img.php del hosting: si el servidor IPTV (o el
+ * sitio de los logos) bloquea la IP del hosting —el mismo motivo del modo navegador— o el hosting no puede guardar en su
+ * caché, todos los canales quedaban con el logo de la marca. Ahora (2.9.10 / 2.9.11), como en las apps de TV:
+ *   1. directo desde el navegador, con la IP del cliente (logo https, o la web en http)
+ *   2. el puente del Worker de Cloudflare (logo http con la web en https; no para servidores con IP)
+ *   3. img.php del hosting (&fb=2: si no puede, 404 y la página sigue)
+ *   4. la caché de imágenes del panel (otra IP; logos de 80 px o más)
+ *   5. la misma dirección por https, desde el navegador (logo http con la web en https)
  */
 function wp_logo_sources($url)
 {
     $url = trim((string)$url);
     if ($url === '' || !preg_match('~^https?://[^/\s]+~i', $url)) return [wp_channel_fallback()];
+    $enc = preg_replace_callback('/[^\x21-\x7e]/', function ($m) { return rawurlencode($m[0]); }, $url);
+    $page = wp_is_https();
+    $isHttps = stripos($url, 'https://') === 0;
     $out = [];
-    if (stripos($url, 'https://') === 0 || !wp_is_https()) $out[] = preg_replace_callback('/[^\x21-\x7e]/', function ($m) { return rawurlencode($m[0]); }, $url);
+    if ($isHttps || !$page) $out[] = $enc;
     $r = function_exists('wp_xt_relay_img') ? wp_xt_relay_img($url) : '';
     if ($r !== '') $out[] = $r;
-    $out[] = wp_logo($url);
+    $out[] = wp_proxy_url($url, 'img.php') . '&fb=2';
+    $p = wp_panel_logo_url($url);
+    if ($p !== '') $out[] = $p;
+    if (!$isHttps && $page) $out[] = preg_replace('~^http://~i', 'https://', $enc);
     return array_values(array_unique($out));
+}
+
+/** El logo por img.php del panel (lo baja el panel desde su IP y lo guarda para todas las apps), o ''. */
+function wp_panel_logo_url($url)
+{
+    if (!function_exists('wp_panel_img_base') || !function_exists('wp_panel_token')) return '';
+    $b = wp_panel_img_base();
+    $tok = $b !== '' ? wp_panel_token() : '';
+    return $tok === '' ? '' : $b . 'img.php?w=200&token=' . rawurlencode($tok) . '&u=' . wp_b64u_enc($url);
 }
 
 /* ------------------------------------------------------------------ */

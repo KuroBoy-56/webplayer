@@ -4,6 +4,22 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Logos de los canales en TV en vivo: ya no dependen solo del hosting — versión 2.9.11 (22 de noviembre, segunda parte)
+- **El problema:** en TV en vivo se veía el logo del distribuidor o del dueño en lugar del logo de cada canal. Cada logo lo descargaba el hosting (`img.php`) y había tres casos en que fallaba en todos los canales a la vez:
+  - el servidor IPTV bloquea la IP del hosting (el mismo motivo del modo navegador);
+  - el hosting no puede guardar en su caché de imágenes (disco lleno o carpeta `includes/cache` sin permiso): el logo salía vacío;
+  - el hosting no puede guardar su clave de firma (`includes/cache/.key.php`): cada página firmaba con otra clave e `img.php` rechazaba todos los logos.
+- **Ahora:** el logo de cada canal prueba varios caminos, en orden, y solo si no carga por ninguno sale el de la marca:
+  1. directo desde el navegador del cliente, como las apps de TV (logo https, o la web en http);
+  2. el puente del Worker de Cloudflare (logo http con la web en https);
+  3. el hosting, que si no puede contesta enseguida para que se pruebe el siguiente;
+  4. la caché de imágenes del panel;
+  5. el logo por https desde el navegador.
+- Cada camino tiene 6 segundos: un servidor que no contesta no deja el logo esperando.
+- **Hosting sin espacio o sin permiso:** el hosting entrega el logo aunque no pueda guardarlo, y la clave de firma ya no cambia en cada página.
+- **Recomendado:** revisa que `includes/cache` del hosting tenga permiso de escritura y que haya espacio libre.
+- Archivos: `includes/core.php`, `img.php`, `tvguide.php`.
+
 ## Logos de los canales que vuelven a verse y tarjetas de Deportes sin salirse del recuadro — versión 2.9.10 (22 de noviembre)
 - **Logos de canales:** cada logo lo descargaba el hosting (`img.php`). Cuando el servidor IPTV (o el sitio donde están los logos) bloquea o limita la IP del hosting, el hosting no podía traerlo y, desde la 2.9.5, mostraba el logo del distribuidor o del dueño en lugar del logo del canal. Ahora el navegador lo pide como las apps de TV: primero directo desde la conexión del cliente (logo https, o la web en http), después por el puente del Worker de Cloudflare (logo http con la web en https) y al final por el hosting. Solo si nada funciona sale el logo de la marca. Vale para la lista de TV en vivo, el logo grande del canal elegido y los canales en la búsqueda.
 - **Deportes:** en los eventos con un título, una liga, un estadio o una lista de canales muy largos, la etiqueta roja «En vivo» y el botón «TV en vivo» quedaban fuera de la tarjeta. Ahora el texto largo se corta con «…» (el título del evento en hasta 3 líneas y los equipos en 2) y todo queda dentro del recuadro, en la computadora y en el celular. El filtro, la búsqueda y los canales no cambian.

@@ -12,8 +12,11 @@ if (!wp_verify_signed($url)) {
 }
 
 // logos de canales: el de la marca (el del dueño solo con Omitir). Depende del distribuidor: esa redirección no se comparte
-$noimg = !empty($_GET['fb']) ? wp_channel_fallback() : WP_NOIMG;
-$noimgCc = (!empty($_GET['fb']) ? 'private' : 'public') . ', max-age=3600';
+// &fb=2 (2.9.11): si no se puede, 404 y la página prueba el siguiente camino del logo (wp_logo_sources); pone la marca
+// ella misma al final
+$fbMode = (string)($_GET['fb'] ?? '');
+$noimg = $fbMode === '1' ? wp_channel_fallback() : WP_NOIMG;
+$noimgCc = ($fbMode !== '' ? 'private' : 'public') . ', max-age=3600';
 // espacios y acentos sin codificar en la URL del logo
 $url = preg_replace_callback('/[^\x21-\x7e]/', function ($m) { return rawurlencode($m[0]); }, $url);
 $dir = wp_cache_dir('img');
@@ -44,18 +47,26 @@ if (is_file($file) && is_file($meta) && (time() - filemtime($file) < $ttl)) {
 
 // imagen que falló hace poco: no se vuelve a esperar al servidor caído
 $bad = $dir . '/' . $key . '.bad';
-if (is_file($bad) && time() - filemtime($bad) < 86400 && !is_file($file)) {
+if (is_file($bad) && time() - filemtime($bad) < ($fbMode === '2' ? 21600 : 86400) && !is_file($file)) {
+    wp_img_none();
+}
+/** sin imagen: el logo de la marca o, con &fb=2, un 404 corto (la página sigue con otra dirección) */
+function wp_img_none()
+{
+    global $noimgCc, $noimg, $fbMode;
+    if ($fbMode === '2') {
+        http_response_code(404);
+        header('Cache-Control: private, max-age=600');
+        exit;
+    }
     header('Cache-Control: ' . $noimgCc);
     header('Location: ' . $noimg);
     exit;
 }
 function wp_img_fail($bad, $noimg)
 {
-    global $noimgCc;
     @touch($bad);
-    header('Cache-Control: ' . $noimgCc);
-    header('Location: ' . $noimg);
-    exit;
+    wp_img_none();
 }
 
 $ch = wp_curl($url, !empty($_GET['fb']) ? 7 : 12);
@@ -88,12 +99,21 @@ if (strlen($body) < 120) {
     wp_img_fail($bad, $noimg); // imagen vacía o de 1 píxel
 }
 if ($type === 'image/svg+xml') {
-    header('Location: ' . $noimg); // los SVG externos pueden contener scripts
+    wp_img_none(); // los SVG externos pueden contener scripts
+}
+$saved = @file_put_contents($file, $body) === strlen($body) && @file_put_contents($meta, $type) !== false;
+@unlink($bad);
+if (!$saved) {
+    // no se pudo guardar en la caché (disco lleno o carpeta sin permiso): igual se entrega (antes salía vacía y se veía el
+    // logo de la marca en todos los canales)
+    @unlink($file);
+    header('Content-Type: ' . $type);
+    header('Cache-Control: public, max-age=86400');
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Length: ' . strlen($body));
+    echo $body;
     exit;
 }
-@file_put_contents($file, $body);
-@file_put_contents($meta, $type);
-@unlink($bad);
 if (mt_rand(1, 300) === 1) {
     // limpieza ocasional de imágenes viejas
     foreach ((array)glob($dir . '/*.bin') as $old) {
