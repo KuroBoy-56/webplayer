@@ -3,7 +3,7 @@
  * Perfil infantil (includes/profiles.php): con un perfil infantil elegido la web muestra solo contenido para niños y
  * Disney. Las reglas son las del panel («kidsRules» de api/profiles.php, includes/kids_rules.php del panel): las mismas
  * en todas las apps, y si el panel sube su versión se usan las nuevas sin cambiar la web. wp_kids_rules_local() es una
- * copia por si el panel no contesta (cópiala del panel cuando cambien las listas). Algoritmo: docs/PERFILES.md del
+ * copia por si el panel no contesta (el texto exacto de kids_rules() del panel: cópialo cuando cambien las listas). Algoritmo: docs/PERFILES.md del
  * panel («Perfil infantil»).
  *
  * Se filtra en el origen, así todo lo demás (Inicio, Películas, Series, Explorar, búsqueda, Top 10, actores) muestra
@@ -13,7 +13,8 @@
  *  - xt_get('get_live_streams'): solo los canales de las categorías infantiles (sin ninguna, TV en vivo desaparece);
  *  - fichas, reproductor y TV en vivo no abren lo que no pasa el filtro (wp_kids_guard); Deportes no está.
  *
- * v2 (con TMDB): cada título queda 'strong' (seguro: categoría o género de niños), 'weak' (dudoso: solo «Familia»,
+ * v2 (con TMDB): cada título queda 'strong' (seguro: categoría o género de niños; v3: o un título de niños de
+ * «kids_titles», como Shrek o Paw Patrol en «Estrenos»), 'weak' (dudoso: solo «Familia»,
  * una categoría de Disney o de familia, o un género como Telenovela) o fuera. La clasificación de edad de TMDB la
  * da el panel (api/kids_rate.php, la misma para todas las apps): lo dudoso se ve solo con 'ok' y lo que TMDB dice
  * 'no' nunca se ve. La web la pide en segundo plano (wp_kids_rate_schedule) y la guarda por distribuidor.
@@ -117,13 +118,25 @@ function wp_kids_item_level(array $it, $type, array $cls, array $gidx)
     $g = wp_norm(trim(($it['genre'] ?? '') . ' ' . ($gidx[$type . ':' . ($it['id'] ?? '')] ?? '')));
     $has = function ($list) use ($g) { return $g !== '' && wp_kids_m($g, $list); };
     $gWeak = $has('genre_weak');
-    $kidsGenre = $has('genre_kids') || ($gWeak && $has('genre_anim'));
+    $gAnim = $has('genre_anim');
+    $kidsGenre = $has('genre_kids') || ($gWeak && $gAnim);
     $gHard = $has('genre_hard');
     $gBlock = $has('genre_block');
+    // título de niños (kids_titles, v3: Shrek, Toy Story, Paw Patrol…) fuera de una categoría de niños: solo sin género
+    // o con género de niños, familia o animación, o en una categoría de Disney o familia (son cientos: así es rápido)
+    $tKids = !$kidsCat && ($g === '' || $kidsGenre || $gWeak || $gAnim || $weakCat) && wp_kids_title($name);
     // crimen, terror, telenovela… sin nada de niños ni de familia: fuera
-    if ($gBlock && !$kidsGenre && !$gWeak) return '';
-    if (($kidsCat || $kidsGenre) && !$gHard && !$gBlock) return 'strong';
-    return ($kidsCat || $kidsGenre || $weakCat || $gWeak) ? 'weak' : '';
+    if ($gBlock && !$kidsGenre && !$gWeak && !$tKids) return '';
+    if (($kidsCat || $kidsGenre || $tKids) && !$gHard && !$gBlock) return 'strong';
+    return ($kidsCat || $kidsGenre || $tKids || $weakCat || $gWeak) ? 'weak' : '';
+}
+
+/** ¿El nombre (ya normalizado) es de un título de niños de kids_titles? (memoria por nombre: la misma película está en varias categorías) */
+function wp_kids_title($normName)
+{
+    static $memo = [];
+    if (!isset($memo[$normName])) $memo[$normName] = wp_kids_m($normName, 'kids_titles');
+    return $memo[$normName];
 }
 
 /** Clave del título para la clasificación de TMDB: por su id de TMDB o, sin él, por el nombre (y el año). */
@@ -347,7 +360,7 @@ function wp_kids_guard($type, $id)
 function wp_kids_rules_local()
 {
     return [
-        'v' => 2,
+        'v' => 3,
         // edad máxima de la clasificación (TMDB): hasta PG / TV-PG / 7 años, como el perfil «Niños» de Netflix
         'rate_age_max' => 7,
         // categorías de películas y series que son de niños
@@ -384,6 +397,125 @@ function wp_kids_rules_local()
             'belica', '/\bwar\b/', 'guerra', '/\bgore\b/', 'soap', 'telenovela', '/\bnovelas?\b/'],
         // marcas en el nombre (películas, series y canales)
         'block_marks' => ['/\+ ?18/', '/18 ?\+/', 'xxx', 'porn', 'erotic', 'erotica', 'erotico', 'hentai', 'playboy', '/\bsexy?\b/'],
+        // títulos de películas y series para niños (v3): cuentan como una categoría de niños. Nombres en español latino,
+        // de España y en inglés; las palabras sueltas que también son de otros títulos van ancladas (/^coco( \(|$)/) o
+        // no van (Up, Red, Valiente, Robin Hood, Hércules, Tarzán: están en las categorías de Disney o infantiles)
+        'kids_titles' => [
+            // Disney (clásicos y animación)
+            'blancanieves', 'snow white', 'pinocho', 'pinocchio', '/\bdumbo\b/', '/\bbambi\b/', 'cenicienta', 'cinderella',
+            'alicia en el pais de las maravillas', 'alice in wonderland', 'peter pan', 'la dama y el vagabundo', 'lady and the tramp',
+            'la bella durmiente', 'sleeping beauty', '101 dalmatas', '102 dalmatas', '101 dalmatians', '102 dalmatians',
+            'la espada en la piedra', 'sword in the stone', 'el libro de la selva', 'jungle book', 'aristogatos', 'aristocats',
+            'los rescatadores', 'the rescuers', 'el zorro y el sabueso', 'fox and the hound', 'el caldero magico', 'black cauldron',
+            'basil el raton', 'great mouse detective', 'oliver y su pandilla', 'oliver & company', 'la sirenita', 'little mermaid',
+            'la bella y la bestia', 'beauty and the beast', '/\baladd?in\b/', 'aladino', 'el rey leon', 'lion king', 'pocahontas',
+            'jorobado de notre dame', 'hunchback of notre dame', '/\bmulan\b/', 'las locuras del emperador', '/emperor.?s new groove/',
+            'atlantis: el imperio perdido', 'atlantis el imperio perdido', 'atlantis: the lost empire', '/\blilo\b/', '/\bstitch\b/',
+            'planeta del tesoro', 'treasure planet', 'tierra de osos', 'brother bear', 'vacas vaqueras', 'home on the range',
+            'chicken little', 'la familia del futuro', 'meet the robinsons', '/^bolt( \(|$)/', 'la princesa y el sapo',
+            'princess and the frog', 'enredados', '/\btangled\b/', 'winnie pooh', 'winnie the pooh', '/\bpooh\b/', 'ralph el demoledor',
+            'wreck-it ralph', 'wifi ralph', 'rompe ralph', '/\bfrozen\b/', 'grandes heroes', 'big hero 6', 'zootopia', 'zootropolis',
+            '/\bmoana\b/', '/\bvaiana\b/', 'raya y el ultimo dragon', 'raya and the last dragon', '/^encanto( \(|$)/',
+            'un mundo extrano', 'strange world', 'el poder de los deseos', 'mickey mouse', 'la casa de mickey', 'mickey y ', 'mickey and ', 'mickey & ', '/\bminnie\b/', 'pato donald', 'donald duck',
+            '/\bgoofy\b/', '/\btribilin\b/', 'patoaventuras', 'ducktales', 'chip y dale', '/chip .?n.? dale/', 'phineas',
+            'kim possible', 'doc mcstuffins', 'doctora juguetes', 'princesita sofia', 'sofia the first', 'sofia la primera',
+            'jake y los piratas', 'never land pirates', 'pj masks', 'heroes en pijamas', 'vampirina', 'elena de avalor',
+            'elena of avalor', 'muppet babies', 'fancy nancy', 'la guardia del leon', 'lion guard', 'gravity falls',
+            'perritos traviesos', 'puppy dog pals', 'bingo y rolly', 'mira, royal detective', 'mira detective real', 'spidey',
+            'super kitties', 'superkitties', '/alice.?s wonderland bakery/', 'pasteleria de alicia', 'firebuds', 'tinker bell', 'tinkerbell', 'campanita', 'hadas de disney', 'disney fairies', 'el regreso de mary poppins', 'mary poppins', 'descendientes', 'descendants', 'high school musical',
+            'hannah montana', 'lizzie mcguire', 'los hechiceros de waverly', 'wizards of waverly', '/\bbunk.?d\b/', // Pixar
+            'toy story', 'lightyear', '/monsters,? inc\b/', 'monsters university', 'monsters at work',
+            'buscando a nemo', 'finding nemo', 'buscando a dory', 'finding dory', 'los increibles', 'the incredibles',
+            'increibles 2', 'incredibles 2', '/^cars( \d| \(|$|:)/', 'cars toons', 'ratatouille', '/\bwall.?e\b/',
+            'up: una aventura', 'up una aventura de altura', 'intensamente', 'inside out', 'del reves', 'un gran dinosaurio',
+            'the good dinosaur', '/^coco( \(|$)/', '/^onward( \(|$)/', '/^soul( \(|$)/', '/^luca( \(|$)/', 'turning red',
+            '/^elemental( \(|$)/', '/^elio( \(|$)/', 'bichos', "a bug's life", 'a bugs life', 'vichos',
+            // DreamWorks
+            '/\bshrek\b/', '/\bmadagascar\b/', 'pinguinos de madagascar', 'penguins of madagascar', 'kung fu panda',
+            'como entrenar a tu dragon', 'how to train your dragon', 'dragones: ', 'dragons: race', 'monstruos vs aliens',
+            'monsters vs aliens', '/\bmegamente\b/', '/\bmegamind\b/', 'el gato con botas', 'puss in boots', '/\bcroods\b/',
+            '/^turbo( \(|$)/', 'peabody', 'no hay lugar como el hogar', '/\btrolls\b/', 'un jefe en panales', 'boss baby',
+            'jefe en panales', 'capitan calzoncillos', 'captain underpants', '/^abominable( \(|$)/', 'spirit el corcel',
+            'spirit: stallion', 'spirit cabalgando', 'spirit riding free', 'spirit indomable', 'spirit untamed',
+            'los tipos malos', 'the bad guys', 'el robot salvaje', 'the wild robot', 'ruby gillman', 'aventuras de una kraken',
+            'bee movie', 'vecinos invasores', 'over the hedge', 'el principe de egipto', 'prince of egypt', 'el camino hacia el dorado',
+            'road to el dorado', 'simbad', 'sinbad', '/\bantz\b/', 'hormiguitaz', 'pollitos en fuga', 'chicken run', 'wallace y gromit', 'wallace & gromit', 'wallace and gromit',
+            'gromit', 'shaun the sheep', 'la oveja shaun', 'shaun el cordero', 'go dog go',
+            // Illumination, Universal, Sony, Blue Sky, Warner
+            'mi villano favorito', 'despicable me', '/\bminions?\b/', 'el lorax', '/\blorax\b/', 'la vida secreta de tus mascotas',
+            'secret life of pets', 'sing: ven y canta', 'sing ven y canta', 'sing 2', '/\bgrinch\b/', 'super mario', 'mario bros',
+            'migracion: un viaje', 'migracion un viaje', 'lluvia de hamburguesas', 'cloudy with a chance', 'hotel transylvania',
+            'hotel transilvania', 'pitufos', 'smurfs', 'angry birds', 'emoji: la pelicula', 'the emoji movie', 'los mitchell', 'mitchells vs', 'la era de hielo',
+            'ice age', '/^rio( \d| \(|$)/', 'horton', 'epic: el reino secreto', 'epic el reino secreto', '/^ferdinand( \(|$)/',
+            'snoopy', 'peanuts', 'charlie brown', 'espias a escondidas', 'spies in disguise', 'la leyenda de los guardianes',
+            'happy feet', 'barnyard', 'the lego', 'la gran aventura lego', '/\blego\b/', 'space jam', 'looney tunes',
+            'bugs bunny', 'pato lucas', 'daffy duck', 'piolin', 'tweety', 'correcaminos', 'road runner', 'tom y jerry',
+            'tom and jerry', 'tom & jerry', '/\bscooby\b/', 'scoob', 'el gato con sombrero', 'cat in the hat', 'el principito',
+            'little prince', 'pequeno principe', 'la estrella de belen', 'storks', 'ciguenas',
+            'arthur y los minimoys', 'arthur and the invisibles', 'leap!',
+            'el arca de noe', 'animal crackers', 'wish dragon', 'el dragon de los deseos', '/^klaus( \(|$)/', 'la familia willoughby',
+            'the willoughbys', 'nimona', 'el monstruo marino', 'the sea beast', 'mascotas al rescate', 'orion y la oscuridad',
+            'orion and the dark', 'leo (2023)', 'thelma el unicornio', 'thelma the unicorn', // otros clásicos y familiares de imagen real
+            'paddington', 'peter rabbit', 'peter conejo', 'stuart little', '/\bbabe\b.*\b(cerdito|pig)\b/', 'babe, el puerquito',
+            'babe: pig', 'garfield', 'clifford', 'alvin y las ardillas', 'alvin and the chipmunks', 'harry potter', 'narnia',
+            'solo en casa', 'mi pobre angelito', 'home alone', '/\bmatilda\b/', 'charlie y la fabrica de chocolate',
+            'charlie and the chocolate factory', 'willy wonka', '/\bwonka\b/', 'jumanji', 'una noche en el museo',
+            'night at the museum', 'spy kids', 'nanny mcphee', 'la nana magica', 'los goonies', 'the goonies', 'karate kid',
+            '/\bsonic\b/', 'detective pikachu', 'dolittle', 'power rangers', 'minecraft', 'playmobil', 'hot wheels', 'barbie',
+            'polly pocket', 'my little pony', 'mi pequeno pony', 'littlest pet shop', 'monster high', 'enchantimals',
+            'rainbow high', 'lol surprise', 'l.o.l. surprise', 'strawberry shortcake', 'rosita fresita', 'frutillita',
+            'care bears', 'ositos carinosos', 'teletubbies', 'barney y sus amigos', 'barney & friends', 'barney and friends',
+            'barney el dinosaurio', 'plaza sesamo', 'sesame street', '/\belmo\b/', 'muppets', 'fraggle', 'la abeja maya',
+            'maya the bee', '/marco,? de los apeninos/', 'pippi', 'el gruffalo', 'gruffalo', 'room on the broom',
+            'stick man', 'bob el constructor', 'bob the builder', 'thomas y sus amigos', 'thomas & friends',
+            'thomas and friends', 'sam el bombero', 'bombero sam', 'fireman sam', 'cartero pat', 'postman pat', 'chuggington',
+            'pingu', 'noddy', 'caillou', 'babar', '/\bmaisy\b/', 'jorge el curioso', 'curious george',
+            'daniel tigre', 'daniel tiger', 'el autobus magico', 'magic school bus', 'super why', 'sid el cientifico',
+            'sid the science kid', 'dinosaur train', 'el tren de los dinosaurios', 'wild kratts', 'aventuras con los kratt',
+            'peg + cat', 'cyberchase', 'word girl', 'llama llama', 'puffin rock', 'hey duggee', 'octonautas', 'octonauts',
+            'storybots', 'ada twist', 'ask the storybots', 'beat bugs', 'true y el reino', 'true and the rainbow', 'oddbods',
+            'zig y sharko', 'zig & sharko', 'mr. bean animado', 'mr bean animated', 'lamput', '/\blarva\b/', 'cuphead',
+            // preescolar y bebés
+            'paw patrol', 'patrulla canina', 'peppa', 'bluey', 'pocoyo', 'masha y el oso', 'masha and the bear', 'cocomelon',
+            'baby shark', 'pinkfong', 'bebefinn', 'super simple', 'little baby bum', 'blippi', 'baby einstein', 'babyfirst',
+            'la vaca lola', 'gallina pintadita', 'granja de zenon', 'plim plim', 'canticuentos', 'el reino infantil',
+            'mundo bita', 'little angel', 'dora la exploradora', 'dora the explorer', '/\bdora (y|and|la|the)\b/', 'go diego',
+            'backyardigans', 'bubble guppies', 'team umizoomi', 'blaze y los monster', 'blaze and the monster', 'wonder pets',
+            'maravillosas mascotas', 'max y ruby', 'max & ruby', 'pistas de blue', "blue's clues", 'blues clues', 'little bill',
+            'rusty rivets', 'ricky zoom', 'santiago of the seas', 'santiago de los mares', 'abby hatcher', 'top wing',
+            'shimmer y shine', 'shimmer and shine', 'lazy town', 'lazytown', 'mister maker', '/\bdoki\b/', 'hi-5',
+            'the wiggles', 'los wiggles', 'yo gabba gabba', 'tayo', 'robocar poli', 'super wings', 'superwings', 'tinga tinga',
+            'timmy time', 'chip y patata', 'chip and potato', 'dino ranch', 'gigantosaurus', 'mickey mouse clubhouse', 'la casa de munecas de gabby', "gabby's dollhouse", 'word party',
+            'tumble leaf', 'molang', 'trotro', '/\bkikoriki\b/', 'the tiny chef', 'meekah', 'pinky dinky doo', 'little einsteins',
+            'pequenos einsteins', 'handy manny', 'manny a la obra', 'special agent oso', 'agente especial oso', 'jungle junction',
+            'imagination movers', 't.o.t.s.', 'dino dana', 'if you give a mouse',
+            // Cartoon Network, Nickelodeon, Netflix y otros
+            'bob esponja', 'spongebob', 'los padrinos magicos', 'fairly oddparents', 'jimmy neutron', 'rugrats',
+            'aventuras en panales', 'hey arnold', 'oye arnold', 'thornberry', 'la casa de los loud', 'the loud house', 'los loud',
+            'los casagrande', 'the casagrandes', 'tortugas ninja', 'ninja turtles', 'leyenda de aang', 'the last airbender',
+            'leyenda de korra', 'legend of korra', 'henry danger', 'hora de aventura', 'adventure time', 'un show mas',
+            'regular show', 'mundo de gumball', 'world of gumball', 'steven universe', 'escandalosos', 'we bare bears',
+            '/\bben 10\b/', 'chicas superpoderosas', 'powerpuff', 'laboratorio de dexter', '/dexter.?s laboratory/',
+            'coraje el perro', 'courage the cowardly', 'johnny bravo', '/\bed,? edd\b/', 'mansion foster', '/foster.?s home/',
+            'craig of the creek', 'el mundo de craig', 'teen titans go', 'jovenes titanes en accion', 'unikitty', 'apple & onion',
+            'manzana y cebolla', 'victor y valentino', 'victor and valentino', '/^clarence( \(|$)/', 'tio grandpa', 'uncle grandpa',
+            'mao mao', 'summer camp island', 'campamento de verano', 'gumball', 'transformers: rescue bots',
+            'ninjago', 'bakugan', 'beyblade', 'pokemon', 'digimon', 'doraemon', 'yu-gi-oh', 'hamtaro', '/chi.?s sweet home/',
+            'totoro', 'ponyo', 'chihiro', 'spirited away', 'castillo vagabundo', '/howl.?s moving castle/', '/kiki.?s delivery/',
+            'nicky, la aprendiz', 'nicky la aprendiz', 'arrietty', 'el chavo animado', 'chavo animado', 'el chapulin colorado animado',
+            'miraculous', 'ladybug', 'lady bug', 'zak storm', 'trollhunters', 'cazadores de trolls', 'she-ra', 'voltron',
+            'dinotrux', 'super monsters', 'super monstruos', 'dragons rescue riders', 'jinetes del rescate', 'sonic boom',
+            'sonic prime', 'kipo', 'the cuphead show', 'kung fu panda: el caballero dragon', '/star (vs\.?|contra) (las fuerzas|the forces)/',
+            'amphibia', 'anfibia', 'the owl house', 'la casa del buho', 'big city greens', 'los green en la gran ciudad',
+            'moon girl', 'the proud family', 'la familia proud', 'kiff', 'hamster & gretel', 'hamster y gretel', 'gabby duran', 'andi mack', 'stuck in the middle', 'bizaardvark', 'liv y maddie', 'liv and maddie', 'buena suerte charlie', 'good luck charlie', 'sunny entre estrellas', 'sonny with a chance', 'icarly', 'sam & cat',
+            'sam y cat', 'victorious', 'zoey 101', 'drake & josh', 'drake y josh', 'school of rock', 'game shakers',
+            'the thundermans', 'los thundermans', 'nicky, ricky', 'knight squad', 'danger force', 'the really loud house',
+            'peter pan y wendy', 'peter pan & wendy', 'el libro de la vida', 'book of life', 'metegol', 'anina', '31 minutos',
+            'condorito', 'zamba', 'pelicula de huevos', 'gallo con muchos huevos', 'rescate de huevitos', 'huevitos congelados',
+            'un disfraz para nicolas', 'selkie', 'la leyenda de las momias', 'momias de guanajuato',
+            'la leyenda del chupacabras', 'la leyenda de la nahuala', 'la leyenda del charro negro',
+            'mi amigo el gigante', 'the bfg', '/pete.?s dragon/', 'mi amigo el dragon',
+            'christopher robin', ],
         // títulos que nunca son para niños aunque estén en una categoría de animación, de niños o de Disney
         'block_titles' => [
             // animación para adultos
@@ -403,7 +535,7 @@ function wp_kids_rules_local()
             'kimetsu', 'demon slayer', 'guardianes de la noche', 'berserk', 'hellsing', 'devilman', 'parasyte', 'kiseiju',
             'elfen lied', 'goblin slayer', 'high school dxd', 'akame ga kill', 'dorohedoro', 'vinland saga', 'psycho-pass',
             'psycho pass', 'evangelion', 'cowboy bebop', 'ghost in the shell', '/\bakira\b/', 'one punch', 'my hero academia',
-            'boku no hero', 'hunter x hunter', '/\bbleach\b/', 'tokyo revengers', 'mob psycho', 'hell.?s paradise', 'jigokuraku',
+            'boku no hero', 'hunter x hunter', '/\bbleach\b/', 'tokyo revengers', 'mob psycho', '/hell.?s paradise/', 'jigokuraku',
             'blue lock', 'spy x family code', 'baki', 'kengan', 'record of ragnarok', 'shuumatsu', 'the promised neverland',
             'yakusoku', 'made in abyss', 'black lagoon', 'gantz', 'future diary', 'mirai nikki', 'terror in resonance', 'zankyou', 'neon genesis', 'higurashi',
             // Disney+ y Star para adolescentes y adultos (Marvel, Star Wars, Star)
@@ -425,6 +557,11 @@ function wp_kids_rules_local()
             '/\belite\b/', 'chucky', 'annabelle', 'conjuro', 'conjuring', 'it chapter', '/^scream\b/',
             'hereditary', 'midsommar', 'terrifier', 'the purge', 'la purga', 'the nun', 'la monja', 'insidious', 'la noche del demonio',
             'evil dead', 'exorcist', 'exorcista', '/^smile\b/', '/\bbarbarians?\b/',
+            // parodias de terror con personajes de niños (v3: sus nombres están en kids_titles)
+            'blood and honey', 'sangre y miel', 'reckoning', 'neverland nightmare', 'mouse trap', 'mousetrap', 'screamboat',
+            'unstrung', 'slayer', 'huntsman', '/cinderella.?s (revenge|curse)/', 'la venganza de cenicienta', 'twisted childhood',
+            'mickey 17', 'the mean one', '/grinch.{0,4}(slay|terror|horror)/', 'mickey blue eyes', 'mickey and the bear', 'cinderella man', 'frozen river',
+            'frozen ground', 'krampus',
         ],
     ];
 }

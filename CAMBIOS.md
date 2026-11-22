@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Perfil infantil: títulos de niños aunque estén en «Estrenos» — versión 2.9.12 (22 de noviembre, tercera parte)
+- **El problema:** en un perfil infantil solo se veía lo que estaba en una categoría de niños (Infantiles, Animadas…) o tenía un género de niños. Shrek 2, Paw Patrol o Toy Story en «Estrenos» o «Películas» no aparecían, y Frozen II en Disney+ esperaba a TMDB.
+- **Ahora** (reglas v3 del panel, iguales en todas las apps): la lista `kids_titles` del panel (unos 700 títulos para niños, en español latino, de España y en inglés) cuenta como una categoría de niños. Solo se mira si el título no trae género o trae uno de niños, familia o animación, o si está en una categoría de Disney o familia; nunca gana a las listas de bloqueo (Winnie the Pooh: Blood and Honey, Mickey 17…) ni al «no» de TMDB.
+- La copia de las reglas de la web (por si el panel no contesta) es ahora el texto exacto de `includes/kids_rules.php` del panel (v3).
+- Archivos: `includes/kids.php`, `includes/core.php` (versión).
+
 ## Logos de los canales en TV en vivo: ya no dependen solo del hosting — versión 2.9.11 (22 de noviembre, segunda parte)
 - **El problema:** en TV en vivo se veía el logo del distribuidor o del dueño en lugar del logo de cada canal. Cada logo lo descargaba el hosting (`img.php`) y había tres casos en que fallaba en todos los canales a la vez:
   - el servidor IPTV bloquea la IP del hosting (el mismo motivo del modo navegador);
