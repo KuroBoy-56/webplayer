@@ -442,4 +442,9 @@
     <string name="sp_watch_auto">Ver el evento (canal automático)</string>
     <string name="sp_where">¿Dónde quieres verlo?</string>
     <string name="sp_search_go">Buscar</string>
+    <string name="catalog_reload">Actualizar catálogo</string>
+    <string name="catalog_reload_desc">Vuelve a traer películas, series y canales del servidor</string>
+    <string name="catalog_reloading">Actualizando el catálogo…</string>
+    <string name="catalog_reloaded">Catálogo actualizado</string>
+    <string name="catalog_reload_failed">No se pudo actualizar todo el catálogo; se conserva lo anterior</string>
 </resources>

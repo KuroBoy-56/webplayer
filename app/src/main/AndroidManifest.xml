@@ -8,8 +8,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- app para celular y tablet (la versión para TV está en la rama android-tv) -->
-    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- Solo celulares y tablets. Pide pantalla táctil, así Google Play no la ofrece en Android TV, Google TV ni TV Box
+         (no tienen pantalla táctil); sin android.software.leanback ni LEANBACK_LAUNCHER tampoco entra en la tienda de los
+         televisores. La app de TV es otra (com.latmpx.player.tv, ramas android-tv / play-store-tv). Sin orientación fija
+         en el manifiesto: el teléfono se pone en vertical al abrir (MainActivity) y en tablets y pantallas grandes queda
+         libre, como pide Google Play (sin avisos de pantallas grandes). -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="true" />
 
     <application
         android:name=".App"

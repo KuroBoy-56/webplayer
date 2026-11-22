@@ -52,6 +52,18 @@ class AppState {
     var catalogLoading by mutableStateOf(false)
     /** cambia cada vez que se vuelve del reproductor, para refrescar "Continuar viendo" */
     var refresh by mutableStateOf(0)
+    /** Cuenta › «Actualizar catálogo» (como Roku): cada toque sube el número y AppRoot vuelve a bajar todo del servidor */
+    var catalogRev by mutableStateOf(0)
+    /** esa actualización está en curso (el botón dice «Actualizando el catálogo…» y no se repite) */
+    var catalogReloading by mutableStateOf(false)
+
+    /** false si ya se está actualizando */
+    fun reloadCatalog(): Boolean {
+        if (catalogReloading || session == null) return false
+        catalogReloading = true
+        catalogRev++
+        return true
+    }
 
     /* ---------- perfiles (docs/PERFILES.md del panel) ---------- */
     /** pantalla de perfiles abierta: false = elegir, true = administrar (null = cerrada) */
