@@ -185,29 +185,27 @@ class PlayerActivity : ComponentActivity() {
             fullscreen = if (!tv) ({ toggleFullscreen() }) else null,
         )
         setContent {
-            // celular en vertical (como la web player): el video arriba en 16:9 y debajo el título y las opciones; en
-            // horizontal (botón de pantalla completa o girando el teléfono) el video a pantalla completa como siempre.
-            // Vertical = la ventana es más alta que ancha, medida aquí: la orientación que informa el sistema
-            // (LocalConfiguration) en algunos teléfonos llega tarde o no se actualiza al pasar a pantalla completa, y el
-            // título con «Pantalla completa / Audio y subtítulos / Velocidad» quedaba encima del video en horizontal
+            // celular en vertical (1.5.4): el video solo, en el centro de toda la pantalla (negro arriba y abajo), con los
+            // mismos controles que en horizontal encima; nada debajo. Girar el teléfono (o «Pantalla completa») pasa a
+            // horizontal con el mismo video. Vertical = la ventana es más alta que ancha, medida aquí: la orientación que
+            // informa el sistema (LocalConfiguration) en algunos teléfonos llega tarde o no se actualiza al girar
             androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
                 // y después del botón «Pantalla completa» nunca el panel de vertical, aunque el teléfono tarde en girar o
                 // informe mal el tamaño (1.5.0)
                 val portrait = !tv && !ui2.inPip && !forcedLandscape.value && maxHeight > maxWidth
-                androidx.compose.runtime.SideEffect { if (ui2.portrait != portrait) ui2.portrait = portrait }
-                // el mismo AndroidView en los dos modos (solo cambia su tamaño): el video no se corta al girar
-                Box(
-                    if (portrait) Modifier.fillMaxWidth().displayCutoutPadding().aspectRatio(16f / 9f)
-                    else Modifier.fillMaxSize(),
-                ) {
+                androidx.compose.runtime.SideEffect {
+                    if (ui2.portrait != portrait) {
+                        ui2.portrait = portrait
+                        // vertical: el video siempre entero en el centro (el zoom / estirar elegido vale en horizontal)
+                        view.resizeMode = if (portrait) androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT else ui2.resize
+                    }
+                }
+                // el mismo AndroidView en los dos modos, siempre a toda la pantalla: el video (ajustado) queda en el centro
+                // y no se corta al girar
+                Box(Modifier.fillMaxSize()) {
                     AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
                     PlayerOverlay(ui2, actions)
                 }
-                if (portrait) PortraitPanel(
-                    ui2, actions,
-                    // debajo del video: el ancho de esta misma ventana (no el de la configuración del sistema)
-                    Modifier.fillMaxSize().displayCutoutPadding().padding(top = maxWidth * 9f / 16f).navigationBarsPadding(),
-                )
             }
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
