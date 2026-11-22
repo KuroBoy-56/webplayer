@@ -21,6 +21,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -104,7 +105,7 @@ enum class PlayerPanel { TRACKS, SPEED, EPISODES }
 
 /** Estado de la interfaz del reproductor (lo actualiza PlayerActivity desde ExoPlayer). */
 class PlayerUiModel(val player: ExoPlayer, val live: Boolean, val tv: Boolean) {
-    /** celular en vertical (como la web): el video arriba con controles compactos y el resto debajo (PortraitPanel) */
+    /** celular en vertical: el video en el centro de toda la pantalla, con los mismos controles (sin nada debajo) */
     var portrait by mutableStateOf(false)
     /** imagen en imagen: siempre el video solo, a pantalla completa en su ventana */
     var inPip by mutableStateOf(false)
@@ -295,10 +296,9 @@ fun PlayerOverlay(m: PlayerUiModel, a: PlayerActions) {
         AnimatedVisibility(m.visible && m.panel == null, enter = fadeIn(), exit = fadeOut()) {
             if (m.locked) LockedLayer(m) else Controls(m, a)
         }
-        // en vertical la tarjeta del siguiente capítulo y los paneles van debajo del video, a toda la pantalla (PortraitPanel)
-        if (!m.portrait) NextEpisodeCard(m, a, Modifier.align(Alignment.BottomEnd).padding(end = 32.dp, bottom = 96.dp))
+        NextEpisodeCard(m, a, Modifier.align(Alignment.BottomEnd).padding(end = if (m.portrait) 16.dp else 32.dp, bottom = 96.dp))
         ExitVideoDialog(m, a)
-        if (!m.portrait) m.panel?.let { Panel(m, a, it) }
+        m.panel?.let { Panel(m, a, it) }
         m.toast?.let { t ->
             Text(t, color = Color.White, fontSize = 15.sp, modifier = Modifier.align(Alignment.TopCenter).padding(top = 28.dp)
                 .background(Color(0xE6141414), RoundedCornerShape(8.dp)).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp)).padding(horizontal = 18.dp, vertical = 10.dp))
@@ -317,7 +317,6 @@ private fun LockedLayer(m: PlayerUiModel) {
 
 @Composable
 private fun Controls(m: PlayerUiModel, a: PlayerActions) {
-    if (m.portrait) { CompactControls(m, a); return }
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(m.focusTick) { if (m.tv) runCatching { playFocus.requestFocus() } }
     Box(Modifier.fillMaxSize()) {
@@ -326,7 +325,8 @@ private fun Controls(m: PlayerUiModel, a: PlayerActions) {
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(220.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000)))))
 
         // arriba: atrás, título, calidad
-        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        val cut = if (m.portrait) Modifier.displayCutoutPadding() else Modifier
+        Row(Modifier.fillMaxWidth().then(cut).padding(horizontal = if (m.portrait) 8.dp else 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             CtrlButton(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), big = false) { a.back() }
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(m.title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -339,21 +339,28 @@ private fun Controls(m: PlayerUiModel, a: PlayerActions) {
 
         // centro: -10, reproducir/pausa, +10. En vivo no hay botones en el centro: el canal cambia con ▲▼ del control
         // (o deslizando arriba / abajo en la pantalla) y no se pausa
-        if (!m.live) Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (m.tv) 36.dp else 48.dp)) {
+        if (!m.live) Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (m.tv) 36.dp else if (m.portrait) 32.dp else 48.dp)) {
             CtrlButton(Icons.Filled.Replay10, stringResource(R.string.rewind_10)) { m.player.seekBack(); m.poke() }
             CtrlButton(if (m.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, stringResource(if (m.playing) R.string.pause else R.string.play), Modifier.focusRequester(playFocus), huge = true) { m.toggle() }
             CtrlButton(Icons.Filled.Forward10, stringResource(R.string.forward_10)) { m.player.seekForward(); m.poke() }
         }
 
         // abajo: barra de progreso y opciones
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp)) {
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(cut).padding(horizontal = if (m.portrait) 12.dp else 22.dp, vertical = 14.dp)) {
             if (!m.live && m.duration > 0) SeekBar(m)
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+            // en vertical las opciones no caben a lo ancho: la fila se desliza con el dedo
+            Row(
+                Modifier.fillMaxWidth().then(if (m.portrait) Modifier.horizontalScroll(rememberScrollState()) else Modifier).padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // celular en vertical: pasar a horizontal (también girando el teléfono)
+                if (!m.tv && m.portrait) a.fullscreen?.let { fs -> Pill(Icons.Filled.Fullscreen, stringResource(R.string.fullscreen)) { fs(); m.poke() } }
                 if (!m.live) Pill(Icons.Filled.Speed, stringResource(R.string.speed_x, speedLabel(m.speed))) { m.panel = PlayerPanel.SPEED }
                 if (!m.tv) Pill(Icons.Filled.LockOpen, stringResource(R.string.lock)) { m.locked = true; m.poke() }
                 if (m.episodes.size > 1 && !m.live) Pill(Icons.Filled.VideoLibrary, stringResource(R.string.episodes)) { m.panel = PlayerPanel.EPISODES }
                 Pill(Icons.Filled.Subtitles, stringResource(R.string.audio_subs)) { m.panel = PlayerPanel.TRACKS }
-                Pill(Icons.Filled.AspectRatio, resizeLabel(m.resize)) {
+                // tamaño del video (ajustar / zoom / estirar): solo en horizontal; en vertical va entero en el centro
+                if (!m.portrait) Pill(Icons.Filled.AspectRatio, resizeLabel(m.resize)) {
                     val next = when (m.resize) {
                         AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
@@ -363,70 +370,9 @@ private fun Controls(m: PlayerUiModel, a: PlayerActions) {
                 }
                 if (m.hasNext && !m.live) Pill(Icons.Filled.SkipNext, stringResource(R.string.next_episode)) { a.next() }
                 // celular en horizontal: volver a vertical
-                if (!m.tv) a.fullscreen?.let { fs -> Pill(Icons.Filled.FullscreenExit, stringResource(R.string.exit_fullscreen)) { fs(); m.poke() } }
+                if (!m.tv && !m.portrait) a.fullscreen?.let { fs -> Pill(Icons.Filled.FullscreenExit, stringResource(R.string.exit_fullscreen)) { fs(); m.poke() } }
             }
         }
-    }
-}
-
-/** celular en vertical: controles compactos sobre el video (16:9 arriba de la pantalla) */
-@Composable
-private fun CompactControls(m: PlayerUiModel, a: PlayerActions) {
-    Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(Color(0x66000000)))
-        CtrlButton(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), Modifier.align(Alignment.TopStart).padding(4.dp), big = false) { a.back() }
-        Row(Modifier.align(Alignment.TopEnd).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (m.live) Badge(stringResource(R.string.live_badge), Red)
-            if (m.quality.isNotEmpty()) { Spacer(Modifier.width(6.dp)); Badge(m.quality, Color(0x33FFFFFF)) }
-            a.pip?.let { enter -> Spacer(Modifier.width(4.dp)); CtrlButton(Icons.Filled.PictureInPictureAlt, stringResource(R.string.pip), big = false) { enter() } }
-        }
-        if (!m.live) Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            CtrlButton(Icons.Filled.Replay10, stringResource(R.string.rewind_10), big = false) { m.player.seekBack(); m.poke() }
-            CtrlButton(if (m.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, stringResource(if (m.playing) R.string.pause else R.string.play)) { m.toggle() }
-            CtrlButton(Icons.Filled.Forward10, stringResource(R.string.forward_10), big = false) { m.player.seekForward(); m.poke() }
-        }
-        Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f)) { if (!m.live && m.duration > 0) SeekBar(m) }
-            a.fullscreen?.let { fs -> CtrlButton(Icons.Filled.Fullscreen, stringResource(R.string.fullscreen), big = false) { fs() } }
-        }
-    }
-}
-
-/**
- * Celular en vertical (como la web player): debajo del video el título, las opciones (audio y subtítulos, velocidad,
- * capítulos, siguiente, pantalla completa) y la lista de capítulos de la serie. Pantalla completa (o girar el teléfono)
- * pasa a horizontal. Los paneles (idiomas, velocidad, capítulos) se abren aquí, a toda la pantalla.
- */
-@Composable
-fun PortraitPanel(m: PlayerUiModel, a: PlayerActions, modifier: Modifier) {
-    Box(modifier) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Text(m.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (m.subtitle.isNotBlank()) Text(m.subtitle, color = Dim, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                a.fullscreen?.let { fs -> Pill(Icons.Filled.Fullscreen, stringResource(R.string.fullscreen)) { fs() } }
-                Pill(Icons.Filled.Subtitles, stringResource(R.string.audio_subs)) { m.panel = PlayerPanel.TRACKS }
-                if (!m.live) Pill(Icons.Filled.Speed, stringResource(R.string.speed_x, speedLabel(m.speed))) { m.panel = PlayerPanel.SPEED }
-                if (m.hasNext && !m.live) Pill(Icons.Filled.SkipNext, stringResource(R.string.next_episode)) { a.next() }
-            }
-            if (m.episodes.size > 1 && !m.live) {
-                Text(stringResource(R.string.episodes), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp, bottom = 6.dp))
-                m.episodes.forEachIndexed { i, t ->
-                    val cur = i == m.index
-                    Row(
-                        Modifier.fillMaxWidth().clickable { if (!cur) a.pickEpisode(i) }
-                            .background(if (cur) Color(0x26FFFFFF) else Color.Transparent, RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (cur) Icon(Icons.Filled.PlayArrow, null, tint = Red, modifier = Modifier.size(18.dp).padding(end = 2.dp))
-                        Text(t, color = if (cur) Color.White else Dim, fontSize = 14.sp, fontWeight = if (cur) FontWeight.Bold else FontWeight.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
-        }
-        NextEpisodeCard(m, a, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 24.dp))
-        m.panel?.let { Panel(m, a, it) }
     }
 }
 
@@ -463,8 +409,13 @@ private fun Panel(m: PlayerUiModel, a: PlayerActions, p: PlayerPanel) {
                 val rev = m.tracksRev
                 val audio = remember(rev) { audioOptions(m.player) }
                 val subs = remember(rev) { textOptions(m.player) }
-                Row(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 60.dp, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-                    TrackColumn(stringResource(R.string.audio), if (audio.isEmpty()) listOf(TrackOption(stringResource(R.string.default_track), true) {}) else audio, Modifier.weight(1f), first) { it.apply(); m.tracksRev++ }
+                val audioList = if (audio.isEmpty()) listOf(TrackOption(stringResource(R.string.default_track), true) {}) else audio
+                // vertical: audio arriba y subtítulos abajo (en horizontal, uno al lado del otro)
+                if (m.portrait) Column(Modifier.fillMaxSize().displayCutoutPadding().padding(start = 20.dp, end = 20.dp, top = 64.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                    TrackColumn(stringResource(R.string.audio), audioList, Modifier.weight(1f), first) { it.apply(); m.tracksRev++ }
+                    TrackColumn(stringResource(R.string.subtitles), subs, Modifier.weight(1f), null) { it.apply(); m.tracksRev++ }
+                } else Row(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 60.dp, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+                    TrackColumn(stringResource(R.string.audio), audioList, Modifier.weight(1f), first) { it.apply(); m.tracksRev++ }
                     TrackColumn(stringResource(R.string.subtitles), subs, Modifier.weight(1f), null) { it.apply(); m.tracksRev++ }
                 }
             }
@@ -472,7 +423,7 @@ private fun Panel(m: PlayerUiModel, a: PlayerActions, p: PlayerPanel) {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(stringResource(R.string.playback_speed), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(28.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(if (m.portrait) 2.dp else 18.dp)) {
                         listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEachIndexed { i, s ->
                             val sel = m.speed == s
                             Focusable(onClick = { m.player.setPlaybackSpeed(s); m.speed = s; m.panel = null; m.poke() }, modifier = if (i == 2) Modifier.focusRequester(first) else Modifier, shape = CircleShape) { f ->
@@ -487,7 +438,7 @@ private fun Panel(m: PlayerUiModel, a: PlayerActions, p: PlayerPanel) {
             }
             PlayerPanel.EPISODES -> {
                 val st = rememberLazyListState(initialFirstVisibleItemIndex = (m.index - 1).coerceAtLeast(0))
-                Column(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 24.dp)) {
+                Column(Modifier.fillMaxSize().then(if (m.portrait) Modifier.displayCutoutPadding() else Modifier).padding(start = if (m.portrait) 16.dp else 40.dp, end = if (m.portrait) 16.dp else 40.dp, top = 24.dp)) {
                     Text(stringResource(R.string.episodes), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     LazyColumn(state = st, contentPadding = PaddingValues(vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         itemsIndexed(m.episodes) { i, t ->
