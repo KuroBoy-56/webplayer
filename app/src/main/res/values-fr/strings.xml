@@ -452,4 +452,9 @@
     <string name="protected_session">Contenu protégé pour cette session</string>
     <string name="protected_locked">Verrouillé</string>
     <string name="protected_unlocked">Déverrouillé · jusqu\'à la fermeture de l\'app</string>
+    <string name="catalog_reload">Actualiser le catalogue</string>
+    <string name="catalog_reload_desc">Recharge les films, séries et chaînes depuis le serveur</string>
+    <string name="catalog_reloading">Actualisation du catalogue…</string>
+    <string name="catalog_reloaded">Catalogue mis à jour</string>
+    <string name="catalog_reload_failed">Une partie du catalogue n\'a pas pu être actualisée ; l\'ancienne copie est conservée</string>
 </resources>
