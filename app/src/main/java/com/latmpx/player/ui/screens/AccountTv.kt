@@ -119,6 +119,11 @@ fun AccountTv(
             Setting(stringResource(R.string.stream_format), when (streamFormat) { "ts" -> "MPEG-TS (.ts)"; "auto" -> stringResource(R.string.automatic); else -> "HLS (.m3u8)" }, onStreamFormat)
             Setting(stringResource(R.string.player), stringResource(if (extPlayer) R.string.player_external else R.string.player_internal), onPlayer)
             DnsButton(Modifier.fillMaxWidth().padding(bottom = 6.dp)) { f, label -> SettingRow("DNS", label, f) }
+            // como Roku: vuelve a traer películas, series y canales del servidor IPTV (lo nuevo que agregó el proveedor)
+            val reloadCtx = LocalContext.current
+            Setting(stringResource(R.string.catalog_reload), stringResource(if (state.catalogReloading) R.string.catalog_reloading else R.string.catalog_reload_desc)) {
+                if (state.reloadCatalog()) android.widget.Toast.makeText(reloadCtx, com.latmpx.player.tr(R.string.catalog_reloading), android.widget.Toast.LENGTH_SHORT).show()
+            }
             Setting(stringResource(R.string.change_distributor), if (b != null) "${b.name.ifBlank { b.code }} (${b.code})" else stringResource(R.string.none), onChangeDistributor)
             Setting(stringResource(R.string.logout), "", onLogout)
             Text("${stringResource(R.string.version)} ${BuildConfig.VERSION_NAME}", color = Color(0xFF808080), fontSize = 11.sp, modifier = Modifier.padding(top = 20.dp))
