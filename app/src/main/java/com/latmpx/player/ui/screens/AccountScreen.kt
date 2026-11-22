@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.ArrowForwardIos
@@ -276,6 +277,13 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
             }
             Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             SettingsItem(Icons.Filled.Language, stringResource(R.string.app_language), com.latmpx.player.ui.components.languageChoiceLabel()) { langDialog = true }
+            Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+            // como Roku: vuelve a traer todo del servidor IPTV (lo nuevo que agregó el proveedor)
+            val reloadCtx = LocalContext.current
+            SettingsItem(Icons.Filled.Refresh, stringResource(R.string.catalog_reload),
+                stringResource(if (state.catalogReloading) R.string.catalog_reloading else R.string.catalog_reload_desc)) {
+                if (state.reloadCatalog()) android.widget.Toast.makeText(reloadCtx, tr(R.string.catalog_reloading), android.widget.Toast.LENGTH_SHORT).show()
+            }
             Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             
             Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
