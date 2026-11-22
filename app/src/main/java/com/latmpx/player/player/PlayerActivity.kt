@@ -191,7 +191,9 @@ class PlayerActivity : ComponentActivity() {
             // (LocalConfiguration) en algunos teléfonos llega tarde o no se actualiza al pasar a pantalla completa, y el
             // título con «Pantalla completa / Audio y subtítulos / Velocidad» quedaba encima del video en horizontal
             androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
-                val portrait = !tv && !ui2.inPip && maxHeight > maxWidth
+                // y después del botón «Pantalla completa» nunca el panel de vertical, aunque el teléfono tarde en girar o
+                // informe mal el tamaño (1.5.0)
+                val portrait = !tv && !ui2.inPip && !forcedLandscape.value && maxHeight > maxWidth
                 androidx.compose.runtime.SideEffect { if (ui2.portrait != portrait) ui2.portrait = portrait }
                 // el mismo AndroidView en los dos modos (solo cambia su tamaño): el video no se corta al girar
                 Box(
@@ -231,6 +233,9 @@ class PlayerActivity : ComponentActivity() {
 
     /** pantalla completa pedida con el botón: 1 = horizontal, 2 = vertical, 0 = manda el giro del teléfono */
     private var lockedTo = 0
+
+    /** horizontal pedido con el botón y todavía vigente: el panel de vertical no se dibuja */
+    private val forcedLandscape = androidx.compose.runtime.mutableStateOf(false)
     private var orientListener: android.view.OrientationEventListener? = null
 
     /** ¿el usuario tiene el giro automático encendido? */
@@ -244,8 +249,10 @@ class PlayerActivity : ComponentActivity() {
      * cambia de modo. Con el giro bloqueado, solo el botón cambia.
      */
     private fun toggleFullscreen() {
-        val land = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        // lo que se ve ahora (no la orientación que informa el sistema, que en algunos teléfonos llega tarde)
+        val land = !ui2.portrait
         lockedTo = if (land) 2 else 1
+        forcedLandscape.value = !land
         requestedOrientation = if (land) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         if (!autoRotate()) return
         val l = orientListener ?: object : android.view.OrientationEventListener(this) {
@@ -255,6 +262,8 @@ class PlayerActivity : ComponentActivity() {
                 val landNow = deg in 65..115 || deg in 245..295
                 if ((lockedTo == 2 && portraitNow) || (lockedTo == 1 && landNow)) {
                     lockedTo = 0
+                    // el giro vuelve a mandar: si después lo ponen en vertical, el tamaño de la ventana decide
+                    forcedLandscape.value = false
                     requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
                     disable()
                 }
