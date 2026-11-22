@@ -35,10 +35,13 @@ object Kids {
 
     private class Compiled(val v: Int, private val lists: Map<String, Rx>) {
         fun m(name: String, t: String): Boolean = lists[name]?.m(t) == true
+        fun has(name: String): Boolean = lists[name]?.list?.isNotEmpty() == true
+        /** nombre → ¿está en kids_titles? (el catálogo infantil se vuelve a armar cuando llegan veredictos de TMDB) */
+        val titles = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
     }
 
     @Volatile private var compiled: Compiled? = null
-    private val NAMES = listOf("kids", "family", "live", "disney", "block_cats", "kids_strong", "genre_kids", "genre_weak", "genre_anim", "genre_hard", "genre_block", "block_marks", "block_titles")
+    private val NAMES = listOf("kids", "family", "live", "disney", "block_cats", "kids_strong", "genre_kids", "genre_weak", "genre_anim", "genre_hard", "genre_block", "block_marks", "block_titles", "kids_titles")
     private val REQUIRED = listOf("kids", "live", "disney", "block_cats", "kids_strong", "genre_kids", "genre_block", "block_marks", "block_titles")
 
     private fun valid(r: JSONObject?): Boolean = r != null && r.has("v") && REQUIRED.all { r.optJSONArray(it) != null }
@@ -98,7 +101,7 @@ object Kids {
         return ""
     }
 
-    private class Genre(val weak: Boolean, val kids: Boolean, val hard: Boolean, val block: Boolean)
+    private class Genre(val weak: Boolean, val kids: Boolean, val hard: Boolean, val block: Boolean, val anim: Boolean)
 
     /** "strong" (se ve salvo que TMDB diga «no»), "weak" (solo si TMDB dice «ok») o "" (nunca): wp_kids_item_level() de la web */
     private fun level(c: Compiled, cls: String, x: Item, memo: HashMap<String, Genre>): String {
@@ -108,18 +111,28 @@ object Kids {
         val g = if (x.genre.isEmpty()) null else memo.getOrPut(x.genre) {
             val t = norm(x.genre)
             val weak = c.m("genre_weak", t)
-            Genre(weak, c.m("genre_kids", t) || (weak && c.m("genre_anim", t)), c.m("genre_hard", t), c.m("genre_block", t))
+            val anim = c.m("genre_anim", t)
+            Genre(weak, c.m("genre_kids", t) || (weak && anim), c.m("genre_hard", t), c.m("genre_block", t), anim)
         }
         val gWeak = g?.weak == true
         val gKids = g?.kids == true
         val gHard = g?.hard == true
         val gBlock = g?.block == true
-        // nada de niños ni en la categoría ni en el género: fuera sin mirar el nombre
-        if (!kidsCat && !weakCat && !gKids && !gWeak) return ""
-        if (gBlock && !gKids && !gWeak) return ""
-        val n = norm(x.name)
+        val gAnim = g?.anim == true
+        // título de niños (kids_titles, v3: Shrek, Toy Story, Paw Patrol…) fuera de una categoría de niños: solo sin género
+        // o con género de niños, familia o animación, o en una categoría de Disney o familia (son cientos: así es rápido)
+        var n = ""
+        var tKids = false
+        if (!kidsCat && c.has("kids_titles") && (g == null || gKids || gWeak || gAnim || weakCat)) {
+            n = norm(x.name)
+            tKids = c.titles.getOrPut(n) { c.m("kids_titles", n) }
+        }
+        // nada de niños ni en la categoría, ni en el género, ni en el título: fuera sin mirar más
+        if (!kidsCat && !weakCat && !gKids && !gWeak && !tKids) return ""
+        if (gBlock && !gKids && !gWeak && !tKids) return ""
+        if (n.isEmpty()) n = norm(x.name)
         if (c.m("block_marks", n) || c.m("block_titles", n)) return ""
-        if ((kidsCat || gKids) && !gHard && !gBlock) return "strong"
+        if ((kidsCat || gKids || tKids) && !gHard && !gBlock) return "strong"
         return "weak"
     }
 
