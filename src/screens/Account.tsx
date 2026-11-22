@@ -14,7 +14,7 @@ import { pref, setPref } from '../lib/storage';
 import { brand, brandName, distChoice } from '../lib/tenant';
 import { dateText, dateTimeText, demoLength } from '../lib/util';
 import { useNav } from '../nav';
-import { deviceId, loadCatalog, loadCloud, logoutByHand, refreshCatalog, resetTenant, showNotice, useAppState } from '../state';
+import { deviceId, loadCatalog, loadCloud, logoutByHand, refreshCatalog, reloadCatalog, resetTenant, showNotice, useAppState } from '../state';
 import { C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
 
@@ -194,10 +194,11 @@ export default function Account() {
         />
       ) : null}
       <Setting
-        label={t('Recargar catálogo')}
+        label={t('Actualizar catálogo')}
         value={t('Actualizar películas, series y canales')}
         onPress={() => {
-          loadCatalog(true);
+          // como Roku: todo otra vez del servidor IPTV (lo de antes sigue en pantalla mientras baja)
+          reloadCatalog();
           loadCloud();
         }}
       />
