@@ -453,4 +453,9 @@
     <string name="protected_session">Contenido protegido en esta sesión</string>
     <string name="protected_locked">Bloqueado</string>
     <string name="protected_unlocked">Desbloqueado · hasta que cierres la app</string>
+    <string name="catalog_reload">Actualizar catálogo</string>
+    <string name="catalog_reload_desc">Vuelve a traer películas, series y canales del servidor</string>
+    <string name="catalog_reloading">Actualizando el catálogo…</string>
+    <string name="catalog_reloaded">Catálogo actualizado</string>
+    <string name="catalog_reload_failed">No se pudo actualizar todo el catálogo; se conserva lo anterior</string>
 </resources>
