@@ -1,6 +1,11 @@
 package com.latmpx.player.ui.screens
 
 import androidx.compose.ui.res.stringResource
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
 import com.latmpx.player.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +34,25 @@ fun posterWidth(): Dp = if (LocalIsTv.current) 128.dp else 108.dp
 
 @Composable
 fun sidePad(): Dp = if (LocalIsTv.current) 36.dp else 14.dp
+
+/**
+ * Celular: flecha «Atrás» (ficha, categoría, actor, Ver todo). Vuelve a la pantalla anterior, que sigue donde estaba.
+ * overlay: círculo oscuro para ir encima de la imagen de la ficha.
+ */
+@Composable
+fun PhoneBackButton(state: AppState, modifier: Modifier = Modifier, overlay: Boolean = false) {
+    Box(
+        modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape)
+            .background(if (overlay) androidx.compose.ui.graphics.Color(0x8C000000) else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable { state.pop() },
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.material3.Icon(
+            androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back),
+            tint = androidx.compose.ui.graphics.Color.White,
+        )
+    }
+}
 
 @Composable
 fun Loading(msg: String = stringResource(R.string.loading)) {
