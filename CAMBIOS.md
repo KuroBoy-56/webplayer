@@ -4,7 +4,7 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
-## «Continuar viendo» como Roku y Vega: idioma guardado e índice de la VPS / VDS — versión 2.9.12 (22 de noviembre, tercera parte)
+## «Continuar viendo» como Roku y Vega: idioma guardado e índice de la VPS / VDS — versión 2.9.13 (22 de noviembre, cuarta parte)
 - **Idioma de «Continuar viendo»:** la web toma el idioma de audio con el que se venía viendo el título en cualquier equipo de la línea (el que dejaron Roku, Vega u otra web en el panel), igual que Roku y Vega. Se compara por idioma (`es` = `spa` = `es-MX`) y, si el archivo trae dos pistas del mismo idioma, desempata el número de pista.
   - En una serie, el idioma vale para todos sus capítulos.
   - Lo que el usuario elige en este navegador manda sobre lo del panel, y queda guardado para cada título.
@@ -12,6 +12,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 - **Índice de la VPS / VDS:** el índice de cada MP4 que dejó otro equipo (Roku, Vega, Android…) en la VPS del dueño o en la VDS del distribuidor ya se usaba en las películas con varios audios. Ahora también en las de un solo audio: si el índice llegó de la máquina, o si es «Continuar viendo», el lector de la web sigue con él y arranca en el segundo guardado. Antes el reproductor del navegador volvía a leer el índice del servidor IPTV (3 a 10 MB; en servidores lentos, 15 a 35 segundos más). La primera web que lee un índice lo deja en la máquina para los demás.
 - Esto vale con la web en https, que es cuando el video pasa por la VPS / VDS. Con la web en http, el navegador lee el video directo del servidor IPTV como antes.
 - Archivos: `assets/nf/player.js`, `includes/panel.php`, `includes/progress_save.php`, `video_player.php`, `play.php`, `tvguide.php` (versión del reproductor), `includes/core.php` (versión).
+## Perfil infantil: títulos de niños aunque estén en «Estrenos» — versión 2.9.12 (22 de noviembre, tercera parte)
+- **El problema:** en un perfil infantil solo se veía lo que estaba en una categoría de niños (Infantiles, Animadas…) o tenía un género de niños. Shrek 2, Paw Patrol o Toy Story en «Estrenos» o «Películas» no aparecían, y Frozen II en Disney+ esperaba a TMDB.
+- **Ahora** (reglas v3 del panel, iguales en todas las apps): la lista `kids_titles` del panel (unos 700 títulos para niños, en español latino, de España y en inglés) cuenta como una categoría de niños. Solo se mira si el título no trae género o trae uno de niños, familia o animación, o si está en una categoría de Disney o familia; nunca gana a las listas de bloqueo (Winnie the Pooh: Blood and Honey, Mickey 17…) ni al «no» de TMDB.
+- La copia de las reglas de la web (por si el panel no contesta) es ahora el texto exacto de `includes/kids_rules.php` del panel (v3).
+- Archivos: `includes/kids.php`, `includes/core.php` (versión).
 
 ## Logos de los canales en TV en vivo: ya no dependen solo del hosting — versión 2.9.11 (22 de noviembre, segunda parte)
 - **El problema:** en TV en vivo se veía el logo del distribuidor o del dueño en lugar del logo de cada canal. Cada logo lo descargaba el hosting (`img.php`) y había tres casos en que fallaba en todos los canales a la vez:
