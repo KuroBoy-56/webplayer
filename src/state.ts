@@ -280,6 +280,34 @@ export function refreshCatalog() {
   set({ catalogRev: state.catalogRev + 1 });
 }
 
+// Cuenta › «Actualizar catálogo» (como Roku): películas, series y canales otra vez del servidor IPTV para traer lo nuevo,
+// sin vaciar lo que se ve: cada lista se cambia al llegar y, si el servidor no contesta una, se conserva la anterior
+let reloading = false;
+export async function reloadCatalog(): Promise<void> {
+  const s = state.session;
+  if (!s || reloading) return;
+  reloading = true;
+  showNotice(t('Actualizando el catálogo…'));
+  try {
+    loadWeekTop().catch(() => {});
+    const ok = await Promise.all(
+      (['vod', 'series', 'live'] as Kind[]).map(async kind => {
+        const { cats, items } = await loadKind(s, kind).catch(() => ({ cats: [] as any[], items: [] as any[] }));
+        // sin lista, o sin categorías cuando ya había: se queda lo anterior
+        if (state.session !== s || !items.length || (!cats.length && catalog.has(kind))) return false;
+        catalog.set(kind, cats, items);
+        set({ loaded: { ...state.loaded, [kind]: true }, catalogRev: state.catalogRev + 1 });
+        return true;
+      }),
+    );
+    if (state.session !== s) return;
+    if (ok.every(Boolean)) set({ error: '' });
+    showNotice(t(ok.every(Boolean) ? 'Catálogo actualizado' : 'No se pudo actualizar todo el catálogo; se conserva lo anterior'));
+  } finally {
+    reloading = false;
+  }
+}
+
 // ---------- nube ----------
 
 // segundos de la última vez que se guardó (ts del panel con microsegundos, o updatedAt ISO)
