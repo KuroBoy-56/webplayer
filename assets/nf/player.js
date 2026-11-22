@@ -40,6 +40,21 @@
     function store(k, v) {
         try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; }
     }
+    /* Idioma elegido para ESTE título (como Roku y Vega): se usa al volver a abrirlo, también desde «Continuar viendo».
+       180 días, los 400 más recientes. {a: idioma de la pista, ai: su número entre los audios del archivo, t: cuándo} */
+    var TLANG = 'nfp_tlang';
+    function tlangAll() { try { return JSON.parse(store(TLANG) || '{}') || {}; } catch (e) { return {}; } }
+    function tlangGet(k) {
+        var e = k ? tlangAll()[k] : null;
+        return e && e.a && Date.now() - (e.t || 0) < 180 * 864e5 ? e : null;
+    }
+    function tlangSet(k, v) {
+        if (!k) return;
+        var all = tlangAll(), o = {};
+        if (v) all[k] = v; else delete all[k];
+        Object.keys(all).sort(function (x, y) { return (all[y].t || 0) - (all[x].t || 0); }).slice(0, 400).forEach(function (x) { o[x] = all[x]; });
+        store(TLANG, JSON.stringify(o));
+    }
 
     function NFPlayer(root, opts) {
         if (!(this instanceof NFPlayer)) return new NFPlayer(root, opts);
@@ -575,6 +590,10 @@
                 var okA = m.audio.filter(function (a) { return a.ok; }).length;
                 if (m.audio.length > 1 && okA) return true;
                 if (m.subs.length && okA && m.videoOk) return true;
+                // el índice (moov) ya llegó de la VPS / VDS (lo dejó otro equipo: Roku, Vega, Android…) o esto es «Continuar
+                // viendo»: se sigue con el motor, que arranca en el segundo guardado. El reproductor del navegador volvería a
+                // leer el índice del servidor IPTV (3-10 MB; en servidores lentos 15-35 s más)
+                if ((m.shared || resume) && okA && m.videoOk) { self.log('motor MP4: un audio, ' + (m.shared ? 'índice de la VPS / VDS' : 'continuar viendo')); return true; }
                 self.native(url, idx, resume);
                 return false;
             },
@@ -649,6 +668,8 @@
     };
     /* pista preferida: la que eligió antes el usuario o la del idioma del navegador */
     NFPlayer.prototype.pickAudio = function (list) {
+        var tw = this.titlePick(list);
+        if (tw >= 0) return tw;
         var pref = store('nfp_audio');
         if (pref) for (var i = 0; i < list.length; i++) if ((list[i].lang + '|' + list[i].label) === pref) return i;
         var pl = store('nfp_audio_lang');
@@ -899,15 +920,15 @@
         if (this.mp4 && this.mp4.audio.length) {
             this.mp4.audio.forEach(function (t) {
                 if (!t.ok) return; // códec que este navegador no decodifica (p. ej. Dolby en Chrome)
-                out.push({ label: t.label, lang: t.lang, on: self.mp4.audioId === t.id, set: function () { if (self.mp4 && self.mp4.audioId !== t.id) { self.root.classList.add('buffering'); self.mp4.setAudio(t.id); } } });
+                out.push({ label: t.label, lang: t.lang, ai: t.i, on: self.mp4.audioId === t.id, set: function () { if (self.mp4 && self.mp4.audioId !== t.id) { self.root.classList.add('buffering'); self.mp4.setAudio(t.id); } } });
             });
         } else if (this.hls && this.hls.audioTracks && this.hls.audioTracks.length) {
-            this.hls.audioTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || tr('Audio {n}', { n: i + 1 }), lang: t.lang || '', on: self.hls.audioTrack === i, set: function () { self.hls.audioTrack = i; } }); });
+            this.hls.audioTracks.forEach(function (t, i) { out.push({ label: t.name || t.lang || tr('Audio {n}', { n: i + 1 }), lang: t.lang || '', ai: i, on: self.hls.audioTrack === i, set: function () { self.hls.audioTrack = i; } }); });
         } else if (this.info && this.info.audio && this.info.audio.length && this._media0 && (isIos || !(this.v.audioTracks && this.v.audioTracks.length > 1))) {
             // Safari iOS/Mac native fallback bypassed. Usamos el panel (startTc) para transcodificar.
             var cur = this.tc ? this.tc.a : -1;
             if (!isIos) {
-                out.push({ label: tr('Automático (Nativo)'), lang: 'auto', on: cur === -1, set: function () {
+                out.push({ label: tr('Automático (Nativo)'), lang: 'auto', ai: -1, on: cur === -1, set: function () {
                     // vuelve al video directo en el mismo punto (antes recibía la configuración del motor como dirección)
                     if (self.tc) { self._native = true; self.lastTime = self.T(); self.tc = null; self.idx--; self.next(); }
                 } });
@@ -916,12 +937,12 @@
                 cur = 0;
             }
             this.info.audio.forEach(function (t) {
-                out.push({ label: t.label, lang: t.lang, on: cur === t.i, set: function () { if (!self.o.media) self.o.media = self._media0; if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
+                out.push({ label: t.label, lang: t.lang, ai: t.i, on: cur === t.i, set: function () { if (!self.o.media) self.o.media = self._media0; if (cur !== t.i || !self.tc) self.startTc(self.T(), t.i, self.info.video && !videoOk(self.info.video)); } });
             });
         } else if (this.v.audioTracks && this.v.audioTracks.length) {
             var at = this.v.audioTracks;
             for (var i = 0; i < at.length; i++) (function (t, i) {
-                out.push({ label: t.label || t.language || tr('Audio {n}', { n: i + 1 }), lang: t.language || '', on: t.enabled, set: function () { for (var j = 0; j < at.length; j++) at[j].enabled = j === i; } });
+                out.push({ label: t.label || t.language || tr('Audio {n}', { n: i + 1 }), lang: t.language || '', ai: i, on: t.enabled, set: function () { for (var j = 0; j < at.length; j++) at[j].enabled = j === i; } });
             })(at[i], i);
         }
         return out;
@@ -934,8 +955,8 @@
         var list = this.audioList();
         if (list.length < 2) return;
         var pref = store('nfp_audio');
-        var w = -1;
-        if (pref) {
+        var w = this.titlePick(list);
+        if (w < 0 && pref) {
             for (var i = 0; i < list.length; i++) {
                 if ((list[i].lang + '|' + list[i].label) === pref) { w = i; break; }
             }
@@ -993,7 +1014,7 @@
             h += '</div>';
             pop.innerHTML = h;
             Array.prototype.forEach.call(pop.querySelectorAll('[data-a]'), function (b) {
-                b.addEventListener('click', function () { var t = a[+b.getAttribute('data-a')]; t.set(); store('nfp_audio', t.lang + '|' + t.label); if (t.lang) store('nfp_audio_lang', t.lang); self.closePop(); self.toastMsg(tr('Audio: {a}', { a: t.label })); });
+                b.addEventListener('click', function () { var t = a[+b.getAttribute('data-a')]; t.set(); store('nfp_audio', t.lang + '|' + t.label); if (t.lang) store('nfp_audio_lang', t.lang); self.rememberTitleAudio(t); self.closePop(); self.toastMsg(tr('Audio: {a}', { a: t.label })); });
             });
             Array.prototype.forEach.call(pop.querySelectorAll('[data-s]'), function (b) {
                 b.addEventListener('click', function () { var i = +b.getAttribute('data-s'); if (i < 0) s.off(); else s[i].set(); self.closePop(); });
@@ -1280,10 +1301,57 @@
     }
     NFPlayer.pickLang = pickLang;
 
+    /* Idioma que se quiere para este título: el elegido en este navegador o, si no, el que dejó otro equipo en «Continuar
+       viendo» (progress.php «play», como Roku y Vega; docs/AVANCE-COMPARTIDO.md del panel). null = el de siempre. */
+    NFPlayer.prototype.titleWant = function () {
+        if (this._tlCleared) return null;
+        var e = tlangGet(this.o.tkey);
+        if (e) return { a: e.a, ai: e.ai != null ? e.ai : -1 };
+        var p = this.o.play;
+        return p && p.a ? { a: String(p.a), ai: p.ai != null ? +p.ai : -1 } : null;
+    };
+    /* la pista de la lista con ese idioma (es = spa = esp = es-MX); con dos del mismo idioma desempata el número; -1 si no hay */
+    NFPlayer.prototype.titlePick = function (list) {
+        var w = this.titleWant(), want = w ? lang2({ lang: w.a }) : '', hits = [];
+        if (!want || !list) return -1;
+        for (var i = 0; i < list.length; i++) if (lang2(list[i]) === want) hits.push(i);
+        if (!hits.length) return -1;
+        if (hits.length > 1 && w.ai >= 0) {
+            for (var h = 0; h < hits.length; h++) {
+                var t = list[hits[h]], n = t.ai != null ? t.ai : (t.i != null ? t.i : hits[h]);
+                if (n === w.ai) return hits[h];
+            }
+        }
+        return hits[0];
+    };
+    /* el usuario eligió un audio en el menú: se recuerda para el título y viaja con el avance a los demás equipos; la primera
+       pista del archivo (o «Automático») es volver al predeterminado: se borra para todos */
+    NFPlayer.prototype.rememberTitleAudio = function (t) {
+        var k = this.o.tkey;
+        if (!k || this.live || !t) return;
+        var raw = String(t.lang || '').toLowerCase(), code = /^[a-z]{2,3}([-_][a-z0-9]{2,8})?$/.test(raw) && raw !== 'und' ? raw : lang2(t);
+        if (t.lang === 'auto' || t.ai === 0 || !code) {
+            tlangSet(k, null);
+            this._tlCleared = true;
+            return;
+        }
+        this._tlCleared = false;
+        tlangSet(k, { a: code, ai: t.ai != null ? t.ai : -1, t: Date.now() });
+    };
+    /* lo que va con el avance (save_progress.php): el idioma elegido para este título, {a: ''} si se volvió al
+       predeterminado en esta sesión, o null (no se manda nada y el panel conserva lo que dejó otro equipo) */
+    NFPlayer.prototype.playHint = function () {
+        if (this.live) return null;
+        if (this._tlCleared) return { a: '' };
+        var e = tlangGet(this.o.tkey);
+        return e ? { a: e.a, ai: e.ai != null ? e.ai : -1 } : null;
+    };
+
     NFPlayer.prototype.prefAudioIndex = function () {
         var list = (this.info && this.info.audio) || [];
         if (!list.length) return 0;
-        var k = pickLang(list);
+        var k = this.titlePick(list);
+        if (k < 0) k = pickLang(list);
         return list[k].i != null ? list[k].i : k;
     };
 

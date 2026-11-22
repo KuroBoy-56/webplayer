@@ -42,6 +42,14 @@ El relay de Cloudflare de versiones anteriores ya no se usa: puedes borrar el Wo
 - **Catálogo por partes:** Inicio, Películas, Series, Explorar y las fichas definen `WP_XT_SOFT`: en el modo navegador salen al momento sin la pantalla «Cargando…» y el catálogo completo se trae por detrás (`wp_xt_soft()` en `includes/xt_client.php`, salvo en un perfil infantil). Cada fila (`api.php?action=row`) espera lo suyo; una fila de una categoría y su «Ver todo» llegan solos con `get_vod_streams&category_id=` (`wp_cat_list_quick()`) mientras llega el catálogo completo. `wp_cat_derive()` no guarda cálculos hechos sin catálogo. El navegador espera el catálogo completo hasta 3 minutos (`xtfill.js`).
 - Pruebas: `tools/web_relay_test.php` del panel (carátulas por el Worker, firma de la línea, catálogo por partes con un servidor lento).
 
+## «Continuar viendo» como Roku y Vega (2.9.12)
+
+- `wp_panel_userdata()` pide `progress.php?v=2&play=1`; `wp_user_progress()` trae `play` (`wp_play_clean()`: `{a, ai}`). `wp_play_hint($slug, $id, $seriesId)` (`includes/panel.php`) da el idioma para el video que se abre: el de la película, o el de la serie (`a` para todos sus capítulos, `ai` solo para el mismo). Va al reproductor como `cfg.play`, con `cfg.tkey` (`movie_<id>` / `series_<id>`), también en `play.php` (dato `play` del enlace).
+- `assets/nf/player.js`: `titleWant()` (lo de este navegador en `localStorage` `nfp_tlang`, 180 días, 400 títulos; si no, `cfg.play`), `titlePick(list)` (por `lang2`, desempata con `ai`) dentro de `pickAudio()`, `prefAudioIndex()` y `applyAudioPref()`; `rememberTitleAudio()` al elegir en el menú (la primera pista o «Automático» = predeterminado: se borra y en esa sesión se manda `{a: ""}`); `playHint()` lo que va con el avance. Cada pista de `audioList()` trae `ai`.
+- `video_player.php` / `play.php` mandan `play_a` / `play_ai` con el avance; `wp_progress_play()` (`includes/progress_save.php`) los pasa al panel como `play`. Contrato: `docs/AVANCE-COMPARTIDO.md` del panel.
+- `playMp4()`: con un solo audio sigue con `NFMp4` si el moov llegó del índice compartido (`m.shared`) o si hay `resume`; si no, el reproductor del navegador como antes.
+- Pruebas del panel: `tools/web_play_hint_test.mjs` (elección de pista, lo que se manda, decisión del lector MP4) y `tools/web_relay_test.php` (el idioma va y vuelve por el panel de prueba).
+
 ## Logos de canales sin depender del hosting (2.9.11)
 
 - `wp_logo_sources($url)` (`includes/core.php`), en orden: el original (logo https o web en http), `wp_xt_relay_img()` (Worker; no para servidores con IP), `img.php?…&fb=2` del hosting, `wp_panel_logo_url()` (`img.php?w=200&token=` del panel: lo baja el panel, solo imágenes de 80 px o más) y, con la web en https y el logo http, la misma dirección por https. La marca (`CH_FB`) la pone la página al final.

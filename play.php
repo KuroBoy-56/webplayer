@@ -86,7 +86,7 @@ $media_cfg = $live ? null : wp_media_cfg($kind, $id, $exts, (string)($d['vlcExt'
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=2" defer></script>
-    <script src="assets/nf/player.js?v=34" defer></script>
+    <script src="assets/nf/player.js?v=35" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -106,6 +106,8 @@ $media_cfg = $live ? null : wp_media_cfg($kind, $id, $exts, (string)($d['vlcExt'
             // idiomas y subtítulos aún desconocidos: el reproductor los pide en segundo plano (tracks.php, por la VPS / VDS)
             'tracks' => ($live || !empty($d['multi']) || !$media_cfg || !empty($media_cfg['info'])) ? '' : (string)$media_cfg['probe'],
             'vidx' => $live ? '' : wp_vidx_url($kind, $id, (string)($d['vlcExt'] ?? $ext)),
+            'play' => $live ? null : (is_array($d['play'] ?? null) ? wp_play_clean($d['play']) : null),
+            'tkey' => $live ? '' : ($kind === 'series' ? 'series' : 'movie') . '_' . $id,
             'ext' => $ext,
             'extraMenu' => [],
             'id' => $id,
@@ -130,6 +132,8 @@ $media_cfg = $live ? null : wp_media_cfg($kind, $id, $exts, (string)($d['vlcExt'
                 fd.append('series_id', cfg.seriesId);
                 fd.append('current_time', cur);
                 fd.append('total_time', tot > 0 ? tot : 0);
+                var ph = player && player.playHint ? player.playHint() : null;
+                if (ph) { fd.append('play_a', ph.a); if (ph.ai != null && ph.ai >= 0) fd.append('play_ai', ph.ai); }
                 if (beacon && navigator.sendBeacon) { navigator.sendBeacon(here, fd); return; }
                 fetch(here, { method: 'POST', body: fd, keepalive: true })
                     .then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok) lastSent = -1, lastSave = 0; })

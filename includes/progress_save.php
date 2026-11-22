@@ -24,6 +24,22 @@ function wp_progress_save(array $in, $username)
     return $r;
 }
 
+/**
+ * El idioma de audio elegido en el reproductor, para «Continuar viendo» de todos los equipos (progress.php «play», como
+ * Roku y Vega): play_a (idioma de la pista, p. ej. spa / es-419) y play_ai (su número entre las pistas de audio).
+ * play_a vacío = se volvió al audio predeterminado (el panel lo borra para todos). Sin play_a no se manda nada (el panel
+ * conserva el que dejó otro equipo).
+ */
+function wp_progress_play(array $in)
+{
+    if (!isset($in['play_a'])) return [];
+    $a = substr(preg_replace('/[^A-Za-z0-9_.-]/', '', (string)$in['play_a']), 0, 12);
+    if ($a === '') return ['play' => ['a' => '']];
+    $p = ['a' => $a];
+    if (isset($in['play_ai']) && is_numeric($in['play_ai'])) $p['ai'] = max(-1, min(31, (int)$in['play_ai']));
+    return ['play' => $p];
+}
+
 function wp_progress_save_do(array $in, $username)
 {
     $stream_id = preg_replace('/[^0-9]/', '', (string)($in['id'] ?? ''));
@@ -88,6 +104,6 @@ function wp_progress_save_do(array $in, $username)
         'id' => $stream_id,
         'seriesId' => $slug === 'series' ? $series_id : '',
         'categoryId' => $category,
-    ]);
+    ] + wp_progress_play($in));
     return ['ok' => $ok];
 }

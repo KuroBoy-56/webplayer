@@ -320,7 +320,7 @@ include "header.php";
 
 <script src="assets/vendor/hls.min.js" defer></script>
 <script src="assets/vendor/mpegts.min.js" defer></script>
-<script src="assets/nf/player.js?v=33" defer></script>
+<script src="assets/nf/player.js?v=35" defer></script>
 <script>
 // imagen de un canal sin logo: la de la marca (el logo del dueño solo con Omitir)
 var CH_FB = <?php echo json_encode(wp_channel_fallback(), JSON_UNESCAPED_SLASHES); ?>;

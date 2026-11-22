@@ -91,6 +91,9 @@ if ($restart == 0) {
     $resume_time = (int)($prog[$slug . '_' . $id]['current_time'] ?? 0);
 }
 
+// el idioma con el que se venía viendo en cualquier equipo (Continuar viendo, como Roku y Vega)
+$play_hint = wp_play_hint($slug, $id, $series_id_get);
+
 /* ---------- Fuentes en orden de prueba ---------- */
 $use_vlc = (isset($_COOKIE["use_vlc"]) && !$demo) ? $_COOKIE["use_vlc"] : "0";
 $exts = [$ext];
@@ -130,6 +133,7 @@ $media_cfg = wp_media_cfg($kind, $id, $exts, $ext, (int)($dur_secs ?? 0), $multi
 $http_url = wp_handoff_url([
     'kind' => $kind, 'id' => $id, 'exts' => $exts, 'vlcExt' => $ext, 'slug' => $slug, 'sid' => $series_id_get,
     'title' => $content_name, 'sub' => $episode_label, 'resume' => $resume_time, 'dur' => (int)($dur_secs ?? 0), 'multi' => $multi_audio ? 1 : 0,
+    'play' => $play_hint,
     'back' => wp_handoff_abs($slug == 'movie' ? 'Movie_description.php?id=' . $id : 'seriesvideo.php?id=' . $series_id_get),
     'next' => $has_next ? wp_handoff_abs($next_url) : '',
 ]);
@@ -180,7 +184,7 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
     <script src="assets/vendor/hls.min.js" defer></script>
     <script src="assets/vendor/mpegts.min.js" defer></script>
     <script src="assets/nf/mp4mse.js?v=2" defer></script>
-    <script src="assets/nf/player.js?v=34" defer></script>
+    <script src="assets/nf/player.js?v=35" defer></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         var cfg = <?php echo json_encode([
@@ -199,6 +203,8 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
             'media' => $media_cfg,
             'mediaOff' => $media_cfg ? '' : $media_off,
             'vidx' => wp_vidx_url($kind, $id, $ext),
+            'play' => $play_hint,
+            'tkey' => $slug . '_' . $id,
             'multi' => $multi_audio,
             'tracks' => $tracks_url,
             'ext' => $ext,
@@ -237,6 +243,9 @@ if ($media_cfg && $multi_audio) $extra[] = ['label' => t('¿Sin audio o no carga
             fd.append('series_id', cfg.seriesId);
             fd.append('current_time', cur);
             fd.append('total_time', tot > 0 ? tot : 0);
+            // el idioma elegido para el título viaja con el avance (lo usan Roku, Vega y las demás apps)
+            var ph = player && player.playHint ? player.playHint() : null;
+            if (ph) { fd.append('play_a', ph.a); if (ph.ai != null && ph.ai >= 0) fd.append('play_ai', ph.ai); }
             if (beacon && navigator.sendBeacon) { navigator.sendBeacon('save_progress.php', fd); return; }
             fetch('save_progress.php', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true })
                 .then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok) lastSent = -1, lastSave = 0; })

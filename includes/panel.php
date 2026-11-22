@@ -432,7 +432,9 @@ function wp_panel_userdata($refresh = false)
     // parámetro único: ninguna caché del hosting puede devolver un progreso viejo; «profile» = el perfil elegido
     // (includes/profiles.php; sin él, el principal)
     $pid = wp_prof_id();
-    $j = wp_panel_call('progress.php?v=2' . ($pid !== '' ? '&profile=' . rawurlencode($pid) : '') . '&_=' . str_replace('.', '', (string)microtime(true)), null, 6);
+    // &play=1: cada avance trae «play», el idioma de audio elegido para el título en cualquier equipo (Roku, Vega…;
+    // docs/AVANCE-COMPARTIDO.md del panel)
+    $j = wp_panel_call('progress.php?v=2&play=1' . ($pid !== '' ? '&profile=' . rawurlencode($pid) : '') . '&_=' . str_replace('.', '', (string)microtime(true)), null, 6);
     // el perfil se eliminó en otro equipo: la próxima página vuelve a «¿Quién está viendo?»
     if ($j === null && $pid !== '' && (int)($GLOBALS['wp_panel_code'] ?? 0) === 410) wp_prof_gone();
     wp_panel_remember_tmdb($j);
@@ -504,8 +506,39 @@ function wp_user_progress($username = '')
             'current_time' => (int)($p['position'] ?? 0),
             'total_time' => (int)($p['duration'] ?? 0),
             'last_watched' => (int)@strtotime((string)($p['updatedAt'] ?? '')),
+            'play' => wp_play_clean($p['play'] ?? null),
         ];
     }
+    return $out;
+}
+
+/** El idioma de «play» ({a, ai}) limpio, como lo guarda el panel (play_field), o null. */
+function wp_play_clean($v)
+{
+    if (!is_array($v)) return null;
+    $a = substr(preg_replace('/[^A-Za-z0-9_.-]/', '', (string)(is_scalar($v['a'] ?? null) ? $v['a'] : '')), 0, 12);
+    if ($a === '') return null;
+    $o = ['a' => $a];
+    if (isset($v['ai']) && is_numeric($v['ai'])) $o['ai'] = max(-1, min(31, (int)$v['ai']));
+    return $o;
+}
+
+/**
+ * El idioma con el que se venía viendo este título en cualquier equipo de la línea (Continuar viendo, como Roku y Vega):
+ * el de la película o el de la serie; en una serie el idioma vale para sus otros capítulos y el número de pista (ai)
+ * solo para el mismo capítulo. null si nadie eligió un idioma.
+ */
+function wp_play_hint($slug, $id, $seriesId)
+{
+    $best = null;
+    foreach (wp_user_progress() as $p) {
+        if (empty($p['play'])) continue;
+        $same = $slug === 'series' ? ($p['type'] === 'series' && $p['series_id'] === (string)$seriesId) : ($p['type'] === 'movie' && $p['stream_id'] === (string)$id);
+        if ($same && (!$best || $p['_when'] > $best['_when'])) $best = $p;
+    }
+    if (!$best) return null;
+    $out = ['a' => $best['play']['a']];
+    if (isset($best['play']['ai']) && ($slug !== 'series' || $best['stream_id'] === (string)$id)) $out['ai'] = $best['play']['ai'];
     return $out;
 }
 
