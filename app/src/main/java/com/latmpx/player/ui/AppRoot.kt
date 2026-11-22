@@ -397,6 +397,20 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
         if (!state.pop()) state.tab = Tab.HOME
     }
     val top = state.stack.lastOrNull()
+    // Cada pantalla guarda su posición (la lista de la sección, la rejilla de la categoría y cada fila horizontal) mientras
+    // hay otra abierta encima: al volver de una ficha, Series › «Series 4K» queda donde estaba, con el título que se abrió
+    // a la vista. Lo que se cierra se olvida (abrir otra vez la misma ficha empieza arriba) y cambiar de pestaña empieza
+    // arriba, como antes.
+    val saver = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    val depth = state.stack.size
+    val screenKey = if (top == null) "tab:${state.tab.name}" else "r$depth:${top.hashCode()}"
+    val screenKeys = remember { HashMap<Int, String>() }
+    LaunchedEffect(screenKey) {
+        val gone = screenKeys.filterKeys { it > depth }.values + listOfNotNull(screenKeys[depth]?.takeIf { it != screenKey })
+        gone.forEach { saver.removeState(it) }
+        screenKeys.keys.removeAll { it > depth }
+        screenKeys[depth] = screenKey
+    }
     val content: @Composable () -> Unit = {
         when (top) {
             is Route.Detail -> DetailScreen(state, top.item)
@@ -448,7 +462,7 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
         // perfil infantil sin canales de niños: sin TV en vivo
         val phoneTabs = listOf(Tab.HOME, Tab.SERIES, Tab.MOVIES, Tab.LIVE, Tab.ACCOUNT).filter { it != Tab.LIVE || !state.hideLive }
         Column(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f)) { content() }
+            Box(Modifier.weight(1f)) { saver.SaveableStateProvider(screenKey) { content() } }
             if (!state.immersive) NavigationBar(containerColor = Color(0xFF0B0B0B), tonalElevation = 0.dp) {
                 phoneTabs.forEach { t ->
                     NavigationBarItem(

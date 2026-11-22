@@ -122,8 +122,10 @@ fun BrowseScreen(state: AppState, title: String, kind: Kind?, categoryIds: Set<S
         val q = com.latmpx.player.data.Platforms.fold(query.trim())
         if (q.isEmpty()) list else list.filter { com.latmpx.player.data.Platforms.fold(it.name).contains(q) }
     }
+    val phone = !LocalIsTv.current
     Column(Modifier.fillMaxSize().background(NfBg)) {
-        Row(Modifier.fillMaxWidth().padding(start = sidePad(), end = sidePad(), top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = if (phone) 4.dp else sidePad(), end = sidePad(), top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (phone) PhoneBackButton(state)
             Text(title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = if (searching) Modifier.widthIn(max = 280.dp) else Modifier.weight(1f))
             if (platform != null) {
                 if (searching) {
@@ -195,11 +197,12 @@ fun SavedScreen(state: AppState, continueWatching: Boolean) {
             Cloud.progressList().mapNotNull { p -> state.itemFromProgress(p)?.let { it.copy(poster = p.poster.ifEmpty { it.poster }) } }.distinctBy { it.key }
         } else Cloud.favList().filter { it.kind != Kind.LIVE }
     }
+    val phone = !LocalIsTv.current
     Column(Modifier.fillMaxSize().background(NfBg)) {
-        Text(
-            stringResource(if (continueWatching) R.string.continue_watching else R.string.my_list), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = sidePad(), top = 16.dp, bottom = 6.dp),
-        )
+        Row(Modifier.padding(start = if (phone) 4.dp else sidePad(), top = if (phone) 12.dp else 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (phone) PhoneBackButton(state)
+            Text(stringResource(if (continueWatching) R.string.continue_watching else R.string.my_list), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        }
         if (list.isEmpty()) Empty(stringResource(if (continueWatching) R.string.continue_empty else R.string.my_list_empty))
         else Grid(state, list)
     }
