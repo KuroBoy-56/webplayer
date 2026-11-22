@@ -174,6 +174,9 @@ object Xtream {
 
     fun clearCache() { cache.clear() }
 
+    /** «Actualizar catálogo»: fichas y capítulos en memoria se vuelven a pedir al abrirlos (las listas las cambia refresh) */
+    suspend fun clearDetails() = lock.withLock { cache.keys.removeAll { it.startsWith("vod|") || it.startsWith("ser|") } }
+
     /** Categorías: memoria → copia del equipo → servidor. */
     suspend fun categories(s: Session, kind: Kind): List<Category> = memo("cat|${kind.name}") {
         CatalogCache.categories(s, kind) ?: fetchCategories(s, kind)
