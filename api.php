@@ -185,7 +185,7 @@ switch ($action) {
                 if (!is_array($ch) || strpos(wp_norm($ch['name'] ?? ''), $qn) === false) continue;
                 $res['live'][] = [
                     't' => 'live', 'id' => (string)$ch['stream_id'], 'n' => (string)$ch['name'], 'r' => '', 'y' => '',
-                    'i' => wp_logo($ch['stream_icon'] ?? ''),
+                    'i' => ($ls = wp_logo_sources($ch['stream_icon'] ?? ''))[0], 'f' => array_slice($ls, 1),
                     'u' => 'tvguide.php?id=' . rawurlencode($ch['stream_id']) . '&slug=live&category_id=' . rawurlencode($ch['category_id'] ?? ''),
                 ];
                 if (count($res['live']) >= 6) break;

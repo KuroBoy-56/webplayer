@@ -264,6 +264,10 @@ include "header.php";
 .sp-card { position: relative; background: var(--sp-card); border: 1px solid var(--sp-line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 10px; transition: transform .18s ease, background .18s ease, border-color .18s; overflow: hidden; }
 .sp-card:hover { transform: translateY(-2px); background: var(--sp-card2); border-color: rgba(255,255,255,.16); }
 .sp-card.live { border-color: rgba(229,9,20,.55); background: linear-gradient(180deg, rgba(229,9,20,.12), var(--sp-card) 60%); }
+/* un texto largo de una sola línea (liga, evento, estadio, canales) ya no ensancha la tarjeta: se corta con «…» y la
+   etiqueta «En vivo» y el botón «TV en vivo» quedan siempre dentro del recuadro (2.9.10) */
+.sp-card { grid-template-columns: minmax(0, 1fr); }
+.sp-card > * { min-width: 0; max-width: 100%; }
 .sp-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--sp-mute); }
 .sp-top .lg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .sp-pill { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; background: #333; color: #ddd; }
@@ -271,14 +275,14 @@ include "header.php";
 .sp-pill.live .sp-dot { background: #fff; width: 7px; height: 7px; }
 .sp-pill.fin { background: #2b2b2b; color: #9a9a9a; }
 .sp-pill.time { background: #fff; color: #000; font-size: 13px; letter-spacing: 0; text-transform: none; }
-.sp-teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
+.sp-teams { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }
 .sp-team { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-width: 0; }
 .sp-team img, .sp-team .ph { width: 52px; height: 52px; object-fit: contain; }
 .sp-team .ph { display: grid; place-items: center; border-radius: 50%; background: #2c2c2c; color: #888; font-weight: 800; font-size: 18px; }
-.sp-team b { font-size: 14px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.sp-team b { font-size: 14px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
 .sp-score { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 1px; white-space: nowrap; }
 .sp-vs { color: #666; font-weight: 800; font-size: 15px; }
-.sp-single { font-size: 16px; font-weight: 700; text-align: center; line-height: 1.3; }
+.sp-single { font-size: 16px; font-weight: 700; text-align: center; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; max-height: 3.9em; align-self: center; }
 .sp-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--sp-mute); min-width: 0; }
 .sp-foot .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .sp-foot a { flex: none; color: #fff; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 4px; background: rgba(255,255,255,.1); }

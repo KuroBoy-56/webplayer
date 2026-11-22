@@ -92,24 +92,16 @@ function tv_channel_map()
 }
 
 /**
- * Nombre y logo de un canal elegido en la lista (2.9.9): la página manda el nombre (n) y el logo que ya muestra (l, la
- * dirección firmada de img.php), así abrir un canal no descarga la lista completa de canales del servidor IPTV (con
- * miles de canales eso eran los 3 a 5 s). Sin esos datos (enlace directo ?id=), el mapa de canales.
+ * Nombre de un canal elegido en la lista (2.9.9): la página manda el nombre (n) y ya muestra su logo, así abrir un canal
+ * no descarga la lista completa de canales del servidor IPTV (con miles de canales eso eran los 3 a 5 s). El logo queda
+ * null: lo pone la página. Sin el nombre (enlace directo ?id=), el mapa de canales.
  */
 function tv_channel_row($id)
 {
     $n = trim((string)preg_replace('/[\x00-\x1F\x7F]+/u', ' ', (string)($_GET['n'] ?? '')));
     if ($n === '' || !isset($_GET['n'])) return tv_channel_map()[(string)$id] ?? null;
     if (function_exists('mb_substr')) $n = mb_substr($n, 0, 150, 'UTF-8'); else $n = substr($n, 0, 150);
-    // el logo original, solo si la firma de img.php es la nuestra
-    $icon = '';
-    $q = parse_url((string)($_GET['l'] ?? ''), PHP_URL_QUERY);
-    if (is_string($q)) {
-        parse_str($q, $lq);
-        $u = isset($lq['u']) ? (string)wp_b64u_dec((string)$lq['u']) : '';
-        if ($u !== '' && preg_match('~^https?://~i', $u) && isset($lq['s']) && hash_equals(wp_sign($u), (string)$lq['s'])) $icon = $u;
-    }
-    return [$n, $icon];
+    return [$n, null];
 }
 
 /**
@@ -120,6 +112,8 @@ function tv_channel_data($id, $username, $fav_file, $fav = true)
 {
     $row = tv_channel_row($id);
     $info = $row ? ['name' => $row[0], 'stream_icon' => $row[1]] : null;
+    // logo: null = lo pone la página (canal elegido en la lista)
+    $logos = $row && $row[1] === null ? [] : wp_logo_sources($info['stream_icon'] ?? '');
     $name = ($info['name'] ?? '') !== '' ? $info['name'] : t('Canal');
     $settings = isset($_COOKIE["settings_array"]) ? json_decode($_COOKIE["settings_array"], true) : [];
     $pref = (isset($settings["stream_type"]) && $settings["stream_type"] === 'ts') ? 'ts' : 'm3u8';
@@ -132,7 +126,8 @@ function tv_channel_data($id, $username, $fav_file, $fav = true)
     return [
         'id' => (string)$id,
         'name' => $name,
-        'logo' => wp_logo($info['stream_icon'] ?? ''),
+        'logo' => $logos[0] ?? '',
+        'logos' => $logos,
         'poster' => (string)($info['stream_icon'] ?? ''),
         'sources' => $sources,
         'http' => $http,
@@ -153,7 +148,12 @@ if (isset($_GET['ajax'])) {
         $out = [];
         foreach (tv_channels((string)($_GET['category_id'] ?? ''), $username, $fav_file) as $c) {
             if (!is_array($c)) continue;
-            $out[] = ['id' => (string)$c['stream_id'], 'n' => (string)$c['name'], 'i' => wp_logo($c['stream_icon'] ?? '')];
+            // logo: i la primera dirección, j las demás (2.9.10), p el original (póster de Mis favoritos)
+            $ls = wp_logo_sources($c['stream_icon'] ?? '');
+            $o = ['id' => (string)$c['stream_id'], 'n' => (string)$c['name'], 'i' => $ls[0]];
+            if (count($ls) > 1) $o['j'] = array_slice($ls, 1);
+            if (trim((string)($c['stream_icon'] ?? '')) !== '') $o['p'] = trim((string)$c['stream_icon']);
+            $out[] = $o;
         }
         echo json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     } elseif ($_GET['ajax'] === 'channel') {
@@ -307,7 +307,7 @@ include "header.php";
             <div class="ph"><?php echo wp_icon('tv'); ?><span><?php echo t('Selecciona un canal para comenzar a ver'); ?></span></div>
         </div>
         <div class="tv-info" id="tvInfo" style="display:none">
-            <img id="tvLogo" src="" alt="" onerror="this.onerror=null;this.src=<?php echo e(json_encode(wp_channel_fallback(), JSON_UNESCAPED_SLASHES)); ?>">
+            <img id="tvLogo" src="" alt="">
             <div class="tv-ttl"><h2 id="tvName"></h2><div class="tv-now" id="tvNow"></div></div>
             <button type="button" class="nf-btn-circle" id="toggleLiveFav" title="<?php echo e(t('Favorito')); ?>"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 17.3 18.2 21l-1.6-7L22 9.2l-7.2-.6L12 2 9.2 8.6 2 9.2 7.4 14l-1.6 7z"/></svg></button>
         </div>
@@ -324,6 +324,26 @@ include "header.php";
 <script>
 // imagen de un canal sin logo: la de la marca (el logo del dueño solo con Omitir)
 var CH_FB = <?php echo json_encode(wp_channel_fallback(), JSON_UNESCAPED_SLASHES); ?>;
+// logo de un canal (2.9.10): prueba sus direcciones en orden (directo, Worker, hosting) y, si ninguna carga, el de la marca.
+// Una imagen de 1 a 3 px (logo vacío) cuenta como fallida.
+function chLogoNext(img) {
+    var l = [];
+    try { l = JSON.parse(img.getAttribute('data-alt') || '[]'); } catch (e) {}
+    if (l.length) { img.setAttribute('data-alt', JSON.stringify(l.slice(1))); img.src = l[0]; return; }
+    img.removeAttribute('data-alt');
+    img.onerror = null;
+    if (img.getAttribute('src') !== CH_FB) img.src = CH_FB;
+}
+function chLogoOk(img) {
+    if (img.getAttribute('data-alt') !== null && img.naturalWidth > 0 && img.naturalWidth < 4) chLogoNext(img);
+}
+function chLogoSet(img, srcs) {
+    srcs = (srcs || []).filter(Boolean);
+    img.setAttribute('data-alt', JSON.stringify(srcs.slice(1)));
+    img.onerror = function () { chLogoNext(img); };
+    img.onload = function () { chLogoOk(img); };
+    img.src = srcs[0] || CH_FB;
+}
 document.addEventListener('DOMContentLoaded', function () {
     var state = { cat: <?php echo json_encode($selectedCategoryId); ?>, ch: null, player: null, channels: [], seq: 0, favs: <?php echo json_encode($live_favs); ?> };
     var initial = <?php echo json_encode($initial, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG); ?>;
@@ -339,7 +359,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('chCount').textContent = items.length ? '(' + items.length + ')' : '';
         if (!items.length) { list.innerHTML = '<div class="tv-empty">' + (state.cat === 'favorites' ? <?php echo tj('Aún no tienes canales favoritos.'); ?> : <?php echo tj('No hay canales en esta sección.'); ?>) + '</div>'; return; }
         list.innerHTML = items.map(function (c) {
-            return '<div class="tv-ch' + (state.ch === c.id ? ' active' : '') + '" data-id="' + NF.esc(c.id) + '"><img src="' + NF.esc(c.i) + '" alt="" loading="lazy" onerror="this.onerror=null;this.src=CH_FB"><span>' + NF.esc(c.n) + '</span></div>';
+            return '<div class="tv-ch' + (state.ch === c.id ? ' active' : '') + '" data-id="' + NF.esc(c.id) + '"><img src="' + NF.esc(c.i || CH_FB) + '" data-alt="' + NF.esc(JSON.stringify(c.j || [])) + '" alt="" loading="lazy" onerror="chLogoNext(this)" onload="chLogoOk(this)"><span>' + NF.esc(c.n) + '</span></div>';
         }).join('');
     }
 
@@ -418,9 +438,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (el) el.classList.add('active');
     }
 
-    // nombre y logo del canal que la página ya tiene: el servidor no descarga la lista completa para saberlos (2.9.9)
+    // nombre del canal que la página ya tiene: el servidor no descarga la lista completa para saberlo (2.9.9)
     function chq(c) {
-        return c ? '&n=' + encodeURIComponent(c.n || '') + '&l=' + encodeURIComponent(c.i || '') : '';
+        return c ? '&n=' + encodeURIComponent(c.n || '') : '';
+    }
+    function chById(id) {
+        return state.channels.filter(function (x) { return x.id === String(id); })[0] || null;
     }
 
     // la guía de un canal, aparte (2.9.9): el video arranca sin esperarla
@@ -436,7 +459,10 @@ document.addEventListener('DOMContentLoaded', function () {
         markActive(data.id);
         document.getElementById('tvInfo').style.display = '';
         document.getElementById('tvName').textContent = data.name;
-        document.getElementById('tvLogo').src = data.logo;
+        // el logo: el que manda el servidor (enlace directo) o el que la página ya puso al elegir el canal
+        if (data.logos && data.logos.length) chLogoSet(document.getElementById('tvLogo'), data.logos);
+        var cc = chById(data.id);
+        if (!data.poster && cc && cc.p) data.poster = cc.p;
         var fav = document.getElementById('toggleLiveFav');
         var isFav = data.fav === null || data.fav === undefined ? state.favs.indexOf(String(data.id)) >= 0 : !!data.fav;
         fav.classList.toggle('on', isFav);
@@ -474,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function () {
         state.ch = id;
         markActive(id);
         document.getElementById('tvInfo').style.display = '';
-        if (c) { document.getElementById('tvName').textContent = c.n; document.getElementById('tvLogo').src = c.i; }
+        if (c) { document.getElementById('tvName').textContent = c.n; chLogoSet(document.getElementById('tvLogo'), [c.i].concat(c.j || [])); }
         var box = document.getElementById('tvPlayer');
         if (state.player) { try { state.player.destroy(); } catch (e) {} }
         state.player = null;

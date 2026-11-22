@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '2.9.9');
+define('WP_VERSION', '2.9.10');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -872,6 +872,25 @@ function wp_logo($url)
     $url = trim((string)$url);
     if ($url === '' || !preg_match('~^https?://[^/\s]+~i', $url)) return wp_channel_fallback();
     return wp_proxy_url($url, 'img.php') . '&fb=1';
+}
+
+/**
+ * Direcciones del logo de un canal, en orden (2.9.10). Antes solo img.php del hosting: si el servidor IPTV (o el sitio
+ * de los logos) bloquea o limita la IP del hosting, todos sus canales quedaban con el logo de la marca. Ahora, como en
+ * las apps de TV, el navegador lo pide primero directo desde la IP del cliente (logo https, o la web en http), después
+ * por el puente del Worker (logo http con la web en https) y al final por img.php del hosting, que, si tampoco puede,
+ * manda el logo de la marca (wp_channel_fallback).
+ */
+function wp_logo_sources($url)
+{
+    $url = trim((string)$url);
+    if ($url === '' || !preg_match('~^https?://[^/\s]+~i', $url)) return [wp_channel_fallback()];
+    $out = [];
+    if (stripos($url, 'https://') === 0 || !wp_is_https()) $out[] = preg_replace_callback('/[^\x21-\x7e]/', function ($m) { return rawurlencode($m[0]); }, $url);
+    $r = function_exists('wp_xt_relay_img') ? wp_xt_relay_img($url) : '';
+    if ($r !== '') $out[] = $r;
+    $out[] = wp_logo($url);
+    return array_values(array_unique($out));
 }
 
 /* ------------------------------------------------------------------ */
