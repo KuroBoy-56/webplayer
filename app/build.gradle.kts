@@ -24,7 +24,7 @@ android {
 
     defaultConfig {
         applicationId = "com.latmpx.player.tv"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 36
         versionCode = 35
         versionName = "1.6.11"
