@@ -441,4 +441,9 @@
     <string name="sp_watch_auto">Watch the event (automatic channel)</string>
     <string name="sp_where">Where do you want to watch it?</string>
     <string name="sp_search_go">Search</string>
+    <string name="catalog_reload">Refresh catalog</string>
+    <string name="catalog_reload_desc">Downloads movies, series and channels again from the server</string>
+    <string name="catalog_reloading">Refreshing the catalog…</string>
+    <string name="catalog_reloaded">Catalog updated</string>
+    <string name="catalog_reload_failed">Part of the catalog could not be refreshed; the previous copy is kept</string>
 </resources>

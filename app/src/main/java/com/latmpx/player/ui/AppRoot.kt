@@ -187,6 +187,35 @@ fun AppRoot() {
         state.loading = false
         state.catalogLoading = false
     }
+    // Cuenta › «Actualizar catálogo» (como Roku): películas, series y canales otra vez del servidor IPTV aunque la copia del
+    // equipo sea nueva (y las fichas / capítulos que quedaron en memoria). Lo que se ve sigue en pantalla mientras baja; si
+    // el servidor no contesta un tipo, se conserva lo anterior de ese tipo.
+    LaunchedEffect(state.catalogRev) {
+        if (state.catalogRev == 0) return@LaunchedEffect
+        val s = state.session
+        if (s == null) { state.catalogReloading = false; return@LaunchedEffect }
+        state.catalogLoading = true
+        try {
+            Xtream.clearDetails()
+            val ok = listOf(Kind.MOVIE, Kind.SERIES, Kind.LIVE).map { k ->
+                async {
+                    val r = runCatching { Xtream.refresh(s, k) }.getOrNull()
+                    if (r != null && state.session === s) state.putCatalog(k, r.first, r.second)
+                    r != null
+                }
+            }.awaitAll()
+            if (state.session === s) {
+                // Continuar viendo y Mi lista también del panel
+                if (state.profileReady) runCatching { Cloud.load() }
+                state.refresh++
+                android.widget.Toast.makeText(ctx, com.latmpx.player.tr(if (ok.all { it }) com.latmpx.player.R.string.catalog_reloaded else com.latmpx.player.R.string.catalog_reload_failed),
+                    android.widget.Toast.LENGTH_LONG).show()
+            }
+        } finally {
+            state.catalogLoading = false
+            state.catalogReloading = false
+        }
+    }
     // perfiles (docs/PERFILES.md del panel): al entrar se leen. Apagados, una sola conexión, DEMO o el panel sin respuesta
     // en 12 s: directo al principal, como siempre (la app nunca se queda esperando). Si no, «¿Quién está viendo?».
     LaunchedEffect(state.session) {
