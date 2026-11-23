@@ -10,3 +10,6 @@ src/generated/
 out/
 webos/app.js
 webos/img/
+
+# caché de Python (tools/lg-icons/make-lg-icons.py)
+__pycache__/
