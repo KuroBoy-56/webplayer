@@ -25,6 +25,14 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 
 ## Novedades de la 1.4.0
 
+- (1.4.10) **Revisión de LG QA2026111927245 («App icon background color and tile color do not match», 1.3.11):** el
+  `appinfo.json` y los iconos del paquete ya coincidían (`iconColor` #000000 y fondo #000000), pero en LG Apps el mosaico
+  usa el **icono de 400x400 que se sube en Seller Lounge**, no los del `.ipk`, y ese no estaba en el repositorio. Ahora
+  los tres salen del mismo generador (`tools/lg-icons/make-lg-icons.py`, logo con colores planos y el nombre en Inter
+  Bold sobre el color exacto de `iconColor`): `webos/icon.png` 80x80, `webos/largeIcon.png` 130x130 y
+  `webos/store/appIcon-400.png` 400x400 (PNG RGB opacos, sin perfil de color). `npm test` comprueba que el fondo de los
+  tres sea `iconColor` (`tools/lg-icons.test.js`) y el workflow publica `appIcon-400.png` junto al `.ipk`. **En Seller
+  Lounge hay que reemplazar el App Icon por `appIcon-400.png`**; sin eso LG vuelve a ver el fondo anterior.
 - (1.4.9) **Actualizar catálogo (como Roku):** Cuenta › «Actualizar catálogo» (antes «Recargar catálogo») vuelve a bajar películas, series y canales del servidor IPTV sin vaciar lo que se ve: cada lista se cambia al llegar y, si el servidor no contesta una, se conserva la anterior; avisa «Actualizando el catálogo…» y al terminar «Catálogo actualizado» (`reloadCatalog()` en `src/state.ts`). Antes la pantalla quedaba vacía cargando todo de nuevo.
 - (1.4.8) **Perfil infantil con la lista de títulos para niños (reglas v3 del panel):** las reglas traen `kids_titles` (unos 700 títulos: Shrek, Toy Story, Paw Patrol, Bob Esponja, Pokémon…): un título así cuenta como de una categoría de niños aunque esté en «Estrenos», sin ganar nunca a las listas de bloqueo ni al «no» de TMDB. Se mira solo sin género o con género de niños, familia o animación (o en una categoría de Disney o familia) y se guarda por nombre (`kidsTitle()` en `src/lib/kids.ts`). La copia de fábrica `src/lib/kidsrules.ts` es la v3 del panel, generada desde `includes/kids_rules.php`.
 - (1.4.7) **Logo de la marca en los canales sin logo:** un canal en vivo sin logo, o cuyo logo no carga, muestra el logo de la marca en la lista de canales, la vista previa y el reproductor: el de la app sin distribuidor, el del distribuidor con su número y ninguno si el distribuidor no tiene logo, como la web player y Android (`ChannelLogo` en `src/components/ui.tsx`).
@@ -597,8 +605,10 @@ quedaba en negro porque ahí no estaba `app.js`. Si algo falla al arrancar, `ind
 pantalla en lugar de dejarla negra. No hay pantalla de carga fija de LG (`splashBackground`): la de inicio la arma la
 app con el logo y los colores que el distribuidor configura en el panel (o los de MPX Player con Omitir), y sin
 distribuidor elegido lo primero es el número de distribuidor. Solo el icono y el nombre son fijos.
-El icono del menú de LG (`webos/icon.png`, `largeIcon.png`) es el logo con el nombre sobre negro, y `iconColor` de
-`appinfo.json` también es negro (#000000).
+El icono del menú de LG (`webos/icon.png`, `largeIcon.png`) y el de Seller Lounge (`webos/store/appIcon-400.png`) son
+el logo con el nombre sobre negro, y `iconColor` de `appinfo.json` también es negro (#000000). Se generan juntos con
+`python3 tools/lg-icons/make-lg-icons.py` (Pillow), que toma el fondo de `iconColor`: si cambia el color del mosaico,
+se vuelven a generar los tres y se sube el de 400x400 a Seller Lounge.
 
 ## Instalarla en tu televisor LG
 

@@ -49,6 +49,8 @@ jobs:
           mkdir -p out out-hd pkg pkg-hd
           ares-package -o pkg dist
           cp pkg/*.ipk out/MPXPlayer.ipk
+          # icono de 400x400 de Seller Lounge (Application > App Icon): mismo fondo que iconColor, ver tools/lg-icons/
+          cp webos/store/appIcon-400.png out/appIcon-400.png
           (cd dist && zip -qr ../out/MPXPlayer-web.zip .)
           # versión HD (1280x720): mismo id y versión, appinfo.json con "resolution": "1280x720"
           ares-package -o pkg-hd dist-hd
@@ -72,9 +74,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd out
-          sha256sum MPXPlayer.ipk MPXPlayer-web.zip > SHA256SUMS.txt
+          sha256sum MPXPlayer.ipk MPXPlayer-web.zip appIcon-400.png > SHA256SUMS.txt
           gh release delete webos-latest --yes --cleanup-tag || true
-          gh release create webos-latest MPXPlayer.ipk MPXPlayer-web.zip SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease \
+          gh release create webos-latest MPXPlayer.ipk MPXPlayer-web.zip appIcon-400.png SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease \
             --title "MPX Player LG Smart TV · webOS Full HD 1920x1080 (última versión)" \
             --notes "Compilado automáticamente desde la rama webOS ($GITHUB_SHA). Se instala con la app Developer Mode de LG y ares-install (ver el README de la rama webOS)."
           cd ../out-hd
