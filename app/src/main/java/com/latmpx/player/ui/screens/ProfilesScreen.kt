@@ -85,8 +85,8 @@ private data class EditTarget(val p: Profiles.Profile?, val pin: String)
 /**
  * «¿Quién está viendo?» (docs/PERFILES.md del panel, sección 6). Horizontal (TV, tableta o celular girado): perfiles en
  * columna a la izquierda, «Salir» arriba a la izquierda, logo arriba a la derecha y «Administrar perfiles» debajo de los
- * perfiles. Vertical (celular): el destacado arriba, el título sobre los perfiles, dos por fila y el quinto centrado. De
- * fondo el destacado de la semana de TMDB (solo nombre y calificación) y la versión abajo a la izquierda.
+ * perfiles; de fondo el destacado de la semana de TMDB (solo nombre y calificación) y la versión abajo a la izquierda.
+ * Vertical (celular): como la app de Netflix ([PhoneProfiles]).
  */
 @Composable
 fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBack: () -> Unit, onLogout: () -> Unit) {
@@ -104,6 +104,8 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
     var edit by remember { mutableStateOf<EditTarget?>(null) }
     var askLogout by remember { mutableStateOf(false) }
     val featured by produceState(emptyList<Profiles.Featured>()) { value = runCatching { Profiles.featuredList() }.getOrDefault(emptyList()) }
+    // el destacado que se ve (vertical: su logo va sobre «Elige tu perfil»)
+    var shownIdx by remember { mutableStateOf(0) }
 
     fun toast(msg: String) = android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
 
@@ -152,10 +154,10 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
     val rows = list.size + (if (canAdd) 1 else 0)
 
     Box(Modifier.fillMaxSize().background(NfBg)) {
-        // fondo: lo más destacado de la semana, 10 s cada uno (horizontal: toda la pantalla; vertical: arriba)
-        ProfileBackdrops(featured, wide, if (wide) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height((conf.screenHeightDp * 0.34f).dp))
-        // arriba: «Salir» a la izquierda, el título al centro (en horizontal) y el logo a la derecha
-        Row(Modifier.fillMaxWidth().padding(horizontal = sidePad() + 6.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        // fondo: lo más destacado de la semana, 10 s cada uno, a pantalla completa
+        ProfileBackdrops(featured, wide, Modifier.fillMaxSize()) { shownIdx = it }
+        // arriba: «Salir» a la izquierda, el título al centro y el logo a la derecha (vertical: nada arriba, como Netflix)
+        if (wide) Row(Modifier.fillMaxWidth().padding(horizontal = sidePad() + 6.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             AppButton(stringResource(R.string.exit), minHeight = 40.dp, fontSize = 14.sp) { askLogout = true }
             Spacer(Modifier.weight(1f))
             LogoHeader(height = if (wide) 34.dp else 28.dp)
@@ -166,8 +168,7 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
         )
 
         // perfiles grandes: en horizontal los 5 caben en la altura (con el título arriba y «Administrar perfiles» abajo)
-        val tileSize: Dp = if (wide) (((conf.screenHeightDp - 162) / rows.coerceAtLeast(1)) - 12).dp.coerceIn(56.dp, 140.dp)
-            else ((conf.screenWidthDp - 96) / 2).dp.coerceIn(96.dp, 150.dp)
+        val tileSize: Dp = (((conf.screenHeightDp - 162) / rows.coerceAtLeast(1)) - 12).dp.coerceIn(56.dp, 140.dp)
         if (wide) {
             // perfiles en columna a la izquierda y «Administrar perfiles» debajo (si no caben, se desplaza: nunca se cortan)
             Box(Modifier.fillMaxHeight().padding(start = sidePad() + 24.dp, top = 70.dp, bottom = 36.dp), contentAlignment = Alignment.CenterStart) {
@@ -182,26 +183,13 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
                 }
             }
         } else {
-            // celular en vertical: dos por fila y el quinto centrado
-            Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = (conf.screenHeightDp * 0.30f).dp, bottom = 48.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(stringResource(if (manage) R.string.prof_manage else R.string.prof_who), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(bottom = 18.dp))
-                val tiles: List<Profiles.Profile?> = list + (if (canAdd) listOf(null) else emptyList())
-                tiles.chunked(2).forEach { pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.padding(bottom = 18.dp)) {
-                        pair.forEach { p ->
-                            if (p == null) AddTile(tileSize) { edit = EditTarget(null, "") }
-                            else ProfileTile(p, tileSize, manage, if (list.indexOf(p) == focusIdx) Modifier.focusRequester(firstFocus) else Modifier) { openProfile(p) }
-                        }
-                    }
-                }
-                AppButton(stringResource(if (manage) R.string.prof_done else R.string.prof_manage), minHeight = 44.dp, fontSize = 15.sp) { manage = !manage }
-            }
+            PhoneProfiles(
+                featured = featured.getOrNull(shownIdx), list = list, canAdd = canAdd, manage = manage, focusIdx = focusIdx, firstFocus = firstFocus,
+                onOpen = { openProfile(it) }, onAdd = { edit = EditTarget(null, "") }, onToggleManage = { manage = !manage }, onExit = { askLogout = true },
+            )
         }
-        // la versión abajo a la izquierda, chica
-        Text(
+        // la versión abajo a la izquierda, chica (vertical: con «Editar», junto a «Salir»)
+        if (wide) Text(
             stringResource(R.string.prof_version, BuildConfig.VERSION_NAME), color = Color(0xFF8C8C8C), fontSize = 11.sp,
             modifier = Modifier.align(Alignment.BottomStart).padding(start = sidePad() + 6.dp, bottom = 10.dp),
         )
@@ -283,27 +271,28 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
 /** esquinas del avatar: proporcionales al tamaño como la web (10 px en ~150 px), nunca menos de 6 dp */
 fun avatarCorner(size: Dp): Dp = maxOf(6.dp, size * 0.08f)
 
-/** avatar del perfil (imagen del panel) con la etiqueta «Niños» si es infantil; también lo usa la barra superior */
+/** avatar del perfil (imagen del panel) con la etiqueta «Niños» si es infantil (badge = null: sin etiqueta, como en la
+ *  barra de abajo) */
 @Composable
-fun ProfileAvatar(p: Profiles.Profile, size: Dp) {
-    Box(Modifier.size(size), contentAlignment = Alignment.BottomCenter) {
+fun ProfileAvatar(p: Profiles.Profile, size: Dp, corner: Dp = avatarCorner(size), badge: Alignment? = Alignment.BottomCenter) {
+    Box(Modifier.size(size), contentAlignment = badge ?: Alignment.Center) {
         AsyncImage(
             model = p.avatar, contentDescription = p.name, contentScale = ContentScale.Crop,
-            modifier = Modifier.size(size).clip(RoundedCornerShape(avatarCorner(size))).background(Color(0xFF333333)),
+            modifier = Modifier.size(size).clip(RoundedCornerShape(corner)).background(Color(0xFF333333)),
         )
-        if (p.kids) Text(
+        if (p.kids && badge != null) Text(
             stringResource(R.string.prof_kids), color = NfOnRed, fontSize = (size.value * 0.16f).coerceIn(9f, 16f).sp, fontWeight = FontWeight.Bold, maxLines = 1,
-            modifier = Modifier.padding(bottom = 4.dp).background(NfRed, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
+            modifier = Modifier.padding(bottom = 4.dp, end = if (badge == Alignment.BottomEnd) 4.dp else 0.dp).background(NfRed, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
         )
     }
 }
 
 /** avatar con el lápiz (administrar) y el candado (bloqueado con PIN) */
 @Composable
-private fun AvatarBox(p: Profiles.Profile, size: Dp, manage: Boolean) {
+internal fun AvatarBox(p: Profiles.Profile, size: Dp, manage: Boolean, corner: Dp = avatarCorner(size), badge: Alignment = Alignment.BottomCenter) {
     Box(Modifier.size(size)) {
-        ProfileAvatar(p, size)
-        if (manage) Box(Modifier.size(size).background(Color(0x99000000), RoundedCornerShape(avatarCorner(size))), contentAlignment = Alignment.Center) {
+        ProfileAvatar(p, size, corner, badge)
+        if (manage) Box(Modifier.size(size).background(Color(0x99000000), RoundedCornerShape(corner)), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Edit, stringResource(R.string.prof_edit), tint = Color.White, modifier = Modifier.size(size * 0.32f))
         }
         if (p.locked) Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(size * 0.24f).background(Color(0xCC000000), CircleShape), contentAlignment = Alignment.Center) {
@@ -335,29 +324,6 @@ private fun AddRow(size: Dp, onClick: () -> Unit) {
                 Icon(Icons.Filled.Add, null, tint = Color.White, modifier = Modifier.size(size * 0.4f))
             }
             Text(stringResource(R.string.prof_add), color = if (f) Color.White else Color(0xFFB3B3B3), fontSize = (size.value * 0.2f).coerceIn(16f, 26f).sp, fontWeight = if (f) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 18.dp))
-        }
-    }
-}
-
-/** vertical: avatar grande con el nombre debajo */
-@Composable
-private fun ProfileTile(p: Profiles.Profile, size: Dp, manage: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(10.dp)) { f ->
-        Column(Modifier.width(size + 8.dp).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            AvatarBox(p, size, manage)
-            Text(p.name, color = if (f) Color.White else Color(0xFFB3B3B3), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-        }
-    }
-}
-
-@Composable
-private fun AddTile(size: Dp, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, shape = RoundedCornerShape(10.dp)) { f ->
-        Column(Modifier.width(size + 8.dp).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(size).background(Color(0xFF2A2A2A), RoundedCornerShape(avatarCorner(size))), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Add, null, tint = Color.White, modifier = Modifier.size(size * 0.4f))
-            }
-            Text(stringResource(R.string.prof_add), color = if (f) Color.White else Color(0xFFB3B3B3), fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }
