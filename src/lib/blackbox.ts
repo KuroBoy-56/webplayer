@@ -5,7 +5,10 @@
 // 2.6.11: en segundo plano (Inicio del control, otra app, el televisor apagado) no se guarda nada: ahí el sistema puede
 // cerrar la app cuando quiera y eso no es un error. Antes el cierre del reproductor al pasar a segundo plano («se cierra
 // el reproductor») volvía a guardar la caja y llegaba al panel como «La app se cerró sola». Al volver se guarda otra vez.
+// 2.8.0: también la memoria fuera del montón de JavaScript (ext=: lo bajado del video, los índices), que es la que se
+// llenaba (la app se cerraba con heap=48-68MB)
 import { read, remove, write } from './storage';
+import { jsMemory } from '../player/membudget';
 
 const KEY = 'bb_play';
 const MAX_STEPS = 30;
@@ -14,17 +17,7 @@ let lastWrite = 0;
 // la app está en segundo plano: los pasos quedan en memoria, nada se guarda
 let paused = false;
 
-// memoria de JavaScript (Hermes): ' heap=123MB'; '' si el motor no la da
-function heap(): string {
-  try {
-    const s = (globalThis as any).HermesInternal?.getInstrumentedStats?.();
-    const h = s && (s.js_heapSize || s.js_allocatedBytes);
-    if (h) return ' heap=' + Math.round(h / 1048576) + 'MB';
-  } catch {
-    // sin datos
-  }
-  return '';
-}
+const heap = jsMemory;
 
 function flush(): void {
   if (!cur || paused) return;

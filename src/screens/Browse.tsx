@@ -7,7 +7,7 @@ import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem, openSpecial, playMovie } from '../actions';
 import { Button, Message, Spinner } from '../components/ui';
 import { RowView, rowHeight } from '../components/Tiles';
-import { ChainImage } from '../components/ChainImage';
+import { ChainImage, useImagesOff } from '../components/ChainImage';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, isItem, Item, Row, Special } from '../data/catalog';
 import { continueItems, favItems } from '../data/personal';
@@ -57,11 +57,13 @@ const Billboard = memo(function Billboard({ info, compact }: { info: Info; compa
   }, [art]);
   const title = info.title ?? it?.name ?? '';
   const plot = info.plot ?? it?.plot ?? '';
+  // debajo del reproductor: sin el fondo (2.8.0, ChainImage.tsx)
+  const off = useImagesOff();
   return (
     <View style={s.hero} pointerEvents="none">
       {/* sin fondo propio: la carátula del mismo título agrandada y oscurecida (antes quedaba el fondo del último título
           enfocado, que no tenía nada que ver); el último fondo solo para plataformas, géneros y «Ver todo» */}
-      {under && under !== art && !it ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
+      {under && under !== art && !it && !off ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
       {!art && sideSrc.length ? (
         <View style={s.heroDim}>
           <ChainImage sources={sideSrc} style={s.heroImg} resizeMode="cover" blurRadius={18} />

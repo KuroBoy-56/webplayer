@@ -102,3 +102,20 @@ test('borrar caché (panel) y archivo que cambió', async () => {
   await sleep(30);
   assert.equal([...disk.keys()].filter(k => k.startsWith('latmpxidx:')).length, 0);
 });
+
+test('2.8.0: con un reproductor abierto el índice no se guarda (texto de varios MB y el almacenamiento del sistema mientras se ve: la app se cerraba); se guarda 3 s después de cerrarlo', async () => {
+  const mb = require('../src/player/membudget.ts');
+  const url = 'http://srv.test/movie/u/p/300.mp4';
+  let made = 0;
+  mb.setVideoOpen(true);
+  ix.saveText(url, 'm', 9000, () => { made++; return 'QUJD'; });
+  await sleep(300);
+  assert.equal(made, 0, 'no arma el texto con el video abierto');
+  assert.equal(ix.hasIndex(url), false);
+  mb.setVideoOpen(false);
+  await sleep(1000);
+  assert.equal(made, 0, 'espera a que el reproductor termine de soltar el video');
+  await sleep(2500);
+  assert.equal(made, 1);
+  assert.equal(ix.hasIndex(url), true);
+});

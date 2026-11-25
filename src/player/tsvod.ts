@@ -12,6 +12,7 @@
 import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { RangeState } from './rangeget';
 import { ReadAhead } from './readahead';
+import { aheadSecs, BEHIND_KEEP, BEHIND_MAX } from './membudget';
 import { concat } from '../lib/mp4box';
 import { demux, Pmt } from '../lib/tsdemux';
 import { TsMux } from '../lib/tsmux';
@@ -21,7 +22,7 @@ const PKT = 188;
 // pedazos de ~1 MB (múltiplo de 188)
 const CHUNK = PKT * 5577;
 // lo que se guarda por delante (segundos)
-const AHEAD = 40;
+// segundos entregados por adelantado: aheadSecs (membudget.ts, 2.8.0: como mucho ~40 MB; antes 40 s siempre)
 const WRAP = 8589934592;
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -275,7 +276,9 @@ export class TsVodMse {
     try {
       while (this.alive) {
         const g = this.gen;
-        if (this.sb && this.bufEnd() - (this.v.currentTime || 0) > AHEAD) {
+        if (this.sb && this.bufEnd() - (this.v.currentTime || 0) > aheadSecs(this.bps())) {
+          // 2.8.0: mientras espera también se borra lo ya visto (antes solo antes de entregar: quedaban 30 s o más detrás)
+          await this.trim();
           await sleep(1000);
           continue;
         }
@@ -434,8 +437,8 @@ export class TsVodMse {
     try {
       const b = this.sb.buffered;
       const t = this.v.currentTime || 0;
-      if (b.length && b.start(0) < t - 30) {
-        this.sb.remove(b.start(0), t - 15);
+      if (b.length && b.start(0) < t - BEHIND_MAX) {
+        this.sb.remove(b.start(0), t - BEHIND_KEEP);
         await this.idle();
       }
     } catch {

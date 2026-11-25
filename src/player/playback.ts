@@ -634,6 +634,10 @@ export class Playback {
     // 2.1.4: Continuar viendo (at > 5) también con el lector, como hasta 2.0.17: el de Amazon empezaba en 0 y saltaba al
     // segundo guardado sin mostrar nada (pantalla negra, el tiempo quieto); queda de respaldo si el lector no puede
     if (readerFile.test(url) && (at > 5 || mkvReady(url) || mp4Ready(url))) return false;
+    // 2.8.0: un idioma elegido para el título (la serie DUAL que se viene viendo en latino): directo con el lector. El de
+    // Amazon empezaba con el audio predeterminado, a los pocos segundos se cerraba y el lector abría en un reproductor
+    // nuevo (vodFresh): dos reproductores seguidos, justo antes de varios cierres de la app («reproductor nuevo»)
+    if (readerFile.test(url) && titleLangOf(url)) return false;
     // 2.6.8: la ficha ya está leyendo el índice (línea de una conexión libre, warm.ts): el lector sigue con esos pedidos
     // (abrir con el de Amazon los cortaba y empezaba de cero: cabecera, índice y video)
     if (readerFile.test(url) && (lineLimit() <= 1 || isSingle(url)) && (mp4Known(url) || mkvKnown(url))) return false;

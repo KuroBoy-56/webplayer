@@ -28,6 +28,7 @@ import { freeMp4Memory, MP4_HEAD, mp4Spot } from '../player/mp4mse';
 import { setLineMax, singleFor } from '../player/readahead';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
+import { setVideoOpen } from '../player/membudget';
 import { getState, isFav, saveProgress, showNotice, toggleFav, playHintFor } from '../state';
 import { t } from '../lib/i18n';
 import { alpha, C, px, themed } from '../theme';
@@ -179,10 +180,13 @@ function PlayerScreen({ params }: { params: PlayParams }) {
   // la orden de borrar la caché del panel espera a que se cierre el reproductor
   useEffect(() => {
     setPlayerOpen(true);
+    // 2.8.0: guardar el índice en el equipo y subirlo a la VPS esperan a que se cierre (membudget.ts)
+    setVideoOpen(true);
     // los índices de Continuar viendo en segundo plano se detienen (la línea es del video)
     idxWarmHold(true);
     return () => {
       setPlayerOpen(false);
+      setVideoOpen(false);
       idxWarmHold(false);
       if (startDog.current) clearTimeout(startDog.current);
     };
@@ -513,7 +517,7 @@ function PlayerScreen({ params }: { params: PlayParams }) {
       save(false);
       if (!live && now - bbTick.current > 5000) {
         bbTick.current = now;
-        bbStep('pos=' + Math.round(c.realPos()) + '/' + Math.round(c.duration()) + 's');
+        bbStep('pos=' + Math.round(c.realPos()) + '/' + Math.round(c.duration()) + 's' + bufNote(v));
       }
       // con el menú abierto la barra no se ve: no se redibuja el reproductor cada medio segundo (el menú se trababa);
       // en los canales no hay barra: sin redibujar, la app queda libre para bajar y descifrar el canal
@@ -865,9 +869,12 @@ function PlayerScreen({ params }: { params: PlayParams }) {
     // (hasta 15 s; antes como mucho 5 s). Los pasos van a la caja negra: si la app se cerrara al iniciar el nuevo, el
     // panel lo sabría
     const waitFrom = Date.now();
+    // 2.8.0: el reproductor nuevo (lector después del de Amazon, el episodio siguiente) espera 1 s más después de que el
+    // anterior terminó de cerrarse: el sistema todavía está soltando su decodificador y su memoria
+    const settle = (ok: boolean) => new Promise<boolean>(r => setTimeout(() => r(ok), session > 0 ? 1000 : 0));
     const begin: Promise<void> = inherited
       ? Promise.resolve()
-      : stopLivePreview().then(waitForLivePreview).then(() => (live ? true : waitPlayersClosed(15000))).then(closed => {
+      : stopLivePreview().then(waitForLivePreview).then(() => (live ? true : waitPlayersClosed(15000).then(settle))).then(closed => {
         if (!alive) return;
         if (!live && session > 0) {
           const waited = (Date.now() - waitFrom) / 1000;
@@ -876,6 +883,12 @@ function PlayerScreen({ params }: { params: PlayParams }) {
         // el primer pedido del video va mientras el reproductor se inicia (antes esperaba a que terminara)
         const first = dnsUrl.current?.i === indexRef.current ? dnsUrl.current.url : urlFor(indexRef.current);
         warmStop(live ? undefined : first);
+        // 2.8.0: el idioma con que se venía viendo (avance del panel) antes de elegir el reproductor: con un idioma elegido
+        // abre directo el lector (Playback.nativeVodPlanned); antes se sabía recién en load, después de esta decisión
+        if (params.kind !== 'live') {
+          const hint = playHintFor(params.kind, params.queue[indexRef.current]?.id || '', params.seriesId);
+          if (hint?.a) seedTitleLang(first, hint.a, typeof hint.ai === 'number' ? hint.ai : -1);
+        }
         // con lo que dejó la miniatura de este canal (o con el reproductor nativo) no hace falta pedir nada por adelantado;
         // en un cambio de canal ya se pidió (preUrl)
         if (preUrl) {
@@ -1502,6 +1515,20 @@ function ProgressBar({ pct }: { pct: number }) {
       <View style={[s.dot, { marginLeft: Math.max(0, Math.min(px(BAR_W) - px(DOT), fill - px(DOT / 2))) }]} />
     </View>
   );
+}
+
+// caja negra (2.8.0): segundos de video que tiene el reproductor por delante y por detrás del segundo actual
+function bufNote(v: VideoPlayer): string {
+  try {
+    const b = v.buffered;
+    const t = v.currentTime || 0;
+    for (let i = 0; i < b.length; i++) {
+      if (t >= b.start(i) - 0.5 && t <= b.end(i)) return ' video=+' + Math.round(b.end(i) - t) + 's/-' + Math.round(Math.max(0, t - b.start(i))) + 's';
+    }
+  } catch {
+    // sin datos
+  }
+  return '';
 }
 
 const s = themed(() =>

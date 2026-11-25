@@ -30,7 +30,10 @@ import { resetEngine } from './api/media';
 import { onLoginUnreachable, setStreamFlip } from './api/xtream';
 import { bindReportContext, installCrashReporter, reportError, setRecover } from './api/report';
 import ScreenGuard from './components/ScreenGuard';
-import { bbClose, bbPending } from './lib/blackbox';
+import { bbClose, bbPending, bbStep } from './lib/blackbox';
+import { ImagesOff } from './components/ChainImage';
+import { notePressure } from './player/membudget';
+import { freeMp4Memory } from './player/mp4mse';
 import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppSelector } from './state';
 import { deviceBlocked, deviceSync, onCacheClear, panelAnswered, panelCheckMac, panelLineGone, registerPending, sessionVerdict } from './api/panel';
 
@@ -232,6 +235,18 @@ function App() {
     };
   }, []);
 
+  // 2.8.0: el sistema avisa que queda poca memoria (antes de cerrar la app por pasar de 420 MB): queda en la caja negra,
+  // los lectores entregan la mitad por adelantado durante 3 minutos (membudget.ts) y se sueltan los índices guardados en
+  // memoria que no se están usando
+  useEffect(() => {
+    const sub = AppState.addEventListener('memoryWarning', () => {
+      notePressure();
+      bbStep('aviso del sistema: memoria baja', true);
+      freeMp4Memory();
+    });
+    return () => sub.remove();
+  }, []);
+
   // 2.6.4: un error de JavaScript o al dibujar una pantalla ya no cierra la app: aviso, se vuelve a la pantalla
   // anterior (el reproductor se cierra) y el error queda al panel (api/report.ts)
   const failScreen = useCallback((msg: string, at?: number) => {
@@ -322,9 +337,12 @@ function App() {
           <View key={skin} style={s.app}>
             {stack.map((r, i) => {
               const active = i === stack.length - 1;
+              // 2.8.0: con el reproductor encima, lo de abajo sin carátulas ni fondos (memoria para el video)
+              const underPlayer = !active && stack[stack.length - 1].name === 'player';
               // el reproductor tapa todo; lo de abajo se oculta para que el foco no se escape
               return (
                 <View key={i + r.name} style={[StyleSheet.absoluteFill, !active && s.hidden]}>
+                  <ImagesOff.Provider value={underPlayer}>
                   <ScreenGuard
                     onError={(e, where) => {
                       const msg = String((e as any)?.message || e || 'Error');
@@ -334,6 +352,7 @@ function App() {
                   >
                     <Screen route={r} active={active} />
                   </ScreenGuard>
+                  </ImagesOff.Provider>
                 </View>
               );
             })}

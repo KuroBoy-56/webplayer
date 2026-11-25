@@ -10,7 +10,7 @@ import { episodeUrl, lineFree, movieUrl, SeriesInfo, seriesInfo, VodInfo, vodInf
 import { warmTracks } from '../api/media';
 import { Button, Focusable } from '../components/ui';
 import { RowView } from '../components/Tiles';
-import { ChainImage } from '../components/ChainImage';
+import { ChainImage, useImagesOff } from '../components/ChainImage';
 import { backdropSources, posterSources } from '../lib/images';
 import { catalog, Item } from '../data/catalog';
 import { savedArt } from '../data/heroart';
@@ -21,6 +21,8 @@ import { alpha, C, px, SIDE, themed } from '../theme';
 
 function DetailScreen({ item, active }: { item: Item; active: boolean }) {
   const nav = useNav();
+  // debajo del reproductor: sin las imágenes de los capítulos ni de los actores (2.8.0, ChainImage.tsx)
+  const imgOff = useImagesOff();
   // el avance y Mi lista (botones Continuar / Mi lista y la barra de cada episodio); antes cualquier cambio del estado
   const progress = useAppSelector(x => x.progress);
   useAppSelector(x => x.favorites);
@@ -239,7 +241,7 @@ function DetailScreen({ item, active }: { item: Item; active: boolean }) {
                 return (
                   <Focusable onFocus={() => warmEp(e.id, e.ext)} onPress={() => playEpisodes(nav, item, eps, index, resumePosition(p))} style={f => [s.ep, f && s.epF]}>
                     <View style={s.epImgBox}>
-                      {e.image || item.poster ? <Image source={{ uri: e.image || item.poster }} style={s.epImg} resizeMode="cover" /> : null}
+                      {(e.image || item.poster) && !imgOff ? <Image source={{ uri: e.image || item.poster }} style={s.epImg} resizeMode="cover" /> : null}
                       {p && p.duration > 0 ? (
                         <View style={s.bar}>
                           <View style={[s.barFill, { width: `${Math.min(100, (p.position / p.duration) * 100)}%` }]} />
@@ -275,7 +277,7 @@ function DetailScreen({ item, active }: { item: Item; active: boolean }) {
                   {f => (
                     <>
                       <View style={[s.actorImgBox, f && s.actorImgF]}>
-                        {a.photo ? <Image source={{ uri: a.photo }} style={s.actorImg} resizeMode="cover" /> : <Text style={s.actorInitial}>{a.name.slice(0, 1)}</Text>}
+                        {a.photo && !imgOff ? <Image source={{ uri: a.photo }} style={s.actorImg} resizeMode="cover" /> : <Text style={s.actorInitial}>{a.name.slice(0, 1)}</Text>}
                       </View>
                       <Text style={[s.actorName, f && { color: C.text }]} numberOfLines={2}>
                         {a.name}

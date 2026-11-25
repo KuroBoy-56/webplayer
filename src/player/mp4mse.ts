@@ -18,10 +18,11 @@ import { sameLang } from '../lib/lang';
 import { StartWatch } from './startwatch';
 import { addCue, sampleText, SUB_ENTRIES, SUB_HANDLERS } from './mp4subs';
 import { keyIdleMs } from '../lib/keyidle';
+import { aheadSecs, BEHIND_KEEP, BEHIND_MAX } from './membudget';
 import type { Cue } from '../lib/vtt';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-const AHEAD = 40; // segundos bajados por adelantado
+// segundos entregados por adelantado: aheadSecs (membudget.ts, 2.8.0: como mucho ~40 MB; antes 40 s siempre, ~130 MB en 4K)
 const CHUNK = 4; // segundos de video por pedido
 const MOOV_MAX = 64 * 1048576;
 // motivo cuando el archivo «.mp4» es un MKV (playback lo pasa al lector de MKV)
@@ -337,12 +338,22 @@ function moovIn(tl: Tail, off: number): Uint8Array | null {
 // hasta ~3 MB (capítulos y películas con 1-3 idiomas) y, si es más grande, su final
 const SUFFIX = 3 * 1048576;
 const PARTIAL = new Map<string, MoovPart>();
+const MOOV_ONE = 12 * 1048576;
+const MOOV_ALL = 16 * 1048576;
 function rememberMoov(url: string, moov: Uint8Array): void {
   const k = cacheKey(url);
   MOOV_CACHE.delete(k);
+  // 2.8.0: uno de más de 12 MB (4K de 3 h: 26 MB) no queda en memoria al cerrar; dos como mucho y 16 MB entre todos
+  // (antes dos de cualquier tamaño: con el 4K eran ~50 MB que seguían ocupados mientras se veía otra cosa)
+  if (moov.length > MOOV_ONE) return;
   MOOV_CACHE.set(k, moov);
-  // dos como mucho (cada uno hasta ~10 MB de memoria de la app; el resto queda guardado en el equipo)
-  while (MOOV_CACHE.size > 2) MOOV_CACHE.delete(MOOV_CACHE.keys().next().value as string);
+  let total = 0;
+  for (const m of MOOV_CACHE.values()) total += m.length;
+  while (MOOV_CACHE.size > 2 || (MOOV_CACHE.size > 1 && total > MOOV_ALL)) {
+    const old = MOOV_CACHE.keys().next().value as string;
+    total -= MOOV_CACHE.get(old)?.length || 0;
+    MOOV_CACHE.delete(old);
+  }
 }
 
 // tamaño de los archivos cuyo índice está en memoria
@@ -687,8 +698,9 @@ export class Mp4Mse {
     else if (dur > 1) this.bps = mediaEnd / dur;
     this.ra.hold = false;
     this.ra.end = mediaEnd;
-    // ~40 s ya leídos quedan detrás (como mucho 12 MB): otro idioma sale de ahí sin pedirle nada al servidor (switchAudio)
-    this.ra.keepBehind = Math.min(12 * 1048576, Math.round(this.bps * 40));
+    // lo ya leído que va por delante de lo que se ve queda detrás (como mucho 8 MB; antes 12): otro idioma sale de ahí
+    // sin pedirle nada al servidor (switchAudio)
+    this.ra.keepBehind = Math.min(8 * 1048576, Math.round(this.bps * aheadSecs(this.bps)));
     if (this.warm) {
       // desde la ficha: solo el arranque (~6 s de video) y el índice al equipo ya (no hay reproductor que esperar)
       this.ra.limit = Math.max(1048576, Math.min(6 * 1048576, Math.round(this.bps * 6)));
@@ -850,8 +862,9 @@ export class Mp4Mse {
       } catch {
         // índice raro: no se guarda
       }
-      // entero (con todos los idiomas) al panel para los demás equipos, si el panel no lo tenía
-      if (!this.shared) shareIndex(this.url, 'm', this.size, () => toBase64(moov));
+      // entero (con todos los idiomas) al panel para los demás equipos, si el panel no lo tenía. 2.8.0: solo hasta 8 MB
+      // (más grande, el texto pasaba de 11 MB: no lo aceptaba la VPS y se armaba igual, en memoria, mientras se veía)
+      if (!this.shared && moov.length <= 8 * 1048576) shareIndex(this.url, 'm', this.size, () => toBase64(moov));
     }, wait);
   }
 
@@ -1647,8 +1660,10 @@ export class Mp4Mse {
           }
           return;
         }
-        if (this.bufEnd() - (this.v.currentTime || 0) > AHEAD) {
+        if (this.bufEnd() - (this.v.currentTime || 0) > aheadSecs(this.bps)) {
           this.collectSubs();
+          // 2.8.0: mientras espera también se borra lo ya visto (antes solo antes de entregar: quedaban 30 s o más detrás)
+          await this.trim();
           await sleep(1000);
           continue;
         }
@@ -1720,8 +1735,8 @@ export class Mp4Mse {
     try {
       const b = this.sb.buffered;
       const t = this.v.currentTime || 0;
-      if (b.length && b.start(0) < t - 30) {
-        this.sb.remove(b.start(0), t - 15);
+      if (b.length && b.start(0) < t - BEHIND_MAX) {
+        this.sb.remove(b.start(0), t - BEHIND_KEEP);
         await this.idle();
       }
     } catch {

@@ -10,6 +10,7 @@
 // no debe cargarse ahí (son varios MB). Los 8 más recientes, 24 MB como mucho.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readJson, writeJson } from '../lib/storage';
+import { whenNoVideo } from './membudget';
 
 const PREFIX = 'latmpxidx:';
 const LIST = 'idx_list_1';
@@ -148,11 +149,15 @@ export function saved(): Promise<void> {
 }
 
 // guarda en segundo plano (una escritura a la vez); lo más viejo se borra
+// 2.8.0: con un reproductor abierto espera a que se cierre. Armar el texto (base64 de 4-11 MB) y pasarlo al almacenamiento
+// del sistema (varias copias más) mientras se veía el video era justo cuando la app se cerraba sola (8-15 s después de
+// empezar; «Los Juegos del Hambre» 9 veces seguidas, sin llegar a guardarlo nunca)
 export function saveText(url: string, kind: string, size: number, make: () => Promise<string> | string): void {
   if (size <= 0) return;
   const k = keyOf(url);
   saving = saving.then(async () => {
     try {
+      await whenNoVideo();
       const text = await make();
       if (!text || text.length > MAX_ONE * 1.4) return;
       await AsyncStorage.setItem(PREFIX + k, text);

@@ -134,3 +134,25 @@ test('2.1.4: Continuar viendo en un equipo con Vega OS 2.0 (el reproductor de Am
     await s.close();
   }
 });
+
+test('2.8.0: película 4K (25 Mbps) en un servidor rápido: en el reproductor como mucho ~17 s por delante y ~13 s ya vistos (antes 43 s y 31 s: ~225 MB, y Vega cierra la app al pasar de 420 MB)', async () => {
+  const file = makeMp4({ secs: 90, audios: 2, vkbps: 25000 });
+  const s = await xui(file, { wait: 300, rate: 12_000_000, max: 4 });
+  let ahead = 0;
+  let behind = 0;
+  const actions = [];
+  for (let k = 2; k <= 40; k++) actions.push({ at: k, run: (m, v) => {
+    const sb = H.current.sb;
+    for (const [a, z] of sb ? sb.ranges : []) if (v.currentTime >= a - 0.5 && v.currentTime <= z) { ahead = Math.max(ahead, z - v.currentTime); behind = Math.max(behind, v.currentTime - a); }
+  } });
+  try {
+    const r = await H.openOnce(s.url, { at: 0, lineMax: 4, watch: 41, actions });
+    assert.equal(r.err, null, r.diag);
+    assert.ok(r.first !== null && r.first < 5, 'primera imagen a los ' + r.first + ' s');
+    assert.ok(ahead > 10 && ahead <= 18, 'por delante ' + ahead.toFixed(1) + ' s');
+    assert.ok(behind <= 14, 'detrás ' + behind.toFixed(1) + ' s');
+    assert.ok(r.stalled < 2.5, 'detenido ' + r.stalled + ' s');
+  } finally {
+    await s.close();
+  }
+});

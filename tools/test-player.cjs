@@ -494,19 +494,37 @@ test('2.1.5: Continuar viendo con el idioma guardado en Roku (audio que preparó
   await c.destroy();
 });
 
-test('2.1.5: con el reproductor de Amazon sonando, el idioma guardado que él no informa se pone con el lector en un reproductor nuevo (en el mismo quedaba en negro), sin el panel',async t=>{
+test('2.8.0: con un idioma guardado para el título (la serie DUAL que se viene viendo en latino) abre directo con el lector: sin el reproductor de Amazon ni un reproductor nuevo (justo antes de varios cierres de la app)',async t=>{
   t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
   const {c,video,hooks}=setup({tracks:[{language:'es',label:'',enabled:true}],cached:dual});nativeOk();
   const fresh=[];hooks.vodFresh=at=>fresh.push(at);
   const url='https://fixture.invalid/movie/u/p/roku2.mp4';
   require('../src/player/playback.ts').seedTitleLang(url,'en',1);
+  assert.equal(c.nativeVodPlanned(url,0),false);
+  c.load(url,0,false);
+  assert.notEqual(video.src,url,'el de Amazon no se abre');
+  assert.ok(mp4s.length>=1,'abre el lector (en este mismo reproductor)');
+  t.mock.timers.tick(2000);
+  assert.notEqual(video.src,url);
+  assert.deepEqual(fresh,[],'sin reproductor nuevo');
+  assert.deepEqual(calls,[]);
+  await c.destroy();
+});
+
+test('2.1.5: con el reproductor de Amazon sonando, el idioma que se elige en el menú y él no informa se pone con el lector en un reproductor nuevo (en el mismo quedaba en negro), sin el panel',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:100000});
+  const {c,video,hooks}=setup({tracks:[{language:'es',label:'',enabled:true}],cached:dual});nativeOk();
+  const fresh=[];hooks.vodFresh=at=>fresh.push(at);
+  const url='https://fixture.invalid/movie/u/p/roku3.mp4';
   c.load(url,0,false);assert.equal(video.src,url);
   video.currentTime=0.5;c.onPlaying();
   t.mock.timers.tick(2000);
+  assert.deepEqual(fresh,[],'sin idioma elegido sigue con el de Amazon');
+  choose(c,'Inglés');t.mock.timers.tick(2000);
   assert.equal(fresh.length,1);assert.equal(mp4s.length,0,'el lector no se abre en este reproductor');
   assert.deepEqual(calls,[]);
   await c.destroy();
-  // el reproductor nuevo abre con el lector y el idioma guardado
+  // el reproductor nuevo abre con el lector y el idioma elegido
   const {c:c2}=setup({cached:dual});
   c2.load(url,0,false);assert.equal(mp4s.length,1);
   await c2.destroy();

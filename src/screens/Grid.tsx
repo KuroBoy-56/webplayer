@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import KeyboardModal from '../components/KeyboardModal';
+import { useImagesOff } from '../components/ChainImage';
 import { openItem } from '../actions';
 import { Focusable, Message } from '../components/ui';
 import { posterH, PosterTile } from '../components/Tiles';
@@ -96,6 +97,8 @@ function MagnifierIcon({ color }: { color: string }) {
 }
 
 export default function Grid({ title, mode, keyName, kind, active }: { title: string; mode: 'cat' | 'platform' | 'genre' | 'recent' | 'continue' | 'mylist'; keyName: string; kind?: 'vod' | 'series'; active: boolean }) {
+  // debajo del reproductor: sin el fondo de arriba (2.8.0, ChainImage.tsx)
+  const imgOff = useImagesOff();
   const progress = useAppSelector(x => x.progress);
   const favorites = useAppSelector(x => x.favorites);
   const catalogRev = useAppSelector(x => x.catalogRev);
@@ -132,7 +135,7 @@ export default function Grid({ title, mode, keyName, kind, active }: { title: st
 
   return (
     <View style={s.root}>
-      {banner ? (
+      {banner && !imgOff ? (
         <View style={s.banner} pointerEvents="none">
           <Image source={{ uri: banner }} style={s.bannerImg} resizeMode="cover" />
           <Image source={require('../../assets/image/grad_bottom.png')} style={[s.bannerGrad, { tintColor: C.bg }]} resizeMode="stretch" />

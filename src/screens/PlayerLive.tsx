@@ -29,6 +29,7 @@ import { MP4_HEAD, mp4Spot } from '../player/mp4mse';
 import { setLineMax, singleFor } from '../player/readahead';
 import { StreamCheck, streamCheck } from '../player/streamcheck';
 import { setPlayerOpen } from '../lib/cacheclear';
+import { setVideoOpen } from '../player/membudget';
 import { probeTracks } from '../lib/probe';
 import { getState, isFav, saveProgress, showNotice, toggleFav, playHintFor } from '../state';
 import { t } from '../lib/i18n';
@@ -175,10 +176,13 @@ function PlayerLiveScreen({ params }: { params: PlayParams }) {
   // la orden de borrar la caché del panel espera a que se cierre el reproductor
   useEffect(() => {
     setPlayerOpen(true);
+    // 2.8.0: guardar o subir un índice espera a que se cierre (membudget.ts)
+    setVideoOpen(true);
     // (2.1.2) mientras se ve un canal, los índices de Continuar viendo en segundo plano no usan la línea
     idxWarmHold(true);
     return () => {
       setPlayerOpen(false);
+      setVideoOpen(false);
       idxWarmHold(false);
       if (startDog.current) clearTimeout(startDog.current);
     };

@@ -12,6 +12,7 @@
 import type { HttpResult } from '../lib/http';
 import { http } from '../lib/http';
 import { b64Encode } from '../lib/crypto';
+import { whenNoVideo } from './membudget';
 
 // (el cliente del panel se carga al usarlo: el lector de MP4 se prueba sin la app entera)
 function cloud(file: string, method: 'GET' | 'POST', payload: Record<string, any>): Promise<HttpResult> {
@@ -120,6 +121,8 @@ export function shareIndex(url: string, kind: string, size: number, make: () => 
   if (!vod(url) || size <= 0 || said.get(k) !== 'none') return;
   said.set(k, 'up');
   (async () => {
+    // 2.8.0: después de cerrar el reproductor (el texto son varios MB y la subida, pedidos de 1,5 MB)
+    await whenNoVideo();
     const text = await make();
     if (!text || text.length > MAX_TEXT) return;
     const n = Math.ceil(text.length / PART);

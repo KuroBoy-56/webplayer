@@ -8,6 +8,7 @@ import { MediaSource, VideoPlayer } from '@amazon-devices/react-native-w3cmedia'
 import { rangeGet, RangeState } from './rangeget';
 import { takeRangeFrom } from './prefetch';
 import { ReadAhead } from './readahead';
+import { aheadSecs, BEHIND_KEEP, BEHIND_MAX } from './membudget';
 import { sameLang } from '../lib/lang';
 import { b64, dropIndex, fromBase64, hasIndexKind, loadText, saveText, STALE_INDEX } from './indexstore';
 import { AUDIO_ID, audioEntry, concat, esdsFor, fragment, initSegment, rawBox, Sample, VIDEO_ID, videoEntry } from '../lib/mp4box';
@@ -17,7 +18,7 @@ import { str, ebmlId, ebmlSize, ebmlUint, ac3Info, aacRate, Mkv, MkvTrack, mpaIn
 import { StartWatch } from './startwatch';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-const AHEAD = 40; // segundos bajados por adelantado
+// segundos entregados por adelantado: aheadSecs (membudget.ts, 2.8.0: como mucho ~40 MB; antes 40 s siempre)
 const FIRST_READ = 1048576; // primer pedido de los Cluster (arranque rápido)
 const READ = 4194304; // los siguientes
 const CHUNK = 3; // segundos de video por entrega (el primero, 1,5)
@@ -810,7 +811,9 @@ export class MkvMse {
     try {
       while (this.alive) {
         const g = this.gen;
-        if (this.bufEnd() - (this.v.currentTime || 0) > AHEAD) {
+        if (this.bufEnd() - (this.v.currentTime || 0) > aheadSecs(this.size > 0 && this.index && this.index.duration > 1 ? this.size / this.index.duration : 0)) {
+          // 2.8.0: mientras espera también se borra lo ya visto (antes solo antes de entregar: quedaban 30 s o más detrás)
+          await this.trim();
           await sleep(1000);
           continue;
         }
@@ -897,8 +900,8 @@ export class MkvMse {
     try {
       const b = this.sb.buffered;
       const t = this.v.currentTime || 0;
-      if (b.length && b.start(0) < t - 30) {
-        this.sb.remove(b.start(0), t - 15);
+      if (b.length && b.start(0) < t - BEHIND_MAX) {
+        this.sb.remove(b.start(0), t - BEHIND_KEEP);
         await this.idle();
       }
     } catch {
