@@ -446,4 +446,8 @@
     <string name="catalog_reloading">Actualisation du catalogue…</string>
     <string name="catalog_reloaded">Catalogue mis à jour</string>
     <string name="catalog_reload_failed">Une partie du catalogue n\'a pas pu être actualisée ; l\'ancienne copie est conservée</string>
+    <!-- Play Integrity (solo Google Play): copia instalada por fuera de Google Play -->
+    <string name="pi_title">Cette copie de l\'app n\'est pas valide</string>
+    <string name="pi_text">Cette app n\'a pas été installée depuis Google Play ou a été modifiée. Pour continuer à regarder, installez-la depuis Google Play.</string>
+    <string name="pi_get">Télécharger sur Google Play</string>
 </resources>

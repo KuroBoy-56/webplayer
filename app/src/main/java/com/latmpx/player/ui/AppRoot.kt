@@ -246,6 +246,8 @@ fun AppRoot() {
     }
     // perfil infantil: lo que se ve se arma otra vez al cambiar de perfil y al llegar veredictos de TMDB
     LaunchedEffect(Profiles.current, Kids.rev) { state.applyKids() }
+    // Play Integrity (solo Google Play): con sesión, el panel verifica con Google que esta copia es de Google Play
+    LaunchedEffect(state.session) { if (state.session != null) com.latmpx.player.data.PlayIntegrity.check(ctx) }
     // lo dudoso se le pregunta al panel en segundo plano (api/kids_rate.php), nunca esperando para mostrar la pantalla
     LaunchedEffect(state.session, Profiles.current) {
         Kids.resetPending()
@@ -326,6 +328,8 @@ fun AppRoot() {
                 Xtream.clearCache()
                 state.session = s
             }
+            // copia instalada por fuera de Google Play (Play Integrity, modo «Bloquear copias» del panel)
+            com.latmpx.player.data.PlayIntegrity.blocked -> com.latmpx.player.ui.screens.PlayIntegrityScreen()
             // «¿Quién está viendo?» (al entrar, desde Cuenta o después de un 410)
             state.profilesOpen != null -> com.latmpx.player.ui.screens.ProfilesScreen(
                 state,
