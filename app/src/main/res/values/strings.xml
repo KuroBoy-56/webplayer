@@ -447,4 +447,8 @@
     <string name="catalog_reloading">Actualizando el catálogo…</string>
     <string name="catalog_reloaded">Catálogo actualizado</string>
     <string name="catalog_reload_failed">No se pudo actualizar todo el catálogo; se conserva lo anterior</string>
+    <!-- Amazon Appstore: copia instalada por fuera de la tienda (AmazonLicense.kt) -->
+    <string name="lic_title">Esta copia de la app no es válida</string>
+    <string name="lic_text">Esta app no se instaló desde la Amazon Appstore o fue modificada. Para seguir viendo, instálala desde la Amazon Appstore.</string>
+    <string name="lic_get">Obtener en Amazon Appstore</string>
 </resources>

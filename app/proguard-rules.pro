@@ -3,3 +3,7 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+
+# Amazon Appstore SDK (verificación de licencia, data/AmazonLicense.kt)
+-keep class com.amazon.device.drm.** { *; }
+-dontwarn com.amazon.**
