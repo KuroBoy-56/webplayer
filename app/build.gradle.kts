@@ -28,8 +28,8 @@ android {
         applicationId = "com.latmpx.player.tv"
         minSdk = 23
         targetSdk = 36
-        versionCode = 34
-        versionName = "1.6.10"
+        versionCode = 35
+        versionName = "1.6.11"
         buildConfigField("String", "PANEL_MASTER_KEY", "\"$panelMasterKey\"")
     }
 
@@ -75,6 +75,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    // Amazon Appstore: verificación de licencia (una copia instalada por fuera de la Amazon Appstore no se usa; data/AmazonLicense.kt)
+    implementation("com.amazon.device:amazon-appstore-sdk:3.0.9")
 
     // reproductor: ExoPlayer + HLS + decodificador FFmpeg (Dolby AC3/E-AC3, DTS, TrueHD, MP2, FLAC, Opus... por software)
     implementation("androidx.media3:media3-exoplayer:$media3")

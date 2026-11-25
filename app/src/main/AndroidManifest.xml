@@ -12,6 +12,12 @@
     <uses-feature android:name="android.software.leanback" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
+    <!-- Amazon Appstore: la verificación de licencia habla con la tienda (data/AmazonLicense.kt) -->
+    <queries>
+        <package android:name="com.amazon.sdktestclient" />
+        <package android:name="com.amazon.venezia" />
+    </queries>
+
     <application
         android:name=".App"
         android:allowBackup="true"
@@ -49,5 +55,14 @@
             android:name=".data.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- Amazon Appstore: respuesta de la verificación de licencia (data/AmazonLicense.kt) -->
+        <receiver
+            android:name="com.amazon.device.drm.ResponseReceiver"
+            android:exported="true"
+            android:permission="com.amazon.drm.Permission.NOTIFY">
+            <intent-filter>
+                <action android:name="com.amazon.drm.NOTIFY" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

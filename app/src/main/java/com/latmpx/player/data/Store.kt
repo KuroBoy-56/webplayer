@@ -211,6 +211,11 @@ object Store {
         get() = p.getString(tenantKey("cloud_token2"), null)
         set(v) = p.edit().putString(tenantKey("cloud_token2"), v).apply()
 
+    // licencia de la Amazon Appstore: hasta cuándo vale el último «con licencia» del panel (AmazonLicense.kt; 0 = preguntar)
+    var integrityOkUntil: Long
+        get() = p.getLong("pi_ok_until", 0L)
+        set(v) = p.edit().putLong("pi_ok_until", v).apply()
+
     // usuario@servidor al que pertenece el token guardado: si entra otro usuario, el token no coincide
     // y se pide uno nuevo (no se reutiliza "Continuar viendo" ni "Mi lista" de la cuenta anterior)
     var cloudTokenScope: String?

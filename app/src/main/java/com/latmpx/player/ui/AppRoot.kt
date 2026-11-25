@@ -241,6 +241,8 @@ fun AppRoot() {
     }
     // perfil infantil: lo que se ve se arma otra vez al cambiar de perfil y al llegar veredictos de TMDB
     LaunchedEffect(Profiles.current, Kids.rev) { state.applyKids() }
+    // licencia de la Amazon Appstore: con sesión, la app pregunta a la tienda y el panel decide (AmazonLicense.kt)
+    LaunchedEffect(state.session) { if (state.session != null) com.latmpx.player.data.AmazonLicense.check(ctx) }
     // lo dudoso se le pregunta al panel en segundo plano (api/kids_rate.php), nunca esperando para mostrar la pantalla
     LaunchedEffect(state.session, Profiles.current) {
         Kids.resetPending()
@@ -321,6 +323,8 @@ fun AppRoot() {
                 Xtream.clearCache()
                 state.session = s
             }
+            // copia instalada por fuera de la Amazon Appstore (modo «Bloquear copias» del panel)
+            com.latmpx.player.data.AmazonLicense.blocked -> com.latmpx.player.ui.screens.AmazonLicenseScreen()
             // «¿Quién está viendo?» (al entrar, desde Cuenta o después de un 410)
             state.profilesOpen != null -> com.latmpx.player.ui.screens.ProfilesScreen(
                 state,

@@ -457,4 +457,8 @@
     <string name="catalog_reloading">Refreshing the catalog…</string>
     <string name="catalog_reloaded">Catalog updated</string>
     <string name="catalog_reload_failed">Part of the catalog could not be refreshed; the previous copy is kept</string>
+    <!-- Amazon Appstore: copia instalada por fuera de la tienda (AmazonLicense.kt) -->
+    <string name="lic_title">This copy of the app isn\'t valid</string>
+    <string name="lic_text">This app wasn\'t installed from the Amazon Appstore or was modified. To keep watching, install it from the Amazon Appstore.</string>
+    <string name="lic_get">Get it on Amazon Appstore</string>
 </resources>
