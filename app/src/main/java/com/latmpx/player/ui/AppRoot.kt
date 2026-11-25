@@ -31,9 +31,6 @@ import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -468,28 +465,15 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
             Box(Modifier.weight(1f).fillMaxHeight()) { content() }
         }
     } else {
-        // teléfono: barra inferior como la app de Netflix
-        // perfil infantil sin canales de niños: sin TV en vivo
-        val phoneTabs = listOf(Tab.HOME, Tab.SERIES, Tab.MOVIES, Tab.LIVE, Tab.ACCOUNT).filter { it != Tab.LIVE || !state.hideLive }
+        // teléfono: barra de abajo flotante como la app de Netflix (PhoneBar.kt). En Inicio, Películas y Series el contenido
+        // pasa por detrás de la barra (esas pantallas dejan su espacio al final); en las demás se reserva el espacio abajo.
+        val overlay = top == null && (state.tab == Tab.HOME || state.tab == Tab.MOVIES || state.tab == Tab.SERIES)
+        val barSpace = com.latmpx.player.ui.screens.phoneBarSpace()
         // Android 15+ dibuja de borde a borde: el contenido empieza bajo la barra de estado (hora, señal, batería) y el
         // buscador y el perfil quedaban tapados. Se deja ese espacio arriba; las pantallas que ya lo tenían no se duplican.
-        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))) {
-            Box(Modifier.weight(1f)) { saver.SaveableStateProvider(screenKey) { content() } }
-            if (!state.immersive) NavigationBar(containerColor = Color(0xFF0B0B0B), tonalElevation = 0.dp) {
-                phoneTabs.forEach { t ->
-                    NavigationBarItem(
-                        selected = state.tab == t && top == null,
-                        onClick = { state.stack.clear(); state.tab = t },
-                        icon = { Icon(tabIcons.getValue(t), t.label) },
-                        label = { Text(t.label, fontSize = 10.sp, maxLines = 1) },
-                        alwaysShowLabel = false,
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color.White, selectedTextColor = Color.White, indicatorColor = Color(0x22FFFFFF),
-                            unselectedIconColor = NfGray, unselectedTextColor = NfGray,
-                        ),
-                    )
-                }
-            }
+        Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))) {
+            Box(Modifier.fillMaxSize().padding(bottom = if (state.immersive || overlay) 0.dp else barSpace)) { saver.SaveableStateProvider(screenKey) { content() } }
+            if (!state.immersive) PhoneNavBar(state, Modifier.align(Alignment.BottomCenter))
         }
     }
 }

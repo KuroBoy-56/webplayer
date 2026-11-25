@@ -26,8 +26,12 @@ object Profiles {
         data class Fail(val message: String, val code: String) : Result()
     }
 
-    /** fondo de la pantalla de perfiles: lo más destacado de la semana en TMDB (solo nombre y calificación) */
-    data class Featured(val image: String, val name: String, val rating: String)
+    /** fondo de la pantalla de perfiles: lo más destacado de la semana en TMDB (solo nombre y calificación); kind
+     *  "movie" o "tv" e id de TMDB para el arte vertical del celular ([art]) */
+    data class Featured(val image: String, val name: String, val rating: String, val kind: String = "", val id: String = "")
+
+    /** arte vertical del celular: póster sin textos y logo del título (vacíos si TMDB no tiene) */
+    data class Art(val poster: String, val logo: String)
 
     /** perfil elegido (null = sin perfiles: todo va al principal) */
     var current by mutableStateOf<Profile?>(null)
@@ -125,10 +129,45 @@ object Profiles {
                 val name = o.optString("title").ifEmpty { o.optString("name") }
                 if (name.isEmpty() || !seen.add(kind + ":" + o.optString("id"))) continue
                 val v = o.optDouble("vote_average", 0.0)
-                out += Featured("https://image.tmdb.org/t/p/original$bd", name, if (v > 0) String.format(java.util.Locale.US, "%.1f", v) else "")
+                out += Featured("https://image.tmdb.org/t/p/original$bd", name, if (v > 0) String.format(java.util.Locale.US, "%.1f", v) else "", kind, o.optString("id"))
             }
         }
         if (ok) featCache = Triple(key, System.currentTimeMillis(), out)
         return out
+    }
+
+    private val artCache = HashMap<String, Art>()
+
+    /**
+     * Celular en vertical (como Netflix): el póster del título sin textos y su logo (api/tmdb.php del panel, …/images).
+     * Una vez por título mientras la app está abierta; sin respuesta no se guarda (se vuelve a pedir la próxima vez) y la
+     * pantalla usa el fondo horizontal con el nombre escrito.
+     */
+    suspend fun art(f: Featured): Art {
+        if (f.id.isEmpty() || (f.kind != "movie" && f.kind != "tv")) return Art("", "")
+        val key = f.kind + ":" + f.id
+        synchronized(artCache) { artCache[key] }?.let { return it }
+        val lang = Lang.tmdb.take(2)
+        val b = PanelUrl.api("tmdb.php").toHttpUrlOrNull()?.newBuilder() ?: return Art("", "")
+        b.addQueryParameter("path", "${f.kind}/${f.id}/images")
+        Tenant.tag(b)
+        b.addQueryParameter("include_image_language", "$lang,en,null")
+        val r = runCatching { Net.get(b.build().toString()) }.getOrNull() ?: return Art("", "")
+        val j = (if (r.ok) r.json() else null) ?: return Art("", "")
+        fun files(name: String): List<Pair<String, String>> {
+            val arr = j.optJSONArray(name) ?: return emptyList()
+            return (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val fp = o.optString("file_path")
+                if (fp.isEmpty() || fp == "null") null else (if (o.isNull("iso_639_1")) "" else o.optString("iso_639_1")) to fp
+            }
+        }
+        val poster = files("posters").firstOrNull { it.first.isEmpty() }?.second
+        // logo en el idioma de la app, si no en inglés; solo PNG (los SVG no se dibujan)
+        val logos = files("logos").filter { it.second.endsWith(".png", ignoreCase = true) }
+        val logo = (logos.firstOrNull { it.first == lang } ?: logos.firstOrNull { it.first == "en" })?.second
+        val a = Art(poster?.let { "https://image.tmdb.org/t/p/w780$it" }.orEmpty(), logo?.let { "https://image.tmdb.org/t/p/w500$it" }.orEmpty())
+        synchronized(artCache) { artCache[key] = a }
+        return a
     }
 }

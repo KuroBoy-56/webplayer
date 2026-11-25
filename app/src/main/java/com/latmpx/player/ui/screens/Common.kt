@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.size
 import com.latmpx.player.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -34,6 +37,13 @@ fun posterWidth(): Dp = if (LocalIsTv.current) 128.dp else 108.dp
 
 @Composable
 fun sidePad(): Dp = if (LocalIsTv.current) 36.dp else 14.dp
+
+/** celular: espacio que ocupa abajo la barra flotante (Inicio, TV en vivo, Buscar, Perfil) con su margen y la barra del sistema */
+@Composable
+fun phoneBarSpace(): Dp = if (LocalIsTv.current) 0.dp else
+    PHONE_BAR_H + 22.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+val PHONE_BAR_H = 64.dp
 
 /**
  * Celular: flecha «Atrás» (ficha, categoría, actor, Ver todo). Vuelve a la pantalla anterior, que sigue donde estaba.

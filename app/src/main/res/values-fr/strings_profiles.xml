@@ -39,4 +39,8 @@
     <string name="prof_created">Profil « %1$s » créé</string>
     <string name="prof_saved">Modifications enregistrées</string>
     <string name="prof_deleted">Profil « %1$s » supprimé</string>
+    <string name="prof_choose">Choisissez votre profil</string>
+    <string name="prof_add_short">Ajouter</string>
+    <string name="prof_feat_movie">Film</string>
+    <string name="prof_feat_show">Série</string>
 </resources>

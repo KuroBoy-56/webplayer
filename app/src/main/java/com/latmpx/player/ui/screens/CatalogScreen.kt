@@ -66,7 +66,7 @@ fun CatalogScreen(state: AppState, kind: Kind) {
         LazyColumn(Modifier.fillMaxSize(), state = listState) {
             item {
                 if (tv) HeroCarousel(items = heroItems, tv = tv) { item -> com.latmpx.player.ui.screens.Hero(state, item, tv) }
-                else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 112.dp)
+                else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 116.dp)
             }
             if (tv) item {
                 Row(Modifier.fillMaxWidth().padding(horizontal = sp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -83,9 +83,10 @@ fun CatalogScreen(state: AppState, kind: Kind) {
                     ShelfRow(c.name, list, sp, onViewAll = { state.push(Route.Browse(c.name, kind, setOf(c.id))) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) }
                 }
             }
-            item { Spacer(Modifier.height(40.dp)) }
+            // celular: lo último queda arriba de la barra flotante
+            item { Spacer(Modifier.height(40.dp + phoneBarSpace())) }
         }
-        if (!tv) PhoneTopBar(state, sp, solid, if (kind == Kind.MOVIE) Tab.MOVIES else Tab.SERIES) { state.tab = Tab.ACCOUNT }
+        if (!tv) PhoneTopBar(state, sp, solid, if (kind == Kind.MOVIE) Tab.MOVIES else Tab.SERIES)
     }
 }
 
