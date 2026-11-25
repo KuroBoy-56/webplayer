@@ -13,16 +13,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.draw.clip
-import androidx.compose.material3.AlertDialog
-import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.material3.TextButton
 import com.latmpx.player.ui.Tab
 
 import androidx.compose.foundation.layout.Spacer
@@ -35,11 +32,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Divider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -111,63 +104,6 @@ fun HomeScreen(state: AppState) {
     val heroItems = remember(movies) { recentMovies.filter { it.backdrop.isNotEmpty() }.take(5).ifEmpty { recentMovies.take(1) } }
     var userFocusedHero by remember(movies) { mutableStateOf<Item?>(null) }
 
-    var showProfileDialog by remember { mutableStateOf(false) }
-
-    if (showProfileDialog) {
-        Dialog(onDismissRequest = { showProfileDialog = false }) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color(0xE6141414), Color(0xF2000000))), RoundedCornerShape(16.dp))
-                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp))
-                    .padding(24.dp)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text(stringResource(R.string.profile), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        // con perfiles, el nombre del perfil (la línea debajo)
-                        com.latmpx.player.data.Profiles.current?.let { p -> Text(p.name, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) }
-                        Text(Store.shownUser(state.session), color = Color.White, fontSize = 16.sp)
-                        Text(if (Store.demo) Store.demoEndText().let { if (it.isEmpty()) "" else tr(R.string.expires_on, it) } else state.session?.dnsName ?: "", color = NfGray2, fontSize = 13.sp)
-                    }
-                    Divider(color = Color(0x33FFFFFF))
-                    // perfiles (docs/PERFILES.md del panel): cambiar y administrar
-                    if (com.latmpx.player.data.Profiles.current != null) {
-                        Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.openProfiles(false) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(16.dp))
-                            Text(stringResource(R.string.prof_switch), color = Color.White, fontSize = 16.sp)
-                        }
-                        Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.openProfiles(true) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Settings, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(16.dp))
-                            Text(stringResource(R.string.prof_manage), color = Color.White, fontSize = 16.sp)
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.ACCOUNT }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(16.dp))
-                        Text(stringResource(R.string.my_account), color = Color.White, fontSize = 16.sp)
-                    }
-                    Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.ACCOUNT }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Settings, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(16.dp))
-                        Text(stringResource(R.string.settings), color = Color.White, fontSize = 16.sp)
-                    }
-                    if (com.latmpx.player.data.Tenant.sportsEnabled && !com.latmpx.player.data.Profiles.kids) Row(Modifier.fillMaxWidth().clickable { showProfileDialog = false; state.tab = Tab.SPORTS }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.SportsSoccer, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(16.dp))
-                        Text(stringResource(R.string.sports), color = Color.White, fontSize = 16.sp)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(onClick = { showProfileDialog = false }, modifier = Modifier.align(Alignment.End)) { 
-                        Text(stringResource(R.string.close), color = NfRed) 
-                    }
-                }
-            }
-        }
-    }
-
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // derivedStateOf: la pantalla ya no se recompone en cada píxel de desplazamiento, solo al cambiar el valor
     val solid by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 260 } }
@@ -183,7 +119,7 @@ fun HomeScreen(state: AppState) {
             if (tv) {
                 val h = userFocusedHero
                 if (h != null) Hero(state, h, tv) else HeroCarousel(items = heroItems, tv = tv) { item -> Hero(state, item, tv) }
-            } else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 112.dp)
+            } else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 116.dp)
         }
         item {
             ShelfRow(stringResource(R.string.continue_watching_for, Store.shownUser(state.session)), cont, pad) { _, p ->
@@ -213,44 +149,55 @@ fun HomeScreen(state: AppState) {
                 }
             }
         }
-        item { Spacer(Modifier.height(40.dp)) }
+        // celular: lo último queda arriba de la barra flotante
+        item { Spacer(Modifier.height(40.dp + phoneBarSpace())) }
     }
-    if (!tv) PhoneTopBar(state, pad, solid, null) { showProfileDialog = true }
+    if (!tv) PhoneTopBar(state, pad, solid, null)
 }
 }
 
 /**
- * Barra superior de la app de Netflix para celular: "Para <usuario>", buscar y perfil;
- * debajo los filtros Series / Películas / Deportes. Transparente sobre los destacados y oscura al bajar.
+ * Barra superior de la app de Netflix para celular: el logo y el nombre de la sección («Inicio») con Mis descargas a la
+ * derecha; debajo Series / Películas / Deportes / Mi lista (se desliza si no cabe). Buscar y el perfil están en la barra
+ * de abajo. Transparente sobre los destacados y oscura al bajar.
  */
 @Composable
-fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolean, current: Tab?, onProfile: () -> Unit) {
+fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolean, current: Tab?) {
     val bg by androidx.compose.animation.animateColorAsState(if (solid) Color(0xF2141414) else Color.Transparent, label = "bar")
     Column(Modifier.fillMaxWidth().background(bg).background(Brush.verticalGradient(listOf(Color(0xB3000000), Color.Transparent)))) {
-        Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (current == null) {
-                Text(stringResource(R.string.for_user, com.latmpx.player.data.Profiles.current?.name ?: Store.shownUser(state.session)), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            } else {
-                LogoHeader(height = 28.dp)
-                Spacer(Modifier.weight(1f))
-            }
-            Icon(Icons.Filled.Search, stringResource(R.string.search), tint = Color.White, modifier = Modifier.size(26.dp).clickable { state.tab = Tab.SEARCH })
-            Spacer(Modifier.width(18.dp))
-            // con perfiles, el avatar del perfil (con «Niños» si es infantil)
-            val prof = com.latmpx.player.data.Profiles.current
-            if (prof != null) Box(Modifier.clickable { onProfile() }) { ProfileAvatar(prof, 32.dp) }
-            else Box(Modifier.size(30.dp).clip(RoundedCornerShape(5.dp)).background(Brush.linearGradient(listOf(NfRed, if (com.latmpx.player.data.Tenant.brand?.colors == null) Color(0xFF8E0B12) else androidx.compose.ui.graphics.lerp(NfRed, Color.Black, 0.4f)))).clickable { onProfile() }, contentAlignment = Alignment.Center) {
-                Text(Store.shownUser(state.session).take(1).uppercase().ifEmpty { "U" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            }
+        Row(Modifier.fillMaxWidth().padding(start = pad, end = pad - 8.dp, top = 10.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            LogoHeader(height = 34.dp)
+            Spacer(Modifier.width(12.dp))
+            Text((current ?: Tab.HOME).label, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Icon(
+                Icons.Filled.Download, stringResource(R.string.my_downloads), tint = Color.White,
+                modifier = Modifier.size(44.dp).clip(CircleShape).clickable { state.push(Route.Downloads) }.padding(9.dp),
+            )
         }
-        Row(Modifier.fillMaxWidth().padding(start = pad, end = pad, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (current != null) com.latmpx.player.ui.components.Chip("✕", false) { state.tab = Tab.HOME }
-            com.latmpx.player.ui.components.Chip(stringResource(R.string.series), current == Tab.SERIES) { state.tab = Tab.SERIES }
-            com.latmpx.player.ui.components.Chip(stringResource(R.string.movies), current == Tab.MOVIES) { state.tab = Tab.MOVIES }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(start = pad, end = pad, bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (current != null) TopChip("✕", false) { state.tab = Tab.HOME }
+            TopChip(stringResource(R.string.series), current == Tab.SERIES) { state.tab = Tab.SERIES }
+            TopChip(stringResource(R.string.movies), current == Tab.MOVIES) { state.tab = Tab.MOVIES }
             // el perfil infantil nunca tiene Deportes
-            if (com.latmpx.player.data.Tenant.sportsEnabled && !com.latmpx.player.data.Profiles.kids) com.latmpx.player.ui.components.Chip(stringResource(R.string.sports), current == Tab.SPORTS) { state.tab = Tab.SPORTS }
-            com.latmpx.player.ui.components.Chip(stringResource(R.string.my_list), current == Tab.MYLIST) { state.tab = Tab.MYLIST }
+            if (com.latmpx.player.data.Tenant.sportsEnabled && !com.latmpx.player.data.Profiles.kids) TopChip(stringResource(R.string.sports), current == Tab.SPORTS) { state.tab = Tab.SPORTS }
+            TopChip(stringResource(R.string.my_list), current == Tab.MYLIST) { state.tab = Tab.MYLIST }
         }
+    }
+}
+
+/** filtro de arriba como Netflix: recuadro gris redondeado (el elegido, blanco) */
+@Composable
+private fun TopChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    FocusBox(onClick = onClick, shape = shape, focusScale = 1.04f) {
+        Text(
+            text, color = if (selected) Color.Black else Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            modifier = Modifier.background(if (selected) Color.White else Color(0x2EFFFFFF), shape).border(1.dp, Color(0x1FFFFFFF), shape)
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        )
     }
 }
 

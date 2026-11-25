@@ -46,11 +46,12 @@ private const val FADE_MS = 700
  * antes en la que no se ve y aparece con un fundido recién cuando cargó (nunca un hueco); si no carga se salta. Encima,
  * los degradados del color del tema: en horizontal la imagen a pantalla completa (como Netflix en el televisor) con el
  * color entrando suave desde el borde izquierdo (los perfiles se leen y la imagen se sigue viendo detrás) y un
- * sombreado leve abajo y arriba; en vertical (celular) arriba, con la parte de abajo que se funde con el fondo. El nombre y la calificación de abajo a
- * la derecha cambian con la imagen.
+ * sombreado leve abajo y arriba; en vertical (celular, como la app de Netflix) a pantalla completa el póster sin textos
+ * del título ([Profiles.art]; si no hay, el fondo horizontal) y el logo, el nombre y la sección de perfiles los dibuja
+ * ProfilesScreen con [onShown]. En horizontal el nombre y la calificación de abajo a la derecha cambian con la imagen.
  */
 @Composable
-fun ProfileBackdrops(items: List<Profiles.Featured>, wide: Boolean, modifier: Modifier) {
+fun ProfileBackdrops(items: List<Profiles.Featured>, wide: Boolean, modifier: Modifier, onShown: (Int) -> Unit = {}) {
     if (items.isEmpty()) return
     // capa A (abajo) y capa B (arriba, con su opacidad): qué título tiene cada una y qué pasó al cargarlo
     var aIdx by remember(items) { mutableIntStateOf(0) }
@@ -61,6 +62,7 @@ fun ProfileBackdrops(items: List<Profiles.Featured>, wide: Boolean, modifier: Mo
     val aAlpha = remember(items) { Animatable(0f) }
     val bAlpha = remember(items) { Animatable(0f) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(shown, items) { onShown(shown) }
 
     LaunchedEffect(items) {
         // el primero, con su fundido
@@ -101,8 +103,8 @@ fun ProfileBackdrops(items: List<Profiles.Featured>, wide: Boolean, modifier: Mo
         // horizontal: a pantalla completa, como Netflix en el televisor; vertical: lo que le da ProfilesScreen (todo el
         // ancho, arriba)
         Box(Modifier.fillMaxSize()) {
-            BdLayer(items.getOrNull(aIdx), aIdx, Modifier.graphicsLayer { alpha = aAlpha.value }) { r -> aRes = r }
-            BdLayer(items.getOrNull(bIdx), bIdx, Modifier.graphicsLayer { alpha = bAlpha.value }) { r -> bRes = r }
+            BdLayer(items.getOrNull(aIdx), aIdx, !wide, Modifier.graphicsLayer { alpha = aAlpha.value }) { r -> aRes = r }
+            BdLayer(items.getOrNull(bIdx), bIdx, !wide, Modifier.graphicsLayer { alpha = bAlpha.value }) { r -> bRes = r }
             if (wide) {
                 // el color del tema desde el borde izquierdo hasta el 65 % del ancho (más oscuro en el borde: detrás de los
                 // perfiles la imagen se sigue viendo, más oscura) y abajo / arriba solo un sombreado leve
@@ -114,11 +116,12 @@ fun ProfileBackdrops(items: List<Profiles.Featured>, wide: Boolean, modifier: Mo
                     0f to bg.copy(alpha = 0.45f), 0.18f to Color.Transparent, 0.7f to Color.Transparent, 0.86f to bg.copy(alpha = 0.4f), 1f to bg.copy(alpha = 0.8f),
                 )))
             } else {
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(bg.copy(alpha = 0.5f), Color.Transparent, bg.copy(alpha = 0.55f), bg))))
+                // vertical: solo un sombreado arriba (hora y batería); abajo funde ProfilesScreen hacia los perfiles
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.45f), 0.16f to Color.Transparent)))
             }
         }
-        // solo su nombre y su calificación, abajo a la derecha, sin tapar nada
-        Crossfade(targetState = shown, animationSpec = tween(400), modifier = Modifier.align(Alignment.BottomEnd), label = "feat") { i ->
+        // horizontal: solo su nombre y su calificación, abajo a la derecha, sin tapar nada
+        if (wide) Crossfade(targetState = shown, animationSpec = tween(400), modifier = Modifier.align(Alignment.BottomEnd), label = "feat") { i ->
             val f = items.getOrNull(i) ?: return@Crossfade
             Column(Modifier.padding(horizontal = 24.dp, vertical = if (wide) 22.dp else 10.dp), horizontalAlignment = Alignment.End) {
                 Text(f.name, color = Color.White, fontSize = if (wide) 20.sp else 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -128,12 +131,16 @@ fun ProfileBackdrops(items: List<Profiles.Featured>, wide: Boolean, modifier: Mo
     }
 }
 
-/** una capa: Full HD del panel → TMDB; avisa si cargó (o si no cargó ninguna dirección) */
+/** una capa: Full HD del panel → TMDB (vertical: antes el póster sin textos); avisa si cargó (o si no cargó ninguna dirección) */
 @Composable
-private fun BdLayer(item: Profiles.Featured?, idx: Int, modifier: Modifier, onResult: (Pair<Int, Boolean>) -> Unit) {
+private fun BdLayer(item: Profiles.Featured?, idx: Int, portrait: Boolean, modifier: Modifier, onResult: (Pair<Int, Boolean>) -> Unit) {
     if (item == null) return
-    val sources = remember(item.image) { PanelImg.backdropSources(item.image) }
-    var s by remember(item.image) { mutableIntStateOf(0) }
+    // vertical: se espera a saber si TMDB tiene el póster sin textos (si no, el fondo horizontal recortado)
+    var art by remember(item, portrait) { mutableStateOf(if (portrait) null else Profiles.Art("", "")) }
+    if (portrait) LaunchedEffect(item) { art = Profiles.art(item) }
+    val a = art ?: return
+    val sources = remember(item.image, a.poster) { listOfNotNull(a.poster.takeIf { it.isNotEmpty() }) + PanelImg.backdropSources(item.image) }
+    var s by remember(item.image, a.poster) { mutableIntStateOf(0) }
     val url = sources.getOrNull(s)
     if (url == null) {
         LaunchedEffect(item.image) { onResult(idx to false) }
