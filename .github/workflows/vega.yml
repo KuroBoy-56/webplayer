@@ -37,8 +37,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y lz4 jq tar curl ca-certificates
 
-      # el instalador oficial de Amazon no pide cuenta ni llaves
+      # Copia del SDK de Vega guardada en GitHub (actions/cache, 2.8.0). El instalador de Amazon a veces no contesta (25 de
+      # noviembre de 2026: «401 Unauthorized» durante horas) y sin el SDK no se compila nada. Se recupera en cada
+      # compilación (así GitHub no la borra: borra las que no se usan en 7 días) y se renueva cuando Amazon entrega una
+      # versión nueva; si Amazon no contesta, se compila con la copia
+      - name: SDK de Vega guardado
+        id: saved
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/vega-saved
+          key: vega-sdk-v1-${{ github.run_id }}
+          restore-keys: vega-sdk-v1-
+
+      # el instalador oficial de Amazon no pide cuenta ni llaves (hasta 3 intentos)
       - name: Instalar SDK de Vega
+        id: sdk
+        continue-on-error: true
         env:
           NONINTERACTIVE: 'true'
           SKIP_VVD_INSTALL: 'true'
@@ -46,11 +60,52 @@ jobs:
           set -o pipefail
           want="${{ github.event.inputs.sdk_version }}"
           [ -z "$want" ] && want="$VEGA_SDK_PINNED"
-          curl -fsSL https://sdk-installer.vega.labcollab.net/get_vvm.sh -o "$RUNNER_TEMP/get_vvm.sh"
-          if ! VEGA_SDK_VERSION="$want" bash "$RUNNER_TEMP/get_vvm.sh" 2>&1 | tee sdk.log; then
-            echo "::warning::No se pudo instalar el SDK $want; se instala la última versión"
-            bash "$RUNNER_TEMP/get_vvm.sh" 2>&1 | tee sdk.log
+          ok=0
+          for attempt in 1 2 3; do
+            [ "$attempt" -gt 1 ] && sleep 30
+            curl -fsSL https://sdk-installer.vega.labcollab.net/get_vvm.sh -o "$RUNNER_TEMP/get_vvm.sh" || continue
+            if VEGA_SDK_VERSION="$want" bash "$RUNNER_TEMP/get_vvm.sh" 2>&1 | tee sdk.log; then ok=1; break; fi
+            if [ -n "$want" ]; then
+              echo "::warning::No se pudo instalar el SDK $want; se instala la última versión"
+              if bash "$RUNNER_TEMP/get_vvm.sh" 2>&1 | tee sdk.log; then ok=1; break; fi
+            fi
+          done
+          [ "$ok" = 1 ] || exit 1
+          ver=$(sed -n 's#.*vega-sdk/main/\([0-9][0-9.]*\).*#\1#p' "$HOME/vega/env" | head -1)
+          echo "ver=${ver:-desconocida}" >> "$GITHUB_OUTPUT"
+
+      # Amazon entregó el SDK: la copia se renueva si es otra versión que la guardada
+      - name: Preparar copia nueva del SDK
+        id: fresh
+        if: steps.sdk.outcome == 'success'
+        run: |
+          old=$(sed -n 's#.*vega-sdk/main/\([0-9][0-9.]*\).*#\1#p' "$HOME/vega-saved/env" 2>/dev/null | head -1)
+          if [ "$old" != "${{ steps.sdk.outputs.ver }}" ]; then
+            rm -rf "$HOME/vega-saved" && cp -a "$HOME/vega" "$HOME/vega-saved"
+            echo "save=1" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Guardar copia del SDK
+        if: steps.fresh.outputs.save == '1'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ~/vega-saved
+          key: vega-sdk-v1-${{ steps.sdk.outputs.ver }}
+
+      # Amazon no contestó: se compila con la copia guardada (si todavía no hay ninguna, no se puede compilar)
+      - name: Usar la copia guardada del SDK
+        if: steps.sdk.outcome != 'success'
+        run: |
+          if [ ! -f "$HOME/vega-saved/env" ]; then
+            echo "::error::Amazon no entregó el SDK de Vega y todavía no hay una copia guardada"
+            exit 1
+          fi
+          echo "::warning::Amazon no entregó el SDK de Vega: se compila con la copia guardada"
+          rm -rf "$HOME/vega" && cp -a "$HOME/vega-saved" "$HOME/vega"
+
+      - name: Ruta del SDK
+        run: |
           [ -f "$HOME/vega/env" ] && cat "$HOME/vega/env"
           echo "$HOME/vega/bin" >> "$GITHUB_PATH"
 
