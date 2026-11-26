@@ -68,13 +68,15 @@ import kotlinx.coroutines.launch
 
 /** Pestañas de Deportes (como Roku y Vega): la agenda y, si el panel las ofrece, Tablas, Selecciones y Equipos */
 /** pestañas de Deportes como Roku y Vega: Hoy, Mañana y, si el panel las ofrece, Tablas, Selecciones y Equipos */
-enum class SpTab { TODAY, TOMORROW, TABLES, NATIONS, TEAMS }
+enum class SpTab { TODAY, TOMORROW, FINISHED, TABLES, NATIONS, TEAMS }
 
 @Composable
 fun SportsTabs(d: SportsData, tab: SpTab, onTab: (SpTab) -> Unit) {
     val tabs = buildList {
         add(SpTab.TODAY to stringResource(R.string.today))
         add(SpTab.TOMORROW to stringResource(R.string.tomorrow))
+        // con perfiles: los terminados de hoy en su propia pestaña (Hoy queda con los que se juegan y los que no empiezan)
+        if (com.latmpx.player.data.Profiles.current != null) add(SpTab.FINISHED to stringResource(R.string.sp_tab_finished))
         if (d.tablesOn) add(SpTab.TABLES to stringResource(R.string.sp_tab_tables))
         if (d.nationsOn) add(SpTab.NATIONS to stringResource(R.string.sp_tab_nations))
         if (d.fixturesOn) add(SpTab.TEAMS to stringResource(R.string.sp_tab_teams))

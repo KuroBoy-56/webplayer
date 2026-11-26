@@ -9,4 +9,6 @@
     <string name="rm_phone">Para receber as notificações das suas partidas e times favoritos você precisa ter o app %1$s instalado no seu celular.</string>
     <string name="rm_failed">Não foi possível salvar o lembrete. Tente novamente.</string>
     <string name="rm_ok">Entendi</string>
+    <string name="rm_late_title">Não é possível ativar</string>
+    <string name="rm_late">Os lembretes só podem ser ativados em partidas que começam em mais de 5 minutos.</string>
 </resources>
