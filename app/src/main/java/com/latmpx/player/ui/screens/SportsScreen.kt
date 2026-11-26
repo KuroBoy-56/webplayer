@@ -173,8 +173,7 @@ fun SportsScreen(state: AppState) {
         val all = found ?: return null
         val m = all[e.id] ?: extra.getOrPut(e.id + "|" + e.start) { Sports.match(e, c.prepared, d.rules) }
         val epg = epgMap[e.id].orEmpty().mapNotNull { id -> id.toIntOrNull()?.let { c.byId[it] } }
-        if (epg.isEmpty()) return m
-        return m.copy(epg = epg, best = m.tv.firstOrNull { it.second != null }?.second ?: epg.first())
+        return m.withEpg(epg)
     }
     val tNoChan = stringResource(R.string.sp_no_channel)
     val tFinding = stringResource(R.string.sp_finding)
@@ -244,7 +243,8 @@ fun SportsScreen(state: AppState) {
             if (d.iptvOnly && ch == null) continue
             if (ch != null) seen += ch.id
             val title = if (d.iptvOnly && ch != null) ch.name else t.name + if (t.country.isNotBlank()) " (${t.country})" else ""
-            opts += MenuOpt(title, if (ch != null) tr(R.string.sp_in_list, ch.name) else tr(R.string.sp_not_in_list), ch != null) {
+            val where = if (ch != null) tr(R.string.sp_in_list, ch.name) else tr(R.string.sp_not_in_list)
+            opts += MenuOpt(title, if (t.usual) tr(R.string.sp_usual) + " · " + where else where, ch != null) {
                 val teams = m?.teams
                 when {
                     ch != null -> play(ch)
