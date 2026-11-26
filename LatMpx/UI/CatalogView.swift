@@ -42,8 +42,8 @@ struct CatalogView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ScrollOffsetReader(space: "cat\(title)")
-                    if !hero.isEmpty { HeroCards(items: hero, width: size.width, topPad: 104).padding(.bottom, 8) }
-                    else { Color.clear.frame(height: 104) }
+                    if !hero.isEmpty { HeroCards(items: hero, width: size.width, height: size.height, topPad: UIDevice.current.userInterfaceIdiom == .pad ? 128 : 116).padding(.bottom, 8) }
+                    else { Color.clear.frame(height: 116) }
                     ShelfRow(title: tr("Agregadas recientemente"), items: recent, pad: pad, onViewAll: { state.push(.browse(tr("Agregadas recientemente"), kind, [])) }) { _, it in
                         PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                     }

@@ -53,8 +53,8 @@ struct HomeView: View {
           ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ScrollOffsetReader(space: "home")
-                if !hero.isEmpty { HeroCards(items: hero, width: size.width, topPad: 104).padding(.bottom, 8) }
-                else { Color.clear.frame(height: 104) }
+                if !hero.isEmpty { HeroCards(items: hero, width: size.width, height: size.height, topPad: UIDevice.current.userInterfaceIdiom == .pad ? 128 : 116).padding(.bottom, 8) }
+                else { Color.clear.frame(height: 116) }
                 ShelfRow(title: tr("Continuar viendo para %@", cloud.shownUser(state.session)), items: cont, pad: pad, onViewAll: { state.push(.saved(true)) }) { _, p in
                     if let it = state.item(from: p) { ContinueCard(item: it, progress: p, width: pw) }
                 }

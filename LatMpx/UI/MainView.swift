@@ -1,7 +1,11 @@
 import SwiftUI
 import Combine
 
-/** Pestañas de abajo como la app de Netflix; cada una con su propia pila de pantallas. */
+/**
+ * Pestañas como la app de Netflix; cada una con su propia pila de pantallas. La barra de abajo del sistema no se ve: en
+ * su lugar va la cápsula flotante (FloatingTabBar: Inicio, TV en vivo, Buscar, Perfil). Series y Películas se abren
+ * desde arriba, en Inicio.
+ */
 struct MainView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var tenant: Tenant
@@ -11,11 +15,6 @@ struct MainView: View {
     init(onLogout: @escaping () -> Void, onChangeDistributor: @escaping () -> Void) {
         self.onLogout = onLogout
         self.onChangeDistributor = onChangeDistributor
-        let a = UITabBarAppearance()
-        a.configureWithOpaqueBackground()
-        a.backgroundColor = UIColor(red: 0.043, green: 0.043, blue: 0.043, alpha: 1)
-        UITabBar.appearance().standardAppearance = a
-        UITabBar.appearance().scrollEdgeAppearance = a
         let n = UINavigationBarAppearance()
         n.configureWithTransparentBackground()
         n.titleTextAttributes = [.foregroundColor: UIColor.white]
@@ -31,14 +30,21 @@ struct MainView: View {
         })
     }
 
+    /** iPad: la barra de abajo un poco más grande */
+    private var big: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
     var body: some View {
-        TabView(selection: selection) {
-            stack(.home) { HomeView() }.tabItem { Label(tr("Inicio"), systemImage: "house.fill") }.tag(Tab.home)
-            stack(.series) { CatalogView(kind: .series) }.tabItem { Label(tr("Series"), systemImage: "tv") }.tag(Tab.series)
-            stack(.movies) { CatalogView(kind: .movie) }.tabItem { Label(tr("Películas"), systemImage: "film") }.tag(Tab.movies)
-            stack(.live) { LiveView() }.tabItem { Label(tr("TV en vivo"), systemImage: "dot.radiowaves.left.and.right") }.tag(Tab.live)
-            stack(.account) { AccountView(onLogout: onLogout, onChangeDistributor: onChangeDistributor) }
-                .tabItem { Label(tr("Cuenta"), systemImage: "person.crop.circle") }.tag(Tab.account)
+        ZStack(alignment: .bottom) {
+            TabView(selection: selection) {
+                stack(.home) { HomeView() }.tag(Tab.home)
+                stack(.series) { CatalogView(kind: .series) }.tag(Tab.series)
+                stack(.movies) { CatalogView(kind: .movie) }.tag(Tab.movies)
+                stack(.live) { LiveView() }.tag(Tab.live)
+                stack(.search) { SearchView() }.tag(Tab.search)
+                stack(.account) { AccountView(onLogout: onLogout, onChangeDistributor: onChangeDistributor) }.tag(Tab.account)
+            }
+            // con el teclado abierto (Buscar) la barra se queda abajo, detrás del teclado
+            FloatingTabBar(big: big).ignoresSafeArea(.keyboard, edges: .bottom)
         }
         .toast($state.toast)
         // línea demo: Mi lista y el progreso no se guardan
@@ -48,8 +54,11 @@ struct MainView: View {
     private func stack<V: View>(_ t: Tab, @ViewBuilder _ root: () -> V) -> some View {
         NavigationStack(path: state.path(t)) {
             root()
-                .navigationDestination(for: Route.self) { r in RouteView(route: r) }
+                .toolbar(.hidden, for: .tabBar)
+                .navigationDestination(for: Route.self) { r in RouteView(route: r).toolbar(.hidden, for: .tabBar) }
         }
+        // el espacio de la barra flotante: las listas pasan por detrás y lo último queda arriba de la barra
+        .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: FloatingTabBar.height(big: big) + 8).allowsHitTesting(false) }
     }
 }
 

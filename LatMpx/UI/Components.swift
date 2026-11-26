@@ -24,6 +24,8 @@ struct AppButton: View {
     var icon: String? = nil
     var primary = true
     var height: CGFloat = 48
+    /** cápsula (destacados, como Netflix) con los mismos colores */
+    var pill = false
     let action: () -> Void
 
     var body: some View {
@@ -35,7 +37,7 @@ struct AppButton: View {
             .frame(maxWidth: .infinity, minHeight: height)
             .foregroundColor(primary ? Theme.p.onAccent : .white)
             .background(primary ? Theme.accent : Color.white.opacity(0.18))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: pill ? height / 2 : 6))
         }
         .buttonStyle(.plain)
     }
@@ -131,10 +133,10 @@ struct ShelfRow<T, Cell: View>: View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(title).font(.system(size: 18, weight: .bold)).foregroundColor(.white).lineLimit(1)
+                    Text(title).font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 22 : 18, weight: .bold)).foregroundColor(.white).lineLimit(1)
                     Spacer()
                     if let v = onViewAll {
-                        Button(action: v) { HStack(spacing: 2) { Text(tr("Ver todo")); Image(systemName: "chevron.right") }.font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.muted) }
+                        Button(action: v) { HStack(spacing: 2) { Text(tr("Ver todo")); Image(systemName: "chevron.right") }.font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 15 : 13, weight: .semibold)).foregroundColor(Theme.muted) }
                     }
                 }.padding(.horizontal, pad)
                 ScrollView(.horizontal, showsIndicators: false) {

@@ -1,48 +1,49 @@
 import SwiftUI
 
 /**
- * Barra superior como la app de Android para celular: "Para <usuario>" (inicio) o el logo, buscar y
- * perfil; debajo los filtros Series / Películas / Deportes / Mi lista (con ✕ para volver al inicio).
- * Transparente sobre los destacados y oscura al bajar.
+ * Barra superior como la app de Netflix (y Android 1.5.6): el logo y el nombre de la sección («Inicio», «Series»,
+ * «Películas») con Mis descargas a la derecha; debajo los filtros Series / Películas / Deportes / Mi lista (con ✕ para
+ * volver al inicio). Buscar y el perfil están en la barra de abajo (FloatingTabBar). Transparente sobre los destacados
+ * y oscura al bajar; en iPad un poco más grande.
  */
 struct PhoneTopBar: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var tenant: Tenant
-    @EnvironmentObject var cloud: Cloud
     let current: Tab?
     var solid = false
     var pad: CGFloat = 16
-    @State private var profile = false
+
+    private var big: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var title: String {
+        switch current {
+        case .series: return tr("Series")
+        case .movies: return tr("Películas")
+        default: return tr("Inicio")
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 18) {
-                if current == nil {
-                    Text(tr("Para %@", cloud.shownUser(state.session))).font(.system(size: 22, weight: .bold)).foregroundColor(.white).lineLimit(1)
-                } else {
-                    LogoHeader(height: 28)
-                }
+            HStack(spacing: 12) {
+                LogoHeader(height: big ? 40 : 34)
+                Text(title).font(.system(size: big ? 32 : 28, weight: .bold)).foregroundColor(.white).lineLimit(1)
                 Spacer()
-                Button { state.push(.search) } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).foregroundColor(.white) }
-                    .accessibilityLabel(tr("Buscar"))
-                Button { profile = true } label: {
-                    Text(String(cloud.shownUser(state.session).prefix(1)).uppercased()).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
-                        .frame(width: 30, height: 30)
-                        .background(LinearGradient(colors: [Theme.accent, Theme.accent.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
-                }.accessibilityLabel(tr("Perfil"))
+                Button { state.push(.downloads) } label: {
+                    Image(systemName: "arrow.down.to.line").font(.system(size: big ? 24 : 21, weight: .semibold)).foregroundColor(.white)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }.accessibilityLabel(tr("Mis descargas"))
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    if current != nil { Chip(text: "✕") { state.open(.home) }.accessibilityLabel(tr("Inicio")) }
-                    Chip(text: tr("Series"), selected: current == .series) { state.open(.series) }
-                    Chip(text: tr("Películas"), selected: current == .movies) { state.open(.movies) }
-                    if tenant.sportsEnabled { Chip(text: tr("Deportes")) { state.push(.sports) } }
-                    Chip(text: tr("Mi lista")) { state.push(.saved(false)) }
+                HStack(spacing: 10) {
+                    if current != nil { TopChip(text: "✕", big: big) { state.open(.home) }.accessibilityLabel(tr("Inicio")) }
+                    TopChip(text: tr("Series"), selected: current == .series, big: big) { state.open(.series) }
+                    TopChip(text: tr("Películas"), selected: current == .movies, big: big) { state.open(.movies) }
+                    if tenant.sportsEnabled { TopChip(text: tr("Deportes"), big: big) { state.push(.sports) } }
+                    TopChip(text: tr("Mi lista"), big: big) { state.push(.saved(false)) }
                 }
             }
         }
-        .padding(.horizontal, pad).padding(.top, 8).padding(.bottom, 10)
+        .padding(.horizontal, pad).padding(.top, 6).padding(.bottom, 10)
         .background(
             ZStack {
                 (solid ? Color(hex: 0x141414, alpha: 0.95) : Color.clear)
@@ -51,52 +52,26 @@ struct PhoneTopBar: View {
             .ignoresSafeArea(edges: .top)
             .animation(.easeInOut(duration: 0.2), value: solid)
         )
-        .sheet(isPresented: $profile) { ProfileSheet().environmentObject(state).environmentObject(tenant).environmentObject(cloud) }
     }
 }
 
-/** Perfil (igual que Android): Mi cuenta, Ajustes y Deportes */
-struct ProfileSheet: View {
-    @EnvironmentObject var state: AppState
-    @EnvironmentObject var tenant: Tenant
-    @EnvironmentObject var cloud: Cloud
-    @Environment(\.dismiss) private var dismiss
+/** filtro de arriba como Netflix: recuadro gris redondeado (el elegido, blanco) */
+private struct TopChip: View {
+    let text: String
+    var selected = false
+    var big = false
+    let action: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(tr("Perfil")).font(.system(size: 20, weight: .bold)).foregroundColor(.white)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(cloud.shownUser(state.session)).font(.system(size: 16)).foregroundColor(.white)
-                Text(cloud.demo ? (cloud.demoEndText.isEmpty ? "" : tr("Vence: %@", cloud.demoEndText)) : (state.session?.dnsName ?? "")).font(.system(size: 13)).foregroundColor(Theme.muted)
-            }
-            Divider().background(Color.white.opacity(0.2))
-            row("person.fill", tr("Mi cuenta")) { go { state.open(.account) } }
-            row("gearshape.fill", tr("Ajustes")) { go { state.open(.account) } }
-            if tenant.sportsEnabled { row("sportscourt.fill", tr("Deportes")) { go { state.push(.sports) } } }
-            row("bookmark.fill", tr("Mi lista")) { go { state.push(.saved(false)) } }
-            HStack { Spacer(); Button(tr("Cerrar")) { dismiss() }.foregroundColor(Theme.accent) }
+        let shape = RoundedRectangle(cornerRadius: 12)
+        Button(action: action) {
+            Text(text).font(.system(size: big ? 18 : 16, weight: .semibold)).lineLimit(1)
+                .padding(.horizontal, 18).padding(.vertical, big ? 12 : 10)
+                .foregroundColor(selected ? .black : .white)
+                .background(shape.fill(selected ? Color.white : Color.white.opacity(0.18)))
+                .overlay(shape.stroke(Color.white.opacity(0.12), lineWidth: 1))
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(LinearGradient(colors: [Color(hex: 0x141414), .black], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
-        .presentationDetents([.medium])
-        .preferredColorScheme(.dark)
-    }
-
-    /** cierra la hoja y después navega (si no, la navegación se pierde al cerrarse) */
-    private func go(_ f: @escaping () -> Void) {
-        dismiss()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: f)
-    }
-
-    private func row(_ icon: String, _ text: String, _ f: @escaping () -> Void) -> some View {
-        Button(action: f) {
-            HStack(spacing: 16) {
-                Image(systemName: icon).font(.system(size: 18)).foregroundColor(.white).frame(width: 24)
-                Text(text).font(.system(size: 16)).foregroundColor(.white)
-                Spacer()
-            }.padding(.vertical, 6).contentShape(Rectangle())
-        }.buttonStyle(.plain)
+        .buttonStyle(.plain)
     }
 }
 

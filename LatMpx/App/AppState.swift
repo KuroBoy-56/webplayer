@@ -1,7 +1,7 @@
 import SwiftUI
 import Combine
 
-enum Tab: Hashable { case home, series, movies, live, account }
+enum Tab: Hashable { case home, series, movies, live, search, account }
 
 /** Pantallas que se apilan sobre las pestañas. */
 enum Route: Hashable {

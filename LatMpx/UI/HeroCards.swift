@@ -11,14 +11,18 @@ struct HeroCards: View {
     @EnvironmentObject var cloud: Cloud
     let items: [Item]
     let width: CGFloat
+    /** alto de la pantalla: la tarjeta nunca más alta que ~2/3 (iPad, sobre todo girado) */
+    var height: CGFloat = 0
     var topPad: CGFloat = 0
     @State private var page = 0
     @GestureState private var drag: CGFloat = 0
     private let timer = Timer.publish(every: 6.5, on: .main, in: .common).autoconnect()
 
-    private var cardW: CGFloat { min(width - 60, 420) }
+    // girado (iPad): tarjeta cuadrada para que «Reproducir» y «Mi lista» quepan enteros y no la tape la barra de abajo
+    private var aspect: CGFloat { height > 0 && width > height ? 1 : 0.70 }
+    private var cardW: CGFloat { height > 0 ? min(width - 60, max(height * 0.66 * aspect, 340)) : min(width - 60, 420) }
     private var step: CGFloat { cardW + 14 }
-    private var cardH: CGFloat { cardW / 0.70 }
+    private var cardH: CGFloat { cardW / aspect }
     private var current: Item? { items.isEmpty ? nil : items[min(page, items.count - 1)] }
 
     var body: some View {
@@ -103,11 +107,11 @@ private struct HeroCard: View {
                 let tags = heroTags(state, item)
                 if !tags.isEmpty { Text(tags).font(.system(size: 13)).foregroundColor(Color(hex: 0xE5E5E5)).lineLimit(1) }
                 HStack(spacing: 10) {
-                    AppButton(text: tr("Reproducir"), icon: "play.fill", height: 44) {
+                    AppButton(text: tr("Reproducir"), icon: "play.fill", height: 46, pill: true) {
                         if item.kind == .movie { state.playMovie(item, ext: item.ext) } else { state.push(.detail(item)) }
                     }
                     let fav = cloud.isFav(item.key)
-                    AppButton(text: tr(fav ? "En mi lista" : "Mi lista"), icon: fav ? "checkmark" : "plus", primary: false, height: 44) { Cloud.shared.toggleFav(item) }
+                    AppButton(text: tr(fav ? "En mi lista" : "Mi lista"), icon: fav ? "checkmark" : "plus", primary: false, height: 46, pill: true) { Cloud.shared.toggleFav(item) }
                 }.padding(.top, 8)
             }.padding(16)
         }

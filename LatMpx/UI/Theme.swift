@@ -48,6 +48,6 @@ extension Color {
     }
 }
 
-/** separación lateral: más en iPad */
+/** separación lateral y carátulas: más grandes en iPad (y más con el iPad girado o el de 13") */
 func sidePad(_ size: CGSize) -> CGFloat { size.width >= 700 ? 32 : 16 }
-func posterWidth(_ size: CGSize) -> CGFloat { size.width >= 700 ? 150 : 110 }
+func posterWidth(_ size: CGSize) -> CGFloat { size.width >= 1000 ? 170 : size.width >= 700 ? 150 : 110 }

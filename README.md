@@ -4,6 +4,21 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.0.13 (como Android 1.5.9)
+
+- **Barra de abajo flotante como Netflix:** cápsula oscura con **Inicio, TV en vivo, Buscar y Perfil** (la inicial del
+  usuario en el color del panel; abre Mi cuenta) en lugar de la barra del sistema (`LatMpx/UI/FloatingTabBar.swift`,
+  `MainView`). Las listas pasan por detrás y lo último queda arriba de la barra (`safeAreaInset`); con el teclado abierto
+  la barra se queda abajo. Buscar es una pestaña.
+- **Arriba:** el logo y el nombre de la sección («Inicio», «Series», «Películas») con Mis descargas a la derecha, y los
+  filtros **Series / Películas / Deportes / Mi lista** en recuadros grises como Netflix (`PhoneTopBar`). Con Series o
+  Películas abiertas sigue resaltado Inicio abajo.
+- **Destacados:** «Reproducir» y «Mi lista» en cápsula, con los colores del dueño o del distribuidor (`pill` de
+  `AppButton`). La tarjeta nunca pasa de ~2/3 del alto de la pantalla; con el iPad girado es cuadrada para que los
+  botones quepan enteros.
+- **iPad:** barra de abajo, cabecera, títulos de las filas y carátulas más grandes (170 pt con el iPad girado o el de 13").
+- iOS no tiene perfiles: «Elige tu perfil» de Android no aplica todavía.
+
 ## Novedades de la 1.0.12
 
 - **Actualizar catálogo (como Roku):** «Mi cuenta» › **Actualizar catálogo** vuelve a bajar películas, series y canales
