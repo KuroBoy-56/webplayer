@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Equipos favoritos (Cuenta) y campanita de la TV (solo con perfiles) -->
+<resources>
+    <string name="tb_teams">Équipes favorites</string>
+    <string name="tb_teams_none">Aucune</string>
+    <string name="tb_add">+ Ajouter une équipe</string>
+    <string name="tb_phone_only">Les notifications ne sont disponibles que dans l\'app mobile (Android ou iOS). Ici, elles sont enregistrées dans le cloud et sur la TV vous les voyez avec la cloche.</string>
+    <string name="tb_pick_sport">Choisissez le sport</string>
+    <string name="tb_pick_league">Choisissez la ligue</string>
+    <string name="tb_pick_team">Choisissez l\'équipe</string>
+    <string name="tb_nations">Équipes nationales</string>
+    <string name="tb_clubs">Ligues et coupes</string>
+    <string name="tb_loading">Chargement…</string>
+    <string name="tb_no_data">Aucun match à venir pour choisir des équipes.</string>
+    <string name="tb_no_teams">Aucune équipe dans cette ligue.</string>
+    <string name="tb_remove">Retirer</string>
+    <string name="tb_bell">Alertes du jour</string>
+    <string name="tb_bell_empty">Aucune de vos équipes ne joue aujourd\'hui.</string>
+    <string name="tb_live">En direct ! %1$s</string>
+    <string name="tb_today">Aujourd\'hui %1$s : %2$s</string>
+    <string name="tb_final">Final : %1$s</string>
+    <string name="tb_save_err">Impossible d\'enregistrer. Réessayez.</string>
+</resources>

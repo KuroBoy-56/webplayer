@@ -97,7 +97,7 @@ fun rememberTvLive(state: AppState): List<TvLiveCard> {
                 e.id !in ids && !e.postponed && (e.home in teams || e.away in teams) && now < e.start + 3 * 3600_000L &&
                     Calendar.getInstance().apply { timeInMillis = e.start }.get(Calendar.DAY_OF_YEAR) == today
             }.map { it.copy(homeScore = "", awayScore = "", status = "NS", soon = true) }
-            (d.events + extra).mapNotNull { e -> Sports.match(e, prepared, d.rules).best?.let { TvLiveCard(e, it) } }
+            (d.events + extra).mapNotNull { e -> Sports.match(e, prepared, d.rules).takeIf { !it.guess }?.best?.let { TvLiveCard(e, it) } }
                 .sortedWith(compareBy({ it.e.soon }, { it.e.start })).take(20)
         }
     }
