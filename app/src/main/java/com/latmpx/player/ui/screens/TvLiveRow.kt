@@ -98,7 +98,7 @@ fun rememberTvLive(state: AppState): List<TvLiveCard> {
                     Calendar.getInstance().apply { timeInMillis = e.start }.get(Calendar.DAY_OF_YEAR) == today
             }.map { it.copy(homeScore = "", awayScore = "", status = "NS", soon = true) }
             (d.events + extra).mapNotNull { e -> Sports.match(e, prepared, d.rules).best?.let { TvLiveCard(e, it) } }
-                .sortedWith(compareBy({ it.e.soon }, { it.e.start }))
+                .sortedWith(compareBy({ it.e.soon }, { it.e.start })).take(20)
         }
     }
     return if (active) cards else emptyList()
@@ -169,6 +169,23 @@ private fun TvTeam(name: String, badge: String, size: Dp, modifier: Modifier) {
         }
         Text(name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/** al final de la fila: toda la agenda en Deportes (el estadio con el color de la app) */
+@Composable
+fun TvGoSportsTile(width: Dp, onFocus: () -> Unit, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    FocusBox(onClick = onClick, onFocus = onFocus, shape = shape, focusScale = 1.06f) {
+        Box(Modifier.width(width * 0.62f).height(width * 0.5625f).clip(shape).border(1.dp, Color(0x26FFFFFF), shape)) {
+            androidx.compose.foundation.Image(painterResource(R.drawable.sports_bg), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(com.latmpx.player.ui.theme.NfRed.copy(alpha = 0.75f), NfBg.copy(alpha = 0.9f)))))
+            Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text("🏟️", fontSize = 40.sp)
+                Text(stringResource(R.string.sl_go_sports), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                Text(stringResource(R.string.sl_go_sports_sub), color = Color(0xD9FFFFFF), fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
     }
 }
 

@@ -76,7 +76,7 @@ sealed class BrowseRow(val key: String, val title: String) {
     class Plats(key: String, title: String, val list: List<Platform>) : BrowseRow(key, title)
     class Chips(key: String, title: String, val chips: List<String>, val onChip: (Int) -> Unit) : BrowseRow(key, title)
     /** «En vivo ahora» (solo con perfiles): OK abre el canal del partido */
-    class Live(key: String, title: String, val cards: List<TvLiveCard>, val onOpen: (TvLiveCard) -> Unit) : BrowseRow(key, title)
+    class Live(key: String, title: String, val cards: List<TvLiveCard>, val onSports: () -> Unit, val onOpen: (TvLiveCard) -> Unit) : BrowseRow(key, title)
 }
 
 // dónde empiezan las filas (en 1920×1080, como Roku y Vega): con los botones de la portada asoman abajo; recorriéndolas,
@@ -250,6 +250,11 @@ private fun RowSlot(state: AppState, r: BrowseRow, slot: Dp, focusItem: (Item) -
                     val score = if (e.soon || (e.homeScore.isBlank() && e.awayScore.isBlank())) "" else "   ${e.homeScore} - ${e.awayScore}"
                     val plot = listOf(e.league, clock + score, c.best.name).filter { it.isNotBlank() }.joinToString("  ·  ")
                     TvLiveTile(c, liveW, onFocus = { focusLive(c, plot) }) { r.onOpen(c) }
+                }
+                item(key = "go") {
+                    val go = stringResource(R.string.sl_go_sports)
+                    val goSub = stringResource(R.string.sl_go_sports_sub)
+                    TvGoSportsTile(liveW, onFocus = { focusLabel(go, goSub) }) { r.onSports() }
                 }
             }
         }

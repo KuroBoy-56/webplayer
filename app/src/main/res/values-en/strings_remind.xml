@@ -9,4 +9,6 @@
     <string name="rm_phone">To get notifications for your favorite matches and teams you need the %1$s app installed on your phone.</string>
     <string name="rm_failed">Could not save the reminder. Try again.</string>
     <string name="rm_ok">Got it</string>
+    <string name="rm_late_title">Can’t turn it on</string>
+    <string name="rm_late">Reminders can only be turned on for matches that start in more than 5 minutes.</string>
 </resources>
