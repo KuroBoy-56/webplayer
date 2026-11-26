@@ -1,6 +1,6 @@
 /*
- * «En vivo ahora» de Inicio (homex.php, includes/sports_live.php), como Android y la app de computadora: partidos que
- * se están jugando con marcador y minuto, la cancha del deporte de fondo (y el color del torneo si es uno grande) y el
+ * «En vivo ahora» de Inicio (homex.php, includes/sports_live.php), como Android y la app de computadora: hasta 20
+ * partidos (los que se juegan con marcador y minuto, después los próximos con su hora) y al final «Ir a Deportes»; la cancha del deporte de fondo (y el color del torneo si es uno grande) y el
  * canal exacto de la lista del cliente. Se pregunta cada ttl (30 s) solo con la pestaña visible. Al pulsar, el menú de
  * canales (solo los del cliente, y buscar); Atrás desde el reproductor vuelve con el foco en el mismo partido.
  * Configuración: window.NF_LIVE = {key: clave de «Deporte preferido», T: textos}.
@@ -20,10 +20,12 @@
     function pref() { try { return localStorage.getItem(C.key) || ''; } catch (x) { return ''; } }
     // Ajustes › Habilitar tarjetas de plataformas: con la fila en vivo, las plataformas quedan debajo
     function platCards() { try { return !!C.platKey && localStorage.getItem(C.platKey) === '1'; } catch (x) { return false; } }
+    function hour(s) { return s ? new Intl.DateTimeFormat(window.NF_LOCALE || undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(s * 1000)) : ''; }
     function score(v) { v = v == null ? '' : String(v).trim(); return v === '' ? '0' : v; }
 
     /* «67'», «Descanso», «Q3 5:21»: lo que dice TheSportsDB del momento del partido */
     function clock(e) {
+        if (e.soon) return T.starts + ' ' + hour(e.s);
         var st = String(e.st || '').trim(), pr = String(e.pr || '').trim();
         if (st.toUpperCase() === 'HT' || pr.toUpperCase() === 'HT') return T.ht;
         if (/^\d+$/.test(pr)) return pr + "'";
@@ -119,17 +121,18 @@
         var badge = src ? '<img src="' + esc(src) + '/small" alt="" loading="lazy" data-n="' + ini + '" onerror="nfLvImg(this)">' : '<b>' + ini + '</b>';
         return '<span class="nf-lv-team"><span class="nf-lv-badge">' + badge + '</span><span class="nf-lv-name">' + esc(name) + '</span></span>';
     }
-    function title(e) { return e.h || e.a ? e.h + ' ' + score(e.hs) + ' - ' + score(e.as) + ' ' + e.a : e.ev || e.lg; }
+    function title(e) { return e.h || e.a ? (e.soon ? e.h + ' vs ' + e.a : e.h + ' ' + score(e.hs) + ' - ' + score(e.as) + ' ' + e.a) : e.ev || e.lg; }
 
     function card(e) {
         var best = CH[e.best] ? CH[e.best][0] : '';
         var th = theme(e.lg);
         var mid = e.h || e.a
-            ? '<span class="nf-lv-mid">' + team(e.h, e.hb) + '<span class="nf-lv-score">' + esc(score(e.hs)) + '<small>-</small>' + esc(score(e.as)) + '</span>' + team(e.a, e.ab) + '</span>'
+            ? '<span class="nf-lv-mid">' + team(e.h, e.hb) + (e.soon ? '<span class="nf-lv-score nf-lv-vs">vs</span>'
+                : '<span class="nf-lv-score">' + esc(score(e.hs)) + '<small>-</small>' + esc(score(e.as)) + '</span>') + team(e.a, e.ab) + '</span>'
             : '<span class="nf-lv-evname">' + esc(e.ev || e.lg) + '</span>';
         return '<button type="button" class="nf-lv-card" data-id="' + esc(e.id) + '" aria-label="' + esc(title(e) + ', ' + clock(e) + ', ' + best) + '">' +
             field(e.sp) + (th ? '<span class="nf-lv-theme" style="background:' + th + '"></span>' : '') + '<span class="nf-lv-scrim"></span>' +
-            '<span class="nf-lv-body"><span class="nf-lv-top"><span class="nf-lv-lg">' + esc(e.lg) + '</span><span class="nf-lv-clock"><i></i>' + esc(clock(e)) + '</span></span>' +
+            '<span class="nf-lv-body"><span class="nf-lv-top"><span class="nf-lv-lg">' + esc(e.lg) + '</span><span class="nf-lv-clock' + (e.soon ? ' soon' : '') + '"><i></i>' + esc(clock(e)) + '</span></span>' +
             mid + '<span class="nf-lv-ch">▶ ' + esc(best) + '</span></span></button>';
     }
 
@@ -140,7 +143,9 @@
         var keep = focused ? focused.getAttribute('data-id') : '';
         var x = slider.scrollLeft;
         box.hidden = !list.length;
-        slider.innerHTML = list.map(card).join('');
+        // al final: toda la agenda en Deportes
+        slider.innerHTML = list.map(card).join('') + (list.length ? '<a class="nf-lv-card nf-lv-more" href="sportsschedule.php"><span class="nf-lv-more-body">' +
+            '<span class="nf-lv-more-icon" aria-hidden="true">🏟️</span><b>' + esc(T.goSports) + '</b><small>' + esc(T.goSportsSub) + '</small></span></a>' : '');
         slider.scrollLeft = x;
         if (slider._upd) slider._upd();
         var back = '';

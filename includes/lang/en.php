@@ -516,4 +516,9 @@ return [
     'Deporte preferido' => 'Favorite sport',
     'Todos los deportes' => 'All sports',
     'Los partidos en vivo de Inicio muestran solo este deporte.' => 'Live matches on Home show only this sport.',
+    'Empieza' => 'Starts',
+    'Ir a Deportes' => 'Go to Sports',
+    'Toda la agenda de hoy y mañana' => 'The full schedule for today and tomorrow',
+    'Finalizados' => 'Finished',
+    'Todavía no terminó ningún evento hoy. Aquí aparecen los de hoy cuando terminan (se vacía a las 00:00).' => 'No event has finished today yet. Today’s events show here once they end (cleared at 00:00).',
 ];

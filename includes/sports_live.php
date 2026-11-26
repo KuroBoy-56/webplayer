@@ -1,7 +1,7 @@
 <?php
 /**
- * «En vivo ahora» de Inicio (en el lugar de las plataformas), como Android y la app de computadora: los partidos que se
- * están jugando con su marcador y minuto (api/sports_live.php del panel), cada uno con el canal exacto de la lista de
+ * «En vivo ahora» de Inicio (en el lugar de las plataformas), como Android y la app de computadora: hasta 20 partidos,
+ * los que se están jugando con su marcador y minuto y después los próximos con su hora (api/sports_live.php del panel), cada uno con el canal exacto de la lista de
  * esta línea (includes/sports_match.php: el canal que lo transmite, el de la guía del panel o el de los equipos). Un
  * partido que el cliente no puede ver no sale.
  *
@@ -14,6 +14,9 @@ if (defined('WP_SPORTS_LIVE_LOADED')) {
 }
 define('WP_SPORTS_LIVE_LOADED', true);
 require_once __DIR__ . '/sports_match.php';
+
+/** tarjetas de «En vivo ahora»: en vivo y próximos */
+const WP_SPORTS_LIVE_MAX = 20;
 
 /** ¿Esta sesión puede tener la fila? (sin pedir nada a la red) */
 function wp_sports_live_allowed()
@@ -30,7 +33,8 @@ function wp_panel_sports_live($known = false)
     $d = wp_cache_get($ck, 25, $stale);
     if (is_array($d)) return $d;
     if ($known) return is_array($stale) ? $stale : null;
-    $j = wp_panel_call('sports_live.php', null, 12);
+    // next=1: además de los que se juegan, los próximos de las 24 h siguientes (soon: true)
+    $j = wp_panel_call('sports_live.php', ['next' => 1], 12);
     if (is_array($j) && isset($j['enabled'])) {
         wp_cache_set($ck, $j);
         return $j;
@@ -63,7 +67,7 @@ function wp_sports_live_pref_key()
 /**
  * Para homex (sportsschedule.php?ajax=live):
  *   {on: false, ttl} = sin fila (vuelven las plataformas)
- *   {on: true, ttl, cards: [{id, sp, lg, h, a, hb, ab, hs, as, st, pr, ev, best, opts: [[id, motivo, nombre del canal que lo transmite]]}],
+ *   {on: true, ttl, cards: [{id, sp, lg, h, a, hb, ab, hs, as, st, pr, ev, best, soon, s, opts: [[id, motivo, nombre del canal que lo transmite]]}],
  *    ch: {id: [nombre, carpeta]}}
  */
 function wp_sports_live()
@@ -73,8 +77,10 @@ function wp_sports_live()
     if (!is_array($p)) return ['on' => false, 'ttl' => 60];
     if (empty($p['enabled'])) return ['on' => false, 'ttl' => max(60, min(3600, (int)($p['ttl'] ?? 3600)))];
     $ttl = max(15, min(300, (int)($p['ttl'] ?? 30)));
-    $events = array_values(array_filter(is_array($p['events'] ?? null) ? $p['events'] : [], function ($e) {
-        return is_array($e) && (string)($e['id'] ?? '') !== '';
+    $now = time();
+    $events = array_values(array_filter(is_array($p['events'] ?? null) ? $p['events'] : [], function ($e) use ($now) {
+        // un próximo que «empezaba» hace más de 5 min y el livescore no trae: fuera
+        return is_array($e) && (string)($e['id'] ?? '') !== '' && !(!empty($e['soon']) && (int)($e['s'] ?? 0) > 0 && (int)$e['s'] < $now - 300);
     }));
     if (!$events) return ['on' => true, 'ttl' => $ttl, 'cards' => [], 'ch' => (object)[]];
     $rules = spm_rules($p);
@@ -112,9 +118,14 @@ function wp_sports_live()
             'id' => $id, 'sp' => (string)($e['sp'] ?? ''), 'lg' => (string)($e['lg'] ?? ''), 'ev' => (string)($e['ev'] ?? ''),
             'h' => (string)($e['h'] ?? ''), 'a' => (string)($e['a'] ?? ''), 'hb' => (string)($e['hb'] ?? ''), 'ab' => (string)($e['ab'] ?? ''),
             'hs' => (string)($e['hs'] ?? ''), 'as' => (string)($e['as'] ?? ''), 'st' => (string)($e['st'] ?? ''), 'pr' => (string)($e['pr'] ?? ''),
-            'best' => $opts[0][0], 'opts' => array_slice($opts, 0, 10),
+            'best' => $opts[0][0], 'opts' => array_slice($opts, 0, 10), 'soon' => !empty($e['soon']), 's' => (int)($e['s'] ?? 0),
         ];
     }
+    // en vivo primero, después los próximos por hora; como mucho 20 (al final va «Ir a Deportes»)
+    usort($cards, function ($x, $y) {
+        return ((int)$x['soon'] <=> (int)$y['soon']) ?: (($x['s'] ?: PHP_INT_MAX) <=> ($y['s'] ?: PHP_INT_MAX));
+    });
+    $cards = array_slice($cards, 0, WP_SPORTS_LIVE_MAX);
     $used = [];
     foreach ($cards as $c) foreach ($c['opts'] as $o) $used[$o[0]] = $ch[$o[0]];
     return ['on' => true, 'ttl' => $ttl, 'cards' => $cards, 'ch' => (object)$used];

@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## 20 partidos en Inicio y pestaña Finalizados — versión 3.0.4 (26 de noviembre, quinta parte)
+- **«En vivo ahora» de Inicio** (solo con perfiles): hasta **20** partidos, primero los que se juegan (marcador y minuto) y después los **próximos** de las 24 h siguientes con su hora («Empieza 20:30», «vs»). Al final, una tarjeta **«Ir a Deportes»** con el color de la app. Un partido que termina sale de la fila (el panel deja de mandarlo).
+- **Deportes › Finalizados** (solo con perfiles, junto a Hoy / Mañana): los eventos de hoy que ya terminaron, el último primero; se vacía a las 00:00 (zona del panel). Con ella **Hoy** muestra solo los que se juegan y los que todavía no empiezan. Sin perfiles, Deportes queda como siempre.
+- Hace falta el panel con `api/sports_live.php` del 26 de noviembre (acepta `next=1`).
+- Archivos: `homex.php`, `sportsschedule.php`, `assets/nf/live.js`, `assets/nf/live.css`, `assets/nf/sports.js`, `includes/sports_live.php`, `includes/lang/en.php`, `includes/lang/pt.php`, `includes/lang/fr.php`, `includes/core.php` (versión).
+
 ## «Habilitar tarjetas de plataformas» — versión 3.0.3 (26 de noviembre, cuarta parte)
 - **Ajustes › Habilitar tarjetas de plataformas** (en la tarjeta «Deporte preferido», o sea solo con perfiles activos y la fila «En vivo ahora»; y solo si el distribuidor tiene las plataformas): las tarjetas de plataformas (Netflix, Disney+…) vuelven en Inicio, **debajo** de «En vivo ahora», como estaban antes. Se guarda por línea y perfil en ese navegador. Apagado (lo de siempre), con la fila en vivo las plataformas no se ven.
 - Archivos: `homex.php`, `settings.php`, `assets/nf/live.js`, `includes/sports_live.php`, `includes/lang/en.php`, `includes/lang/pt.php`, `includes/lang/fr.php`, `includes/core.php` (versión).

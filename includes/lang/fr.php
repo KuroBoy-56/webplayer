@@ -516,4 +516,9 @@ return [
     'Deporte preferido' => 'Sport préféré',
     'Todos los deportes' => 'Tous les sports',
     'Los partidos en vivo de Inicio muestran solo este deporte.' => 'Les matchs en direct de l’Accueil ne montrent que ce sport.',
+    'Empieza' => 'Débute',
+    'Ir a Deportes' => 'Aller aux Sports',
+    'Toda la agenda de hoy y mañana' => 'Tout le programme d’aujourd’hui et de demain',
+    'Finalizados' => 'Terminés',
+    'Todavía no terminó ningún evento hoy. Aquí aparecen los de hoy cuando terminan (se vacía a las 00:00).' => 'Aucun événement n’est encore terminé aujourd’hui. Ceux du jour apparaissent ici une fois finis (vidé à 00:00).',
 ];

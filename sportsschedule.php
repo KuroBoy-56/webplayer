@@ -185,6 +185,9 @@ foreach ($sp_sports as $k => $m) $sp_meta[$k] = ['n' => $m[0], 'i' => $m[1], 'd'
 // pestañas Tablas / Selecciones / Equipos (cuando el panel las ofrece) y los nombres en español de los equipos
 require_once __DIR__ . '/includes/sports_panel.php';
 $sp_extra = wp_sports_extra($sp_panel);
+// con perfiles (uno elegido): pestaña Finalizados con los terminados de hoy; Hoy queda con los que se juegan y los que no empiezan
+$sp_pf = wp_prof_state();
+$sp_fin = wp_prof_needed($sp_pf) && (string)($sp_pf['id'] ?? '') !== '';
 $sp_alias = is_array($sp_panel['match']['alias'] ?? null) ? $sp_panel['match']['alias'] : [];
 
 $page_title = t('Deportes');
@@ -345,7 +348,7 @@ include "header.php";
 </div>
 </main>
 
-<script src="assets/nf/sports.js?v=2"></script>
+<script src="assets/nf/sports.js?v=3"></script>
 <script>
 (function () {
     var q2 = document.getElementById('spQ2');
@@ -376,8 +379,11 @@ include "header.php";
         typeHint: <?php echo tj('Canal, equipo o evento'); ?>, go: <?php echo tj('Buscar'); ?>, chWith: <?php echo tj('Canales con «{q}»'); ?>,
         noChWith: <?php echo tj('No hay canales con «{q}» en tu lista'); ?>, missing: <?php echo tj('No tienes {c}; te mostramos {d}'); ?>,
         notYet: <?php echo tj('Aún no aparece el canal exacto, te mostramos {c}'); ?>, notFound: <?php echo tj('No encontramos un canal para este evento'); ?>,
-        event: <?php echo tj('Evento'); ?>, close: <?php echo tj('Cerrar'); ?>, events: <?php echo tj('eventos'); ?>
+        event: <?php echo tj('Evento'); ?>, close: <?php echo tj('Cerrar'); ?>, events: <?php echo tj('eventos'); ?>,
+        finEmpty: <?php echo tj('Todavía no terminó ningún evento hoy. Aquí aparecen los de hoy cuando terminan (se vacía a las 00:00).'); ?>
     };
+    // pestaña Finalizados: solo con perfiles (uno elegido)
+    var FINTAB = <?php echo json_encode($sp_fin); ?>;
 
     var FIN = /^(FT|AET|AOT|PEN|Match Finished|Finished|After Over Time|Final)$/i;
     var state = { day: 0, sport: '' };
@@ -544,6 +550,9 @@ include "header.php";
         var live = [], next = [], done = [];
         AG.filter(function (e) { return !state.sport || e.sp === state.sport; }).sort(function (a, b) { return a.t - b.t; }).forEach(function (e) {
             var st = status(e);
+            // con Finalizados (perfiles) Hoy no lleva los terminados: van en su pestaña, los de hoy, el último primero
+            if (state.day === 2) { if (e.dk === keys[0] && st === 'fin') done.unshift(e); return; }
+            if (FINTAB && state.day === 0 && st === 'fin') return;
             if (!((state.day === 0 && (e.dk === keys[0] || st === 'live')) || (state.day === 1 && e.dk === keys[1]))) return;
             (st === 'live' ? live : st === 'soon' ? next : done).push(e);
         });
@@ -552,7 +561,7 @@ include "header.php";
         var lc = document.getElementById('spLiveCount');
         lc.hidden = !liveCount;
         lc.lastChild.textContent = (liveCount === 1 ? T.one : T.many).replace('{n}', liveCount);
-        document.getElementById('spList').innerHTML = rows.length ? '<div class="sp-grid">' + rows.map(card).join('') + '</div>' : '<div class="sp-empty"><b>' + esc(T.none) + '</b></div>';
+        document.getElementById('spList').innerHTML = rows.length ? '<div class="sp-grid">' + rows.map(card).join('') + '</div>' : '<div class="sp-empty"><b>' + esc(state.day === 2 ? T.finEmpty : T.none) + '</b></div>';
     }
 
     /* ---------- menú del partido (y de una búsqueda) ---------- */
@@ -689,7 +698,7 @@ include "header.php";
 
     // Tablas / Selecciones / Equipos (assets/nf/sports.js)
     // pestañas Hoy / Mañana y, si el panel las ofrece, Tablas / Selecciones / Equipos (assets/nf/sports.js)
-    if (window.NFSports) sports = NFSports({ extra: <?php echo json_encode(['tables' => $sp_extra['tables'], 'fixtures' => $sp_extra['fixtures'], 'nat' => $sp_extra['nat']]); ?>,
+    if (window.NFSports) sports = NFSports({ extra: <?php echo json_encode(['tables' => $sp_extra['tables'], 'fixtures' => $sp_extra['fixtures'], 'nat' => $sp_extra['nat'], 'fin' => $sp_fin]); ?>,
         alias: <?php echo json_encode((object)$sp_alias, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>, meta: META, prep: prep, card: card,
         day: function (d) { if (state.day !== d) { state.day = d; state.sport = ''; if (AG.length) { renderChips(); render(); } } } });
 })();

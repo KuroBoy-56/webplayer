@@ -39,6 +39,8 @@
         if (!tabsBox) return null;
         var x = ctx.extra || {};
         var tabs = [['today', tr('Hoy')], ['tomorrow', tr('Mañana')]];
+        // con perfiles: los terminados de hoy en su propia pestaña (Hoy queda con los que se juegan y los que no empiezan)
+        if (x.fin) tabs.push(['finished', tr('Finalizados')]);
         if (x.tables) tabs.push(['tables', tr('Tablas')]);
         if (x.nat) tabs.push(['nations', tr('Selecciones')]);
         if (x.fixtures) tabs.push(['teams', tr('Equipos')]);
@@ -55,11 +57,11 @@
             if (!tabs.some(function (x) { return x[0] === t; })) t = 'today';
             cur = t;
             [].forEach.call(tabsBox.querySelectorAll('[data-tab]'), function (b) { var on = b.getAttribute('data-tab') === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-            var agenda = t === 'today' || t === 'tomorrow';
+            var agenda = t === 'today' || t === 'tomorrow' || t === 'finished';
             panes.agenda.hidden = !agenda;
             panes.tables.hidden = t !== 'tables';
             panes.fx.hidden = t !== 'teams' && t !== 'nations';
-            if (agenda && ctx.day) ctx.day(t === 'tomorrow' ? 1 : 0);
+            if (agenda && ctx.day) ctx.day(t === 'tomorrow' ? 1 : t === 'finished' ? 2 : 0);
             if (push) try { history.replaceState(null, '', t === 'today' ? location.pathname + location.search : '#' + t); } catch (e) {}
             if (t === 'tables') tables.load();
             if (t === 'teams' || t === 'nations') fx.load();

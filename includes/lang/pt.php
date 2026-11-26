@@ -516,4 +516,9 @@ return [
     'Deporte preferido' => 'Esporte preferido',
     'Todos los deportes' => 'Todos os esportes',
     'Los partidos en vivo de Inicio muestran solo este deporte.' => 'As partidas ao vivo do Início mostram só este esporte.',
+    'Empieza' => 'Começa',
+    'Ir a Deportes' => 'Ir para Esportes',
+    'Toda la agenda de hoy y mañana' => 'Toda a agenda de hoje e amanhã',
+    'Finalizados' => 'Finalizados',
+    'Todavía no terminó ningún evento hoy. Aquí aparecen los de hoy cuando terminan (se vacía a las 00:00).' => 'Nenhum evento terminou hoje ainda. Os de hoje aparecem aqui quando terminam (esvazia às 00:00).',
 ];

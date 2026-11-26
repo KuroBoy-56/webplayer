@@ -17,6 +17,7 @@ function wp_cache_get($k, $ttl, &$stale = null) { $stale = null; return $GLOBALS
 function wp_cache_set($k, $v) { $GLOBALS['cache'][$k] = $v; }
 function wp_panel_call($ep, $body = null, $t = 8) {
     $GLOBALS['calls']++;
+    if ($ep === 'sports_live.php') $GLOBALS['body'] = $body;
     if ($ep === 'sports_epg.php') return ['map' => ['3' => ['30']]];
     return $GLOBALS['panel'];
 }
@@ -72,6 +73,26 @@ $GLOBALS['feat'] = true;
 $ok(wp_sports_live_pref_key() === 'nf_live_sport|' . substr(sha1('juan@srv.example'), 0, 12) . '|p1', 'Deporte preferido por línea y perfil');
 $GLOBALS['cache'] = ['panel|sportslive' => ['enabled' => true]];
 $ok(wp_sports_live_expected(), 'lo último guardado decía que hay fila: Inicio no muestra las plataformas mientras carga');
+
+$GLOBALS['cache'] = [];
+$now = time();
+$evs = [];
+for ($i = 0; $i < 30; $i++) {
+    $e = $ev('n' . $i, 'Local ' . $i, 'Visita ' . $i, 'Soccer', [['n' => 'ESPN 2', 'c' => 'MX']]);
+    $e['s'] = $i < 2 ? $now - 600 : $now + 3600 * (30 - $i);
+    if ($i >= 2) $e['soon'] = true;
+    $evs[] = $e;
+}
+$old = $ev('viejo', 'A', 'B', 'Soccer', [['n' => 'ESPN 2', 'c' => 'MX']]);
+$old['soon'] = true;
+$old['s'] = $now - 600;
+$evs[] = $old;
+$GLOBALS['panel'] = ['enabled' => true, 'ttl' => 30, 'events' => $evs, 'match' => []];
+$r = wp_sports_live();
+$ids = array_map(function ($c) { return $c['id']; }, $r['cards']);
+$ok(($GLOBALS['body']['next'] ?? 0) === 1, 'pide next=1 al panel (también los próximos)');
+$ok(count($ids) === 20 && $ids[0] === 'n0' && $ids[1] === 'n1' && $ids[2] === 'n29', 'en vivo primero, después los próximos por hora, como mucho 20');
+$ok(!in_array('viejo', $ids, true) && $r['cards'][2]['soon'] === true && $r['cards'][0]['soon'] === false, 'uno que «empezaba» hace 10 min sin marcador no sale; soon marcado');
 
 echo $fail ? "\n$fail fallidas\n" : "\ntodo ok\n";
 exit($fail ? 1 : 0);
