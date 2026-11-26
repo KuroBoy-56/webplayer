@@ -63,6 +63,24 @@ export const LiveTile = memo(function LiveTile({ c, onPress, onFocus }: { c: Liv
   );
 });
 
+const STADIUM = require('../../assets/image/sports_bg.jpg');
+
+/** al final de la fila: toda la agenda en Deportes (el estadio con el color de la app) */
+export const GoSportsTile = memo(function GoSportsTile({ onPress, onFocus }: { onPress: () => void; onFocus?: () => void }) {
+  return (
+    <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.tile, { width: px(300), height: LIVE_H() }, f && s.tileF]}>
+      <Image source={STADIUM} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: C.red, opacity: 0.55 }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
+      <View style={s.goBody}>
+        <Text style={s.goIcon}>🏟️</Text>
+        <Text style={s.goTitle} numberOfLines={2}>{t('Ir a Deportes')}</Text>
+        <Text style={s.goSub} numberOfLines={2}>{t('Toda la agenda de hoy y mañana')}</Text>
+      </View>
+    </Focusable>
+  );
+});
+
 /** el fondo grande de la portada con el foco en un partido: la imagen del evento o la cancha con los dos escudos */
 export function LiveBackdrop({ c }: { c: LiveCard }) {
   if (c.th) return <Image source={{ uri: c.th }} style={StyleSheet.absoluteFill} resizeMode="cover" />;
@@ -102,6 +120,10 @@ const s = themed(() =>
     noBadge: { backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
     noBadgeText: { color: '#fff', fontWeight: '900' },
     bigTeams: { position: 'absolute', right: px(120), top: px(250), flexDirection: 'row', alignItems: 'center' },
+    goBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: px(16) },
+    goIcon: { fontSize: px(54) },
+    goTitle: { color: '#fff', fontSize: px(30), fontWeight: '900', marginTop: px(8), textAlign: 'center' },
+    goSub: { color: '#fff', fontSize: px(20), opacity: 0.9, marginTop: px(6), textAlign: 'center' },
     bigVs: { color: '#fff', fontSize: px(80), fontWeight: '900', marginHorizontal: px(50), opacity: 0.9 },
   }),
 );

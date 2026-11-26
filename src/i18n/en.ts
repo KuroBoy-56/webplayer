@@ -482,6 +482,12 @@ const en = {
   "No se pudo guardar el recordatorio. Inténtalo otra vez.": "Could not save the reminder. Try again.",
   "Habilitar tarjetas de plataformas": "Show platform cards",
   "Activado: las plataformas van debajo de «En vivo ahora»": "On: platforms go below «Live now»",
+  "Ir a Deportes": "Go to Sports",
+  "Toda la agenda de hoy y mañana": "The full schedule for today and tomorrow",
+  "Finalizados": "Finished",
+  "Todavía no terminó ningún evento hoy. Aquí aparecen los de hoy cuando terminan (se vacía a las 00:00).": "No event has finished today yet. Today’s events show here once they end (cleared at 00:00).",
+  "No se puede activar": "Can’t turn it on",
+  "Los recordatorios solo se pueden activar en partidos que empiezan en más de 5 minutos.": "Reminders can only be turned on for matches that start in more than 5 minutes.",
 };
 
 export default en;

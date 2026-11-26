@@ -483,6 +483,12 @@ const pt: Record<Key, string> = {
   "No se pudo guardar el recordatorio. Inténtalo otra vez.": "Não foi possível salvar o lembrete. Tente novamente.",
   "Habilitar tarjetas de plataformas": "Ativar cartões de plataformas",
   "Activado: las plataformas van debajo de «En vivo ahora»": "Ativado: as plataformas ficam abaixo de «Ao vivo agora»",
+  "Ir a Deportes": "Ir para Esportes",
+  "Toda la agenda de hoy y mañana": "Toda a agenda de hoje e amanhã",
+  "Finalizados": "Finalizados",
+  "Todavía no terminó ningún evento hoy. Aquí aparecen los de hoy cuando terminan (se vacía a las 00:00).": "Nenhum evento terminou hoje ainda. Os de hoje aparecem aqui quando terminam (esvazia às 00:00).",
+  "No se puede activar": "Não é possível ativar",
+  "Los recordatorios solo se pueden activar en partidos que empiezan en más de 5 minutos.": "Os lembretes só podem ser ativados em partidas que começam em mais de 5 minutos.",
 };
 
 export default pt;

@@ -1,4 +1,5 @@
 // Abrir fichas, cuadrículas y el reproductor (igual que Play.brs de Roku).
+import { goto } from './lib/goto';
 import type { Episode } from './api/xtream';
 import { GENRES, Item, label, PLATFORMS, Special } from './data/catalog';
 import { t } from './lib/i18n';
@@ -19,7 +20,8 @@ export function openItem(nav: Nav, it: Item, channels?: Item[]) {
 export function openSpecial(nav: Nav, sp: Special) {
   // un partido de «En vivo ahora»: su canal
   if (sp.kind === 'live') {
-    if (sp.live) openItem(nav, sp.live.best);
+    if (sp.extra === 'sports') goto('sports');
+    else if (sp.live) openItem(nav, sp.live.best);
   } else if (sp.kind === 'platform') {
     nav.push({ name: 'grid', title: sp.label, mode: 'platform', key: sp.key });
   } else if (sp.kind === 'genre') {

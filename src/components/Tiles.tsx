@@ -8,7 +8,7 @@ import { C, px, SIDE, themed } from '../theme';
 import { Focusable } from './ui';
 import { ChainImage } from './ChainImage';
 import { posterSources } from '../lib/images';
-import { LIVE_H, LiveTile } from './LiveTile';
+import { GoSportsTile, LIVE_H, LiveTile } from './LiveTile';
 
 // funciones: la escala se conoce al medir la pantalla (después de importar este archivo)
 export const posterW = () => px(210);
@@ -62,6 +62,7 @@ export const PosterTile = memo(function PosterTile({
 export const SpecialTile = memo(function SpecialTile({ sp, onPress: pressSp, onFocus: focusSp, preferred }: { sp: Special; onPress: (sp: Special) => void; onFocus?: (sp: Special) => void; preferred?: boolean }) {
   const onPress = useCallback(() => pressSp(sp), [pressSp, sp]);
   const onFocus = useMemo(() => (focusSp ? () => focusSp(sp) : undefined), [focusSp, sp]);
+  if (sp.kind === 'live' && sp.extra === 'sports') return <GoSportsTile onPress={onPress} onFocus={onFocus} />;
   if (sp.kind === 'live' && sp.live) return <LiveTile c={sp.live} onPress={onPress} onFocus={onFocus} />;
   if (sp.kind === 'platform') {
     return (
