@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- recordatorios de partidos en la nube (api/alerts.php): el celular avisa -->
+<resources>
+    <string name="rm_on">🔔  Recordarme este partido</string>
+    <string name="rm_off">🔔  Quitar el recordatorio</string>
+    <string name="rm_desc">Te avisaremos en tu celular 30 min y 10 min antes y al empezar</string>
+    <string name="rm_saved">Recordatorio guardado</string>
+    <string name="rm_removed">Recordatorio quitado</string>
+    <string name="rm_phone">Para recibir las notificaciones de tus partidos y equipos favoritos debes tener la app %1$s instalada en tu celular.</string>
+    <string name="rm_failed">No se pudo guardar el recordatorio. Inténtalo otra vez.</string>
+    <string name="rm_ok">Entendido</string>
+</resources>

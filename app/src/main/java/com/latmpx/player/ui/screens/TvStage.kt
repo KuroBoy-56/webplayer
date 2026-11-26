@@ -54,7 +54,8 @@ import kotlinx.coroutines.coroutineScope
  */
 
 /** lo que muestra la portada: un título (con su fondo y sinopsis si ya se encontraron) o un nombre y un texto */
-data class StageInfo(val item: Item?, val art: TvHero? = null, val title: String = "", val plot: String = "")
+// live: con el foco en un partido de «En vivo ahora» (TvLiveRow.kt)
+data class StageInfo(val item: Item?, val art: TvHero? = null, val title: String = "", val plot: String = "", val live: com.latmpx.player.data.SportEvent? = null)
 
 /** fondos ya buscados de los títulos enfocados (null = no tiene): al volver a enfocarlos salen al instante */
 internal object FocusArt {
@@ -109,6 +110,8 @@ fun TvStageView(info: StageInfo, compact: Boolean, h: Dp, w: Dp, pad: Dp) {
             // sin fondo: la carátula del mismo título agrandada, difuminada y oscurecida, y la carátula a la derecha
             ItemPoster(item, Modifier.fillMaxSize().blur(18.dp).alpha(0.45f))
         }
+        // partido: la imagen del evento o la cancha con los dos escudos; sin nada de eso queda el último fondo congelado
+        info.live?.takeIf { it.thumb.isNotBlank() || it.homeBadge.isNotBlank() || it.awayBadge.isNotBlank() }?.let { TvLiveStage(it) }
         // degradados como Roku: desde la izquierda (1500 de ancho, 92 %) y desde abajo (a partir de la fila de las filas)
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to NfBg.copy(alpha = 0.92f), 0.45f to NfBg.copy(alpha = 0.55f), 0.78f to Color.Transparent)))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color(0x80000000), 0.14f to Color.Transparent, 0.52f to Color.Transparent, 0.75f to NfBg.copy(alpha = 0.85f), 1f to NfBg)))

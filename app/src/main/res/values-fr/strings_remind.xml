@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- recordatorios de partidos en la nube (api/alerts.php): el celular avisa -->
+<resources>
+    <string name="rm_on">🔔  Me rappeler ce match</string>
+    <string name="rm_off">🔔  Retirer le rappel</string>
+    <string name="rm_desc">Nous vous préviendrons sur votre téléphone 30 et 10 min avant et au coup d\'envoi</string>
+    <string name="rm_saved">Rappel enregistré</string>
+    <string name="rm_removed">Rappel retiré</string>
+    <string name="rm_phone">Pour recevoir les notifications de vos matchs et équipes favoris, l\'application %1$s doit être installée sur votre téléphone.</string>
+    <string name="rm_failed">Impossible d\'enregistrer le rappel. Réessayez.</string>
+    <string name="rm_ok">Compris</string>
+</resources>

@@ -29,6 +29,15 @@ data class SportEvent(
     val tv: List<TvChannel> = emptyList(),
     /** liga del partido en los JSON de Equipos / Selecciones (api/sports_fixtures.php: "l") */
     val leagueId: String = "",
+    /** en vivo (api/sports_live.php "pr"): minuto o periodo tal como lo da TheSportsDB ("67", "Q3 5:21", "HT") */
+    val progress: String = "",
+    /** selecciones en el idioma de la app (api/sports_fixtures.php "hn" / "an"); vacío = el nombre de siempre */
+    val homeLabel: String = "",
+    val awayLabel: String = "",
+    /** imagen del evento (api/sports_live.php "th"): la portada de Inicio la muestra con el foco en el partido */
+    val thumb: String = "",
+    /** empieza en 5 minutos o menos (api/sports_live.php?soon=1): todavía sin marcador */
+    val soon: Boolean = false,
 )
 
 data class TvChannel(val name: String, val country: String)
@@ -97,18 +106,7 @@ object Sports {
         j.optJSONObject("sports")?.let { so ->
             so.keys().forEach { k -> so.optJSONObject(k)?.let { o -> sports[k] = SportInfo(o.s("label").ifEmpty { k }, o.s("icon"), o.i("minutes").takeIf { it > 0 } ?: 120) } }
         }
-        val m = j.optJSONObject("match")
-        val stop = m?.optJSONArray("stop")?.let { a -> (0 until a.length()).map { a.optString(it) }.toSet() }?.takeIf { it.isNotEmpty() } ?: DEFAULT_STOP
-        val alias = HashMap<String, String>()
-        m?.optJSONObject("alias")?.let { ao -> ao.keys().forEach { k -> alias[norm(k)] = norm(ao.optString(k)) } }
-        val evCat = runCatching { Regex(m?.s("eventCategory").orEmpty().ifEmpty { DEFAULT_EVENT_CAT }, RegexOption.IGNORE_CASE) }
-            .getOrDefault(Regex(DEFAULT_EVENT_CAT, RegexOption.IGNORE_CASE))
-        val sc = m?.optJSONObject("scoring")
-        fun w(k: String, def: Int) = sc?.optInt(k, def) ?: def
-        val rules = MatchRules(
-            stop, alias, evCat, w("fullName", 2), w("token", 1), w("teamWeight", 10), w("bothTeamsBonus", 15),
-            w("leagueBonus", 3), w("eventCategoryBonus", 6), w("singleTokenWeight", 8),
-        )
+        val rules = rulesOf(j.optJSONObject("match"))
         val tb = j.optJSONObject("tables")
         val fx = j.optJSONObject("fixtures")
         return SportsData(
@@ -116,6 +114,21 @@ object Sports {
             tablesOn = tb?.optBoolean("on", false) == true, tablesRev = tb?.optLong("t", 0L) ?: 0L,
             fixturesOn = fx?.optBoolean("on", false) == true, nationsOn = fx?.optBoolean("on", false) == true && fx.optBoolean("nat", true),
             fixturesRev = fx?.optLong("t", 0L) ?: 0L, iptvOnly = j.s("chan") == "iptv",
+        )
+    }
+
+    /** reglas para encontrar el canal ("match" de api/sports.php y api/sports_live.php) */
+    fun rulesOf(m: JSONObject?): MatchRules {
+        val stop = m?.optJSONArray("stop")?.let { a -> (0 until a.length()).map { a.optString(it) }.toSet() }?.takeIf { it.isNotEmpty() } ?: DEFAULT_STOP
+        val alias = HashMap<String, String>()
+        m?.optJSONObject("alias")?.let { ao -> ao.keys().forEach { k -> alias[norm(k)] = norm(ao.optString(k)) } }
+        val evCat = runCatching { Regex(m?.s("eventCategory").orEmpty().ifEmpty { DEFAULT_EVENT_CAT }, RegexOption.IGNORE_CASE) }
+            .getOrDefault(Regex(DEFAULT_EVENT_CAT, RegexOption.IGNORE_CASE))
+        val sc = m?.optJSONObject("scoring")
+        fun w(k: String, def: Int) = sc?.optInt(k, def) ?: def
+        return MatchRules(
+            stop, alias, evCat, w("fullName", 2), w("token", 1), w("teamWeight", 10), w("bothTeamsBonus", 15),
+            w("leagueBonus", 3), w("eventCategoryBonus", 6), w("singleTokenWeight", 8),
         )
     }
 
@@ -128,7 +141,7 @@ object Sports {
             homeScore = e.s("hs"), awayScore = e.s("as"), start = start, venue = e.s("v"), status = e.s("st"),
             postponed = e.optBoolean("pp", false),
             tv = e.optJSONArray("tv").mapObj { t -> t.s("n").takeIf { it.isNotBlank() }?.let { TvChannel(it, t.s("c")) } },
-            leagueId = e.s("l"),
+            leagueId = e.s("l"), homeLabel = e.s("hn"), awayLabel = e.s("an"),
         )
     }
 

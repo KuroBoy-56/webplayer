@@ -21,6 +21,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -116,6 +120,14 @@ fun AccountTv(
             // perfiles: Cambiar perfil y Administrar perfiles están en el submenú del avatar de la barra (como Vega y Roku)
             Setting(stringResource(R.string.app_language), languageChoiceLabel(), onLang)
             Setting(stringResource(R.string.parental_control), stringResource(R.string.parental_control_desc), onParental)
+            // con perfiles y las plataformas del distribuidor: vuelven en Inicio debajo de «En vivo ahora»
+            if (com.latmpx.player.data.MatchCloud.on && com.latmpx.player.data.Tenant.platformsEnabled) {
+                var plat by remember(com.latmpx.player.data.Profiles.current) { mutableStateOf(com.latmpx.player.data.Store.platformCards) }
+                Setting(stringResource(R.string.sl_plat), stringResource(if (plat) R.string.sl_plat_on else R.string.sl_plat_off)) {
+                    plat = !plat
+                    com.latmpx.player.data.Store.platformCards = plat
+                }
+            }
             Setting(stringResource(R.string.stream_format), when (streamFormat) { "ts" -> "MPEG-TS (.ts)"; "auto" -> stringResource(R.string.automatic); else -> "HLS (.m3u8)" }, onStreamFormat)
             Setting(stringResource(R.string.player), stringResource(if (extPlayer) R.string.player_external else R.string.player_internal), onPlayer)
             DnsButton(Modifier.fillMaxWidth().padding(bottom = 6.dp)) { f, label -> SettingRow("DNS", label, f) }

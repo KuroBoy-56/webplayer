@@ -75,6 +75,8 @@ sealed class BrowseRow(val key: String, val title: String) {
     class Top10(key: String, title: String, val items: List<Item>) : BrowseRow(key, title)
     class Plats(key: String, title: String, val list: List<Platform>) : BrowseRow(key, title)
     class Chips(key: String, title: String, val chips: List<String>, val onChip: (Int) -> Unit) : BrowseRow(key, title)
+    /** «En vivo ahora» (solo con perfiles): OK abre el canal del partido */
+    class Live(key: String, title: String, val cards: List<TvLiveCard>, val onOpen: (TvLiveCard) -> Unit) : BrowseRow(key, title)
 }
 
 // dónde empiezan las filas (en 1920×1080, como Roku y Vega): con los botones de la portada asoman abajo; recorriéndolas,
@@ -159,6 +161,12 @@ fun TvBrowse(state: AppState, pool: List<Item>, cacheKey: String, rows: List<Bro
         infoJob?.cancel()
         info = StageInfo(null, title = title, plot = plot)
     }
+    // un partido: la portada muestra su imagen o la cancha con los dos escudos (sin nada de eso, el último fondo)
+    fun focusLive(c: TvLiveCard, plot: String) {
+        infoJob?.cancel()
+        val e = c.e
+        info = StageInfo(null, title = if (e.home.isNotBlank() && e.away.isNotBlank()) "${e.home} vs ${e.away}" else e.title.ifBlank { e.league }, plot = plot, live = e)
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val h = maxHeight
@@ -201,7 +209,7 @@ fun TvBrowse(state: AppState, pool: List<Item>, cacheKey: String, rows: List<Bro
         ) {
             itemsIndexed(rows, key = { _, r -> r.key }) { i, r ->
                 Box(Modifier.fillMaxWidth().height(slot).onFocusChanged { if (it.hasFocus) focusRow(i) }) {
-                    RowSlot(state, r, slot, ::focusItem, ::focusLabel)
+                    RowSlot(state, r, slot, ::focusItem, ::focusLabel, ::focusLive)
                 }
             }
         }
@@ -210,7 +218,7 @@ fun TvBrowse(state: AppState, pool: List<Item>, cacheKey: String, rows: List<Bro
 
 /** una fila dentro de su ranura: título y carátulas del alto justo para que se vea completa y sola */
 @Composable
-private fun RowSlot(state: AppState, r: BrowseRow, slot: Dp, focusItem: (Item) -> Unit, focusLabel: (String, String) -> Unit) {
+private fun RowSlot(state: AppState, r: BrowseRow, slot: Dp, focusItem: (Item) -> Unit, focusLabel: (String, String) -> Unit, focusLive: (TvLiveCard, String) -> Unit) {
     val cardH = (slot - 78.dp).coerceAtLeast(120.dp)
     val cardW = cardH * (2f / 3f)
     val open: (Item) -> Unit = { state.push(Route.Detail(it)) }
@@ -228,6 +236,20 @@ private fun RowSlot(state: AppState, r: BrowseRow, slot: Dp, focusItem: (Item) -
             LazyRow(contentPadding = PaddingValues(start = pad, end = pad, top = 16.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(r.list, key = { it.key }) { p ->
                     TvPlatformTile(p, cardW * 1.6f, onFocus = { focusLabel(p.label, platPlot.replace("%s", p.label)) }) { state.push(Route.PlatformPage(p)) }
+                }
+            }
+        }
+        is BrowseRow.Live -> Column(Modifier.padding(top = 10.dp)) {
+            val pad = tvPad()
+            val liveW = (cardH * 0.82f) / 0.5625f
+            Text(r.title, color = Color(0xFFE5E5E5), fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = pad))
+            LazyRow(contentPadding = PaddingValues(start = pad, end = pad, top = 14.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(r.cards, key = { it.e.id }) { c ->
+                    val e = c.e
+                    val clock = tvLiveClock(e)
+                    val score = if (e.soon || (e.homeScore.isBlank() && e.awayScore.isBlank())) "" else "   ${e.homeScore} - ${e.awayScore}"
+                    val plot = listOf(e.league, clock + score, c.best.name).filter { it.isNotBlank() }.joinToString("  ·  ")
+                    TvLiveTile(c, liveW, onFocus = { focusLive(c, plot) }) { r.onOpen(c) }
                 }
             }
         }

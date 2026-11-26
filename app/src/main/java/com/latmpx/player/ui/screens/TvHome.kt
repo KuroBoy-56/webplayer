@@ -92,9 +92,17 @@ fun TvHomeScreen(state: AppState) {
     val bestOf = stringResource(R.string.best_of, "%s")
     // Top 10 de la semana del panel (cada 12 h); al llegar una lista nueva se rehacen las filas
     LaunchedEffect(Unit) { com.latmpx.player.data.WeekTop.load() }
-    val rows = remember(movies, series, platforms, state.movieCats, state.seriesCats, state.refresh, Cloud.rev, com.latmpx.player.data.WeekTop.rev) {
+    // «En vivo ahora» (solo con perfiles): arriba, en el lugar de las plataformas, que vuelven debajo si se activaron en Cuenta
+    val live = rememberTvLive(state)
+    val tLive = stringResource(R.string.sl_title)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val rows = remember(movies, series, platforms, state.movieCats, state.seriesCats, state.refresh, Cloud.rev, com.latmpx.player.data.WeekTop.rev, live) {
         val out = ArrayList<BrowseRow>()
-        if (platforms.isNotEmpty()) out += BrowseRow.Plats("plats", tPlats, platforms)
+        if (live.isNotEmpty()) out += BrowseRow.Live("live", tLive, live) { c ->
+            val list = state.live.filter { it.categoryId == c.best.categoryId }.ifEmpty { listOf(c.best) }
+            com.latmpx.player.player.Play.live(ctx, list, list.indexOfFirst { it.id == c.best.id }.coerceAtLeast(0))
+        }
+        if (platforms.isNotEmpty() && (live.isEmpty() || com.latmpx.player.data.Store.platformCards)) out += BrowseRow.Plats("plats", tPlats, platforms)
         continueRow(state, tCont) { state.push(Route.Saved(continueWatching = true)) }?.let { out += it }
         val favs = Cloud.favList().filter { it.kind != Kind.LIVE }
         if (favs.isNotEmpty()) out += BrowseRow.Posters("favs", tMyList, favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) })
