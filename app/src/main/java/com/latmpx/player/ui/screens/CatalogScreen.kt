@@ -44,21 +44,21 @@ fun CatalogScreen(state: AppState, kind: Kind) {
     val all = if (kind == Kind.MOVIE) state.movies else state.series
     val cats = (if (kind == Kind.MOVIE) state.movieCats else state.seriesCats).let { com.latmpx.player.data.Store.visibleCats(it) }
     val tv = LocalIsTv.current
-    val heroItems = remember(all) { all.sortedByDescending { it.added }.filter { it.backdrop.isNotEmpty() }.take(5).ifEmpty { all.take(1) } }
+    val heroItems = remember(all) { state.cached("c_hero_" + kind, all) { all.sortedByDescending { it.added }.filter { it.backdrop.isNotEmpty() }.take(5).ifEmpty { all.take(1) } } }
     if (state.loading && all.isEmpty()) { Loading(); return }
     
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // derivedStateOf: la pantalla ya no se recompone en cada píxel de desplazamiento, solo al cambiar el valor
     val solid by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 260 } }
     // filas calculadas una vez por catálogo (antes se filtraba todo el catálogo por cada categoría en cada recomposición)
-    val recent = remember(all) { all.sortedByDescending { it.added }.take(20) }
+    val recent = remember(all) { state.cached("c_recent_" + kind, all) { all.sortedByDescending { it.added }.take(20) } }
     androidx.compose.runtime.LaunchedEffect(Unit) { com.latmpx.player.data.WeekTop.load() }
-    val top10 = remember(all, com.latmpx.player.data.WeekTop.rev) { com.latmpx.player.data.WeekTop.top10(all, kind) }
-    val rows = remember(all, cats) {
+    val top10 = remember(all, com.latmpx.player.data.WeekTop.rev) { state.cached("c_top10_" + kind, all, com.latmpx.player.data.WeekTop.rev) { com.latmpx.player.data.WeekTop.top10(all, kind) } }
+    val rows = remember(all, cats) { state.cached("c_rows_" + kind, all, cats) {
         val byCat = all.groupBy { it.categoryId }
         cats.mapNotNull { c -> byCat[c.id]?.sortedByDescending { it.added }?.take(20)?.let { c to it } }
-    }
-    val cardHero = remember(all) { all.sortedByDescending { it.added }.take(40).sortedByDescending { it.rating }.take(6) }
+    } }
+    val cardHero = remember(all) { state.cached("c_cardHero_" + kind, all) { all.sortedByDescending { it.added }.take(40).sortedByDescending { it.rating }.take(6) } }
     Box(Modifier.fillMaxSize().background(NfBg)) {
         val pw = posterWidth()
         val sp = sidePad()

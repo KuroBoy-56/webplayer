@@ -74,6 +74,8 @@ class AppState {
     var profilesData by mutableStateOf<Profiles.State?>(null)
     /** el perfil ya se eligió (o no hay perfiles): ya se pueden leer Continuar viendo y Mi lista */
     var profileReady by mutableStateOf(false)
+    /** el perfil recién elegido: su avatar en el centro con el circulito hasta que Inicio está listo (ProfileEnter.kt) */
+    var entering by mutableStateOf<com.latmpx.player.data.Profiles.Profile?>(null)
 
     fun openProfiles(manage: Boolean) {
         profilesFromAccount = true
@@ -89,6 +91,19 @@ class AppState {
     private var allLive: List<Item> = emptyList()
     /** claves de lo que se ve (con un perfil infantil, una ficha de otra cosa no se abre) */
     @Volatile private var shownKeys: Set<String> = emptySet()
+
+    /**
+     * Filas de Inicio, Películas y Series (ordenar y filtrar todo el catálogo): se guardan mientras sus datos son los
+     * mismos. Antes cada vez que se pulsaba Inicio se volvía a ordenar el catálogo entero y la pantalla tardaba en abrir.
+     */
+    private val memo = HashMap<String, Pair<List<Any?>, Any?>>()
+
+    @Suppress("UNCHECKED_CAST")
+    fun <T> cached(name: String, vararg keys: Any?, f: () -> T): T {
+        val k = keys.toList()
+        memo[name]?.let { (old, v) -> if (old == k) return v as T } // el mismo catálogo: es la misma lista (comparación inmediata)
+        return f().also { memo[name] = k to it }
+    }
 
     /** llegó el catálogo de un tipo (del equipo o del servidor): se guarda completo y se arma lo que se ve */
     suspend fun putCatalog(kind: Kind, cats: List<Category>, items: List<Item>) {

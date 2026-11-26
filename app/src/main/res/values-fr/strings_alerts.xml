@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- avisos de partidos (data/MatchAlerts.kt) y campanita -->
+<resources>
+    <string name="ma_channel">Alertes de matchs</string>
+    <string name="ma_30">Le match commence dans 30 minutes</string>
+    <string name="ma_10">Ça va commencer : plus que 10 minutes</string>
+    <string name="ma_live">C’est parti ! Le match est en direct</string>
+    <string name="ma_teams">Équipes favorites</string>
+    <string name="ma_teams_none">Choisissez des équipes et nous vous prévenons avant chaque match</string>
+    <string name="ma_add_team">Ajouter une équipe</string>
+    <string name="ma_pick_sport">Choisissez le sport</string>
+    <string name="ma_pick_league">Choisissez la ligue</string>
+    <string name="ma_nations">Équipes nationales</string>
+    <string name="ma_clubs">Ligues et coupes</string>
+    <string name="ma_pick_team">Choisissez l’équipe</string>
+    <string name="ma_no_teams">Aucun match à venir dans cette ligue</string>
+    <string name="ma_no_data">Pas encore de matchs à venir. Réessayez dans quelques minutes.</string>
+    <string name="ma_loading">Chargement…</string>
+    <string name="ma_remove">Retirer</string>
+    <string name="ma_exact">Alertes à l’heure exacte</string>
+    <string name="ma_exact_desc">Autorisez les alarmes exactes pour que les alertes arrivent à l’heure</string>
+    <string name="ma_notify_on">Activer les notifications pour cet événement</string>
+    <string name="ma_notify_off">Désactiver les notifications de cet événement</string>
+    <string name="ma_on_toast">Nous vous prévenons 30 et 10 minutes avant et au coup d’envoi</string>
+    <string name="ma_off_toast">Alerte retirée</string>
+    <string name="ma_bell">Notifications</string>
+    <string name="ma_bell_empty">Aucune notification ces dernières 24 heures</string>
+    <string name="ma_back">Retour</string>
+    <string name="ma_mins_ago">il y a %1$d min</string>
+    <string name="ma_hours_ago">il y a %1$d h</string>
+    <string name="ma_now">maintenant</string>
+</resources>
