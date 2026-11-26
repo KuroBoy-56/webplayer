@@ -13,6 +13,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -91,7 +96,7 @@ internal fun PhoneProfiles(
     val cell = (w * 0.297f).dp
     val avatar = (w * 0.184f).dp.coerceIn(64.dp, 120.dp)
     val corner = avatar * 0.13f
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
         val screenH = maxHeight
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).heightIn(min = screenH)) {
             // todo pegado abajo; con muchos perfiles o letra grande se desplaza, nunca se corta
