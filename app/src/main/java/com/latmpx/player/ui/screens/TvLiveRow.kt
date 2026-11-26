@@ -189,7 +189,10 @@ fun TvGoSportsTile(width: Dp, onFocus: () -> Unit, onClick: () -> Unit) {
     }
 }
 
-/** el fondo grande de la portada con el foco en un partido: la imagen del evento o la cancha con los dos escudos */
+/**
+ * el fondo grande de la portada con el foco en un partido: la imagen del evento (TheSportsDB) o el estadio sin personas
+ * con los dos escudos grandes (nunca en negro ni con el último póster de una película)
+ */
 @Composable
 fun TvLiveStage(e: SportEvent) {
     if (e.thumb.isNotBlank()) {
@@ -197,7 +200,8 @@ fun TvLiveStage(e: SportEvent) {
         return
     }
     Box(Modifier.fillMaxSize()) {
-        SportField(e.sport, Modifier.fillMaxSize())
+        androidx.compose.foundation.Image(painterResource(R.drawable.sports_bg), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(Color(0x59000000)))
         Row(Modifier.align(Alignment.CenterEnd).padding(end = 90.dp), horizontalArrangement = Arrangement.spacedBy(40.dp), verticalAlignment = Alignment.CenterVertically) {
             TvBigBadge(e.home, e.homeBadge)
             Text("VS", color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.Black)
