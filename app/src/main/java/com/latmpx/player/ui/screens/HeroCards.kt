@@ -153,7 +153,8 @@ fun heroTags(state: AppState, item: Item): String {
     ).joinToString("  •  ")
 }
 
+/** «Reproducir» / «Mi lista» en cápsula como Netflix, con los colores del tema (dueño o distribuidor) */
 @Composable
 private fun CardButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    com.latmpx.player.ui.components.AppButton(text, modifier, primary = primary, icon = icon, minHeight = 44.dp, fontSize = 15.sp, onClick = onClick)
+    com.latmpx.player.ui.components.AppButton(text, modifier, primary = primary, icon = icon, minHeight = 46.dp, fontSize = 16.sp, shape = CircleShape, onClick = onClick)
 }
