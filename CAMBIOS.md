@@ -4,6 +4,10 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Elegir perfil como Netflix — versión 3.0.1 (26 de noviembre, segunda parte)
+- Al elegir un perfil su avatar va desde su lugar al centro de la pantalla, más grande, con el nombre y el circulito girando debajo; Inicio se pide cuando el avatar ya llegó al centro y la animación queda a la vista mientras el hosting arma la página (en el perfil infantil, el filtro del catálogo). Con PIN, la animación empieza al acertar el PIN. Si el panel contesta un error, la animación se quita y sale el aviso de siempre.
+- Archivos: `assets/nf/profiles.js`, `assets/nf/profiles.css`, `perfiles.php` (versión de los archivos), `includes/core.php` (versión).
+
 ## «En vivo ahora» en Inicio: marcador y minuto de los partidos, en el lugar de las plataformas — versión 3.0.0 (26 de noviembre)
 - **Qué es:** con los perfiles activos, Inicio cambia la fila de plataformas por los partidos que se están jugando, como en Android y la app de computadora: la cancha del deporte de fondo (fútbol, básquet, fútbol americano, béisbol, hockey, tenis / vóley), el color del torneo si es uno grande (Champions en azul, Libertadores en dorado, NBA…), los escudos, el marcador, el minuto o el periodo y el canal donde verlo. Se actualiza cada 30 segundos solo mientras Inicio está abierto (con la pestaña oculta no pregunta nada).
 - **Solo con el canal exacto:** cada partido busca su canal en la lista de esta línea igual que la página Deportes (el canal que lo transmite, el de la guía del panel o el de los equipos en las carpetas de eventos). Un partido que el cliente no puede ver no sale.

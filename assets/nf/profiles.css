@@ -254,3 +254,16 @@
     .pf-bg, .pf-item, .pf-av, .pf-hl { transition: none; }
 }
 .pf-item.pf-busy { opacity: .6; pointer-events: none; }
+
+/* perfil elegido (assets/nf/profiles.js enterFx): su avatar va al centro con el nombre y el circulito */
+.pf-enter { position: fixed; inset: 0; z-index: 9999; background: transparent; transition: background .25s ease-out; }
+.pf-enter.on { background: var(--nf-bg, #141414); }
+.pf-enter-av { position: absolute; left: calc(50% - 60px); top: calc(50% - 130px); width: 120px; height: 120px; object-fit: cover; border-radius: 10px; background: #333;
+    transition: left .48s cubic-bezier(.4, 0, .2, 1), top .48s cubic-bezier(.4, 0, .2, 1), width .48s cubic-bezier(.4, 0, .2, 1), height .48s cubic-bezier(.4, 0, .2, 1); }
+.pf-enter.on .pf-enter-av { left: calc(50% - 75px); top: calc(50% - 150px); width: 150px; height: 150px; }
+.pf-enter-below { position: absolute; left: 0; right: 0; top: calc(50% + 22px); display: flex; flex-direction: column; align-items: center; gap: 22px; color: #fff; opacity: 0; transition: opacity .25s .3s; }
+.pf-enter.on .pf-enter-below { opacity: 1; }
+.pf-enter-below b { font-size: 22px; }
+.pf-enter-spin { width: 42px; height: 42px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .15); border-top-color: var(--nf-red, #e50914); animation: pfEnterSpin .9s linear infinite; }
+@keyframes pfEnterSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pf-enter-av { transition: none; } }

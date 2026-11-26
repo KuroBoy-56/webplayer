@@ -220,10 +220,9 @@
             return;
         }
         if (p.locked) { askPin(p, 'select'); return; }
-        b.classList.add('pf-busy');
+        enterFx(p);
         select(p, '').then(function (r) {
-            b.classList.remove('pf-busy');
-            if (!r.ok && r.error) alertBox(r.error);
+            if (!r.ok) { enterFx(null); if (r.error) alertBox(r.error); }
         });
     });
     if (manageBtn) manageBtn.addEventListener('click', function () { managing = !managing; render(); });
@@ -249,9 +248,36 @@
         return post({action: 'select', id: p.id, pin: pin, next: C.next || ''}).then(function (r) {
             if (r.ok && r.go) {
                 store('pf_last', p.id);
-                location.href = r.go;
+                // con el PIN la animación empieza ahora; Inicio se pide cuando el avatar ya llegó al centro
+                if (!fx) enterFx(p);
+                setTimeout(function () { location.href = r.go; }, Math.max(0, 650 - (Date.now() - fxAt)));
             }
             return r;
+        });
+    }
+
+    /* al elegir un perfil (como Netflix, Android y la app de computadora): su avatar va al centro con el nombre y el
+       circulito mientras se arma Inicio (en el perfil infantil, el filtro del catálogo); null = se quita (error) */
+    var fx = null, fxAt = 0;
+    function enterFx(p) {
+        if (fx) { fx.remove(); fx = null; }
+        if (!p) return;
+        var img = list.querySelector('[data-id="' + cssEsc(p.id) + '"] img');
+        var r = img ? img.getBoundingClientRect() : null;
+        fx = d.createElement('div');
+        fx.className = 'pf-enter';
+        fx.setAttribute('role', 'status');
+        fx.setAttribute('aria-label', p.name);
+        fx.innerHTML = '<img class="pf-enter-av" alt="" src="' + esc(p.img) + '"><div class="pf-enter-below"><b>' + esc(p.name) + '</b><span class="pf-enter-spin"></span></div>';
+        d.body.appendChild(fx);
+        fxAt = Date.now();
+        var av = fx.firstChild, o = fx;
+        if (r) { av.style.left = r.left + 'px'; av.style.top = r.top + 'px'; av.style.width = r.width + 'px'; av.style.height = r.height + 'px'; }
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                o.classList.add('on');
+                av.style.left = ''; av.style.top = ''; av.style.width = ''; av.style.height = '';
+            });
         });
     }
 
