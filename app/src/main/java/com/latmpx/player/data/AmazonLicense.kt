@@ -3,11 +3,13 @@ package com.latmpx.player.data
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.amazon.device.drm.LicensingService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -19,7 +21,9 @@ import kotlin.coroutines.resume
  * instalada por fuera de la Amazon Appstore no se puede usar: la app le pregunta a la tienda por su licencia (Appstore
  * SDK, llave pública en assets/AppstoreAuthenticationKey.pem), manda el resultado al panel (api/integrity.php, la misma
  * página Play Integrity del dueño) y, con el modo «Bloquear copias», muestra el aviso y no deja seguir.
- * Nunca se bloquea por un error: sin la tienda, sin respuesta, sin panel o con el modo apagado, sigue como siempre.
+ * Nunca se bloquea por un error: sin respuesta, sin panel o con el modo apagado, sigue como siempre. La tienda solo
+ * contesta si la app Amazon Appstore está en el equipo y la copia se instaló desde ahí; por eso también se manda quién
+ * la instaló («installer») y NO_APPSTORE sin la tienda: el panel distingue una copia instalada con un APK de un error.
  * Un «con licencia» vale 24 h en el equipo.
  */
 object AmazonLicense {
@@ -42,13 +46,32 @@ object AmazonLicense {
         }
     } ?: "TIMEOUT"
 
+    /** quién instaló la app (com.amazon.venezia = la Amazon Appstore); "" si el sistema no lo dice (adb) */
+    private fun installer(ctx: Context): String = runCatching {
+        val pm = ctx.packageManager
+        if (Build.VERSION.SDK_INT >= 30) pm.getInstallSourceInfo(ctx.packageName).installingPackageName
+        else @Suppress("DEPRECATION") pm.getInstallerPackageName(ctx.packageName)
+    }.getOrNull().orEmpty()
+
+    /** la app Amazon Appstore (o su cliente de pruebas) está en el equipo: sin ella el SDK solo dice UNKNOWN_ERROR */
+    private fun appstoreInstalled(ctx: Context): Boolean = listOf("com.amazon.venezia", "com.amazon.sdktestclient").any { p ->
+        runCatching { ctx.packageManager.getPackageInfo(p, 0) }.isSuccess
+    }
+
     /** después de entrar (con sesión): pregunta a la tienda y al panel, salvo un «con licencia» de menos de 24 h */
     suspend fun check(ctx: Context) {
         if (running || blocked || System.currentTimeMillis() < Store.integrityOkUntil) return
         running = true
         try {
-            val status = askStore(ctx)
+            // sin la tienda en el equipo no se le pregunta (el SDK solo diría UNKNOWN_ERROR); el panel decide con quién la instaló
+            var status = if (appstoreInstalled(ctx)) askStore(ctx) else "NO_APPSTORE"
+            // recién encendido, el servicio de la tienda a veces no contesta la primera vez: una vez más
+            if (status == "UNKNOWN_ERROR" || status == "TIMEOUT") {
+                delay(8_000)
+                status = askStore(ctx)
+            }
             val body = JSONObject().put("step", "amazon").put("package", ctx.packageName).put("device", Store.deviceIdOrEmpty()).put("status", status)
+                .put("installer", installer(ctx))
             val v = Cloud.call { t -> Net.postJson(PanelUrl.api("integrity.php"), JSONObject(body.toString()).put("token", t)) }?.json() ?: return
             // modo «Apagado» o un panel viejo: nada que hacer
             if (!v.optBoolean("active", false)) return
