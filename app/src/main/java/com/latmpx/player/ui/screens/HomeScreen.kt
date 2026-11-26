@@ -92,6 +92,8 @@ fun HomeScreen(state: AppState) {
             if (list.size >= 4) label to list else null
         }
     }
+    // partidos en vivo (solo con perfiles y una clave de pago de TheSportsDB en el panel): van en el lugar de Plataformas
+    val live = rememberLiveSports(state)
     val platOn = com.latmpx.player.data.Tenant.platformsEnabled
     val platforms = remember(state.movieCats, state.seriesCats, platOn) {
         // platforms=false del distribuidor: sin fila de plataformas
@@ -132,7 +134,8 @@ fun HomeScreen(state: AppState) {
             ShelfRow(stringResource(R.string.top10_today), top10, pad) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) }
         }
         item {
-            ShelfRow(stringResource(R.string.platforms), platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.PlatformPage(p)) }) }
+            if (live.enabled) LiveSportsRow(live, pad)
+            else ShelfRow(stringResource(R.string.platforms), platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.PlatformPage(p)) }) }
         }
         item {
             ShelfRow(stringResource(R.string.new_movies), recentMovies, pad, onViewAll = { state.push(Route.Browse(tr(R.string.new_movies), com.latmpx.player.data.Kind.MOVIE, emptySet())) }) { _, it ->
