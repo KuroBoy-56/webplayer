@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -14,6 +15,9 @@ import kotlin.math.roundToInt
  * barras, avatares), así nada se ve diminuto en la pantalla grande. Se agranda la densidad y la configuración que leen las
  * pantallas (ancho y alto en dp) se ajusta igual, para que las medidas sigan cuadrando. El celular queda como siempre.
  */
+/** true dentro de la app agrandada de la tableta (las pantallas eligen su diseño de tableta, como Netflix) */
+val LocalIsTablet = staticCompositionLocalOf { false }
+
 @Composable
 fun TabletScale(enabled: Boolean = true, content: @Composable () -> Unit) {
     val conf = LocalConfiguration.current
@@ -31,6 +35,6 @@ fun TabletScale(enabled: Boolean = true, content: @Composable () -> Unit) {
                 smallestScreenWidthDp = (sw / f).roundToInt()
             }
         }
-        CompositionLocalProvider(LocalDensity provides Density(d.density * f, d.fontScale), LocalConfiguration provides scaled, content = content)
+        CompositionLocalProvider(LocalDensity provides Density(d.density * f, d.fontScale), LocalConfiguration provides scaled, LocalIsTablet provides true, content = content)
     }
 }
