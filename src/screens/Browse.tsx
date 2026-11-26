@@ -70,8 +70,7 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
       ) : null}
       {art ? <ChainImage sources={artSrc} style={s.heroImg} resizeMode="cover" /> : null}
       {/* partido: imagen del evento o cancha con los dos escudos; sin nada de eso queda el último fondo congelado */}
-      {info.live && !it && under && !(info.live.th || info.live.hb || info.live.ab) ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
-      {info.live && (info.live.th || info.live.hb || info.live.ab) ? <LiveBackdrop c={info.live} /> : null}
+      {info.live ? <LiveBackdrop c={info.live} /> : null}
       <Shade side="bottom" style={s.heroGrad} />
       <Shade side="left" style={s.heroShade} />
       {sideSrc.length ? <ChainImage sources={sideSrc} style={[s.side, compact && s.sideCompact]} resizeMode="cover" /> : null}
