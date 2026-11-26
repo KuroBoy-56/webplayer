@@ -304,10 +304,13 @@ fun SportsTeamsView(
 ) {
     var fx by remember { mutableStateOf<Fixtures?>(null) }
     var loading by remember { mutableStateOf(true) }
+    // mantener presionada una tarjeta: activar o quitar los avisos de ese partido (MatchAlertsUi.kt)
+    var alertFor by remember { mutableStateOf<SportEvent?>(null) }
+    alertFor?.let { EventAlertDialog(it) { alertFor = null } }
     LaunchedEffect(d.fixturesRev) {
         for (tries in 0 until 12) {
             val r = SportsPanel.fixtures(d.fixturesRev)
-            r.fx?.let { fx = it }
+            r.fx?.let { fx = it; com.latmpx.player.data.MatchAlerts.schedule(it) }
             loading = false
             if (!r.partial) break
             delay(25_000)
@@ -346,7 +349,7 @@ fun SportsTeamsView(
             list.isNotEmpty() -> LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 40.dp)) {
                 items(list, key = { "f" + it.id + it.start }) { e ->
                     val c = chanOf?.invoke(e)
-                    SportCardView(e, d.sports[e.sport], now, compact, chan = c?.first, chanFound = c?.second == true) { onOpen(e) }
+                    SportCardView(e, d.sports[e.sport], now, compact, chan = c?.first, chanFound = c?.second == true, onLong = { alertFor = e }) { onOpen(e) }
                 }
             }
             f == null -> Empty(stringResource(R.string.sp_fx_failed))

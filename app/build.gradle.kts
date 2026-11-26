@@ -26,8 +26,8 @@ android {
         applicationId = "com.latmpx.player"
         minSdk = 24
         targetSdk = 36
-        versionCode = 38
-        versionName = "1.6.2"
+        versionCode = 39
+        versionName = "1.6.3"
         buildConfigField("String", "PANEL_MASTER_KEY", "\"$panelMasterKey\"")
     }
 

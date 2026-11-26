@@ -44,6 +44,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -291,7 +293,8 @@ fun ProfileAvatar(p: Profiles.Profile, size: Dp, corner: Dp = avatarCorner(size)
 /** avatar con el lápiz (administrar) y el candado (bloqueado con PIN) */
 @Composable
 internal fun AvatarBox(p: Profiles.Profile, size: Dp, manage: Boolean, corner: Dp = avatarCorner(size), badge: Alignment = Alignment.BottomCenter) {
-    Box(Modifier.size(size)) {
+    // su lugar en pantalla: al elegirlo sale desde aquí al centro (ProfileEnter.kt)
+    Box(Modifier.size(size).onGloballyPositioned { profileBounds[p.id] = it.boundsInRoot() }) {
         ProfileAvatar(p, size, corner, badge)
         if (manage) Box(Modifier.size(size).background(Color(0x99000000), RoundedCornerShape(corner)), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Edit, stringResource(R.string.prof_edit), tint = Color.White, modifier = Modifier.size(size * 0.32f))

@@ -79,28 +79,28 @@ fun HomeScreen(state: AppState) {
     val movies = state.movies
     val series = state.series
 
-    val recentMovies = remember(movies) { movies.sortedByDescending { it.added }.take(40) }
-    val recentSeries = remember(series) { series.sortedByDescending { it.added }.take(40) }
+    val recentMovies = remember(movies) { state.cached("h_recentMovies", movies) { movies.sortedByDescending { it.added }.take(40) } }
+    val recentSeries = remember(series) { state.cached("h_recentSeries", series) { series.sortedByDescending { it.added }.take(40) } }
     // Top 10 de la semana del panel (cada 12 h), como Roku, Vega OS y Android TV
     androidx.compose.runtime.LaunchedEffect(Unit) { com.latmpx.player.data.WeekTop.load() }
-    val top10 = remember(movies, series, com.latmpx.player.data.WeekTop.rev) { com.latmpx.player.data.WeekTop.top10Home(movies, series) }
-    val genreRows = remember(movies, state.movieCats) {
+    val top10 = remember(movies, series, com.latmpx.player.data.WeekTop.rev) { state.cached("h_top10", movies, series, com.latmpx.player.data.WeekTop.rev) { com.latmpx.player.data.WeekTop.top10Home(movies, series) } }
+    val genreRows = remember(movies, state.movieCats) { state.cached("h_genres", movies, com.latmpx.player.data.Store.visibleCats(state.movieCats)) { // las carpetas visibles: cambian con el control parental
         Platforms.genres.mapNotNull { (label, kw) ->
             val mcats = com.latmpx.player.data.Store.visibleCats(state.movieCats)
             val ids = Platforms.categoriesFor(mcats, kw)
             val list = if (ids.isEmpty()) emptyList() else movies.filter { it.categoryId in ids }.sortedByDescending { it.added }.take(30)
             if (list.size >= 4) label to list else null
         }
-    }
+    } }
     // partidos en vivo (solo con perfiles y una clave de pago de TheSportsDB en el panel): van en el lugar de Plataformas
     val live = rememberLiveSports(state)
     val platOn = com.latmpx.player.data.Tenant.platformsEnabled
-    val platforms = remember(state.movieCats, state.seriesCats, platOn) {
+    val platforms = remember(state.movieCats, state.seriesCats, platOn) { state.cached("h_platforms", com.latmpx.player.data.Store.visibleCats(state.movieCats + state.seriesCats), platOn) {
         // platforms=false del distribuidor: sin fila de plataformas
-        if (!platOn) return@remember emptyList()
+        if (!platOn) return@cached emptyList()
         val safeCats = com.latmpx.player.data.Store.visibleCats(state.movieCats + state.seriesCats)
         Platforms.list.filter { p -> Platforms.categoriesFor(safeCats, p.kw).isNotEmpty() }
-    }
+    } }
     val cont = remember(state.refresh, Cloud.rev, movies, series) { Cloud.progressList() }
     val favs = remember(state.refresh, Cloud.rev) { Cloud.favList().filter { it.kind != Kind.LIVE } }
     val heroItems = remember(movies) { recentMovies.filter { it.backdrop.isNotEmpty() }.take(5).ifEmpty { recentMovies.take(1) } }
@@ -109,12 +109,12 @@ fun HomeScreen(state: AppState) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // derivedStateOf: la pantalla ya no se recompone en cada píxel de desplazamiento, solo al cambiar el valor
     val solid by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 260 } }
-    val cardHero = remember(movies, series) {
+    val cardHero = remember(movies, series) { state.cached("h_cardHero", movies, series) {
         // destacados: lo más nuevo y mejor valorado, películas y series mezcladas
         val m = recentMovies.take(30).sortedByDescending { it.rating }.take(4)
         val se = recentSeries.take(30).sortedByDescending { it.rating }.take(3)
         (m.zip(se).flatMap { listOf(it.first, it.second) } + m.drop(se.size) + se.drop(m.size)).distinctBy { it.key }.take(7)
-    }
+    } }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize().background(NfBg), state = listState) {
         item {
@@ -172,6 +172,8 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
             LogoHeader(height = 34.dp)
             Spacer(Modifier.width(12.dp))
             Text((current ?: Tab.HOME).label, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            // campanita: avisos de partidos de las últimas 24 h (el perfil infantil no tiene Deportes)
+            if (com.latmpx.player.data.Tenant.sportsEnabled && !com.latmpx.player.data.Profiles.kids) BellButton()
             Icon(
                 Icons.Filled.Download, stringResource(R.string.my_downloads), tint = Color.White,
                 modifier = Modifier.size(44.dp).clip(CircleShape).clickable { state.push(Route.Downloads) }.padding(9.dp),

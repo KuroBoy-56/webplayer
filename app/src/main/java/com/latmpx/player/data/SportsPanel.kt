@@ -21,7 +21,7 @@ data class StandingGroup(val name: String, val rows: List<StandingRow>)
 data class League(val id: String, val name: String, val country: String, val badge: String, val sportLabel: String, val division: Int,
                   val region: String, val season: String, val women: Boolean, val groups: List<StandingGroup>)
 
-data class FxLeague(val name: String, val badge: String, val country: String, val region: String, val women: Boolean)
+data class FxLeague(val name: String, val badge: String, val country: String, val region: String, val women: Boolean, val sport: String = "")
 
 /** partidos de los próximos 21 días para Equipos y Selecciones */
 data class Fixtures(val events: List<SportEvent>, val leagues: Map<String, FxLeague>)
@@ -120,7 +120,7 @@ object SportsPanel {
     private fun parseFx(j: JSONObject): Fixtures {
         val lg = HashMap<String, FxLeague>()
         j.optJSONObject("leagues")?.let { o ->
-            o.keys().forEach { k -> o.optJSONObject(k)?.let { x -> lg[k] = FxLeague(x.s("n"), x.s("b"), x.s("c"), x.s("rg"), x.optInt("w", 0) == 1) } }
+            o.keys().forEach { k -> o.optJSONObject(k)?.let { x -> lg[k] = FxLeague(x.s("n"), x.s("b"), x.s("c"), x.s("rg"), x.optInt("w", 0) == 1, x.s("sp")) } }
         }
         return Fixtures(j.optJSONArray("events").mapObj { Sports.event(it) }.sortedBy { it.start }, lg)
     }
@@ -148,6 +148,9 @@ object SportsPanel {
         }
         if (saved != null) FixturesResult(true, true, parseFx(saved)) else FixturesResult(true, false, null)
     }
+
+    /** los partidos guardados, sin pedir nada al panel (avisos de partidos, también sin la app abierta) */
+    fun cachedFixtures(): Fixtures? = prefs?.getString(fxKey(), null)?.let { runCatching { parseFx(JSONObject(it)) }.getOrNull() }
 
     private fun ended(e: SportEvent, minutes: (String) -> Int, nowMs: Long) = nowMs >= e.start + minutes(e.sport) * 60_000L
 

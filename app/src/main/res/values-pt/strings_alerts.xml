@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- avisos de partidos (data/MatchAlerts.kt) y campanita -->
+<resources>
+    <string name="ma_channel">Avisos de partidas</string>
+    <string name="ma_30">A partida começa em 30 minutos</string>
+    <string name="ma_10">Está para começar: faltam 10 minutos</string>
+    <string name="ma_live">Já começou! A partida está ao vivo</string>
+    <string name="ma_teams">Times favoritos</string>
+    <string name="ma_teams_none">Escolha times e avisamos antes de cada partida</string>
+    <string name="ma_add_team">Adicionar time</string>
+    <string name="ma_pick_sport">Escolha o esporte</string>
+    <string name="ma_pick_league">Escolha a liga</string>
+    <string name="ma_nations">Seleções nacionais</string>
+    <string name="ma_clubs">Ligas e copas</string>
+    <string name="ma_pick_team">Escolha o time</string>
+    <string name="ma_no_teams">Não há próximas partidas nesta liga</string>
+    <string name="ma_no_data">Ainda não há próximas partidas. Tente em alguns minutos.</string>
+    <string name="ma_loading">Carregando…</string>
+    <string name="ma_remove">Remover</string>
+    <string name="ma_exact">Avisos na hora exata</string>
+    <string name="ma_exact_desc">Permita os alarmes exatos para os avisos chegarem na hora</string>
+    <string name="ma_notify_on">Ativar notificações para este evento</string>
+    <string name="ma_notify_off">Remover as notificações deste evento</string>
+    <string name="ma_on_toast">Vamos avisar 30 e 10 minutos antes e quando começar</string>
+    <string name="ma_off_toast">Aviso removido</string>
+    <string name="ma_bell">Notificações</string>
+    <string name="ma_bell_empty">Nenhuma notificação nas últimas 24 horas</string>
+    <string name="ma_back">Voltar</string>
+    <string name="ma_mins_ago">há %1$d min</string>
+    <string name="ma_hours_ago">há %1$d h</string>
+    <string name="ma_now">agora</string>
+</resources>
