@@ -73,14 +73,29 @@ struct LiveView: View {
             let list = shown
             let ch = sel
             let nowProg = guide?.first { $0.start <= now && $0.end > now }
-            VStack(spacing: 0) {
-                LivePlayerBox(preview: preview, channel: ch, active: active, nowProg: nowProg, now: now,
-                              onStart: { active = true }, onRetry: { resumeTick += 1 }, onFull: { openFull(list, byRotation: false) })
-                    .frame(width: boxWidth(g.size), height: boxWidth(g.size) * 9 / 16)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.black)
-                if let ch = ch { selectedRow(ch, nowProg: nowProg) }
-                channelList(list, progs: ch == nil ? [] : Array((guide ?? []).filter { $0.end > now }.prefix(3)))
+            if !phone && g.size.width > g.size.height {
+                // iPad girado: reproductor, canal elegido y guía a la izquierda; categorías y canales a la derecha
+                let lw = g.size.width * 0.6
+                HStack(spacing: 0) {
+                    VStack(spacing: 0) {
+                        playerBox(ch, nowProg, list).frame(width: lw, height: lw * 9 / 16).background(Color.black)
+                        if let ch = ch {
+                            selectedRow(ch, nowProg: nowProg)
+                            sideGuide(Array((guide ?? []).filter { $0.end > now }.prefix(10)))
+                        }
+                        Spacer(minLength: 0)
+                    }.frame(width: lw)
+                    channelList(list, progs: [])
+                }
+            } else {
+                VStack(spacing: 0) {
+                    playerBox(ch, nowProg, list)
+                        .frame(width: boxWidth(g.size), height: boxWidth(g.size) * 9 / 16)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.black)
+                    if let ch = ch { selectedRow(ch, nowProg: nowProg) }
+                    channelList(list, progs: ch == nil ? [] : Array((guide ?? []).filter { $0.end > now }.prefix(3)))
+                }
             }
         }
         .background(LiveColors.bg.ignoresSafeArea())
@@ -162,6 +177,26 @@ struct LiveView: View {
     }
 
     /* ---------- partes ---------- */
+    private func playerBox(_ ch: Item?, _ nowProg: EpgEntry?, _ list: [Item]) -> some View {
+        LivePlayerBox(preview: preview, channel: ch, active: active, nowProg: nowProg, now: now,
+                      onStart: { active = true }, onRetry: { resumeTick += 1 }, onFull: { openFull(list, byRotation: false) })
+    }
+
+    /** iPad girado: la guía del canal elegido bajo el reproductor (hasta 10 programas) */
+    private func sideGuide(_ l: [EpgEntry]) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(tr("Guía de programas")).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                    .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
+                if guide != nil && l.isEmpty {
+                    Text(tr("Guía no disponible")).font(.system(size: 13)).foregroundColor(LiveColors.empty).padding(16)
+                }
+                ForEach(l, id: \.self) { p in ProgramRow(program: p, now: now) }
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(LiveColors.col)
+    }
+
     private func channelList(_ list: [Item], progs: [EpgEntry]) -> some View {
         ScrollViewReader { proxy in
             ScrollView {

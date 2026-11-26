@@ -97,6 +97,9 @@ struct AccountView: View {
                     Spacer(minLength: 40)
                 }
                 .padding(pad)
+                // iPad girado: la cuenta al centro con un ancho cómodo
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
             }
         }
         .background(Theme.bg.ignoresSafeArea())

@@ -4,6 +4,12 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.1.1 (como Android 1.6.4)
+
+- **TV en vivo con el iPad girado:** reproductor, canal elegido y guía de programas (hasta 10) a la izquierda; categorías, buscador y canales a la derecha (`LiveView`, `sideGuide`). En vertical y en el iPhone, igual que antes.
+- **Ficha de película o serie con el iPad girado:** va al centro con un ancho cómodo (680 pt) y a los lados el fondo del título oscurecido, como la app de Netflix; ya no es solo la portada a pantalla completa (`DetailView`).
+- **Mi cuenta** centrada con ancho máximo en el iPad girado (`AccountView`).
+
 ## Novedades de la 1.1.0 (como Android 1.6.3)
 
 - **Destacado en el iPad como Netflix:** en el iPad (vertical y girado) Inicio, Películas y Series muestran una sola tarjeta ancha y apaisada: el fondo horizontal del título (`PanelImg.backdropSources`) y, abajo a la izquierda, el título, año · categoría · nota, la sinopsis y «Reproducir» / «Mi lista» en cápsula con los colores del dueño o del distribuidor. Pasa sola cada 6,5 s o con el dedo y nunca ocupa más de la mitad de la pantalla (`wideCard` en `LatMpx/UI/HeroCards.swift`). En el iPhone no cambia nada.

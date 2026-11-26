@@ -18,18 +18,29 @@ struct DetailView: View {
 
     var body: some View {
         GeometryReader { g in
-            let pad = sidePad(g.size)
+            // iPad girado: la ficha va al centro con un ancho cómodo y a los lados el fondo oscurecido, como Netflix
+            let wide = UIDevice.current.userInterfaceIdiom == .pad && g.size.width > g.size.height
+            let cw = wide ? min(g.size.width, 680) : g.size.width
+            let cs = CGSize(width: cw, height: g.size.height)
+            let pad = sidePad(cs)
             let _ = cloud.rev
             let progress = cloud.progress(media.key)
             let lastEp = media.kind == .series ? cloud.seriesProgress(media.id) : nil
             let seasons = det?.seasons ?? []
             let cur = season >= 0 ? season : defaultSeason(seasons, lastEp)
+            ZStack(alignment: .top) {
+            if wide {
+                ChainImage(sources: PanelImg.backdropSources(backdrop), maxPixel: 1280)
+                    .frame(width: g.size.width, height: g.size.height).clipped().blur(radius: 30).opacity(0.35)
+                    .ignoresSafeArea()
+                Color.black.opacity(0.4).ignoresSafeArea()
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ZStack(alignment: .bottom) {
                         // fondo Full HD del panel (si es de TMDB) y, si no carga, el original
                         ChainImage(sources: PanelImg.backdropSources(backdrop), maxPixel: 2560)
-                            .frame(width: g.size.width, height: min(g.size.width / 1.6, 460)).clipped()
+                            .frame(width: cw, height: wide ? cw / 2 : min(cw / 1.6, 460)).clipped()
                         // empieza transparente: antes empezaba en negro al 20 % y dejaba una línea marcada sobre el póster
                         LinearGradient(colors: [.clear, Theme.bg.opacity(0.35), Theme.bg.opacity(0.8), Theme.bg], startPoint: .top, endPoint: .bottom).frame(height: 170)
                     }
@@ -105,12 +116,17 @@ struct DetailView: View {
                     }
 
                     ShelfRow(title: tr("Sugerencias"), items: similar, pad: pad) { _, it in
-                        PosterCard(item: it, width: posterWidth(g.size)) { state.push(.detail(it)) }
+                        PosterCard(item: it, width: posterWidth(cs)) { state.push(.detail(it)) }
                     }.padding(.top, 16)
                     Spacer(minLength: 40)
                 }
+                .frame(width: cw)
+                .frame(minHeight: g.size.height, alignment: .top)
+                .background(Theme.bg)
+                .frame(maxWidth: .infinity)
             }
             .ignoresSafeArea(edges: .top)
+            }
         }
         .background(Theme.bg.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
