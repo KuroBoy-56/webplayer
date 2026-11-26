@@ -80,6 +80,13 @@ fun HeroCards(state: AppState, items: List<Item>, topPad: Dp = 0.dp) {
         }
     }
     val cur = items[pager.currentPage.coerceIn(0, items.lastIndex)]
+    // la tarjeta nunca más alta que ~2/3 de la pantalla (tableta, sobre todo girada): angosta y centrada, con las
+    // vecinas asomando a los lados; en el celular queda como siempre (30 dp a cada lado)
+    val conf = androidx.compose.ui.platform.LocalConfiguration.current
+    // girada: tarjeta cuadrada para que «Reproducir» y «Mi lista» quepan enteros y no la tape la barra de abajo
+    val aspect = if (conf.screenWidthDp > conf.screenHeightDp) 1f else 0.70f
+    val cardW = minOf(conf.screenWidthDp - 60f, maxOf(conf.screenHeightDp * 0.66f * aspect, 360f))
+    val sidePadCard = ((conf.screenWidthDp - cardW) / 2f).coerceAtLeast(30f).dp
     Box(Modifier.fillMaxWidth()) {
         // fondo: la carátula actual muy difuminada (Android 12+) o oscurecida
         Box(Modifier.matchParentSize()) {
@@ -91,12 +98,12 @@ fun HeroCards(state: AppState, items: List<Item>, topPad: Dp = 0.dp) {
         }
         Column(Modifier.fillMaxWidth().padding(top = topPad)) {
             HorizontalPager(
-                state = pager, contentPadding = PaddingValues(horizontal = 30.dp), pageSpacing = 14.dp,
+                state = pager, contentPadding = PaddingValues(horizontal = sidePadCard), pageSpacing = 14.dp,
                 modifier = Modifier.fillMaxWidth(),
             ) { page ->
                 val it = items[page]
                 val off = ((pager.currentPage - page) + pager.currentPageOffsetFraction).absoluteValue.coerceIn(0f, 1f)
-                HeroCard(state, it, Modifier.graphicsLayer {
+                HeroCard(state, it, aspect, Modifier.graphicsLayer {
                     val sc = lerp(1f, 0.9f, off); scaleX = sc; scaleY = sc; alpha = lerp(1f, 0.6f, off)
                 })
             }
@@ -110,12 +117,12 @@ fun HeroCards(state: AppState, items: List<Item>, topPad: Dp = 0.dp) {
 }
 
 @Composable
-private fun HeroCard(state: AppState, item: Item, modifier: Modifier) {
+private fun HeroCard(state: AppState, item: Item, aspect: Float, modifier: Modifier) {
     val ctx = LocalContext.current
     var fav by remember(item.key, Cloud.rev) { mutableStateOf(Cloud.isFav(item.key)) }
     val shape = RoundedCornerShape(14.dp)
     Box(
-        modifier.fillMaxWidth().aspectRatio(0.70f).shadow(18.dp, shape).clip(shape).border(1.dp, Color(0x2EFFFFFF), shape),
+        modifier.fillMaxWidth().aspectRatio(aspect).shadow(18.dp, shape).clip(shape).border(1.dp, Color(0x2EFFFFFF), shape),
     ) {
         FocusBox(onClick = { state.push(Route.Detail(item)) }, modifier = Modifier.fillMaxSize(), shape = shape, focusScale = 1f) {
             ItemPoster(item, Modifier.fillMaxSize())
