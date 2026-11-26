@@ -4,9 +4,15 @@
 // canal de cada partido: el que lo transmite (TheSportsDB) si el cliente lo tiene, el de la guía del panel o el de
 // los equipos; con «Solo los canales del servidor IPTV» (panel) solo se nombran los que el cliente tiene.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem } from '../actions';
-import { Chip, EventRow, EvRow, InputModal, MenuModal, MenuOpt } from '../components/SportsUi';
+import { Chip, EventRow, EvRow, InputModal, MenuModal, MenuOpt, ReadModal } from '../components/SportsUi';
+import { alertsBrand, cloudAlerts, isReminded, liveTvOn, setReminder } from '../data/liveTv';
+import { alpha, C } from '../theme';
+import { Shade } from '../components/Shade';
+
+// fondo de Deportes con perfiles: estadio de noche en 4K, sin personas (bajo el degradado del color de la app)
+const STADIUM = require('../../assets/image/sports_bg.jpg');
 import { Message, Spinner } from '../components/ui';
 import { Item } from '../data/catalog';
 import { matchSports, panelToday, SportMatch, SportsData } from '../data/sports';
@@ -83,6 +89,12 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
   const [extra, setExtra] = useState<Record<string, SportMatch>>({});
   const [menu, setMenu] = useState<{ title: string; sub?: string; opts: MenuOpt[] } | null>(null);
   const [typing, setTyping] = useState<string | null>(null);
+  const [note, setNote] = useState<{ title: string; text: string } | null>(null);
+  const stadium = liveTvOn();
+  // los recordatorios ya guardados en la nube (para ofrecer «Quitar el recordatorio»)
+  useEffect(() => {
+    if (stadium) cloudAlerts();
+  }, [stadium]);
   const alive = useRef(true);
   useEffect(
     () => () => {
@@ -304,19 +316,43 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
     setMenu({ title: t('Canales con «{x}»', { x: q }), opts: list.map(c => ({ title: c.name, green: true, onPress: () => play(c) })) });
   };
 
-  const playable = (e: Ev) => {
+  const playable = (e: Ev, quiet = false) => {
     const now = nowSec();
     const ending = e.s + minutes(str(e.sp)) * 60;
-    if (e.pp === true) return say(t('El evento está aplazado')), false;
-    if (isFinal(str(e.st)) || (e.s && now >= ending)) return say(t('Este evento ya terminó')), false;
-    if (e.s && e.dy !== panelToday(data, now) && !(e.s <= now && now < ending)) return say(t('El evento aún no está en línea')), false;
+    const no = (m: string) => (quiet || say(m), false);
+    if (e.pp === true) return no(t('El evento está aplazado'));
+    if (isFinal(str(e.st)) || (e.s && now >= ending)) return no(t('Este evento ya terminó'));
+    if (e.s && e.dy !== panelToday(data, now) && !(e.s <= now && now < ending)) return no(t('El evento aún no está en línea'));
     return true;
   };
+
+  // recordatorio en la nube (solo con perfiles): el celular de la misma línea y perfil avisa 30 y 10 min antes y al empezar
+  const remind = async (e: Ev, on: boolean) => {
+    setMenu(null);
+    const ok = await setReminder(e, on);
+    if (!alive.current) return;
+    if (!ok) return say(t('No se pudo guardar el recordatorio. Inténtalo otra vez.'));
+    setNote({
+      title: on ? t('Recordatorio guardado') : t('Recordatorio quitado'),
+      text: t('Para recibir las notificaciones de tus partidos y equipos favoritos debes tener la app {x} instalada en tu celular.', { x: alertsBrand() }),
+    });
+  };
+  const remindOpt = (e: Ev): MenuOpt | null => {
+    if (!stadium || e.pp === true || isFinal(str(e.st)) || !e.s || nowSec() >= e.s + minutes(str(e.sp)) * 60) return null;
+    const on = isReminded(str(e.id));
+    return { title: '🔔  ' + (on ? t('Quitar el recordatorio') : t('Recordarme este partido')), sub: t('Te avisaremos en tu celular 30 min y 10 min antes y al empezar'), onPress: () => remind(e, !on) };
+  };
+  const evTitle = (e: Ev) => (str(e.h) && str(e.a) ? (str(e.hn) || str(e.h)) + ' vs ' + (str(e.an) || str(e.a)) : str(e.ev));
 
   // menú del partido: el automático, los canales que lo transmiten, los de la guía y los equipos (en verde los que
   // tiene el cliente), buscar por el nombre de cada equipo y escribir otro nombre
   const open = (e: Ev) => {
-    if (!playable(e)) return;
+    const rem = remindOpt(e);
+    // un partido de otro día: con perfiles, solo el recordatorio
+    if (!playable(e, !!rem)) {
+      if (rem) setMenu({ title: evTitle(e), sub: t('El evento aún no está en línea'), opts: [rem] });
+      return;
+    }
     if (!found) return say(t('Buscando los canales, un momento…'));
     const m = resolve(e);
     const opts: MenuOpt[] = [
@@ -326,6 +362,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
         green: !!m?.best,
         onPress: () => (setMenu(null), m?.best ? openItem(nav, m.best) : folder(t('Aún no aparece el canal exacto; '))),
       },
+      ...(rem ? [rem] : []),
     ];
     const seen = new Set<string>();
     for (const tv of m?.tv || []) {
@@ -348,7 +385,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
     if (!names.length && str(e.ev)) names.push(str(e.ev));
     for (const n of names) opts.push({ title: t('Buscar canales: «{x}»', { x: n }), onPress: () => (setMenu(null), findChans(n)) });
     opts.push({ title: t('Buscar canal, equipo o evento…'), onPress: () => (setMenu(null), setTyping(names[0] || '')) });
-    setMenu({ title: str(e.h) && str(e.a) ? (str(e.hn) || str(e.h)) + ' vs ' + (str(e.an) || str(e.a)) : str(e.ev), sub: t('¿Dónde quieres verlo?'), opts });
+    setMenu({ title: evTitle(e), sub: t('¿Dónde quieres verlo?'), opts });
   };
 
   const sportKeys = useMemo(() => {
@@ -392,6 +429,13 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
 
   return (
     <View style={s.root}>
+      {stadium ? (
+        <View pointerEvents="none" style={s.bg}>
+          <Image source={STADIUM} style={s.bgImg} resizeMode="cover" />
+          <View style={[s.bgImg, { backgroundColor: alpha(C.bg, 0.62) }]} />
+          <Shade side="bottom" style={s.bgShade} />
+        </View>
+      ) : null}
       <View style={s.chips}>
         {tabs.map((x, i) => (
           <Chip key={x.id} label={x.label} on={tab === x.id} preferred={i === 0} onFocus={chipFocus} onPress={() => (forget(), setTab(x.id), setSport(''))} />
@@ -443,6 +487,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
       )}
       {menu ? <MenuModal title={menu.title} sub={menu.sub} opts={menu.opts} onClose={() => setMenu(null)} /> : null}
       {typing !== null ? <InputModal title={t('Canal, equipo o evento')} initial={typing} onSubmit={findChans} onClose={() => setTyping(null)} /> : null}
+      {note ? <ReadModal title={note.title} image="" text={note.text} onClose={() => setNote(null)} /> : null}
     </View>
   );
 }
@@ -450,6 +495,10 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
 const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, paddingTop: px(145) },
+    // con ancho y alto fijos (Vega dibuja las imágenes del paquete a su tamaño real si solo se estiran)
+    bg: { position: 'absolute', left: 0, top: 0, width: px(1920), height: px(1080) },
+    bgImg: { position: 'absolute', left: 0, top: 0, width: px(1920), height: px(1080) },
+    bgShade: { position: 'absolute', left: 0, top: px(420), width: px(1920), height: px(660) },
     chips: { flexDirection: 'row', paddingHorizontal: SIDE, marginBottom: px(22) },
     sports: { flexGrow: 0, height: px(76), minHeight: px(76), marginBottom: px(20) },
     toast: { color: '#e87c03', fontSize: px(26), marginLeft: SIDE, marginBottom: px(10) },
