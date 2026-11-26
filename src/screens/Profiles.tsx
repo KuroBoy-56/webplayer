@@ -15,6 +15,7 @@ import { BackdropSlides, SLIDE_MS } from '../components/BackdropSlides';
 import KeyboardModal from '../components/KeyboardModal';
 import ProfileEdit from '../components/ProfileEdit';
 import ProfilePin from '../components/ProfilePin';
+import { ProfileEnter } from '../components/ProfileEnter';
 import { Shade } from '../components/Shade';
 import { Button, Focusable, Logo } from '../components/ui';
 import { t } from '../lib/i18n';
@@ -89,9 +90,20 @@ export default function Profiles({ from, manage, active }: { from: 'start' | 'me
     return () => sub.remove();
   }, [active, open, managing, from]);
 
+  // el avatar va al centro con el circulito (ProfileEnter) y, ya dibujado, se arma el perfil (el infantil filtra el
+  // catálogo, lo que más tarda) y se entra a Inicio; nunca se ve la pantalla trabada
+  const [entering, setEntering] = useState<Profile | null>(null);
   const enter = useCallback((p: Profile) => {
-    chooseProfile(p);
-    nav.reset({ name: 'main' });
+    busy.current = true;
+    setEntering(p);
+    const t0 = Date.now();
+    setTimeout(() => {
+      chooseProfile(p);
+      setTimeout(() => {
+        busy.current = false;
+        nav.reset({ name: 'main' });
+      }, Math.max(150, 900 - (Date.now() - t0)));
+    }, 80);
   }, [nav]);
 
   const refocus = (id: string) => {
@@ -256,6 +268,7 @@ export default function Profiles({ from, manage, active }: { from: 'start' | 'me
           </View>
         </View>
       </Modal>
+      {entering ? <ProfileEnter name={entering.name} avatar={entering.avatar} /> : null}
     </View>
   );
 }

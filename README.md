@@ -11,6 +11,8 @@ GitHub Actions la compila sola en cada cambio de la rama `vega-os`.
 
 ## Qué trae
 
+- (2.8.1) **Elegir perfil:** al elegir un perfil su avatar va al centro de la pantalla con el nombre y el circulito girando, y recién entonces se arma lo de ese perfil (en el infantil, el filtro del catálogo, lo que más tarda): la pantalla ya no queda trabada un par de segundos (`src/components/ProfileEnter.tsx`, `src/screens/Profiles.tsx`).
+
 - **Inicio de sesión** solo con usuario y contraseña: se prueba a la vez en todos los DNS
   del panel y entra en el que coincida. Si el panel tiene una cuenta asignada a este equipo
   aparece un botón para entrar con ella. Fondo con carteles de estreno (TMDB del panel).
