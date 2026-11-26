@@ -479,6 +479,12 @@ const fr: Record<Key, string> = {
   "No se pudo guardar el recordatorio. Inténtalo otra vez.": "Impossible d'enregistrer le rappel. Réessayez.",
   "Habilitar tarjetas de plataformas": "Activer les cartes des plateformes",
   "Activado: las plataformas van debajo de «En vivo ahora»": "Activé : les plateformes sous « En direct »",
+  "Ir a Deportes": "Aller aux Sports",
+  "Toda la agenda de hoy y mañana": "Tout le programme d’aujourd’hui et de demain",
+  "Finalizados": "Terminés",
+  "Todavía no terminó ningún evento hoy. Aquí aparecen los de hoy cuando terminan (se vacía a las 00:00).": "Aucun événement n’est encore terminé aujourd’hui. Ceux du jour apparaissent ici une fois finis (vidé à 00:00).",
+  "No se puede activar": "Impossible de l’activer",
+  "Los recordatorios solo se pueden activar en partidos que empiezan en más de 5 minutos.": "Les rappels ne peuvent être activés que pour les matchs qui commencent dans plus de 5 minutes.",
 };
 
 export default fr;

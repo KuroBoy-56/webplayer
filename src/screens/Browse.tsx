@@ -141,7 +141,11 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     // con partidos en vivo la fila va arriba, en el lugar de las plataformas (que vuelven debajo si se activaron en Cuenta)
     if (section === 'home' && live.length) {
       if (out.length && out[0].type === 'platform' && !platformCards()) out.shift();
-      out.unshift({ title: t('En vivo ahora'), type: 'live', items: live.map(c => ({ kind: 'live' as const, key: c.id, label: c.h + ' vs ' + c.a, color: '', live: c })) });
+      out.unshift({
+        title: t('En vivo ahora'),
+        type: 'live',
+        items: [...live.map(c => ({ kind: 'live' as const, key: c.id, label: c.h + ' vs ' + c.a, color: '', live: c })), { kind: 'live' as const, key: 'go-sports', label: t('Ir a Deportes'), color: '', extra: 'sports' }],
+      });
     }
     let at = out.length && out[0].type === 'live' ? 1 : 0;
     if (out.length > at && out[at].type === 'platform') at++;
@@ -268,6 +272,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
             );
           }
         }
+        else if (x.kind === 'live' && x.extra === 'sports') setInfo({ item: null, title: t('Ir a Deportes'), plot: t('Toda la agenda de hoy y mañana') });
         else if (x.kind === 'live' && x.live) {
           const c = x.live;
           const score = c.soon || !(c.hs || c.as) ? '' : '   ' + c.hs + ' - ' + c.as;

@@ -1,6 +1,6 @@
 // «En vivo ahora» de Inicio y recordatorios de partidos en la nube, solo con perfiles (uno elegido, no el infantil) y
 // Deportes encendido para el distribuidor:
-// - api/sports_live.php?soon=1: los partidos que se juegan y los que empiezan en 5 minutos o menos; con equipos
+// - api/sports_live.php?next=1: los partidos que se juegan y los próximos de 24 h (hasta 20); con equipos
 //   favoritos (los que se eligen en el celular o la computadora, guardados en la nube) además todos los de hoy de esos
 //   equipos. Solo salen los que tienen un canal en la lista del cliente (las mismas reglas que Deportes).
 // - api/alerts.php: el recordatorio de un partido se guarda en la nube por línea y perfil; el celular de la misma
@@ -14,6 +14,11 @@ import { getState, profilesNeeded } from '../state';
 import { Item } from './catalog';
 import { matchSports } from './sports';
 import { fetchSports, localSports } from './sportsPanel';
+
+export const LIVE_MAX = 20;
+
+/** activar el recordatorio solo vale si faltan más de 5 minutos para que empiece (el panel responde 409 too_late) */
+export const tooLate = (e: any) => int(e.s) <= nowSec() + 300;
 
 export type LiveCard = {
   id: string;
@@ -100,9 +105,11 @@ async function agenda(): Promise<any | null> {
 /** los partidos de la fila (en vivo, por empezar y, con equipos favoritos, los de hoy de esos equipos) con su canal */
 export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number } | null> {
   if (!liveTvOn()) return null;
-  const j = json<any>(await cloud('sports_live.php', 'GET', { soon: '1' }));
+  const j = json<any>(await cloud('sports_live.php', 'GET', { soon: '1', next: '1' }));
   if (!j || j.enabled !== true) return null;
-  const events: any[] = Array.isArray(j.events) ? j.events.slice() : [];
+  // un próximo que «empezaba» hace más de 5 min y el livescore no trae: fuera
+  const n0 = nowSec();
+  const events: any[] = (Array.isArray(j.events) ? j.events : []).filter((e: any) => !(e?.soon === true && int(e.s) > 0 && int(e.s) < n0 - 300));
   const fav = await cloudAlerts();
   if (fav?.teams.length) {
     const ag = await agenda();
@@ -129,9 +136,9 @@ export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number 
       hs: str(e.hs), as: str(e.as), st: str(e.st), pr: str(e.pr), s: int(e.s), th: str(e.th), soon: e.soon === true, best,
     });
   }
-  // en vivo primero, después los que empiezan antes
+  // en vivo primero, después los que empiezan antes; como mucho 20 (al final va «Ir a Deportes»)
   cards.sort((x, y) => Number(x.soon) - Number(y.soon) || (x.s || 9e12) - (y.s || 9e12));
-  return { cards, ttl: Math.max(20, int(j.ttl) || 30) };
+  return { cards: cards.slice(0, LIVE_MAX), ttl: Math.max(20, int(j.ttl) || 30) };
 }
 
 /** «67'», «Descanso», «Q3 5:21» o la hora de inicio (los que todavía no empiezan) */
