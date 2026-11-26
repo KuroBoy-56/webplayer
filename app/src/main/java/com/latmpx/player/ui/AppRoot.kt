@@ -80,6 +80,7 @@ import com.latmpx.player.ui.theme.NfGray
 import com.latmpx.player.ui.theme.NfRed
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** puerta del distribuidor antes del inicio de sesión */
@@ -325,6 +326,9 @@ fun AppRoot() {
             state.profilesOpen != null -> com.latmpx.player.ui.screens.ProfilesScreen(
                 state,
                 onChosen = { p ->
+                    // el avatar va al centro con el circulito mientras se arma todo (null = perfiles apagados: nada que mostrar)
+                    if (p != null) state.entering = p
+                    val t0 = System.currentTimeMillis()
                     scope.launch {
                         Profiles.choose(p)
                         Cloud.clear()
@@ -333,6 +337,14 @@ fun AppRoot() {
                         state.stack.clear(); state.tab = Tab.HOME
                         state.profilesOpen = null
                         state.profileReady = true
+                        if (p != null) {
+                            // Inicio se arma debajo: el circulito sigue hasta que el catálogo está (máx. 20 s)
+                            kotlinx.coroutines.withTimeoutOrNull(20_000) {
+                                androidx.compose.runtime.snapshotFlow { !state.loading || state.movies.isNotEmpty() }.first { it }
+                            }
+                            kotlinx.coroutines.delay((900 - (System.currentTimeMillis() - t0)).coerceAtLeast(150))
+                            state.entering = null
+                        }
                     }
                 },
                 onBack = { if (state.profilesFromAccount && Profiles.current != null) state.profilesOpen = null else (ctx as? android.app.Activity)?.finishAffinity() },
@@ -352,6 +364,7 @@ fun AppRoot() {
                 }
             }, onChangeDistributor = { wipe(null) })
         }
+        state.entering?.let { com.latmpx.player.ui.screens.ProfileEnterOverlay(it) }
         alert.value?.takeIf { state.session != null }?.let { a -> PanelAlertDialog(a) { alert.value = null } }
         // el panel pidió borrar la caché: aviso de 3 s, se borra y la app se reinicia sola
         if (com.latmpx.player.data.CacheClear.pending) {
