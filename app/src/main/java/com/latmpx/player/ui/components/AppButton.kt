@@ -39,7 +39,8 @@ import com.latmpx.player.ui.theme.NfText
  *  - principal: color del distribuidor (rojo sin distribuidor) con texto de contraste
  *  - secundario: blanco translúcido con borde fino
  *  - con el foco del control (o al tocarlo): borde de 3 px y crece un 5 % con una animación corta
- * El tamaño lo da [modifier] (fillMaxWidth, weight…); sin tamaño se ajusta al texto.
+ * El tamaño lo da [modifier] (fillMaxWidth, weight…); sin tamaño se ajusta al texto. [shape]: la cápsula de las
+ * tarjetas destacadas del celular (como Netflix), con los mismos colores.
  */
 @Composable
 fun AppButton(
@@ -49,12 +50,12 @@ fun AppButton(
     icon: ImageVector? = null,
     minHeight: Dp = 48.dp,
     fontSize: TextUnit = 16.sp,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(6.dp),
     onClick: () -> Unit,
 ) {
     val src = remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
     val sc by animateFloatAsState(if (focused) 1.05f else 1f, tween(130), label = "appButton")
-    val shape = RoundedCornerShape(6.dp)
     val text0 = NfText
     val bg = when {
         primary -> NfRed
