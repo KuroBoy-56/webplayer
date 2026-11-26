@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Explorar (botón «Categorías» con perfiles) -->
+<resources>
+    <string name="explore">Explorar</string>
+    <string name="explore_sub">Todo o catálogo de filmes e séries</string>
+    <string name="ex_all">Tudo</string>
+    <string name="ex_sort_recent">Adicionados recentemente</string>
+    <string name="ex_sort_rating">Mais bem avaliados</string>
+    <string name="ex_all_folders">Todas as pastas</string>
+    <string name="ex_all_genres">Todos os gêneros</string>
+    <string name="ex_filter_title">Filtrar por título…</string>
+    <string name="ex_count">%1$d títulos</string>
+</resources>
