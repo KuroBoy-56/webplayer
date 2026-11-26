@@ -9,6 +9,8 @@ se trae aquí con un `git merge`.
 
 ## Cómo es una app de VIDAA
 
+- (1.0.4) **Elegir perfil:** al elegir un perfil su avatar va al centro de la pantalla con el nombre y el circulito girando, y recién entonces se arma lo de ese perfil (en el infantil, el filtro del catálogo, lo que más tarda): la pantalla ya no queda trabada un par de segundos (`src/components/ProfileEnter.tsx`, `src/screens/Profiles.tsx`).
+
 VIDAA OS (Linux de Hisense) no instala paquetes como LG (`.ipk`) o Samsung (`.wgt`): sus apps son **páginas web que el
 televisor abre desde una dirección**, en su propio navegador y a pantalla completa. Por eso esta app se publica como
 una carpeta de archivos (`index.html`, `app.js`, imágenes) en un servidor web, y el televisor la abre desde ahí.
