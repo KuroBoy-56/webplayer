@@ -72,6 +72,8 @@ import kotlin.math.absoluteValue
 @Composable
 fun HeroCards(state: AppState, items: List<Item>, topPad: Dp = 0.dp) {
     if (items.isEmpty()) return
+    // tableta: una sola tarjeta ancha y apaisada como la app de Netflix en tableta
+    if (com.latmpx.player.ui.components.LocalIsTablet.current) { TabletHero(state, items, topPad); return }
     val pager = rememberPagerState(pageCount = { items.size })
     LaunchedEffect(items) {
         while (true) {
@@ -164,4 +166,70 @@ fun heroTags(state: AppState, item: Item): String {
 @Composable
 private fun CardButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
     com.latmpx.player.ui.components.AppButton(text, modifier, primary = primary, icon = icon, minHeight = 46.dp, fontSize = 16.sp, shape = CircleShape, onClick = onClick)
+}
+
+/**
+ * Tableta (como Netflix en el iPad / tableta Android): una tarjeta ancha y apaisada con el fondo horizontal del título,
+ * y abajo a la izquierda el título, sus datos, la sinopsis y «Reproducir» / «Mi lista» en cápsula. Pasa sola cada 6,5 s
+ * o con el dedo; nunca más alta que la mitad de la pantalla (vertical) o ~60 % (girada).
+ */
+@Composable
+private fun TabletHero(state: AppState, items: List<Item>, topPad: Dp) {
+    // primero los que tienen fondo horizontal (la carátula vertical recortada se ve peor en una tarjeta ancha)
+    val list = remember(items) { items.sortedByDescending { it.backdrop.isNotEmpty() } }
+    val pager = rememberPagerState(pageCount = { list.size })
+    LaunchedEffect(list) {
+        while (true) {
+            delay(6500)
+            if (!pager.isScrollInProgress && list.size > 1) pager.animateScrollToPage((pager.currentPage + 1) % list.size)
+        }
+    }
+    val conf = androidx.compose.ui.platform.LocalConfiguration.current
+    val land = conf.screenWidthDp > conf.screenHeightDp
+    val side = 24f
+    val cardW = conf.screenWidthDp - side * 2
+    val h = minOf(cardW / (if (land) 2.4f else 1.4f), conf.screenHeightDp * (if (land) 0.48f else 0.5f))
+    Column(Modifier.fillMaxWidth().padding(top = topPad)) {
+        HorizontalPager(state = pager, contentPadding = PaddingValues(horizontal = side.dp), pageSpacing = 16.dp, modifier = Modifier.fillMaxWidth()) { page ->
+            TabletHeroCard(state, list[page], if (land) 0.5f else 0.75f, Modifier.fillMaxWidth().height(h.dp))
+        }
+        if (list.size > 1) Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+            repeat(list.size) { i ->
+                Box(Modifier.size(if (i == pager.currentPage) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (i == pager.currentPage) Color.White else Color(0x55FFFFFF)))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabletHeroCard(state: AppState, item: Item, textWidth: Float, modifier: Modifier) {
+    val ctx = LocalContext.current
+    var fav by remember(item.key, Cloud.rev) { mutableStateOf(Cloud.isFav(item.key)) }
+    val shape = RoundedCornerShape(16.dp)
+    Box(modifier.shadow(18.dp, shape).clip(shape).border(1.dp, Color(0x2EFFFFFF), shape)) {
+        FocusBox(onClick = { state.push(Route.Detail(item)) }, modifier = Modifier.fillMaxSize(), shape = shape, focusScale = 1f) {
+            if (item.backdrop.isNotEmpty()) com.latmpx.player.ui.components.ChainImage(remember(item.backdrop) { com.latmpx.player.data.PanelImg.backdropSources(item.backdrop) }, Modifier.fillMaxSize())
+            else ItemPoster(item, Modifier.fillMaxSize())
+        }
+        // oscuro a la izquierda y abajo: los textos se leen sobre cualquier imagen
+        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(0f to Color(0xD9000000), 0.55f to Color(0x66000000), 0.85f to Color.Transparent)))
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color(0xCC000000))))
+        // los textos ocupan la parte izquierda; los botones, lo que necesiten
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 26.dp, end = 26.dp, bottom = 24.dp)) {
+            val tw = Modifier.fillMaxWidth(textWidth)
+            Text(item.name, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 36.sp, modifier = tw)
+            val tags = heroTags(state, item)
+            if (tags.isNotEmpty()) Text(tags, color = Color(0xFFE5E5E5), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = tw.padding(top = 8.dp))
+            if (item.plot.isNotBlank()) Text(item.plot, color = Color(0xFFDDDDDD), fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp, modifier = tw.padding(top = 8.dp))
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                CardButton(stringResource(R.string.play), Icons.Filled.PlayArrow, true, Modifier.width(165.dp)) {
+                    if (item.kind == Kind.MOVIE) Play.movie(ctx, item, item.ext) else state.push(Route.Detail(item))
+                }
+                CardButton(stringResource(if (fav) R.string.in_my_list else R.string.my_list), if (fav) Icons.Filled.Check else Icons.Filled.Add, false, Modifier.width(165.dp)) {
+                    fav = Cloud.toggleFav(item)
+                }
+            }
+        }
+    }
 }
