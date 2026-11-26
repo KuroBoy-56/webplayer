@@ -244,6 +244,12 @@ object Store {
         get() = p.getString(tenantKey("last_prof|" + scope()), "") ?: ""
         set(v) = p.edit().putString(tenantKey("last_prof|" + scope()), v).apply()
 
+    /** Ajustes › Deporte preferido: solo los partidos en vivo de ese deporte en Inicio (nombre de TheSportsDB, "" = todos);
+     *  por línea y por perfil */
+    var preferredSport: String
+        get() = p.getString(tenantKey("pref_sport|" + scope() + "|" + (Profiles.current?.id ?: "")), "") ?: ""
+        set(v) = p.edit().putString(tenantKey("pref_sport|" + scope() + "|" + (Profiles.current?.id ?: "")), v).apply()
+
     /* ---------- inicio de sesión (docs/LOGIN-SERVIDORES.md del panel) ---------- */
     /** la DNS con la que entró cada usuario la última vez en este equipo: se prueba primero, sola */
     fun lastDns(user: String): String = p.getString(tenantKey("last_dns|" + user.lowercase()), "") ?: ""
