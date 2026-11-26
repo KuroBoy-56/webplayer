@@ -29,4 +29,6 @@
     <string name="ma_mins_ago">hace %1$d min</string>
     <string name="ma_hours_ago">hace %1$d h</string>
     <string name="ma_now">ahora</string>
+    <string name="ma_allow">Permitir notificaciones</string>
+    <string name="ma_allow_desc">Las notificaciones de la app están apagadas en el celular: actívalas para que los avisos de tus partidos lleguen a la barra</string>
 </resources>

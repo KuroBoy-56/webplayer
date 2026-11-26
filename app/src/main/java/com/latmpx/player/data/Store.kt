@@ -47,6 +47,11 @@ object Store {
 
     /* ---------- distribuidor (ver Tenant.kt) ---------- */
     /** "" = sin elegir (se pregunta), "skip" = Omitir, "code" = con número */
+    /** colores de «¿Quién está viendo?» que mandó el panel (login.php features "palette"), por distribuidor */
+    var profileColors: String
+        get() = p.getString(tenantKey("profile_colors"), "") ?: ""
+        set(v) = p.edit().putString(tenantKey("profile_colors"), v).apply()
+
     var distChoice: String
         get() = p.getString("dist_choice", "") ?: ""
         set(v) = p.edit().putString("dist_choice", v).apply()

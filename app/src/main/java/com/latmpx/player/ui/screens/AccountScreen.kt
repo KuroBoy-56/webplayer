@@ -185,7 +185,8 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
         }
     }
 
-    Column(Modifier.fillMaxSize().background(NfBg).verticalScroll(rememberScrollState()).padding(sidePad())) {
+    // tableta girada: la cuenta al centro con un ancho cómodo (no filas de lado a lado de la pantalla)
+    Column(Modifier.fillMaxSize().background(NfBg).verticalScroll(rememberScrollState()).wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = 760.dp).padding(sidePad())) {
         LogoHeader(height = 50.dp)
         Spacer(Modifier.height(24.dp))
         

@@ -221,6 +221,7 @@ object Panel {
         val f = r.json()?.takeIf { r.ok && it.s("status") == "ok" }?.optJSONObject("features") ?: return null
         // tema de prueba (Pantalla Falsa del panel): solo con Omitir
         reviewOffered = f.optBoolean("review", false) && !Tenant.active
+        Tenant.setProfileColors(f.optJSONObject("palette"))
         return if (f.has("demo")) f.optBoolean("demo") else null
     }
 
