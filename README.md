@@ -25,6 +25,7 @@ La HD es el mismo `app.js`: la interfaz se escala sola al tamaño de la pantalla
 
 ## Novedades de la 1.4.0
 
+- (1.5.0) **Elegir perfil:** al elegir un perfil su avatar va al centro de la pantalla con el nombre y el circulito girando, y recién entonces se arma lo de ese perfil (en el infantil, el filtro del catálogo, lo que más tarda): la pantalla ya no queda trabada un par de segundos (`src/components/ProfileEnter.tsx`, `src/screens/Profiles.tsx`).
 - (1.4.10) **Revisión de LG QA2026111927245 («App icon background color and tile color do not match», 1.3.11):** el
   `appinfo.json` y los iconos del paquete ya coincidían (`iconColor` #000000 y fondo #000000), pero en LG Apps el mosaico
   usa el **icono de 400x400 que se sube en Seller Lounge**, no los del `.ipk`, y ese no estaba en el repositorio. Ahora
