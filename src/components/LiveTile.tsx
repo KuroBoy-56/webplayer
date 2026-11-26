@@ -112,9 +112,10 @@ const s = themed(() =>
     pillSoon: { backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)' },
     pillText: { color: '#fff', fontSize: px(20), fontWeight: '800' },
     mid: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: px(18) },
-    team: { width: px(140), alignItems: 'center' },
+    // los equipos se reparten el ancho que deja el marcador (que nunca se corta ni baja de línea)
+    team: { flex: 1, minWidth: 0, alignItems: 'center' },
     teamName: { color: '#fff', fontSize: px(20), fontWeight: '700', marginTop: px(6), textAlign: 'center' },
-    score: { color: '#fff', fontSize: px(46), fontWeight: '900' },
+    score: { color: '#fff', fontSize: px(46), fontWeight: '900', flexShrink: 0, marginHorizontal: px(8) },
     scoreLong: { fontSize: px(34) },
     chan: { color: '#fff', fontSize: px(20), fontWeight: '600', paddingHorizontal: px(16), paddingBottom: px(12), opacity: 0.95 },
     noBadge: { backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
