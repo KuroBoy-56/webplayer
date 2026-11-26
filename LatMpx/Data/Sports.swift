@@ -1,6 +1,7 @@
 import Foundation
 
-struct TvChannel: Hashable { let name: String; let country: String }
+/** usual = no es de la agenda: es donde suele transmitirse (panel "tvh") */
+struct TvChannel: Hashable { let name: String; let country: String; var usual = false }
 
 struct SportEvent: Hashable, Identifiable {
     let id: String
@@ -12,6 +13,8 @@ struct SportEvent: Hashable, Identifiable {
     let tv: [TvChannel]
     /** liga del JSON de partidos (api/sports_fixtures.php "l"): Equipos y Selecciones */
     var leagueId: String = ""
+    /** sin "tv": donde suelen ir los partidos de local de su equipo (o de su liga) en los últimos 60 días (panel "tvh") */
+    var tvh: [TvChannel] = []
 }
 
 struct SportInfo: Hashable { let label: String; let icon: String; let minutes: Int }
@@ -130,7 +133,8 @@ enum Sports {
         let tv = e.objs("tv").compactMap { t -> TvChannel? in t.s("n").isEmpty ? nil : TvChannel(name: t.s("n"), country: t.s("c")) }
         return SportEvent(id: e.s("id"), sport: e.s("sp"), league: e.s("lg"), leagueBadge: e.s("lb"), title: e.s("ev"), home: e.s("h"), away: e.s("a"),
                           homeBadge: e.s("hb"), awayBadge: e.s("ab"), homeScore: e.s("hs"), awayScore: e.s("as"), start: st, venue: e.s("v"),
-                          status: e.s("st"), postponed: e.b("pp"), tv: tv, leagueId: e.s("l"))
+                          status: e.s("st"), postponed: e.b("pp"), tv: tv, leagueId: e.s("l"),
+                          tvh: e.objs("tvh").compactMap { t -> TvChannel? in t.s("n").isEmpty ? nil : TvChannel(name: t.s("n"), country: t.s("c"), usual: true) })
     }
 
     /** "2026-10-03T15:00:00Z" / "+00:00" / sin segundos / sin zona -> segundos (UTC si no trae zona) */
@@ -279,7 +283,9 @@ enum Sports {
      */
     static func findByChannel(_ tvName: String, _ ix: Index) -> [Item] {
         if let hit = ix.remembered(tvName) { return hit }
-        let out = findByChannelOnce(tvName, ix)
+        var out = findByChannelOnce(tvName, ix)
+        // un nombre solo es su primer canal ("ESPN" = "ESPN 1", "DAZN" = "DAZN 1")
+        if out.isEmpty, let last = channelKey(tvName).joined().last, !last.isNumber { out = findByChannelOnce(tvName + " 1", ix) }
         ix.remember(tvName, out)
         return out
     }
@@ -330,15 +336,20 @@ enum Sports {
      * equipos o el nombre del evento; el automático es el primero de los que lo transmiten y, si no, el de los equipos.
      */
     static func match(_ ev: SportEvent, _ ix: Index, _ r: MatchRules) -> SportMatch {
-        let tv = ev.tv.map { t in (t, findByChannel(t.name, ix).first) }
+        // sin los canales de la agenda: los habituales de su equipo de local o de su liga, como último recurso
+        let usual = ev.tv.isEmpty
+        let tv = (usual ? ev.tvh : ev.tv).map { t in (t, findByChannel(t.name, ix).first) }
         let teams = find(ev, ix, r)
-        return SportMatch(best: tv.first(where: { $0.1 != nil })?.1 ?? teams, teams: teams, tv: tv)
+        let owned = tv.first(where: { $0.1 != nil })?.1
+        return SportMatch(best: usual ? (teams ?? owned) : (owned ?? teams), teams: teams, tv: tv)
     }
 
     /** El canal del partido: el primero de sus canales de TV que tiene el cliente; si no, por equipos o nombre del evento. */
     static func best(_ ev: SportEvent, _ ix: Index, _ r: MatchRules) -> Item? {
         for t in ev.tv { if let f = findByChannel(t.name, ix).first { return f } }
-        return find(ev, ix, r)
+        if let f = find(ev, ix, r) { return f }
+        for t in ev.tv.isEmpty ? ev.tvh : [] { if let f = findByChannel(t.name, ix).first { return f } }
+        return nil
     }
 
     static func find(_ ev: SportEvent, _ ix: Index, _ r: MatchRules) -> Item? {

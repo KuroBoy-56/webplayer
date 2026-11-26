@@ -128,7 +128,7 @@ struct SportsView: View {
         let g = (epg[e.id] ?? []).compactMap { Int($0).flatMap { c.byId[$0] } }
         if g.isEmpty { return m }
         m.epg = g
-        m.best = m.tv.first(where: { $0.1 != nil })?.1 ?? g.first
+        m.best = m.tv.first(where: { $0.1 != nil && !$0.0.usual })?.1 ?? g.first
         return m
     }
 
@@ -216,7 +216,7 @@ struct SportsView: View {
             if let ch = ch { seen.insert(ch.id) }
             let title = d.iptvOnly && ch != nil ? ch!.name : t.name + (t.country.isEmpty ? "" : " (\(t.country))")
             let teams = m?.teams
-            opts.append(SpOpt(title: title, sub: ch.map { tr("en tu lista: %@", $0.name) } ?? tr("no está en tu lista: se busca el evento"), green: ch != nil) {
+            opts.append(SpOpt(title: title, sub: (t.usual ? tr("suele transmitirlo") + " · " : "") + (ch.map { tr("en tu lista: %@", $0.name) } ?? tr("no está en tu lista: se busca el evento")), green: ch != nil) {
                 if let ch = ch { play(ch) }
                 else if let tm = teams { state.toast = tr("No tienes %@; te mostramos %@", t.name, tm.name); play(tm) }
                 else { folder() }
