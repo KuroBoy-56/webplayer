@@ -273,7 +273,8 @@ fun SportsScreen(state: AppState) {
         Text(stringResource(R.string.sports), color = Color.White, fontSize = if (tv) 40.sp else 28.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(bottom = 8.dp))
     }
     if ((tab == SpTab.TABLES && d.tablesOn) || (tab == SpTab.NATIONS && d.nationsOn) || (tab == SpTab.TEAMS && d.fixturesOn)) {
-        Column(Modifier.fillMaxSize().sportsStadium().padding(start = pad, end = pad, top = 16.dp)) {
+        // de borde a borde: el estadio sigue por detrás de la barra de notificaciones; el contenido, debajo
+        Column(Modifier.fillMaxSize().sportsStadium().padding(start = pad, end = pad, top = 16.dp + topInset())) {
             title()
             SportsTabs(d, tab) { tab = it; sport = "" }
             when (tab) {
@@ -311,9 +312,15 @@ fun SportsScreen(state: AppState) {
     }
     val sportKeys = remember(d) { d.events.map { it.sport }.filter { it.isNotEmpty() }.distinct() }
     val liveCount = remember(d, now) { d.events.count { isLive(it) } }
+    // de borde a borde: el estadio sigue por detrás de la barra de notificaciones y la cámara; al bajar, la barra toma el
+    // color de la app para que ninguna tarjeta quede debajo de la hora y la batería
+    val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val scrolled by remember { androidx.compose.runtime.derivedStateOf { grid.firstVisibleItemIndex > 0 || grid.firstVisibleItemScrollOffset > 24 } }
+    Box(Modifier.fillMaxSize()) {
     LazyVerticalGrid(
         columns = if (compact) GridCells.Fixed(1) else GridCells.Adaptive(330.dp),
-        contentPadding = PaddingValues(start = pad, end = pad, top = 16.dp, bottom = 48.dp),
+        state = grid,
+        contentPadding = PaddingValues(start = pad, end = pad, top = 16.dp + topInset(), bottom = 48.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
         modifier = Modifier.fillMaxSize().sportsStadium(),
     ) {
@@ -357,6 +364,8 @@ fun SportsScreen(state: AppState) {
                 }
             }
         }
+    }
+    StatusScrim(scrolled, Modifier.align(Alignment.TopCenter))
     }
 }
 
