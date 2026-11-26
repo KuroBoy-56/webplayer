@@ -5,6 +5,25 @@ import Foundation
 
 extension L10n {
     static let en: [String: String] = [
+        // equipos favoritos y avisos de partidos (iOS 1.1.4)
+        "Equipos favoritos": "Favorite teams",
+        "+ Agregar equipo": "+ Add team",
+        "Elige el deporte": "Choose the sport",
+        "Elige la liga": "Choose the league",
+        "Elige el equipo": "Choose the team",
+        "No hay equipos en esta liga.": "No teams in this league.",
+        "No hay partidos próximos para elegir equipos.": "No upcoming matches to choose teams from.",
+        "No se pudo guardar. Inténtalo de nuevo.": "Could not save. Try again.",
+        "Abrir Ajustes": "Open Settings",
+        "Permitir notificaciones": "Allow notifications",
+        "Toca para quitarlo": "Tap to remove it",
+        "El partido empieza en 30 minutos": "The match starts in 30 minutes",
+        "Está por comenzar: faltan 10 minutos": "About to start: 10 minutes to go",
+        "¡Ya comenzó! El partido está en vivo": "It has started! The match is live",
+        "Avisos 30 y 10 minutos antes y al empezar": "Alerts 30 and 10 minutes before and at kick-off",
+        "Las notificaciones están apagadas para la app. Actívalas en Ajustes del iPhone.": "Notifications are turned off for the app. Turn them on in the iPhone Settings.",
+        "Para avisarte, el iPhone tiene que permitir las notificaciones de la app.": "To alert you, the iPhone has to allow the app's notifications.",
+        "Te avisamos 30 minutos antes, 10 minutos antes y al empezar cada partido de tus equipos, aunque la app esté cerrada.": "We alert you 30 minutes before, 10 minutes before and at the start of every match of your teams, even with the app closed.",
         // «Actualizar catálogo» como Roku (iOS 1.0.12)
         "Actualizar catálogo": "Refresh catalog",
         "Actualizando el catálogo…": "Refreshing the catalog…",
@@ -392,6 +411,25 @@ extension L10n {
     ]
 
     static let pt: [String: String] = [
+        // equipos favoritos y avisos de partidos (iOS 1.1.4)
+        "Equipos favoritos": "Times favoritos",
+        "+ Agregar equipo": "+ Adicionar time",
+        "Elige el deporte": "Escolha o esporte",
+        "Elige la liga": "Escolha a liga",
+        "Elige el equipo": "Escolha o time",
+        "No hay equipos en esta liga.": "Não há times nesta liga.",
+        "No hay partidos próximos para elegir equipos.": "Não há próximas partidas para escolher times.",
+        "No se pudo guardar. Inténtalo de nuevo.": "Não foi possível salvar. Tente de novo.",
+        "Abrir Ajustes": "Abrir Ajustes",
+        "Permitir notificaciones": "Permitir notificações",
+        "Toca para quitarlo": "Toque para removê-lo",
+        "El partido empieza en 30 minutos": "A partida começa em 30 minutos",
+        "Está por comenzar: faltan 10 minutos": "Está para começar: faltam 10 minutos",
+        "¡Ya comenzó! El partido está en vivo": "Começou! A partida está ao vivo",
+        "Avisos 30 y 10 minutos antes y al empezar": "Avisos 30 e 10 minutos antes e no início",
+        "Las notificaciones están apagadas para la app. Actívalas en Ajustes del iPhone.": "As notificações estão desativadas para o app. Ative-as nos Ajustes do iPhone.",
+        "Para avisarte, el iPhone tiene que permitir las notificaciones de la app.": "Para avisar você, o iPhone precisa permitir as notificações do app.",
+        "Te avisamos 30 minutos antes, 10 minutos antes y al empezar cada partido de tus equipos, aunque la app esté cerrada.": "Avisamos 30 minutos antes, 10 minutos antes e no início de cada partida dos seus times, mesmo com o app fechado.",
         // «Actualizar catálogo» como Roku (iOS 1.0.12)
         "Actualizar catálogo": "Atualizar catálogo",
         "Actualizando el catálogo…": "Atualizando o catálogo…",
@@ -747,6 +785,25 @@ extension L10n {
     ]
 
     static let fr: [String: String] = [
+        // equipos favoritos y avisos de partidos (iOS 1.1.4)
+        "Equipos favoritos": "Équipes favorites",
+        "+ Agregar equipo": "+ Ajouter une équipe",
+        "Elige el deporte": "Choisissez le sport",
+        "Elige la liga": "Choisissez la ligue",
+        "Elige el equipo": "Choisissez l'équipe",
+        "No hay equipos en esta liga.": "Aucune équipe dans cette ligue.",
+        "No hay partidos próximos para elegir equipos.": "Aucun match à venir pour choisir des équipes.",
+        "No se pudo guardar. Inténtalo de nuevo.": "Impossible d'enregistrer. Réessayez.",
+        "Abrir Ajustes": "Ouvrir Réglages",
+        "Permitir notificaciones": "Autoriser les notifications",
+        "Toca para quitarlo": "Touchez pour la retirer",
+        "El partido empieza en 30 minutos": "Le match commence dans 30 minutes",
+        "Está por comenzar: faltan 10 minutos": "Ça va commencer : plus que 10 minutes",
+        "¡Ya comenzó! El partido está en vivo": "C'est parti ! Le match est en direct",
+        "Avisos 30 y 10 minutos antes y al empezar": "Alertes 30 et 10 minutes avant et au coup d'envoi",
+        "Las notificaciones están apagadas para la app. Actívalas en Ajustes del iPhone.": "Les notifications sont désactivées pour l'app. Activez-les dans les Réglages de l'iPhone.",
+        "Para avisarte, el iPhone tiene que permitir las notificaciones de la app.": "Pour vous prévenir, l'iPhone doit autoriser les notifications de l'app.",
+        "Te avisamos 30 minutos antes, 10 minutos antes y al empezar cada partido de tus equipos, aunque la app esté cerrada.": "Nous vous prévenons 30 minutes avant, 10 minutes avant et au début de chaque match de vos équipes, même avec l'app fermée.",
         // «Actualizar catálogo» como Roku (iOS 1.0.12)
         "Actualizar catálogo": "Actualiser le catalogue",
         "Actualizando el catálogo…": "Actualisation du catalogue…",

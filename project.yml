@@ -8,8 +8,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.1.3"
-    CURRENT_PROJECT_VERSION: "18"
+    MARKETING_VERSION: "1.1.4"
+    CURRENT_PROJECT_VERSION: "19"
     ENABLE_BITCODE: NO
 targets:
   LatMpx:
@@ -44,7 +44,11 @@ targets:
         UIRequiresFullScreen: false
         UIStatusBarStyle: UIStatusBarStyleLightContent
         UIViewControllerBasedStatusBarAppearance: true
-        UIBackgroundModes: [audio]
+        # audio: el reproductor; fetch: los avisos de partidos de los equipos favoritos se reprograman con la app cerrada
+        # (MatchAlerts). Las notificaciones locales no llevan clave en el Info.plist: la app pide el permiso en pantalla
+        # (Cuenta › Equipos favoritos › Permitir notificaciones) y no necesitan servidor de push ni aps-environment.
+        UIBackgroundModes: [audio, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [com.latmpx.player.matchrefresh]
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

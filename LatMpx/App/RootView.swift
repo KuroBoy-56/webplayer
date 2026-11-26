@@ -68,6 +68,7 @@ struct RootView: View {
             ErrorReport.prepareCrash()
             guard let s = state.session else { return }
             Task { await Cloud.shared.load() }
+            Task { await MatchAlerts.shared.refresh() }
             Task { let a = await Alerts.forLaunch(s); await MainActor.run { alert = a } }
             await state.loadCatalog(s)
             // con la app abierta el panel se vuelve a consultar cada 10 min (poll: no cuenta como otra apertura):
@@ -101,7 +102,7 @@ struct RootView: View {
 
     private func clearAll() {
         NativePlayer.shared.close()
-        Store.logout(); Alerts.reset(); alert = nil; Xtream.clearCache(); Cloud.shared.clear()
+        Store.logout(); Alerts.reset(); alert = nil; Xtream.clearCache(); Cloud.shared.clear(); MatchAlerts.shared.clear()
         Task { await PanelEpg.shared.clear() }
         state.reset(); state.session = nil
     }
@@ -172,7 +173,7 @@ struct RootView: View {
     private func resumed() {
         guard booted else { return }
         state.refresh += 1
-        if state.session != nil { Task { await Cloud.shared.load() } }
+        if state.session != nil { Task { await Cloud.shared.load() }; Task { await MatchAlerts.shared.refresh() } }
         if Tenant.active && (tenant.due() || tenant.brand?.expired() == true) { guardTenant() }
         recheck(after: 15 * 60)
     }

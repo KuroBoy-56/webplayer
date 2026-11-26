@@ -4,6 +4,13 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.1.4 (avisos de partidos como Android)
+
+- **Cuenta › Equipos favoritos** (`LatMpx/UI/TeamsSheet.swift`): la lista (tocar uno lo quita) y «+ Agregar equipo» (deporte → liga o selecciones → equipo, de los próximos 21 días del panel, `api/sports_fixtures.php`). Se guardan en la nube del panel (`api/alerts.php` `set_teams`, la misma de Android, la TV y la computadora: los partidos marcados allá también avisan aquí). Aparece solo si el panel lo habilita para la línea: perfiles encendidos para la app «iPhone / iPad» y nunca en una demo.
+- **Avisos del iPhone** (`LatMpx/Data/MatchAlerts.swift`): 30 minutos antes, 10 minutos antes y al empezar cada partido de esos equipos, con **notificaciones locales** (llegan con la app cerrada, sin servidor de push ni cuenta de desarrollador de pago). Con la app abierta también salen arriba. iOS guarda como mucho 64 avisos: se programan los 60 más cercanos.
+- **Permiso:** iOS no tiene una clave de permiso de notificaciones en el Info.plist; la app lo pide con el cuadro del sistema al agregar el primer equipo o con «Permitir notificaciones». Si se negó, el botón lleva a Ajustes del iPhone.
+- **Con la app cerrada:** `project.yml` agrega `UIBackgroundModes: fetch` y `BGTaskSchedulerPermittedIdentifiers` (`com.latmpx.player.matchrefresh`): cuando iOS lo permite (más o menos cada hora) baja la nube y vuelve a programar. También se reprograma al abrir la app y al volver a ella.
+
 ## Novedades de la 1.1.1 (como Android 1.6.4)
 
 - **TV en vivo con el iPad girado:** reproductor, canal elegido y guía de programas (hasta 10) a la izquierda; categorías, buscador y canales a la derecha (`LiveView`, `sideGuide`). En vertical y en el iPhone, igual que antes.

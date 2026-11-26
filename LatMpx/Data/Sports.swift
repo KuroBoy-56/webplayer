@@ -15,6 +15,9 @@ struct SportEvent: Hashable, Identifiable {
     var leagueId: String = ""
     /** sin "tv": donde suelen ir los partidos de local de su equipo (o de su liga) en los últimos 60 días (panel "tvh") */
     var tvh: [TvChannel] = []
+    /** nombre del local y del visitante en el idioma de la app (api/sports_fixtures.php "hn" / "an"; vacío = el de TheSportsDB) */
+    var homeLabel = ""
+    var awayLabel = ""
 }
 
 struct SportInfo: Hashable { let label: String; let icon: String; let minutes: Int }
@@ -134,7 +137,8 @@ enum Sports {
         return SportEvent(id: e.s("id"), sport: e.s("sp"), league: e.s("lg"), leagueBadge: e.s("lb"), title: e.s("ev"), home: e.s("h"), away: e.s("a"),
                           homeBadge: e.s("hb"), awayBadge: e.s("ab"), homeScore: e.s("hs"), awayScore: e.s("as"), start: st, venue: e.s("v"),
                           status: e.s("st"), postponed: e.b("pp"), tv: tv, leagueId: e.s("l"),
-                          tvh: e.objs("tvh").compactMap { t -> TvChannel? in t.s("n").isEmpty ? nil : TvChannel(name: t.s("n"), country: t.s("c"), usual: true) })
+                          tvh: e.objs("tvh").compactMap { t -> TvChannel? in t.s("n").isEmpty ? nil : TvChannel(name: t.s("n"), country: t.s("c"), usual: true) },
+                          homeLabel: e.s("hn"), awayLabel: e.s("an"))
     }
 
     /** "2026-10-03T15:00:00Z" / "+00:00" / sin segundos / sin zona -> segundos (UTC si no trae zona) */

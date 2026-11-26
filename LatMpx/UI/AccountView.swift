@@ -12,6 +12,9 @@ struct AccountView: View {
     @State private var confirmLogout = false
     @State private var langOpen = false
     @ObservedObject private var lang = L10n.shared
+    /** equipos favoritos y avisos de partidos (solo si el panel los habilita para esta línea) */
+    @ObservedObject private var matchAlerts = MatchAlerts.shared
+    @State private var teamsOpen = false
 
     var body: some View {
         GeometryReader { g in
@@ -64,6 +67,12 @@ struct AccountView: View {
                             state.push(.downloads)
                         }
                         Divider().background(Color(hex: 0x333333))
+                        if matchAlerts.enabled {
+                            setting("bell.badge", tr("Equipos favoritos"), matchAlerts.teams.isEmpty ? tr("Avisos 30 y 10 minutos antes y al empezar") : matchAlerts.teams.map { $0.name }.joined(separator: ", ")) {
+                                teamsOpen = true
+                            }
+                            Divider().background(Color(hex: 0x333333))
+                        }
                         // idioma de la app: automático (el del equipo) o uno fijo; se aplica al momento
                         setting("globe", tr("Idioma de la app"), L10n.label(lang.choice)) { langOpen = true }
                         Divider().background(Color(hex: 0x333333))
@@ -105,6 +114,8 @@ struct AccountView: View {
         .background(Theme.bg.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $pinOpen) { ParentalSheet().environmentObject(state) }
+        .sheet(isPresented: $teamsOpen) { TeamsSheet() }
+        .task { _ = await matchAlerts.sync() }
         .confirmationDialog(tr("¿Cerrar sesión?"), isPresented: $confirmLogout, titleVisibility: .visible) {
             Button(tr("Cerrar sesión"), role: .destructive, action: onLogout)
             Button(tr("Cancelar"), role: .cancel) {}

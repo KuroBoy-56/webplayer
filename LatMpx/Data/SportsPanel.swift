@@ -14,7 +14,7 @@ struct League: Hashable, Identifiable {
     let region: String, season: String, women: Bool, groups: [StandingGroup]
 }
 
-struct FxLeague: Hashable { let name: String, badge: String, country: String, region: String, women: Bool }
+struct FxLeague: Hashable { let name: String, badge: String, country: String, region: String, women: Bool; var sport = "" }
 
 /** partidos de los próximos 21 días para Equipos y Selecciones */
 struct Fixtures { let events: [SportEvent]; let leagues: [String: FxLeague] }
@@ -150,7 +150,7 @@ enum SportsPanel {
     private static func parseFx(_ j: JObj) -> Fixtures {
         var lg = [String: FxLeague]()
         for (k, v) in j.o("leagues") ?? [:] {
-            if let x = v as? JObj { lg[k] = FxLeague(name: x.s("n"), badge: x.s("b"), country: x.s("c"), region: x.s("rg"), women: x.i("w") == 1) }
+            if let x = v as? JObj { lg[k] = FxLeague(name: x.s("n"), badge: x.s("b"), country: x.s("c"), region: x.s("rg"), women: x.i("w") == 1, sport: x.s("sp")) }
         }
         return Fixtures(events: j.objs("events").compactMap(Sports.event).sorted { $0.start < $1.start }, leagues: lg)
     }
