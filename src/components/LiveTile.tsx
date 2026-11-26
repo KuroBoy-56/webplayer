@@ -81,14 +81,16 @@ export const GoSportsTile = memo(function GoSportsTile({ onPress, onFocus }: { o
   );
 });
 
-/** el fondo grande de la portada con el foco en un partido: la imagen del evento o la cancha con los dos escudos */
+/**
+ * el fondo grande de la portada con el foco en un partido: la imagen del evento (TheSportsDB) o el estadio sin personas
+ * con los dos escudos grandes (nunca en negro ni con el último póster de una película)
+ */
 export function LiveBackdrop({ c }: { c: LiveCard }) {
   if (c.th) return <Image source={{ uri: c.th }} style={StyleSheet.absoluteFill} resizeMode="cover" />;
-  const W = px(1920);
-  const H = px(1080);
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: fieldColor(c.sp) }]}>
-      <FieldLines w={W} h={H} />
+    <View style={StyleSheet.absoluteFill}>
+      <Image source={STADIUM} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
       <View style={s.bigTeams}>
         <Badge uri={c.hb} name={c.h} size={px(300)} />
         <Text style={s.bigVs}>VS</Text>
