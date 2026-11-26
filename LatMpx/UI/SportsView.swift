@@ -421,7 +421,9 @@ struct SportCard: View {
             if !event.home.isEmpty && !event.away.isEmpty {
                 HStack {
                     team(event.home, event.homeBadge)
-                    Text(hasScore ? "\(event.homeScore) - \(event.awayScore)" : "VS").font(.system(size: hasScore ? 22 : 14, weight: .heavy)).foregroundColor(hasScore ? .white : Theme.muted).frame(width: 70)
+                    // el marcador siempre en una línea entre los dos equipos («10 - 12» ya no se parte en dos renglones)
+                    Text(hasScore ? "\(event.homeScore) - \(event.awayScore)" : "VS").font(.system(size: hasScore ? 22 : 14, weight: .heavy)).foregroundColor(hasScore ? .white : Theme.muted)
+                        .lineLimit(1).fixedSize().frame(minWidth: 70)
                     team(event.away, event.awayBadge)
                 }
             } else {
