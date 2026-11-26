@@ -427,7 +427,8 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
             // el perfil infantil nunca tiene Deportes
             Tab.SPORTS -> if (Tenant.sportsEnabled && !Profiles.kids) SportsScreen(state) else HomeScreen(state)
             Tab.MYLIST -> MyListScreen(state)
-            Tab.SEARCH -> SearchScreen(state)
+            // TV con perfiles: la lupa abre Explorar (como el web player); si no, Buscar de siempre
+            Tab.SEARCH -> if (tv && com.latmpx.player.data.Profiles.current != null) com.latmpx.player.ui.screens.TvExploreScreen(state) else SearchScreen(state)
             Tab.ACCOUNT -> AccountScreen(state, onLogout, onChangeDistributor)
         }
     }

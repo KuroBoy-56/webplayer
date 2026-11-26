@@ -424,6 +424,7 @@
     <string name="sp_on_tv">À la TV :</string>
     <string name="sp_in_list">dans votre liste : %1$s</string>
     <string name="sp_not_in_list">pas dans votre liste : l’événement sera recherché</string>
+    <string name="sp_usual">le diffuse souvent</string>
     <string name="sp_in_guide">dans le guide</string>
     <string name="sp_by_teams">par équipes</string>
     <string name="sp_search_x">Chercher des chaînes : « %1$s »</string>
