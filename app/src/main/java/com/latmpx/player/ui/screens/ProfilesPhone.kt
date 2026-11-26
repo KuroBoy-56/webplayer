@@ -64,12 +64,14 @@ import com.latmpx.player.R
 import com.latmpx.player.data.Profiles
 import com.latmpx.player.ui.components.FocusBox
 
-// colores de la parte de abajo, como la app de Netflix para celular: azul noche y el panel curvo azul pizarra
-private val PfNavy = Color(0xFF1B2232)
-private val PfArcTop = Color(0xFF2B3546)
-private val PfArcBottom = Color(0xFF4A5873)
+// colores de la parte de abajo, como la app de Netflix para celular (azul noche y el panel curvo azul pizarra): los del distribuidor o, con Omitir, los que el dueño guardó en el panel (Tenant.profileColors);
+// sin colores propios, el azul de siempre
+private val pfPal: com.latmpx.player.ui.theme.BrandPalette? get() = com.latmpx.player.data.Tenant.profileColors?.let { com.latmpx.player.ui.theme.paletteOf(it) }
+private val PfNavy: Color get() = pfPal?.let { androidx.compose.ui.graphics.lerp(it.bg, it.accent, 0.12f) } ?: Color(0xFF1B2232)
+private val PfArcTop: Color get() = pfPal?.let { androidx.compose.ui.graphics.lerp(it.surface, it.accent, 0.20f) } ?: Color(0xFF2B3546)
+private val PfArcBottom: Color get() = pfPal?.let { androidx.compose.ui.graphics.lerp(it.surface, it.accent, 0.35f) } ?: Color(0xFF4A5873)
 private val PfTile = Color(0x2EFFFFFF)
-private val PfSoft = Color(0xFFB8BEC9)
+private val PfSoft: Color get() = pfPal?.let { androidx.compose.ui.graphics.lerp(it.bg, it.text, 0.78f) } ?: Color(0xFFB8BEC9)
 private val TextShade = TextStyle(shadow = Shadow(Color(0x99000000), Offset(0f, 2f), 8f))
 
 /**

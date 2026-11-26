@@ -29,4 +29,6 @@
     <string name="ma_mins_ago">il y a %1$d min</string>
     <string name="ma_hours_ago">il y a %1$d h</string>
     <string name="ma_now">maintenant</string>
+    <string name="ma_allow">Autoriser les notifications</string>
+    <string name="ma_allow_desc">Les notifications de l’app sont désactivées sur le téléphone : activez-les pour recevoir les alertes de vos matchs</string>
 </resources>

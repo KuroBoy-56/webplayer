@@ -14,6 +14,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.platform.LocalConfiguration
+import com.latmpx.player.ui.components.LocalIsTablet
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -127,12 +133,19 @@ fun DetailScreen(state: AppState, media: Item) {
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize().background(NfBg)) {
+    // fondo Full HD del panel (si es de TMDB) y, si no carga, el original; sin fondo, la carátula
+    val bd = tmdb?.backdrop?.ifEmpty { null } ?: det?.backdrop?.ifEmpty { null } ?: media.backdrop
+    // tableta girada: la ficha va al centro como la app de Netflix y a los lados se ve el fondo oscurecido
+    val conf = LocalConfiguration.current
+    val wide = !tv && LocalIsTablet.current && conf.screenWidthDp > conf.screenHeightDp
+    Box(Modifier.fillMaxSize().background(NfBg)) {
+    if (wide && bd.isNotEmpty()) {
+        com.latmpx.player.ui.components.ChainImage(remember(bd) { com.latmpx.player.data.PanelImg.backdropSources(bd) }, Modifier.fillMaxSize().blur(28.dp).alpha(0.35f))
+        Box(Modifier.fillMaxSize().background(Color(0x66000000)))
+    }
+    LazyColumn((if (wide) Modifier.fillMaxHeight().widthIn(max = 680.dp).align(Alignment.TopCenter) else Modifier.fillMaxSize()).background(NfBg)) {
         item {
-            Box(Modifier.fillMaxWidth().then(if (tv) Modifier.height(300.dp) else Modifier.aspectRatio(16f / 10f))) {
-                // fondo Full HD del panel (si es de TMDB) y, si no carga, el original; sin fondo, la carátula
-                val bd = tmdb?.backdrop?.ifEmpty { null } ?: det?.backdrop?.ifEmpty { null } ?: media.backdrop
+            Box(Modifier.fillMaxWidth().then(if (tv) Modifier.height(300.dp) else Modifier.aspectRatio(if (wide) 2f else 16f / 10f))) {
                 if (bd.isNotEmpty()) com.latmpx.player.ui.components.ChainImage(remember(bd) { com.latmpx.player.data.PanelImg.backdropSources(bd) }, Modifier.fillMaxSize())
                 else com.latmpx.player.ui.components.ItemPoster(media, Modifier.fillMaxSize())
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x33000000), Color(0x99141414), NfBg))))

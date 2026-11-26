@@ -1,5 +1,7 @@
 package com.latmpx.player.ui.screens
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalConfiguration
+import com.latmpx.player.ui.components.LocalIsTablet
 import com.latmpx.player.tr
 
 import android.app.Activity
@@ -19,6 +21,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -269,7 +272,8 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
     }
     val nowProg = guide?.firstOrNull { it.start <= now && it.end > now }
     // la guía va dentro de la lista: el programa de ahora y los 2 siguientes (como la web en el teléfono)
-    val progs = if (sel == null) emptyList() else guide.orEmpty().filter { it.end > now }.take(3)
+    val side = LocalIsTablet.current && LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
+    val progs = if (sel == null) emptyList() else guide.orEmpty().filter { it.end > now }.take(if (side) 10 else 3)
     val guideItems = if (progs.isEmpty()) 0 else progs.size + 1
     val nowKey = nowProg?.takeIf { p -> progs.any { it.start == p.start } }?.let { "g${it.start}" }
     val listState = rememberLazyListState()
@@ -289,104 +293,124 @@ fun PhoneLive(state: AppState, all: List<Item>, cats: List<Pair<String, String>>
     val topBefore = atTop
     LaunchedEffect(guideItems > 0) { if (guideItems > 0 && topBefore) listState.scrollToItem(0) }
 
-    Column(Modifier.fillMaxSize().background(if (full) Color.Black else NfBg)) {
+    // lista de canales (con la guía dentro en el celular; en la tableta girada la guía va a la izquierda)
+    val channelList: @Composable (Modifier, Boolean) -> Unit = { mod, withGuide ->
+        LazyColumn(mod, state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
+            if (withGuide && guideItems > 0) {
+                item(key = "gtitle") {
+                    Text(stringResource(R.string.program_guide), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth().background(TvCol).padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 6.dp))
+                }
+                items(progs, key = { "g${it.start}" }) { p -> Box(Modifier.background(TvCol)) { ProgramRow(p, now) } }
+            }
+            // la categoría queda fija arriba de la lista al bajar por los canales
+            stickyHeader(key = "cat") {
+                val catName = cats.firstOrNull { it.first == cat }?.second ?: stringResource(R.string.categories)
+                Box(Modifier.fillMaxWidth().background(NfBg).padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 8.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(Color.Black)
+                            .border(1.dp, Color(0xFF555555), RoundedCornerShape(4.dp))
+                            .clickable { catOpen = true }.padding(start = 12.dp, end = 6.dp, top = 9.dp, bottom = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(catName, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Icon(Icons.Filled.ArrowDropDown, null, tint = Color.White)
+                    }
+                    DropdownMenu(
+                        expanded = catOpen, onDismissRequest = { catOpen = false },
+                        modifier = Modifier.heightIn(max = 420.dp).background(TvCol),
+                    ) {
+                        cats.forEach { (k, n) ->
+                            DropdownMenuItem(
+                                text = { Text(n, color = if (k == cat) Color.White else Color(0xFFCCCCCC), fontWeight = if (k == cat) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                onClick = {
+                                    // la categoría nueva empieza en su primer canal; si la guía ya no se veía, sigue fuera de la vista
+                                    val gi = if (withGuide) guideItems else 0
+                                    val away = gi > 0 && listState.firstVisibleItemIndex >= gi
+                                    cat = k; catOpen = false
+                                    scope.launch { listState.scrollToItem(if (away) gi else 0) }
+                                },
+                                modifier = Modifier.background(if (k == cat) NfRed else Color.Transparent),
+                            )
+                        }
+                    }
+                }
+            }
+            item(key = "head") {
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
+                    Text(stringResource(R.string.channels), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    if (shown.isNotEmpty()) Text("  (${shown.size})", color = TvEmpty, fontSize = 12.sp)
+                }
+            }
+            item(key = "filter") { FilterField(query) { query = it } }
+            if (shown.isEmpty()) item(key = "empty") {
+                Text(
+                    stringResource(if (cat == FAVS && query.isBlank()) R.string.no_fav_channels else R.string.no_channels_section),
+                    color = TvEmpty, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(16.dp),
+                )
+            }
+            itemsIndexed(shown, key = { _, c -> c.id }) { i, ch ->
+                LiveRow(ch, i, shown, active = ch.id == selId, fav = Cloud.isFav(ch.key), now = now, onClick = { select(ch) }, onLong = { toggleFav(ch) })
+            }
+        }
+    }
+
+    // tableta girada: reproductor, canal elegido y guía a la izquierda; categorías y canales a la derecha (como la web)
+    BoxWithConstraints(Modifier.fillMaxSize().background(if (full) Color.Black else NfBg)) {
+        val leftW = if (side) maxWidth * 0.6f else maxWidth
+        val playerH = leftW * 9f / 16f
         /* ---------- reproductor (miniatura 16:9 o pantalla completa, mismo reproductor) ---------- */
         PhonePlayerBox(
             preview = preview, ch = sel, active = active, full = full, nowProg = nowProg, now = now,
-            modifier = if (full) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+            modifier = if (full) Modifier.fillMaxSize() else Modifier.width(leftW).height(playerH),
             onStart = { active = true }, onRetry = { preview.release(); resumeTick++ },
             onFull = openFull, onExitFull = exitFull,
             onPip = if (pipOk && !Store.externalPlayer) openPip else null,
         )
         if (!full) {
-            /* ---------- canal elegido ---------- */
-            if (sel != null) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ChannelLogo(sel.poster, Modifier.size(64.dp, 42.dp), RoundedCornerShape(4.dp))
-                    Spacer(Modifier.width(12.dp))
-                    // con la guía fuera de la vista el nombre sube un poco y debajo aparece lo de ahora (nada cambia de alto)
-                    val t by animateFloatAsState(if (compact && nowProg != null) 1f else 0f, tween(300), label = "now")
-                    Box(Modifier.weight(1f).height(42.dp)) {
-                        Text(sel.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.align(Alignment.CenterStart).offset(y = (-9 * t).dp))
-                        val np = nowProg
-                        if (np != null && t > 0f) {
-                            Row(Modifier.align(Alignment.CenterStart).offset(y = (13 - 4 * t).dp).alpha(t)) {
-                                Text("${hm(np.start)} - ${hm(np.end)}  ", color = NfRed, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Text(np.title, color = Color(0xFFCCCCCC), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.padding(top = playerH).width(leftW).fillMaxHeight()) {
+                /* ---------- canal elegido ---------- */
+                if (sel != null) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        ChannelLogo(sel.poster, Modifier.size(64.dp, 42.dp), RoundedCornerShape(4.dp))
+                        Spacer(Modifier.width(12.dp))
+                        // con la guía fuera de la vista el nombre sube un poco y debajo aparece lo de ahora (nada cambia de alto)
+                        val t by animateFloatAsState(if (compact && !side && nowProg != null) 1f else 0f, tween(300), label = "now")
+                        Box(Modifier.weight(1f).height(42.dp)) {
+                            Text(sel.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.align(Alignment.CenterStart).offset(y = (-9 * t).dp))
+                            val np = nowProg
+                            if (np != null && t > 0f) {
+                                Row(Modifier.align(Alignment.CenterStart).offset(y = (13 - 4 * t).dp).alpha(t)) {
+                                    Text("${hm(np.start)} - ${hm(np.end)}  ", color = NfRed, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Text(np.title, color = Color(0xFFCCCCCC), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
+                        Spacer(Modifier.width(8.dp))
+                        val on = remember(sel.key, favTick, Cloud.rev) { Cloud.isFav(sel.key) }
+                        Box(
+                            Modifier.size(40.dp).clip(CircleShape)
+                                .background(if (on) Color.White else Color(0x992A2A2A))
+                                .border(2.dp, if (on) Color.White else Color(0x99FFFFFF), CircleShape)
+                                .clickable { toggleFav(sel) },
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Filled.Star, stringResource(R.string.favorite), tint = if (on) Color.Black else Color.White, modifier = Modifier.size(22.dp)) }
                     }
-                    Spacer(Modifier.width(8.dp))
-                    val on = remember(sel.key, favTick, Cloud.rev) { Cloud.isFav(sel.key) }
-                    Box(
-                        Modifier.size(40.dp).clip(CircleShape)
-                            .background(if (on) Color.White else Color(0x992A2A2A))
-                            .border(2.dp, if (on) Color.White else Color(0x99FFFFFF), CircleShape)
-                            .clickable { toggleFav(sel) },
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.Star, stringResource(R.string.favorite), tint = if (on) Color.Black else Color.White, modifier = Modifier.size(22.dp)) }
                 }
-            }
-
-            /* ---------- guía (solo si el canal la tiene), categorías, buscador y canales: una sola lista ---------- */
-            LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
-                if (guideItems > 0) {
+                if (!side) channelList(Modifier.weight(1f).fillMaxWidth(), true)
+                else if (sel != null) LazyColumn(Modifier.weight(1f).fillMaxWidth().background(TvCol), contentPadding = PaddingValues(bottom = 16.dp)) {
                     item(key = "gtitle") {
                         Text(stringResource(R.string.program_guide), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.fillMaxWidth().background(TvCol).padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 6.dp))
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 6.dp))
                     }
-                    items(progs, key = { "g${it.start}" }) { p -> Box(Modifier.background(TvCol)) { ProgramRow(p, now) } }
-                }
-                // la categoría queda fija arriba de la lista al bajar por los canales
-                stickyHeader(key = "cat") {
-                    val catName = cats.firstOrNull { it.first == cat }?.second ?: stringResource(R.string.categories)
-                    Box(Modifier.fillMaxWidth().background(NfBg).padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 8.dp)) {
-                        Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(Color.Black)
-                                .border(1.dp, Color(0xFF555555), RoundedCornerShape(4.dp))
-                                .clickable { catOpen = true }.padding(start = 12.dp, end = 6.dp, top = 9.dp, bottom = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(catName, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            Icon(Icons.Filled.ArrowDropDown, null, tint = Color.White)
-                        }
-                        DropdownMenu(
-                            expanded = catOpen, onDismissRequest = { catOpen = false },
-                            modifier = Modifier.heightIn(max = 420.dp).background(TvCol),
-                        ) {
-                            cats.forEach { (k, n) ->
-                                DropdownMenuItem(
-                                    text = { Text(n, color = if (k == cat) Color.White else Color(0xFFCCCCCC), fontWeight = if (k == cat) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    onClick = {
-                                        // la categoría nueva empieza en su primer canal; si la guía ya no se veía, sigue fuera de la vista
-                                        val away = guideItems > 0 && listState.firstVisibleItemIndex >= guideItems
-                                        cat = k; catOpen = false
-                                        scope.launch { listState.scrollToItem(if (away) guideItems else 0) }
-                                    },
-                                    modifier = Modifier.background(if (k == cat) NfRed else Color.Transparent),
-                                )
-                            }
-                        }
+                    if (guide != null && progs.isEmpty()) item(key = "none") {
+                        Text(stringResource(R.string.guide_unavailable), color = TvEmpty, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
                     }
-                }
-                item(key = "head") {
-                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
-                        Text(stringResource(R.string.channels), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        if (shown.isNotEmpty()) Text("  (${shown.size})", color = TvEmpty, fontSize = 12.sp)
-                    }
-                }
-                item(key = "filter") { FilterField(query) { query = it } }
-                if (shown.isEmpty()) item(key = "empty") {
-                    Text(
-                        stringResource(if (cat == FAVS && query.isBlank()) R.string.no_fav_channels else R.string.no_channels_section),
-                        color = TvEmpty, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    )
-                }
-                itemsIndexed(shown, key = { _, c -> c.id }) { i, ch ->
-                    LiveRow(ch, i, shown, active = ch.id == selId, fav = Cloud.isFav(ch.key), now = now, onClick = { select(ch) }, onLong = { toggleFav(ch) })
+                    items(progs, key = { "g${it.start}" }) { p -> ProgramRow(p, now) }
                 }
             }
+            if (side) channelList(Modifier.padding(start = leftW).fillMaxSize(), false)
         }
     }
 }

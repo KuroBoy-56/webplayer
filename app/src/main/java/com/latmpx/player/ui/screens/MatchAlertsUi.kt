@@ -109,6 +109,13 @@ fun SportPrefsSection() {
             }
         }
     }
+    // notificaciones apagadas para la app en el celular: los avisos no llegarían a la barra; se abren sus ajustes
+    val notifOn = remember(rev) { androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled() }
+    if (teams.isNotEmpty() && !notifOn) {
+        SettingsItem(Icons.Filled.Notifications, stringResource(R.string.ma_allow), stringResource(R.string.ma_allow_desc)) {
+            runCatching { ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)) }
+        }
+    }
     if (teams.isNotEmpty() && !MatchAlerts.exactAllowed() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         SettingsItem(Icons.Filled.Alarm, stringResource(R.string.ma_exact), stringResource(R.string.ma_exact_desc)) {
             runCatching { ctx.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + ctx.packageName))) }
