@@ -15,10 +15,20 @@ import java.net.URLEncoder
  * «En vivo ahora» suma los partidos de hoy de esos equipos) y la marca para el aviso («instala la app … en tu celular»).
  */
 object MatchCloud {
+    /** equipo favorito (api/alerts.php: n = nombre, l = nombre en el idioma, b = escudo, lg = liga, sp = deporte) */
+    data class FavTeam(val name: String, val label: String, val badge: String, val league: String, val sport: String)
+    /** partido marcado (api/alerts.php: t = título, s = inicio en ms, h / a = equipos) */
+    data class Marked(val id: String, val title: String, val start: Long, val home: String, val away: String)
+
     /** ids de los partidos con recordatorio (sube al cambiar: el menú del partido se vuelve a dibujar) */
     var marked by mutableStateOf<Set<String>>(emptySet())
         private set
     var teams by mutableStateOf<Set<String>>(emptySet())
+        private set
+    /** los equipos favoritos completos (Cuenta › Equipos favoritos y la campanita) */
+    var teamList by mutableStateOf<List<FavTeam>>(emptyList())
+        private set
+    var markedList by mutableStateOf<List<Marked>>(emptyList())
         private set
     private var brand = ""
     private var at = 0L
@@ -37,7 +47,13 @@ object MatchCloud {
         val ev = j.optJSONObject("events")
         marked = ev?.keys()?.asSequence()?.toSet() ?: emptySet()
         val a = j.optJSONArray("teams")
-        teams = (0 until (a?.length() ?: 0)).mapNotNull { a?.optJSONObject(it)?.optString("n")?.takeIf { n -> n.isNotBlank() } }.toSet()
+        teamList = (0 until (a?.length() ?: 0)).mapNotNull { i ->
+            a?.optJSONObject(i)?.let { o -> o.optString("n").takeIf { it.isNotBlank() }?.let { FavTeam(it, o.optString("l"), o.optString("b"), o.optString("lg"), o.optString("sp")) } }
+        }
+        teams = teamList.map { it.name }.toSet()
+        markedList = ev?.keys()?.asSequence()?.mapNotNull { id ->
+            ev.optJSONObject(id)?.let { o -> Marked(id, o.optString("t"), o.optLong("s"), o.optString("h"), o.optString("a")) }
+        }?.toList() ?: emptyList()
         brand = j.optString("brand")
         at = System.currentTimeMillis()
         true
@@ -51,6 +67,17 @@ object MatchCloud {
             Cloud.call { t -> Net.get(url() + "?token=" + enc(t) + (if (prof.isNotEmpty()) "&profile=" + enc(prof) else "")) }
         }
         apply(r?.json())
+    }
+
+    /** guarda los equipos favoritos en la nube (el celular y la computadora de la misma línea y perfil avisan) */
+    suspend fun setTeams(list: List<FavTeam>): Boolean {
+        if (!on) return false
+        val arr = org.json.JSONArray()
+        list.forEach { t -> arr.put(JSONObject().put("n", t.name).put("l", t.label).put("b", t.badge).put("lg", t.league).put("sp", t.sport)) }
+        val body = JSONObject().put("action", "set_teams").put("teams", arr)
+        Profiles.param().takeIf { it.isNotEmpty() }?.let { body.put("profile", it) }
+        val r = withContext(Dispatchers.IO) { Cloud.call { t -> Net.postJson(url(), JSONObject(body.toString()).put("token", t)) } }
+        return apply(r?.json())
     }
 
     /** marca o quita el recordatorio de un partido; true si quedó guardado en la nube */

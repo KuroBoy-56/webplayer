@@ -128,6 +128,13 @@ fun AccountTv(
                     com.latmpx.player.data.Store.platformCards = plat
                 }
             }
+            // con perfiles: los equipos favoritos se guardan en la nube (avisa el celular; aquí, la campanita)
+            if (com.latmpx.player.data.MatchCloud.on) {
+                var teamsOpen by remember { mutableStateOf(false) }
+                val tl = com.latmpx.player.data.MatchCloud.teamList
+                Setting(stringResource(R.string.tb_teams), if (tl.isEmpty()) stringResource(R.string.tb_teams_none) else tl.joinToString(" · ") { it.label.ifBlank { it.name } }) { teamsOpen = true }
+                if (teamsOpen) TvTeamsDialog { teamsOpen = false }
+            }
             Setting(stringResource(R.string.stream_format), when (streamFormat) { "ts" -> "MPEG-TS (.ts)"; "auto" -> stringResource(R.string.automatic); else -> "HLS (.m3u8)" }, onStreamFormat)
             Setting(stringResource(R.string.player), stringResource(if (extPlayer) R.string.player_external else R.string.player_internal), onPlayer)
             DnsButton(Modifier.fillMaxWidth().padding(bottom = 6.dp)) { f, label -> SettingRow("DNS", label, f) }

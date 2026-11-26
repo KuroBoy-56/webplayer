@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Explorar (botón «Categorías» con perfiles) -->
+<resources>
+    <string name="explore">Explorar</string>
+    <string name="explore_sub">Todo el catálogo de películas y series</string>
+    <string name="ex_all">Todo</string>
+    <string name="ex_sort_recent">Agregados recientemente</string>
+    <string name="ex_sort_rating">Mejor valorados</string>
+    <string name="ex_all_folders">Todas las carpetas</string>
+    <string name="ex_all_genres">Todos los géneros</string>
+    <string name="ex_filter_title">Filtrar por título…</string>
+    <string name="ex_count">%1$d títulos</string>
+    <string name="ex_sub_platform">Todo el contenido de %1$s, filtra por género o tipo</string>
+    <string name="ex_sub_genre">Películas y series de %1$s</string>
+    <string name="ex_all_platforms">Todas las plataformas</string>
+    <string name="ex_none">No hay títulos con estos filtros.</string>
+</resources>
