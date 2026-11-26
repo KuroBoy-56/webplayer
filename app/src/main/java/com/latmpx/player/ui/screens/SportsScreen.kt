@@ -82,6 +82,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.text.KeyboardActions
 import java.util.Calendar
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.text.style.TextAlign
 
 private fun dayKey(t: Long): Int = Calendar.getInstance(Sports.zone).apply { timeInMillis = t }.let { it.get(Calendar.YEAR) * 1000 + it.get(Calendar.DAY_OF_YEAR) }
@@ -272,7 +273,7 @@ fun SportsScreen(state: AppState) {
         Text(stringResource(R.string.sports), color = Color.White, fontSize = if (tv) 40.sp else 28.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(bottom = 8.dp))
     }
     if ((tab == SpTab.TABLES && d.tablesOn) || (tab == SpTab.NATIONS && d.nationsOn) || (tab == SpTab.TEAMS && d.fixturesOn)) {
-        Column(Modifier.fillMaxSize().background(NfBg).padding(start = pad, end = pad, top = 16.dp)) {
+        Column(Modifier.fillMaxSize().sportsStadium().padding(start = pad, end = pad, top = 16.dp)) {
             title()
             SportsTabs(d, tab) { tab = it; sport = "" }
             when (tab) {
@@ -314,7 +315,7 @@ fun SportsScreen(state: AppState) {
         columns = if (compact) GridCells.Fixed(1) else GridCells.Adaptive(330.dp),
         contentPadding = PaddingValues(start = pad, end = pad, top = 16.dp, bottom = 48.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
-        modifier = Modifier.fillMaxSize().background(NfBg),
+        modifier = Modifier.fillMaxSize().sportsStadium(),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(bottom = 6.dp)) {
@@ -449,4 +450,20 @@ internal fun SportTypeDialog(start: String, onDismiss: () -> Unit, onSearch: (St
             com.latmpx.player.ui.components.AppButton(stringResource(R.string.sp_search_go), Modifier, primary = true, icon = Icons.Filled.Search, onClick = { if (q.isNotBlank()) onSearch(q.trim()) })
         }
     }
+}
+
+/**
+ * fondo de Deportes con perfiles (como las TV y la computadora): el estadio sin personas, en vertical en el teléfono y
+ * en horizontal en la tableta acostada, debajo del color de la app para que todo se lea. Sin perfiles, el negro de siempre.
+ */
+@Composable
+private fun Modifier.sportsStadium(): Modifier {
+    if (com.latmpx.player.data.Profiles.current == null || com.latmpx.player.data.Profiles.kids) return background(NfBg)
+    val conf = androidx.compose.ui.platform.LocalConfiguration.current
+    val img = if (conf.screenWidthDp > conf.screenHeightDp) R.drawable.sports_bg_h else R.drawable.sports_bg_v
+    return background(NfBg)
+        .paint(androidx.compose.ui.res.painterResource(img), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+        .background(androidx.compose.ui.graphics.Brush.verticalGradient(
+            0f to NfBg.copy(alpha = 0.55f), 0.35f to NfBg.copy(alpha = 0.78f), 0.7f to NfBg.copy(alpha = 0.92f), 1f to NfBg,
+        ))
 }
