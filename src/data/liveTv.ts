@@ -9,10 +9,11 @@ import { cloud, lineKey } from '../api/panel';
 import { read, write } from '../lib/storage';
 import { json } from '../lib/http';
 import { brandName, features } from '../lib/tenant';
-import { int, nowSec, str } from '../lib/util';
+import { fold, int, nowSec, str } from '../lib/util';
+import { t } from '../lib/i18n';
 import { getState, profilesNeeded } from '../state';
 import { Item } from './catalog';
-import { matchSports } from './sports';
+import { evClock, evDay, matchSports, panelToday } from './sports';
 import { fetchSports, localSports } from './sportsPanel';
 
 export const LIVE_MAX = 20;
@@ -56,8 +57,17 @@ export const setPlatformCards = (on: boolean) => write(platKey(), on ? '1' : '0'
 
 // ---------- recordatorios en la nube ----------
 
-type Cloud = { teams: string[]; events: Record<string, { t: string; s: number }>; brand: string; at: number };
+// equipo favorito (n = nombre, l = en el idioma, b = escudo, lg = liga, sp = deporte), como el celular
+export type FavTeam = { n: string; l: string; b: string; lg: string; sp: string };
+type Cloud = { teams: string[]; teamList: FavTeam[]; events: Record<string, { t: string; s: number; h?: string; a?: string }>; brand: string; at: number };
 let alertsMem: Cloud | null = null;
+
+function parseCloud(j: any): Cloud {
+  const teamList: FavTeam[] = (Array.isArray(j.teams) ? j.teams : [])
+    .filter((x: any) => str(x?.n))
+    .map((x: any) => ({ n: str(x.n), l: str(x.l), b: str(x.b), lg: str(x.lg), sp: str(x.sp) }));
+  return { teams: teamList.map(x => x.n), teamList, events: j.events && typeof j.events === 'object' ? j.events : {}, brand: str(j.brand), at: nowSec() };
+}
 
 /** equipos favoritos y partidos marcados de este perfil (5 min en memoria); null sin perfiles o sin panel */
 export async function cloudAlerts(force = false): Promise<Cloud | null> {
@@ -65,13 +75,58 @@ export async function cloudAlerts(force = false): Promise<Cloud | null> {
   if (!force && alertsMem && nowSec() - alertsMem.at < 300) return alertsMem;
   const j = json<any>(await cloud('alerts.php', 'GET', pid() ? { profile: pid() } : {}));
   if (!j || j.success !== true || j.enabled !== true) return alertsMem;
-  alertsMem = {
-    teams: (Array.isArray(j.teams) ? j.teams : []).map((x: any) => str(x?.n)).filter(Boolean),
-    events: j.events && typeof j.events === 'object' ? j.events : {},
-    brand: str(j.brand),
-    at: nowSec(),
-  };
+  alertsMem = parseCloud(j);
   return alertsMem;
+}
+
+/** guarda los equipos favoritos en la nube (avisa el celular de la misma línea y perfil); true si quedó guardado */
+export async function setTeams(list: FavTeam[]): Promise<boolean> {
+  const body: Record<string, any> = { action: 'set_teams', teams: list };
+  if (pid()) body.profile = pid();
+  const j = json<any>(await cloud('alerts.php', 'POST', body));
+  if (!j || j.success !== true || j.enabled !== true) return false;
+  alertsMem = parseCloud(j);
+  return true;
+}
+
+// ---------- campanita: los partidos de HOY de los equipos favoritos y de los marcados ----------
+
+export type BellMsg = { key: string; text: string; order: number; s: number };
+const FIN = /^(FT|AET|AOT|PEN|Match Finished|Finished|After Over Time|Final)$/i;
+
+/** en vivo primero, después los que faltan (por hora) y al final los terminados; [] sin equipos ni marcados */
+export function bellFrom(fav: Cloud | null, ag: any, liveEvents: any[], now: number = nowSec()): BellMsg[] {
+  if (!fav || (!fav.teams.length && !Object.keys(fav.events).length)) return [];
+  const names = new Set(fav.teams.map(n => fold(n)));
+  const byId = new Map<string, any>();
+  for (const e of ag?.events || []) byId.set(str(e.id), e);
+  // el marcador en vivo es más nuevo que el de la agenda
+  for (const e of liveEvents) {
+    const a = byId.get(str(e.id));
+    byId.set(str(e.id), a ? (e.soon ? a : { ...a, hs: e.hs, as: e.as, st: e.st }) : e);
+  }
+  const today = panelToday(ag, now);
+  const out: BellMsg[] = [];
+  for (const e of byId.values()) {
+    const s = int(e.s);
+    if (s <= 0 || evDay(e, s) !== today) continue;
+    if (!(fav.events[str(e.id)] || names.has(fold(str(e.h))) || names.has(fold(str(e.a))))) continue;
+    const who = str(e.h) && str(e.a) ? (str(e.hn) || str(e.h)) + ' vs ' + (str(e.an) || str(e.a)) : str(e.ev) || str(e.lg);
+    const score = str(e.h) && str(e.a) && str(e.hs) !== '' && str(e.as) !== '' ? (str(e.hn) || str(e.h)) + ' ' + str(e.hs) + '-' + str(e.as) + ' ' + (str(e.an) || str(e.a)) : who;
+    const dur = (int(ag?.sports?.[str(e.sp)]?.minutes) || 120) * 60;
+    if (FIN.test(str(e.st).trim()) || now >= s + dur) out.push({ key: str(e.id), text: t('Final: {x}', { x: score }), order: 2, s });
+    else if (now >= s) out.push({ key: str(e.id), text: t('¡En vivo! {x}', { x: score }), order: 0, s });
+    else out.push({ key: str(e.id), text: t('Hoy {x}: {y}', { x: evClock(e, s), y: who }), order: 1, s });
+  }
+  return out.sort((x, y) => x.order - y.order || (x.order === 2 ? y.s - x.s : x.s - y.s));
+}
+
+export async function bellMessages(): Promise<BellMsg[]> {
+  if (!liveTvOn()) return [];
+  const fav = await cloudAlerts(true);
+  const ag = await agenda();
+  const lj = json<any>(await cloud('sports_live.php', 'GET', { soon: '1', next: '1' }));
+  return bellFrom(fav, ag, lj?.enabled === true && Array.isArray(lj.events) ? lj.events : []);
 }
 
 export const isReminded = (id: string) => !!alertsMem?.events?.[id];
@@ -87,7 +142,7 @@ export async function setReminder(e: any, on: boolean): Promise<boolean> {
   if (pid()) body.profile = pid();
   const j = json<any>(await cloud('alerts.php', 'POST', body));
   if (!j || j.success !== true || j.enabled !== true) return false;
-  alertsMem = { teams: (Array.isArray(j.teams) ? j.teams : []).map((x: any) => str(x?.n)).filter(Boolean), events: j.events || {}, brand: str(j.brand), at: nowSec() };
+  alertsMem = parseCloud(j);
   return true;
 }
 
@@ -129,7 +184,9 @@ export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number 
   const m = matchSports({ events, sports: j.sports || {}, match: j.match } as any).map;
   const cards: LiveCard[] = [];
   for (const e of events) {
-    const best = m[str(e.id)]?.best;
+    // solo un canal exacto: uno habitual (sin agenda ni equipos) no cuenta
+    const mm = m[str(e.id)];
+    const best = mm && !mm.guess ? mm.best : null;
     if (!best) continue;
     cards.push({
       id: str(e.id), sp: str(e.sp), lg: str(e.lg), h: str(e.h) || str(e.ev), a: str(e.a), hb: str(e.hb), ab: str(e.ab),
