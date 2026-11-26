@@ -27,6 +27,8 @@ if (is_array($pf_j) && !wp_prof_needed($pf_s)) {
 }
 $pf_state = is_array($pf_j) ? wp_prof_public($pf_j, $pf_s) : null;
 $pf_dist = wp_tenant_cfg();
+// colores de la pantalla: los del distribuidor o, con Omitir, los del dueño
+$pf_theme = $pf_dist ?: wp_owner_profile_cfg();
 // fondo: lo más destacado de la semana (15 a 20), profiles.js pasa de uno a otro cada 10 s y vuelve al primero
 $pf_bgs = array_map('wp_prof_bg', wp_prof_highlights());
 $pf_bg = $pf_bgs ? $pf_bgs[0] : [];
@@ -44,7 +46,7 @@ $pf_cfg = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="<?php echo e(($pf_pal = wp_tenant_palette($pf_dist)) ? $pf_pal['bg'] : '#000000'); ?>">
+    <meta name="theme-color" content="<?php echo e(($pf_pal = wp_tenant_palette($pf_theme)) ? $pf_pal['bg'] : '#000000'); ?>">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title><?php echo e(t('¿Quién está viendo?')); ?> - <?php echo e($sitename); ?></title>
     <script>/* al entrar no hay transición: nunca se ve un pedazo de la página de antes (como «Top 10 de hoy» del inicio) */
@@ -54,7 +56,7 @@ $pf_cfg = [
     <link rel="stylesheet" href="assets/nf/app.css?v=14">
     <link rel="stylesheet" href="assets/nf/profiles.css?v=14">
     <?php echo wp_tenant_css($pf_dist); ?>
-    <?php echo wp_prof_theme_css($pf_dist); ?>
+    <?php echo wp_prof_theme_css($pf_theme); ?>
     <?php echo wp_i18n_script(); ?>
     <script>window.PF=<?php echo json_encode($pf_cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;</script>
     <script src="assets/nf/profiles.js?v=10" defer></script>

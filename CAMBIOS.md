@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Colores de la pantalla de perfiles — versión 3.0.2 (26 de noviembre, tercera parte)
+- «¿Quién está viendo?» toma los colores del distribuidor (como antes) y ahora, con **Omitir**, los que el dueño eligió en el panel («Colores de las apps»): fondo, sombras, cuadros, foco y el interruptor. Solo cambia esa pantalla; el resto de la web queda igual. Sin colores en el panel, el negro de siempre.
+- El hosting los pide al panel (acción `features` de `login.php`) y los guarda 1 hora en `includes/cache/`; si el panel no responde usa la última copia.
+- Hace falta el panel con `api/login.php` del 26 de noviembre (devuelve `palette` en `features`).
+- Archivos: `includes/profiles.php`, `perfiles.php`, `includes/core.php` (versión).
+
 ## Elegir perfil como Netflix — versión 3.0.1 (26 de noviembre, segunda parte)
 - Al elegir un perfil su avatar va desde su lugar al centro de la pantalla, más grande, con el nombre y el circulito girando debajo; Inicio se pide cuando el avatar ya llegó al centro y la animación queda a la vista mientras el hosting arma la página (en el perfil infantil, el filtro del catálogo). Con PIN, la animación empieza al acertar el PIN. Si el panel contesta un error, la animación se quita y sale el aviso de siempre.
 - Archivos: `assets/nf/profiles.js`, `assets/nf/profiles.css`, `perfiles.php` (versión de los archivos), `includes/core.php` (versión).

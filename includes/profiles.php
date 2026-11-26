@@ -239,7 +239,7 @@ function wp_prof_select($id, $pin = '')
  */
 /**
  * Colores del distribuidor en «¿Quién está viendo?»: fondo, sombras, cuadros, foco y el interruptor con los de su
- * paleta. '' con Omitir o sin colores (el negro y blanco de siempre). Los valores ya vienen validados (#RRGGBB).
+ * paleta; con Omitir, los del dueño (wp_owner_profile_cfg). '' sin colores (el negro y blanco de siempre). Valores ya validados (#RRGGBB).
  */
 function wp_prof_theme_css(array $cfg = null)
 {
@@ -247,6 +247,37 @@ function wp_prof_theme_css(array $cfg = null)
     if ($p === null) return '';
     return '<style id="pf-dist">:root{--pf-bg:' . $p['bg'] . ';--pf-bg-rgb:' . implode(',', wp_hex_rgb($p['bg'])) . ';--pf-card:' . $p['surface']
         . ';--pf-focus:' . $p['focus'] . ';--pf-on:' . $p['accent'] . '}</style>';
+}
+
+/**
+ * Con Omitir: los colores que el dueño eligió en el panel («Colores de las apps»), de la acción features de login.php,
+ * solo para «¿Quién está viendo?» (el resto de la web sigue igual). ['palette' => …] o null sin colores; 1 h en caché
+ * (si el panel no responde, la última copia).
+ */
+function wp_owner_profile_cfg()
+{
+    if (wp_panel_tenant() !== '' || !function_exists('wp_panel_ready') || !wp_panel_ready()) return null;
+    $hit = wp_cache_get('panel|owner_pf_palette', 3600, $stale);
+    if (!is_array($hit)) {
+        $body = wp_panel_login('features', wp_panel_dns_payload(''), 6, $code);
+        if ($body === null || $code !== 200) {
+            if (!is_array($stale)) return null;
+            $hit = $stale;
+        } else {
+            $plain = wp_panel_decrypt($body);
+            $j = json_decode($plain !== null ? $plain : $body, true);
+            $raw = is_array($j) && is_array($j['features']['palette'] ?? null) ? $j['features']['palette'] : null;
+            $pal = is_array($raw) ? [] : null;
+            foreach (['accent', 'bg', 'surface', 'text'] as $k) {
+                $v = strtoupper((string)($raw[$k] ?? ''));
+                if ($pal === null || !preg_match('/^#[0-9A-F]{6}$/', $v)) { $pal = null; break; }
+                $pal[$k] = $v;
+            }
+            $hit = ['p' => $pal];
+            wp_cache_set('panel|owner_pf_palette', $hit);
+        }
+    }
+    return is_array($hit['p'] ?? null) ? ['palette' => $hit['p']] : null;
 }
 
 /** Un título de trending/all/week de TMDB para el fondo de perfiles; null si no sirve (sin fondo, sin nombre). */
