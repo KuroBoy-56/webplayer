@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem } from '../actions';
 import { Chip, EventRow, EvRow, InputModal, MenuModal, MenuOpt, ReadModal } from '../components/SportsUi';
-import { alertsBrand, cloudAlerts, isReminded, liveTvOn, setReminder } from '../data/liveTv';
+import { alertsBrand, cloudAlerts, isReminded, liveTvOn, setReminder, tooLate } from '../data/liveTv';
 import { alpha, C } from '../theme';
 import { Shade } from '../components/Shade';
 
@@ -41,8 +41,8 @@ const isFinal = (st: string) => {
   return s === 'ft' || s === 'aet' || s === 'pen' || s.includes('finish') || s.includes('final') || s === 'ended';
 };
 
-// 0 Hoy, 1 Mañana, 2 Tablas, 3 Equipos, 4 Selecciones
-type Tab = 0 | 1 | 2 | 3 | 4;
+// 0 Hoy, 1 Mañana, 2 Tablas, 3 Equipos, 4 Selecciones, 5 Finalizados (solo con perfiles)
+type Tab = 0 | 1 | 2 | 3 | 4 | 5;
 
 // active: la pantalla vuelve a verse (se cerró el canal); back: Atrás llevó el foco al menú de arriba
 export default function Sports({ active = true, back = 0 }: { active?: boolean; back?: number }) {
@@ -329,6 +329,8 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
   // recordatorio en la nube (solo con perfiles): el celular de la misma línea y perfil avisa 30 y 10 min antes y al empezar
   const remind = async (e: Ev, on: boolean) => {
     setMenu(null);
+    // activar solo con más de 5 minutos para empezar (quitarlo, siempre)
+    if (on && tooLate(e)) return setNote({ title: t('No se puede activar'), text: t('Los recordatorios solo se pueden activar en partidos que empiezan en más de 5 minutos.') });
     const ok = await setReminder(e, on);
     if (!alive.current) return;
     if (!ok) return say(t('No se pudo guardar el recordatorio. Inténtalo otra vez.'));
@@ -396,7 +398,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
 
   // orden: en vivo, después los que vienen por hora y al final los terminados (y aplazados)
   const rows = useMemo(() => {
-    if (!data || tab > 1) return [];
+    if (!data || (tab > 1 && tab !== 5)) return [];
     const now = nowSec();
     const today = panelToday(data, now);
     const liveL: EvRow[] = [];
@@ -407,6 +409,13 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
       const ending = e.s + minutes(str(e.sp)) * 60;
       const live = e.s <= now && now < ending && !isFinal(str(e.st)) && e.pp !== true;
       const dayIdx = e.dy - today;
+      const over = !live && e.pp !== true && (isFinal(str(e.st)) || now >= ending);
+      // con perfiles: Finalizados = los de hoy ya terminados (el último primero; a las 00:00 del panel se vacía) y Hoy sin ellos
+      if (tab === 5) {
+        if (dayIdx === 0 && over) doneL.unshift(rowOf(e, false));
+        continue;
+      }
+      if (stadium && tab === 0 && over) continue;
       if (!((tab === 0 && (dayIdx === 0 || live)) || (tab === 1 && dayIdx === 1))) continue;
       const r = rowOf(e, false);
       if (live) liveL.push(r);
@@ -415,13 +424,14 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
     }
     return [...liveL, ...nextL, ...doneL];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, tab, sport, rowOf]);
+  }, [data, tab, sport, rowOf, stadium]);
 
   if (!data) return err ? <Message text={err} /> : <Spinner label={t('Cargando la agenda deportiva…')} />;
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 0, label: t('Hoy') },
     { id: 1, label: t('Mañana') },
+    ...(stadium ? [{ id: 5 as Tab, label: t('Finalizados') }] : []),
     ...(tablesOn ? [{ id: 2 as Tab, label: t('Tablas') }] : []),
     ...(natOn ? [{ id: 4 as Tab, label: t('Selecciones') }] : []),
     ...(fixOn ? [{ id: 3 as Tab, label: t('Equipos') }] : []),
@@ -481,7 +491,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
               renderItem={({ item: r }) => <EventRow r={r} preferred={r.key === target.key} onFocusKey={focusKey} onPress={() => open(r.e)} />}
             />
           ) : (
-            <Message text={t('No hay partidos para mostrar.')} />
+            <Message text={tab === 5 ? t('Todavía no terminó ningún evento hoy. Aquí aparecen los de hoy cuando terminan (se vacía a las 00:00).') : t('No hay partidos para mostrar.')} />
           )}
         </>
       )}
