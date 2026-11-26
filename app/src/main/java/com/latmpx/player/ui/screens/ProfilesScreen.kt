@@ -121,6 +121,8 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
         Profiles.current?.let { cur -> st.profiles.firstOrNull { it.id == cur.id }?.let { Profiles.choose(it) } }
     }
 
+    // los colores del dueño o del distribuidor para esta pantalla (login.php features), al día cada vez que se abre
+    LaunchedEffect(Unit) { runCatching { com.latmpx.player.data.Panel.demoConfigured(com.latmpx.player.Device.id(ctx)) } }
     // desde Cuenta (o sin datos): la lista otra vez del panel
     LaunchedEffect(Unit) {
         if (state.profilesFromAccount || data == null) {

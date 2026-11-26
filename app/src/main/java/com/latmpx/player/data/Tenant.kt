@@ -55,7 +55,28 @@ object Tenant {
 
     fun init() {
         brand = if (Store.distChoice == "code") parse(Store.distConfig) else null
+        ownerColors = colorsOf(runCatching { JSONObject(Store.profileColors) }.getOrNull())
     }
+
+    /**
+     * Colores que el dueño (con Omitir) o el distribuidor guardó en «Colores de las apps» del panel (login.php features
+     * "palette"): pintan «¿Quién está viendo?». null = no los cambió (los de la app). Se guardan para el próximo inicio.
+     */
+    var ownerColors by mutableStateOf<Colors?>(null)
+        private set
+
+    fun setProfileColors(p: JSONObject?) {
+        ownerColors = colorsOf(p)
+        Store.profileColors = p?.toString() ?: ""
+    }
+
+    private fun colorsOf(p: JSONObject?): Colors? = p?.let {
+        val c = Colors(it.s("accent"), it.s("bg"), it.s("surface"), it.s("text"))
+        if (listOf(c.accent, c.bg, c.surface, c.text).all { h -> HEX.matches(h) }) c else null
+    }
+
+    /** colores de la pantalla de perfiles: los del distribuidor o los del dueño; null = los de la app */
+    val profileColors: Colors? get() = brand?.colors ?: ownerColors
 
     /** número activo ("" con Omitir o sin elegir) */
     val code: String get() = if (Store.distChoice == "code") Store.distCode else ""

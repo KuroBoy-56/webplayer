@@ -99,7 +99,8 @@ fun ProfileBackdrops(items: List<Profiles.Featured>, wide: Boolean, modifier: Mo
     }
 
     Box(modifier) {
-        val bg = NfBg
+        // el degradado del color del distribuidor o, con Omitir, del que guardó el dueño en el panel
+        val bg = com.latmpx.player.data.Tenant.profileColors?.let { com.latmpx.player.ui.theme.paletteOf(it)?.bg } ?: NfBg
         // horizontal: a pantalla completa, como Netflix en el televisor; vertical: lo que le da ProfilesScreen (todo el
         // ancho, arriba)
         Box(Modifier.fillMaxSize()) {
