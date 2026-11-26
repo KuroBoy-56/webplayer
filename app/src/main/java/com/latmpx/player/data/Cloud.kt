@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -42,6 +43,12 @@ object Cloud {
         val scope = "${s.user}@${s.base}"
         if (Store.cloudTokenScope != scope) { Store.cloudToken = null; Store.cloudTokenScope = scope; clear() }
         Store.cloudToken?.takeIf { it.isNotEmpty() }?.let { return it }
+        // en un alcance propio: si quien espera deja de esperar (los perfiles se cortan a los 12 s mientras el panel valida
+        // la línea con el servidor IPTV), el token igual se guarda y el próximo inicio ya no espera esa validación
+        return io.async { fetchToken(s) }.await()
+    }
+
+    private suspend fun fetchToken(s: Session): String? {
         // con distribuidor el token lleva su número y la app (t, a); Omitir = igual que antes
         val r = Net.postJson(api(), Tenant.tag(JSONObject().put("action", "auth").put("user", s.user).put("pass", s.pass).put("dns", s.base)
             .put("platform", Tenant.APP).put("device", Store.deviceIdOrEmpty())))
@@ -51,7 +58,8 @@ object Cloud {
         rememberDemo(j)
         val t = j?.s("token").orEmpty()
         if (t.isEmpty()) return null
-        Store.cloudToken = t
+        // terminó tarde y mientras tanto entró otra cuenta: no se guarda el token de la anterior
+        if (Store.cloudTokenScope == "${s.user}@${s.base}") Store.cloudToken = t
         return t
     }
 
