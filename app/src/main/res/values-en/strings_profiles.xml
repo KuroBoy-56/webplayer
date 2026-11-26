@@ -43,10 +43,4 @@
     <string name="prof_add_short">Add</string>
     <string name="prof_feat_movie">Movie</string>
     <string name="prof_feat_show">Series</string>
-    <string name="prof_status">Profiles</string>
-    <string name="prof_st_on">On</string>
-    <string name="prof_st_off">Off in the panel</string>
-    <string name="prof_st_one">1-connection line</string>
-    <string name="prof_st_no_panel">Panel did not answer</string>
-    <string name="prof_st_demo">Demo line</string>
 </resources>
