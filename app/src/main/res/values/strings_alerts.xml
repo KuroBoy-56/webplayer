@@ -31,4 +31,5 @@
     <string name="ma_now">ahora</string>
     <string name="ma_allow">Permitir notificaciones</string>
     <string name="ma_allow_desc">Las notificaciones de la app están apagadas en el celular: actívalas para que los avisos de tus partidos lleguen a la barra</string>
+    <string name="ma_too_late">Los avisos solo se pueden activar en partidos que empiezan en más de 5 minutos.</string>
 </resources>

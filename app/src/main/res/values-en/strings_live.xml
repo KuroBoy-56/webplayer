@@ -9,4 +9,9 @@
     <string name="sl_plat">Show platform cards</string>
     <string name="sl_plat_on">On: platforms go after «Live now»</string>
     <string name="sl_plat_off">Off</string>
+    <string name="sl_starts">Starts</string>
+    <string name="sl_go_sports">Go to Sports</string>
+    <string name="sl_go_sports_sub">The full schedule for today and tomorrow</string>
+    <string name="sp_tab_finished">Finished</string>
+    <string name="sp_fin_empty">No event has finished today yet. Today’s events show here once they end (cleared at 00:00).</string>
 </resources>

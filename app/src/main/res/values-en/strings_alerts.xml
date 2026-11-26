@@ -31,4 +31,5 @@
     <string name="ma_now">now</string>
     <string name="ma_allow">Allow notifications</string>
     <string name="ma_allow_desc">The app notifications are off on this phone: turn them on so your match alerts reach the notification bar</string>
+    <string name="ma_too_late">Alerts can only be turned on for matches that start in more than 5 minutes.</string>
 </resources>
