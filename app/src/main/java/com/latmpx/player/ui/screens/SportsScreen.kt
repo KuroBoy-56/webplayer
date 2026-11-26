@@ -335,7 +335,7 @@ fun SportsScreen(state: AppState) {
         items(rows, key = { "e" + it.id }) { e ->
             val c = chanOf(e, false)
             SportCardView(e, d.sports[e.sport], now, compact, if (tv && e.id == lastOpen) Modifier.focusRequester(lastFr) else Modifier,
-                chan = c.first, chanFound = c.second, tvLine = tvLine(e), onLong = { alertFor = e }) { open(e) }
+                chan = c.first, chanFound = c.second, tvLine = tvLine(e), onLong = { if (com.latmpx.player.data.Profiles.current != null && !com.latmpx.player.data.Profiles.kids) alertFor = e }) { open(e) }
         }
         if (rows.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {

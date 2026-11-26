@@ -6,4 +6,7 @@
     <string name="sl_live">LIVE</string>
     <string name="sl_pref">Favorite sport</string>
     <string name="sl_all">All sports</string>
+    <string name="sl_plat">Show platform cards</string>
+    <string name="sl_plat_on">On: platforms go after «Live now»</string>
+    <string name="sl_plat_off">Off</string>
 </resources>

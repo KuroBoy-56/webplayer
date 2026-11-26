@@ -6,4 +6,7 @@
     <string name="sl_live">EN VIVO</string>
     <string name="sl_pref">Deporte preferido</string>
     <string name="sl_all">Todos los deportes</string>
+    <string name="sl_plat">Habilitar tarjetas de plataformas</string>
+    <string name="sl_plat_on">Activado: las plataformas van después de «En vivo ahora»</string>
+    <string name="sl_plat_off">Desactivado</string>
 </resources>
