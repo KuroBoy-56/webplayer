@@ -239,6 +239,11 @@ object Store {
 
     /* ---------- perfiles (docs/PERFILES.md del panel) ---------- */
     /** último perfil elegido en este equipo con esta línea: el foco al abrir la pantalla de perfiles */
+    /** Cuenta › Habilitar tarjetas de plataformas: con «En vivo ahora» las plataformas vuelven debajo (por línea y perfil) */
+    var platformCards: Boolean
+        get() = p.getBoolean(tenantKey("plat_cards|" + scope() + "|" + (Profiles.current?.id ?: "")), false)
+        set(v) = p.edit().putBoolean(tenantKey("plat_cards|" + scope() + "|" + (Profiles.current?.id ?: "")), v).apply()
+
     var lastProfile: String
         get() = p.getString(tenantKey("last_prof|" + scope()), "") ?: ""
         set(v) = p.edit().putString(tenantKey("last_prof|" + scope()), v).apply()
