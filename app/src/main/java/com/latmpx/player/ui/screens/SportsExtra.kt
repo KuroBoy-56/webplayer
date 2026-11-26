@@ -349,7 +349,7 @@ fun SportsTeamsView(
             list.isNotEmpty() -> LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 40.dp)) {
                 items(list, key = { "f" + it.id + it.start }) { e ->
                     val c = chanOf?.invoke(e)
-                    SportCardView(e, d.sports[e.sport], now, compact, chan = c?.first, chanFound = c?.second == true, onLong = { alertFor = e }) { onOpen(e) }
+                    SportCardView(e, d.sports[e.sport], now, compact, chan = c?.first, chanFound = c?.second == true, onLong = { if (com.latmpx.player.data.Profiles.current != null && !com.latmpx.player.data.Profiles.kids) alertFor = e }) { onOpen(e) }
                 }
             }
             f == null -> Empty(stringResource(R.string.sp_fx_failed))

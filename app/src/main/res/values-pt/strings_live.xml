@@ -6,4 +6,7 @@
     <string name="sl_live">AO VIVO</string>
     <string name="sl_pref">Esporte preferido</string>
     <string name="sl_all">Todos os esportes</string>
+    <string name="sl_plat">Ativar cartões de plataformas</string>
+    <string name="sl_plat_on">Ativado: as plataformas vêm depois de «Ao vivo agora»</string>
+    <string name="sl_plat_off">Desativado</string>
 </resources>
