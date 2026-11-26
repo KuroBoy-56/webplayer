@@ -1,6 +1,6 @@
 {
   "name": "mpx-vidaa",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "private": true,
   "description": "MPX Player para Hisense Smart TV (VIDAA OS): la app de Vega OS con react-native-web",
   "scripts": {
