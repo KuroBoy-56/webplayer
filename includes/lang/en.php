@@ -511,6 +511,8 @@ return [
     'Críquet' => 'Cricket',
     'Esports' => 'Esports',
     'Descanso' => 'Half time',
+    'Habilitar tarjetas de plataformas' => 'Show platform cards',
+    'Las plataformas (Netflix, Disney+…) vuelven en Inicio, debajo de «En vivo ahora».' => 'Platforms (Netflix, Disney+…) come back on Home, below «Live now».',
     'Deporte preferido' => 'Favorite sport',
     'Todos los deportes' => 'All sports',
     'Los partidos en vivo de Inicio muestran solo este deporte.' => 'Live matches on Home show only this sport.',

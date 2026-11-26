@@ -93,6 +93,12 @@ function opt($name, $value, $label, $desc, $current)
                         <option value="<?php echo e($k); ?>"><?php echo e(t($label)); ?></option>
                     <?php endforeach; ?>
                 </select>
+                <?php if (wp_available_platforms()): ?>
+                    <label class="st-plat" style="display:flex;align-items:center;gap:10px;margin-top:16px;cursor:pointer;">
+                        <input type="checkbox" id="platCards" data-key="<?php echo e(wp_sports_live_plat_key()); ?>" style="width:18px;height:18px;accent-color:var(--nf-red,#e50914);">
+                        <span><b><?php echo t('Habilitar tarjetas de plataformas'); ?></b><br><small style="opacity:.7;"><?php echo t('Las plataformas (Netflix, Disney+…) vuelven en Inicio, debajo de «En vivo ahora».'); ?></small></span>
+                    </label>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>
@@ -103,6 +109,13 @@ document.addEventListener('DOMContentLoaded', function () {
         r.addEventListener('change', function () { document.getElementById('vlc-downloads').style.display = this.value === '1' ? 'flex' : 'none'; });
     });
     // por línea y perfil, en este navegador (assets/nf/live.js lo lee en Inicio)
+    var pc = document.getElementById('platCards');
+    if (pc) {
+        try { pc.checked = localStorage.getItem(pc.getAttribute('data-key')) === '1'; } catch (x) {}
+        pc.addEventListener('change', function () {
+            try { if (pc.checked) localStorage.setItem(pc.getAttribute('data-key'), '1'); else localStorage.removeItem(pc.getAttribute('data-key')); } catch (x) {}
+        });
+    }
     var ls = document.getElementById('liveSport');
     if (ls) {
         try { ls.value = localStorage.getItem(ls.getAttribute('data-key')) || ''; } catch (x) {}

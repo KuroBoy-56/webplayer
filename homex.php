@@ -77,13 +77,15 @@ $live_expected = $live_allowed && wp_sports_live_expected();
     <div class="nf-plats-row"><button class="nf-arrow l" type="button" aria-label="<?php echo e(t('Anterior')); ?>" hidden><?php echo wp_icon('left'); ?></button><div class="nf-slider nf-live-slider"></div><button class="nf-arrow r" type="button" aria-label="<?php echo e(t('Siguiente')); ?>" hidden><?php echo wp_icon('right'); ?></button></div>
 </section>
 <div id="nfPlatWrap"<?php echo $live_expected ? ' hidden' : ''; ?>><?php echo wp_platform_tiles(); ?></div>
+<script>/* Ajustes › Habilitar tarjetas de plataformas: las plataformas siguen debajo de «En vivo ahora» */
+try { if (localStorage.getItem(<?php echo json_encode(wp_sports_live_plat_key()); ?>) === '1') document.getElementById('nfPlatWrap').hidden = false; } catch (x) {}</script>
 <link rel="stylesheet" href="assets/nf/live.css?v=1">
-<script>window.NF_LIVE = { key: <?php echo json_encode(wp_sports_live_pref_key()); ?>, T: {
+<script>window.NF_LIVE = { key: <?php echo json_encode(wp_sports_live_pref_key()); ?>, platKey: <?php echo json_encode(wp_sports_live_plat_key()); ?>, T: {
     live: <?php echo tj('En vivo'); ?>, ht: <?php echo tj('Descanso'); ?>, close: <?php echo tj('Cerrar'); ?>, auto: <?php echo tj('Ver el evento (canal automático)'); ?>,
     inList: <?php echo tj('en tu lista: {c}'); ?>, inGuide: <?php echo tj('en la guía'); ?>, byTeams: <?php echo tj('por equipos'); ?>,
     searchX: <?php echo tj('Buscar canales: «{q}»'); ?>, searchAny: <?php echo tj('Buscar canal, equipo o evento…'); ?>, typeHint: <?php echo tj('Canal, equipo o evento'); ?>,
     go: <?php echo tj('Buscar'); ?>, chWith: <?php echo tj('Canales con «{q}»'); ?>, noChWith: <?php echo tj('No hay canales con «{q}» en tu lista'); ?> } };</script>
-<script src="assets/nf/live.js?v=1" defer></script>
+<script src="assets/nf/live.js?v=2" defer></script>
 <?php else: ?>
 <?php echo wp_platform_tiles(); ?>
 <?php endif; ?>

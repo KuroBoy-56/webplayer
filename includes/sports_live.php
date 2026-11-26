@@ -47,6 +47,12 @@ function wp_sports_live_expected()
 }
 
 /** Clave del navegador para «Deporte preferido» (Ajustes): por línea y perfil. */
+/** clave de «Habilitar tarjetas de plataformas» (por línea y perfil, en este navegador) */
+function wp_sports_live_plat_key()
+{
+    return 'nf_plat_cards|' . substr(wp_sports_live_pref_key(), strlen('nf_live_sport|'));
+}
+
 function wp_sports_live_pref_key()
 {
     $u = wp_user();

@@ -511,6 +511,8 @@ return [
     'Críquet' => 'Cricket',
     'Esports' => 'Esports',
     'Descanso' => 'Mi-temps',
+    'Habilitar tarjetas de plataformas' => 'Activer les cartes des plateformes',
+    'Las plataformas (Netflix, Disney+…) vuelven en Inicio, debajo de «En vivo ahora».' => 'Les plateformes (Netflix, Disney+…) reviennent sur l\'Accueil, sous « En direct ».',
     'Deporte preferido' => 'Sport préféré',
     'Todos los deportes' => 'Tous les sports',
     'Los partidos en vivo de Inicio muestran solo este deporte.' => 'Les matchs en direct de l’Accueil ne montrent que ce sport.',

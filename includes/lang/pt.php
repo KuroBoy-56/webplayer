@@ -511,6 +511,8 @@ return [
     'Críquet' => 'Críquete',
     'Esports' => 'Esports',
     'Descanso' => 'Intervalo',
+    'Habilitar tarjetas de plataformas' => 'Ativar cartões de plataformas',
+    'Las plataformas (Netflix, Disney+…) vuelven en Inicio, debajo de «En vivo ahora».' => 'As plataformas (Netflix, Disney+…) voltam ao Início, abaixo de «Ao vivo agora».',
     'Deporte preferido' => 'Esporte preferido',
     'Todos los deportes' => 'Todos os esportes',
     'Los partidos en vivo de Inicio muestran solo este deporte.' => 'As partidas ao vivo do Início mostram só este esporte.',

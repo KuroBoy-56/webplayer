@@ -18,6 +18,8 @@
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var fill = function (s, p) { for (var k in p) s = s.split('{' + k + '}').join(p[k]); return s; };
     function pref() { try { return localStorage.getItem(C.key) || ''; } catch (x) { return ''; } }
+    // Ajustes › Habilitar tarjetas de plataformas: con la fila en vivo, las plataformas quedan debajo
+    function platCards() { try { return !!C.platKey && localStorage.getItem(C.platKey) === '1'; } catch (x) { return false; } }
     function score(v) { v = v == null ? '' : String(v).trim(); return v === '' ? '0' : v; }
 
     /* «67'», «Descanso», «Q3 5:21»: lo que dice TheSportsDB del momento del partido */
@@ -159,7 +161,7 @@
                 var ttl = 60;
                 if (j && j.on) {
                     shown = true;
-                    if (plat) plat.hidden = true;
+                    if (plat) plat.hidden = !platCards();
                     for (var k in j.ch) CH[k] = j.ch[k];
                     cards = j.cards || [];
                     ttl = j.ttl || 30;

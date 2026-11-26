@@ -4,6 +4,10 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## «Habilitar tarjetas de plataformas» — versión 3.0.3 (26 de noviembre, cuarta parte)
+- **Ajustes › Habilitar tarjetas de plataformas** (en la tarjeta «Deporte preferido», o sea solo con perfiles activos y la fila «En vivo ahora»; y solo si el distribuidor tiene las plataformas): las tarjetas de plataformas (Netflix, Disney+…) vuelven en Inicio, **debajo** de «En vivo ahora», como estaban antes. Se guarda por línea y perfil en ese navegador. Apagado (lo de siempre), con la fila en vivo las plataformas no se ven.
+- Archivos: `homex.php`, `settings.php`, `assets/nf/live.js`, `includes/sports_live.php`, `includes/lang/en.php`, `includes/lang/pt.php`, `includes/lang/fr.php`, `includes/core.php` (versión).
+
 ## Colores de la pantalla de perfiles — versión 3.0.2 (26 de noviembre, tercera parte)
 - «¿Quién está viendo?» toma los colores del distribuidor (como antes) y ahora, con **Omitir**, los que el dueño eligió en el panel («Colores de las apps»): fondo, sombras, cuadros, foco y el interruptor. Solo cambia esa pantalla; el resto de la web queda igual. Sin colores en el panel, el negro de siempre.
 - El hosting los pide al panel (acción `features` de `login.php`) y los guarda 1 hora en `includes/cache/`; si el panel no responde usa la última copia.
