@@ -1,5 +1,6 @@
 package com.latmpx.player.ui.screens
 
+import androidx.compose.foundation.layout.safeDrawingPadding
 import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -45,7 +46,8 @@ fun PlayIntegrityScreen() {
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (tv) runCatching { first.requestFocus() } }
-    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+    // todo dentro de la parte visible (barra de estado, muesca y barra de navegación)
+    Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding(), contentAlignment = Alignment.Center) {
         Column(
             Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(24.dp)
                 .background(Color(0xBF000000), RoundedCornerShape(6.dp)).padding(horizontal = 24.dp, vertical = 28.dp),

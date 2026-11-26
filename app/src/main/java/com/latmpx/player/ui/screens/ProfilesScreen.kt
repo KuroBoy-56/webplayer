@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -157,21 +158,21 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
         // fondo: lo más destacado de la semana, 10 s cada uno, a pantalla completa
         ProfileBackdrops(featured, wide, Modifier.fillMaxSize()) { shownIdx = it }
         // arriba: «Salir» a la izquierda, el título al centro y el logo a la derecha (vertical: nada arriba, como Netflix)
-        if (wide) Row(Modifier.fillMaxWidth().padding(horizontal = sidePad() + 6.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (wide) Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = sidePad() + 6.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             AppButton(stringResource(R.string.exit), minHeight = 40.dp, fontSize = 14.sp) { askLogout = true }
             Spacer(Modifier.weight(1f))
             LogoHeader(height = if (wide) 34.dp else 28.dp)
         }
         if (wide) Text(
             stringResource(if (manage) R.string.prof_manage else R.string.prof_who), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 22.dp),
+            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().safeDrawingPadding().padding(top = 22.dp),
         )
 
         // perfiles grandes: en horizontal los 5 caben en la altura (con el título arriba y «Administrar perfiles» abajo)
         val tileSize: Dp = (((conf.screenHeightDp - 162) / rows.coerceAtLeast(1)) - 12).dp.coerceIn(56.dp, 140.dp)
         if (wide) {
             // perfiles en columna a la izquierda y «Administrar perfiles» debajo (si no caben, se desplaza: nunca se cortan)
-            Box(Modifier.fillMaxHeight().padding(start = sidePad() + 24.dp, top = 70.dp, bottom = 36.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.fillMaxHeight().safeDrawingPadding().padding(start = sidePad() + 24.dp, top = 70.dp, bottom = 36.dp), contentAlignment = Alignment.CenterStart) {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     list.forEachIndexed { i, p ->
                         val req = if (i == focusIdx) Modifier.focusRequester(firstFocus) else Modifier
@@ -191,10 +192,10 @@ fun ProfilesScreen(state: AppState, onChosen: (Profiles.Profile?) -> Unit, onBac
         // la versión abajo a la izquierda, chica (vertical: con «Editar», junto a «Salir»)
         if (wide) Text(
             stringResource(R.string.prof_version, BuildConfig.VERSION_NAME), color = Color(0xFF8C8C8C), fontSize = 11.sp,
-            modifier = Modifier.align(Alignment.BottomStart).padding(start = sidePad() + 6.dp, bottom = 10.dp),
+            modifier = Modifier.align(Alignment.BottomStart).safeDrawingPadding().padding(start = sidePad() + 6.dp, bottom = 10.dp),
         )
         if (busy) CircularProgressIndicator(color = NfRed, modifier = Modifier.align(Alignment.Center))
-        err?.let { Text(it, color = Color(0xFFFF6B6B), fontSize = 14.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp)) }
+        err?.let { Text(it, color = Color(0xFFFF6B6B), fontSize = 14.sp, modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 34.dp)) }
 
         edit?.let { t ->
             ProfileEditor(
@@ -449,7 +450,7 @@ private fun ProfileEditor(target: EditTarget, avatars: List<String>, onClose: (P
 
     Box(Modifier.fillMaxSize().background(NfBg)) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = sidePad() + 18.dp, vertical = 22.dp),
+            Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = sidePad() + 18.dp, vertical = 22.dp),
         ) {
             Text(stringResource(if (creating) R.string.prof_add else R.string.prof_edit_title), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.height(18.dp))
@@ -514,7 +515,7 @@ private fun ProfileEditor(target: EditTarget, avatars: List<String>, onClose: (P
         // elegir avatar: la lista que da el panel
         if (picking) {
             BackHandler { picking = false }
-            Column(Modifier.fillMaxSize().background(NfBg).padding(horizontal = sidePad() + 12.dp, vertical = 18.dp)) {
+            Column(Modifier.fillMaxSize().background(NfBg).safeDrawingPadding().padding(horizontal = sidePad() + 12.dp, vertical = 18.dp)) {
                 Text(stringResource(R.string.prof_pick_avatar), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(bottom = 14.dp))
                 val pickFocus = remember { FocusRequester() }
                 LaunchedEffect(Unit) { kotlinx.coroutines.delay(120); runCatching { pickFocus.requestFocus() } }

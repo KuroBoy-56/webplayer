@@ -1,4 +1,6 @@
 package com.latmpx.player.ui.screens
+
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.res.stringResource
 import com.latmpx.player.tr
 import com.latmpx.player.R
@@ -130,7 +132,7 @@ fun DistributorScreen(message: String?, onDone: () -> Unit) {
         },
     ) {
         PosterWall(posters, columns = if (tv) 8 else 4)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().safeDrawingPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = sidePad(), vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 LogoHeader(height = 46.dp)
                 Spacer(Modifier.weight(1f))
@@ -190,7 +192,7 @@ fun TenantRetryScreen(message: String, busy: Boolean, onRetry: () -> Unit, onCha
     val tv = LocalIsTv.current
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (tv) runCatching { first.requestFocus() } }
-    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding(), contentAlignment = Alignment.Center) {
         Column(
             Modifier.widthIn(max = 460.dp).fillMaxWidth().padding(24.dp)
                 .background(Color(0xBF000000), RoundedCornerShape(6.dp)).padding(horizontal = 24.dp, vertical = 28.dp),
