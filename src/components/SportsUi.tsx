@@ -54,7 +54,8 @@ export const EventRow = memo(function EventRow({ r, onPress, preferred, onFocusK
               <Text style={[s.team, f && { color: C.onFocus }]} numberOfLines={1}>
                 {r.home}
               </Text>
-              {r.away ? <Text style={[s.score, f && { color: C.onFocus }]}>{r.score}</Text> : null}
+              {/* el marcador siempre en una línea, entre los dos equipos: si no cabe, se acortan los nombres */}
+              {r.away ? <Text style={[s.score, f && { color: C.onFocus }]} numberOfLines={1}>{r.score}</Text> : null}
               {r.away ? (
                 <Text style={[s.team, f && { color: C.onFocus }]} numberOfLines={1}>
                   {r.away}
@@ -232,8 +233,8 @@ const s = themed(() =>
     league: { color: C.sub, fontSize: px(22) },
     teams: { flexDirection: 'row', alignItems: 'center', marginTop: px(6) },
     badge: { width: px(42), height: px(42), marginHorizontal: px(10) },
-    team: { color: C.text, fontSize: px(30), fontWeight: '700', maxWidth: px(440) },
-    score: { color: C.text, fontSize: px(30), fontWeight: '800', marginHorizontal: px(20) },
+    team: { color: C.text, fontSize: px(30), fontWeight: '700', maxWidth: px(440), flexShrink: 1 },
+    score: { color: C.text, fontSize: px(30), fontWeight: '800', marginHorizontal: px(20), flexShrink: 0 },
     chan: { fontSize: px(24), fontWeight: '700', width: px(400), textAlign: 'right' },
     tv: { color: C.sub, fontSize: px(22), marginTop: px(6) },
     shade: { flex: 1, backgroundColor: alpha('#000000', 0.8), justifyContent: 'center', alignItems: 'center' },
