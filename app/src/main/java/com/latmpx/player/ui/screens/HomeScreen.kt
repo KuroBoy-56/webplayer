@@ -135,7 +135,10 @@ fun HomeScreen(state: AppState) {
         }
         item {
             if (live.enabled) LiveSportsRow(live, pad)
-            else ShelfRow(stringResource(R.string.platforms), platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.PlatformPage(p)) }) }
+            // con «En vivo ahora» las plataformas solo vuelven (debajo) si se activaron en Ajustes
+            if (!live.enabled || com.latmpx.player.data.Store.platformCards) {
+                ShelfRow(stringResource(R.string.platforms), platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.PlatformPage(p)) }) }
+            }
         }
         item {
             ShelfRow(stringResource(R.string.new_movies), recentMovies, pad, onViewAll = { state.push(Route.Browse(tr(R.string.new_movies), com.latmpx.player.data.Kind.MOVIE, emptySet())) }) { _, it ->
@@ -173,7 +176,7 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
             Spacer(Modifier.width(12.dp))
             Text((current ?: Tab.HOME).label, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             // campanita: avisos de partidos de las últimas 24 h (el perfil infantil no tiene Deportes)
-            if (com.latmpx.player.data.Tenant.sportsEnabled && !com.latmpx.player.data.Profiles.kids) BellButton()
+            if (com.latmpx.player.data.Tenant.sportsEnabled && com.latmpx.player.data.Profiles.current != null && !com.latmpx.player.data.Profiles.kids) BellButton()
             Icon(
                 Icons.Filled.Download, stringResource(R.string.my_downloads), tint = Color.White,
                 modifier = Modifier.size(44.dp).clip(CircleShape).clickable { state.push(Route.Downloads) }.padding(9.dp),

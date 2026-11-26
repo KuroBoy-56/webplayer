@@ -6,4 +6,7 @@
     <string name="sl_live">EN DIRECT</string>
     <string name="sl_pref">Sport préféré</string>
     <string name="sl_all">Tous les sports</string>
+    <string name="sl_plat">Activer les cartes des plateformes</string>
+    <string name="sl_plat_on">Activé : les plateformes après « En direct »</string>
+    <string name="sl_plat_off">Désactivé</string>
 </resources>

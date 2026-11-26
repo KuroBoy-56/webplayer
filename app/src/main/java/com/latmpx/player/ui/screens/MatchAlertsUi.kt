@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsSoccer
+import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -96,6 +97,15 @@ fun SportPrefsSection() {
     val choices = SportsLive.CHOICES
     SettingsItem(Icons.Filled.SportsSoccer, stringResource(R.string.sl_pref), choices.firstOrNull { it.first == pref }?.second ?: stringResource(R.string.sl_all)) { prefOpen = true }
     HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+    // tarjetas de plataformas debajo de «En vivo ahora» (solo si el distribuidor tiene las plataformas)
+    if (com.latmpx.player.data.Tenant.platformsEnabled) {
+        var plat by remember(Profiles.current) { mutableStateOf(Store.platformCards) }
+        SettingsItem(Icons.Filled.ViewCarousel, stringResource(R.string.sl_plat), stringResource(if (plat) R.string.sl_plat_on else R.string.sl_plat_off)) {
+            plat = !plat
+            Store.platformCards = plat
+        }
+        HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+    }
     SettingsItem(Icons.Filled.Shield, stringResource(R.string.ma_teams),
         if (teams.isEmpty()) stringResource(R.string.ma_teams_none) else teams.joinToString(" · ") { it.label.ifBlank { it.name } }) { pickOpen = true }
     if (teams.isNotEmpty()) Column(Modifier.padding(start = 56.dp, end = 16.dp, bottom = 8.dp)) {

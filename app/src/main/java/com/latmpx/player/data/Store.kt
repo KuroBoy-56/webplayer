@@ -255,6 +255,11 @@ object Store {
         get() = p.getString(tenantKey("pref_sport|" + scope() + "|" + (Profiles.current?.id ?: "")), "") ?: ""
         set(v) = p.edit().putString(tenantKey("pref_sport|" + scope() + "|" + (Profiles.current?.id ?: "")), v).apply()
 
+    /** Ajustes › Habilitar tarjetas de plataformas: con «En vivo ahora» la fila de plataformas vuelve después de ella (por línea y perfil) */
+    var platformCards: Boolean
+        get() = p.getBoolean(tenantKey("plat_cards|" + scope() + "|" + (Profiles.current?.id ?: "")), false)
+        set(v) = p.edit().putBoolean(tenantKey("plat_cards|" + scope() + "|" + (Profiles.current?.id ?: "")), v).apply()
+
     /* ---------- inicio de sesión (docs/LOGIN-SERVIDORES.md del panel) ---------- */
     /** la DNS con la que entró cada usuario la última vez en este equipo: se prueba primero, sola */
     fun lastDns(user: String): String = p.getString(tenantKey("last_dns|" + user.lowercase()), "") ?: ""

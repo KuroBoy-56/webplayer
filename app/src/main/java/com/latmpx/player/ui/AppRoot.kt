@@ -242,6 +242,10 @@ fun AppRoot() {
     // avisos de partidos: con equipos favoritos se piden los próximos partidos y se vuelven a programar las alarmas
     LaunchedEffect(state.session, state.profileReady, Profiles.current) {
         if (state.session == null || !state.profileReady || Profiles.kids) return@LaunchedEffect
+        // con perfiles: primero lo de la nube (equipos y partidos marcados en la TV, la computadora u otro celular)
+        if (Profiles.current != null) runCatching {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.latmpx.player.data.MatchAlertsCloud.sync(Profiles.param(), com.latmpx.player.data.MatchAlerts.suffix()) }
+        }
         val fav = com.latmpx.player.data.MatchAlerts.teams().isNotEmpty()
         if (fav) runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.latmpx.player.data.SportsPanel.fixtures(0) } }
         com.latmpx.player.data.MatchAlerts.schedule(com.latmpx.player.data.SportsPanel.cachedFixtures())
