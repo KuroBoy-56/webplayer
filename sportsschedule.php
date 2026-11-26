@@ -192,10 +192,20 @@ $sp_alias = is_array($sp_panel['match']['alias'] ?? null) ? $sp_panel['match']['
 
 $page_title = t('Deportes');
 $nav_active = 'sports';
-$body_class = 'nf-solid';
+// con perfiles: el estadio de fondo (sp-stadium)
+$body_class = 'nf-solid' . ($sp_fin ? ' sp-stadium' : '');
 include "header.php";
 ?>
 <style>
+/* con perfiles: el estadio sin personas de fondo (horizontal; con la pantalla parada, el vertical) bajo el color de la app,
+   que lo oscurece hacia abajo para que todo se lea. Una capa fija: no se mueve al bajar (también en iPhone) */
+body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(180deg, rgba(20,20,20,.58) 0%, rgba(20,20,20,.78) 35%, rgba(20,20,20,.92) 70%, #141414 100%), url(assets/nf/sports-bg.webp) center top / cover no-repeat;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--nf-bg) 58%, transparent) 0%, color-mix(in srgb, var(--nf-bg) 78%, transparent) 35%, color-mix(in srgb, var(--nf-bg) 92%, transparent) 70%, var(--nf-bg) 100%), url(assets/nf/sports-bg.webp) center top / cover no-repeat; }
+@media (orientation: portrait) {
+    body.sp-stadium::before { background-image: linear-gradient(180deg, rgba(20,20,20,.55) 0%, rgba(20,20,20,.78) 35%, rgba(20,20,20,.92) 70%, #141414 100%), url(assets/nf/sports-bg-v.webp);
+        background-image: linear-gradient(180deg, color-mix(in srgb, var(--nf-bg) 55%, transparent) 0%, color-mix(in srgb, var(--nf-bg) 78%, transparent) 35%, color-mix(in srgb, var(--nf-bg) 92%, transparent) 70%, var(--nf-bg) 100%), url(assets/nf/sports-bg-v.webp); }
+}
 .sp { --sp-line: rgba(255,255,255,.08); --sp-card: #1c1c1c; --sp-card2: #232323; --sp-live: #e50914; --sp-win: #fff; --sp-mute: #9a9a9a;
       padding: calc(var(--nf-header) + 18px) var(--nf-pad) 48px; color: var(--nf-text); min-height: 70vh; }
 .sp-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
