@@ -19,6 +19,8 @@ import { deviceId, loadCatalog, loadCloud, logoutByHand, refreshCatalog, reloadC
 import { C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
 import { osVersion } from '../lib/osversion';
+import { liveTvOn, platformCards, setPlatformCards } from '../data/liveTv';
+import { features } from '../lib/tenant';
 
 // los nombres se traducen al mostrarlos
 const SUBS: [string, Key][] = [
@@ -173,6 +175,17 @@ export default function Account() {
         }}
       />
       <Setting label={t('Bloquear categorías')} value="" onPress={() => setPinFor('blocked')} />
+      {/* con perfiles y las plataformas del distribuidor: vuelven en Inicio debajo de «En vivo ahora» */}
+      {liveTvOn() && features().platforms !== false ? (
+        <Setting
+          label={t('Habilitar tarjetas de plataformas')}
+          value={platformCards() ? t('Activado: las plataformas van debajo de «En vivo ahora»') : t('Desactivado')}
+          onPress={() => {
+            setPlatformCards(!platformCards());
+            force(x => x + 1);
+          }}
+        />
+      ) : null}
       <Setting
         label={t('Contenido protegido en esta sesión')}
         value={catalog.unlocked ? t('Desbloqueado') : t('Bloqueado')}

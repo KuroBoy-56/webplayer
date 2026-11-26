@@ -470,6 +470,19 @@ const pt: Record<Key, string> = {
   "¿Eliminar el perfil {n}?": "Excluir o perfil {n}?",
   "¿Olvidaste el PIN?": "Esqueceu o PIN?",
   "¿Quién está viendo?": "Quem está assistindo?",
+  "En vivo ahora": "Ao vivo agora",
+  "Empieza": "Começa",
+  "Descanso": "Intervalo",
+  "Desactivado": "Desativado",
+  "Recordarme este partido": "Lembrar-me desta partida",
+  "Quitar el recordatorio": "Remover o lembrete",
+  "Te avisaremos en tu celular 30 min y 10 min antes y al empezar": "Avisaremos no seu celular 30 e 10 min antes e no início",
+  "Recordatorio guardado": "Lembrete salvo",
+  "Recordatorio quitado": "Lembrete removido",
+  "Para recibir las notificaciones de tus partidos y equipos favoritos debes tener la app {x} instalada en tu celular.": "Para receber as notificações das suas partidas e times favoritos você precisa ter o app {x} instalado no seu celular.",
+  "No se pudo guardar el recordatorio. Inténtalo otra vez.": "Não foi possível salvar o lembrete. Tente novamente.",
+  "Habilitar tarjetas de plataformas": "Ativar cartões de plataformas",
+  "Activado: las plataformas van debajo de «En vivo ahora»": "Ativado: as plataformas ficam abaixo de «Ao vivo agora»",
 };
 
 export default pt;

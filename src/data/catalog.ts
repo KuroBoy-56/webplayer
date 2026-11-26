@@ -30,8 +30,9 @@ export type Item = {
   tm?: string;
 };
 
-export type Special = { kind: 'platform' | 'genre' | 'more'; key: string; label: string; image?: number; color: string; extra?: string };
-export type Row = { title: string; type: 'poster' | 'top10' | 'platform' | 'genre'; items: (Item | Special)[] };
+// live: un partido de «En vivo ahora» (data/liveTv.ts, solo con perfiles)
+export type Special = { kind: 'platform' | 'genre' | 'more' | 'live'; key: string; label: string; image?: number; color: string; extra?: string; live?: import('./liveTv').LiveCard };
+export type Row = { title: string; type: 'poster' | 'top10' | 'platform' | 'genre' | 'live'; items: (Item | Special)[] };
 
 export type Platform = { key: string; label: string; image?: number; color: string; kw: string[] };
 
