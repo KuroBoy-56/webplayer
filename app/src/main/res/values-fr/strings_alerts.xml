@@ -31,4 +31,5 @@
     <string name="ma_now">maintenant</string>
     <string name="ma_allow">Autoriser les notifications</string>
     <string name="ma_allow_desc">Les notifications de l’app sont désactivées sur le téléphone : activez-les pour recevoir les alertes de vos matchs</string>
+    <string name="ma_too_late">Les alertes ne peuvent être activées que pour les matchs qui commencent dans plus de 5 minutes.</string>
 </resources>

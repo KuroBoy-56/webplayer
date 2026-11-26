@@ -134,7 +134,7 @@ fun HomeScreen(state: AppState) {
             ShelfRow(stringResource(R.string.top10_today), top10, pad) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) }
         }
         item {
-            if (live.enabled) LiveSportsRow(live, pad)
+            if (live.enabled) LiveSportsRow(live, pad) { state.stack.clear(); state.tab = Tab.SPORTS }
             // con «En vivo ahora» las plataformas solo vuelven (debajo) si se activaron en Ajustes
             if (!live.enabled || com.latmpx.player.data.Store.platformCards) {
                 ShelfRow(stringResource(R.string.platforms), platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.PlatformPage(p)) }) }

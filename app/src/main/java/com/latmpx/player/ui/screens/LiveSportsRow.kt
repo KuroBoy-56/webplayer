@@ -55,6 +55,8 @@ import com.latmpx.player.data.Profiles
 import com.latmpx.player.data.SportEvent
 import com.latmpx.player.data.SportMatch
 import com.latmpx.player.data.Sports
+import com.latmpx.player.ui.theme.NfBg
+import com.latmpx.player.ui.theme.NfRed
 import com.latmpx.player.data.SportsLive
 import com.latmpx.player.data.SportsPanel
 import com.latmpx.player.data.Store
@@ -67,6 +69,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+
+/** tarjetas de la fila: en vivo primero, después los próximos por hora; al final va «Ir a Deportes» */
+private const val LIVE_ROW_MAX = 20
 
 /** un partido en vivo de la fila con su canal: m.best siempre existe (solo salen los que el cliente puede ver) */
 internal class LiveCard(val e: SportEvent, val m: SportMatch)
@@ -124,7 +129,7 @@ internal fun rememberLiveSports(state: AppState): LiveSports {
                 val full = if (epg.isEmpty()) m else m.copy(epg = epg, best = m.tv.firstOrNull { it.second != null }?.second ?: epg.first())
                 // siempre un canal real del servidor IPTV del cliente; sin ninguno, el partido no sale
                 if (full.best == null) null else LiveCard(e, full)
-            }
+            }.sortedWith(compareBy({ it.e.soon }, { it.e.start })).take(LIVE_ROW_MAX)
         }
     }
     return LiveSports(on, cards, chans)
@@ -132,13 +137,14 @@ internal fun rememberLiveSports(state: AppState): LiveSports {
 
 /** fila «En vivo ahora»: tarjetas que se deslizan; al tocar, el menú de canales de Deportes y Atrás vuelve a Inicio */
 @Composable
-internal fun LiveSportsRow(live: LiveSports, pad: Dp) {
+internal fun LiveSportsRow(live: LiveSports, pad: Dp, onSports: () -> Unit) {
     if (live.cards.isEmpty()) return
     val ctx = LocalContext.current
     val tv = LocalIsTv.current
     var menu by remember { mutableStateOf<Triple<String, String, List<MenuOpt>>?>(null) }
     var typing by remember { mutableStateOf<String?>(null) }
     val tHt = stringResource(R.string.sl_ht)
+    val tStarts = stringResource(R.string.sl_starts)
     val c = live.chans
     fun say(msg: String) = android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_LONG).show()
     fun play(ch: Item) { menu = null; c?.let { playInCategory(ctx, it.all, ch) } }
@@ -170,8 +176,10 @@ internal fun LiveSportsRow(live: LiveSports, pad: Dp) {
         val names = listOf(e.home, e.away).filter { it.isNotBlank() }.ifEmpty { listOf(e.title).filter { it.isNotBlank() } }
         names.forEach { n -> opts += MenuOpt(tr(R.string.sp_search_x, n)) { menu = null; findChans(n) } }
         opts += MenuOpt(tr(R.string.sp_search_any)) { menu = null; typing = names.firstOrNull().orEmpty() }
-        val title = if (e.home.isNotBlank() && e.away.isNotBlank()) "${e.home} ${e.homeScore.ifBlank { "0" }} - ${e.awayScore.ifBlank { "0" }} ${e.away}" else e.title.ifBlank { e.league }
-        menu = Triple(title, clockText(e, tHt) + if (e.league.isNotBlank()) "  ·  ${e.league}" else "", opts)
+        val title = if (e.home.isNotBlank() && e.away.isNotBlank()) {
+            if (e.soon) "${e.home} vs ${e.away}" else "${e.home} ${e.homeScore.ifBlank { "0" }} - ${e.awayScore.ifBlank { "0" }} ${e.away}"
+        } else e.title.ifBlank { e.league }
+        menu = Triple(title, (if (e.soon) tStarts + " " + hhmm(e.start) else clockText(e, tHt)) + if (e.league.isNotBlank()) "  ·  ${e.league}" else "", opts)
     }
 
     Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
@@ -182,10 +190,31 @@ internal fun LiveSportsRow(live: LiveSports, pad: Dp) {
         }
         LazyRow(contentPadding = PaddingValues(horizontal = pad), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(live.cards, key = { it.e.id }) { card -> LiveSportCard(card) { open(card) } }
+            item(key = "go") { GoSportsCard(onSports) }
         }
     }
     menu?.let { (title, sub, opts) -> SportMenuDialog(title, sub, opts, tv) { menu = null } }
     typing?.let { start -> SportTypeDialog(start, onDismiss = { typing = null }) { q -> typing = null; findChans(q) } }
+}
+
+/** hora de inicio de un próximo, en la zona del panel (como Deportes) */
+private fun hhmm(t: Long): String = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).apply { timeZone = Sports.zone }.format(t)
+
+/** al final de la fila: toda la agenda en Deportes, con el color de la app */
+@Composable
+private fun GoSportsCard(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    FocusBox(onClick = onClick, shape = shape, focusScale = 1.04f) {
+        Column(
+            Modifier.width(200.dp).height(172.dp).clip(shape).border(1.dp, Color(0x26FFFFFF), shape)
+                .background(Brush.linearGradient(listOf(NfRed, NfBg))).padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+        ) {
+            Text("🏟️", fontSize = 34.sp)
+            Text(stringResource(R.string.sl_go_sports), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+            Text(stringResource(R.string.sl_go_sports_sub), color = Color(0xD9FFFFFF), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
 }
 
 /** «67'», «Descanso», «Q3 5:21»… lo que dice TheSportsDB del momento del partido */
@@ -226,12 +255,16 @@ private fun LiveSportCard(card: LiveCard, onClick: () -> Unit) {
                     Text(e.league, color = Color(0xE6FFFFFF), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(8.dp))
                     Row(
-                        Modifier.background(Color(0xFFE50914), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 3.dp),
+                        Modifier.background(if (e.soon) Color(0x99000000) else Color(0xFFE50914), RoundedCornerShape(50))
+                            .then(if (e.soon) Modifier.border(1.dp, Color(0x8CFFFFFF), RoundedCornerShape(50)) else Modifier)
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Box(Modifier.size(6.dp).background(Color.White, CircleShape))
-                        Spacer(Modifier.width(5.dp))
-                        Text(liveClock(e).ifBlank { stringResource(R.string.sl_live) }, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        if (!e.soon) { Box(Modifier.size(6.dp).background(Color.White, CircleShape)); Spacer(Modifier.width(5.dp)) }
+                        Text(
+                            if (e.soon) stringResource(R.string.sl_starts) + " " + hhmm(e.start) else liveClock(e).ifBlank { stringResource(R.string.sl_live) },
+                            color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                        )
                     }
                 }
                 Spacer(Modifier.weight(1f))
@@ -244,7 +277,7 @@ private fun LiveSportCard(card: LiveCard, onClick: () -> Unit) {
                 } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     TeamSide(e.home, e.homeBadge, Modifier.weight(1f))
                     Text(
-                        "${e.homeScore.ifBlank { "0" }}  -  ${e.awayScore.ifBlank { "0" }}", color = Color.White, fontSize = 28.sp,
+                        if (e.soon) "vs" else "${e.homeScore.ifBlank { "0" }}  -  ${e.awayScore.ifBlank { "0" }}", color = Color.White, fontSize = if (e.soon) 24.sp else 28.sp,
                         fontWeight = FontWeight.Black, maxLines = 1, modifier = Modifier.padding(horizontal = 6.dp),
                     )
                     TeamSide(e.away, e.awayBadge, Modifier.weight(1f))

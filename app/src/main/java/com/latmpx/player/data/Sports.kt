@@ -34,6 +34,8 @@ data class SportEvent(
     /** selecciones en el idioma de la app (api/sports_fixtures.php "hn" / "an"); vacío = el nombre de siempre */
     val homeLabel: String = "",
     val awayLabel: String = "",
+    /** todavía no empieza (api/sports_live.php?next=1, los próximos de la fila de Inicio): sin marcador, con su hora */
+    val soon: Boolean = false,
 )
 
 data class TvChannel(val name: String, val country: String)

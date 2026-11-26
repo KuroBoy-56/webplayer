@@ -224,7 +224,9 @@ fun EventAlertDialog(e: SportEvent, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss, containerColor = Color(0xFF1F1F1F),
         title = { Text(MatchAlerts.title(e), color = Color.White) },
         text = {
-            Row(Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).clickable {
+            // empieza en 5 minutos o menos (o ya empezó): no se puede activar, solo se explica
+            if (!on && MatchAlerts.tooLate(e)) Text(stringResource(R.string.ma_too_late), color = Color.White, fontSize = 16.sp)
+            else Row(Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).clickable {
                 val now = MatchAlerts.toggle(e)
                 if (now) askNotif()
                 android.widget.Toast.makeText(ctx, ctx.getString(if (now) R.string.ma_on_toast else R.string.ma_off_toast), android.widget.Toast.LENGTH_LONG).show()
