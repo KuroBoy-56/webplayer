@@ -3,6 +3,7 @@
 // (a la sección actual); Atrás en el menú pregunta si salir («¿Salir de …?», «Puedes volver cuando quieras.»).
 // Solo BackHandler: useKeplerBackHandler crea un segundo receptor del Atrás que, sin manejadores propios, cerraba la
 // app con cada Atrás (aunque la pantalla ya lo hubiera atendido).
+import { setGoto } from '../lib/goto';
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, Image, Modal, Platform, StyleSheet, Text, View } from 'react-native';
 import { Shade } from '../components/Shade';
@@ -81,6 +82,11 @@ export default function Main({ active }: { active: boolean }) {
   }, [active, profile, nav]);
   // tras cambiar el idioma se vuelve a Cuenta
   const [section, setSection] = useState<Section>(() => (langChanged() ? 'account' : 'home'));
+  // «Ir a Deportes» (Inicio) cambia de sección
+  useEffect(() => {
+    setGoto(x => setSection(x as Section));
+    return () => setGoto(null);
+  }, []);
   const [exitAsk, setExitAsk] = useState(false);
   // Atrás dentro de la sección: el menú se vuelve a montar con el foco en la sección actual
   const [menuRev, setMenuRev] = useState(0);
