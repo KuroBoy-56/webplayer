@@ -1,6 +1,17 @@
 <?php
 include "session.php";
 include "config.php";
+/* «En vivo ahora» de Inicio (includes/sports_live.php): GET ?ajax=live, cada 30 s solo mientras Inicio está abierto.
+   Siempre JSON (también con un perfil infantil o Deportes apagado: {on: false}). */
+if (($_GET['ajax'] ?? '') === 'live') {
+    require_once __DIR__ . '/includes/sports_live.php';
+    wp_session_read_close();
+    @set_time_limit(60);
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: private, no-store');
+    echo json_encode(wp_sports_live(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 // el distribuidor puede tener la sección de deportes apagada; un perfil infantil no tiene Deportes
 if (!wp_tenant_feature('sports') || wp_kids_on()) {
     header('Location: homex');
@@ -23,7 +34,6 @@ if (in_array($_GET['ajax'] ?? '', ['match', 'search'], true)) {
     header('Cache-Control: private, no-store');
     $panel = wp_panel_sports();
     $rules = spm_rules($panel);
-    $line = xt_cache_key('get_live_streams', []);
     $ix = null;
     $index = function () use (&$ix, $rules) { if ($ix === null) $ix = spm_index($rules); return $ix; };
     $chOut = function (array $ix, array $list) {
@@ -48,52 +58,8 @@ if (in_array($_GET['ajax'] ?? '', ['match', 'search'], true)) {
         foreach (array_slice(is_array($e['tv'] ?? null) ? $e['tv'] : [], 0, 24) as $t) if (is_string($t) && trim($t) !== '') $tv[] = $cut($t, 80);
         $evs[] = ['k' => $cut($e['k'], 80), 'h' => $cut($e['h'] ?? '', 120), 'a' => $cut($e['a'] ?? '', 120), 'lg' => $cut($e['lg'] ?? '', 120), 'ev' => $cut($e['ev'] ?? '', 160), 'tv' => $tv];
     }
-    $ck = 'spmatch|' . $line . '|' . md5(json_encode([$evs, $rules['alias'], array_keys($rules['stop']), $rules['evcat']]));
-    $res = wp_cache_get($ck, 600);
-    if (!is_array($res)) {
-        $ixs = $index();
-        $m = [];
-        $used = [];
-        foreach ($evs as $e) {
-            $r = spm_match($e, $ixs, $rules);
-            $m[$e['k']] = ['t' => array_map(function ($i) use ($ixs) { return $i >= 0 ? $ixs['chans'][$i]['id'] : ''; }, $r['t']), 'tm' => $r['tm'] >= 0 ? $ixs['chans'][$r['tm']]['id'] : ''];
-            foreach ($r['t'] as $i) if ($i >= 0) $used[] = $i;
-            if ($r['tm'] >= 0) $used[] = $r['tm'];
-        }
-        // sin canal exacto: la primera carpeta de eventos
-        $evf = null;
-        foreach ($ixs['chans'] as $i => $c) if ($c['ev']) { $evf = [$c['id'], $c['cat'], (string)($ixs['cats'][$c['cat']] ?? '')]; $used[] = $i; break; }
-        $res = ['m' => $m, 'ch' => $chOut($ixs, $used), 'ev' => $evf];
-        wp_cache_set($ck, $res);
-    }
-    // además, la guía del panel: el canal que tiene el partido en su programación a esa hora (api/sports_epg.php)
-    $g = [];
-    if (!empty($_GET['epg'])) {
-        $gk = 'spepg|' . wp_panel_ck($line);
-        $gr = wp_cache_get($gk, 600);
-        if (!is_array($gr)) {
-            $ixs = $index();
-            $chans = [];
-            $byId = [];
-            foreach (spm_epg_channels($ixs) as $i) {
-                $c = $ixs['chans'][$i];
-                $chans[] = ['id' => $c['id'], 'epg' => $c['epg'], 'name' => $c['name']];
-                $byId[$c['id']] = [$c['name'], $c['cat']];
-            }
-            $j = $chans ? wp_panel_call('sports_epg.php', ['channels' => $chans], 25) : null;
-            $map = [];
-            $gch = [];
-            foreach ((is_array($j['map'] ?? null) ? $j['map'] : []) as $eid => $ids) {
-                $ok = [];
-                foreach ((array)$ids as $id) if (isset($byId[(string)$id])) { $ok[] = (string)$id; $gch[(string)$id] = $byId[(string)$id]; }
-                if ($ok) $map[(string)$eid] = $ok;
-            }
-            $gr = ['map' => $map, 'ch' => $gch];
-            if (is_array($j)) wp_cache_set($gk, $gr);
-        }
-        $g = $gr['map'];
-        $res['ch'] = $res['ch'] + $gr['ch'];
-    }
+    $res = spm_resolve($evs, !empty($_GET['epg']), $rules, $index);
+    $g = $res['g'];
     echo json_encode(['ok' => true, 'm' => (object)$res['m'], 'g' => (object)$g, 'ch' => (object)$res['ch'], 'ev' => $res['ev']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }

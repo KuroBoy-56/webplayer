@@ -11,6 +11,14 @@ if (isset($_COOKIE["settings_array"])) {
 $use_vlc = isset($_COOKIE["use_vlc"]) ? $_COOKIE["use_vlc"] : "0";
 $epg_source = isset($_COOKIE["epg_source"]) ? $_COOKIE["epg_source"] : "server";
 $body_class = 'nf-solid';
+// «Deporte preferido» de la fila «En vivo ahora» de Inicio (includes/sports_live.php): solo cuando la fila existe
+require_once __DIR__ . '/includes/sports_live.php';
+$live_p = wp_sports_live_allowed() ? wp_panel_sports_live() : null;
+$live_on = is_array($live_p) && !empty($live_p['enabled']);
+$live_sports = ['Soccer' => 'Fútbol', 'Basketball' => 'Baloncesto', 'American Football' => 'Fútbol americano', 'Baseball' => 'Béisbol',
+    'Ice Hockey' => 'Hockey sobre hielo', 'Tennis' => 'Tenis', 'Motorsport' => 'Automovilismo', 'Fighting' => 'Artes marciales',
+    'Boxing' => 'Boxeo', 'Rugby' => 'Rugby', 'Volleyball' => 'Vóleibol', 'Handball' => 'Balonmano', 'Golf' => 'Golf',
+    'Cricket' => 'Críquet', 'Esports' => 'Esports'];
 include "header.php";
 
 function opt($name, $value, $label, $desc, $current)
@@ -36,6 +44,7 @@ function opt($name, $value, $label, $desc, $current)
     .st-opt b { display: block; color: #fff; font-size: 15px; }
     .st-opt small { color: #999; font-size: 13px; }
     .vlc-downloads { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+    .st-select { min-width: 240px; padding: 10px 12px; border-radius: 6px; border: 1px solid #444; background: #111; color: #fff; font: inherit; font-size: 15px; }
     .st-saved { background: #2e7d32; color: #fff; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; }
 </style>
 <div class="nf-page settings-wrapper">
@@ -74,6 +83,18 @@ function opt($name, $value, $label, $desc, $current)
             </div>
             <button name="submit" type="submit" class="nf-btn nf-btn-red submit-btn"><?php echo t('Guardar ajustes'); ?></button>
         </form>
+        <?php if ($live_on): ?>
+            <div class="st-card" id="live-sport" style="margin-top: 16px;">
+                <h3><i class="fa fa-futbol"></i> <label for="liveSport"><?php echo t('Deporte preferido'); ?></label></h3>
+                <p><?php echo t('Los partidos en vivo de Inicio muestran solo este deporte.'); ?></p>
+                <select id="liveSport" class="st-select" data-key="<?php echo e(wp_sports_live_pref_key()); ?>">
+                    <option value=""><?php echo t('Todos los deportes'); ?></option>
+                    <?php foreach ($live_sports as $k => $label): ?>
+                        <option value="<?php echo e($k); ?>"><?php echo e(t($label)); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 <script>
@@ -81,6 +102,15 @@ document.addEventListener('DOMContentLoaded', function () {
     Array.prototype.forEach.call(document.querySelectorAll('input[name="use_vlc"]'), function (r) {
         r.addEventListener('change', function () { document.getElementById('vlc-downloads').style.display = this.value === '1' ? 'flex' : 'none'; });
     });
+    // por línea y perfil, en este navegador (assets/nf/live.js lo lee en Inicio)
+    var ls = document.getElementById('liveSport');
+    if (ls) {
+        try { ls.value = localStorage.getItem(ls.getAttribute('data-key')) || ''; } catch (x) {}
+        ls.addEventListener('change', function () {
+            try { if (ls.value) localStorage.setItem(ls.getAttribute('data-key'), ls.value); else localStorage.removeItem(ls.getAttribute('data-key')); } catch (x) {}
+            if (window.NF && NF.toast) NF.toast(<?php echo tj('Ajustes guardados correctamente.'); ?>);
+        });
+    }
     var f = document.getElementById('flash');
     if (f) setTimeout(function () { f.style.display = 'none'; }, 3000);
 });

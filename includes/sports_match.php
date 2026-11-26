@@ -254,6 +254,70 @@ function spm_match(array $ev, array &$ix, array $r)
     return ['t' => $tv, 'tm' => spm_find($ev, $ix, $r)];
 }
 
+/**
+ * Canal de cada partido en la lista de esta línea (agenda de Deportes y fila «En vivo ahora» de Inicio):
+ *   $evs: [{k, h, a, lg, ev, tv: [nombres]}]; $epg: también la guía del panel (api/sports_epg.php)
+ *   -> ['m' => {k: {t: [id o ''], tm: id}}, 'g' => {id del partido: [ids]}, 'ch' => {id: [nombre, carpeta]}, 'ev' => [id, carpeta, nombre]]
+ * Se guarda 10 min por línea y partidos (la guía del panel, 10 min por línea). $index devuelve spm_index() (una vez).
+ */
+function spm_resolve(array $evs, $epg, array $rules, callable $index)
+{
+    $line = xt_cache_key('get_live_streams', []);
+    $chOut = function (array $ix, array $list) {
+        $ch = [];
+        foreach ($list as $i) if ($i >= 0 && isset($ix['chans'][$i])) $ch[$ix['chans'][$i]['id']] = [$ix['chans'][$i]['name'], $ix['chans'][$i]['cat']];
+        return $ch;
+    };
+    $ck = 'spmatch|' . $line . '|' . md5(json_encode([$evs, $rules['alias'], array_keys($rules['stop']), $rules['evcat']]));
+    $res = wp_cache_get($ck, 600);
+    if (!is_array($res)) {
+        $ixs = $index();
+        $m = [];
+        $used = [];
+        foreach ($evs as $e) {
+            $r = spm_match($e, $ixs, $rules);
+            $m[$e['k']] = ['t' => array_map(function ($i) use ($ixs) { return $i >= 0 ? $ixs['chans'][$i]['id'] : ''; }, $r['t']), 'tm' => $r['tm'] >= 0 ? $ixs['chans'][$r['tm']]['id'] : ''];
+            foreach ($r['t'] as $i) if ($i >= 0) $used[] = $i;
+            if ($r['tm'] >= 0) $used[] = $r['tm'];
+        }
+        // sin canal exacto: la primera carpeta de eventos
+        $evf = null;
+        foreach ($ixs['chans'] as $i => $c) if ($c['ev']) { $evf = [$c['id'], $c['cat'], (string)($ixs['cats'][$c['cat']] ?? '')]; $used[] = $i; break; }
+        $res = ['m' => $m, 'ch' => $chOut($ixs, $used), 'ev' => $evf];
+        wp_cache_set($ck, $res);
+    }
+    // además, la guía del panel: el canal que tiene el partido en su programación a esa hora (api/sports_epg.php)
+    $g = [];
+    if ($epg) {
+        $gk = 'spepg|' . wp_panel_ck($line);
+        $gr = wp_cache_get($gk, 600);
+        if (!is_array($gr)) {
+            $ixs = $index();
+            $chans = [];
+            $byId = [];
+            foreach (spm_epg_channels($ixs) as $i) {
+                $c = $ixs['chans'][$i];
+                $chans[] = ['id' => $c['id'], 'epg' => $c['epg'], 'name' => $c['name']];
+                $byId[$c['id']] = [$c['name'], $c['cat']];
+            }
+            $j = $chans ? wp_panel_call('sports_epg.php', ['channels' => $chans], 25) : null;
+            $map = [];
+            $gch = [];
+            foreach ((is_array($j['map'] ?? null) ? $j['map'] : []) as $eid => $ids) {
+                $ok = [];
+                foreach ((array)$ids as $id) if (isset($byId[(string)$id])) { $ok[] = (string)$id; $gch[(string)$id] = $byId[(string)$id]; }
+                if ($ok) $map[(string)$eid] = $ok;
+            }
+            $gr = ['map' => $map, 'ch' => $gch];
+            if (is_array($j)) wp_cache_set($gk, $gr);
+        }
+        $g = $gr['map'];
+        $res['ch'] = $res['ch'] + $gr['ch'];
+    }
+    $res['g'] = $g;
+    return $res;
+}
+
 /** canales deportivos para buscar el partido en la guía del panel (api/sports_epg.php): por el nombre del canal o de su
  *  carpeta, sin las carpetas de eventos; primero los que tienen guía propia (hasta 600, como Android TV y Vega) */
 function spm_epg_channels(array $ix, $max = 600)
