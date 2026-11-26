@@ -74,8 +74,7 @@ const Billboard = memo(function Billboard({ info, compact }: { info: Info; compa
       ) : null}
       {art ? <ChainImage sources={artSrc} style={s.heroImg} resizeMode="cover" /> : null}
       {/* partido: imagen del evento o cancha con los dos escudos; sin nada de eso queda el último fondo congelado */}
-      {info.live && !it && under && !(info.live.th || info.live.hb || info.live.ab) ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
-      {info.live && (info.live.th || info.live.hb || info.live.ab) ? <LiveBackdrop c={info.live} /> : null}
+      {info.live ? <LiveBackdrop c={info.live} /> : null}
       <Image source={require('../../assets/image/grad_bottom.png')} style={[s.heroGrad, { tintColor: C.bg }]} resizeMode="stretch" />
       <Image source={require('../../assets/image/grad_left.png')} style={[s.heroShade, { tintColor: C.bg }]} resizeMode="stretch" />
       {sideSrc.length ? <ChainImage sources={sideSrc} style={[s.side, compact && s.sideCompact]} resizeMode="cover" /> : null}
