@@ -11,6 +11,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.runtime.getValue
+import com.latmpx.player.ui.theme.NfBg
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -104,3 +110,26 @@ fun AppState.itemFromProgress(p: Progress): Item? {
         else -> null
     }
 }
+
+/**
+ * alto de arriba que ocupan la barra de notificaciones y la cámara (muesca, agujero o isla) en este teléfono: las pantallas
+ * de borde a borde (Explorar, ficha, Deportes) dejan ese espacio solo a sus botones y textos, su fondo sigue por detrás
+ */
+@Composable
+fun topInset(): androidx.compose.ui.unit.Dp =
+    androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top)
+        .asPaddingValues().calculateTopPadding()
+
+/**
+ * velo detrás de la hora, la señal y la batería en las pantallas de borde a borde: con el contenido desplazado (scrolled)
+ * toma el color de la app para que nada se lea debajo de los íconos; arriba del todo queda «base» (0 = transparente).
+ * No recibe toques: todo lo de abajo se sigue tocando.
+ */
+@Composable
+fun StatusScrim(scrolled: Boolean, modifier: Modifier = Modifier, base: Float = 0f) {
+    val h = topInset()
+    if (h <= 0.dp) return
+    val a by androidx.compose.animation.core.animateFloatAsState(if (scrolled) 0.96f else base, label = "scrim")
+    Box(modifier.fillMaxWidth().height(h).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(NfBg.copy(alpha = a), NfBg.copy(alpha = a * 0.85f)))))
+}
+

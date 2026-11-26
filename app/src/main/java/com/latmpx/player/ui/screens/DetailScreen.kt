@@ -48,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.layout.layout
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -143,9 +144,14 @@ fun DetailScreen(state: AppState, media: Item) {
         com.latmpx.player.ui.components.ChainImage(remember(bd) { com.latmpx.player.data.PanelImg.backdropSources(bd) }, Modifier.fillMaxSize().blur(28.dp).alpha(0.35f))
         Box(Modifier.fillMaxSize().background(Color(0x66000000)))
     }
-    LazyColumn((if (wide) Modifier.fillMaxHeight().widthIn(max = 680.dp).align(Alignment.TopCenter) else Modifier.fillMaxSize()).background(NfBg)) {
+    // de borde a borde (celular): la imagen grande sigue por detrás de la barra de notificaciones y la cámara, y es más alta
+    // en lo que ocupan, así se ve entera; al bajar, la barra toma el color de la app
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scrolled by remember { androidx.compose.runtime.derivedStateOf { list.firstVisibleItemIndex > 0 } }
+    val inset = if (tv) 0.dp else topInset()
+    LazyColumn((if (wide) Modifier.fillMaxHeight().widthIn(max = 680.dp).align(Alignment.TopCenter) else Modifier.fillMaxSize()).background(NfBg), state = list) {
         item {
-            Box(Modifier.fillMaxWidth().then(if (tv) Modifier.height(300.dp) else Modifier.aspectRatio(if (wide) 2f else 16f / 10f))) {
+            Box(Modifier.fillMaxWidth().then(if (tv) Modifier.height(300.dp) else Modifier.heroAspect(if (wide) 2f else 16f / 10f, inset))) {
                 if (bd.isNotEmpty()) com.latmpx.player.ui.components.ChainImage(remember(bd) { com.latmpx.player.data.PanelImg.backdropSources(bd) }, Modifier.fillMaxSize())
                 else com.latmpx.player.ui.components.ItemPoster(media, Modifier.fillMaxSize())
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x33000000), Color(0x99141414), NfBg))))
@@ -327,8 +333,10 @@ fun DetailScreen(state: AppState, media: Item) {
         }
         item { Spacer(Modifier.height(40.dp)) }
     }
-    // celular: flecha «Atrás» arriba a la izquierda, como la app de Netflix (Atrás del teléfono hace lo mismo)
-    if (!tv) PhoneBackButton(state, Modifier.align(androidx.compose.ui.Alignment.TopStart).statusBarsPadding().padding(8.dp), overlay = true)
+    // la hora y la batería se leen sobre la imagen (velo suave) y sobre el texto al bajar (color de la app)
+    if (!tv) StatusScrim(scrolled, Modifier.align(androidx.compose.ui.Alignment.TopCenter), base = 0.35f)
+    // celular: flecha «Atrás» arriba a la izquierda, debajo de la barra y la cámara, como la app de Netflix
+    if (!tv) PhoneBackButton(state, Modifier.align(androidx.compose.ui.Alignment.TopStart).padding(top = inset).padding(8.dp), overlay = true)
     }
 }
 
@@ -399,3 +407,14 @@ private fun lastEpLabel(seasons: Map<Int, List<Episode>>, key: String): String {
     val e = seasons.values.flatten().firstOrNull { it.id == eid } ?: return tr(R.string.resume)
     return tr(R.string.resume_ep, e.season, e.num)
 }
+
+/** ancho × proporción de la imagen grande, más el alto de la barra de notificaciones y la cámara (que la tapan) */
+private fun Modifier.heroAspect(ratio: Float, extra: androidx.compose.ui.unit.Dp): Modifier = this.then(
+    Modifier.layout { m, c ->
+        val w = c.maxWidth
+        val h = (w / ratio).toInt() + extra.roundToPx()
+        val pl = m.measure(c.copy(minWidth = w, maxWidth = w, minHeight = h, maxHeight = h))
+        layout(w, h) { pl.place(0, 0) }
+    },
+)
+

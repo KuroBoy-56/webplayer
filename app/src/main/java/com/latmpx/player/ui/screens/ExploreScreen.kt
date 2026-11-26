@@ -122,13 +122,17 @@ fun ExploreScreen(state: AppState) {
     val full: (androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope) -> GridItemSpan = { GridItemSpan(it.maxLineSpan) }
     val sorts = listOf(ExSort.RECENT to stringResource(R.string.ex_sort_recent), ExSort.AZ to "A - Z", ExSort.RATING to stringResource(R.string.ex_sort_rating))
     val accent = NfRed
+    val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    // ya no se ve el principio del degradado: la barra de notificaciones toma el color de la app
+    val scrolled by remember { androidx.compose.runtime.derivedStateOf { grid.firstVisibleItemIndex > 0 || grid.firstVisibleItemScrollOffset > 40 } }
+    val inset = topInset()
 
     BoxWithConstraints(Modifier.fillMaxSize().background(NfBg)) {
         // 3 columnas en el teléfono, como el web player; más en la tableta
         val cols = if (maxWidth < 600.dp) 3 else ((maxWidth - pad * 2 + gap) / (150.dp + gap)).toInt().coerceAtLeast(4)
         val colW = (maxWidth - pad * 2 - gap * (cols - 1)) / cols
         LazyVerticalGrid(
-            columns = GridCells.Fixed(cols), contentPadding = PaddingValues(start = pad, end = pad, bottom = 90.dp),
+            columns = GridCells.Fixed(cols), state = grid, contentPadding = PaddingValues(start = pad, end = pad, bottom = 90.dp),
             horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap),
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -136,7 +140,8 @@ fun ExploreScreen(state: AppState) {
             item(key = "head", span = full) {
                 Column(
                     Modifier.fullBleed(pad).background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.42f), accent.copy(alpha = 0.14f), NfBg)))
-                        .padding(top = 10.dp, bottom = 18.dp),
+                        // el degradado sigue por detrás de la barra de notificaciones y la cámara; las secciones, justo debajo
+                        .padding(top = inset + 10.dp, bottom = 18.dp),
                 ) {
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = pad), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         ExChip(stringResource(R.string.series), false, big = true) { state.stack.clear(); state.tab = Tab.SERIES }
@@ -196,6 +201,7 @@ fun ExploreScreen(state: AppState) {
                 PosterCard(it, colW, onClick = { state.push(Route.Detail(it)) }, progress = if (p != null && p.duration > 0) p.position.toFloat() / p.duration else 0f)
             }
         }
+        StatusScrim(scrolled, Modifier.align(Alignment.TopCenter))
     }
 }
 
