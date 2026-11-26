@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Equipos favoritos — versión 3.0.6 (26 de noviembre, séptima parte)
+- **Ajustes › Equipos favoritos** (solo con perfiles, debajo de «Deporte preferido»): se elige **deporte → liga** (agrupadas en «Selecciones nacionales» y «Ligas y copas») **→ equipo** y se pulsa **Agregar equipo**; los elegidos salen como chips con su escudo y una × para quitarlos. Al cambiar el «Deporte preferido» la casilla abre directo las ligas de ese deporte.
+- Los equipos salen de los próximos partidos que el panel ya guarda (`sportsschedule.php?ajax=fixtures`, 12 h en el hosting): **no se gasta ninguna consulta extra a TheSportsDB**.
+- Se guardan **en la nube** (`api/alerts.php` del panel, por línea y perfil), así la app de celular y la de computadora con el mismo usuario y perfil avisan 30 y 10 minutos antes y al empezar. El web player no avisa: al guardar sale «Guardado en la nube. Las notificaciones solo llegan a la app de celular (Android o iOS) y a la de computadora.»
+- Archivos: `settings.php`, `includes/lang/en.php`, `includes/lang/pt.php`, `includes/lang/fr.php`, `includes/core.php` (versión).
+
 ## Estadio de fondo en Deportes — versión 3.0.5 (26 de noviembre, sexta parte)
 - **Deportes** con perfiles (uno elegido) lleva de fondo el estadio sin personas, igual que las TV y la computadora: la imagen **horizontal** con la pantalla acostada (computadora, tableta) y la **vertical** con el celular parado (`@media (orientation: portrait)`). Encima, el color de la app (el del distribuidor o el del dueño) la oscurece hacia abajo para que todo se lea; es una capa fija que no se mueve al bajar (también en iPhone). Sin perfiles, Deportes queda como siempre.
 - Archivos: `sportsschedule.php`, `assets/nf/sports-bg.webp` (nuevo, 3840×2160), `assets/nf/sports-bg-v.webp` (nuevo, 2160×3840), `includes/core.php` (versión).

@@ -2,6 +2,34 @@
 include "session.php";
 $pagename = t('Ajustes');
 include "config.php";
+
+/* Equipos favoritos (con perfiles): se guardan en la nube del panel (api/alerts.php, por línea y perfil); el celular y la
+   computadora avisan 30 y 10 minutos antes y al empezar. GET = la lista; POST {teams} = reemplazarla. */
+if (($_GET['ajax'] ?? '') === 'teams') {
+    require_once __DIR__ . '/includes/sports_live.php';
+    wp_session_read_close();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: private, no-store');
+    if (!wp_sports_live_allowed()) { echo json_encode(['ok' => false, 'enabled' => false]); exit; }
+    $prof = (string)(wp_prof_state()['id'] ?? '');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        // solo desde esta misma página (un formulario de otro sitio no puede mandar esta cabecera)
+        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') { http_response_code(403); echo json_encode(['ok' => false]); exit; }
+        $in = json_decode((string)file_get_contents('php://input'), true);
+        $teams = [];
+        foreach (array_slice(is_array($in['teams'] ?? null) ? $in['teams'] : [], 0, 40) as $t) {
+            if (!is_array($t) || trim((string)($t['n'] ?? '')) === '') continue;
+            $teams[] = ['n' => mb_substr((string)$t['n'], 0, 120), 'l' => mb_substr((string)($t['l'] ?? ''), 0, 120), 'b' => mb_substr((string)($t['b'] ?? ''), 0, 300),
+                'lg' => mb_substr((string)($t['lg'] ?? ''), 0, 20), 'sp' => mb_substr((string)($t['sp'] ?? ''), 0, 40)];
+        }
+        $j = wp_panel_call('alerts.php', ['action' => 'set_teams', 'teams' => $teams, 'profile' => $prof], 12);
+    } else {
+        $j = wp_panel_call('alerts.php' . ($prof !== '' ? '?profile=' . rawurlencode($prof) : ''), null, 12);
+    }
+    $on = is_array($j) && !empty($j['success']) && !empty($j['enabled']);
+    echo json_encode(['ok' => $on, 'teams' => $on && is_array($j['teams'] ?? null) ? $j['teams'] : []], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 if (isset($_COOKIE["settings_array"])) {
     $SettingArray = json_decode($_COOKIE["settings_array"], true);
     $stream_type = isset($SettingArray["stream_type"]) ? $SettingArray["stream_type"] : "m3u8";
@@ -32,6 +60,14 @@ function opt($name, $value, $label, $desc, $current)
     .st-card { background: #1a1a1a; border-radius: 8px; padding: 22px 24px; margin-bottom: 16px; scroll-margin-top: calc(var(--nf-header, 68px) + 14px); }
     .st-card h3 { margin: 0 0 4px; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; }
     .st-card h3 i { color: var(--nf-red); }
+    .ft-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .ft-list:empty { display: none; }
+    .ft-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px 6px 6px; border-radius: 999px; background: #262626; border: 1px solid #3a3a3a; color: #fff; font-size: 14px; }
+    .ft-chip img, .ft-chip .ph { width: 26px; height: 26px; object-fit: contain; border-radius: 50%; background: #333; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; }
+    .ft-chip button { border: 0; background: transparent; color: #aaa; cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; }
+    .ft-chip button:hover { color: #fff; }
+    .ft-add { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; align-items: center; }
+    .ft-note { margin: 14px 0 0 !important; font-size: 13px !important; color: #8c8c8c !important; }
     .st-card > p { margin: 0 0 16px; color: #999; font-size: 14px; }
     .st-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
     .st-opt { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid #333; border-radius: 6px; cursor: pointer; transition: border-color .2s, background .2s; }
@@ -99,6 +135,20 @@ function opt($name, $value, $label, $desc, $current)
                         <span><b><?php echo t('Habilitar tarjetas de plataformas'); ?></b><br><small style="opacity:.7;"><?php echo t('Las plataformas (Netflix, Disney+…) vuelven en Inicio, debajo de «En vivo ahora».'); ?></small></span>
                     </label>
                 <?php endif; ?>
+        <?php if (wp_sports_live_allowed()): ?>
+            <div class="st-card" id="fav-teams" style="margin-top: 16px;">
+                <h3><i class="fa fa-star"></i> <?php echo t('Equipos favoritos'); ?></h3>
+                <p><?php echo t('Te avisamos 30 y 10 minutos antes de cada partido y cuando empieza.'); ?></p>
+                <div class="ft-list" id="ftList"></div>
+                <div class="ft-add">
+                    <select id="ftSport" class="st-select" aria-label="<?php echo e(t('Deporte')); ?>"><option value=""><?php echo t('Deporte'); ?>…</option></select>
+                    <select id="ftLeague" class="st-select" aria-label="<?php echo e(t('Liga')); ?>" disabled><option value=""><?php echo t('Liga'); ?>…</option></select>
+                    <select id="ftTeam" class="st-select" aria-label="<?php echo e(t('Equipo')); ?>" disabled><option value=""><?php echo t('Equipo'); ?>…</option></select>
+                    <button type="button" id="ftAdd" class="nf-btn nf-btn-red" disabled><i class="fa fa-plus"></i> <?php echo t('Agregar equipo'); ?></button>
+                </div>
+                <p class="ft-note"><i class="fa fa-mobile-alt"></i> <?php echo t('Se guarda en la nube con tu usuario y perfil. Las notificaciones solo llegan a la app de celular (Android o iOS) y a la de computadora; aquí no se avisa.'); ?></p>
+            </div>
+        <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>
@@ -124,6 +174,91 @@ document.addEventListener('DOMContentLoaded', function () {
             if (window.NF && NF.toast) NF.toast(<?php echo tj('Ajustes guardados correctamente.'); ?>);
         });
     }
+    // Equipos favoritos: deporte → liga (selecciones y clubes) → equipo, de los próximos partidos que el panel ya guarda
+    (function () {
+        var box = document.getElementById('fav-teams');
+        if (!box) return;
+        var SP = <?php echo json_encode(array_map('t', $live_sports), JSON_UNESCAPED_UNICODE); ?>;
+        var T = { nat: <?php echo tj('Selecciones nacionales'); ?>, clubs: <?php echo tj('Ligas y copas'); ?>, saved: <?php echo tj('Guardado en la nube. Las notificaciones solo llegan a la app de celular (Android o iOS) y a la de computadora.'); ?>,
+            fail: <?php echo tj('No se pudo guardar. Inténtalo otra vez.'); ?>, none: <?php echo tj('Todavía no hay próximos partidos. Prueba en unos minutos.'); ?>, remove: <?php echo tj('Quitar'); ?> };
+        var sSel = document.getElementById('ftSport'), lSel = document.getElementById('ftLeague'), tSel = document.getElementById('ftTeam'), add = document.getElementById('ftAdd');
+        var list = document.getElementById('ftList');
+        var fx = null, teams = [], cur = [];
+        var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+        function get(u, body) {
+            return fetch(u, body ? { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(body) }
+                : { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+        }
+        function opts(sel, first, items) {
+            sel.innerHTML = '<option value="">' + esc(first) + '…</option>' + items;
+            sel.disabled = !items;
+        }
+        function drawList() {
+            list.innerHTML = teams.map(function (t, i) {
+                var b = t.b ? '<img src="' + esc(t.b) + '/tiny" alt="" onerror="this.remove()">' : '<span class="ph">' + esc((t.l || t.n).charAt(0)) + '</span>';
+                return '<span class="ft-chip">' + b + esc(t.l || t.n) + '<button type="button" data-i="' + i + '" aria-label="' + esc(T.remove) + '">×</button></span>';
+            }).join('');
+        }
+        function save(msg) {
+            get('settings.php?ajax=teams', { teams: teams }).then(function (j) {
+                if (j && j.ok) { teams = j.teams || teams; drawList(); if (msg && window.NF && NF.toast) NF.toast(T.saved); }
+                else if (window.NF && NF.toast) NF.toast(T.fail);
+            });
+        }
+        list.addEventListener('click', function (ev) {
+            var b = ev.target.closest('[data-i]'); if (!b) return;
+            teams.splice(+b.getAttribute('data-i'), 1); drawList(); save(false);
+        });
+        function sports() {
+            var seen = {}, h = '';
+            Object.keys(fx.leagues || {}).forEach(function (id) { var sp = fx.leagues[id].sp || ''; if (sp && !seen[sp]) seen[sp] = 1; });
+            Object.keys(seen).sort().forEach(function (sp) { h += '<option value="' + esc(sp) + '">' + esc(SP[sp] || sp) + '</option>'; });
+            opts(sSel, <?php echo tj('Deporte'); ?>, h);
+            // el «Deporte preferido» elegido abre directo sus ligas
+            var pref = document.getElementById('liveSport');
+            if (pref && pref.value && seen[pref.value]) { sSel.value = pref.value; leagues(); }
+        }
+        function leagues() {
+            var sp = sSel.value, nat = '', clubs = '';
+            opts(tSel, <?php echo tj('Equipo'); ?>, ''); add.disabled = true;
+            Object.keys(fx.leagues || {}).forEach(function (id) {
+                var l = fx.leagues[id]; if (l.sp !== sp) return;
+                var o = '<option value="' + esc(id) + '">' + esc(l.n || id) + '</option>';
+                if (l.rg === 'nat') nat += o; else clubs += o;
+            });
+            var h = (nat ? '<optgroup label="' + esc(T.nat) + '">' + nat + '</optgroup>' : '') + (clubs ? '<optgroup label="' + esc(T.clubs) + '">' + clubs + '</optgroup>' : '');
+            opts(lSel, <?php echo tj('Liga'); ?>, sp ? h : '');
+        }
+        function teamList() {
+            var lg = lSel.value, sp = (fx.leagues[lg] || {}).sp || '', m = {};
+            (fx.events || []).forEach(function (e) {
+                if (e.l !== lg) return;
+                if (e.h && !m[e.h]) m[e.h] = { n: e.h, l: e.hn || '', b: e.hb || '', lg: lg, sp: sp };
+                if (e.a && !m[e.a]) m[e.a] = { n: e.a, l: e.an || '', b: e.ab || '', lg: lg, sp: sp };
+            });
+            cur = Object.keys(m).map(function (k) { return m[k]; }).sort(function (x, y) { return (x.l || x.n).localeCompare(y.l || y.n); });
+            opts(tSel, <?php echo tj('Equipo'); ?>, cur.map(function (t, i) { return '<option value="' + i + '">' + esc(t.l || t.n) + '</option>'; }).join(''));
+            add.disabled = true;
+        }
+        sSel.addEventListener('change', leagues);
+        lSel.addEventListener('change', teamList);
+        tSel.addEventListener('change', function () { add.disabled = tSel.value === ''; });
+        add.addEventListener('click', function () {
+            var t = cur[+tSel.value]; if (!t) return;
+            if (!teams.some(function (x) { return x.n === t.n; })) teams.push(t);
+            drawList(); save(true);
+            tSel.value = ''; add.disabled = true;
+        });
+        var pref = document.getElementById('liveSport');
+        if (pref) pref.addEventListener('change', function () { if (fx && pref.value && Array.prototype.some.call(sSel.options, function (o) { return o.value === pref.value; })) { sSel.value = pref.value; leagues(); } });
+        get('settings.php?ajax=teams').then(function (j) { if (j && j.ok) { teams = j.teams || []; drawList(); } });
+        get('sportsschedule.php?ajax=fixtures').then(function (j) {
+            if (!j || !j.on) { box.hidden = true; return; }
+            fx = j;
+            if (!(fx.events || []).length) { opts(sSel, T.none, ''); return; }
+            sports();
+        });
+    })();
     var f = document.getElementById('flash');
     if (f) setTimeout(function () { f.style.display = 'none'; }, 3000);
 });
