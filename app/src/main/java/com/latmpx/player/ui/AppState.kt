@@ -72,6 +72,8 @@ class AppState {
     var profilesFromAccount by mutableStateOf(false)
     /** lo último que mandó el panel (api/profiles.php) */
     var profilesData by mutableStateOf<Profiles.State?>(null)
+    /** por qué hay o no perfiles en esta sesión (Mi cuenta › Perfiles): un texto de strings_profiles.xml, 0 = todavía no se sabe */
+    var profilesNote by mutableStateOf(0)
     /** el perfil ya se eligió (o no hay perfiles): ya se pueden leer Continuar viendo y Mi lista */
     var profileReady by mutableStateOf(false)
 
