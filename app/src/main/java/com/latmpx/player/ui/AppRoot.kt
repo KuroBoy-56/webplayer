@@ -84,6 +84,7 @@ import com.latmpx.player.ui.theme.NfGray
 import com.latmpx.player.ui.theme.NfRed
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** puerta del distribuidor antes del inicio de sesión */
@@ -238,6 +239,13 @@ fun AppRoot() {
         } else state.profileReady = true
     }
     // Continuar viendo y Mi lista del perfil elegido (y otra vez al cambiar de perfil)
+    // avisos de partidos: con equipos favoritos se piden los próximos partidos y se vuelven a programar las alarmas
+    LaunchedEffect(state.session, state.profileReady, Profiles.current) {
+        if (state.session == null || !state.profileReady || Profiles.kids) return@LaunchedEffect
+        val fav = com.latmpx.player.data.MatchAlerts.teams().isNotEmpty()
+        if (fav) runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.latmpx.player.data.SportsPanel.fixtures(0) } }
+        com.latmpx.player.data.MatchAlerts.schedule(com.latmpx.player.data.SportsPanel.cachedFixtures())
+    }
     LaunchedEffect(state.session, state.profileReady, Profiles.current) {
         if (state.session != null && state.profileReady) Cloud.load()
     }
@@ -331,6 +339,9 @@ fun AppRoot() {
             state.profilesOpen != null -> com.latmpx.player.ui.screens.ProfilesScreen(
                 state,
                 onChosen = { p ->
+                    // el avatar va al centro con el circulito mientras se arma todo (null = perfiles apagados: nada que mostrar)
+                    if (p != null) state.entering = p
+                    val t0 = System.currentTimeMillis()
                     scope.launch {
                         Profiles.choose(p)
                         Cloud.clear()
@@ -339,6 +350,14 @@ fun AppRoot() {
                         state.stack.clear(); state.tab = Tab.HOME
                         state.profilesOpen = null
                         state.profileReady = true
+                        if (p != null) {
+                            // Inicio se arma debajo: el circulito sigue hasta que el catálogo está (máx. 20 s)
+                            kotlinx.coroutines.withTimeoutOrNull(20_000) {
+                                androidx.compose.runtime.snapshotFlow { !state.loading || state.movies.isNotEmpty() }.first { it }
+                            }
+                            kotlinx.coroutines.delay((900 - (System.currentTimeMillis() - t0)).coerceAtLeast(150))
+                            state.entering = null
+                        }
                     }
                 },
                 onBack = { if (state.profilesFromAccount && Profiles.current != null) state.profilesOpen = null else (ctx as? android.app.Activity)?.finishAffinity() },
@@ -358,6 +377,7 @@ fun AppRoot() {
                 }
             }, onChangeDistributor = { wipe(null) })
         }
+        state.entering?.let { com.latmpx.player.ui.screens.ProfileEnterOverlay(it) }
         alert.value?.takeIf { state.session != null }?.let { a -> PanelAlertDialog(a) { alert.value = null } }
         if (CacheClear.pending) CacheClearNotice()
     }

@@ -17,6 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -114,12 +116,14 @@ private fun TeamCol(badge: String, name: String, compact: Boolean, away: Boolean
 @Composable
 fun SportCardView(
     e: SportEvent, info: SportInfo?, now: Long, compact: Boolean, modifier: Modifier = Modifier,
-    chan: String? = null, chanFound: Boolean = false, tvLine: String? = null, onTv: () -> Unit,
+    chan: String? = null, chanFound: Boolean = false, tvLine: String? = null, onLong: (() -> Unit)? = null, onTv: () -> Unit,
 ) {
     val st = spStatus(e, info, now)
     val live = st == SpStatus.LIVE
     val shape = RoundedCornerShape(8.dp)
-    FocusBox(onClick = onTv, modifier = modifier, shape = shape, focusScale = 1.03f) { f ->
+    // con aviso activado (mantener presionada la tarjeta): campanita junto al estado
+    val alert = remember(com.latmpx.player.data.MatchAlerts.rev, e.id) { com.latmpx.player.data.MatchAlerts.isMarked(e.id) }
+    FocusBox(onClick = onTv, modifier = modifier, shape = shape, focusScale = 1.03f, onLongClick = onLong) { f ->
         Column(
             Modifier.fillMaxWidth()
                 .background(if (live) Brush.verticalGradient(listOf(Color(0x1FE50914), SpCard)) else Brush.linearGradient(listOf(if (f) Color(0xFF232323) else SpCard, if (f) Color(0xFF232323) else SpCard)), shape)
@@ -130,6 +134,8 @@ fun SportCardView(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${info?.icon.orEmpty()} ${e.league.ifEmpty { info?.label ?: e.sport }}".trim(), color = SpMute, fontSize = 13.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (alert) androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Notifications, null, tint = Color(0xFFFFC107),
+                    modifier = Modifier.padding(end = 6.dp).size(18.dp))
                 Pill(st, e.start)
             }
             if (e.home.isNotBlank() && e.away.isNotBlank()) {

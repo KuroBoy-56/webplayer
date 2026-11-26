@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- avisos de partidos (data/MatchAlerts.kt) y campanita -->
+<resources>
+    <string name="ma_channel">Match alerts</string>
+    <string name="ma_30">The match starts in 30 minutes</string>
+    <string name="ma_10">About to start: 10 minutes to go</string>
+    <string name="ma_live">It has started! The match is live</string>
+    <string name="ma_teams">Favorite teams</string>
+    <string name="ma_teams_none">Pick teams and we will remind you before every match</string>
+    <string name="ma_add_team">Add team</string>
+    <string name="ma_pick_sport">Choose the sport</string>
+    <string name="ma_pick_league">Choose the league</string>
+    <string name="ma_nations">National teams</string>
+    <string name="ma_clubs">Leagues and cups</string>
+    <string name="ma_pick_team">Choose the team</string>
+    <string name="ma_no_teams">No upcoming matches in this league</string>
+    <string name="ma_no_data">No upcoming matches yet. Try again in a few minutes.</string>
+    <string name="ma_loading">Loading…</string>
+    <string name="ma_remove">Remove</string>
+    <string name="ma_exact">On-time alerts</string>
+    <string name="ma_exact_desc">Allow exact alarms so alerts arrive on time</string>
+    <string name="ma_notify_on">Turn on notifications for this event</string>
+    <string name="ma_notify_off">Turn off notifications for this event</string>
+    <string name="ma_on_toast">We will remind you 30 and 10 minutes before and when it starts</string>
+    <string name="ma_off_toast">Alert removed</string>
+    <string name="ma_bell">Notifications</string>
+    <string name="ma_bell_empty">No notifications in the last 24 hours</string>
+    <string name="ma_back">Back</string>
+    <string name="ma_mins_ago">%1$d min ago</string>
+    <string name="ma_hours_ago">%1$d h ago</string>
+    <string name="ma_now">now</string>
+</resources>

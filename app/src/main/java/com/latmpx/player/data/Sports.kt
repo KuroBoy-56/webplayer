@@ -31,6 +31,9 @@ data class SportEvent(
     val leagueId: String = "",
     /** en vivo (api/sports_live.php "pr"): minuto o periodo tal como lo da TheSportsDB ("67", "Q3 5:21", "HT") */
     val progress: String = "",
+    /** selecciones en el idioma de la app (api/sports_fixtures.php "hn" / "an"); vacío = el nombre de siempre */
+    val homeLabel: String = "",
+    val awayLabel: String = "",
 )
 
 data class TvChannel(val name: String, val country: String)
@@ -134,7 +137,7 @@ object Sports {
             homeScore = e.s("hs"), awayScore = e.s("as"), start = start, venue = e.s("v"), status = e.s("st"),
             postponed = e.optBoolean("pp", false),
             tv = e.optJSONArray("tv").mapObj { t -> t.s("n").takeIf { it.isNotBlank() }?.let { TvChannel(it, t.s("c")) } },
-            leagueId = e.s("l"),
+            leagueId = e.s("l"), homeLabel = e.s("hn"), awayLabel = e.s("an"),
         )
     }
 

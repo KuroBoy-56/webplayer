@@ -10,8 +10,23 @@ import com.latmpx.player.data.Net
 import com.latmpx.player.data.Store
 
 class App : Application(), SingletonImageLoader.Factory {
+    companion object {
+        private var started = 0
+        /** alguna pantalla de la app a la vista: los avisos de partidos no salen en la barra de notificaciones */
+        val foreground get() = started > 0
+    }
+
     override fun onCreate() {
         super.onCreate()
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityStarted(a: android.app.Activity) { started++ }
+            override fun onActivityStopped(a: android.app.Activity) { started = (started - 1).coerceAtLeast(0) }
+            override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
+            override fun onActivityResumed(a: android.app.Activity) {}
+            override fun onActivityPaused(a: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
+            override fun onActivityDestroyed(a: android.app.Activity) {}
+        })
         Lang.init(this) // idioma de la app (automático o el elegido en Cuenta)
         Store.init(this)
         Store.deviceIdCache = runCatching { Device.id(this) }.getOrDefault("")
@@ -22,6 +37,7 @@ class App : Application(), SingletonImageLoader.Factory {
         // el Top 10 de la semana nunca puede cerrar la app al abrir
         runCatching { com.latmpx.player.data.WeekTop.init(this) }
         com.latmpx.player.data.SportsPanel.init(this)
+        com.latmpx.player.data.MatchAlerts.init(this) // avisos de partidos (equipos favoritos y partidos marcados)
         com.latmpx.player.data.CatalogCache.init(this)
         com.latmpx.player.data.Downloads.init(this) // descargas para ver sin internet (sigue lo pendiente)
     }

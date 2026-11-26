@@ -114,6 +114,9 @@ fun SportsScreen(state: AppState) {
     var tab by rememberSaveable { mutableStateOf(SpTab.TODAY) }
     var sport by rememberSaveable { mutableStateOf("") }
     var menu by remember { mutableStateOf<Triple<String, String, List<MenuOpt>>?>(null) }
+    // mantener presionada una tarjeta: activar o quitar los avisos de ese partido (MatchAlertsUi.kt)
+    var alertFor by remember { mutableStateOf<SportEvent?>(null) }
+    alertFor?.let { EventAlertDialog(it) { alertFor = null } }
     // el partido que se abrió: al cerrar su menú o volver del canal (también tras «No se pudo reproducir · Cerrar») el foco
     // vuelve a su tarjeta, como Roku y Vega
     var lastOpen by remember { mutableStateOf<String?>(null) }
@@ -332,7 +335,7 @@ fun SportsScreen(state: AppState) {
         items(rows, key = { "e" + it.id }) { e ->
             val c = chanOf(e, false)
             SportCardView(e, d.sports[e.sport], now, compact, if (tv && e.id == lastOpen) Modifier.focusRequester(lastFr) else Modifier,
-                chan = c.first, chanFound = c.second, tvLine = tvLine(e)) { open(e) }
+                chan = c.first, chanFound = c.second, tvLine = tvLine(e), onLong = { alertFor = e }) { open(e) }
         }
         if (rows.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {

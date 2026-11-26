@@ -267,35 +267,8 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
                 }) { state.push(com.latmpx.player.ui.Route.Downloads) }
                 Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
             }
-            // partidos en vivo de Inicio: solo los del deporte elegido (aparece cuando el panel da partidos en vivo)
-            if (com.latmpx.player.data.SportsLive.available && com.latmpx.player.data.Profiles.current != null && !com.latmpx.player.data.Profiles.kids) {
-                var prefOpen by remember { mutableStateOf(false) }
-                var pref by remember(com.latmpx.player.data.Profiles.current) { mutableStateOf(com.latmpx.player.data.Store.preferredSport) }
-                val choices = com.latmpx.player.data.SportsLive.CHOICES
-                SettingsItem(Icons.Filled.SportsSoccer, stringResource(R.string.sl_pref), choices.firstOrNull { it.first == pref }?.second ?: stringResource(R.string.sl_all)) { prefOpen = true }
-                Divider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
-                if (prefOpen) androidx.compose.material3.AlertDialog(
-                    onDismissRequest = { prefOpen = false },
-                    containerColor = Color(0xFF1F1F1F),
-                    title = { Text(stringResource(R.string.sl_pref), color = Color.White) },
-                    text = {
-                        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                            (listOf("" to stringResource(R.string.sl_all)) + choices).forEach { (k, label) ->
-                                Row(
-                                    Modifier.fillMaxWidth().clickable { pref = k; com.latmpx.player.data.Store.preferredSport = k; prefOpen = false }.padding(vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    androidx.compose.material3.RadioButton(selected = pref == k, onClick = null,
-                                        colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = com.latmpx.player.ui.theme.NfRed, unselectedColor = NfGray2))
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(label, color = Color.White, fontSize = 16.sp)
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = { androidx.compose.material3.TextButton(onClick = { prefOpen = false }) { Text(stringResource(R.string.close), color = NfGray2) } },
-                )
-            }
+            // Deporte preferido de «En vivo ahora» y Equipos favoritos con sus avisos (MatchAlertsUi.kt)
+            SportPrefsSection()
             SettingsItem(Icons.Filled.OndemandVideo, stringResource(R.string.stream_format), when(streamFormat) { "ts" -> "MPEG-TS (.ts)"; "auto" -> stringResource(R.string.automatic); else -> "HLS (.m3u8)" }) {
                 streamFormat = when(streamFormat) { "m3u8" -> "ts"; "ts" -> "auto"; else -> "m3u8" }
                 com.latmpx.player.data.Store.streamFormat = streamFormat
@@ -342,7 +315,7 @@ fun AccountScreen(state: AppState, onLogout: () -> Unit, onChangeDistributor: ()
 }
 
 @Composable
-private fun SettingsItem(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+internal fun SettingsItem(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = NfGray2, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(16.dp))
