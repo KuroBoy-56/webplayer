@@ -185,6 +185,8 @@ class PlayerActivity : ComponentActivity() {
             fullscreen = if (!tv) ({ toggleFullscreen() }) else null,
         )
         setContent {
+            // tableta: los controles más grandes, como en la app (ui/components/TabletScale.kt); la TV nunca
+            com.latmpx.player.ui.components.TabletScale(enabled = !tv) {
             // celular en vertical (1.5.4): el video solo, en el centro de toda la pantalla (negro arriba y abajo), con los
             // mismos controles que en horizontal encima; nada debajo. Girar el teléfono (o «Pantalla completa») pasa a
             // horizontal con el mismo video. Vertical = la ventana es más alta que ancha, medida aquí: la orientación que
@@ -206,6 +208,7 @@ class PlayerActivity : ComponentActivity() {
                     AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
                     PlayerOverlay(ui2, actions)
                 }
+            }
             }
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {

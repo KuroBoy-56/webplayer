@@ -64,7 +64,8 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             LatMpxTheme {
-                CompositionLocalProvider(LocalIsTv provides tv) { AppRoot() }
+                // tableta: todo más grande (ui/components/TabletScale.kt)
+                CompositionLocalProvider(LocalIsTv provides tv) { com.latmpx.player.ui.components.TabletScale { AppRoot() } }
             }
         }
     }
