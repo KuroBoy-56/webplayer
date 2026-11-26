@@ -196,7 +196,9 @@ function findByChannel(tvName: string, ix: Index, items: any[]): number {
   const memo = (ix as any).memo || ((ix as any).memo = new Map<string, number>());
   const hit = memo.get(tvName);
   if (hit !== undefined) return hit;
-  const r = findByChannelOnce(tvName, ix, items);
+  let r = findByChannelOnce(tvName, ix, items);
+  // un nombre solo es su primer canal ("ESPN" = "ESPN 1", "DAZN" = "DAZN 1")
+  if (r < 0 && !/\d$/.test(channelKey(tvName).join(''))) r = findByChannelOnce(tvName + ' 1', ix, items);
   memo.set(tvName, r);
   return r;
 }
@@ -278,7 +280,8 @@ function epgChannels(chans: Chan[], items: any[], cats: { id: string; name: stri
   return withEpg.concat(noEpg).slice(0, maxN);
 }
 
-export type SportMatch = { best: Item | null; teams: Item | null; tv: { n: string; c: string; ch: Item | null }[]; epg?: Item[] };
+// u = no es de la agenda: donde suele transmitirse (panel "tvh"); guess = best es solo uno de esos (la fila «En vivo ahora» no lo usa)
+export type SportMatch = { best: Item | null; teams: Item | null; tv: { n: string; c: string; ch: Item | null; u?: boolean }[]; epg?: Item[]; guess?: boolean };
 
 // evento -> canales: el primero de sus canales de TV que tiene el cliente, si no por equipos / nombre
 // del evento. folder = primera carpeta de eventos (cuando no hay canal exacto).
@@ -313,15 +316,17 @@ export function matchSports(data: SportsData): { map: Record<string, SportMatch>
   for (const ev of data.events) {
     const tv: SportMatch['tv'] = [];
     let best: Item | null = null;
-    for (const t of Array.isArray(ev.tv) ? ev.tv : []) {
+    // sin los canales de la agenda: los habituales de su equipo de local o de su liga, como último recurso
+    const usual = !(Array.isArray(ev.tv) && ev.tv.length);
+    for (const t of usual ? (Array.isArray(ev.tvh) ? ev.tvh : []) : ev.tv) {
       const i = findByChannel(str(t.n), ix, d.items);
       const ch = i >= 0 ? toItem('live', d.items[i]) : null;
-      tv.push({ n: str(t.n), c: str(t.c), ch });
+      tv.push(usual ? { n: str(t.n), c: str(t.c), ch, u: true } : { n: str(t.n), c: str(t.c), ch });
       if (!best && ch) best = ch;
     }
     const ti = findChannel(ev, teamCandidates(ev, ix, r), r);
     const teams = ti >= 0 ? toItem('live', d.items[ti]) : null;
-    map[str(ev.id)] = { best: best || teams, teams, tv };
+    map[str(ev.id)] = usual ? { best: teams || best, teams, tv, ...(teams || !best ? {} : { guess: true }) } : { best: best || teams, teams, tv };
   }
   const first = chans.find(c => c.isEvent);
   return { map, folder: first ? toItem('live', d.items[first.idx]) : null, epgChans: epgChannels(chans, d.items, d.cats, 600) };
