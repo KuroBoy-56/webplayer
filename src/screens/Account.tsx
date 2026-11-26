@@ -5,6 +5,7 @@ import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import CategoryLock from '../components/CategoryLock';
 import ChangePinDialog from '../components/ChangePinDialog';
 import PinDialog from '../components/PinDialog';
+import TeamsModal from '../components/TeamsModal';
 import { Button } from '../components/ui';
 import { catalog } from '../data/catalog';
 import { panelSubmit } from '../api/panel';
@@ -90,6 +91,7 @@ export default function Account() {
   const [pinMsg, setPinMsg] = useState('');
   const [reg, setReg] = useState('');
   const [langOpen, setLangOpen] = useState(false);
+  const [teamsOpen, setTeamsOpen] = useState(false);
   // recién cambiado el idioma: el foco vuelve a esa fila
   const [langFocus] = useState(takeLangChanged);
   const s0 = st.session;
@@ -186,6 +188,8 @@ export default function Account() {
           }}
         />
       ) : null}
+      {/* con perfiles: los equipos favoritos se guardan en la nube (avisa el celular; en la TV, la campanita) */}
+      {liveTvOn() ? <Setting label={t('Equipos favoritos')} value={t('Elegir')} onPress={() => setTeamsOpen(true)} /> : null}
       <Setting
         label={t('Contenido protegido en esta sesión')}
         value={catalog.unlocked ? t('Desbloqueado') : t('Bloqueado')}
@@ -270,6 +274,7 @@ export default function Account() {
         />
       ) : null}
       {langOpen ? <LangPicker onClose={() => setLangOpen(false)} /> : null}
+      {teamsOpen ? <TeamsModal onClose={() => setTeamsOpen(false)} /> : null}
     </View>
   );
 }

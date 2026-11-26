@@ -209,8 +209,8 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
       const ids = epgMap[id];
       if (!ids?.length) return m;
       const epg = ids.map(liveById).filter(Boolean) as Item[];
-      const tvBest = m.tv.find(x => x.ch)?.ch || null;
-      return { ...m, epg, best: tvBest || epg[0] || m.teams };
+      const tvBest = m.tv.find(x => x.ch && !x.u)?.ch || null;
+      return { ...m, epg, best: tvBest || epg[0] || m.teams, guess: false };
     },
     [found, extra, epgMap],
   );
@@ -375,7 +375,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
       if (tv.ch) seen.add(tv.ch.id);
       opts.push({
         title: iptv && tv.ch ? tv.ch.name : tv.n + (tv.c ? ' (' + tv.c + ')' : ''),
-        sub: tv.ch ? t('en tu lista: {x}', { x: tv.ch.name }) : t('no está en tu lista: se busca el evento'),
+        sub: (tv.u ? t('suele transmitirlo') + ' · ' : '') + (tv.ch ? t('en tu lista: {x}', { x: tv.ch.name }) : t('no está en tu lista: se busca el evento')),
         green: !!tv.ch,
         onPress: () => (tv.ch ? play(tv.ch) : m?.teams ? (say(t('No tienes {x}; te mostramos {y}', { x: tv.n, y: m.teams.name })), play(m.teams)) : (setMenu(null), folder(t('No tienes {x}; ', { x: tv.n })))),
       });

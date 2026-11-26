@@ -556,6 +556,44 @@ class Catalog {
     return out;
   }
 
+  // ---------- Explorar (la lupa de la barra, como browse.php del web player) ----------
+  // Películas y/o series de las categorías visibles, por plataforma y/o género, filtradas por título y ordenadas;
+  // total = cuántas hay (se arman como mucho «max» fichas).
+  explore(type: 'all' | 'vod' | 'series', sort: 'recent' | 'az' | 'rating', platform: string, genre: string, q: string, max = 2000): { items: Item[]; total: number } {
+    const kinds: Kind[] = type === 'all' ? ['vod', 'series'] : [type];
+    const p = PLATFORMS.find(x => x.key === platform);
+    const g = GENRES.find(x => x.key === genre);
+    const needle = fold(q.trim());
+    const all: { k: Kind; i: number; v: number; n: string }[] = [];
+    for (const k of kinds) {
+      const d = this.k[k];
+      if (!d) continue;
+      let idx = p ? this.idxForKw(k, p.kw) : this.allIdx(k);
+      if (g) {
+        const inGenre = new Set(this.idxForKw(k, g.kw));
+        idx = idx.filter(i => inGenre.has(i));
+      }
+      for (const i of idx) {
+        const it = d.items[i];
+        const n = sort === 'az' || needle ? fold(str(it.name)) : '';
+        if (needle && !n.includes(needle)) continue;
+        all.push({ k, i, n, v: sort === 'az' ? 0 : this.sortKey(k, it, sort === 'rating' ? 'rating' : 'added') });
+      }
+    }
+    all.sort(sort === 'az' ? (a, b) => (a.n < b.n ? -1 : a.n > b.n ? 1 : 0) : (a, b) => b.v - a.v);
+    return { items: all.slice(0, max).map(x => toItem(x.k, this.k[x.k]!.items[x.i])), total: all.length };
+  }
+
+  // géneros y plataformas que tienen alguna categoría visible (géneros: del tipo elegido)
+  exploreTags(type: 'all' | 'vod' | 'series', platforms: boolean): { genres: Platform[]; platforms: Platform[] } {
+    const has = (kinds: Kind[], kw: string[]) => kinds.some(k => this.visibleCats(k).some(c => matchesKw(c.name, kw)));
+    const kinds: Kind[] = type === 'all' ? ['vod', 'series'] : [type];
+    return {
+      genres: GENRES.filter(g => has(kinds, g.kw)),
+      platforms: platforms ? PLATFORMS.filter(x => has(['vod', 'series'], x.kw)) : [],
+    };
+  }
+
   // ---------- búsqueda ----------
   // nombres normalizados una vez por catálogo (Buscar arma los resultados mientras se escribe: antes se normalizaban
   // todos los títulos en cada tecla y el Fire TV se trababa), como Android

@@ -18,7 +18,9 @@ import Account from './Account';
 import Browse from './Browse';
 import Live from './Live';
 import MyList from './MyList';
-import Search from './Search';
+import Explore from './Explore';
+import Bell from '../components/Bell';
+import { liveTvOn } from '../data/liveTv';
 import Sports from './Sports';
 
 type Section = 'home' | 'series' | 'movies' | 'live' | 'sports' | 'mylist' | 'search' | 'account';
@@ -57,7 +59,7 @@ const SectionContent = memo(function SectionContent({ section, active, back }: {
   if (section === 'live') return <Live active={active} />;
   if (section === 'sports') return <Sports active={active} back={back} />;
   if (section === 'mylist') return <MyList />;
-  if (section === 'search') return <Search active={active} />;
+  if (section === 'search') return <Explore active={active} />;
   return <Account />;
 });
 
@@ -212,6 +214,8 @@ export default function Main({ active }: { active: boolean }) {
             </Focusable>
           ))}
           {withProfiles ? iconBtn(searchIcon) : null}
+          {/* con perfiles: la campanita con los partidos de hoy de los equipos favoritos y los marcados */}
+          {withProfiles && profile && liveTvOn() ? <Bell profile={profile.id} iconStyle={s.icon} focusStyle={s.iconF} /> : null}
         </View>
         {loading ? <Text style={s.loading}>{t(loading === 'vod' ? 'Cargando películas…' : loading === 'series' ? 'Cargando series…' : 'Cargando canales…')}</Text> : null}
         {withProfiles ? null : ICONS.map(iconBtn)}
