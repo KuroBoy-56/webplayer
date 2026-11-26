@@ -9,4 +9,8 @@
     <string name="sl_plat">Activer les cartes des plateformes</string>
     <string name="sl_plat_on">Activé : les plateformes après « En direct »</string>
     <string name="sl_plat_off">Désactivé</string>
+    <string name="sl_go_sports">Aller aux Sports</string>
+    <string name="sl_go_sports_sub">Tout le programme d’aujourd’hui et de demain</string>
+    <string name="sp_tab_finished">Terminés</string>
+    <string name="sp_fin_empty">Aucun événement n’est encore terminé aujourd’hui. Ceux du jour apparaissent ici une fois finis (vidé à 00:00).</string>
 </resources>

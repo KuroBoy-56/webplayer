@@ -9,4 +9,8 @@
     <string name="sl_plat">Ativar cartões de plataformas</string>
     <string name="sl_plat_on">Ativado: as plataformas vêm depois de «Ao vivo agora»</string>
     <string name="sl_plat_off">Desativado</string>
+    <string name="sl_go_sports">Ir para Esportes</string>
+    <string name="sl_go_sports_sub">Toda a agenda de hoje e amanhã</string>
+    <string name="sp_tab_finished">Finalizados</string>
+    <string name="sp_fin_empty">Nenhum evento terminou hoje ainda. Os de hoje aparecem aqui quando terminam (esvazia às 00:00).</string>
 </resources>

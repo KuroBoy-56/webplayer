@@ -98,7 +98,7 @@ fun TvHomeScreen(state: AppState) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val rows = remember(movies, series, platforms, state.movieCats, state.seriesCats, state.refresh, Cloud.rev, com.latmpx.player.data.WeekTop.rev, live) {
         val out = ArrayList<BrowseRow>()
-        if (live.isNotEmpty()) out += BrowseRow.Live("live", tLive, live) { c ->
+        if (live.isNotEmpty()) out += BrowseRow.Live("live", tLive, live, onSports = { state.stack.clear(); state.tab = com.latmpx.player.ui.Tab.SPORTS }) { c ->
             val list = state.live.filter { it.categoryId == c.best.categoryId }.ifEmpty { listOf(c.best) }
             com.latmpx.player.player.Play.live(ctx, list, list.indexOfFirst { it.id == c.best.id }.coerceAtLeast(0))
         }

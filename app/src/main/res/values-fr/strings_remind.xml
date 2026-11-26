@@ -9,4 +9,6 @@
     <string name="rm_phone">Pour recevoir les notifications de vos matchs et équipes favoris, l\'application %1$s doit être installée sur votre téléphone.</string>
     <string name="rm_failed">Impossible d\'enregistrer le rappel. Réessayez.</string>
     <string name="rm_ok">Compris</string>
+    <string name="rm_late_title">Impossible de l’activer</string>
+    <string name="rm_late">Les rappels ne peuvent être activés que pour les matchs qui commencent dans plus de 5 minutes.</string>
 </resources>

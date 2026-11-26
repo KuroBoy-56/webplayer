@@ -9,4 +9,6 @@
     <string name="rm_phone">Para recibir las notificaciones de tus partidos y equipos favoritos debes tener la app %1$s instalada en tu celular.</string>
     <string name="rm_failed">No se pudo guardar el recordatorio. Inténtalo otra vez.</string>
     <string name="rm_ok">Entendido</string>
+    <string name="rm_late_title">No se puede activar</string>
+    <string name="rm_late">Los recordatorios solo se pueden activar en partidos que empiezan en más de 5 minutos.</string>
 </resources>
