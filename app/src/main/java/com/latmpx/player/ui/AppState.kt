@@ -80,6 +80,8 @@ class AppState {
     var profilesData by mutableStateOf<Profiles.State?>(null)
     /** el perfil ya se eligió (o no hay perfiles): ya se pueden leer Continuar viendo y Mi lista */
     var profileReady by mutableStateOf(false)
+    /** el perfil recién elegido: su avatar en el centro con el circulito hasta que Inicio está listo (ProfileEnter.kt) */
+    var entering by mutableStateOf<com.latmpx.player.data.Profiles.Profile?>(null)
 
     fun openProfiles(manage: Boolean) {
         profilesFromAccount = true

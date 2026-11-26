@@ -246,3 +246,4 @@ La app está en español (por defecto), inglés, portugués (Brasil) y francés:
 | `ui/` | Pantallas en Jetpack Compose: activación, inicio, películas, series, TV en vivo, deportes, mi lista, buscar, cuenta, detalle |
 | `player/` | Reproductor ExoPlayer (`PlayerActivity.kt`) |
 | `Device.kt` | Detección de TV o teléfono y código del equipo |
+| Elegir perfil | **1.7.0:** al elegir un perfil su avatar va al centro de la pantalla con el nombre y el circulito girando mientras se arma Inicio (y se filtra el perfil infantil); no se ve nada a medio cargar (`ui/screens/ProfileEnter.kt`). |
