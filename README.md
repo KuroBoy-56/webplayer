@@ -4,6 +4,10 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.1.0 (como Android 1.6.3)
+
+- **Destacado en el iPad como Netflix:** en el iPad (vertical y girado) Inicio, Películas y Series muestran una sola tarjeta ancha y apaisada: el fondo horizontal del título (`PanelImg.backdropSources`) y, abajo a la izquierda, el título, año · categoría · nota, la sinopsis y «Reproducir» / «Mi lista» en cápsula con los colores del dueño o del distribuidor. Pasa sola cada 6,5 s o con el dedo y nunca ocupa más de la mitad de la pantalla (`wideCard` en `LatMpx/UI/HeroCards.swift`). En el iPhone no cambia nada.
+
 ## Novedades de la 1.0.13 (como Android 1.5.9)
 
 - **Barra de abajo flotante como Netflix:** cápsula oscura con **Inicio, TV en vivo, Buscar y Perfil** (la inicial del
