@@ -43,10 +43,4 @@
     <string name="prof_add_short">Ajouter</string>
     <string name="prof_feat_movie">Film</string>
     <string name="prof_feat_show">Série</string>
-    <string name="prof_status">Profils</string>
-    <string name="prof_st_on">Activés</string>
-    <string name="prof_st_off">Désactivés dans le panneau</string>
-    <string name="prof_st_one">Ligne à 1 connexion</string>
-    <string name="prof_st_no_panel">Le panneau n\'a pas répondu</string>
-    <string name="prof_st_demo">Ligne démo</string>
 </resources>

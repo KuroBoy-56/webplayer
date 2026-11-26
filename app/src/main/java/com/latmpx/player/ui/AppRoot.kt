@@ -227,18 +227,10 @@ fun AppRoot() {
         state.profilesOpen = null
         Profiles.choose(null)
         Kids.resetPending()
-        state.profilesNote = 0
-        if (Store.demo) { state.profilesNote = com.latmpx.player.R.string.prof_st_demo; state.profileReady = true; return@LaunchedEffect }
+        if (Store.demo) { state.profileReady = true; return@LaunchedEffect }
         val r = kotlinx.coroutines.withTimeoutOrNull(12_000L) { Profiles.load(s.maxCons.toIntOrNull() ?: 0) }
         if (state.session !== s) return@LaunchedEffect
         val st = (r as? Profiles.Result.Ok)?.state
-        // el motivo se ve en Mi cuenta › Perfiles (antes no había forma de saber por qué no aparecían)
-        state.profilesNote = when {
-            st == null -> com.latmpx.player.R.string.prof_st_no_panel
-            !st.enabled -> com.latmpx.player.R.string.prof_st_off
-            st.max <= 1 -> com.latmpx.player.R.string.prof_st_one
-            else -> com.latmpx.player.R.string.prof_st_on
-        }
         if (st != null && st.enabled && st.max > 1 && st.profiles.isNotEmpty()) {
             state.profilesData = st
             state.profilesFromAccount = false
