@@ -170,7 +170,7 @@ internal fun LiveSportsRow(live: LiveSports, pad: Dp) {
         val names = listOf(e.home, e.away).filter { it.isNotBlank() }.ifEmpty { listOf(e.title).filter { it.isNotBlank() } }
         names.forEach { n -> opts += MenuOpt(tr(R.string.sp_search_x, n)) { menu = null; findChans(n) } }
         opts += MenuOpt(tr(R.string.sp_search_any)) { menu = null; typing = names.firstOrNull().orEmpty() }
-        val title = if (e.home.isNotBlank() && e.away.isNotBlank()) "${e.home} ${e.homeScore.ifBlank { "0" }} - ${e.awayScore.ifBlank { "0" }} ${e.away}" else e.title
+        val title = if (e.home.isNotBlank() && e.away.isNotBlank()) "${e.home} ${e.homeScore.ifBlank { "0" }} - ${e.awayScore.ifBlank { "0" }} ${e.away}" else e.title.ifBlank { e.league }
         menu = Triple(title, clockText(e, tHt) + if (e.league.isNotBlank()) "  ·  ${e.league}" else "", opts)
     }
 
@@ -235,7 +235,13 @@ private fun LiveSportCard(card: LiveCard, onClick: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                if (e.home.isBlank() && e.away.isBlank()) {
+                    // carrera, golf…: sin equipos ni marcador, el nombre del evento
+                    Text(
+                        e.title.ifBlank { e.league }, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2,
+                        overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                    )
+                } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     TeamSide(e.home, e.homeBadge, Modifier.weight(1f))
                     Text(
                         "${e.homeScore.ifBlank { "0" }}  -  ${e.awayScore.ifBlank { "0" }}", color = Color.White, fontSize = 28.sp,
