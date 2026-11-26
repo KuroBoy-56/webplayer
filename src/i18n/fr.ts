@@ -466,6 +466,19 @@ const fr: Record<Key, string> = {
   "¿Eliminar el perfil {n}?": "Supprimer le profil {n} ?",
   "¿Olvidaste el PIN?": "Code PIN oublié ?",
   "¿Quién está viendo?": "Qui regarde ?",
+  "En vivo ahora": "En direct",
+  "Empieza": "Commence",
+  "Descanso": "Mi-temps",
+  "Desactivado": "Désactivé",
+  "Recordarme este partido": "Me rappeler ce match",
+  "Quitar el recordatorio": "Retirer le rappel",
+  "Te avisaremos en tu celular 30 min y 10 min antes y al empezar": "Nous vous préviendrons sur votre téléphone 30 et 10 min avant et au coup d'envoi",
+  "Recordatorio guardado": "Rappel enregistré",
+  "Recordatorio quitado": "Rappel retiré",
+  "Para recibir las notificaciones de tus partidos y equipos favoritos debes tener la app {x} instalada en tu celular.": "Pour recevoir les notifications de vos matchs et équipes favoris, l'application {x} doit être installée sur votre téléphone.",
+  "No se pudo guardar el recordatorio. Inténtalo otra vez.": "Impossible d'enregistrer le rappel. Réessayez.",
+  "Habilitar tarjetas de plataformas": "Activer les cartes des plateformes",
+  "Activado: las plataformas van debajo de «En vivo ahora»": "Activé : les plateformes sous « En direct »",
 };
 
 export default fr;

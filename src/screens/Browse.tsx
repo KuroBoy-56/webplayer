@@ -20,6 +20,8 @@ import { isFav, setMenuHidden, toggleFav, useAppState } from '../state';
 import { t } from '../lib/i18n';
 import { brandInitial, features, useBrandRev } from '../lib/tenant';
 import { alpha, C, px, SIDE, themed } from '../theme';
+import { LiveCard, liveClock, liveTvOn, loadLiveCards, platformCards } from '../data/liveTv';
+import { LiveBackdrop } from '../components/LiveTile';
 
 // última imagen de la portada: queda de fondo mientras carga la siguiente (nunca la pantalla en negro)
 let lastBanner = '';
@@ -29,7 +31,8 @@ export const bannerUri = () => lastBanner;
 const ROWS_HERO = 818;
 const ROWS_IN = 560;
 
-type Info = { item: Item | null; title?: string; plot?: string };
+// live: con el foco en un partido de «En vivo ahora» la portada muestra su cancha con los escudos (o la imagen del evento)
+type Info = { item: Item | null; title?: string; plot?: string; live?: LiveCard };
 
 // el título con lo que se encontró para la portada (fondo, sinopsis, año y nota si el servidor no los tenía)
 const withArt = (x: Item, a: Art): Item => ({
@@ -66,6 +69,9 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
         </View>
       ) : null}
       {art ? <ChainImage sources={artSrc} style={s.heroImg} resizeMode="cover" /> : null}
+      {/* partido: imagen del evento o cancha con los dos escudos; sin nada de eso queda el último fondo congelado */}
+      {info.live && !it && under && !(info.live.th || info.live.hb || info.live.ab) ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
+      {info.live && (info.live.th || info.live.hb || info.live.ab) ? <LiveBackdrop c={info.live} /> : null}
       <Shade side="bottom" style={s.heroGrad} />
       <Shade side="left" style={s.heroShade} />
       {sideSrc.length ? <ChainImage sources={sideSrc} style={[s.side, compact && s.sideCompact]} resizeMode="cover" /> : null}
@@ -103,6 +109,25 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, section, st.catalogRev, platforms, brandRev]);
 
+  // «En vivo ahora» (solo con perfiles): se pregunta al panel cada ttl mientras Inicio está a la vista
+  const [live, setLive] = useState<LiveCard[]>([]);
+  useEffect(() => {
+    if (section !== 'home' || !active || !liveTvOn()) return;
+    let on = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = async () => {
+      const r = await loadLiveCards().catch(() => null);
+      if (!on) return;
+      setLive(r?.cards || []);
+      timer = setTimeout(tick, (r?.ttl || 60) * 1000);
+    };
+    tick();
+    return () => {
+      on = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [section, active, st.profile, st.loaded.live]);
+
   // Continuar viendo y Mi lista (del panel) solo en Inicio, después de las plataformas, con «Ver todo» al final
   const rows = useMemo(() => {
     const extra: Row[] = [];
@@ -113,10 +138,16 @@ export default function Browse({ section, active = true }: { section: 'home' | '
       if (f.length) extra.push({ title: t('Mi lista'), type: 'poster', items: [...f, { kind: 'more', key: 'mylist', label: t('Ver todo'), color: '', extra: 'mylist' }] });
     }
     const out = [...base.rows];
-    const at = out.length && out[0].type === 'platform' ? 1 : 0;
+    // con partidos en vivo la fila va arriba, en el lugar de las plataformas (que vuelven debajo si se activaron en Cuenta)
+    if (section === 'home' && live.length) {
+      if (out.length && out[0].type === 'platform' && !platformCards()) out.shift();
+      out.unshift({ title: t('En vivo ahora'), type: 'live', items: live.map(c => ({ kind: 'live' as const, key: c.id, label: c.h + ' vs ' + c.a, color: '', live: c })) });
+    }
+    let at = out.length && out[0].type === 'live' ? 1 : 0;
+    if (out.length > at && out[at].type === 'platform') at++;
     out.splice(at, 0, ...extra);
     return out;
-  }, [base, st.progress, st.favorites, section]);
+  }, [base, st.progress, st.favorites, section, live]);
 
   const progressOf = useMemo(() => {
     const map = new Map<string, number>();
@@ -236,6 +267,11 @@ export default function Browse({ section, active = true }: { section: 'home' | '
               350,
             );
           }
+        }
+        else if (x.kind === 'live' && x.live) {
+          const c = x.live;
+          const score = c.soon || !(c.hs || c.as) ? '' : '   ' + c.hs + ' - ' + c.as;
+          setInfo({ item: null, title: c.h && c.a ? c.h + ' vs ' + c.a : c.h, plot: [c.lg, (c.soon ? t('Empieza') + ' ' : t('EN VIVO') + ' ') + liveClock(c, t('Descanso')) + score, c.best.name].filter(Boolean).join('  ·  '), live: c });
         }
         else if (x.kind === 'platform') setInfo({ item: null, title: x.label, plot: t('Todo el contenido de {x}: películas y series detectadas en tus categorías.', { x: x.label }) });
         else if (x.kind === 'genre') setInfo({ item: null, title: x.label, plot: t('Películas y series de {x}.', { x: x.label }) });
