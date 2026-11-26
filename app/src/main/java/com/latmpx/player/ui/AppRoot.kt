@@ -471,7 +471,9 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
         val barSpace = com.latmpx.player.ui.screens.phoneBarSpace()
         // Android 15+ dibuja de borde a borde: el contenido empieza bajo la barra de estado (hora, señal, batería) y el
         // buscador y el perfil quedaban tapados. Se deja ese espacio arriba; las pantallas que ya lo tenían no se duplican.
-        Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))) {
+        // girado, también los costados (muesca de la cámara, botones del sistema); con el video a pantalla completa solo arriba, como siempre
+        val safe = WindowInsets.safeDrawing.only(if (state.immersive) WindowInsetsSides.Top else WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+        Box(Modifier.fillMaxSize().windowInsetsPadding(safe).consumeWindowInsets(safe)) {
             Box(Modifier.fillMaxSize().padding(bottom = if (state.immersive || overlay) 0.dp else barSpace)) { saver.SaveableStateProvider(screenKey) { content() } }
             if (!state.immersive) PhoneNavBar(state, Modifier.align(Alignment.BottomCenter))
         }
