@@ -27,6 +27,8 @@ data class SportEvent(
     val postponed: Boolean,
     /** canales donde se transmite (panel: "tv"), los de la región primero */
     val tv: List<TvChannel> = emptyList(),
+    /** sin "tv": donde suelen ir los partidos de local de su equipo (o de su liga) en los últimos 60 días (panel "tvh") */
+    val tvh: List<TvChannel> = emptyList(),
     /** liga del partido en los JSON de Equipos / Selecciones (api/sports_fixtures.php: "l") */
     val leagueId: String = "",
     /** en vivo (api/sports_live.php "pr"): minuto o periodo tal como lo da TheSportsDB ("67", "Q3 5:21", "HT") */
@@ -38,7 +40,8 @@ data class SportEvent(
     val soon: Boolean = false,
 )
 
-data class TvChannel(val name: String, val country: String)
+/** usual = no es de la agenda: es donde suele transmitirse (panel "tvh") */
+data class TvChannel(val name: String, val country: String, val usual: Boolean = false)
 
 data class SportInfo(val label: String, val icon: String, val minutes: Int)
 
@@ -69,7 +72,15 @@ data class SportsData(
 
 /** canales de un partido en la lista del cliente: el automático, cada canal que lo transmite (ch = el del cliente),
  *  los de la guía del panel y el de los equipos (como Roku y Vega) */
-data class SportMatch(val best: Item?, val teams: Item?, val tv: List<Pair<TvChannel, Item?>>, val epg: List<Item> = emptyList()) {
+data class SportMatch(
+    val best: Item?, val teams: Item?, val tv: List<Pair<TvChannel, Item?>>, val epg: List<Item> = emptyList(),
+    /** best es solo un canal habitual (sin agenda, guía ni equipos): la fila «En vivo ahora» no lo usa */
+    val guess: Boolean = false,
+) {
+    /** con la guía del panel: el que lo transmite (de la agenda) y si no, el de la guía; uno habitual nunca le gana */
+    fun withEpg(epg: List<Item>): SportMatch = if (epg.isEmpty()) this
+        else copy(epg = epg, best = tv.firstOrNull { it.second != null && !it.first.usual }?.second ?: epg.first(), guess = false)
+
     /** todos los del cliente, sin repetir: el automático primero */
     fun owned(): List<Item> = (listOf(best) + tv.map { it.second } + epg + listOf(teams)).filterNotNull().distinctBy { it.id }
 }
@@ -139,6 +150,7 @@ object Sports {
             homeScore = e.s("hs"), awayScore = e.s("as"), start = start, venue = e.s("v"), status = e.s("st"),
             postponed = e.optBoolean("pp", false),
             tv = e.optJSONArray("tv").mapObj { t -> t.s("n").takeIf { it.isNotBlank() }?.let { TvChannel(it, t.s("c")) } },
+            tvh = e.optJSONArray("tvh").mapObj { t -> t.s("n").takeIf { it.isNotBlank() }?.let { TvChannel(it, t.s("c"), usual = true) } },
             leagueId = e.s("l"), homeLabel = e.s("hn"), awayLabel = e.s("an"),
         )
     }
@@ -277,7 +289,11 @@ object Sports {
     fun findByChannel(tvName: String, chans: List<Chan>): List<Item> {
         val ix = ix(chans)
         ix.memo[tvName]?.let { return it }
-        return findByChannelOnce(tvName, ix).also { ix.memo[tvName] = it }
+        val found = findByChannelOnce(tvName, ix).ifEmpty {
+            // un nombre solo es su primer canal ("ESPN" = "ESPN 1", "DAZN" = "DAZN 1")
+            if (channelKey(tvName).joinToString("").lastOrNull()?.isDigit() == false) findByChannelOnce("$tvName 1", ix) else emptyList()
+        }
+        return found.also { ix.memo[tvName] = it }
     }
 
     private fun findByChannelOnce(tvName: String, ix: Index): List<Item> {
@@ -328,9 +344,13 @@ object Sports {
      * el nombre del evento; el automático es el primero de los que lo transmiten y, si no, el de los equipos.
      */
     fun match(ev: SportEvent, chans: List<Chan>, r: MatchRules): SportMatch {
-        val tv = ev.tv.map { t -> t to findByChannel(t.name, chans).firstOrNull() }
+        // sin los canales de la agenda: los habituales de su equipo de local o de su liga, como último recurso
+        val usual = ev.tv.isEmpty()
+        val tv = (if (usual) ev.tvh else ev.tv).map { t -> t to findByChannel(t.name, chans).firstOrNull() }
         val teams = find(ev, chans, r)
-        return SportMatch(tv.firstOrNull { it.second != null }?.second ?: teams, teams, tv)
+        val owned = tv.firstOrNull { it.second != null }?.second
+        if (usual) return SportMatch(teams ?: owned, teams, tv, guess = teams == null && owned != null)
+        return SportMatch(owned ?: teams, teams, tv)
     }
 
     // canales deportivos para buscar el partido en la guía del panel (api/sports_epg.php): por el nombre del canal o de su
@@ -353,7 +373,9 @@ object Sports {
     /** El canal del partido: el primero de sus canales de TV que tiene el cliente; si no, por equipos o nombre del evento. */
     fun best(ev: SportEvent, chans: List<Chan>, r: MatchRules): Item? {
         for (t in ev.tv) findByChannel(t.name, chans).firstOrNull()?.let { return it }
-        return find(ev, chans, r)
+        find(ev, chans, r)?.let { return it }
+        for (t in if (ev.tv.isEmpty()) ev.tvh else emptyList()) findByChannel(t.name, chans).firstOrNull()?.let { return it }
+        return null
     }
 
     /** solo los canales de las carpetas que el cliente ve (las ocultas con el PIN no cuentan), como Roku y Vega */

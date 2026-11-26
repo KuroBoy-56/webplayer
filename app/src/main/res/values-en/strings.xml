@@ -428,6 +428,7 @@
     <string name="sp_on_tv">On TV:</string>
     <string name="sp_in_list">in your list: %1$s</string>
     <string name="sp_not_in_list">not in your list: the event will be searched</string>
+    <string name="sp_usual">usually broadcasts it</string>
     <string name="sp_in_guide">in the guide</string>
     <string name="sp_by_teams">by teams</string>
     <string name="sp_search_x">Search channels: “%1$s”</string>

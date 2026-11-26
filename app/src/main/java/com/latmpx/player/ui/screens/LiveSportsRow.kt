@@ -126,9 +126,9 @@ internal fun rememberLiveSports(state: AppState): LiveSports {
             d.events.filter { pref.isEmpty() || it.sport == pref }.mapNotNull { e ->
                 val m = Sports.match(e, c.prepared, d.rules)
                 val epg = epgMap[e.id].orEmpty().mapNotNull { id -> id.toIntOrNull()?.let { c.byId[it] } }
-                val full = if (epg.isEmpty()) m else m.copy(epg = epg, best = m.tv.firstOrNull { it.second != null }?.second ?: epg.first())
+                val full = m.withEpg(epg)
                 // siempre un canal real del servidor IPTV del cliente; sin ninguno, el partido no sale
-                if (full.best == null) null else LiveCard(e, full)
+                if (full.best == null || full.guess) null else LiveCard(e, full)
             }.sortedWith(compareBy({ it.e.soon }, { it.e.start })).take(LIVE_ROW_MAX)
         }
     }
