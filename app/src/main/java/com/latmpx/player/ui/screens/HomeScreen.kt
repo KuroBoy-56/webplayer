@@ -191,6 +191,8 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
             TopChip(stringResource(R.string.movies), current == Tab.MOVIES) { state.tab = Tab.MOVIES }
             // el perfil infantil nunca tiene Deportes
             if (com.latmpx.player.data.Tenant.sportsEnabled && !com.latmpx.player.data.Profiles.kids) TopChip(stringResource(R.string.sports), current == Tab.SPORTS) { state.tab = Tab.SPORTS }
+            // con perfiles (no el infantil): Explorar como la del web player
+            if (com.latmpx.player.data.Profiles.current != null && !com.latmpx.player.data.Profiles.kids) TopChip(stringResource(R.string.categories), false) { state.push(Route.Explore) }
             TopChip(stringResource(R.string.my_list), current == Tab.MYLIST) { state.tab = Tab.MYLIST }
         }
     }

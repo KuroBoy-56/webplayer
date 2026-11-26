@@ -33,6 +33,8 @@ sealed class Route {
     data class Saved(val continueWatching: Boolean) : Route()
     /** Cuenta › Mis descargas (celular) */
     data object Downloads : Route()
+    /** «Categorías» (con perfiles): Explorar como la del web player */
+    data object Explore : Route()
 }
 
 class AppState {
