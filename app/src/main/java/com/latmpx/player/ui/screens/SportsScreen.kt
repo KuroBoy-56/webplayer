@@ -82,6 +82,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.text.KeyboardActions
 import java.util.Calendar
+import androidx.compose.ui.text.style.TextAlign
 
 private fun dayKey(t: Long): Int = Calendar.getInstance(Sports.zone).apply { timeInMillis = t }.let { it.get(Calendar.YEAR) * 1000 + it.get(Calendar.DAY_OF_YEAR) }
 
@@ -281,15 +282,23 @@ fun SportsScreen(state: AppState) {
         }
         return
     }
-    val curTab = if (tab == SpTab.TOMORROW) SpTab.TOMORROW else SpTab.TODAY
-    // Hoy: los de hoy y los que siguen en vivo; Mañana: los de mañana. En vivo, después por hora y al final los terminados
-    val rows = remember(d, curTab, sport, now) {
+    val finTab = com.latmpx.player.data.Profiles.current != null
+    val curTab = when {
+        tab == SpTab.TOMORROW -> SpTab.TOMORROW
+        tab == SpTab.FINISHED && finTab -> SpTab.FINISHED
+        else -> SpTab.TODAY
+    }
+    // Hoy: los de hoy y los que siguen en vivo; Mañana: los de mañana. En vivo, después por hora y al final los terminados.
+    // Con perfiles, Finalizados: los de hoy ya terminados (el último primero; a las 00:00 del panel se vacía) y Hoy sin ellos
+    val rows = remember(d, curTab, sport, now, finTab) {
         val liveL = ArrayList<SportEvent>()
         val nextL = ArrayList<SportEvent>()
         val doneL = ArrayList<SportEvent>()
         for (e in d.events.filter { sport.isEmpty() || it.sport == sport }.sortedBy { it.start }) {
             val st = spStatus(e, d.sports[e.sport], now)
             val day = dayKey(e.start)
+            if (curTab == SpTab.FINISHED) { if (day == todayKey && st == SpStatus.FIN) doneL.add(0, e); continue }
+            if (finTab && curTab == SpTab.TODAY && st == SpStatus.FIN) continue
             if (!((curTab == SpTab.TODAY && (day == todayKey || st == SpStatus.LIVE)) || (curTab == SpTab.TOMORROW && day == tomorrowKey))) continue
             when (st) {
                 SpStatus.LIVE -> liveL += e
@@ -340,7 +349,10 @@ fun SportsScreen(state: AppState) {
         if (rows.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(Modifier.fillMaxWidth().padding(vertical = 60.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(stringResource(R.string.sp_no_matches), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(if (curTab == SpTab.FINISHED) R.string.sp_fin_empty else R.string.sp_no_matches), color = Color.White,
+                        fontSize = if (curTab == SpTab.FINISHED) 16.sp else 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                    )
                 }
             }
         }

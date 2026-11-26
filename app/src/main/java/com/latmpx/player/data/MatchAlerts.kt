@@ -76,9 +76,13 @@ object MatchAlerts {
     fun isMarked(id: String): Boolean = marked().has(id)
 
     /** activa o quita el aviso de un partido; true = quedó activado */
+    /** activar el aviso solo vale si faltan más de 5 minutos para que empiece (quitarlo, siempre; el panel dice 409 too_late) */
+    fun tooLate(e: SportEvent, now: Long = System.currentTimeMillis()): Boolean = e.start <= now + 5 * 60_000L
+
     fun toggle(e: SportEvent): Boolean {
         val m = marked()
         val on = !m.has(e.id)
+        if (on && tooLate(e)) return false
         if (on) m.put(e.id, JSONObject().put("t", title(e)).put("s", e.start).put("sp", e.sport)) else m.remove(e.id)
         prefs.edit().putString(key("events"), m.toString()).apply()
         changed()
