@@ -7,6 +7,7 @@ import { C, px, SIDE, themed } from '../theme';
 import { Focusable } from './ui';
 import { ChainImage } from './ChainImage';
 import { posterSources } from '../lib/images';
+import { LIVE_H, LiveTile } from './LiveTile';
 
 // funciones: la escala se conoce al medir la pantalla (después de importar este archivo)
 export const posterW = () => px(210);
@@ -55,6 +56,7 @@ export const PosterTile = memo(function PosterTile({
 });
 
 export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: { sp: Special; onPress: () => void; onFocus?: () => void }) {
+  if (sp.kind === 'live' && sp.live) return <LiveTile c={sp.live} onPress={onPress} onFocus={onFocus} />;
   if (sp.kind === 'platform') {
     return (
       // mosaico 16:9 como Roku: la imagen entera (las de plataformas son 16:9), fondo oscuro y borde fino. Con ancho y
@@ -87,7 +89,8 @@ export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: {
 
 // alto de la fila de tarjetas y de la fila completa (título + tarjetas): fijo, así la lista del inicio sabe dónde
 // queda cada fila y deja la enfocada siempre arriba (como Roku y Netflix)
-export const cardsHeight = (row: Row) => (row.type === 'platform' ? px(190) : row.type === 'genre' ? px(130) : posterH() + px(30));
+export const cardsHeight = (row: Row) =>
+  row.type === 'live' ? LIVE_H() + px(34) : row.type === 'platform' ? px(190) : row.type === 'genre' ? px(130) : posterH() + px(30);
 export const rowHeight = (row: Row) => cardsHeight(row) + (row.title ? px(46) : px(4)) + px(18);
 
 export const RowView = memo(function RowView({

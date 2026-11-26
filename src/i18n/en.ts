@@ -462,6 +462,19 @@ const en = {
   "¿Eliminar el perfil {n}?": "Delete the profile {n}?",
   "¿Olvidaste el PIN?": "Forgot the PIN?",
   "¿Quién está viendo?": "Who's watching?",
+  "En vivo ahora": "Live now",
+  "Empieza": "Starts",
+  "Descanso": "Half-time",
+  "Desactivado": "Off",
+  "Recordarme este partido": "Remind me of this match",
+  "Quitar el recordatorio": "Remove the reminder",
+  "Te avisaremos en tu celular 30 min y 10 min antes y al empezar": "We will notify you on your phone 30 and 10 min before and at kick-off",
+  "Recordatorio guardado": "Reminder saved",
+  "Recordatorio quitado": "Reminder removed",
+  "Para recibir las notificaciones de tus partidos y equipos favoritos debes tener la app {x} instalada en tu celular.": "To get notifications for your favorite matches and teams you need the {x} app installed on your phone.",
+  "No se pudo guardar el recordatorio. Inténtalo otra vez.": "Could not save the reminder. Try again.",
+  "Habilitar tarjetas de plataformas": "Show platform cards",
+  "Activado: las plataformas van debajo de «En vivo ahora»": "On: platforms go below «Live now»",
 };
 
 export default en;
