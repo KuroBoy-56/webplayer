@@ -127,7 +127,12 @@ function spm_find_by_channel($tvName, array &$ix)
         else continue;
         $scored[] = [$s, strlen($ix['chans'][$i]['name']), $i];
     }
-    if (!$scored) return $ix['memo'][$tvName] = spm_find_loose($q, $ix);
+    if (!$scored) {
+        $loose = spm_find_loose($q, $ix);
+        // un nombre solo es su primer canal ("ESPN" = "ESPN 1", "DAZN" = "DAZN 1")
+        if (!$loose && !ctype_digit(substr($qc, -1))) $loose = spm_find_by_channel($tvName . ' 1', $ix);
+        return $ix['memo'][$tvName] = $loose;
+    }
     usort($scored, function ($a, $b) { return $b[0] <=> $a[0] ?: $a[1] <=> $b[1] ?: $a[2] <=> $b[2]; });
     return $ix['memo'][$tvName] = array_column($scored, 2);
 }

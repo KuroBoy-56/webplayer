@@ -4,6 +4,13 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Más partidos con canal en Deportes — versión 3.0.8 (26 de noviembre, novena parte)
+- **Deportes:** sin los canales de la agenda, el partido usa los **canales habituales** de su equipo de local o de su liga (`tvh`, lo manda el panel; ninguna consulta extra a TheSportsDB) como **último recurso**, después de la guía y de los equipos; en «Ver canales» salen con «suele transmitirlo». «En vivo ahora» de Inicio sigue solo con canales exactos.
+- Un nombre solo es su primer canal: «ESPN» encuentra «ESPN 1», «DAZN» encuentra «DAZN 1» (nunca «ESPN 2» ni «DAZN 2»).
+- Con el panel nuevo los nombres de la agenda llegan sin el país («ESPN 2 Honduras» = «ESPN 2»): más partidos encuentran su canal.
+- Hace falta el panel con `includes/sports_tv.php` del 26 de noviembre (sin él todo sigue como antes).
+- Archivos: `sportsschedule.php`, `includes/sports_match.php`, `includes/lang/en.php`, `includes/lang/pt.php`, `includes/lang/fr.php`, `includes/core.php` (versión).
+
 ## Perfiles en el celular igual a la app — versión 3.0.7 (26 de noviembre, octava parte)
 - **«¿Quién está viendo?» con el celular parado** (`perfiles.php`) se ve **igual que la app de Android**: de fondo, a pantalla completa, el **póster** del destacado de la semana (sin textos, de TMDB; si no tiene, el fondo horizontal), cada 10 s el siguiente; encima su **logo** (o el nombre si TMDB no tiene logo) y «Película · ★ 7.8»; debajo **«Elige tu perfil»**; y los perfiles **de a tres** sobre el **panel curvo** azul pizarra, con **«Agregar»** y **«Editar»** al final. El candado va en un círculo sobre el avatar y «Niños» abajo a la derecha del avatar.
 - La misma lógica que el celular: **«Editar»** pone el lápiz en cada avatar, el título dice «Administrar perfiles», el último lugar dice **«Listo»** y abajo aparecen **«Salir»** y la versión. Arriba no hay nada (como Netflix en el celular).

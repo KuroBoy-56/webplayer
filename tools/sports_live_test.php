@@ -28,6 +28,7 @@ function xt_get($a) { return [
     ['stream_id' => 20, 'category_id' => '2', 'name' => 'PPV 1: Real Madrid vs Barcelona', 'epg_channel_id' => ''],
     ['stream_id' => 30, 'category_id' => '1', 'name' => 'NBA TV', 'epg_channel_id' => 'nbatv.us'],
     ['stream_id' => 40, 'category_id' => '3', 'name' => 'CNN', 'epg_channel_id' => 'cnn'],
+    ['stream_id' => 50, 'category_id' => '1', 'name' => 'DAZN 1 ES FHD', 'epg_channel_id' => ''],
 ]; }
 function wp_user() { return ['username' => 'Juan', 'password' => 'x', 'server' => 'http://srv.example:8080']; }
 require __DIR__ . '/../includes/sports_live.php';
@@ -93,6 +94,17 @@ $ids = array_map(function ($c) { return $c['id']; }, $r['cards']);
 $ok(($GLOBALS['body']['next'] ?? 0) === 1, 'pide next=1 al panel (también los próximos)');
 $ok(count($ids) === 20 && $ids[0] === 'n0' && $ids[1] === 'n1' && $ids[2] === 'n29', 'en vivo primero, después los próximos por hora, como mucho 20');
 $ok(!in_array('viejo', $ids, true) && $r['cards'][2]['soon'] === true && $r['cards'][0]['soon'] === false, 'uno que «empezaba» hace 10 min sin marcador no sale; soon marcado');
+
+// un nombre solo es su primer canal; con número, nunca otro
+$ixt = spm_index(spm_rules([]));
+$ok(spm_find_by_channel('DAZN', $ixt) === [4] && spm_find_by_channel('ESPN 2', $ixt) === [0] && spm_find_by_channel('DAZN 2', $ixt) === [], '«DAZN» = «DAZN 1», «DAZN 2» no');
+// la fila de Inicio no usa los canales habituales (tvh): solo un canal exacto
+$GLOBALS['cache'] = [];
+$u = $ev('u1', 'Lyon', 'Lens', 'Soccer', []);
+$u['tvh'] = [['n' => 'ESPN 2', 'c' => 'MX']];
+$u['s'] = $now - 60;
+$GLOBALS['panel'] = ['enabled' => true, 'ttl' => 30, 'events' => [$u], 'match' => []];
+$ok(wp_sports_live()['cards'] === [], 'un partido solo con canal habitual no sale en «En vivo ahora»');
 
 echo $fail ? "\n$fail fallidas\n" : "\ntodo ok\n";
 exit($fail ? 1 : 0);

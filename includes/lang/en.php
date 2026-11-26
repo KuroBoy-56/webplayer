@@ -437,6 +437,7 @@ return [
     '¿Dónde quieres verlo?' => 'Where do you want to watch it?',
     'en tu lista: {c}' => 'in your list: {c}',
     'no está en tu lista: se busca el evento' => 'not in your list: the event will be searched',
+    'suele transmitirlo' => 'usually broadcasts it',
     'en la guía' => 'in the guide',
     'por equipos' => 'by teams',
     'Buscar canales: «{q}»' => 'Search channels: “{q}”',

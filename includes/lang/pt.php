@@ -437,6 +437,7 @@ return [
     '¿Dónde quieres verlo?' => 'Onde você quer assistir?',
     'en tu lista: {c}' => 'na sua lista: {c}',
     'no está en tu lista: se busca el evento' => 'não está na sua lista: o evento será buscado',
+    'suele transmitirlo' => 'costuma transmitir',
     'en la guía' => 'no guia',
     'por equipos' => 'pelos times',
     'Buscar canales: «{q}»' => 'Buscar canais: «{q}»',

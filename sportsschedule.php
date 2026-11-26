@@ -384,7 +384,7 @@ body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; p
         one: <?php echo tj('{n} partido en vivo'); ?>, many: <?php echo tj('{n} partidos en vivo'); ?>, ended: <?php echo tj('Este evento ya terminó'); ?>,
         offline: <?php echo tj('El evento no está en línea'); ?>, postponed: <?php echo tj('El evento está aplazado'); ?>, loading: <?php echo tj('Buscando los canales, un momento…'); ?>,
         auto: <?php echo tj('Ver el evento (canal automático)'); ?>, autoSub: <?php echo tj('Busca el mejor canal automáticamente'); ?>, where: <?php echo tj('¿Dónde quieres verlo?'); ?>,
-        inList: <?php echo tj('en tu lista: {c}'); ?>, notInList: <?php echo tj('no está en tu lista: se busca el evento'); ?>, inGuide: <?php echo tj('en la guía'); ?>,
+        inList: <?php echo tj('en tu lista: {c}'); ?>, notInList: <?php echo tj('no está en tu lista: se busca el evento'); ?>, usual: <?php echo tj('suele transmitirlo'); ?>, inGuide: <?php echo tj('en la guía'); ?>,
         byTeams: <?php echo tj('por equipos'); ?>, searchX: <?php echo tj('Buscar canales: «{q}»'); ?>, searchAny: <?php echo tj('Buscar canal, equipo o evento…'); ?>,
         typeHint: <?php echo tj('Canal, equipo o evento'); ?>, go: <?php echo tj('Buscar'); ?>, chWith: <?php echo tj('Canales con «{q}»'); ?>,
         noChWith: <?php echo tj('No hay canales con «{q}» en tu lista'); ?>, missing: <?php echo tj('No tienes {c}; te mostramos {d}'); ?>,
@@ -434,11 +434,13 @@ body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; p
         return '<span class="ph">' + ini + '</span>';
     }
     function hasTv(e) { return Array.isArray(e.tv) && e.tv.length > 0; }
+    // sin los canales de la agenda: donde suelen ir los partidos de local de su equipo (o de su liga), "tvh" del panel
+    function tvOf(e) { return hasTv(e) ? e.tv : (Array.isArray(e.tvh) ? e.tvh : []); }
 
     /* ---------- canal de cada partido (sportsschedule.php?ajax=match, una vez y en segundo plano) ---------- */
     var M = {}, G = {}, CH = {}, EVF = null, ready = false, pending = {}, asking = false, fxTimer = 0, sports = null;
     function payload(list) {
-        return list.map(function (e) { return { k: e.k, h: e.h || '', a: e.a || '', lg: e.lg || '', ev: e.ev || '', tv: (e.tv || []).map(function (t) { return t.n; }) }; });
+        return list.map(function (e) { return { k: e.k, h: e.h || '', a: e.a || '', lg: e.lg || '', ev: e.ev || '', tv: tvOf(e).map(function (t) { return t.n; }) }; });
     }
     function ask(list, epg) {
         return fetch('sportsschedule.php?ajax=match' + (epg ? '&epg=1' : ''), { method: 'POST', credentials: 'same-origin',
@@ -482,11 +484,14 @@ body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; p
     function resolve(e) {
         var m = M[e.k];
         if (!ready || !m) return null;
-        var tv = (e.tv || []).map(function (t, i) { return [t, m.t[i] || '']; });
+        var usual = !hasTv(e);
+        var tv = tvOf(e).map(function (t, i) { return [t, m.t[i] || '']; });
         var tvOwned = '';
         tv.some(function (x) { if (x[1]) { tvOwned = x[1]; return true; } return false; });
         var g = (G[e.id] || []).filter(function (id) { return CH[id]; });
-        return { best: tvOwned || (g.length ? g[0] : m.tm), teams: m.tm, tv: tv, g: g };
+        // un canal habitual es lo último: antes la guía y los equipos
+        var sure = usual ? (g.length ? g[0] : m.tm) : (tvOwned || (g.length ? g[0] : m.tm));
+        return { best: sure || tvOwned, teams: m.tm, tv: tv, g: g, usual: usual };
     }
     function owned(r) {
         var out = [], seen = {};
@@ -661,7 +666,7 @@ body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; p
             if (ch) seen[ch] = 1;
             list.push({
                 title: IPTV && ch ? CH[ch][0] : t.n + (t.c ? ' (' + t.c + ')' : ''),
-                sub: ch ? fill(T.inList, { c: CH[ch][0] }) : T.notInList, green: !!ch,
+                sub: (r.usual ? T.usual + ' · ' : '') + (ch ? fill(T.inList, { c: CH[ch][0] }) : T.notInList), green: !!ch,
                 run: function () {
                     if (ch) play(ch);
                     else if (r.teams && CH[r.teams]) play(r.teams, fill(T.missing, { c: t.n, d: CH[r.teams][0] }));
