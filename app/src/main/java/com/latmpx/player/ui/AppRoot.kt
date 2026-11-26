@@ -493,7 +493,16 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
         // Android 15+ dibuja de borde a borde: el contenido empieza bajo la barra de estado (hora, señal, batería) y el
         // buscador y el perfil quedaban tapados. Se deja ese espacio arriba; las pantallas que ya lo tenían no se duplican.
         // girado, también los costados (muesca de la cámara, botones del sistema); con el video a pantalla completa solo arriba, como siempre
-        val safe = WindowInsets.safeDrawing.only(if (state.immersive) WindowInsetsSides.Top else WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+        // Explorar, la ficha y Deportes van de borde a borde: su degradado, su imagen o el estadio siguen por detrás de la barra de
+        // notificaciones y de la cámara (sin franja vacía arriba) y ellas mismas bajan sus botones (topInset() en Common.kt)
+        val edge = !state.immersive && (top is Route.Explore || top is Route.Detail || (top == null && state.tab == Tab.SPORTS))
+        val safe = WindowInsets.safeDrawing.only(
+            when {
+                state.immersive -> WindowInsetsSides.Top
+                edge -> WindowInsetsSides.Horizontal
+                else -> WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+            },
+        )
         Box(Modifier.fillMaxSize().windowInsetsPadding(safe).consumeWindowInsets(safe)) {
             Box(Modifier.fillMaxSize().padding(bottom = if (state.immersive || overlay) 0.dp else barSpace)) { saver.SaveableStateProvider(screenKey) { content() } }
             if (!state.immersive) PhoneNavBar(state, Modifier.align(Alignment.BottomCenter))
