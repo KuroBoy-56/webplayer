@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- partidos en vivo de Inicio (api/sports_live.php) y Ajustes › Deporte preferido -->
+<resources>
+    <string name="sl_title">En vivo ahora</string>
+    <string name="sl_ht">Descanso</string>
+    <string name="sl_live">EN VIVO</string>
+    <string name="sl_pref">Deporte preferido</string>
+    <string name="sl_all">Todos los deportes</string>
+</resources>
