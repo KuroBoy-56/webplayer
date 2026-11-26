@@ -483,6 +483,8 @@ return [
     'Si eliminaste un perfil hace menos de 7 días, créalo con el mismo nombre exacto y volverá con su Continuar viendo y su Mi lista.' => 'Se você excluiu um perfil há menos de 7 dias, crie-o com exatamente o mesmo nome e ele voltará com o seu Continuar assistindo e a sua Minha lista.',
     'Guardar' => 'Salvar',
     'Agregar' => 'Adicionar',
+    'Elige tu perfil' => 'Escolha seu perfil',
+    'Editar' => 'Editar',
     'Eliminar perfil' => 'Excluir perfil',
     'Escribe un nombre.' => 'Digite um nome.',
     'El PIN debe tener 4 números.' => 'O PIN deve ter 4 números.',

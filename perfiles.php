@@ -3,7 +3,7 @@
  * «¿Quién está viendo?»: la pantalla de perfiles (includes/profiles.php). Elegir un perfil, administrarlos (nombre,
  * avatar, PIN, eliminar) y crear otro. Todo se guarda en el panel (api/profiles.php); la web solo recuerda en la
  * sesión el perfil elegido. Horizontal: perfiles en columna a la izquierda y de fondo lo más destacado de la semana
- * en TMDB; vertical (celular): dos por fila y el último centrado.
+ * en TMDB; celular en vertical: como la app de Android (póster del destacado, panel curvo, de a tres, «Agregar» y «Editar»).
  */
 include __DIR__ . '/session.php';
 include __DIR__ . '/config.php';
@@ -32,7 +32,10 @@ $pf_theme = $pf_dist ?: wp_owner_profile_cfg();
 // fondo: lo más destacado de la semana (15 a 20), profiles.js pasa de uno a otro cada 10 s y vuelve al primero
 $pf_bgs = array_map('wp_prof_bg', wp_prof_highlights());
 $pf_bg = $pf_bgs ? $pf_bgs[0] : [];
+// celular en vertical: el diseño de la app de Android (assets/nf/profiles.css usa la misma condición)
+const PF_PORTRAIT_MQ = '(orientation: portrait) and (max-width: 899px)';
 $pf_cfg = [
+    'portraitMq' => PF_PORTRAIT_MQ,
     'state' => $pf_state,
     'csrf' => wp_prof_csrf(),
     'next' => wp_prof_next_ok($pf_next) ? $pf_next : '',
@@ -54,20 +57,21 @@ $pf_cfg = [
     <link rel="icon" href="assets/img/Favicon.ico">
     <link rel="stylesheet" href="assets/vendor/fa/css/all.min.css">
     <link rel="stylesheet" href="assets/nf/app.css?v=14">
-    <link rel="stylesheet" href="assets/nf/profiles.css?v=14">
+    <link rel="stylesheet" href="assets/nf/profiles.css?v=15">
     <?php echo wp_tenant_css($pf_dist); ?>
     <?php echo wp_prof_theme_css($pf_theme); ?>
     <?php echo wp_i18n_script(); ?>
     <script>window.PF=<?php echo json_encode($pf_cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;</script>
-    <script src="assets/nf/profiles.js?v=10" defer></script>
+    <script src="assets/nf/profiles.js?v=11" defer></script>
 </head>
 <body class="pf-body">
 <div class="pf-root" id="pfRoot">
     <?php if ($pf_bg): ?>
-        <img class="pf-bg" id="pfBg" alt="" decoding="async" fetchpriority="high"
+        <?php /* celular en vertical: el póster del título sin textos (profiles.js quita el <source> al pasar al siguiente) */ ?>
+        <picture><?php if ($pf_bg['p'] !== ''): ?><source media="<?php echo PF_PORTRAIT_MQ; ?>" srcset="<?php echo e($pf_bg['p']); ?>"><?php endif; ?><img class="pf-bg" id="pfBg" alt="" decoding="async" fetchpriority="high"
              src="<?php echo e($pf_bg['fhd']); ?>"
              srcset="<?php echo e($pf_bg['fhd'] . ' ' . $pf_bg['w'] . 'w, ' . $pf_bg['orig'] . ' 3840w'); ?>" sizes="100vw"
-             data-fb="<?php echo e(json_encode(array_values(array_unique([$pf_bg['orig'], $pf_bg['fhd']])), JSON_UNESCAPED_SLASHES)); ?>">
+             data-fb="<?php echo e(json_encode(array_values(array_unique([$pf_bg['orig'], $pf_bg['fhd']])), JSON_UNESCAPED_SLASHES)); ?>"></picture>
     <?php endif; ?>
     <div class="pf-shade"></div>
 
@@ -77,7 +81,22 @@ $pf_cfg = [
     </header>
 
     <main class="pf-side">
-        <h1 class="pf-title" id="pfTitle"><?php echo e(t('¿Quién está viendo?')); ?></h1>
+        <div class="pf-head">
+        <?php if ($pf_bg): ?>
+            <?php /* horizontal: abajo a la derecha (fijo); celular en vertical: el logo del título y «Película · ★ 7.8» sobre «Elige tu perfil» */ ?>
+            <aside class="pf-hl" id="pfHl" aria-label="<?php echo e(t('Lo más destacado de la semana')); ?>">
+                <?php if ($pf_bg['lg'] !== ''): ?><img class="pf-hl-lg" src="<?php echo e($pf_bg['lg']); ?>" alt="<?php echo e($pf_bg['t']); ?>" onerror="this.nextElementSibling.classList.remove('pf-hl-has');this.remove()"><?php endif; ?>
+                <b class="pf-hl-t<?php echo $pf_bg['lg'] !== '' ? ' pf-hl-has' : ''; ?>"><?php echo e($pf_bg['t']); ?></b>
+                <span class="pf-hl-m">
+                    <?php if ($pf_bg['r'] > 0): ?><span class="pf-hl-r"><i class="fas fa-star" aria-hidden="true"></i> <?php echo e(number_format((float)$pf_bg['r'], 1)); ?></span><?php endif; ?>
+                    <?php if ($pf_bg['y'] !== ''): ?><span><?php echo e($pf_bg['y']); ?></span><?php endif; ?>
+                    <span><?php echo e($pf_bg['k'] === 'tv' ? t('Serie') : t('Película')); ?></span>
+                </span>
+                <span class="pf-hl-pm"><?php echo e(($pf_bg['k'] === 'tv' ? t('Serie') : t('Película')) . ($pf_bg['r'] > 0 ? '  ·  ★ ' . number_format((float)$pf_bg['r'], 1) : '')); ?></span>
+            </aside>
+        <?php endif; ?>
+        <h1 class="pf-title" id="pfTitle"><span class="pf-tl"><?php echo e(t('¿Quién está viendo?')); ?></span><span class="pf-tp"><?php echo e(t('Elige tu perfil')); ?></span></h1>
+        </div>
         <?php if ($pf_state === null): ?>
             <p class="pf-msg"><?php echo e(t('No se pudieron cargar los perfiles. Puedes entrar con el perfil principal o intentarlo de nuevo.')); ?></p>
             <div class="pf-actions">
@@ -87,19 +106,11 @@ $pf_cfg = [
         <?php else: ?>
             <ul class="pf-list" id="pfList" aria-labelledby="pfTitle"></ul>
             <button type="button" class="pf-btn pf-manage" id="pfManage"><i class="fas fa-pen" aria-hidden="true"></i> <span><?php echo e(t('Administrar perfiles')); ?></span></button>
+            <?php /* celular en vertical, administrando: «Salir» y la versión debajo de los perfiles */ ?>
+            <div class="pf-mfoot"><a class="pf-mexit" href="logout.php" data-noprefetch><?php echo e(t('Salir')); ?></a><span><?php echo e(t('Versión {v}', ['v' => WP_VERSION])); ?></span></div>
         <?php endif; ?>
     </main>
 
-    <?php if ($pf_bg): ?>
-        <aside class="pf-hl" id="pfHl" aria-label="<?php echo e(t('Lo más destacado de la semana')); ?>">
-            <b class="pf-hl-t"><?php echo e($pf_bg['t']); ?></b>
-            <span class="pf-hl-m">
-                <?php if ($pf_bg['r'] > 0): ?><span class="pf-hl-r"><i class="fas fa-star" aria-hidden="true"></i> <?php echo e(number_format((float)$pf_bg['r'], 1)); ?></span><?php endif; ?>
-                <?php if ($pf_bg['y'] !== ''): ?><span><?php echo e($pf_bg['y']); ?></span><?php endif; ?>
-                <span><?php echo e($pf_bg['k'] === 'tv' ? t('Serie') : t('Película')); ?></span>
-            </span>
-        </aside>
-    <?php endif; ?>
     <span class="pf-ver"><?php echo e(t('Versión {v}', ['v' => WP_VERSION])); ?></span>
 </div>
 

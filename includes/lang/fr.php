@@ -483,6 +483,8 @@ return [
     'Si eliminaste un perfil hace menos de 7 días, créalo con el mismo nombre exacto y volverá con su Continuar viendo y su Mi lista.' => 'Si vous avez supprimé un profil il y a moins de 7 jours, recréez-le avec exactement le même nom : il reviendra avec sa Reprise de lecture et sa Ma liste.',
     'Guardar' => 'Enregistrer',
     'Agregar' => 'Ajouter',
+    'Elige tu perfil' => 'Choisissez votre profil',
+    'Editar' => 'Modifier',
     'Eliminar perfil' => 'Supprimer le profil',
     'Escribe un nombre.' => 'Saisissez un nom.',
     'El PIN debe tener 4 números.' => 'Le code PIN doit comporter 4 chiffres.',

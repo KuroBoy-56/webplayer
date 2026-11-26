@@ -483,6 +483,8 @@ return [
     'Si eliminaste un perfil hace menos de 7 días, créalo con el mismo nombre exacto y volverá con su Continuar viendo y su Mi lista.' => 'If you deleted a profile less than 7 days ago, create it with the exact same name and it will come back with its Continue watching and My list.',
     'Guardar' => 'Save',
     'Agregar' => 'Add',
+    'Elige tu perfil' => 'Choose your profile',
+    'Editar' => 'Edit',
     'Eliminar perfil' => 'Delete profile',
     'Escribe un nombre.' => 'Type a name.',
     'El PIN debe tener 4 números.' => 'The PIN must have 4 digits.',

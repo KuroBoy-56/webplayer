@@ -18,6 +18,8 @@
        vuelve al primero. Dos capas: la nueva se pide en la de abajo y, cuando ya cargó, aparece con un fundido encima de
        la anterior (nunca un hueco negro). Si una dirección falla, la siguiente; si no carga ninguna, se salta ese título. */
     var bg = d.getElementById('pfBg');
+    // celular en vertical (la misma condición que profiles.css): el póster del título sin textos, como la app de Android
+    var portrait = window.matchMedia ? matchMedia(C.portraitMq || '(orientation: portrait) and (max-width: 899px)') : {matches: false};
     if (bg) slides(bg, Array.isArray(C.bg) ? C.bg : []);
 
     function slides(first, items) {
@@ -26,8 +28,14 @@
         var layers = [first], top = 0, idx = 0, timer = 0, gen = 0;
         function srcsOf(it) {
             var l = [];
-            [it.fhd, it.orig].forEach(function (u) { if (u && l.indexOf(u) < 0) l.push(u); });
+            [portrait.matches ? it.p : '', it.fhd, it.orig].forEach(function (u) { if (u && l.indexOf(u) < 0) l.push(u); });
             return l;
+        }
+        // la primera capa viene en un <picture> con el póster del celular: al reusarla (o si el póster falla) se quita
+        function bare(img) {
+            var pic = img.parentNode, gone = false;
+            if (pic && pic.tagName === 'PICTURE') [].slice.call(pic.querySelectorAll('source')).forEach(function (sc) { pic.removeChild(sc); gone = true; });
+            return gone;
         }
         // la primera ya viene en el HTML (src + srcset del primer título)
         var fb = [];
@@ -39,6 +47,7 @@
         });
         first.addEventListener('error', function onFirstErr() {
             if (first.getAttribute('data-i') !== null) return;
+            if (bare(first)) return; // falló el póster: el fondo horizontal del mismo título
             first.removeAttribute('srcset');
             var next = fb.shift();
             if (next && next === first.getAttribute('src')) next = fb.shift();
@@ -52,7 +61,8 @@
         second.alt = '';
         second.setAttribute('decoding', 'async');
         second.setAttribute('aria-hidden', 'true');
-        first.parentNode.insertBefore(second, first.nextSibling);
+        var host = first.parentNode.tagName === 'PICTURE' ? first.parentNode : first; // fuera del <picture>: sus <source> no la tocan
+        host.parentNode.insertBefore(second, host.nextSibling);
         layers.push(second);
 
         function schedule() {
@@ -64,6 +74,7 @@
             var it = items[i];
             if (!it || !it.fhd) return;
             var im = new Image();
+            if (portrait.matches && it.p) { im.src = it.p; return; }
             im.sizes = '100vw';
             if (it.orig && it.orig !== it.fhd) im.srcset = it.fhd + ' ' + (it.w || 1920) + 'w, ' + it.orig + ' 3840w';
             im.src = it.fhd;
@@ -103,13 +114,13 @@
                 advance(tries + 1);
             };
             under.classList.remove('ok', 'up');
+            bare(under);
             under.removeAttribute('data-fb');
             under.setAttribute('data-i', String(i));
             under.sizes = '100vw';
-            if (it.orig && it.orig !== it.fhd) under.srcset = it.fhd + ' ' + (it.w || 1920) + 'w, ' + it.orig + ' 3840w';
+            if (!(portrait.matches && it.p) && it.orig && it.orig !== it.fhd) under.srcset = it.fhd + ' ' + (it.w || 1920) + 'w, ' + it.orig + ' 3840w';
             else under.removeAttribute('srcset');
-            urls.shift();
-            under.src = it.fhd || it.orig || '';
+            under.src = urls.shift() || '';
         }
         // título, nota, año y tipo abajo a la derecha, con un fundido corto
         function caption(it) {
@@ -119,8 +130,14 @@
                 var m = '';
                 if (it.r > 0) m += '<span class="pf-hl-r"><i class="fas fa-star" aria-hidden="true"></i> ' + esc(Number(it.r).toFixed(1)) + '</span>';
                 if (it.y) m += '<span>' + esc(it.y) + '</span>';
-                m += '<span>' + esc((C.kinds || {})[it.k] || '') + '</span>';
-                hl.innerHTML = '<b class="pf-hl-t">' + esc(it.t) + '</b><span class="pf-hl-m">' + m + '</span>';
+                var kind = (C.kinds || {})[it.k] || '';
+                m += '<span>' + esc(kind) + '</span>';
+                // vertical: el logo del título (si TMDB tiene) y «Película · ★ 7.8»; horizontal: nombre, nota, año y tipo
+                hl.innerHTML = (it.lg ? '<img class="pf-hl-lg" alt="' + esc(it.t) + '" src="' + esc(it.lg) + '">' : '')
+                    + '<b class="pf-hl-t' + (it.lg ? ' pf-hl-has' : '') + '">' + esc(it.t) + '</b><span class="pf-hl-m">' + m + '</span>'
+                    + '<span class="pf-hl-pm">' + esc(kind + (it.r > 0 ? '  ·  ★ ' + Number(it.r).toFixed(1) : '')) + '</span>';
+                var lg = hl.querySelector('.pf-hl-lg');
+                if (lg) lg.onerror = function () { var t = hl.querySelector('.pf-hl-t'); if (t) t.classList.remove('pf-hl-has'); if (lg.parentNode) lg.parentNode.removeChild(lg); };
                 hl.classList.remove('pf-hl-off');
             }, 220);
         }
@@ -164,6 +181,8 @@
         return '<span class="pf-av' + (cls ? ' ' + cls : '') + '"><img src="' + esc(p.img) + '" alt="" onerror="this.onerror=null;this.src=\'assets/nf/noposter.svg\'">'
             // en el celular la etiqueta «Niños» va sobre el avatar (no suma una línea y los 5 perfiles siguen entrando)
             + (p.kids ? '<span class="pf-kids pf-kids-av" aria-hidden="true">' + esc(tr('Niños')) + '</span>' : '')
+            // celular en vertical: el candado en un círculo sobre el avatar (como la app de Android)
+            + (p.locked ? '<span class="pf-lock-av" aria-hidden="true"><i class="fas fa-lock"></i></span>' : '')
             + '<span class="pf-edit" aria-hidden="true"><i class="fas fa-pen"></i></span></span>';
     }
     function render(focusId) {
@@ -175,12 +194,16 @@
                 + (p.locked ? '<i class="fas fa-lock pf-lock" title="' + esc(tr('Protegido con PIN')) + '"></i>' : '') + '</button></li>';
         });
         if (S.canCreate) {
-            h += '<li><button type="button" class="pf-item pf-add" data-add="1"><span class="pf-av"><i class="fas fa-plus" aria-hidden="true"></i></span>'
-                + '<span class="pf-name">' + esc(tr('Agregar perfil')) + '</span></button></li>';
+            h += '<li><button type="button" class="pf-item pf-add" data-add="1" aria-label="' + esc(tr('Agregar perfil')) + '"><span class="pf-av"><i class="fas fa-plus" aria-hidden="true"></i></span>'
+                + '<span class="pf-name"><span class="pf-tl">' + esc(tr('Agregar perfil')) + '</span><span class="pf-tp">' + esc(tr('Agregar')) + '</span></span></button></li>';
         }
+        // celular en vertical: el último lugar es «Editar» / «Listo» (en horizontal está el botón «Administrar perfiles»)
+        h += '<li class="pf-mcell"><button type="button" class="pf-item pf-act" data-manage="1" aria-pressed="' + managing + '"><span class="pf-av"><i class="fas fa-' + (managing ? 'check' : 'pen') + '" aria-hidden="true"></i></span>'
+            + '<span class="pf-name">' + esc(managing ? tr('Listo') : tr('Editar')) + '</span></button></li>';
         list.innerHTML = h;
         root.classList.toggle('pf-managing', managing);
-        if (titleEl) titleEl.textContent = managing ? tr('Administrar perfiles') : tr('¿Quién está viendo?');
+        if (titleEl) titleEl.innerHTML = managing ? '<span>' + esc(tr('Administrar perfiles')) + '</span>'
+            : '<span class="pf-tl">' + esc(tr('¿Quién está viendo?')) + '</span><span class="pf-tp">' + esc(tr('Elige tu perfil')) + '</span>';
         if (manageBtn) manageBtn.innerHTML = managing ? '<span>' + esc(tr('Listo')) + '</span>' : '<i class="fas fa-pen" aria-hidden="true"></i> <span>' + esc(tr('Administrar perfiles')) + '</span>';
         fitTop();
         var want = focusId ? list.querySelector('[data-id="' + cssEsc(focusId) + '"]') : null;
@@ -211,6 +234,7 @@
         var b = e.target.closest ? e.target.closest('.pf-item') : null;
         if (!b || busy) return;
         lastFocus = b;
+        if (b.hasAttribute('data-manage')) { managing = !managing; render(); var m = list.querySelector('[data-manage]'); if (m) m.focus({preventScroll: true}); return; }
         if (b.hasAttribute('data-add')) { openEdit(null); return; }
         var p = find(b.getAttribute('data-id'));
         if (!p) return;

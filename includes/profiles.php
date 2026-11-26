@@ -246,7 +246,11 @@ function wp_prof_theme_css(array $cfg = null)
     $p = wp_tenant_palette($cfg);
     if ($p === null) return '';
     return '<style id="pf-dist">:root{--pf-bg:' . $p['bg'] . ';--pf-bg-rgb:' . implode(',', wp_hex_rgb($p['bg'])) . ';--pf-card:' . $p['surface']
-        . ';--pf-focus:' . $p['focus'] . ';--pf-on:' . $p['accent'] . '}</style>';
+        . ';--pf-focus:' . $p['focus'] . ';--pf-on:' . $p['accent']
+        // celular en vertical (como la app de Android): azul noche abajo, el panel curvo y el texto suave
+        . ';--pf-navy:' . ($navy = wp_mix($p['bg'], $p['accent'], 0.12)) . ';--pf-navy-rgb:' . implode(',', wp_hex_rgb($navy))
+        . ';--pf-arc1:' . wp_mix($p['surface'], $p['accent'], 0.20) . ';--pf-arc2:' . wp_mix($p['surface'], $p['accent'], 0.35)
+        . ';--pf-soft:' . wp_mix($p['bg'], $p['text'], 0.78) . '}</style>';
 }
 
 /**
@@ -287,7 +291,7 @@ function wp_prof_hl_item($r)
     $title = (string)($r['title'] ?? ($r['name'] ?? ''));
     if ($title === '') return null;
     $date = (string)($r['release_date'] ?? ($r['first_air_date'] ?? ''));
-    return ['id' => $r['media_type'] . ':' . (string)($r['id'] ?? $title), 'title' => $title, 'rating' => round((float)($r['vote_average'] ?? 0), 1),
+    return ['id' => $r['media_type'] . ':' . (string)($r['id'] ?? $title), 'tid' => (int)($r['id'] ?? 0), 'title' => $title, 'rating' => round((float)($r['vote_average'] ?? 0), 1),
         'year' => substr($date, 0, 4), 'kind' => $r['media_type'] === 'tv' ? 'tv' : 'movie',
         'backdrop' => 'https://image.tmdb.org/t/p/original' . (string)$r['backdrop_path']];
 }
@@ -301,7 +305,7 @@ function wp_prof_highlights()
 {
     $base = wp_panel_base();
     if ($base === '') return [];
-    $ck = wp_panel_ck('prof|highlights|' . wp_lang());
+    $ck = wp_panel_ck('prof|highlights2|' . wp_lang());
     $c = wp_cache_get($ck, 21600);
     if (is_array($c) && is_array($c['l'] ?? null)) return $c['l'];
     $list = [];
@@ -322,8 +326,45 @@ function wp_prof_highlights()
             $list[] = $h;
         }
     }
+    if ($list) $list = wp_prof_hl_art($base, $list);
     // sin respuesta del panel no se guarda (se vuelve a probar en la próxima visita)
     if ($ok) wp_cache_set($ck, ['l' => $list, 'at' => time()]);
+    return $list;
+}
+
+/**
+ * Celular en vertical (como la app de Android): el póster del título sin textos y su logo (…/images de TMDB por el
+ * panel), todos en paralelo. Sin respuesta quedan vacíos y la pantalla usa el fondo horizontal con el nombre escrito.
+ */
+function wp_prof_hl_art($base, array $list)
+{
+    $lang = substr(wp_tmdb_lang(), 0, 2);
+    $urls = [];
+    foreach ($list as $i => $h) {
+        if (empty($h['tid'])) continue;
+        $urls[$i] = $base . wp_panel_tenant_query('tmdb.php?path=' . $h['kind'] . '/' . $h['tid'] . '/images&include_image_language=' . $lang . ',en,null');
+    }
+    $res = wp_http_multi($urls, 6);
+    foreach ($list as $i => $h) {
+        $j = isset($res[$i]) ? json_decode((string)$res[$i], true) : null;
+        $poster = $logo = '';
+        if (is_array($j)) {
+            foreach ((array)($j['posters'] ?? []) as $o) {
+                if (is_array($o) && ($o['iso_639_1'] ?? null) === null && !empty($o['file_path'])) { $poster = 'https://image.tmdb.org/t/p/w780' . $o['file_path']; break; }
+            }
+            // logo en el idioma de la app, si no en inglés; solo PNG (los SVG no se dibujan en todos lados)
+            $logos = [];
+            foreach ((array)($j['logos'] ?? []) as $o) {
+                $fp = is_array($o) ? (string)($o['file_path'] ?? '') : '';
+                if ($fp !== '' && preg_match('/\.png$/i', $fp) && !isset($logos[(string)($o['iso_639_1'] ?? '')])) $logos[(string)($o['iso_639_1'] ?? '')] = $fp;
+            }
+            $fp = $logos[$lang] ?? ($logos['en'] ?? '');
+            if ($fp !== '') $logo = 'https://image.tmdb.org/t/p/w500' . $fp;
+        }
+        $list[$i]['poster'] = $poster;
+        $list[$i]['logo'] = $logo;
+        unset($list[$i]['tid']);
+    }
     return $list;
 }
 
@@ -334,7 +375,8 @@ function wp_prof_bg(array $h)
     $srcs = wp_backdrop_sources($orig);
     $fhd = (count($srcs) > 1) ? $srcs[0] : wp_img(preg_replace('~/t/p/original/~', '/t/p/w1280/', $orig), '');
     return ['fhd' => $fhd, 'w' => count($srcs) > 1 ? 1920 : 1280, 'orig' => wp_img($orig, ''),
-        't' => (string)$h['title'], 'r' => (float)$h['rating'], 'y' => (string)$h['year'], 'k' => $h['kind'] === 'tv' ? 'tv' : 'movie'];
+        't' => (string)$h['title'], 'r' => (float)$h['rating'], 'y' => (string)$h['year'], 'k' => $h['kind'] === 'tv' ? 'tv' : 'movie',
+        'p' => wp_img((string)($h['poster'] ?? ''), ''), 'lg' => wp_img((string)($h['logo'] ?? ''), '')];
 }
 
 /* ---------- pantalla de perfiles (perfiles.php): acciones por fetch ---------- */
