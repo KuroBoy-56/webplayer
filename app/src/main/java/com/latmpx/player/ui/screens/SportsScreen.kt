@@ -64,6 +64,8 @@ import com.latmpx.player.data.Sports
 import com.latmpx.player.data.SportsData
 import com.latmpx.player.data.Xtream
 import com.latmpx.player.player.Play
+import com.latmpx.player.data.MatchCloud
+import kotlinx.coroutines.launch
 import com.latmpx.player.ui.components.tvTextInput
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.components.Chip
@@ -72,7 +74,6 @@ import com.latmpx.player.ui.components.LocalIsTv
 import com.latmpx.player.ui.theme.NfBg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.latmpx.player.data.Category
 import com.latmpx.player.data.SportMatch
@@ -124,6 +125,10 @@ fun SportsScreen(state: AppState) {
         if (menu == null && lastOpen != null) { delay(120); runCatching { lastFr.requestFocus() } }
     }
     var typing by remember { mutableStateOf<String?>(null) }
+    var remindNote by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // los recordatorios ya guardados en la nube (para ofrecer «Quitar el recordatorio»)
+    LaunchedEffect(Unit) { runCatching { MatchCloud.refresh(force = true) } }
 
     val d = data
     // canales del cliente (una vez) y el canal de cada partido de hoy, mañana y en vivo
@@ -209,21 +214,41 @@ fun SportsScreen(state: AppState) {
         if (list.isEmpty()) { say(tr(R.string.sp_no_channels_with, q)); return }
         menu = Triple(tr(R.string.sp_channels_with, q), "", list.map { ch -> MenuOpt(ch.name, green = true) { play(ch) } })
     }
-    fun playable(e: SportEvent): Boolean {
+    fun playable(e: SportEvent, quiet: Boolean = false): Boolean {
         val st = spStatus(e, d.sports[e.sport], now)
-        when {
-            st == SpStatus.POSTPONED -> say(tr(R.string.sp_postponed))
-            st == SpStatus.FIN || now >= ending(e) -> say(tr(R.string.event_over))
-            dayKey(e.start) != todayKey && st != SpStatus.LIVE -> say(tr(R.string.event_offline))
+        val msg = when {
+            st == SpStatus.POSTPONED -> tr(R.string.sp_postponed)
+            st == SpStatus.FIN || now >= ending(e) -> tr(R.string.event_over)
+            dayKey(e.start) != todayKey && st != SpStatus.LIVE -> tr(R.string.event_offline)
             else -> return true
         }
+        if (!quiet) say(msg)
         return false
+    }
+    // recordatorio en la nube (solo con perfiles): el celular de la misma línea y perfil avisa 30 y 10 min antes y al empezar
+    fun remindOpt(e: SportEvent): MenuOpt? {
+        val st = spStatus(e, d.sports[e.sport], now)
+        if (!MatchCloud.on || st == SpStatus.POSTPONED || st == SpStatus.FIN || now >= ending(e)) return null
+        val on = e.id in MatchCloud.marked
+        return MenuOpt(tr(if (on) R.string.rm_off else R.string.rm_on), tr(R.string.rm_desc)) {
+            menu = null
+            scope.launch {
+                val ok = runCatching { MatchCloud.set(e, !on) }.getOrDefault(false)
+                if (!ok) say(tr(R.string.rm_failed))
+                else remindNote = tr(if (on) R.string.rm_removed else R.string.rm_saved) to tr(R.string.rm_phone, MatchCloud.brandName())
+            }
+        }
     }
     // menú del partido: el automático, los canales que lo transmiten, los de la guía y los equipos (en verde los que
     // tiene el cliente), buscar por el nombre de cada equipo y escribir otro nombre
     fun open(e: SportEvent) {
         lastOpen = e.id
-        if (!playable(e)) return
+        val rem = remindOpt(e)
+        // un partido de otro día: con perfiles, solo el recordatorio
+        if (!playable(e, quiet = rem != null)) {
+            if (rem != null) menu = Triple(if (e.home.isNotBlank() && e.away.isNotBlank()) "${e.home} vs ${e.away}" else e.title, tr(R.string.event_offline), listOf(rem))
+            return
+        }
         // todavía buscando los canales de la agenda: se avisa (antes se buscaba aquí mismo y se trababa)
         if (chans == null || found == null) { say(tr(R.string.sp_loading_channels)); return }
         val m = resolve(e)
@@ -232,6 +257,7 @@ fun SportsScreen(state: AppState) {
         opts += MenuOpt("▶  " + tr(R.string.sp_watch_auto), best?.name ?: tr(R.string.watch_event_desc), best != null) {
             if (best != null) play(best) else { menu = null; folder("") }
         }
+        rem?.let { opts += it }
         val seen = HashSet<Int>()
         for ((t, ch) in m?.tv.orEmpty()) {
             if (ch != null && ch.id in seen) continue
@@ -259,6 +285,13 @@ fun SportsScreen(state: AppState) {
         menu = Triple(if (e.home.isNotBlank() && e.away.isNotBlank()) "${e.home} vs ${e.away}" else e.title, tr(R.string.sp_where), opts)
     }
     menu?.let { (title, sub, opts) -> SportMenuDialog(title, sub, opts) { menu = null } }
+    remindNote?.let { (t, msg) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { remindNote = null }, containerColor = Color(0xFF1F1F1F),
+            title = { Text(t, color = Color.White) }, text = { Text(msg, color = Color(0xFFDDDDDD), fontSize = 18.sp) },
+            confirmButton = { com.latmpx.player.ui.components.AppButton(stringResource(R.string.rm_ok), Modifier, primary = true) { remindNote = null } },
+        )
+    }
     typing?.let { start -> SportTypeDialog(start, onDismiss = { typing = null }) { q -> typing = null; findChans(q) } }
 
     val pad = sidePad()
@@ -267,7 +300,7 @@ fun SportsScreen(state: AppState) {
         Text(stringResource(R.string.sports), color = Color.White, fontSize = if (tv) 40.sp else 28.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(bottom = 8.dp))
     }
     if ((tab == SpTab.TABLES && d.tablesOn) || (tab == SpTab.NATIONS && d.nationsOn) || (tab == SpTab.TEAMS && d.fixturesOn)) {
-        Column(Modifier.fillMaxSize().background(NfBg).padding(start = pad, end = pad, top = 16.dp)) {
+        Column(Modifier.fillMaxSize().background(NfBg).sportsStadium().padding(start = pad, end = pad, top = 16.dp)) {
             title()
             SportsTabs(d, tab) { tab = it; sport = "" }
             when (tab) {
@@ -301,7 +334,7 @@ fun SportsScreen(state: AppState) {
         columns = if (compact) GridCells.Fixed(1) else GridCells.Adaptive(330.dp),
         contentPadding = PaddingValues(start = pad, end = pad, top = 16.dp, bottom = 48.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
-        modifier = Modifier.fillMaxSize().background(NfBg),
+        modifier = Modifier.fillMaxSize().background(NfBg).sportsStadium(),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(bottom = 6.dp)) {

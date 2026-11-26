@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- recordatorios de partidos en la nube (api/alerts.php): el celular avisa -->
+<resources>
+    <string name="rm_on">🔔  Lembrar-me desta partida</string>
+    <string name="rm_off">🔔  Remover o lembrete</string>
+    <string name="rm_desc">Avisaremos no seu celular 30 e 10 min antes e no início</string>
+    <string name="rm_saved">Lembrete salvo</string>
+    <string name="rm_removed">Lembrete removido</string>
+    <string name="rm_phone">Para receber as notificações das suas partidas e times favoritos você precisa ter o app %1$s instalado no seu celular.</string>
+    <string name="rm_failed">Não foi possível salvar o lembrete. Tente novamente.</string>
+    <string name="rm_ok">Entendi</string>
+</resources>
