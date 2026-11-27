@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsSoccer
@@ -104,6 +105,16 @@ fun SportPrefsSection() {
     }
     SettingsItem(Icons.Filled.SportsSoccer, stringResource(R.string.sl_pref), choices.firstOrNull { it.first == pref }?.second ?: stringResource(R.string.sl_all)) { prefOpen = true }
     HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+    // Ligas favoritas: varias a la vez; «En vivo ahora» solo con esas
+    var lgOpen by remember { mutableStateOf(false) }
+    var lgs by remember(Profiles.current) { mutableStateOf(Store.liveLeagues) }
+    SettingsItem(Icons.Filled.EmojiEvents, stringResource(R.string.sl_lg), when (lgs.size) {
+        0 -> stringResource(R.string.sl_lg_all)
+        1 -> lgs[0].name
+        else -> stringResource(R.string.sl_lg_n, lgs.size)
+    }) { lgOpen = true }
+    HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
+    if (lgOpen) LeagueDialog(pref, { lgOpen = false; lgs = Store.liveLeagues }) { lgs = it; Store.liveLeagues = it }
     // tarjetas de plataformas debajo de «En vivo ahora» (solo si el distribuidor tiene las plataformas)
     if (com.latmpx.player.data.Tenant.platformsEnabled) {
         var plat by remember(Profiles.current) { mutableStateOf(Store.platformCards) }
@@ -141,10 +152,58 @@ fun SportPrefsSection() {
     HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
     if (prefOpen) ChoiceDialog(stringResource(R.string.sl_pref), listOf("" to stringResource(R.string.sl_all)) + choices, pref, { prefOpen = false }) {
         pref = it; Store.preferredSport = it; prefOpen = false
+        // las ligas favoritas de otra disciplina ya no tienen sentido
+        if (it.isNotEmpty()) { Store.liveLeagues = Store.liveLeagues.filter { l -> l.sport.equals(it, true) }; lgs = Store.liveLeagues }
     }
     if (pickOpen) TeamPicker(pref, { pickOpen = false }) { t ->
         pickOpen = false
         if (teams.none { it.name == t.name }) { MatchAlerts.setTeams(teams + t); askNotif() }
+    }
+}
+
+/** Ajustes › Ligas favoritas: varias a la vez (primero las que juegan hoy, con cuántos partidos); «Todas las ligas» las quita */
+@Composable
+private fun LeagueDialog(sport: String, onDismiss: () -> Unit, onChange: (List<com.latmpx.player.data.FavLeague>) -> Unit) {
+    val list by produceState<List<com.latmpx.player.data.FavLeague>?>(null) { value = runCatching { SportsLive.leagueChoices() }.getOrNull().orEmpty() }
+    var sel by remember { mutableStateOf(Store.liveLeagues) }
+    fun save(v: List<com.latmpx.player.data.FavLeague>) { sel = v; onChange(v) }
+    val ids = sel.map { it.id }.toSet()
+    AlertDialog(
+        onDismissRequest = onDismiss, containerColor = Color(0xFF1F1F1F),
+        title = { Text(stringResource(R.string.sl_lg), color = Color.White) },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
+                Text(stringResource(R.string.sl_lg_msg) + if (sport.isNotEmpty()) "  " + stringResource(R.string.sl_lg_only, sportLabel(sport)) else "",
+                    color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp))
+                val l = list
+                if (l == null) Text(stringResource(R.string.ma_loading), color = NfGray2, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
+                else {
+                    if (l.isEmpty()) Text(stringResource(R.string.sl_lg_none), color = NfGray2, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
+                    LeagueCheck(stringResource(R.string.sl_lg_all), null, ids.isEmpty()) { save(emptyList()) }
+                    val today = stringResource(R.string.sl_lg_today)
+                    l.forEach { x ->
+                        val sub = listOfNotNull(x.sportLabel.takeIf { sport.isEmpty() && it.isNotEmpty() }, today.format(x.today).takeIf { x.today > 0 }).joinToString("  ·  ")
+                        LeagueCheck(x.name, sub.ifEmpty { null }, x.id in ids) {
+                            save(if (x.id in ids) sel.filter { it.id != x.id } else sel + x.copy(today = 0, sportLabel = ""))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close), color = NfGray2) } },
+    )
+}
+
+@Composable
+private fun LeagueCheck(title: String, sub: String?, on: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.material3.Checkbox(checked = on, onCheckedChange = null,
+            colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = NfRed, uncheckedColor = NfGray2, checkmarkColor = Color.White))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (sub != null) Text(sub, color = NfGray2, fontSize = 12.sp, maxLines = 1)
+        }
     }
 }
 
