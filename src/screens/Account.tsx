@@ -18,7 +18,8 @@ import { useNav } from '../nav';
 import { deviceId, loadCatalog, loadCloud, logoutByHand, refreshCatalog, reloadCatalog, resetTenant, showNotice, useAppState } from '../state';
 import { C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
-import { liveTvOn, platformCards, setPlatformCards } from '../data/liveTv';
+import { liveSport, liveSportName, liveTvOn, platformCards, setLiveSport, setPlatformCards } from '../data/liveTv';
+import { fetchSports, localSports } from '../data/sportsPanel';
 import { features } from '../lib/tenant';
 
 // los nombres se traducen al mostrarlos
@@ -73,6 +74,49 @@ function LangPicker({ onClose }: { onClose: () => void }) {
   );
 }
 
+// Cuenta › Deporte favorito: «Todos los deportes» o una de las disciplinas que da el panel (api/sports.php: las de la
+// agenda y todas las encendidas); con una elegida, «En vivo ahora» de Inicio solo muestra esa
+function SportPicker({ onClose }: { onClose: () => void }) {
+  const [sports, setSports] = useState<Record<string, { label?: string; icon?: string }> | null>(() => localSports()?.sports || null);
+  useEffect(() => {
+    fetchSports().then(d => d && setSports(d.sports)).catch(() => {});
+  }, []);
+  const cur = liveSport();
+  const list: [string, string][] = [
+    ['', t('Todos los deportes')],
+    ...Object.entries(sports || {})
+      .map(([k, v]) => [k, ((v?.icon ? v.icon + ' ' : '') + String(v?.label || k)).trim()] as [string, string])
+      .sort((a, b) => a[1].replace(/^\S+ /, '').localeCompare(b[1].replace(/^\S+ /, ''))),
+  ];
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.pickShade}>
+        <View style={s.pickBox}>
+          <Text style={s.pickTitle}>{t('Deporte favorito')}</Text>
+          <Text style={s.pickNote}>{t('En Inicio, «En vivo ahora» muestra solo los partidos y eventos de esta disciplina.')}</Text>
+          {!sports ? <Text style={s.pickNote}>{t('Cargando…')}</Text> : null}
+          <ScrollView style={{ maxHeight: px(560) }}>
+            {list.map(([k, label]) => (
+              <View key={k || 'all'} style={s.set}>
+                <Button
+                  label={(k.toLowerCase() === cur.toLowerCase() ? '✓  ' : '     ') + label}
+                  left
+                  last
+                  preferred={k.toLowerCase() === cur.toLowerCase()}
+                  onPress={() => {
+                    setLiveSport(k, k ? label : '');
+                    onClose();
+                  }}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function cycle(list: string[][], cur: string): string {
   const i = list.findIndex(x => x[0] === cur);
   return list[(i + 1) % list.length][0];
@@ -90,6 +134,7 @@ export default function Account() {
   const [reg, setReg] = useState('');
   const [langOpen, setLangOpen] = useState(false);
   const [teamsOpen, setTeamsOpen] = useState(false);
+  const [sportOpen, setSportOpen] = useState(false);
   // recién cambiado el idioma: el foco vuelve a esa fila
   const [langFocus] = useState(takeLangChanged);
   const s0 = st.session;
@@ -187,6 +232,7 @@ export default function Account() {
         />
       ) : null}
       {/* con perfiles: los equipos favoritos se guardan en la nube (avisa el celular; en la TV, la campanita) */}
+      {liveTvOn() ? <Setting label={t('Deporte favorito')} value={liveSport() ? liveSportName() || liveSport() : t('Todos los deportes')} onPress={() => setSportOpen(true)} /> : null}
       {liveTvOn() ? <Setting label={t('Equipos favoritos')} value={t('Elegir')} onPress={() => setTeamsOpen(true)} /> : null}
       <Setting
         label={t('Contenido protegido en esta sesión')}
@@ -273,6 +319,7 @@ export default function Account() {
       ) : null}
       {langOpen ? <LangPicker onClose={() => setLangOpen(false)} /> : null}
       {teamsOpen ? <TeamsModal onClose={() => setTeamsOpen(false)} /> : null}
+      {sportOpen ? <SportPicker onClose={() => setSportOpen(false)} /> : null}
     </View>
   );
 }
@@ -301,5 +348,6 @@ const s = themed(() =>
     pickShade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center' },
     pickBox: { width: px(760), backgroundColor: C.bg2, borderRadius: px(12), padding: px(50) },
     pickTitle: { color: C.text, fontSize: px(44), fontWeight: '800', marginBottom: px(24) },
+    pickNote: { color: C.sub, fontSize: px(26), marginBottom: px(18) },
   }),
 );

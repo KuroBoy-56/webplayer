@@ -73,13 +73,7 @@ export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: {
       </Focusable>
     );
   }
-  if (sp.kind === 'genre') {
-    return (
-      <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.genre, { backgroundColor: sp.color === '#000000' ? '#333' : sp.color }, f && s.tileF]}>
-        <Text style={s.genreText}>{sp.label}</Text>
-      </Focusable>
-    );
-  }
+  if (sp.kind === 'genre') return <GenreTile sp={sp} onPress={onPress} onFocus={onFocus} />;
   return (
     <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.tile, s.more, f && s.tileF]}>
       <Text style={s.moreText}>{t('Ver todo')} ›</Text>
@@ -87,10 +81,30 @@ export const SpecialTile = memo(function SpecialTile({ sp, onPress, onFocus }: {
   );
 });
 
+// género: el color de siempre con su dibujo de líneas (blanco translúcido: el mismo color, más claro), el póster del
+// título más destacado a la derecha y el nombre abajo a la izquierda. Ancho y alto fijos (Vega, ver plataformas)
+const GenreTile = memo(function GenreTile({ sp, onPress, onFocus }: { sp: Special; onPress: () => void; onFocus?: () => void }) {
+  const f = sp.feat;
+  const src = useMemo(() => (f ? posterSources(f.kind, f.poster, f.name, f.year, f.tm) : []), [f]);
+  return (
+    <Focusable onPress={onPress} onFocus={onFocus} style={fo => [s.genre, { backgroundColor: sp.color === '#000000' ? '#222' : sp.color }, fo && s.tileF]}>
+      {sp.art ? <Image source={sp.art} style={s.genreArt} resizeMode="stretch" /> : null}
+      {src.length ? (
+        <View style={s.genrePosterBox}>
+          <ChainImage sources={src} style={s.genrePoster} resizeMode="cover" />
+        </View>
+      ) : null}
+      <Text style={[s.genreText, src.length ? s.genreTextNarrow : null]} numberOfLines={2}>
+        {sp.label}
+      </Text>
+    </Focusable>
+  );
+});
+
 // alto de la fila de tarjetas y de la fila completa (título + tarjetas): fijo, así la lista del inicio sabe dónde
 // queda cada fila y deja la enfocada siempre arriba (como Roku y Netflix)
 export const cardsHeight = (row: Row) =>
-  row.type === 'live' ? LIVE_H() + px(34) : row.type === 'platform' ? px(190) : row.type === 'genre' ? px(130) : posterH() + px(30);
+  row.type === 'live' ? LIVE_H() + px(34) : row.type === 'platform' ? px(190) : row.type === 'genre' ? px(212) : posterH() + px(30);
 export const rowHeight = (row: Row) => cardsHeight(row) + (row.title ? px(46) : px(4)) + px(18);
 
 export const RowView = memo(function RowView({
@@ -172,8 +186,12 @@ const s = themed(() =>
     platRing: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: px(10), borderWidth: px(3), borderColor: 'rgba(255,255,255,0.12)' },
     platRingF: { borderColor: C.focus, borderWidth: px(4) },
     platText: { color: '#fff', fontSize: px(34), fontWeight: '800', textAlign: 'center' },
-    genre: { width: px(250), height: px(100), borderRadius: px(10), marginRight: px(18), justifyContent: 'center', alignItems: 'center', borderWidth: px(4), borderColor: 'transparent', marginTop: px(10) },
-    genreText: { color: '#fff', fontSize: px(30), fontWeight: '800' },
+    genre: { width: px(268), height: px(184), borderRadius: px(10), marginRight: px(18), overflow: 'hidden', borderWidth: px(4), borderColor: 'transparent', marginTop: px(12) },
+    genreArt: { position: 'absolute', left: 0, top: 0, width: px(260), height: px(176), opacity: 0.3 },
+    genrePosterBox: { position: 'absolute', right: px(10), top: px(16), width: px(96), height: px(144), borderRadius: px(6), overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.35)' },
+    genrePoster: { width: px(96), height: px(144) },
+    genreText: { position: 'absolute', left: px(14), right: px(14), bottom: px(10), color: '#fff', fontSize: px(30), fontWeight: '800', lineHeight: px(34), textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: px(6), textShadowOffset: { width: 0, height: px(2) } },
+    genreTextNarrow: { right: px(118) },
     more: { width: posterW(), height: posterH(), justifyContent: 'center', alignItems: 'center', backgroundColor: C.card },
     moreText: { color: C.text, fontSize: px(30), fontWeight: '700' },
     row: { marginBottom: px(18) },
