@@ -65,8 +65,9 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
     <View style={s.hero} pointerEvents="none">
       {/* sin fondo propio: la carátula del mismo título agrandada y oscurecida (antes quedaba el fondo del último título
           enfocado, que no tenía nada que ver); el último fondo solo para plataformas, géneros y «Ver todo» */}
-      {under && under !== art && !ref ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
-      {!art && sideSrc.length ? (
+      {/* el destacado de un género sin imagen horizontal todavía: el último fondo, nunca su carátula estirada y borrosa */}
+      {under && under !== art && (!ref || (info.feat && !art)) ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
+      {!art && sideSrc.length && !info.feat ? (
         <View style={s.heroDim}>
           <ChainImage sources={sideSrc} style={s.heroImg} resizeMode="cover" blurRadius={18} />
         </View>
