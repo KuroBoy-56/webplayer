@@ -268,14 +268,23 @@ object Sports {
         "ve", "venezuela", "uy", "uruguay", "py", "paraguay", "bo", "bolivia", "cr", "pa", "panama", "gt", "hn", "sv", "ni", "do", "pr",
         "latam", "latin", "latino", "latina", "lat", "america", "es", "esp", "spain", "espana", "uk", "gb", "int", "intl", "international",
         "br", "bra", "brasil", "brazil", "pt", "portugal", "ca", "can", "canada", "fr", "france", "it", "italy", "de", "germany",
-        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland", "en", "network", "net")
+        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland", "en", "network", "net",
+        "hdr", "fd", "2160", "2160p", "1080i", "fullhd", "east", "west", "eastern", "western", "eng", "english", "raw", "dual")
+
+    // números en palabra («ESPN Two», «Canal Dos»): como cifra, así se pegan igual que «ESPN 2»
+    private val NUM_WORDS = mapOf(
+        "one" to "1", "two" to "2", "three" to "3", "four" to "4", "five" to "5", "six" to "6", "seven" to "7", "eight" to "8",
+        "nine" to "9", "ten" to "10", "eleven" to "11", "twelve" to "12", "uno" to "1", "dos" to "2", "tres" to "3", "cuatro" to "4",
+        "cinco" to "5", "seis" to "6", "siete" to "7", "ocho" to "8", "nueve" to "9", "diez" to "10",
+    )
 
     /** palabras que identifican el canal; un número va pegado a la palabra anterior ("espn 2" -> "espn2") */
     fun channelKey(name: String): List<String> {
         val out = ArrayList<String>()
-        for (raw in norm(name).split(' ')) {
+        // «ESPN+», «Star+», «M+»: el + es «plus» (norm lo borraba y «ESPN+» daba el canal «ESPN»)
+        for (raw in norm(name.replace("+", " plus ")).split(' ')) {
             // "M+ LaLiga" (Movistar Plus) llega como "m laliga"
-            val t = if (raw == "m") "movistar" else raw
+            val t = if (raw == "m") "movistar" else NUM_WORDS[raw] ?: raw
             if (t.isEmpty() || t in NOISE) continue
             if (t.all(Char::isDigit) && out.isNotEmpty() && !out.last().all(Char::isDigit)) out[out.size - 1] = out.last() + t else out.add(t)
         }
@@ -292,6 +301,9 @@ object Sports {
         val found = findByChannelOnce(tvName, ix).ifEmpty {
             // un nombre solo es su primer canal ("ESPN" = "ESPN 1", "DAZN" = "DAZN 1")
             if (channelKey(tvName).joinToString("").lastOrNull()?.isDigit() == false) findByChannelOnce("$tvName 1", ix) else emptyList()
+        }.ifEmpty {
+            // «Movistar+ LaLiga» en una lista que lo llama «Movistar LaLiga»: sin el plus
+            if (tvName.contains('+')) findByChannelOnce(tvName.replace('+', ' '), ix) else emptyList()
         }
         return found.also { ix.memo[tvName] = it }
     }
@@ -316,7 +328,7 @@ object Sports {
             }
             scored.add(score to c)
         }
-        if (scored.isEmpty()) return findLoose(q, ix)
+        if (scored.isEmpty()) return findLoose(q, ix).ifEmpty { findFuzzy(q, ix) }
         return scored.sortedWith(compareByDescending<Pair<Int, Chan>> { it.first }.thenBy { it.second.item.name.length }).map { it.second.item }
     }
 
@@ -337,6 +349,52 @@ object Sports {
             if (ok) scored.add((300 - (compact.length - want) - c.item.name.length) to c)
         }
         return scored.sortedByDescending { it.first }.map { it.second.item }
+    }
+
+    /**
+     * Último recurso, como los emparejadores de canales de IPTV (Stream-Mapparr): parecido de Levenshtein entre las palabras
+     * ordenadas («TyC Sport» = «TyC Sports»). Solo canales que comparten la mitad de las palabras, con los mismos números
+     * («ESPN 2» nunca «ESPN 3» ni «ESPN») y más estricto con los nombres cortos (≤ 4 letras 95 %, ≤ 8 90 %, si no 86 %).
+     */
+    private fun findFuzzy(q: List<String>, ix: Index): List<Item> {
+        val qLen = q.joinToString("").length
+        if (qLen < 3) return emptyList()
+        val qs = q.sorted().joinToString(" ")
+        val qDig = keyDigits(q)
+        val need = (q.size + 1) / 2
+        val thr = if (qLen <= 4) 0.95 else if (qLen <= 8) 0.9 else 0.86
+        val hits = LinkedHashMap<Int, Int>()
+        for (t in q) (ix.words[t] ?: if (t.length >= 4) ix.words[t.dropLast(1)] else null)?.forEach { hits[it] = (hits[it] ?: 0) + 1 }
+        val scored = ArrayList<Pair<Double, Chan>>()
+        var tried = 0
+        for ((ci, n) in hits) {
+            if (n < need && q.size > 1) continue
+            val c = ix.chans[ci]
+            if (keyDigits(c.key) != qDig) continue
+            val r = similarity(qs, c.key.sorted().joinToString(" "))
+            if (r >= thr) scored.add(r to c)
+            if (++tried >= 200) break
+        }
+        return scored.sortedWith(compareByDescending<Pair<Double, Chan>> { it.first }.thenBy { it.second.item.name.length }).map { it.second.item }
+    }
+
+    /** los números del nombre, en orden («espn2» -> "2", «fox sports 1 hd» -> "1») */
+    private fun keyDigits(words: List<String>): String = words.joinToString(" ").replace(Regex("[^0-9]+"), " ").trim()
+
+    /** 1 - distancia de Levenshtein / largo mayor (el ratio normalizado de rapidfuzz) */
+    fun similarity(a: String, b: String): Double {
+        if (a.isEmpty() || b.isEmpty()) return 0.0
+        if (a == b) return 1.0
+        val mx = maxOf(a.length, b.length)
+        if (kotlin.math.abs(a.length - b.length) > mx * 0.15) return 0.0
+        var prev = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val cur = IntArray(b.length + 1)
+            cur[0] = i
+            for (j in 1..b.length) cur[j] = minOf(prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1, prev[j] + 1, cur[j - 1] + 1)
+            prev = cur
+        }
+        return 1.0 - prev[b.length].toDouble() / mx
     }
 
     /**
