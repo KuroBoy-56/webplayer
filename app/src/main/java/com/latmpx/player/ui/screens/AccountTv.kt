@@ -137,6 +137,15 @@ fun AccountTv(
                 }
                 Setting(stringResource(R.string.sl_fav), spName ?: stringResource(R.string.sl_all)) { spOpen = true }
                 if (spOpen) TvSportPrefDialog { spOpen = false }
+                // Ligas favoritas: varias a la vez; «En vivo ahora» solo con esas
+                var lgOpen by remember { mutableStateOf(false) }
+                val lgs = remember(com.latmpx.player.data.Profiles.current, spRev) { com.latmpx.player.data.Store.liveLeagues }
+                Setting(stringResource(R.string.sl_lg), when (lgs.size) {
+                    0 -> stringResource(R.string.sl_lg_all)
+                    1 -> lgs[0].name
+                    else -> stringResource(R.string.sl_lg_n, lgs.size)
+                }) { lgOpen = true }
+                if (lgOpen) TvLeaguePrefDialog { lgOpen = false }
             }
             // con perfiles: los equipos favoritos se guardan en la nube (avisa el celular; aquí, la campanita)
             if (com.latmpx.player.data.MatchCloud.on) {

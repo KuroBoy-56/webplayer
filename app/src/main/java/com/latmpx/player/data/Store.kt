@@ -248,6 +248,14 @@ object Store {
         get() = p.getBoolean(tenantKey("live_avail|" + scope()), true)
         set(v) = p.edit().putBoolean(tenantKey("live_avail|" + scope()), v).apply()
 
+    /** Cuenta › Ligas favoritas: ninguna = todas; si no, Inicio › «En vivo ahora» solo con esas ligas (por línea y perfil) */
+    var liveLeagues: List<FavLeague>
+        get() = runCatching { org.json.JSONArray(p.getString(tenantKey("live_lg|" + scope() + "|" + (Profiles.current?.id ?: "")), "[]")) }.getOrNull()
+            ?.let { a -> (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o -> FavLeague(o.optString("id"), o.optString("n"), o.optString("sp")).takeIf { it.id.isNotEmpty() } } } }
+            .orEmpty()
+        set(v) = p.edit().putString(tenantKey("live_lg|" + scope() + "|" + (Profiles.current?.id ?: "")),
+            org.json.JSONArray(v.map { JSONObject().put("id", it.id).put("n", it.name).put("sp", it.sport) }).toString()).apply()
+
     var liveSportName: String
         get() = p.getString(tenantKey("live_sport_n|" + scope() + "|" + (Profiles.current?.id ?: "")), "") ?: ""
         set(v) = p.edit().putString(tenantKey("live_sport_n|" + scope() + "|" + (Profiles.current?.id ?: "")), v).apply()

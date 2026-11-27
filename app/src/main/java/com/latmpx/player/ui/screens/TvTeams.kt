@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -217,6 +218,8 @@ fun TvSportPrefDialog(onDismiss: () -> Unit) {
     fun pick(sp: String, name: String) {
         com.latmpx.player.data.Store.liveSport = sp
         com.latmpx.player.data.Store.liveSportName = name
+        // las ligas favoritas de otra disciplina ya no tienen sentido
+        if (sp.isNotEmpty()) com.latmpx.player.data.Store.liveLeagues = com.latmpx.player.data.Store.liveLeagues.filter { it.sport.equals(sp, true) }
         SportsLive.prefRev++
         onDismiss()
     }
@@ -243,5 +246,67 @@ fun TvSportPrefDialog(onDismiss: () -> Unit) {
                 LaunchedEffect(Unit) { delay(80); runCatching { first.requestFocus() } }
             }
         }
+    }
+}
+
+/**
+ * Cuenta › Ligas favoritas (solo con perfiles): varias a la vez, de la agenda y de los próximos 21 días (primero las que
+ * juegan hoy, con cuántos partidos). Con alguna elegida, Inicio › «En vivo ahora» solo muestra partidos de esas ligas.
+ */
+@Composable
+fun TvLeaguePrefDialog(onDismiss: () -> Unit) {
+    val list by produceState<List<com.latmpx.player.data.FavLeague>?>(null) {
+        value = runCatching { SportsLive.leagueChoices() }.getOrNull().orEmpty()
+    }
+    var sel by remember { mutableStateOf(com.latmpx.player.data.Store.liveLeagues) }
+    val sp = remember { com.latmpx.player.data.Store.liveSport }
+    fun save(v: List<com.latmpx.player.data.FavLeague>) {
+        sel = v
+        com.latmpx.player.data.Store.liveLeagues = v
+        SportsLive.prefRev++
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.width(560.dp).background(NfBg2, RoundedCornerShape(10.dp)).padding(20.dp)) {
+            Text(stringResource(R.string.sl_lg), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            val spName = com.latmpx.player.data.Store.liveSportName.ifEmpty { sp }
+            Text(stringResource(R.string.sl_lg_msg) + if (sp.isNotEmpty()) "  " + stringResource(R.string.sl_lg_only, spName) else "",
+                color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))
+            val l = list
+            val first = remember { FocusRequester() }
+            if (l == null) Text(stringResource(R.string.tb_loading), color = NfGray2, fontSize = 14.sp, modifier = Modifier.padding(vertical = 16.dp))
+            else {
+                if (l.isEmpty()) Text(stringResource(R.string.sl_lg_none), color = NfGray2, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
+                val ids = sel.map { it.id }.toSet()
+                val today = stringResource(R.string.sl_lg_today)
+                LazyColumn(Modifier.heightIn(max = 380.dp).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    item(key = "_all") {
+                        LeagueRow(stringResource(R.string.sl_lg_all), ids.isEmpty(), Modifier.focusRequester(first)) { save(emptyList()) }
+                    }
+                    items(l, key = { it.id }) { x ->
+                        val label = x.name + (if (sp.isEmpty()) "  ·  " + x.sportLabel.ifEmpty { x.sport } else "") +
+                            (if (x.today > 0) "  ·  " + today.format(x.today) else "")
+                        LeagueRow(label, x.id in ids, Modifier) {
+                            save(if (x.id in ids) sel.filter { it.id != x.id } else sel + x.copy(today = 0, sportLabel = ""))
+                        }
+                    }
+                    item(key = "_done") {
+                        FocusBox(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(top = 6.dp), focusScale = 1.02f) { fo ->
+                            Text(stringResource(R.string.ok), color = if (fo) Color.Black else Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth().background(if (fo) Color.White else NfRed, RoundedCornerShape(6.dp)).padding(horizontal = 14.dp, vertical = 9.dp))
+                        }
+                    }
+                }
+                LaunchedEffect(Unit) { delay(80); runCatching { first.requestFocus() } }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LeagueRow(label: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    FocusBox(onClick = onClick, modifier = Modifier.fillMaxWidth().then(modifier), focusScale = 1.02f) { fo ->
+        Text((if (on) "✓  " else "") + label, color = if (fo) Color.Black else if (on) Color(0xFF46D369) else Color.White, fontSize = 15.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().background(if (fo) Color.White else Color(0x22FFFFFF), RoundedCornerShape(6.dp)).padding(horizontal = 14.dp, vertical = 9.dp))
     }
 }
