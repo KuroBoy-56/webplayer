@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -46,6 +47,7 @@ import com.latmpx.player.R
 import com.latmpx.player.data.Item
 import com.latmpx.player.data.MatchCloud
 import com.latmpx.player.data.SportEvent
+import com.latmpx.player.data.SportMatch
 import com.latmpx.player.data.Sports
 import com.latmpx.player.data.SportsLive
 import com.latmpx.player.ui.AppState
@@ -57,7 +59,8 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 
 /** un partido de «En vivo ahora» con el canal del cliente donde verlo (siempre uno real de su servidor IPTV) */
-class TvLiveCard(val e: SportEvent, val best: Item, val sport: String = "") {
+/** m / chans: todo lo encontrado para el partido y los canales del cliente, para el menú de canales (como en Deportes) */
+class TvLiveCard(val e: SportEvent, val best: Item, val sport: String = "", val m: SportMatch? = null, val chans: SpChans? = null) {
     /**
      * sin dos equipos o de una disciplina sin marcador (peleas, boxeo, WWE, carreras, golf): la tarjeta muestra la
      * disciplina, el evento y su póster (también con dos nombres: TheSportsDB pone a veces a los boxeadores como equipos)
@@ -100,6 +103,7 @@ fun rememberTvLive(state: AppState): List<TvLiveCard> {
         if (d == null || !d.enabled || state.live.isEmpty()) { value = emptyList(); return@produceState }
         value = withContext(Dispatchers.Default) {
             val prepared = Sports.prepare(state.live, state.liveCats, d.rules)
+            val sc = SpChans(state.live, prepared, state.liveCats)
             val ids = d.events.map { it.id }.toHashSet()
             val now = System.currentTimeMillis()
             val today = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
@@ -108,7 +112,10 @@ fun rememberTvLive(state: AppState): List<TvLiveCard> {
                 e.id !in ids && !e.postponed && (e.home in teams || e.away in teams) && now < e.start + 3 * 3600_000L &&
                     Calendar.getInstance().apply { timeInMillis = e.start }.get(Calendar.DAY_OF_YEAR) == today
             }.map { it.copy(homeScore = "", awayScore = "", status = "NS", soon = true) }
-            (d.events + extra).filter { pref.isEmpty() || it.sport.equals(pref, true) }.mapNotNull { e -> Sports.match(e, prepared, d.rules).takeIf { !it.guess }?.best?.let { TvLiveCard(e, it, d.sports[e.sport]?.label ?: e.sport) } }
+            (d.events + extra).filter { pref.isEmpty() || it.sport.equals(pref, true) }.mapNotNull { e ->
+                val mm = Sports.match(e, prepared, d.rules)
+                mm.takeIf { !it.guess }?.best?.let { TvLiveCard(e, it, d.sports[e.sport]?.label ?: e.sport, mm, sc) }
+            }
                 .sortedWith(compareBy({ it.e.soon }, { it.e.start })).take(20)
         }
     }
@@ -143,12 +150,14 @@ fun TvLiveTile(card: TvLiveCard, width: Dp, onFocus: () -> Unit, onClick: () -> 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(e.league, color = Color(0xE6FFFFFF), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(8.dp))
+                    // la píldora se ajusta a su texto («Descanso», «Alargue · 105'») y nunca pasa del 60 % de la tarjeta
                     Row(
-                        Modifier.background(if (e.soon) Color(0x99000000) else Color(0xFFE50914), RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 3.dp),
+                        Modifier.widthIn(max = width * 0.6f).background(if (e.soon) Color(0x99000000) else Color(0xFFE50914), RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (!e.soon) { Box(Modifier.size(6.dp).background(Color.White, CircleShape)); Spacer(Modifier.width(5.dp)) }
-                        Text(tvLiveClock(e).ifBlank { stringResource(R.string.sl_live) }, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(tvLiveClock(e).ifBlank { stringResource(R.string.sl_live) }, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                            softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 Spacer(Modifier.weight(1f))
@@ -251,3 +260,59 @@ private fun TvBigBadge(name: String, badge: String) {
 fun Modifier.sportsStadium(): Modifier = if (!MatchCloud.on) this else this
     .paint(painterResource(R.drawable.sports_bg), contentScale = ContentScale.Crop)
     .background(Brush.verticalGradient(0f to NfBg.copy(alpha = 0.6f), 0.4f to NfBg.copy(alpha = 0.8f), 0.75f to NfBg.copy(alpha = 0.93f), 1f to NfBg))
+
+/**
+ * Menú de canales de un partido de «En vivo ahora» (Inicio): el mismo de Deportes. El automático, los canales que lo
+ * transmiten (en verde los que tiene el cliente), los de la guía y el de los equipos, buscar por el nombre de cada
+ * equipo y escribir otro nombre. Antes la tarjeta abría solo la primera coincidencia y, si no andaba, no había más.
+ */
+@Composable
+fun TvLiveMenu(card: TvLiveCard, onDismiss: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val c = card.chans
+    val m = card.m
+    val e = card.e
+    var found by remember { mutableStateOf<Pair<String, List<Item>>?>(null) }
+    var typing by remember { mutableStateOf<String?>(null) }
+    fun play(ch: Item) {
+        onDismiss()
+        if (c != null) playInCategory(ctx, c.all, ch) else com.latmpx.player.player.Play.live(ctx, listOf(ch), 0)
+    }
+    fun find(q: String) {
+        typing = null
+        val list = if (c != null && q.isNotBlank()) searchChannels(q, c) else emptyList()
+        if (list.isEmpty()) android.widget.Toast.makeText(ctx, com.latmpx.player.tr(R.string.sp_no_channels_with, q), android.widget.Toast.LENGTH_LONG).show()
+        else found = q to list
+    }
+    typing?.let { start -> SportTypeDialog(start, onDismiss = { typing = null }) { q -> find(q) }; return }
+    found?.let { (q, list) ->
+        SportMenuDialog(com.latmpx.player.tr(R.string.sp_channels_with, q), "", list.map { ch -> MenuOpt(ch.name, green = true) { play(ch) } }) { found = null }
+        return
+    }
+    val best = m?.best ?: card.best
+    val opts = ArrayList<MenuOpt>()
+    opts += MenuOpt("▶  " + stringResource(R.string.sp_watch_auto), best.name, true) { play(best) }
+    val seen = hashSetOf(best.id)
+    val inList = stringResource(R.string.sp_in_list, "%s")
+    val notInList = stringResource(R.string.sp_not_in_list)
+    val usual = stringResource(R.string.sp_usual)
+    for ((t, ch) in m?.tv.orEmpty()) {
+        if (ch != null && ch.id in seen) continue
+        if (ch != null) seen += ch.id
+        val where = if (ch != null) inList.replace("%s", ch.name) else notInList
+        opts += MenuOpt(t.name + if (t.country.isNotBlank()) " (${t.country})" else "", if (t.usual) "$usual · $where" else where, ch != null) {
+            val alt = ch ?: m?.teams
+            if (alt != null) play(alt) else find(if (card.solo) card.eventName else e.home)
+        }
+    }
+    val extra = m?.epg.orEmpty().map { it to stringResource(R.string.sp_in_guide) } + listOfNotNull(m?.teams?.let { it to stringResource(R.string.sp_by_teams) })
+    for ((ch, why) in extra) {
+        if (ch.id in seen || opts.size > 10) continue
+        seen += ch.id
+        opts += MenuOpt("${ch.name} · $why", green = true) { play(ch) }
+    }
+    val names = if (card.solo) listOf(card.eventName) else listOf(e.home, e.away).filter { it.isNotBlank() }
+    names.forEach { n -> opts += MenuOpt(stringResource(R.string.sp_search_x, n)) { find(n) } }
+    opts += MenuOpt(stringResource(R.string.sp_search_any)) { typing = names.firstOrNull().orEmpty() }
+    SportMenuDialog(if (card.solo) card.eventName else "${e.home} vs ${e.away}", stringResource(R.string.sp_where), opts, onDismiss)
+}
