@@ -62,6 +62,22 @@ const platKey = () => 'plat_cards|' + lineKey() + '|' + (getState().profile?.id 
 export const platformCards = () => features().platforms !== false && read(platKey()) === '1';
 export const setPlatformCards = (on: boolean) => write(platKey(), on ? '1' : '0');
 
+/**
+ * con perfiles y partidos en vivo del panel las plataformas no van en Inicio (salvo «Habilitar tarjetas de
+ * plataformas»). Hasta que el panel contesta vale lo de la última vez para esta línea: así no aparecen y se van.
+ */
+const availKey = () => 'live_avail|' + lineKey();
+export const hidesPlatforms = () => liveTvOn() && !platformCards() && read(availKey()) !== '0';
+
+/** Cuenta › Deporte favorito: '' = todos; si no, «En vivo ahora» solo con esa disciplina (por línea y perfil) */
+const sportKey = () => 'live_sport|' + lineKey() + '|' + (getState().profile?.id || '');
+export const liveSport = () => read(sportKey()) || '';
+export const liveSportName = () => read(sportKey() + '|n') || '';
+export const setLiveSport = (sp: string, name: string) => {
+  write(sportKey(), sp);
+  write(sportKey() + '|n', name);
+};
+
 // ---------- recordatorios en la nube ----------
 
 // equipo favorito (n = nombre, l = en el idioma, b = escudo, lg = liga, sp = deporte), como el celular
@@ -168,7 +184,7 @@ async function agenda(): Promise<any | null> {
 // Inicio lo muestra al momento (antes la primera respuesta llegaba unos segundos después de entrar)
 let lastLive: { key: string; at: number; r: { cards: LiveCard[]; ttl: number } | null } | null = null;
 let liveInFlight: { key: string; p: Promise<{ cards: LiveCard[]; ttl: number } | null> } | null = null;
-const liveKey = () => lineKey() + '|' + (getState().profile?.id || '');
+const liveKey = () => lineKey() + '|' + (getState().profile?.id || '') + '|' + liveSport();
 
 /** «En vivo ahora» ya pedido (menos de 20 s) o uno nuevo; el mismo pedido si ya hay uno en curso */
 export function loadLiveCardsCached(): Promise<{ cards: LiveCard[]; ttl: number } | null> {
@@ -194,7 +210,9 @@ export function loadLiveCardsCached(): Promise<{ cards: LiveCard[]; ttl: number 
 export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number } | null> {
   if (!liveTvOn()) return null;
   const j = json<any>(await cloud('sports_live.php', 'GET', { soon: '1', next: '1' }));
+  if (j) write(availKey(), j.enabled === true ? '1' : '0');
   if (!j || j.enabled !== true) return null;
+  const only = liveSport().toLowerCase();
   // un próximo que «empezaba» hace más de 5 min y el livescore no trae: fuera
   const n0 = nowSec();
   const events: any[] = (Array.isArray(j.events) ? j.events : []).filter((e: any) => !(e?.soon === true && int(e.s) > 0 && int(e.s) < n0 - 300));
@@ -217,6 +235,7 @@ export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number 
   const m = matchSports({ events, sports: j.sports || {}, match: j.match } as any).map;
   const cards: LiveCard[] = [];
   for (const e of events) {
+    if (only && str(e.sp).toLowerCase() !== only) continue;
     // solo un canal exacto: uno habitual (sin agenda ni equipos) no cuenta
     const mm = m[str(e.id)];
     const best = mm && !mm.guess ? mm.best : null;

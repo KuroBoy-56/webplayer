@@ -39,7 +39,7 @@ export default function TeamsModal({ onClose }: { onClose: () => void }) {
     rows = [{ k: 'add', text: t('+ Agregar equipo'), run: () => setStep(1) }, ...teams.map(x => ({ k: 'x' + x.n, text: '✕  ' + (x.l || x.n), run: () => save(teams.filter(y => y.n !== x.n)) }))];
   } else if (step === 1) {
     title = t('Elige el deporte');
-    const sps = [...new Set(Object.values(fx?.leagues || {}).map((l: any) => String(l?.sp || '')).filter(Boolean))];
+    const sps = [...new Set(Object.values(fx?.leagues || {}).map((l: any) => String(l?.sp || '')).filter(Boolean))].sort((a, b) => sportLabel(a).localeCompare(sportLabel(b)));
     rows = sps.map(sp => ({ k: sp, text: sportLabel(sp), run: () => (setSport(sp), setStep(2)) }));
   } else if (step === 2) {
     title = t('Elige la liga');
