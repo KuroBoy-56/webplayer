@@ -2,7 +2,9 @@
 // subtítulo sobre el degradado del color, la cápsula Todo / Películas / Series, «Categorías» (despliega las carpetas del
 // servidor IPTV, como el selector de Películas / Series del web player; con una elegida la cuadrícula es esa carpeta),
 // «Filtrar por título…» (abre el teclado de la app), el total, los géneros, las plataformas, el divisor y la cuadrícula
-// de carátulas. Todo con el control; una plataforma elegida se quita con «Todas las plataformas».
+// de carátulas. Todo con el control; una plataforma elegida se quita con «Todas las plataformas». El orden tiene solo los
+// tres del web player (Agregados recientemente / A - Z / Mejor valorados). «Ver todo» de una fila la abre como pantalla
+// (init = el filtro de esa fila: plataforma, género, tipo, categoría y orden); Atrás vuelve a la fila.
 import React, { useMemo, useState } from 'react';
 import { Image, Modal, Platform as RNPlatform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import KeyboardModal from '../components/KeyboardModal';
@@ -11,6 +13,7 @@ import { Shade } from '../components/Shade';
 import { catalog, GENRES, label, PLATFORMS } from '../data/catalog';
 import { features } from '../lib/tenant';
 import { useAppState } from '../state';
+import type { ExploreInit, ExploreSort } from '../nav';
 import { t } from '../lib/i18n';
 import { alpha, C, px, SIDE, themed } from '../theme';
 import { ItemGrid } from './Grid';
@@ -18,13 +21,21 @@ import { ItemGrid } from './Grid';
 type Type = 'all' | 'vod' | 'series';
 type Cat = { id: string; name: string; kind: 'vod' | 'series' };
 
-export default function Explore({ active }: { active: boolean }) {
+const SORTS: [ExploreSort, string][] = [
+  ['recent', 'Agregados recientemente'],
+  ['az', 'A - Z'],
+  ['rating', 'Mejor valorados'],
+];
+
+export default function Explore({ active, init }: { active: boolean; init?: ExploreInit }) {
   const st = useAppState();
-  const [type, setType] = useState<Type>('all');
-  const [cat, setCat] = useState<Cat | null>(null);
+  const [type, setType] = useState<Type>(init?.cat?.kind || init?.type || 'all');
+  const [cat, setCat] = useState<Cat | null>(init?.cat || null);
   const [catsOpen, setCatsOpen] = useState(false);
-  const [genre, setGenre] = useState('');
-  const [platform, setPlatform] = useState('');
+  const [sort, setSort] = useState<ExploreSort>(init?.sort || 'recent');
+  const [sortOpen, setSortOpen] = useState(false);
+  const [genre, setGenre] = useState(init?.genre || '');
+  const [platform, setPlatform] = useState(init?.platform || '');
   const [q, setQ] = useState('');
   const [typing, setTyping] = useState(false);
   // el foco: al abrir la lupa entra a «Filtrar por título…» (como la web y la computadora) y vuelve ahí al cerrar el
@@ -37,8 +48,8 @@ export default function Explore({ active }: { active: boolean }) {
   const gen = GENRES.find(g => g.key === genre);
   const tags = useMemo(() => catalog.exploreTags(type, withPlatforms), [type, withPlatforms, st.catalogRev]);
   const res = useMemo(
-    () => catalog.explore(type, 'recent', cat ? '' : plat?.key || '', cat ? '' : genre, q, 2000, cat?.id || '', cat?.kind || ''),
-    [type, cat, plat, genre, q, st.catalogRev],
+    () => catalog.explore(type, sort, cat ? '' : plat?.key || '', cat ? '' : genre, q, 2000, cat?.id || '', cat?.kind || ''),
+    [type, sort, cat, plat, genre, q, st.catalogRev],
   );
   const cats = useMemo(() => (catsOpen ? catalog.exploreCats(type) : []), [catsOpen, type, st.catalogRev]);
   const pickType = (k: Type) => (setType(k), setCat(null), setGenre(''));
@@ -56,7 +67,7 @@ export default function Explore({ active }: { active: boolean }) {
 
   const header = (
     <View>
-      <View style={s.head}>
+      <View style={[s.head, init && s.headPushed]}>
         {RNPlatform.OS === 'web' ? (
           <View pointerEvents="none" style={[s.glow, { backgroundImage: `radial-gradient(${px(1800)}px ${px(450)}px at 0% 0%, ${alpha(accent, 0.33)}, transparent 70%)` } as any]} />
         ) : (
@@ -84,7 +95,10 @@ export default function Explore({ active }: { active: boolean }) {
           <Focusable onPress={() => setCatsOpen(true)} style={f => [s.select, f && s.focus]}>
             {f => <Text style={[s.selectText, f && s.focusText]} numberOfLines={1}>{catLabel}  ▾</Text>}
           </Focusable>
-          <Focusable key={'filter:' + filterRev} preferred onPress={() => setTyping(true)} style={f => [s.input, f && s.inputF]}>
+          <Focusable onPress={() => setSortOpen(true)} style={f => [s.select, f && s.focus]}>
+            {f => <Text style={[s.selectText, f && s.focusText]} numberOfLines={1}>{t(SORTS.find(x => x[0] === sort)![1] as any)}  ▾</Text>}
+          </Focusable>
+          <Focusable key={'filter:' + filterRev} preferred={!init} onPress={() => setTyping(true)} style={f => [s.input, f && s.inputF]}>
             <Text style={[s.inputText, !q && s.ph]} numberOfLines={1}>{q || t('Filtrar por título…')}</Text>
           </Focusable>
           <Text style={s.count}>{res.total ? t('{n} títulos', { n: res.total.toLocaleString() }) : ''}</Text>
@@ -142,6 +156,31 @@ export default function Explore({ active }: { active: boolean }) {
           </View>
         </Modal>
       ) : null}
+      {sortOpen ? (
+        <Modal visible transparent animationType="fade" onRequestClose={() => (setSortOpen(false), setFilterRev(n => n + 1))}>
+          <View style={s.shade}>
+            <View style={[s.box, s.boxSmall]}>
+              <Text style={s.boxTitle}>{t('Ordenar')}</Text>
+              {SORTS.map(([k, l]) => (
+                <View key={k} style={s.listRow}>
+                  <Button
+                    label={(sort === k ? '✓  ' : '     ') + t(l as any)}
+                    left
+                    last
+                    width={px(560)}
+                    preferred={sort === k}
+                    onPress={() => {
+                      setSortOpen(false);
+                      setSort(k);
+                      setFilterRev(n => n + 1);
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
+          </View>
+        </Modal>
+      ) : null}
       {typing ? (
         <KeyboardModal
           title={t('Filtrar por título…')}
@@ -173,6 +212,8 @@ const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.bg },
     head: { paddingTop: px(150), paddingBottom: px(10), marginHorizontal: -SIDE, paddingHorizontal: SIDE },
+    // abierta desde «Ver todo» no hay barra de arriba
+    headPushed: { paddingTop: px(70) },
     glow: { position: 'absolute', left: 0, top: 0, width: px(1920), height: px(450) },
     titleRow: { flexDirection: 'row', alignItems: 'center' },
     platImg: { width: px(110), height: px(84), marginRight: px(22), borderRadius: px(8) },
@@ -201,6 +242,7 @@ const s = themed(() =>
     focus: { backgroundColor: C.focus, borderColor: C.red, transform: [{ scale: 1.08 }] },
     shade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center' },
     box: { width: px(920), maxHeight: px(940), backgroundColor: C.bg2, borderRadius: px(12), padding: px(44) },
+    boxSmall: { width: px(660) },
     boxTitle: { color: C.text, fontSize: px(40), fontWeight: '800', marginBottom: px(18) },
     list: { maxHeight: px(780) },
     listRow: { marginBottom: px(10) },

@@ -18,6 +18,7 @@ import Actor from './screens/Actor';
 import Detail from './screens/Detail';
 import Distributor, { TenantRetry } from './screens/Distributor';
 import Grid from './screens/Grid';
+import Explore from './screens/Explore';
 import Login from './screens/Login';
 import Main from './screens/Main';
 import Player from './screens/Player';
@@ -65,6 +66,8 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
       return <Actor personId={route.personId} name={route.actorName} active={active} />;
     case 'grid':
       return <Grid title={route.title} mode={route.mode} keyName={route.key} kind={route.kind} active={active} />;
+    case 'explore':
+      return <Explore active={active} init={route.init} />;
     case 'player':
       // canales en vivo: la pantalla grande de la 2.0.17 (PlayerLive); películas y series: Player
       return route.params.kind === 'live' ? <PlayerLive params={route.params} /> : <Player params={route.params} />;

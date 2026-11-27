@@ -433,7 +433,8 @@ class Catalog {
       ];
       picks.push(...weekShuffle(fill, 5).slice(0, need));
     }
-    if (picks.length >= 5) rows.push({ title: t('Top 10 de la semana'), type: 'top10', items: picks.map(x => this.items(x.kind, [x.i])[0]) });
+    // «Ver todo» del Top 10: Explorar con Mejor valorados (como el web player)
+    if (picks.length >= 5) rows.push({ title: t('Top 10 de la semana'), type: 'top10', items: [...picks.map(x => this.items(x.kind, [x.i])[0]), { kind: 'more', key: 'top', label: t('Ver todo'), color: '', extra: 'top:all' }] });
 
     const recentMovies = this.top('vod', vodIdx, 'added', 30);
     if (recentMovies.length) {
@@ -472,7 +473,7 @@ class Catalog {
 
     const pick = (kind: Kind, idx: number[], n: number) => this.items(kind, shuffle(idx.slice()).slice(0, n));
     const seriesForYou = pick('series', serIdx, 24);
-    if (seriesForYou.length) rows.push({ title: t('Series para ti'), type: 'poster', items: [...seriesForYou, { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'series' }] });
+    if (seriesForYou.length) rows.push({ title: t('Series para ti'), type: 'poster', items: [...seriesForYou, { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'for:series' }] });
 
     for (const key of ['accion', 'comedia', 'terror', 'anime', 'drama', 'suspenso', 'aventura', 'animacion', 'scifi', 'romance', 'documental']) {
       const g = GENRES.find(x => x.key === key);
@@ -482,7 +483,7 @@ class Catalog {
     }
 
     const moviesForYou = pick('vod', vodIdx, 24);
-    if (moviesForYou.length) rows.push({ title: t('Películas para ti'), type: 'poster', items: [...moviesForYou, { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'vod' }] });
+    if (moviesForYou.length) rows.push({ title: t('Películas para ti'), type: 'poster', items: [...moviesForYou, { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: 'for:vod' }] });
     return { rows, hero, heroes: this.heroCandidates(['vod', 'series'], 4) };
   }
 
@@ -533,7 +534,7 @@ class Catalog {
     }
     if (gen.items.length) rows.push(gen);
     const top = this.weekTop10(kind, all);
-    if (top.length >= 5) rows.push({ title: t('Top 10 de la semana'), type: 'top10', items: this.items(kind, top) });
+    if (top.length >= 5) rows.push({ title: t('Top 10 de la semana'), type: 'top10', items: [...this.items(kind, top), { kind: 'more', key: 'top', label: t('Ver todo'), color: '', extra: 'top:' + kind }] });
     for (const c of this.visibleCats(kind)) {
       const idx = d.byCat.get(c.id) || [];
       if (!idx.length) continue;
