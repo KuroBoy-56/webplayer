@@ -74,7 +74,7 @@ import kotlinx.coroutines.launch
 /** Una fila de Inicio / Películas / Series. */
 sealed class BrowseRow(val key: String, val title: String) {
     class Posters(key: String, title: String, val items: List<Item>, val progress: Map<String, Float> = emptyMap(), val onViewAll: (() -> Unit)? = null) : BrowseRow(key, title)
-    class Top10(key: String, title: String, val items: List<Item>) : BrowseRow(key, title)
+    class Top10(key: String, title: String, val items: List<Item>, val onViewAll: (() -> Unit)? = null) : BrowseRow(key, title)
     class Plats(key: String, title: String, val list: List<Platform>) : BrowseRow(key, title)
     class Chips(key: String, title: String, val chips: List<String>, val onChip: (Int) -> Unit) : BrowseRow(key, title)
     /** Películas / Series › Géneros: tarjetas con el dibujo del género y el póster de su título destacado */
@@ -232,14 +232,16 @@ private fun RowSlot(state: AppState, r: BrowseRow, slot: Dp, focusItem: (Item) -
             r.title, r.items, onViewAll = r.onViewAll, cardWidth = cardW, top = 10.dp,
             onViewAllFocus = { focusLabel(r.title, seeAll) },
         ) { _, it -> TvCard(it, cardW, progress = r.progress[it.key] ?: 0f, onFocus = { focusItem(it) }) { open(it) } }
-        is BrowseRow.Top10 -> TvRow(r.title, r.items, cardWidth = cardW, top = 10.dp) { i, it -> TvTop10Card(i + 1, it, cardW, onFocus = { focusItem(it) }) { open(it) } }
+        is BrowseRow.Top10 -> TvRow(
+            r.title, r.items, onViewAll = r.onViewAll, cardWidth = cardW, top = 10.dp, onViewAllFocus = { focusLabel(r.title, seeAll) },
+        ) { i, it -> TvTop10Card(i + 1, it, cardW, onFocus = { focusItem(it) }) { open(it) } }
         is BrowseRow.Plats -> Column(Modifier.padding(top = 10.dp)) {
             val pad = tvPad()
             val platPlot = stringResource(R.string.browse_platform_plot, "%s")
             Text(r.title, color = Color(0xFFE5E5E5), fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = pad))
             LazyRow(contentPadding = PaddingValues(start = pad, end = pad, top = 16.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(r.list, key = { it.key }) { p ->
-                    TvPlatformTile(p, cardW * 1.6f, onFocus = { focusLabel(p.label, platPlot.replace("%s", p.label)) }) { state.push(Route.PlatformPage(p)) }
+                    TvPlatformTile(p, cardW * 1.6f, onFocus = { focusLabel(p.label, platPlot.replace("%s", p.label)) }) { state.push(Route.ExploreAt(platform = p.key)) }
                 }
             }
         }
