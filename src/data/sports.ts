@@ -130,14 +130,23 @@ const NOISE = new Set(['hd', 'fhd', 'uhd', 'sd', '4k', '8k', 'hq', 'hevc', 'h264
   've', 'venezuela', 'uy', 'uruguay', 'py', 'paraguay', 'bo', 'bolivia', 'cr', 'pa', 'panama', 'gt', 'hn', 'sv', 'ni', 'do', 'pr',
   'latam', 'latin', 'latino', 'latina', 'lat', 'america', 'es', 'esp', 'spain', 'espana', 'uk', 'gb', 'int', 'intl', 'international',
   'br', 'bra', 'brasil', 'brazil', 'pt', 'portugal', 'ca', 'can', 'canada', 'fr', 'france', 'it', 'italy', 'de', 'germany',
-  'nl', 'netherlands', 'au', 'australia', 'nz', 'zealand', 'new', 'ie', 'ireland', 'en', 'network', 'net']);
+  'nl', 'netherlands', 'au', 'australia', 'nz', 'zealand', 'new', 'ie', 'ireland', 'en', 'network', 'net',
+  'hdr', 'fd', '2160', '2160p', '1080i', 'fullhd', 'east', 'west', 'eastern', 'western', 'eng', 'english', 'raw', 'dual']);
+
+// números en palabra («ESPN Two», «Canal Dos»): como cifra, así se pegan igual que «ESPN 2»
+const NUM_WORDS: Record<string, string> = {
+  one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10', eleven: '11', twelve: '12',
+  uno: '1', dos: '2', tres: '3', cuatro: '4', cinco: '5', seis: '6', siete: '7', ocho: '8', nueve: '9', diez: '10',
+};
 
 // palabras que identifican el canal; un número va pegado a la palabra anterior ("espn 2" -> "espn2")
+// «ESPN+», «Star+», «M+»: el + es «plus» (norm lo borraba y «ESPN+» daba el canal «ESPN»)
 export function channelKey(name: string): string[] {
   const out: string[] = [];
-  for (let t of norm(name).split(' ')) {
+  for (let t of norm(name.replace(/\+/g, ' plus ')).split(' ')) {
     // "M+ LaLiga" (Movistar Plus) llega como "m laliga"
     if (t === 'm') t = 'movistar';
+    t = NUM_WORDS[t] || t;
     if (!t || NOISE.has(t)) continue;
     if (/^\d+$/.test(t) && out.length && !/^\d+$/.test(out[out.length - 1])) out[out.length - 1] += t;
     else out.push(t);
@@ -197,6 +206,8 @@ function findByChannel(tvName: string, ix: Index, items: any[]): number {
   let r = findByChannelOnce(tvName, ix, items);
   // un nombre solo es su primer canal ("ESPN" = "ESPN 1", "DAZN" = "DAZN 1")
   if (r < 0 && !/\d$/.test(channelKey(tvName).join(''))) r = findByChannelOnce(tvName + ' 1', ix, items);
+  // «Movistar+ LaLiga» en una lista que lo llama «Movistar LaLiga»: sin el plus
+  if (r < 0 && tvName.includes('+')) r = findByChannelOnce(tvName.replace(/\+/g, ' '), ix, items);
   memo.set(tvName, r);
   return r;
 }
@@ -230,7 +241,62 @@ function findByChannelOnce(tvName: string, ix: Index, items: any[]): number {
       bestScore = score;
     }
   }
-  return best >= 0 ? best : findLoose(q, ix, items);
+  if (best >= 0) return best;
+  best = findLoose(q, ix, items);
+  return best >= 0 ? best : findFuzzy(q, ix);
+}
+
+// último recurso, como los emparejadores de canales de IPTV (Stream-Mapparr): parecido de Levenshtein entre las palabras
+// ordenadas («TyC Sport» = «TyC Sports»). Solo canales que comparten la mitad de las palabras, con los mismos números
+// («ESPN 2» nunca «ESPN 3» ni «ESPN») y más estricto con los nombres cortos (≤ 4 letras 95 %, ≤ 8 90 %, si no 86 %)
+function findFuzzy(q: string[], ix: Index): number {
+  const qLen = q.join('').length;
+  if (qLen < 3) return -1;
+  const qs = [...q].sort().join(' ');
+  const qDig = keyDigits(q);
+  const need = Math.ceil(q.length / 2);
+  const thr = qLen <= 4 ? 0.95 : qLen <= 8 ? 0.9 : 0.86;
+  const hits = new Map<number, number>();
+  for (const t of q) (ix.words.get(t) || (t.length >= 4 ? ix.words.get(t.slice(0, -1)) : undefined))?.forEach(i => hits.set(i, (hits.get(i) || 0) + 1));
+  let best = -1;
+  let bestR = 0;
+  let tried = 0;
+  for (const [ci, n] of hits) {
+    if (n < need && q.length > 1) continue;
+    const c = ix.chans[ci];
+    if (keyDigits(c.key) !== qDig) continue;
+    const r = similarity(qs, [...c.key].sort().join(' '));
+    if (r >= thr && r > bestR) {
+      best = c.idx;
+      bestR = r;
+    }
+    if (++tried >= 200) break;
+  }
+  return best;
+}
+
+// los números del nombre, en orden («espn2» -> "2", «fox sports 1 hd» -> "1")
+const keyDigits = (words: string[]) => words.join(' ').replace(/[^0-9]+/g, ' ').trim();
+
+/** 1 - distancia de Levenshtein / largo mayor (el ratio normalizado de rapidfuzz) */
+export function similarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const mx = Math.max(a.length, b.length);
+  if (Math.abs(a.length - b.length) > mx * 0.15) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur.push(Math.min(prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1), prev[j] + 1, cur[j - 1] + 1));
+    prev = cur;
+  }
+  return 1 - prev[b.length] / mx;
+}
+
+/** para las pruebas: la posición del canal de una lista de nombres para un canal que transmite (-1 = ninguno) */
+export function findTvIn(names: string[], tvName: string): number {
+  const chans: Chan[] = names.map((n, i) => ({ norm: norm(n), isEvent: false, idx: i, key: channelKey(n) }));
+  return findByChannel(tvName, buildIndex(chans), names.map(name => ({ name })));
 }
 
 // último intento: las palabras del canal pegadas contienen cada palabra buscada, sin que la siga un número

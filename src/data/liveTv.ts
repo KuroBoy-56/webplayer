@@ -44,6 +44,10 @@ export type LiveCard = {
   solo: boolean;
   spl: string;
   ev: string;
+  /** todo lo encontrado para el partido (agenda, guía, equipos): el menú de canales de la tarjeta, como en Deportes */
+  m?: import('./sports').SportMatch;
+  folder?: Item | null;
+  iptv?: boolean;
 };
 
 /** ¿existe todo esto? (perfiles activos con un perfil elegido que no es el infantil, y Deportes encendido) */
@@ -232,7 +236,8 @@ export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number 
       seen.add(str(e.id));
     }
   }
-  const m = matchSports({ events, sports: j.sports || {}, match: j.match } as any).map;
+  const mr = matchSports({ events, sports: j.sports || {}, match: j.match } as any);
+  const m = mr.map;
   const cards: LiveCard[] = [];
   for (const e of events) {
     if (only && str(e.sp).toLowerCase() !== only) continue;
@@ -246,6 +251,7 @@ export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number 
       id: str(e.id), sp: str(e.sp), lg: str(e.lg), h: str(e.h) || str(e.ev), a: str(e.a), hb: str(e.hb), ab: str(e.ab),
       hs: str(e.hs), as: str(e.as), st: str(e.st), pr: str(e.pr), s: int(e.s), th: str(e.th), soon: e.soon === true, best,
       solo, spl: t((str(j.sports?.[str(e.sp)]?.label) || str(e.sp)) as any), ev: str(e.ev) || [str(e.h), str(e.a)].filter(Boolean).join(' vs ') || str(e.lg),
+      m: mm, folder: mr.folder, iptv: str(j.chan) === 'iptv',
     });
   }
   // en vivo primero, después los que empiezan antes; como mucho 20 (al final va «Ir a Deportes»)

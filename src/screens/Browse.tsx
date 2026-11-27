@@ -6,6 +6,7 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openItem, openSpecial, playMovie } from '../actions';
 import { Button, Message, Spinner } from '../components/ui';
+import { LiveMenu } from '../components/LiveMenu';
 import { RowView, rowHeight } from '../components/Tiles';
 import { ChainImage, useImagesOff } from '../components/ChainImage';
 import { backdropSources, posterSources } from '../lib/images';
@@ -416,7 +417,9 @@ export default function Browse({ section, active = true }: { section: 'home' | '
   }, [win, rowIdx, rows.length, active]);
 
   const selectItem = useCallback((it: Item) => openItem(nav, it), [nav]);
-  const selectSpecial = useCallback((sp: Special) => openSpecial(nav, sp), [nav]);
+  // un partido de «En vivo ahora»: el menú de canales (como en Deportes), no solo la primera coincidencia
+  const [liveMenu, setLiveMenu] = useState<LiveCard | null>(null);
+  const selectSpecial = useCallback((sp: Special) => (sp.kind === 'live' && sp.live ? setLiveMenu(sp.live) : openSpecial(nav, sp)), [nav]);
 
   if (!ready) return <Spinner label={loadError || t('Cargando el catálogo…')} />;
   if (!rows.length) return <Message text={t('No hay contenido para mostrar.')} />;
@@ -478,6 +481,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
           ))}
         </ScrollView>
       </View>
+      {liveMenu ? <LiveMenu c={liveMenu} onClose={() => setLiveMenu(null)} /> : null}
     </View>
   );
 }
