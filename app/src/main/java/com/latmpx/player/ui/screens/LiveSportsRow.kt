@@ -84,7 +84,9 @@ internal class LiveCard(val e: SportEvent, val m: SportMatch)
  * de su servidor IPTV. Con «Deporte preferido» (Ajustes), solo ese deporte.
  * enabled = false: la fila no existe y vuelve «Plataformas».
  */
-internal class LiveSports(val enabled: Boolean, val cards: List<LiveCard>, val chans: SpChans?)
+/** hidesPlats: Inicio no muestra las plataformas (perfiles + partidos en vivo del panel, sin el ajuste); antes de la
+ *  primera respuesta vale lo de la última vez para esta línea, así no aparecen y se van */
+internal class LiveSports(val enabled: Boolean, val cards: List<LiveCard>, val chans: SpChans?, val hidesPlats: Boolean = false)
 
 @Composable
 internal fun rememberLiveSports(state: AppState): LiveSports {
@@ -132,7 +134,7 @@ internal fun rememberLiveSports(state: AppState): LiveSports {
             }.sortedWith(compareBy({ it.e.soon }, { it.e.start })).take(LIVE_ROW_MAX)
         }
     }
-    return LiveSports(on, cards, chans)
+    return LiveSports(on, cards, chans, active && !Store.platformCards && (d?.enabled ?: Store.liveAvail))
 }
 
 /** fila «En vivo ahora»: tarjetas que se deslizan; al tocar, el menú de canales de Deportes y Atrás vuelve a Inicio */

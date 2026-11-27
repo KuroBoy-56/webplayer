@@ -18,13 +18,16 @@ object SportsLive {
     var available by mutableStateOf(false)
         private set
 
+    /** nombres de las disciplinas del panel (api/sports.php, en el idioma de la app): Deporte preferido y Equipos favoritos */
+    var labels by mutableStateOf<Map<String, String>>(emptyMap())
+
     class Data(val enabled: Boolean, val ttl: Int, val events: List<SportEvent>, val sports: Map<String, SportInfo>, val rules: MatchRules, val iptvOnly: Boolean)
 
     /** null = el panel no respondió (la fila deja lo que tenía) */
     suspend fun load(): Data? = withContext(Dispatchers.IO) {
         val j = Cloud.call { t -> Net.get(PanelUrl.api("sports_live.php") + "?next=1&token=" + URLEncoder.encode(t, "UTF-8")) }?.json() ?: return@withContext null
         val ttl = j.optInt("ttl", 30).coerceIn(15, 3600)
-        withContext(Dispatchers.Main) { available = j.optBoolean("enabled", false) }
+        withContext(Dispatchers.Main) { available = j.optBoolean("enabled", false); Store.liveAvail = available }
         if (!j.optBoolean("enabled", false)) return@withContext Data(false, ttl, emptyList(), emptyMap(), Sports.rulesOf(null), false)
         val now = System.currentTimeMillis()
         val events = j.optJSONArray("events").mapObj { e ->

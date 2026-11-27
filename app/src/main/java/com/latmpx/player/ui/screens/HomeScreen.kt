@@ -136,7 +136,7 @@ fun HomeScreen(state: AppState) {
         item {
             if (live.enabled) LiveSportsRow(live, pad) { state.stack.clear(); state.tab = Tab.SPORTS }
             // con «En vivo ahora» las plataformas solo vuelven (debajo) si se activaron en Ajustes
-            if (!live.enabled || com.latmpx.player.data.Store.platformCards) {
+            if (!live.hidesPlats) {
                 ShelfRow(stringResource(R.string.platforms), platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.PlatformPage(p)) }) }
             }
         }
