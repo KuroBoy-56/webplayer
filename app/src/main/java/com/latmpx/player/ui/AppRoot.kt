@@ -416,6 +416,7 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
             is Route.Detail -> DetailScreen(state, r.item)
             is Route.Browse -> BrowseScreen(state, r.title, r.kind, r.categoryIds)
             is Route.PlatformPage -> BrowseScreen(state, r.platform.label, null, emptySet(), r.platform)
+            is Route.ExploreAt -> com.latmpx.player.ui.screens.TvExploreScreen(state, r)
             is Route.ActorPage -> ActorScreen(state, r)
             is Route.Saved -> SavedScreen(state, r.continueWatching)
             is Route.Downloads -> com.latmpx.player.ui.screens.DownloadsScreen { state.pop() }

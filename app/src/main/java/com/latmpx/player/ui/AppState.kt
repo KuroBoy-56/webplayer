@@ -31,6 +31,11 @@ sealed class Route {
     data class ActorPage(val name: String, val tmdbId: Int = 0, val photo: String = "") : Route()
     /** rejilla completa de "Continuar viendo" (true) o de "Mi lista" (false) */
     data class Saved(val continueWatching: Boolean) : Route()
+    /**
+     * «Ver todo» de una fila, como browse.php del web player: Explorar con el filtro de esa fila. type 0 todo / 1 películas /
+     * 2 series; sort 0 Agregados recientemente / 1 A - Z / 2 Mejor valorados; genre = el nombre del género; catKind "m" / "s".
+     */
+    data class ExploreAt(val type: Int = 0, val sort: Int = 0, val platform: String = "", val genre: String = "", val cat: String = "", val catKind: String = "") : Route()
     /** Cuenta › Mis descargas (celular) */
     data object Downloads : Route()
 }
