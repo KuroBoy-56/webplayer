@@ -34,7 +34,12 @@ sealed class Route {
     /** Cuenta › Mis descargas (celular) */
     data object Downloads : Route()
     /** «Categorías» (con perfiles): Explorar como la del web player */
-    data object Explore : Route()
+    /**
+     * Explorar, como browse.php del web player. «Ver todo» de una fila la abre con su filtro: type 0 todo / 1 películas /
+     * 2 series; sort 0 Agregados recientemente / 1 A - Z / 2 Mejor valorados; genre = nombre del género; platform = clave;
+     * cat + catKind ("m" / "s") = una carpeta del servidor.
+     */
+    data class Explore(val type: Int = 0, val sort: Int = 0, val genre: String = "", val platform: String = "", val cat: String = "", val catKind: String = "") : Route()
 }
 
 class AppState {
