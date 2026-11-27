@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -302,7 +303,8 @@ fun AppRoot() {
         onPauseOrDispose { }
     }
 
-    Box(Modifier.fillMaxSize().background(NfBg)) {
+    // mientras se carga el perfil elegido (su avatar al centro) el control no mueve nada de Inicio por detrás
+    Box(Modifier.fillMaxSize().background(NfBg).onPreviewKeyEvent { state.entering != null }) {
         when {
             !booted.value -> Splash()
             gate.value == Gate.CHOOSE -> DistributorScreen(distMsg.value) {
@@ -338,11 +340,12 @@ fun AppRoot() {
                         state.profilesOpen = null
                         state.profileReady = true
                         if (p != null) {
-                            // Inicio se arma debajo: el circulito sigue hasta que el catálogo está (máx. 20 s)
-                            kotlinx.coroutines.withTimeoutOrNull(20_000) {
-                                androidx.compose.runtime.snapshotFlow { !state.loading || state.movies.isNotEmpty() }.first { it }
+                            // Inicio, «En vivo ahora» y Explorar se arman debajo: el circulito sigue al menos 5 s y, si el
+                            // catálogo todavía carga, hasta que termine (como mucho 15 s); así al entrar todo está listo
+                            kotlinx.coroutines.withTimeoutOrNull(15_000) {
+                                androidx.compose.runtime.snapshotFlow { !state.loading }.first { it }
                             }
-                            kotlinx.coroutines.delay((900 - (System.currentTimeMillis() - t0)).coerceAtLeast(150))
+                            kotlinx.coroutines.delay((5_000 - (System.currentTimeMillis() - t0)).coerceAtLeast(150))
                             state.entering = null
                         }
                     }

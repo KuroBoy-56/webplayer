@@ -57,7 +57,11 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 
 /** un partido de «En vivo ahora» con el canal del cliente donde verlo (siempre uno real de su servidor IPTV) */
-class TvLiveCard(val e: SportEvent, val best: Item)
+class TvLiveCard(val e: SportEvent, val best: Item, val sport: String = "") {
+    /** sin dos equipos (peleas, boxeo, WWE, carreras): la tarjeta muestra la disciplina, el evento y su póster */
+    val solo: Boolean get() = e.home.isBlank() || e.away.isBlank()
+    val eventName: String get() = e.title.ifBlank { (e.home + " " + e.away).trim() }.ifBlank { e.league }
+}
 
 /**
  * «En vivo ahora» de Inicio en la TV, solo con perfiles (uno elegido que no sea el infantil) y Deportes encendido: los
@@ -97,7 +101,7 @@ fun rememberTvLive(state: AppState): List<TvLiveCard> {
                 e.id !in ids && !e.postponed && (e.home in teams || e.away in teams) && now < e.start + 3 * 3600_000L &&
                     Calendar.getInstance().apply { timeInMillis = e.start }.get(Calendar.DAY_OF_YEAR) == today
             }.map { it.copy(homeScore = "", awayScore = "", status = "NS", soon = true) }
-            (d.events + extra).mapNotNull { e -> Sports.match(e, prepared, d.rules).takeIf { !it.guess }?.best?.let { TvLiveCard(e, it) } }
+            (d.events + extra).mapNotNull { e -> Sports.match(e, prepared, d.rules).takeIf { !it.guess }?.best?.let { TvLiveCard(e, it, d.sports[e.sport]?.label ?: e.sport) } }
                 .sortedWith(compareBy({ it.e.soon }, { it.e.start })).take(20)
         }
     }
@@ -141,9 +145,22 @@ fun TvLiveTile(card: TvLiveCard, width: Dp, onFocus: () -> Unit, onClick: () -> 
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                if (e.home.isBlank() && e.away.isBlank()) {
-                    Text(e.title.ifBlank { e.league }, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2,
-                        overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                if (card.solo) {
+                    // sin equipos: el póster del evento en pequeño (si lo tiene), la disciplina y el nombre; sin marcador
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        if (e.thumb.isNotBlank()) {
+                            AsyncImage(model = e.thumb, contentDescription = null, contentScale = ContentScale.Crop,
+                                modifier = Modifier.width(width * 0.42f).height(width * 0.42f * 0.5625f).clip(RoundedCornerShape(6.dp)))
+                            Spacer(Modifier.width(12.dp))
+                        }
+                        val al = if (e.thumb.isNotBlank()) TextAlign.Start else TextAlign.Center
+                        Column(Modifier.weight(1f)) {
+                            Text(card.sport, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, textAlign = al, modifier = Modifier.fillMaxWidth())
+                            Text(card.eventName, color = Color(0xEBFFFFFF), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 3,
+                                overflow = TextOverflow.Ellipsis, textAlign = al, modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
+                        }
+                    }
                 } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     TvTeam(e.home, e.homeBadge, 48.dp, Modifier.weight(1f))
                     Text(
@@ -202,6 +219,8 @@ fun TvLiveStage(e: SportEvent) {
     Box(Modifier.fillMaxSize()) {
         androidx.compose.foundation.Image(painterResource(R.drawable.sports_bg), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Color(0x59000000)))
+        // sin equipos (pelea, carrera): el estadio solo, sin escudos ni «VS»
+        if (e.home.isBlank() || e.away.isBlank()) return@Box
         Row(Modifier.align(Alignment.CenterEnd).padding(end = 90.dp), horizontalArrangement = Arrangement.spacedBy(40.dp), verticalAlignment = Alignment.CenterVertically) {
             TvBigBadge(e.home, e.homeBadge)
             Text("VS", color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.Black)

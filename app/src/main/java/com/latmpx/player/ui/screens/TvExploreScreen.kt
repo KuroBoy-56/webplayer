@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -81,7 +83,10 @@ import com.latmpx.player.ui.theme.NfRed
 @Composable
 fun TvExploreScreen(state: AppState) {
     var type by rememberSaveable { mutableStateOf(0) } // 0 todo, 1 películas, 2 series
-    var sort by rememberSaveable { mutableStateOf(0) } // 0 recientes, 1 A - Z, 2 mejor valorados
+    // «Categorías»: una carpeta del servidor IPTV ("" = todas), como el selector de Películas / Series del web player
+    var cat by rememberSaveable { mutableStateOf("") }
+    var catKind by rememberSaveable { mutableStateOf("") } // "m" películas, "s" series
+    var catsOpen by remember { mutableStateOf(false) }
     var genre by rememberSaveable { mutableStateOf("") }
     var platform by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
@@ -90,27 +95,30 @@ fun TvExploreScreen(state: AppState) {
     val sCats = remember(state.seriesCats, state.refresh) { Store.visibleCats(state.seriesCats) }
     val movies = remember(state.movies, mCats) { mCats.map { it.id }.toSet().let { ids -> state.movies.filter { it.categoryId in ids } } }
     val series = remember(state.series, sCats) { sCats.map { it.id }.toSet().let { ids -> state.series.filter { it.categoryId in ids } } }
-    val pool = when (type) { 1 -> movies; 2 -> series; else -> movies + series }
+    val pool = when {
+        cat.isNotEmpty() -> (if (catKind == "s") series else movies).filter { it.categoryId == cat }
+        type == 1 -> movies
+        type == 2 -> series
+        else -> movies + series
+    }
     val cats: List<Category> = when (type) { 1 -> mCats; 2 -> sCats; else -> mCats + sCats }
+    val catName = (if (catKind == "s") sCats else mCats).firstOrNull { it.id == cat }?.name.orEmpty()
     val genres = remember(cats) { Platforms.genres.filter { (_, kw) -> Platforms.categoriesFor(cats, kw).isNotEmpty() } }
     val platforms = remember(mCats, sCats) {
         if (!Tenant.platformsEnabled) emptyList() else Platforms.list.filter { p -> Platforms.categoriesFor(mCats + sCats, p.kw).isNotEmpty() }
     }
     val plat = platforms.find { it.key == platform }
     val gen = Platforms.genres.find { it.first == genre }
-    val shown = remember(pool, cats, sort, genre, plat, query) {
+    val shown = remember(pool, cats, cat, genre, plat, query) {
         var l = pool
-        for (kw in listOfNotNull(plat?.kw, gen?.second)) {
+        // con una carpeta elegida no hay géneros ni plataformas (como el web player)
+        if (cat.isEmpty()) for (kw in listOfNotNull(plat?.kw, gen?.second)) {
             val ids = Platforms.categoriesFor(cats, kw)
             l = l.filter { it.categoryId in ids }
         }
         val q = Platforms.fold(query.trim())
         if (q.isNotEmpty()) l = l.filter { Platforms.fold(it.name).contains(q) }
-        when (sort) {
-            1 -> l.sortedBy { Platforms.fold(it.name) }
-            2 -> l.sortedWith(compareByDescending<Item> { it.rating }.thenByDescending { it.added })
-            else -> l.sortedByDescending { it.added }
-        }
+        l.sortedByDescending { it.added }
     }
     val progress = remember(state.refresh, Cloud.rev) { Cloud.progressList().associateBy { it.key.split(":").take(2).joinToString(":") } }
     val pad = sidePad()
@@ -125,7 +133,7 @@ fun TvExploreScreen(state: AppState) {
         kotlinx.coroutines.delay(120)
         runCatching { field.box.requestFocus() }
     }
-    val sortLabel = when (sort) { 1 -> "A - Z"; 2 -> stringResource(R.string.ex_sort_rating); else -> stringResource(R.string.ex_sort_recent) }
+    val catLabel = if (cat.isEmpty()) stringResource(R.string.categories) else catName.let { if (it.length > 28) it.take(27) + "…" else it }
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(pw), contentPadding = PaddingValues(start = pad, end = pad, bottom = 60.dp),
@@ -146,10 +154,11 @@ fun TvExploreScreen(state: AppState) {
                         Image(painterResource(plat.image), null, contentScale = ContentScale.Fit, modifier = Modifier.size(56.dp, 40.dp).clip(RoundedCornerShape(5.dp)))
                         Spacer(Modifier.width(12.dp))
                     }
-                    Text(plat?.label ?: gen?.first ?: stringResource(R.string.explore), color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    Text(if (cat.isNotEmpty()) catName else plat?.label ?: gen?.first ?: stringResource(R.string.explore), color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 }
                 Text(
                     when {
+                        cat.isNotEmpty() -> stringResource(if (catKind == "s") R.string.ex_sub_cat_series else R.string.ex_sub_cat_movies, catName)
                         plat != null -> stringResource(R.string.ex_sub_platform, plat.label)
                         gen != null -> stringResource(R.string.ex_sub_genre, gen.first.lowercase())
                         else -> stringResource(R.string.explore_sub)
@@ -165,7 +174,7 @@ fun TvExploreScreen(state: AppState) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.border(1.dp, Color(0xFF444444), RoundedCornerShape(50)).clip(RoundedCornerShape(50))) {
                         listOf(stringResource(R.string.ex_all), stringResource(R.string.movies), stringResource(R.string.series)).forEachIndexed { i, l ->
-                            FocusBox(onClick = { type = i; genre = "" }, shape = RoundedCornerShape(50), focusScale = 1.05f) { f ->
+                            FocusBox(onClick = { type = i; genre = ""; cat = "" }, shape = RoundedCornerShape(50), focusScale = 1.05f) { f ->
                                 Text(
                                     l, color = if (type == i) Color.Black else Color(0xFFDDDDDD), fontSize = 13.sp, fontWeight = if (type == i) FontWeight.Bold else FontWeight.Normal,
                                     modifier = Modifier.background(if (type == i || f) Color.White else Color.Transparent).padding(horizontal = 14.dp, vertical = 6.dp),
@@ -174,9 +183,9 @@ fun TvExploreScreen(state: AppState) {
                         }
                     }
                     Spacer(Modifier.width(10.dp))
-                    FocusBox(onClick = { sort = (sort + 1) % 3 }, shape = RoundedCornerShape(4.dp), focusScale = 1.05f) { f ->
+                    FocusBox(onClick = { catsOpen = true }, shape = RoundedCornerShape(4.dp), focusScale = 1.05f) { f ->
                         Text(
-                            "$sortLabel  ▾", color = Color.White, fontSize = 13.sp,
+                            "$catLabel  ▾", color = Color.White, fontSize = 13.sp, maxLines = 1,
                             modifier = Modifier.background(Color.Black).border(1.dp, if (f) Color.White else Color(0xFF555555), RoundedCornerShape(4.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
                         )
                     }
@@ -185,11 +194,11 @@ fun TvExploreScreen(state: AppState) {
                     Spacer(Modifier.weight(1f))
                     if (shown.isNotEmpty()) Text(stringResource(R.string.ex_count, shown.size), color = NfGray2, fontSize = 12.sp)
                 }
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 12.dp, bottom = 2.dp)) {
+                if (cat.isEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 12.dp, bottom = 2.dp)) {
                     item { ExChip(stringResource(R.string.ex_all_genres), genre.isEmpty()) { genre = "" } }
                     items(genres, key = { it.first }) { (label, _) -> ExChip(label, genre == label) { genre = label } }
                 }
-                if (platforms.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 6.dp, bottom = 2.dp)) {
+                if (cat.isEmpty() && platforms.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 6.dp, bottom = 2.dp)) {
                     // con una plataforma elegida, el primero la quita (en la web se vuelve con Atrás)
                     if (plat != null) item { ExChip(stringResource(R.string.ex_all_platforms), false) { platform = "" } }
                     items(platforms, key = { it.key }) { p -> ExChip(p.label, p.key == platform) { platform = if (p.key == platform) "" else p.key } }
@@ -200,6 +209,20 @@ fun TvExploreScreen(state: AppState) {
         items(shown, key = { it.key }) { it ->
             val p = progress[it.key]
             PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, progress = if (p != null && p.duration > 0) p.position.toFloat() / p.duration else 0f)
+        }
+    }
+    if (catsOpen) {
+        // las carpetas visibles del tipo elegido (con «Todo», las de películas y las de series)
+        val list = when (type) { 1 -> mCats.map { "m" to it }; 2 -> sCats.map { "s" to it }; else -> mCats.map { "m" to it } + sCats.map { "s" to it } }
+        val tMovies = stringResource(R.string.movies)
+        val tSeries = stringResource(R.string.series)
+        ExploreCatsDialog(
+            listOf(stringResource(R.string.ex_all_categories) to "") + list.map { (k, c) -> (c.name + if (type == 0) "  ·  " + (if (k == "s") tSeries else tMovies) else "") to "$k|${c.id}" },
+            if (cat.isEmpty()) "" else "$catKind|$cat",
+            onDismiss = { catsOpen = false },
+        ) { v ->
+            catsOpen = false
+            if (v.isEmpty()) cat = "" else { catKind = v.substringBefore('|'); cat = v.substringAfter('|'); genre = ""; platform = "" }
         }
     }
 }
@@ -242,4 +265,30 @@ private fun Modifier.bleed(pad: Dp): Modifier = layout { m, c ->
     val side = pad.roundToPx()
     val p = m.measure(c.copy(minWidth = c.minWidth + side * 2, maxWidth = c.maxWidth + side * 2))
     layout(c.maxWidth, p.height) { p.place(-side, 0) }
+}
+
+/** «Categorías» de Explorar: la lista de carpetas del servidor IPTV; OK elige una (la elegida tiene el foco al abrir) */
+@Composable
+private fun ExploreCatsDialog(rows: List<Pair<String, String>>, current: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.width(560.dp).background(com.latmpx.player.ui.theme.NfBg2, RoundedCornerShape(10.dp)).padding(20.dp)) {
+            Text(stringResource(R.string.categories), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            val start = rows.indexOfFirst { it.second == current }.coerceAtLeast(0)
+            val first = remember { androidx.compose.ui.focus.FocusRequester() }
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (start - 3).coerceAtLeast(0))
+            androidx.compose.foundation.lazy.LazyColumn(
+                Modifier.heightIn(max = 400.dp).padding(top = 10.dp), state = listState, verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(rows.size, key = { rows[it].second }) { i ->
+                    val (label, v) = rows[i]
+                    FocusBox(onClick = { onPick(v) }, modifier = Modifier.fillMaxWidth().then(if (i == start) Modifier.focusRequester(first) else Modifier), focusScale = 1.02f) { fo ->
+                        Text(label, color = if (fo) Color.Black else Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            fontWeight = if (v == current) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.fillMaxWidth().background(if (fo) Color.White else if (v == current) Color(0x44FFFFFF) else Color(0x22FFFFFF), RoundedCornerShape(6.dp)).padding(horizontal = 14.dp, vertical = 9.dp))
+                    }
+                }
+            }
+            androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(100); runCatching { first.requestFocus() } }
+        }
+    }
 }

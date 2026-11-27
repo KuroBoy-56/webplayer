@@ -14,4 +14,7 @@
     <string name="ex_sub_genre">Films et séries : %1$s</string>
     <string name="ex_all_platforms">Toutes les plateformes</string>
     <string name="ex_none">Aucun titre avec ces filtres.</string>
+    <string name="ex_all_categories">Toutes les catégories</string>
+    <string name="ex_sub_cat_movies">Films de la catégorie %1$s</string>
+    <string name="ex_sub_cat_series">Séries de la catégorie %1$s</string>
 </resources>
