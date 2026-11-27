@@ -374,9 +374,9 @@ body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; p
     var META = <?php echo json_encode($sp_meta, JSON_UNESCAPED_UNICODE); ?>;
     // «Solo los canales del servidor IPTV» del panel ("chan": "iptv"): en cada partido solo se nombran los que tiene el cliente
     var IPTV = <?php echo json_encode(($sp_panel['chan'] ?? '') === 'iptv'); ?>;
-    // zona horaria del panel (la del distribuidor o del dueño): la hora y Hoy / Mañana van en ella, no en la del equipo
-    var TZ = <?php echo json_encode(is_string($sp_panel['tz'] ?? null) ? $sp_panel['tz'] : ''); ?>;
-    try { new Intl.DateTimeFormat('en', { timeZone: TZ || undefined }); } catch (x) { TZ = ''; }
+    // la hora y Hoy / Mañana en la zona horaria de quien mira (la del navegador), nunca la del panel: el partido de las
+    // 10:00 UTC es «04:00» en Honduras y «11:00» en España, y cada uno lo ve a su hora (antes salía la del panel)
+    var TZ = '';
     var T = {
         live: <?php echo tj('En vivo'); ?>, fin: <?php echo tj('Final'); ?>, pp: <?php echo tj('Aplazado'); ?>, today: <?php echo tj('Hoy'); ?>, tomorrow: <?php echo tj('Mañana'); ?>,
         all: <?php echo tj('Todos'); ?>, seeCh: <?php echo tj('Ver canales'); ?>, liveTv: <?php echo tj('TV en vivo'); ?>, finding: <?php echo tj('Buscando…'); ?>,
@@ -405,8 +405,11 @@ body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; p
 
     var fmtW = new Intl.DateTimeFormat(window.NF_LOCALE, { weekday: 'short', day: 'numeric', month: 'short', timeZone: TZ || undefined });
     function prep(e) {
-        e.t = +e.s > 0 ? new Date(e.s * 1000) : new Date(e.ts);
-        if (isNaN(e.t)) e.t = new Date(String(e.ts).replace(' ', 'T'));
+        // sin «s»: la fecha de TheSportsDB está en UTC aunque no lo diga («2026-11-27T10:00:00»); sin la Z, el navegador
+        // la leía como hora local y quedaba corrida
+        var iso = String(e.ts || '').replace(' ', 'T');
+        if (iso && !/(Z|[+-]\d\d:?\d\d)$/.test(iso)) iso += 'Z';
+        e.t = +e.s > 0 ? new Date(e.s * 1000) : new Date(iso);
         e.dk = dayKey(e.t);
         // clave del partido para su canal (los de Equipos / Selecciones pueden repetir el id con otra fecha)
         e.k = String(e.id) + '|' + e.t.getTime();

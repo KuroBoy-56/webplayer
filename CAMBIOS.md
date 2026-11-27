@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Horarios de Deportes en tu hora — versión 3.1.1 (27 de noviembre)
+- **Deportes** escribe la hora de los partidos y arma Hoy / Mañana / Finalizados en la **zona horaria del navegador** de quien mira, nunca en la del panel: un partido de las 10:00 UTC se ve «04:00» en Honduras y «11:00» en España (antes todos veían la hora del panel y parecía «en vivo» antes de su hora).
+- Si un partido llega sin `s`, su fecha de TheSportsDB se lee como UTC (sin la «Z», el navegador la tomaba como hora local).
+- Hace falta el panel del 27 de noviembre (horarios en la hora de cada cliente).
+- Archivos: `sportsschedule.php`, `includes/core.php`.
+
 ## Buscador de canales más preciso — versión 3.1.0 (27 de noviembre)
 - **Deportes y «En vivo ahora»** (`includes/sports_match.php`, ideas de los emparejadores de canales de IPTV como Stream-Mapparr): «+» es «plus» («ESPN+» ya no da el canal «ESPN»; «Movistar+ LaLiga» encuentra «Movistar LaLiga»), números en palabra como cifra («ESPN Two»), más etiquetas que no cuentan (HDR, FD, 2160p, 1080i, Full HD, East/West, ENG, RAW) y, como último recurso, el parecido de Levenshtein entre las palabras ordenadas («TyC Sport» = «TyC Sports») solo con los mismos números («ESPN 2» nunca «ESPN 3») y más estricto con los nombres cortos. Las mismas reglas que las apps.
 - La píldora roja del minuto de las tarjetas de Inicio queda en una línea y nunca se sale.
