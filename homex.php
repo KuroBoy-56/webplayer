@@ -79,7 +79,7 @@ $live_expected = $live_allowed && wp_sports_live_expected();
 <div id="nfPlatWrap"<?php echo $live_expected ? ' hidden' : ''; ?>><?php echo wp_platform_tiles(); ?></div>
 <script>/* Ajustes › Habilitar tarjetas de plataformas: las plataformas siguen debajo de «En vivo ahora» */
 try { if (localStorage.getItem(<?php echo json_encode(wp_sports_live_plat_key()); ?>) === '1') document.getElementById('nfPlatWrap').hidden = false; } catch (x) {}</script>
-<link rel="stylesheet" href="assets/nf/live.css?v=2">
+<link rel="stylesheet" href="assets/nf/live.css?v=3">
 <script>window.NF_LIVE = { key: <?php echo json_encode(wp_sports_live_pref_key()); ?>, platKey: <?php echo json_encode(wp_sports_live_plat_key()); ?>, T: {
     live: <?php echo tj('En vivo'); ?>, ht: <?php echo tj('Descanso'); ?>, close: <?php echo tj('Cerrar'); ?>, auto: <?php echo tj('Ver el evento (canal automático)'); ?>,
     inList: <?php echo tj('en tu lista: {c}'); ?>, inGuide: <?php echo tj('en la guía'); ?>, byTeams: <?php echo tj('por equipos'); ?>,

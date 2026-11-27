@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Buscador de canales más preciso — versión 3.1.0 (27 de noviembre)
+- **Deportes y «En vivo ahora»** (`includes/sports_match.php`, ideas de los emparejadores de canales de IPTV como Stream-Mapparr): «+» es «plus» («ESPN+» ya no da el canal «ESPN»; «Movistar+ LaLiga» encuentra «Movistar LaLiga»), números en palabra como cifra («ESPN Two»), más etiquetas que no cuentan (HDR, FD, 2160p, 1080i, Full HD, East/West, ENG, RAW) y, como último recurso, el parecido de Levenshtein entre las palabras ordenadas («TyC Sport» = «TyC Sports») solo con los mismos números («ESPN 2» nunca «ESPN 3») y más estricto con los nombres cortos. Las mismas reglas que las apps.
+- La píldora roja del minuto de las tarjetas de Inicio queda en una línea y nunca se sale.
+- Prueba: `php tools/channel_match_test.php` (todo ok).
+- Archivos: `includes/sports_match.php`, `assets/nf/live.css`, `homex.php`, `includes/core.php`.
+
 ## Todas las disciplinas en «Deporte preferido» — versión 3.0.9 (27 de noviembre)
 - **Ajustes › Deporte preferido** (y **Equipos favoritos**) lista todas las disciplinas que da el panel (las de la agenda y todas las encendidas del distribuidor), con el nombre del panel; antes eran 15 fijas.
 - Las tarjetas de plataformas de Inicio ya no aparecían para irse después (el servidor ya sabía si iba la fila «En vivo ahora»): sin cambios ahí.

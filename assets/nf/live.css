@@ -28,7 +28,8 @@
 .nf-lv-body { display: flex; flex-direction: column; justify-content: space-between; padding: 10px 12px; }
 .nf-lv-top { display: flex; align-items: center; gap: 8px; }
 .nf-lv-lg { flex: 1; min-width: 0; font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,.9); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nf-lv-clock { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 99px; background: #e50914; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+/* se ajusta a su texto («Descanso», «Alargue · 105'») en una línea y nunca pasa del 60 % de la tarjeta */
+.nf-lv-clock { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 99px; background: #e50914; font-size: 11.5px; font-weight: 700; white-space: nowrap; max-width: 60%; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
 .nf-lv-clock.soon { background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.55); }
 .nf-lv-clock.soon i { display: none; }
 .nf-lv-vs { font-size: 24px; opacity: .9; }

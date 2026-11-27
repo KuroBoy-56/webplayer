@@ -64,11 +64,18 @@ function spm_channel_key($name, $isNorm = false)
         've', 'venezuela', 'uy', 'uruguay', 'py', 'paraguay', 'bo', 'bolivia', 'cr', 'pa', 'panama', 'gt', 'hn', 'sv', 'ni', 'do', 'pr',
         'latam', 'latin', 'latino', 'latina', 'lat', 'america', 'es', 'esp', 'spain', 'espana', 'uk', 'gb', 'int', 'intl', 'international',
         'br', 'bra', 'brasil', 'brazil', 'pt', 'portugal', 'ca', 'can', 'canada', 'fr', 'france', 'it', 'italy', 'de', 'germany',
-        'nl', 'netherlands', 'au', 'australia', 'nz', 'zealand', 'new', 'ie', 'ireland', 'en', 'network', 'net']);
+        'nl', 'netherlands', 'au', 'australia', 'nz', 'zealand', 'new', 'ie', 'ireland', 'en', 'network', 'net',
+        'hdr', 'fd', '2160', '2160p', '1080i', 'fullhd', 'east', 'west', 'eastern', 'western', 'eng', 'english', 'raw', 'dual']);
+    // números en palabra («ESPN Two», «Canal Dos»): como cifra, así se pegan igual que «ESPN 2»
+    static $num = ['one' => '1', 'two' => '2', 'three' => '3', 'four' => '4', 'five' => '5', 'six' => '6', 'seven' => '7', 'eight' => '8',
+        'nine' => '9', 'ten' => '10', 'eleven' => '11', 'twelve' => '12', 'uno' => '1', 'dos' => '2', 'tres' => '3', 'cuatro' => '4',
+        'cinco' => '5', 'seis' => '6', 'siete' => '7', 'ocho' => '8', 'nueve' => '9', 'diez' => '10'];
     $out = [];
-    foreach (explode(' ', $isNorm ? $name : spm_norm($name)) as $t) {
+    // «ESPN+», «Star+», «M+»: el + es «plus» (spm_norm lo borraba y «ESPN+» daba el canal «ESPN»)
+    foreach (explode(' ', $isNorm ? $name : spm_norm(str_replace('+', ' plus ', $name))) as $t) {
         // "M+ LaLiga" (Movistar Plus) llega como "m laliga"
         if ($t === 'm') $t = 'movistar';
+        if (isset($num[$t])) $t = $num[$t];
         if ($t === '' || isset($noise[$t])) continue;
         $last = count($out) - 1;
         if (ctype_digit($t) && $last >= 0 && !ctype_digit($out[$last])) $out[$last] .= $t;
@@ -94,7 +101,7 @@ function spm_index(array $rules, array $hiddenCats = [])
         if (isset($hiddenCats[$cat])) continue;
         $name = (string)($st['name'] ?? '');
         $norm = spm_norm($name);
-        $key = spm_channel_key($norm, true);
+        $key = strpos($name, '+') !== false ? spm_channel_key($name) : spm_channel_key($norm, true);
         $i = count($ix['chans']);
         $ix['chans'][] = ['id' => (string)$st['stream_id'], 'cat' => $cat, 'name' => $name, 'norm' => $norm, 'ev' => isset($evCats[$cat]), 'key' => $key,
             'epg' => (string)($st['epg_channel_id'] ?? '')];
@@ -129,8 +136,11 @@ function spm_find_by_channel($tvName, array &$ix)
     }
     if (!$scored) {
         $loose = spm_find_loose($q, $ix);
+        if (!$loose) $loose = spm_find_fuzzy($q, $ix);
         // un nombre solo es su primer canal ("ESPN" = "ESPN 1", "DAZN" = "DAZN 1")
-        if (!$loose && !ctype_digit(substr($qc, -1))) $loose = spm_find_by_channel($tvName . ' 1', $ix);
+        if (!$loose && !ctype_digit(substr($qc, -1)) && substr($tvName, -2) !== ' 1') $loose = spm_find_by_channel($tvName . ' 1', $ix);
+        // «Movistar+ LaLiga» en una lista que lo llama «Movistar LaLiga»: sin el plus
+        if (!$loose && strpos($tvName, '+') !== false) $loose = spm_find_by_channel(str_replace('+', ' ', $tvName), $ix);
         return $ix['memo'][$tvName] = $loose;
     }
     usort($scored, function ($a, $b) { return $b[0] <=> $a[0] ?: $a[1] <=> $b[1] ?: $a[2] <=> $b[2]; });
@@ -162,6 +172,57 @@ function spm_find_loose(array $q, array &$ix)
     }
     usort($scored, function ($a, $b) { return $b[0] <=> $a[0] ?: $a[1] <=> $b[1]; });
     return array_column($scored, 1);
+}
+
+/**
+ * Último recurso, como los emparejadores de canales de IPTV (Stream-Mapparr): parecido de Levenshtein entre las palabras
+ * ordenadas («TyC Sport» = «TyC Sports»). Solo canales que comparten la mitad de las palabras, con los mismos números
+ * («ESPN 2» nunca «ESPN 3» ni «ESPN») y más estricto con los nombres cortos (≤ 4 letras 95 %, ≤ 8 90 %, si no 86 %).
+ */
+function spm_find_fuzzy(array $q, array &$ix)
+{
+    $qLen = strlen(implode('', $q));
+    if ($qLen < 3) return [];
+    $sq = $q;
+    sort($sq);
+    $qs = implode(' ', $sq);
+    $qDig = spm_key_digits($q);
+    $need = (int)ceil(count($q) / 2);
+    $thr = $qLen <= 4 ? 0.95 : ($qLen <= 8 ? 0.9 : 0.86);
+    $hits = [];
+    foreach ($q as $t) {
+        $l = $ix['words'][$t] ?? (strlen($t) >= 4 ? ($ix['words'][substr($t, 0, -1)] ?? []) : []);
+        foreach ($l as $i) $hits[$i] = ($hits[$i] ?? 0) + 1;
+    }
+    $scored = [];
+    $tried = 0;
+    foreach ($hits as $i => $n) {
+        if ($n < $need && count($q) > 1) continue;
+        $k = $ix['chans'][$i]['key'];
+        if (spm_key_digits($k) !== $qDig) continue;
+        sort($k);
+        $r = spm_similarity($qs, implode(' ', $k));
+        if ($r >= $thr) $scored[] = [$r, strlen($ix['chans'][$i]['name']), $i];
+        if (++$tried >= 200) break;
+    }
+    usort($scored, function ($a, $b) { return $b[0] <=> $a[0] ?: $a[1] <=> $b[1]; });
+    return array_column($scored, 2);
+}
+
+/** los números del nombre, en orden («espn2» -> "2", «fox sports 1 hd» -> "1") */
+function spm_key_digits(array $words)
+{
+    return trim(preg_replace('/[^0-9]+/', ' ', implode(' ', $words)));
+}
+
+/** 1 - distancia de Levenshtein / largo mayor (el ratio normalizado de rapidfuzz) */
+function spm_similarity($a, $b)
+{
+    if ($a === '' || $b === '') return 0.0;
+    if ($a === $b) return 1.0;
+    $mx = max(strlen($a), strlen($b));
+    if (abs(strlen($a) - strlen($b)) > $mx * 0.15) return 0.0;
+    return 1.0 - levenshtein($a, $b) / $mx;
 }
 
 function spm_has_word($chan, $w)
