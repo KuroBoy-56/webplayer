@@ -6,7 +6,7 @@
 // - api/alerts.php: el recordatorio de un partido se guarda en la nube por línea y perfil; el celular de la misma
 //   línea y perfil avisa en su barra de notificaciones (30 min, 10 min y al empezar).
 import { cloud, lineKey } from '../api/panel';
-import { read, write } from '../lib/storage';
+import { read, readJson, write, writeJson } from '../lib/storage';
 import { json } from '../lib/http';
 import { brandName, features } from '../lib/tenant';
 import { fold, int, nowSec, str } from '../lib/util';
@@ -14,7 +14,7 @@ import { t } from '../lib/i18n';
 import { getState, profilesNeeded } from '../state';
 import { Item } from './catalog';
 import { evClock, evDay, matchSports, panelToday } from './sports';
-import { fetchSports, localSports } from './sportsPanel';
+import { fetchSports, loadFixtures, localSports } from './sportsPanel';
 
 export const LIVE_MAX = 20;
 
@@ -80,6 +80,46 @@ export const liveSportName = () => read(sportKey() + '|n') || '';
 export const setLiveSport = (sp: string, name: string) => {
   write(sportKey(), sp);
   write(sportKey() + '|n', name);
+  // las ligas favoritas de otra disciplina ya no tienen sentido
+  if (sp) setLiveLeagues(liveLeagues().filter(x => x.sp.toLowerCase() === sp.toLowerCase()));
+};
+
+/** Cuenta › Ligas favoritas: id de TheSportsDB, nombre, escudo y deporte; ninguna = todas (por línea y perfil) */
+export type FavLeague = { id: string; n: string; b: string; sp: string };
+const leagueKey = () => 'live_leagues|' + lineKey() + '|' + (getState().profile?.id || '');
+export const liveLeagues = (): FavLeague[] => {
+  const j = readJson<FavLeague[]>(leagueKey());
+  return Array.isArray(j) ? j.filter(x => x && str(x.id)) : [];
+};
+export const setLiveLeagues = (list: FavLeague[]) => writeJson(leagueKey(), list);
+/** ligas para elegir: las de la agenda (con cuántos partidos tienen hoy) y las de los próximos 21 días; con un
+ *  deporte favorito, solo las de ese. Primero las que juegan hoy; las elegidas siempre están para poder quitarlas */
+export async function leagueChoices(): Promise<(FavLeague & { today: number })[]> {
+  const [ag, fx] = await Promise.all([fetchSports().catch(() => null), loadFixtures(0, null).catch(() => null)]);
+  const now = nowSec();
+  const today = panelToday(null, now);
+  const map = new Map<string, FavLeague & { today: number }>();
+  for (const e of (ag || localSports())?.events || []) {
+    const id = str(e.li);
+    if (!id || !str(e.lg)) continue;
+    const x = map.get(id) || { id, n: str(e.lg), b: str(e.lb), sp: str(e.sp), today: 0 };
+    if (int(e.s) > 0 && evDay(e, int(e.s)) === today) x.today++;
+    map.set(id, x);
+  }
+  for (const [id, v] of Object.entries<any>(fx?.leagues || {})) {
+    if (!map.has(id) && str(v?.n)) map.set(id, { id, n: str(v.n), b: str(v.b), sp: str(v.sp), today: 0 });
+  }
+  for (const x of liveLeagues()) if (!map.has(x.id)) map.set(x.id, { ...x, today: 0 });
+  const sp = liveSport().toLowerCase();
+  return [...map.values()]
+    .filter(x => !sp || x.sp.toLowerCase() === sp)
+    .sort((a, b) => Number(b.today > 0) - Number(a.today > 0) || a.sp.localeCompare(b.sp) || a.n.localeCompare(b.n));
+}
+
+/** «Todas las ligas», el nombre de la única o «3 ligas» */
+export const liveLeaguesText = () => {
+  const l = liveLeagues();
+  return !l.length ? t('Todas las ligas') : l.length === 1 ? l[0].n : t('{n} ligas', { n: l.length });
 };
 
 // ---------- recordatorios en la nube ----------
@@ -188,7 +228,7 @@ async function agenda(): Promise<any | null> {
 // Inicio lo muestra al momento (antes la primera respuesta llegaba unos segundos después de entrar)
 let lastLive: { key: string; at: number; r: { cards: LiveCard[]; ttl: number } | null } | null = null;
 let liveInFlight: { key: string; p: Promise<{ cards: LiveCard[]; ttl: number } | null> } | null = null;
-const liveKey = () => lineKey() + '|' + (getState().profile?.id || '') + '|' + liveSport();
+const liveKey = () => lineKey() + '|' + (getState().profile?.id || '') + '|' + liveSport() + '|' + liveLeagues().map(x => x.id).join(',');
 
 /** «En vivo ahora» ya pedido (menos de 20 s) o uno nuevo; el mismo pedido si ya hay uno en curso */
 export function loadLiveCardsCached(): Promise<{ cards: LiveCard[]; ttl: number } | null> {
@@ -217,6 +257,7 @@ export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number 
   if (j) write(availKey(), j.enabled === true ? '1' : '0');
   if (!j || j.enabled !== true) return null;
   const only = liveSport().toLowerCase();
+  const leagues = new Set(liveLeagues().map(x => x.id));
   // un próximo que «empezaba» hace más de 5 min y el livescore no trae: fuera
   const n0 = nowSec();
   const events: any[] = (Array.isArray(j.events) ? j.events : []).filter((e: any) => !(e?.soon === true && int(e.s) > 0 && int(e.s) < n0 - 300));
@@ -241,6 +282,7 @@ export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number 
   const cards: LiveCard[] = [];
   for (const e of events) {
     if (only && str(e.sp).toLowerCase() !== only) continue;
+    if (leagues.size && !leagues.has(str(e.li))) continue;
     // solo un canal exacto: uno habitual (sin agenda ni equipos) no cuenta
     const mm = m[str(e.id)];
     const best = mm && !mm.guess ? mm.best : null;
