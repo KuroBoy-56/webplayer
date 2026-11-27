@@ -485,6 +485,7 @@ const en = {
   "Solo las de {x}.": "Only {x} leagues.",
   "El panel todavía no tiene ligas para elegir.": "There are no leagues to pick yet.",
   "{n} hoy": "{n} today",
+  "Ordenar": "Sort",
   "Todos los deportes": "All sports",
   "En Inicio, «En vivo ahora» muestra solo los partidos y eventos de esta disciplina.": "On Home, «Live now» shows only the matches and events of this sport.",
   "Destacado: {x}": "Featured: {x}",

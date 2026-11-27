@@ -486,6 +486,7 @@ const fr: Record<Key, string> = {
   "Solo las de {x}.": "Seulement {x}.",
   "El panel todavía no tiene ligas para elegir.": "Aucune ligue à choisir pour l’instant.",
   "{n} hoy": "{n} aujourd’hui",
+  "Ordenar": "Trier",
   "Todos los deportes": "Tous les sports",
   "En Inicio, «En vivo ahora» muestra solo los partidos y eventos de esta disciplina.": "Sur l’Accueil, «En direct» n’affiche que les matchs et événements de ce sport.",
   "Destacado: {x}": "À la une : {x}",
