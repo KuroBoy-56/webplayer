@@ -259,25 +259,34 @@ enum Sports {
         "ve", "venezuela", "uy", "uruguay", "py", "paraguay", "bo", "bolivia", "cr", "pa", "panama", "gt", "hn", "sv", "ni", "do", "pr",
         "latam", "latin", "latino", "latina", "lat", "america", "es", "esp", "spain", "espana", "uk", "gb", "int", "intl", "international",
         "br", "bra", "brasil", "brazil", "pt", "portugal", "ca", "can", "canada", "fr", "france", "it", "italy", "de", "germany",
-        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland", "en", "network", "net"]
+        "nl", "netherlands", "au", "australia", "nz", "zealand", "new", "ie", "ireland", "en", "network", "net",
+        "hdr", "fd", "2160", "2160p", "1080i", "fullhd", "east", "west", "eastern", "western", "eng", "english", "raw", "dual"]
+
+    // números en palabra («ESPN Two», «Canal Dos»): como cifra, así se pegan igual que «ESPN 2»
+    private static let numWords: [String: String] = [
+        "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
+        "ten": "10", "eleven": "11", "twelve": "12", "uno": "1", "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5",
+        "seis": "6", "siete": "7", "ocho": "8", "nueve": "9", "diez": "10",
+    ]
 
     /** palabras que identifican el canal; un número va pegado a la palabra anterior ("espn 2" -> "espn2") */
     static func channelKey(normalized: String) -> [String] {
         var out = [String]()
         // "M+ LaLiga" (Movistar Plus) llega como "m laliga"
-        for t in normalized.split(separator: " ").map({ $0 == "m" ? "movistar" : String($0) }) where !t.isEmpty && !noise.contains(t) {
+        for t in normalized.split(separator: " ").map({ $0 == "m" ? "movistar" : (numWords[String($0)] ?? String($0)) }) where !t.isEmpty && !noise.contains(t) {
             if t.isDigits, let last = out.last, !last.isDigits { out[out.count - 1] = last + t } else { out.append(t) }
         }
         return out
     }
 
-    static func channelKey(_ name: String) -> [String] { channelKey(normalized: norm(name)) }
+    // «ESPN+», «Star+», «M+»: el + es «plus» (norm lo borraba y «ESPN+» daba el canal «ESPN»)
+    static func channelKey(_ name: String) -> [String] { channelKey(normalized: norm(name.replacingOccurrences(of: "+", with: " plus "))) }
 
     static func prepare(_ channels: [Item], _ cats: [Category], _ r: MatchRules) -> [Chan] {
         let eventCats = Set(cats.filter { Rx.has($0.name.folded, r.eventCategory, ci: true) }.map { $0.id })
         return channels.map { it in
             let n = norm(it.name)
-            return Chan(item: it, norm: n, isEvent: eventCats.contains(it.categoryId), key: channelKey(normalized: n))
+            return Chan(item: it, norm: n, isEvent: eventCats.contains(it.categoryId), key: it.name.contains("+") ? channelKey(it.name) : channelKey(normalized: n))
         }
     }
 
@@ -290,6 +299,8 @@ enum Sports {
         var out = findByChannelOnce(tvName, ix)
         // un nombre solo es su primer canal ("ESPN" = "ESPN 1", "DAZN" = "DAZN 1")
         if out.isEmpty, let last = channelKey(tvName).joined().last, !last.isNumber { out = findByChannelOnce(tvName + " 1", ix) }
+        // «Movistar+ LaLiga» en una lista que lo llama «Movistar LaLiga»: sin el plus
+        if out.isEmpty && tvName.contains("+") { out = findByChannelOnce(tvName.replacingOccurrences(of: "+", with: " "), ix) }
         ix.remember(tvName, out)
         return out
     }
@@ -310,7 +321,10 @@ enum Sports {
             else { continue }
             scored.append((score, c))
         }
-        if scored.isEmpty { return findLoose(q, ix) }
+        if scored.isEmpty {
+            let loose = findLoose(q, ix)
+            return loose.isEmpty ? findFuzzy(q, ix) : loose
+        }
         return scored.sorted { $0.0 != $1.0 ? $0.0 > $1.0 : $0.1.item.name.count < $1.1.item.name.count }.map { $0.1.item }
     }
 
@@ -333,6 +347,62 @@ enum Sports {
             if ok { scored.append((300 - (compact.count - want) - c.item.name.count, c)) }
         }
         return scored.sorted { $0.0 > $1.0 }.map { $0.1.item }
+    }
+
+    /**
+     * Último recurso, como los emparejadores de canales de IPTV (Stream-Mapparr): parecido de Levenshtein entre las palabras
+     * ordenadas («TyC Sport» = «TyC Sports»). Solo canales que comparten la mitad de las palabras, con los mismos números
+     * («ESPN 2» nunca «ESPN 3» ni «ESPN») y más estricto con los nombres cortos (≤ 4 letras 95 %, ≤ 8 90 %, si no 86 %).
+     */
+    private static func findFuzzy(_ q: [String], _ ix: Index) -> [Item] {
+        let qLen = q.joined().count
+        if qLen < 3 { return [] }
+        let qs = q.sorted().joined(separator: " ")
+        let qDig = keyDigits(q)
+        let need = (q.count + 1) / 2
+        let thr = qLen <= 4 ? 0.95 : (qLen <= 8 ? 0.9 : 0.86)
+        var hits = [Int: Int]()
+        for t in q {
+            let l = ix.words[t] ?? (t.count >= 4 ? ix.words[String(t.dropLast())] : nil) ?? []
+            for i in l { hits[i, default: 0] += 1 }
+        }
+        var scored = [(Double, Chan)]()
+        var tried = 0
+        for (i, n) in hits.sorted(by: { $0.key < $1.key }) {
+            if n < need && q.count > 1 { continue }
+            let c = ix.chans[i]
+            if keyDigits(c.key) != qDig { continue }
+            let r = similarity(qs, c.key.sorted().joined(separator: " "))
+            if r >= thr { scored.append((r, c)) }
+            tried += 1
+            if tried >= 200 { break }
+        }
+        return scored.sorted { $0.0 != $1.0 ? $0.0 > $1.0 : $0.1.item.name.count < $1.1.item.name.count }.map { $0.1.item }
+    }
+
+    /** los números del nombre, en orden («espn2» -> "2», «fox sports 1 hd» -> "1") */
+    private static func keyDigits(_ words: [String]) -> String {
+        words.joined(separator: " ").map { $0.isNumber ? String($0) : " " }.joined()
+            .split(separator: " ").joined(separator: " ")
+    }
+
+    /** 1 - distancia de Levenshtein / largo mayor (el ratio normalizado de rapidfuzz) */
+    static func similarity(_ a: String, _ b: String) -> Double {
+        if a.isEmpty || b.isEmpty { return 0 }
+        if a == b { return 1 }
+        let x = Array(a), y = Array(b)
+        let mx = max(x.count, y.count)
+        if Double(abs(x.count - y.count)) > Double(mx) * 0.15 { return 0 }
+        var prev = Array(0...y.count)
+        for i in 1...x.count {
+            var cur = [i]
+            cur.reserveCapacity(y.count + 1)
+            for j in 1...y.count {
+                cur.append(min(prev[j - 1] + (x[i - 1] == y[j - 1] ? 0 : 1), prev[j] + 1, cur[j - 1] + 1))
+            }
+            prev = cur
+        }
+        return 1 - Double(prev[y.count]) / Double(mx)
     }
 
     /**

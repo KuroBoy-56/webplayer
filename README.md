@@ -4,6 +4,10 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.1.5 (buscador de canales más preciso)
+
+- **Deportes** (`LatMpx/Data/Sports.swift`, ideas de los emparejadores de canales de IPTV como Stream-Mapparr, las mismas reglas que Android, Roku, webOS, Tizen, VIDAA, Vega, Windows y el web player): «+» es «plus» («ESPN+» ya no da el canal «ESPN»; «Movistar+ LaLiga» encuentra «Movistar LaLiga»), números en palabra como cifra («ESPN Two»), más etiquetas que no cuentan (HDR, FD, 2160p, 1080i, Full HD, East/West, ENG, RAW) y, como último recurso, el parecido de Levenshtein entre las palabras ordenadas («TyC Sport» = «TyC Sports») solo con los mismos números («ESPN 2» nunca «ESPN 3») y más estricto con los nombres cortos.
+
 ## Novedades de la 1.1.4 (avisos de partidos como Android)
 
 - **Cuenta › Equipos favoritos** (`LatMpx/UI/TeamsSheet.swift`): la lista (tocar uno lo quita) y «+ Agregar equipo» (deporte → liga o selecciones → equipo, de los próximos 21 días del panel, `api/sports_fixtures.php`). Se guardan en la nube del panel (`api/alerts.php` `set_teams`, la misma de Android, la TV y la computadora: los partidos marcados allá también avisan aquí). Aparece solo si el panel lo habilita para la línea: perfiles encendidos para la app «iPhone / iPad» y nunca en una demo.
