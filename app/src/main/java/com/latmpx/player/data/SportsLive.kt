@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URLEncoder
+import java.util.Calendar
 
 /**
  * Partidos EN VIVO con marcador para la fila de Inicio de la TV (api/sports_live.php?soon=1 del panel: también los que
@@ -13,6 +14,9 @@ import java.net.URLEncoder
  * una clave de pago de TheSportsDB para este cliente (la del dueño o la del distribuidor, cada uno la suya): si no,
  * enabled = false y la fila no existe. La fila los vuelve a pedir cada "ttl" segundos (30) mientras Inicio está abierto.
  */
+/** Cuenta › Ligas favoritas: id de TheSportsDB, nombre y deporte; today = partidos de hoy en la agenda (solo al elegir) */
+data class FavLeague(val id: String, val name: String, val sport: String, val today: Int = 0, val sportLabel: String = "")
+
 object SportsLive {
     /** el panel tiene partidos en vivo para este cliente (clave de pago); null = todavía no contestó en esta sesión */
     var available by mutableStateOf<Boolean?>(null)
@@ -67,4 +71,28 @@ object SportsLive {
         "Rugby" to "Rugby", "Volleyball" to "Voleibol", "Handball" to "Balonmano", "Golf" to "Golf", "Cricket" to "Cricket",
         "Esports" to "eSports",
     )
+
+    /**
+     * Cuenta › Ligas favoritas: las de la agenda (con cuántos partidos tienen hoy, en la hora del equipo) y las de los
+     * próximos 21 días; con un deporte favorito, solo las de ese. Primero las que juegan hoy; las elegidas siempre
+     * están para poder quitarlas.
+     */
+    suspend fun leagueChoices(): List<FavLeague> = withContext(Dispatchers.IO) {
+        val ag = runCatching { Sports.load() }.getOrNull()
+        val fx = runCatching { SportsPanel.fixtures(0).fx }.getOrNull()
+        fun day(t: Long) = Calendar.getInstance().apply { timeInMillis = t }.let { it.get(Calendar.YEAR) * 1000 + it.get(Calendar.DAY_OF_YEAR) }
+        val today = day(System.currentTimeMillis())
+        val map = LinkedHashMap<String, FavLeague>()
+        ag?.events?.forEach { e ->
+            if (e.leagueId.isEmpty() || e.league.isEmpty()) return@forEach
+            val x = map[e.leagueId] ?: FavLeague(e.leagueId, e.league, e.sport)
+            map[e.leagueId] = if (day(e.start) == today) x.copy(today = x.today + 1) else x
+        }
+        fx?.leagues?.forEach { (id, v) -> if (id !in map && v.name.isNotEmpty()) map[id] = FavLeague(id, v.name, v.sport) }
+        Store.liveLeagues.forEach { if (it.id !in map) map[it.id] = it }
+        val sp = Store.liveSport
+        map.values.filter { sp.isEmpty() || it.sport.equals(sp, true) }
+            .map { it.copy(sportLabel = ag?.sports?.get(it.sport)?.label ?: it.sport) }
+            .sortedWith(compareBy<FavLeague>({ it.today == 0 }, { it.sport.lowercase() }, { it.name.lowercase() }))
+    }
 }

@@ -99,7 +99,9 @@ fun rememberTvLive(state: AppState): List<TvLiveCard> {
     }
     val d = data
     val pref = remember(SportsLive.prefRev, com.latmpx.player.data.Profiles.current) { com.latmpx.player.data.Store.liveSport }
-    val cards by produceState<List<TvLiveCard>>(emptyList(), d, agenda, state.live, state.liveCats, pref) {
+    // Cuenta › Ligas favoritas: solo esas ligas (vacío = todas)
+    val lgs = remember(SportsLive.prefRev, com.latmpx.player.data.Profiles.current) { com.latmpx.player.data.Store.liveLeagues.map { it.id }.toSet() }
+    val cards by produceState<List<TvLiveCard>>(emptyList(), d, agenda, state.live, state.liveCats, pref, lgs) {
         if (d == null || !d.enabled || state.live.isEmpty()) { value = emptyList(); return@produceState }
         value = withContext(Dispatchers.Default) {
             val prepared = Sports.prepare(state.live, state.liveCats, d.rules)
@@ -112,7 +114,7 @@ fun rememberTvLive(state: AppState): List<TvLiveCard> {
                 e.id !in ids && !e.postponed && (e.home in teams || e.away in teams) && now < e.start + 3 * 3600_000L &&
                     Calendar.getInstance().apply { timeInMillis = e.start }.get(Calendar.DAY_OF_YEAR) == today
             }.map { it.copy(homeScore = "", awayScore = "", status = "NS", soon = true) }
-            (d.events + extra).filter { pref.isEmpty() || it.sport.equals(pref, true) }.mapNotNull { e ->
+            (d.events + extra).filter { (pref.isEmpty() || it.sport.equals(pref, true)) && (lgs.isEmpty() || it.leagueId in lgs) }.mapNotNull { e ->
                 val mm = Sports.match(e, prepared, d.rules)
                 mm.takeIf { !it.guess }?.best?.let { TvLiveCard(e, it, d.sports[e.sport]?.label ?: e.sport, mm, sc) }
             }
