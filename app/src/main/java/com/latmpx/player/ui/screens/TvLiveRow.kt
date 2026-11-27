@@ -58,10 +58,15 @@ import java.util.Calendar
 
 /** un partido de «En vivo ahora» con el canal del cliente donde verlo (siempre uno real de su servidor IPTV) */
 class TvLiveCard(val e: SportEvent, val best: Item, val sport: String = "") {
-    /** sin dos equipos (peleas, boxeo, WWE, carreras): la tarjeta muestra la disciplina, el evento y su póster */
-    val solo: Boolean get() = e.home.isBlank() || e.away.isBlank()
-    val eventName: String get() = e.title.ifBlank { (e.home + " " + e.away).trim() }.ifBlank { e.league }
+    /**
+     * sin dos equipos o de una disciplina sin marcador (peleas, boxeo, WWE, carreras, golf): la tarjeta muestra la
+     * disciplina, el evento y su póster (también con dos nombres: TheSportsDB pone a veces a los boxeadores como equipos)
+     */
+    val solo: Boolean get() = e.home.isBlank() || e.away.isBlank() || e.sport.lowercase() in SOLO_SPORTS
+    val eventName: String get() = e.title.ifBlank { listOf(e.home, e.away).filter { it.isNotBlank() }.joinToString(" vs ") }.ifBlank { e.league }
 }
+
+private val SOLO_SPORTS = setOf("fighting", "boxing", "wrestling", "mma", "motorsport", "golf", "cycling", "athletics")
 
 /**
  * «En vivo ahora» de Inicio en la TV, solo con perfiles (uno elegido que no sea el infantil) y Deportes encendido: los
@@ -220,7 +225,7 @@ fun TvLiveStage(e: SportEvent) {
         androidx.compose.foundation.Image(painterResource(R.drawable.sports_bg), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Color(0x59000000)))
         // sin equipos (pelea, carrera): el estadio solo, sin escudos ni «VS»
-        if (e.home.isBlank() || e.away.isBlank()) return@Box
+        if (e.home.isBlank() || e.away.isBlank() || e.sport.lowercase() in SOLO_SPORTS) return@Box
         Row(Modifier.align(Alignment.CenterEnd).padding(end = 90.dp), horizontalArrangement = Arrangement.spacedBy(40.dp), verticalAlignment = Alignment.CenterVertically) {
             TvBigBadge(e.home, e.homeBadge)
             Text("VS", color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.Black)
