@@ -15,6 +15,7 @@ import Actor from './screens/Actor';
 import Detail from './screens/Detail';
 import Distributor, { TenantRetry } from './screens/Distributor';
 import Grid from './screens/Grid';
+import Explore from './screens/Explore';
 import Login from './screens/Login';
 import Main from './screens/Main';
 import Player from './screens/Player';
@@ -56,6 +57,8 @@ function Screen({ route, active }: { route: Route; active: boolean }) {
       return <Actor personId={route.personId} name={route.actorName} />;
     case 'grid':
       return <Grid title={route.title} mode={route.mode} keyName={route.key} kind={route.kind} active={active} />;
+    case 'explore':
+      return <Explore active={active} init={route.init} />;
     case 'player':
       return <Player params={route.params} />;
     case 'review':
