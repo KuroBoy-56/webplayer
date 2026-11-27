@@ -3,7 +3,7 @@
  * partidos (los que se juegan con marcador y minuto, después los próximos con su hora) y al final «Ir a Deportes»; la cancha del deporte de fondo (y el color del torneo si es uno grande) y el
  * canal exacto de la lista del cliente. Se pregunta cada ttl (30 s) solo con la pestaña visible. Al pulsar, el menú de
  * canales (solo los del cliente, y buscar); Atrás desde el reproductor vuelve con el foco en el mismo partido.
- * Configuración: window.NF_LIVE = {key: clave de «Deporte preferido», T: textos}.
+ * Configuración: window.NF_LIVE = {key: clave de «Deporte preferido» (+ '|lg' = Ligas favoritas), T: textos}.
  */
 (function () {
     'use strict';
@@ -18,6 +18,14 @@
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var fill = function (s, p) { for (var k in p) s = s.split('{' + k + '}').join(p[k]); return s; };
     function pref() { try { return localStorage.getItem(C.key) || ''; } catch (x) { return ''; } }
+    // Ajustes › Ligas favoritas (por línea y perfil): ninguna = todas
+    function leagues() {
+        try {
+            var j = JSON.parse(localStorage.getItem(C.key + '|lg') || '[]'), o = {};
+            (Array.isArray(j) ? j : []).forEach(function (x) { if (x && x.id) o[x.id] = 1; });
+            return o;
+        } catch (x) { return {}; }
+    }
     // Ajustes › Habilitar tarjetas de plataformas: con la fila en vivo, las plataformas quedan debajo
     function platCards() { try { return !!C.platKey && localStorage.getItem(C.platKey) === '1'; } catch (x) { return false; } }
     function hour(s) { return s ? new Intl.DateTimeFormat(window.NF_LOCALE || undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(s * 1000)) : ''; }
@@ -137,8 +145,8 @@
     }
 
     function render() {
-        var p = pref();
-        var list = cards.filter(function (e) { return !p || e.sp === p; });
+        var p = pref(), lg = leagues(), anyLg = Object.keys(lg).length > 0;
+        var list = cards.filter(function (e) { return (!p || e.sp === p) && (!anyLg || lg[e.li]); });
         var focused = document.activeElement && document.activeElement.closest ? document.activeElement.closest('.nf-lv-card') : null;
         var keep = focused ? focused.getAttribute('data-id') : '';
         var x = slider.scrollLeft;

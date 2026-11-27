@@ -43,6 +43,7 @@ $body_class = 'nf-solid';
 require_once __DIR__ . '/includes/sports_live.php';
 $live_p = wp_sports_live_allowed() ? wp_panel_sports_live() : null;
 $live_on = is_array($live_p) && !empty($live_p['enabled']);
+$lg_agenda = [];
 $live_sports = ['Soccer' => 'Fútbol', 'Basketball' => 'Baloncesto', 'American Football' => 'Fútbol americano', 'Baseball' => 'Béisbol',
     'Ice Hockey' => 'Hockey sobre hielo', 'Tennis' => 'Tenis', 'Motorsport' => 'Automovilismo', 'Fighting' => 'Artes marciales',
     'Boxing' => 'Boxeo', 'Rugby' => 'Rugby', 'Volleyball' => 'Vóleibol', 'Handball' => 'Balonmano', 'Golf' => 'Golf',
@@ -54,6 +55,13 @@ if ($live_on) {
         if (is_string($k) && $k !== '' && !isset($live_sports[$k])) $live_sports[$k] = (string)(is_array($info) ? ($info['label'] ?? $k) : $k);
     }
     uasort($live_sports, function ($a, $b) { return strcasecmp(t($a), t($b)); });
+    // Ligas favoritas: las de la agenda con la hora de cada partido (el navegador cuenta las de hoy en su zona)
+    foreach ((array)($ag['events'] ?? []) as $ev) {
+        $id = (string)($ev['li'] ?? '');
+        if ($id === '' || (string)($ev['lg'] ?? '') === '') continue;
+        if (!isset($lg_agenda[$id])) $lg_agenda[$id] = ['id' => $id, 'n' => (string)$ev['lg'], 'b' => (string)($ev['lb'] ?? ''), 'sp' => (string)($ev['sp'] ?? ''), 's' => []];
+        $lg_agenda[$id]['s'][] = (int)($ev['s'] ?? 0);
+    }
 }
 include "header.php";
 
@@ -137,6 +145,9 @@ function opt($name, $value, $label, $desc, $current)
                         <option value="<?php echo e($k); ?>"><?php echo e(t($label)); ?></option>
                     <?php endforeach; ?>
                 </select>
+                <h3 style="margin-top:20px;"><i class="fa fa-trophy"></i> <?php echo t('Ligas favoritas'); ?></h3>
+                <p><?php echo t('«En vivo ahora» de Inicio muestra solo los partidos de las ligas que elijas.'); ?> <b id="lgSum"></b></p>
+                <div id="lgList" class="lg-list" style="max-height:320px;overflow-y:auto;padding-right:6px;"></div>
                 <?php if (wp_available_platforms()): ?>
                     <label class="st-plat" style="display:flex;align-items:center;gap:10px;margin-top:16px;cursor:pointer;">
                         <input type="checkbox" id="platCards" data-key="<?php echo e(wp_sports_live_plat_key()); ?>" style="width:18px;height:18px;accent-color:var(--nf-red,#e50914);">
@@ -182,6 +193,63 @@ document.addEventListener('DOMContentLoaded', function () {
             if (window.NF && NF.toast) NF.toast(<?php echo tj('Ajustes guardados correctamente.'); ?>);
         });
     }
+    // Ligas favoritas: varias a la vez (las de la agenda y las de los próximos 21 días, las que juegan hoy primero, con
+    // su escudo); assets/nf/live.js deja en «En vivo ahora» solo los partidos de esas ligas. Por línea y perfil.
+    (function () {
+        var box = document.getElementById('lgList'), sum = document.getElementById('lgSum');
+        if (!box || !ls) return;
+        var KEY = ls.getAttribute('data-key') + '|lg';
+        var AG = <?php echo json_encode(array_values($lg_agenda), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG); ?>;
+        var SPN = <?php echo json_encode(array_map('t', $live_sports), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG); ?>;
+        var T = { all: <?php echo tj('Todas las ligas'); ?>, n: <?php echo tj('{n} ligas'); ?>, today: <?php echo tj('{n} hoy'); ?>, none: <?php echo tj('El panel todavía no tiene ligas para elegir.'); ?> };
+        var FX = {}, known = {};
+        var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+        function chosen() {
+            try { var j = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(j) ? j.filter(function (x) { return x && x.id; }) : []; } catch (x) { return []; }
+        }
+        function store(l) { try { if (l.length) localStorage.setItem(KEY, JSON.stringify(l)); else localStorage.removeItem(KEY); } catch (x) {} }
+        function row(id, n, b, sub, on) {
+            return '<label class="lg-row" style="display:flex;align-items:center;gap:10px;margin:8px 0;cursor:pointer;"><input type="checkbox" data-id="' + esc(id) + '"' + (on ? ' checked' : '') +
+                ' style="width:18px;height:18px;accent-color:var(--nf-red,#e50914);">' + (b ? '<img src="' + esc(b) + '/tiny" alt="" loading="lazy" style="width:22px;height:22px;object-fit:contain;" onerror="this.remove()">' : '') +
+                '<span>' + esc(n) + (sub ? ' <small style="opacity:.7;">· ' + esc(sub) + '</small>' : '') + '</span></label>';
+        }
+        function draw() {
+            var sp = ls.value, sel = chosen(), ids = {}, today = new Date().toDateString(), out = [];
+            known = {};
+            sel.forEach(function (x) { ids[x.id] = 1; });
+            AG.forEach(function (l) {
+                var c = 0;
+                (l.s || []).forEach(function (t) { if (t && new Date(t * 1000).toDateString() === today) c++; });
+                known[l.id] = { id: l.id, n: l.n, b: l.b, sp: l.sp, today: c };
+            });
+            Object.keys(FX).forEach(function (id) { var l = FX[id]; if (!known[id] && l && l.n) known[id] = { id: id, n: l.n, b: l.b || '', sp: l.sp || '', today: 0 }; });
+            sel.forEach(function (l) { if (!known[l.id]) known[l.id] = { id: l.id, n: l.n, b: l.b || '', sp: l.sp || '', today: 0 }; });
+            Object.keys(known).forEach(function (k) { if (!sp || known[k].sp === sp) out.push(known[k]); });
+            out.sort(function (a, b) { return (b.today > 0) - (a.today > 0) || a.sp.localeCompare(b.sp) || a.n.localeCompare(b.n); });
+            sum.textContent = !sel.length ? T.all : sel.length === 1 ? sel[0].n : T.n.replace('{n}', sel.length);
+            box.innerHTML = row('', T.all, '', '', !sel.length) + (out.length ? out.map(function (l) {
+                var sub = [sp ? '' : (SPN[l.sp] || l.sp), l.today ? T.today.replace('{n}', l.today) : ''].filter(Boolean).join(' · ');
+                return row(l.id, l.n, l.b, sub, !!ids[l.id]);
+            }).join('') : '<p style="opacity:.7;">' + esc(T.none) + '</p>');
+        }
+        box.addEventListener('change', function (ev) {
+            var id = ev.target.getAttribute('data-id');
+            if (id === null) return;
+            var sel = chosen();
+            if (id === '') sel = [];
+            else if (sel.some(function (x) { return x.id === id; })) sel = sel.filter(function (x) { return x.id !== id; });
+            else if (known[id]) sel.push({ id: id, n: known[id].n, b: known[id].b, sp: known[id].sp });
+            store(sel);
+            draw();
+            if (window.NF && NF.toast) NF.toast(<?php echo tj('Ajustes guardados correctamente.'); ?>);
+        });
+        // al elegir un deporte se quitan las ligas de otro
+        ls.addEventListener('change', function () { if (ls.value) store(chosen().filter(function (x) { return x.sp === ls.value; })); draw(); });
+        draw();
+        fetch('sportsschedule.php?ajax=fixtures', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+            .then(function (j) { if (j && j.on && j.leagues) { FX = j.leagues; draw(); } });
+    })();
     // Equipos favoritos: deporte → liga (selecciones y clubes) → equipo, de los próximos partidos que el panel ya guarda
     (function () {
         var box = document.getElementById('fav-teams');

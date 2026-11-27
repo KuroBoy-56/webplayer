@@ -115,7 +115,7 @@ function wp_sports_live()
         // sin un canal exacto de su lista el partido no sale
         if (!$opts) continue;
         $cards[] = [
-            'id' => $id, 'sp' => (string)($e['sp'] ?? ''), 'lg' => (string)($e['lg'] ?? ''), 'ev' => (string)($e['ev'] ?? ''),
+            'id' => $id, 'sp' => (string)($e['sp'] ?? ''), 'lg' => (string)($e['lg'] ?? ''), 'li' => (string)($e['li'] ?? ''), 'ev' => (string)($e['ev'] ?? ''),
             'h' => (string)($e['h'] ?? ''), 'a' => (string)($e['a'] ?? ''), 'hb' => (string)($e['hb'] ?? ''), 'ab' => (string)($e['ab'] ?? ''),
             'hs' => (string)($e['hs'] ?? ''), 'as' => (string)($e['as'] ?? ''), 'st' => (string)($e['st'] ?? ''), 'pr' => (string)($e['pr'] ?? ''),
             'best' => $opts[0][0], 'opts' => array_slice($opts, 0, 10), 'soon' => !empty($e['soon']), 's' => (int)($e['s'] ?? 0),
