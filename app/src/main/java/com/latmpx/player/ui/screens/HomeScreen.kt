@@ -124,12 +124,13 @@ fun HomeScreen(state: AppState) {
             } else HeroCards(state, cardHero.ifEmpty { heroItems }, topPad = 116.dp)
         }
         item {
-            ShelfRow(stringResource(R.string.continue_watching_for, Store.shownUser(state.session)), cont, pad) { _, p ->
+            // «Ver todo»: la lista completa en rejilla, con su avance (SavedScreen), como las demás filas
+            ShelfRow(stringResource(R.string.continue_watching_for, Store.shownUser(state.session)), cont, pad, onViewAll = { state.push(Route.Saved(continueWatching = true)) }) { _, p ->
                 val it = state.itemFromProgress(p) ?: return@ShelfRow
                 ContinueCard(state, it.copy(poster = p.poster.ifEmpty { it.poster }), p, pw)
             }
         }
-        item { ShelfRow(stringResource(R.string.my_list), favs, pad) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
+        item { ShelfRow(stringResource(R.string.my_list), favs, pad, onViewAll = { state.push(Route.Saved(continueWatching = false)) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
         item {
             ShelfRow(stringResource(R.string.top10_today), top10, pad) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) }
         }
