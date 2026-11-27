@@ -1,12 +1,12 @@
 // Explorar (la lupa de la barra, solo con perfiles): como browse.php del web player en horizontal. «Explorar» y su
-// subtítulo sobre el degradado del color, la cápsula Todo / Películas / Series, el orden (Agregados recientemente /
-// A - Z / Mejor valorados), «Filtrar por título…» (abre el teclado de la app), el total, los géneros, las plataformas, el
-// divisor y la cuadrícula de carátulas. Todo con el control: el orden cambia con cada OK y una plataforma elegida se
-// quita con «Todas las plataformas».
+// subtítulo sobre el degradado del color, la cápsula Todo / Películas / Series, «Categorías» (despliega las carpetas del
+// servidor IPTV, como el selector de Películas / Series del web player; con una elegida la cuadrícula es esa carpeta),
+// «Filtrar por título…» (abre el teclado de la app), el total, los géneros, las plataformas, el divisor y la cuadrícula
+// de carátulas. Todo con el control; una plataforma elegida se quita con «Todas las plataformas».
 import React, { useMemo, useState } from 'react';
-import { Image, Platform as RNPlatform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Platform as RNPlatform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import KeyboardModal from '../components/KeyboardModal';
-import { Focusable, Message } from '../components/ui';
+import { Button, Focusable, Message } from '../components/ui';
 import { Shade } from '../components/Shade';
 import { catalog, GENRES, label, PLATFORMS } from '../data/catalog';
 import { features } from '../lib/tenant';
@@ -16,13 +16,13 @@ import { alpha, C, px, SIDE, themed } from '../theme';
 import { ItemGrid } from './Grid';
 
 type Type = 'all' | 'vod' | 'series';
-type Sort = 'recent' | 'az' | 'rating';
-const SORTS: Sort[] = ['recent', 'az', 'rating'];
+type Cat = { id: string; name: string; kind: 'vod' | 'series' };
 
 export default function Explore({ active }: { active: boolean }) {
   const st = useAppState();
   const [type, setType] = useState<Type>('all');
-  const [sort, setSort] = useState<Sort>('recent');
+  const [cat, setCat] = useState<Cat | null>(null);
+  const [catsOpen, setCatsOpen] = useState(false);
   const [genre, setGenre] = useState('');
   const [platform, setPlatform] = useState('');
   const [q, setQ] = useState('');
@@ -36,16 +36,23 @@ export default function Explore({ active }: { active: boolean }) {
   const plat = withPlatforms ? PLATFORMS.find(p => p.key === platform) : undefined;
   const gen = GENRES.find(g => g.key === genre);
   const tags = useMemo(() => catalog.exploreTags(type, withPlatforms), [type, withPlatforms, st.catalogRev]);
-  const res = useMemo(() => catalog.explore(type, sort, plat?.key || '', genre, q), [type, sort, plat, genre, q, st.catalogRev]);
+  const res = useMemo(
+    () => catalog.explore(type, 'recent', cat ? '' : plat?.key || '', cat ? '' : genre, q, 2000, cat?.id || '', cat?.kind || ''),
+    [type, cat, plat, genre, q, st.catalogRev],
+  );
+  const cats = useMemo(() => (catsOpen ? catalog.exploreCats(type) : []), [catsOpen, type, st.catalogRev]);
+  const pickType = (k: Type) => (setType(k), setCat(null), setGenre(''));
 
-  const title = plat ? label(plat) : gen ? label(gen) : t('Explorar');
-  const sub = plat
-    ? t('Todo el contenido de {x}, filtra por género o tipo', { x: label(plat) })
-    : gen
-      ? t('Películas y series de {x}', { x: label(gen).toLowerCase() })
-      : t('Todo el catálogo de películas y series');
-  const accent = plat?.color || '#E50914';
-  const sortLabel = sort === 'az' ? 'A - Z' : t(sort === 'rating' ? 'Mejor valorados' : 'Agregados recientemente');
+  const title = cat ? cat.name : plat ? label(plat) : gen ? label(gen) : t('Explorar');
+  const sub = cat
+    ? t(cat.kind === 'series' ? 'Series de la categoría {x}' : 'Películas de la categoría {x}', { x: cat.name })
+    : plat
+      ? t('Todo el contenido de {x}, filtra por género o tipo', { x: label(plat) })
+      : gen
+        ? t('Películas y series de {x}', { x: label(gen).toLowerCase() })
+        : t('Todo el catálogo de películas y series');
+  const accent = (!cat && plat?.color) || '#E50914';
+  const catLabel = cat ? (cat.name.length > 28 ? cat.name.slice(0, 27) + '…' : cat.name) : t('Categorías');
 
   const header = (
     <View>
@@ -69,26 +76,29 @@ export default function Explore({ active }: { active: boolean }) {
         <View style={s.row1}>
           <View style={s.seg}>
             {(['all', 'vod', 'series'] as Type[]).map(k => (
-              <Focusable key={k} onPress={() => setType(k)} style={f => [s.segBtn, type === k && s.segOn, f && s.focus]}>
+              <Focusable key={k} onPress={() => pickType(k)} style={f => [s.segBtn, type === k && s.segOn, f && s.focus]}>
                 {f => <Text style={[s.segText, type === k && s.segTextOn, f && s.focusText]}>{t(k === 'all' ? 'Todo' : k === 'vod' ? 'Películas' : 'Series')}</Text>}
               </Focusable>
             ))}
           </View>
-          <Focusable onPress={() => setSort(SORTS[(SORTS.indexOf(sort) + 1) % SORTS.length])} style={f => [s.select, f && s.focus]}>
-            {f => <Text style={[s.selectText, f && s.focusText]}>{sortLabel}  ▾</Text>}
+          <Focusable onPress={() => setCatsOpen(true)} style={f => [s.select, f && s.focus]}>
+            {f => <Text style={[s.selectText, f && s.focusText]} numberOfLines={1}>{catLabel}  ▾</Text>}
           </Focusable>
           <Focusable key={'filter:' + filterRev} preferred onPress={() => setTyping(true)} style={f => [s.input, f && s.inputF]}>
             <Text style={[s.inputText, !q && s.ph]} numberOfLines={1}>{q || t('Filtrar por título…')}</Text>
           </Focusable>
           <Text style={s.count}>{res.total ? t('{n} títulos', { n: res.total.toLocaleString() }) : ''}</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
-          <Chip text={t('Todos los géneros')} on={!gen} onPress={() => setGenre('')} />
-          {tags.genres.map(g => (
-            <Chip key={g.key} text={label(g)} on={genre === g.key} onPress={() => setGenre(g.key)} />
-          ))}
-        </ScrollView>
-        {tags.platforms.length ? (
+        {/* con una carpeta elegida no hay géneros ni plataformas (como el web player) */}
+        {!cat ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+            <Chip text={t('Todos los géneros')} on={!gen} onPress={() => setGenre('')} />
+            {tags.genres.map(g => (
+              <Chip key={g.key} text={label(g)} on={genre === g.key} onPress={() => setGenre(g.key)} />
+            ))}
+          </ScrollView>
+        ) : null}
+        {!cat && tags.platforms.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.chips, s.chips2]}>
             {plat ? <Chip text={t('Todas las plataformas')} on={false} onPress={() => setPlatform('')} /> : null}
             {tags.platforms.map(p => (
@@ -104,6 +114,34 @@ export default function Explore({ active }: { active: boolean }) {
   return (
     <View style={s.root}>
       <ItemGrid items={res.items} header={header} active={active} focusFirst={typing ? 0 : focusRev} />
+      {catsOpen ? (
+        <Modal visible transparent animationType="fade" onRequestClose={() => (setCatsOpen(false), setFilterRev(n => n + 1))}>
+          <View style={s.shade}>
+            <View style={s.box}>
+              <Text style={s.boxTitle}>{t('Categorías')}</Text>
+              <ScrollView style={s.list}>
+                {[null, ...cats].map((c, i) => (
+                  <View key={c ? c.kind + c.id : 'all'} style={s.listRow}>
+                    <Button
+                      label={c ? c.name + (type === 'all' ? '  ·  ' + t(c.kind === 'series' ? 'Series' : 'Películas') : '') : t('Todas las categorías')}
+                      left
+                      last
+                      width={px(820)}
+                      preferred={c ? cat?.id === c.id && cat?.kind === c.kind : !cat && i === 0}
+                      onPress={() => {
+                        setCatsOpen(false);
+                        setCat(c);
+                        if (c) (setGenre(''), setPlatform(''));
+                        setFilterRev(n => n + 1);
+                      }}
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
       {typing ? (
         <KeyboardModal
           title={t('Filtrar por título…')}
@@ -161,6 +199,11 @@ const s = themed(() =>
     chipText: { color: '#fff', fontSize: px(24) },
     chipTextOn: { color: '#000', fontWeight: '700' },
     focus: { backgroundColor: C.focus, borderColor: C.red, transform: [{ scale: 1.08 }] },
+    shade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center' },
+    box: { width: px(920), maxHeight: px(940), backgroundColor: C.bg2, borderRadius: px(12), padding: px(44) },
+    boxTitle: { color: C.text, fontSize: px(40), fontWeight: '800', marginBottom: px(18) },
+    list: { maxHeight: px(780) },
+    listRow: { marginBottom: px(10) },
     focusText: { color: C.onFocus },
   }),
 );
