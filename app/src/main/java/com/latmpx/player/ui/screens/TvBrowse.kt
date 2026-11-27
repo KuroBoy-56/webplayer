@@ -165,7 +165,7 @@ fun TvBrowse(state: AppState, pool: List<Item>, cacheKey: String, rows: List<Bro
     fun focusLive(c: TvLiveCard, plot: String) {
         infoJob?.cancel()
         val e = c.e
-        info = StageInfo(null, title = if (e.home.isNotBlank() && e.away.isNotBlank()) "${e.home} vs ${e.away}" else e.title.ifBlank { e.league }, plot = plot, live = e)
+        info = StageInfo(null, title = if (!c.solo) "${e.home} vs ${e.away}" else c.eventName, plot = plot, live = e)
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -248,7 +248,7 @@ private fun RowSlot(state: AppState, r: BrowseRow, slot: Dp, focusItem: (Item) -
                     val e = c.e
                     val clock = tvLiveClock(e)
                     val score = if (e.soon || (e.homeScore.isBlank() && e.awayScore.isBlank())) "" else "   ${e.homeScore} - ${e.awayScore}"
-                    val plot = listOf(e.league, clock + score, c.best.name).filter { it.isNotBlank() }.joinToString("  ·  ")
+                    val plot = listOf(if (c.solo) c.sport else "", e.league, clock + if (c.solo) "" else score, c.best.name).filter { it.isNotBlank() }.joinToString("  ·  ")
                     TvLiveTile(c, liveW, onFocus = { focusLive(c, plot) }) { r.onOpen(c) }
                 }
                 item(key = "go") {

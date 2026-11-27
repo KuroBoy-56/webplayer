@@ -14,4 +14,7 @@
     <string name="ex_sub_genre">Movies and series: %1$s</string>
     <string name="ex_all_platforms">All platforms</string>
     <string name="ex_none">No titles match these filters.</string>
+    <string name="ex_all_categories">All categories</string>
+    <string name="ex_sub_cat_movies">Movies in the %1$s category</string>
+    <string name="ex_sub_cat_series">Series in the %1$s category</string>
 </resources>
