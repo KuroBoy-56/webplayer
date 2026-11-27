@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## «Ver todo» en Continuar viendo y Mi lista — versión 3.1.3 (27 de noviembre)
+- Las filas **Continuar viendo** y **Mi lista** de Inicio tienen **«Ver todo ›»** como las demás categorías. Abre una página nueva (`mylist.php?k=cont` / `?k=fav`) con **todos** los títulos (en Inicio la fila sigue con 20 y 30) en la misma cuadrícula de Explorar: Continuar viendo con su barra de progreso, lo último visto primero; Mi lista en el orden del panel. Solo títulos que siguen en el servidor IPTV, como en Inicio.
+- Las dos listas se arman en un solo lugar (`includes/home_lists.php`), así Inicio y «Ver todo» muestran siempre lo mismo. La página nueva va con dirección por token y espera a que se elija el perfil, como las demás.
+- Prueba: `php tools/home_lists_test.php` (todo ok).
+- Archivos: `homex.php`, `mylist.php` (nuevo), `includes/home_lists.php` (nuevo), `includes/route_token.php`, `includes/profiles.php`, `includes/lang/en.php`, `includes/lang/pt.php`, `includes/lang/fr.php`, `includes/core.php`.
+
 ## Ligas favoritas — versión 3.1.2 (27 de noviembre)
 - **Ajustes › Ligas favoritas** (debajo de «Deporte preferido», solo cuando existe la fila «En vivo ahora»): se marcan **varias ligas** con su escudo. La lista junta las ligas de la agenda (primero las que juegan hoy, con cuántos partidos, contados en la hora del navegador) y las de los próximos 21 días; con un deporte preferido, solo las de ese. Al elegir otro deporte se quitan las ligas del anterior.
 - Con alguna marcada, **«En vivo ahora»** de Inicio solo muestra partidos de esas ligas (cada tarjeta lleva ahora la liga, `li`). Se guarda en el navegador por línea y perfil, como el deporte preferido. Las mismas ligas favoritas tienen Roku, Android (TV y celular), webOS, Tizen, VIDAA, Vega y la computadora.

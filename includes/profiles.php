@@ -20,7 +20,7 @@ const WP_PROF_TTL = 600;
 // páginas que esperan a que se elija el perfil (las demás —salir, el reproductor http, avisos— se abren igual)
 const WP_PROF_GATED = ['homex.php', 'home.php', 'browse.php', 'movies.php', 'series.php', 'moviesondemand.php', 'seriesondemand.php',
     'Movie_description.php', 'seriesvideo.php', 'video_player.php', 'tvguide.php', 'sportsschedule.php', 'actor.php', 'myaccount.php',
-    'settings.php'];
+    'settings.php', 'mylist.php'];
 
 /** De quién es lo guardado (otra línea u otro número de distribuidor en la misma sesión = se empieza de cero). */
 function wp_prof_acct()

@@ -6,58 +6,10 @@ include "config.php";
 $page_title = t('Inicio');
 include "header.php";
 
-/* ---------- Sólo títulos que existen en el servidor IPTV actual ---------- */
-// los ids del catálogo, guardados aparte (includes/catalog_fast.php): no se lee el catálogo entero en cada Inicio
-$have = ['movie' => wp_catalog_ids('movie'), 'series' => wp_catalog_ids('series')];
-$in_server = function ($type, $id) use ($have) {
-    // si el catálogo no cargó (servidor caído) no se oculta nada
-    return !$have[$type] || isset($have[$type][(string)$id]);
-};
-
-/* ---------- Mi lista (favoritos guardados en el panel) ---------- */
-$favoritos = [];
-foreach (wp_user_favorites() as $row) {
-    if (!in_array($row['type'], ['movie', 'series'], true)) continue;
-    if ($in_server($row['type'], $row['stream_id'])) $favoritos[] = $row;
-    if (count($favoritos) >= 30) break;
-}
-
-/* ---------- Continuar viendo (progreso guardado en el panel) ---------- */
-$continuar_viendo = [];
-$user_prog = array_values(wp_user_progress($username));
-usort($user_prog, function ($a, $b) {
-    return ($b['_when'] ?? 0) <=> ($a['_when'] ?? 0);
-});
-$user_prog = array_values(array_filter($user_prog, function ($it) use ($in_server) {
-    return ($it['type'] ?? 'movie') === 'series'
-        ? $in_server('series', $it['series_id'] ?? '')
-        : $in_server('movie', $it['stream_id'] ?? '');
-}));
-$continuar_viendo = array_slice($user_prog, 0, 20);
-
-$cont_html = '';
-foreach ($continuar_viendo as $item) {
-    $stream_id = $item["stream_id"] ?? '';
-    $type = $item["type"] ?? 'movie';
-    $series_id = $item["series_id"] ?? 0;
-    $medialink = ($type == 'series')
-        ? "video_player.php?id=" . rawurlencode($stream_id) . "&slug=series&series_id=" . rawurlencode($series_id)
-        : "video_player.php?id=" . rawurlencode($stream_id) . "&slug=movie";
-    $pct = (!empty($item["total_time"]) && $item["total_time"] > 0) ? ($item["current_time"] / $item["total_time"]) * 100 : 5;
-    // carátula por la caché del panel; en series el título guardado puede traer el episodio: solo la imagen
-    $src = wp_poster_sources($type, $item['poster_url'] ?? '', $type == 'series' ? '' : ($item['title'] ?? ''));
-    $cont_html .= wp_card_html(['u' => $medialink, 'n' => $item['title'] ?? '', 'i' => $src ? array_shift($src) : WP_NOIMG, 'f' => $src, 'r' => ''], $pct);
-}
-
-$fav_html = '';
-foreach ($favoritos as $fav) {
-    $isS = $fav['type'] === 'series';
-    $src = wp_poster_sources($isS ? 'series' : 'movie', $fav['poster_url'], $fav['title']);
-    $fav_html .= wp_card_html([
-        'u' => $isS ? 'seriesvideo.php?id=' . rawurlencode($fav['stream_id']) : 'Movie_description.php?id=' . rawurlencode($fav['stream_id']),
-        'n' => $fav['title'], 'i' => $src ? array_shift($src) : WP_NOIMG, 'f' => $src, 'r' => '',
-    ]);
-}
+/* ---------- Continuar viendo y Mi lista (panel): las mismas tarjetas que su «Ver todo» (mylist.php) ---------- */
+require_once __DIR__ . '/includes/home_lists.php';
+list($cont_html) = wp_continue_cards($username, 20);
+list($fav_html) = wp_mylist_cards(30);
 
 $platforms = wp_available_platforms();
 $genres = wp_available_genres('all');
@@ -98,8 +50,8 @@ try { if (localStorage.getItem(<?php echo json_encode(wp_sports_live_plat_key())
 
 <div class="nf-rows">
     <?php
-    if ($cont_html) echo wp_row(t('Continuar viendo'), [], '', '', 'sec_continuar', $cont_html);
-    if ($fav_html) echo wp_row(t('Mi lista'), [], '', '', 'sec_favoritos', $fav_html);
+    if ($cont_html) echo wp_row(t('Continuar viendo'), [], 'mylist.php?k=cont', '', 'sec_continuar', $cont_html);
+    if ($fav_html) echo wp_row(t('Mi lista'), [], 'mylist.php?k=fav', '', 'sec_favoritos', $fav_html);
 
     echo wp_row(t('Top 10 de hoy'), [], 'browse.php?type=all&sort=rating', 'api.php?action=row&type=movie&sort=top', 'sec_top', null, 'top');
     echo wp_row(t('Películas agregadas recientemente'), [], 'browse.php?type=movie&sort=recent', 'api.php?action=row&type=movie&sort=recent&limit=30', 'sec_peliculas');
