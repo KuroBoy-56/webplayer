@@ -70,6 +70,7 @@ struct RouteView: View {
         case .detail(let it): DetailView(media: it)
         case .browse(let title, let kind, let ids): BrowseView(title: title, kind: kind, categoryIds: ids, platform: nil)
         case .platform(let p): BrowseView(title: tr(p.label), kind: nil, categoryIds: [], platform: p)
+        case .topRated(let title, let kind): BrowseView(title: title, kind: kind, categoryIds: [], platform: nil, sort: 2, all: true)
         case .saved(let cw): SavedView(continueWatching: cw)
         case .sports: if tenant.sportsEnabled { SportsView() } else { EmptyMessage(text: tr("Deportes no está disponible.")) }
         case .search: SearchView()

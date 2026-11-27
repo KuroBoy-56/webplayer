@@ -47,7 +47,7 @@ struct CatalogView: View {
                     ShelfRow(title: tr("Agregadas recientemente"), items: recent, pad: pad, onViewAll: { state.push(.browse(tr("Agregadas recientemente"), kind, [])) }) { _, it in
                         PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                     }
-                    ShelfRow(title: tr("Top 10 de la semana"), items: top10, pad: pad) { i, it in
+                    ShelfRow(title: tr("Top 10 de la semana"), items: top10, pad: pad, onViewAll: { state.push(.topRated(tr("Mejor valorados"), kind)) }) { i, it in
                         Top10Card(rank: i + 1, item: it, width: pw * 1.15) { state.push(.detail(it)) }
                     }
                     ForEach(rows) { row in
@@ -96,29 +96,66 @@ struct PosterGrid: View {
     }
 }
 
-/** "Ver todo", plataformas y géneros */
+/**
+ * "Ver todo", plataformas y géneros. Arriba a la derecha «Ordenar» con solo los tres órdenes del web player (Agregados
+ * recientemente / A - Z / Mejor valorados); el Top 10 la abre con Mejor valorados (all = películas y series si kind es nil).
+ */
 struct BrowseView: View {
     @EnvironmentObject var state: AppState
     let title: String
     let kind: Kind?
     let categoryIds: Set<String>
     let platform: Platform?
+    @State private var sort: Int
+    private let all: Bool
+
+    init(title: String, kind: Kind?, categoryIds: Set<String>, platform: Platform?, sort: Int = 0, all: Bool = false) {
+        self.title = title
+        self.kind = kind
+        self.categoryIds = categoryIds
+        self.platform = platform
+        self.all = all
+        _sort = State(initialValue: sort)
+    }
 
     var body: some View {
         GeometryReader { g in
-            let list: [Item] = {
+            let base: [Item] = {
                 if let p = platform {
                     let ids = Platforms.categoriesFor(state.visible(state.movieCats + state.seriesCats), p.kw)
                     return (state.movies + state.series).filter { ids.contains($0.categoryId) }.sorted { $0.added > $1.added }
                 }
-                let all = state.visibleItems(state.recent(kind == .series ? .series : .movie))
-                return categoryIds.isEmpty ? all : all.filter { categoryIds.contains($0.categoryId) }
+                if all && kind == nil {
+                    return (state.visibleItems(state.recent(.movie)) + state.visibleItems(state.recent(.series))).sorted { $0.added > $1.added }
+                }
+                let items = state.visibleItems(state.recent(kind == .series ? .series : .movie))
+                return categoryIds.isEmpty ? items : items.filter { categoryIds.contains($0.categoryId) }
+            }()
+            let list: [Item] = {
+                switch sort {
+                case 1: return base.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+                case 2: return base.sorted { $0.rating != $1.rating ? $0.rating > $1.rating : $0.added > $1.added }
+                default: return base
+                }
             }()
             if list.isEmpty { EmptyMessage(text: tr("No hay títulos.")) } else { PosterGrid(items: list, size: g.size) }
         }
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Picker(tr("Ordenar"), selection: $sort) {
+                        Text(tr("Agregados recientemente")).tag(0)
+                        Text("A - Z").tag(1)
+                        Text(tr("Mejor valorados")).tag(2)
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down").accessibilityLabel(tr("Ordenar"))
+                }
+            }
+        }
     }
 }
 

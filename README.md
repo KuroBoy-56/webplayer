@@ -4,6 +4,11 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.1.7 («Ver todo» con los órdenes del web player)
+
+- **«Ver todo»** (`BrowseView` en `LatMpx/UI/CatalogView.swift`): arriba a la derecha el menú **Ordenar** con solo las tres opciones del web player (Agregados recientemente, A - Z, Mejor valorados), también en las plataformas.
+- El **Top 10** de Inicio, Películas y Series ganó su «Ver todo» (`Route.topRated`): abre todo el catálogo (o solo películas / series) por **Mejor valorados**, como el web player lleva el Top 10 a Explorar con ese orden. La app no tiene pantalla Explorar: el «Ver todo» de cada fila hace ese papel.
+
 ## Novedades de la 1.1.6 (Deportes en la hora del iPhone)
 
 - **Deportes** (`LatMpx/Data/Sports.swift`): la hora de cada partido, Hoy / Mañana, Equipos / Selecciones y los avisos van **siempre en la zona horaria del iPhone**. El panel manda solo `s` (segundos UTC); si un panel viejo todavía manda su zona (`tz` / `tzo`) se ignora, así un cliente de otro país ya no ve el partido de las 10:00 UTC a las «11:00» del panel ni «en vivo» antes de su hora.

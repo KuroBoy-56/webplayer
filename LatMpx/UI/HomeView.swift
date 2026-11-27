@@ -61,7 +61,7 @@ struct HomeView: View {
                 ShelfRow(title: tr("Mi lista"), items: favs, pad: pad, onViewAll: { state.push(.saved(false)) }) { _, it in
                     PosterCard(item: it, width: pw) { state.push(.detail(it)) }
                 }
-                ShelfRow(title: tr("Top 10 de la semana"), items: top10, pad: pad) { i, it in
+                ShelfRow(title: tr("Top 10 de la semana"), items: top10, pad: pad, onViewAll: { state.push(.topRated(tr("Mejor valorados"), nil)) }) { i, it in
                     Top10Card(rank: i + 1, item: it, width: pw * 1.15) { state.push(.detail(it)) }
                 }
                 ShelfRow(title: tr("Plataformas"), items: platforms, pad: pad) { _, p in

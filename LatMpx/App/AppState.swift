@@ -7,6 +7,8 @@ enum Tab: Hashable { case home, series, movies, live, search, account }
 enum Route: Hashable {
     case detail(Item)
     case browse(String, Kind, Set<String>)
+    /** «Ver todo» del Top 10 (como el web player): todo el tipo (nil = películas y series) por «Mejor valorados» */
+    case topRated(String, Kind?)
     case platform(Platform)
     /** "Continuar viendo" (true) o "Mi lista" (false) */
     case saved(Bool)
