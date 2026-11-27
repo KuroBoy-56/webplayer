@@ -5,6 +5,8 @@
  */
 include "session.php";
 include "config.php";
+// wp_card_html: las tarjetas se arman antes del encabezado (que es quien carga ui.php en las demás páginas)
+require_once __DIR__ . '/includes/ui.php';
 require_once __DIR__ . '/includes/home_lists.php';
 
 $k = ($_GET['k'] ?? '') === 'fav' ? 'fav' : 'cont';

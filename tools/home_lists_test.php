@@ -34,5 +34,11 @@ list($h, $n) = wp_mylist_cards();
 $ok($h === '[A][B]' && $n === 2, 'Mi lista: películas y series del servidor, sin canales (' . $h . ')');
 list($h, $n) = wp_mylist_cards(1);
 $ok($h === '[A]' && $n === 2, 'Mi lista con tope (Inicio)');
+// «Ver todo» salía en blanco: mylist.php armaba las tarjetas antes del encabezado (que carga ui.php, donde está
+// wp_card_html) y PHP se detenía. ui.php tiene que cargarse antes de la primera tarjeta.
+$page = file_get_contents(__DIR__ . '/../mylist.php');
+$ui = strpos($page, "includes/ui.php");
+$first = min(strpos($page, 'wp_mylist_cards('), strpos($page, 'wp_continue_cards('));
+$ok($ui !== false && $ui < $first, 'mylist.php carga ui.php antes de armar las tarjetas (si no, la página queda en blanco)');
 echo $fails ? "\n$fails falla(s)\n" : "\ntodo ok\n";
 exit($fails ? 1 : 0);
