@@ -112,31 +112,32 @@ fun TvHomeScreen(state: AppState) {
         val favs = Cloud.favList().filter { it.kind != Kind.LIVE }
         if (favs.isNotEmpty()) out += BrowseRow.Posters("favs", tMyList, favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) })
         val top10 = com.latmpx.player.data.WeekTop.top10Home(movies, series)
-        if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10)
+        // «Ver todo» de cada fila: Explorar con su filtro, como browse.php del web player (Top 10 = Mejor valorados)
+        if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10, onViewAll = { state.push(Route.ExploreAt(sort = 2)) })
         // un partido: el menú de canales (como en Deportes), no solo la primera coincidencia
         if (live.isNotEmpty()) out += BrowseRow.Live("live", tLive, live, onSports = { state.stack.clear(); state.tab = com.latmpx.player.ui.Tab.SPORTS }) { c -> liveMenu = c }
         val rm = movies.sortedByDescending { it.added }.take(30)
-        if (rm.isNotEmpty()) out += BrowseRow.Posters("rm", tNewMovies, rm, onViewAll = { state.push(Route.Browse(tNewMovies, Kind.MOVIE, emptySet())) })
+        if (rm.isNotEmpty()) out += BrowseRow.Posters("rm", tNewMovies, rm, onViewAll = { state.push(Route.ExploreAt(type = 1)) })
         val rs = series.sortedByDescending { it.added }.take(30)
-        if (rs.isNotEmpty()) out += BrowseRow.Posters("rs", tNewSeries, rs, onViewAll = { state.push(Route.Browse(tNewSeries, Kind.SERIES, emptySet())) })
+        if (rs.isNotEmpty()) out += BrowseRow.Posters("rs", tNewSeries, rs, onViewAll = { state.push(Route.ExploreAt(type = 2)) })
         platforms.filter { it.key != "xmas" && it.key != "halloween" }.map { p ->
             val m = Platforms.categoriesFor(safe(state.movieCats), p.kw)
             val se = Platforms.categoriesFor(safe(state.seriesCats), p.kw)
             p to (movies.filter { it.categoryId in m } + series.filter { it.categoryId in se }).sortedByDescending { it.added }.take(30)
         }.filter { it.second.size >= 4 }.take(5).forEach { (p, l) ->
-            out += BrowseRow.Posters("p_${p.key}", bestOf.replace("%s", p.label), l, onViewAll = { state.push(Route.PlatformPage(p)) })
+            out += BrowseRow.Posters("p_${p.key}", bestOf.replace("%s", p.label), l, onViewAll = { state.push(Route.ExploreAt(platform = p.key)) })
         }
         val sfy = series.filter { it.poster.isNotBlank() }.shuffled().take(24)
-        if (sfy.isNotEmpty()) out += BrowseRow.Posters("sfy", tSeriesForYou, sfy)
+        if (sfy.isNotEmpty()) out += BrowseRow.Posters("sfy", tSeriesForYou, sfy, onViewAll = { state.stack.clear(); state.tab = com.latmpx.player.ui.Tab.SERIES })
         preferredGenres.forEach { label ->
             val kw = Platforms.genres.firstOrNull { it.first == label }?.second ?: return@forEach
             val m = Platforms.categoriesFor(safe(state.movieCats), kw)
             val se = Platforms.categoriesFor(safe(state.seriesCats), kw)
             val l = (movies.filter { it.categoryId in m } + series.filter { it.categoryId in se }).sortedByDescending { it.added }.take(30)
-            if (l.size >= 4) out += BrowseRow.Posters("g_$label", label, l, onViewAll = { state.push(Route.Browse(label, Kind.MOVIE, m)) })
+            if (l.size >= 4) out += BrowseRow.Posters("g_$label", label, l, onViewAll = { state.push(Route.ExploreAt(genre = label)) })
         }
         val mfy = movies.filter { it.poster.isNotBlank() }.shuffled().take(24)
-        if (mfy.isNotEmpty()) out += BrowseRow.Posters("mfy", tMoviesForYou, mfy)
+        if (mfy.isNotEmpty()) out += BrowseRow.Posters("mfy", tMoviesForYou, mfy, onViewAll = { state.stack.clear(); state.tab = com.latmpx.player.ui.Tab.MOVIES })
         out
     }
     TvBrowse(state, pool, "home", rows)
@@ -158,21 +159,22 @@ fun TvCatalogScreen(state: AppState, kind: Kind) {
     LaunchedEffect(Unit) { com.latmpx.player.data.WeekTop.load() }
     val rows = remember(all, cats, com.latmpx.player.data.WeekTop.rev) {
         val out = ArrayList<BrowseRow>()
+        val t = if (kind == Kind.SERIES) 2 else 1 // Explorar: Películas o Series
         val recent = all.sortedByDescending { it.added }.take(30)
-        if (recent.isNotEmpty()) out += BrowseRow.Posters("recent", tRecent, recent, onViewAll = { state.push(Route.Browse(tRecent, kind, emptySet())) })
+        if (recent.isNotEmpty()) out += BrowseRow.Posters("recent", tRecent, recent, onViewAll = { state.push(Route.ExploreAt(type = t)) })
         // cada género con su dibujo y el póster de su título más destacado: el de la lista de la semana de TMDB del panel
         // que está en esas carpetas o, si no hay, uno de los mejor calificados (como las tarjetas de deportes)
         val genres = Platforms.genres.mapIndexed { i, (g, kw) -> Triple(i, g, Platforms.categoriesFor(cats, kw)) }.filter { it.third.isNotEmpty() }
         if (genres.isNotEmpty()) out += BrowseRow.Genres("genres", tGenres, genres.map { (i, g, ids) ->
             val st = Platforms.genreStyles.getOrNull(i)
             GenreCard(g, st?.first ?: 0xFF333333, st?.second ?: 0, com.latmpx.player.data.WeekTop.top10(all.filter { it.categoryId in ids }, kind).firstOrNull())
-        }) { i -> genres.getOrNull(i)?.let { (_, g, ids) -> state.push(Route.Browse(g, kind, ids)) } }
+        }) { i -> genres.getOrNull(i)?.let { (_, g, _) -> state.push(Route.ExploreAt(type = t, genre = g)) } }
         val top10 = com.latmpx.player.data.WeekTop.top10(all, kind)
-        if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10)
+        if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10, onViewAll = { state.push(Route.ExploreAt(type = t, sort = 2)) })
         val byCat = all.groupBy { it.categoryId }
         cats.forEach { c ->
             val l = byCat[c.id]?.take(30).orEmpty()
-            if (l.isNotEmpty()) out += BrowseRow.Posters("c_${c.id}", c.name, l, onViewAll = { state.push(Route.Browse(c.name, kind, setOf(c.id))) })
+            if (l.isNotEmpty()) out += BrowseRow.Posters("c_${c.id}", c.name, l, onViewAll = { state.push(Route.ExploreAt(type = t, cat = c.id, catKind = if (kind == Kind.SERIES) "s" else "m")) })
         }
         out
     }

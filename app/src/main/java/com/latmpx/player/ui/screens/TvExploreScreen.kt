@@ -76,19 +76,22 @@ import com.latmpx.player.ui.theme.NfRed
 
 /**
  * Explorar en la TV (la lupa de la barra, solo con perfiles): como browse.php del web player en horizontal. «Explorar» y
- * su subtítulo sobre el degradado del color, la cápsula Todo / Películas / Series, el orden (Agregados recientemente /
- * A - Z / Mejor valorados; cada OK pasa al siguiente), «Filtrar por título…» (OK abre el teclado), el total, los géneros,
- * las plataformas, el divisor y la cuadrícula de carátulas. Solo las carpetas que el cliente ve (control parental).
+ * su subtítulo sobre el degradado del color, la cápsula Todo / Películas / Series, «Categorías», el orden (solo los tres
+ * del web player: Agregados recientemente / A - Z / Mejor valorados), «Filtrar por título…» (OK abre el teclado), el
+ * total, los géneros, las plataformas, el divisor y la cuadrícula de carátulas. Solo las carpetas que el cliente ve
+ * (control parental). «Ver todo» de una fila la abre con el filtro de esa fila (init); Atrás vuelve a la fila.
  */
 @Composable
-fun TvExploreScreen(state: AppState) {
-    var type by rememberSaveable { mutableStateOf(0) } // 0 todo, 1 películas, 2 series
+fun TvExploreScreen(state: AppState, init: Route.ExploreAt? = null) {
+    var type by rememberSaveable { mutableStateOf(init?.type ?: 0) } // 0 todo, 1 películas, 2 series
     // «Categorías»: una carpeta del servidor IPTV ("" = todas), como el selector de Películas / Series del web player
-    var cat by rememberSaveable { mutableStateOf("") }
-    var catKind by rememberSaveable { mutableStateOf("") } // "m" películas, "s" series
+    var cat by rememberSaveable { mutableStateOf(init?.cat ?: "") }
+    var catKind by rememberSaveable { mutableStateOf(init?.catKind ?: "") } // "m" películas, "s" series
     var catsOpen by remember { mutableStateOf(false) }
-    var genre by rememberSaveable { mutableStateOf("") }
-    var platform by rememberSaveable { mutableStateOf("") }
+    var sort by rememberSaveable { mutableStateOf(init?.sort ?: 0) } // 0 recientes, 1 A - Z, 2 mejor valorados
+    var sortOpen by remember { mutableStateOf(false) }
+    var genre by rememberSaveable { mutableStateOf(init?.genre ?: "") }
+    var platform by rememberSaveable { mutableStateOf(init?.platform ?: "") }
     var query by rememberSaveable { mutableStateOf("") }
 
     val mCats = remember(state.movieCats, state.refresh) { Store.visibleCats(state.movieCats) }
@@ -102,10 +105,10 @@ fun TvExploreScreen(state: AppState) {
     val plat = platforms.find { it.key == platform }
     val gen = Platforms.genres.find { it.first == genre }
     // filtrar y ordenar todo el catálogo en segundo plano (la vista de siempre ya viene armada desde Inicio): la lupa abre al momento
-    val key = ExploreCache.key(state.movies, state.series, mCats, sCats, type, cat, catKind, gen?.first, plat?.key, query)
+    val key = ExploreCache.key(state.movies, state.series, mCats, sCats, type, cat, catKind, gen?.first, plat?.key, query, sort)
     val ready by androidx.compose.runtime.produceState(ExploreCache.peek(key), key) {
         value = ExploreCache.peek(key) ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            ExploreCache.compute(key, state.movies, state.series, mCats, sCats, type, cat, catKind, cats, plat?.kw, gen?.second, query)
+            ExploreCache.compute(key, state.movies, state.series, mCats, sCats, type, cat, catKind, cats, plat?.kw, gen?.second, query, sort)
         }
     }
     val shown = ready ?: emptyList()
@@ -122,6 +125,7 @@ fun TvExploreScreen(state: AppState) {
         kotlinx.coroutines.delay(120)
         runCatching { field.box.requestFocus() }
     }
+    val sortLabels = listOf(stringResource(R.string.ex_sort_recent), "A - Z", stringResource(R.string.ex_sort_rating))
     val catLabel = if (cat.isEmpty()) stringResource(R.string.categories) else catName.let { if (it.length > 28) it.take(27) + "…" else it }
 
     LazyVerticalGrid(
@@ -179,6 +183,13 @@ fun TvExploreScreen(state: AppState) {
                         )
                     }
                     Spacer(Modifier.width(10.dp))
+                    FocusBox(onClick = { sortOpen = true }, shape = RoundedCornerShape(4.dp), focusScale = 1.05f) { f ->
+                        Text(
+                            sortLabels[sort] + "  ▾", color = Color.White, fontSize = 13.sp, maxLines = 1,
+                            modifier = Modifier.background(Color.Black).border(1.dp, if (f) Color.White else Color(0xFF555555), RoundedCornerShape(4.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
                     TitleFilter(field, query) { query = it }
                     Spacer(Modifier.weight(1f))
                     if (shown.isNotEmpty()) Text(stringResource(R.string.ex_count, shown.size), color = NfGray2, fontSize = 12.sp)
@@ -198,6 +209,12 @@ fun TvExploreScreen(state: AppState) {
         items(shown, key = { it.key }) { it ->
             val p = progress[it.key]
             PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, progress = if (p != null && p.duration > 0) p.position.toFloat() / p.duration else 0f)
+        }
+    }
+    if (sortOpen) {
+        ExploreCatsDialog(sortLabels.mapIndexed { i, l -> l to i.toString() }, sort.toString(), onDismiss = { sortOpen = false }, title = stringResource(R.string.ex_sort)) { v ->
+            sortOpen = false
+            sort = v.toIntOrNull() ?: 0
         }
     }
     if (catsOpen) {
@@ -256,12 +273,12 @@ private fun Modifier.bleed(pad: Dp): Modifier = layout { m, c ->
     layout(c.maxWidth, p.height) { p.place(-side, 0) }
 }
 
-/** «Categorías» de Explorar: la lista de carpetas del servidor IPTV; OK elige una (la elegida tiene el foco al abrir) */
+/** «Categorías» (o «Ordenar») de Explorar: la lista de carpetas del servidor IPTV; OK elige una (la elegida tiene el foco al abrir) */
 @Composable
-private fun ExploreCatsDialog(rows: List<Pair<String, String>>, current: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+private fun ExploreCatsDialog(rows: List<Pair<String, String>>, current: String, onDismiss: () -> Unit, title: String = stringResource(R.string.categories), onPick: (String) -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Column(Modifier.width(560.dp).background(com.latmpx.player.ui.theme.NfBg2, RoundedCornerShape(10.dp)).padding(20.dp)) {
-            Text(stringResource(R.string.categories), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
             val start = rows.indexOfFirst { it.second == current }.coerceAtLeast(0)
             val first = remember { androidx.compose.ui.focus.FocusRequester() }
             val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (start - 3).coerceAtLeast(0))
@@ -316,6 +333,7 @@ object ExploreCache {
     fun compute(
         k: List<Any?>, movies: List<Item>, series: List<Item>, mCats: List<Category>, sCats: List<Category>,
         type: Int, cat: String, catKind: String, cats: List<Category>, platKw: List<String>?, genKw: List<String>?, query: String,
+        sort: Int = 0,
     ): List<Item> {
         val b = base(movies, series, mCats, sCats)
         var l = when {
@@ -331,14 +349,20 @@ object ExploreCache {
         }
         val q = Platforms.fold(query.trim())
         if (q.isNotEmpty()) l = l.filter { Platforms.fold(it.name).contains(q) }
-        return l.sortedByDescending { it.added }.also { put(k, it) }
+        // los tres órdenes del web player (browse.php)
+        val out = when (sort) {
+            1 -> java.text.Collator.getInstance(java.util.Locale("es")).let { c -> l.sortedWith { a, b -> c.compare(a.name, b.name) } }
+            2 -> l.sortedByDescending { it.rating }
+            else -> l.sortedByDescending { it.added }
+        }
+        return out.also { put(k, it) }
     }
 
     /** desde Inicio: deja lista la vista por defecto, con las mismas claves que arma la pantalla */
     suspend fun warm(state: AppState) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
         val m = Store.visibleCats(state.movieCats)
         val s = Store.visibleCats(state.seriesCats)
-        val k = key(state.movies, state.series, m, s, 0, "", "", null, null, "")
+        val k = key(state.movies, state.series, m, s, 0, "", "", null, null, "", 0)
         if ((state.movies.isNotEmpty() || state.series.isNotEmpty()) && peek(k) == null) compute(k, state.movies, state.series, m, s, 0, "", "", m + s, null, null, "")
     }
 }

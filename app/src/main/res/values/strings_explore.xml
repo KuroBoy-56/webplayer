@@ -4,6 +4,7 @@
     <string name="explore">Explorar</string>
     <string name="explore_sub">Todo el catálogo de películas y series</string>
     <string name="ex_all">Todo</string>
+    <string name="ex_sort">Ordenar</string>
     <string name="ex_sort_recent">Agregados recientemente</string>
     <string name="ex_sort_rating">Mejor valorados</string>
     <string name="ex_all_folders">Todas las carpetas</string>
