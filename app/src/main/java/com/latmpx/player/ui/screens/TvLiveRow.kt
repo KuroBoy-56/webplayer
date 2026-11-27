@@ -80,6 +80,7 @@ fun rememberTvLive(state: AppState): List<TvLiveCard> {
     var data by remember { mutableStateOf<SportsLive.Data?>(null) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(active, state.session) {
+        SportsLive.reset()
         if (!active) { data = null; return@LaunchedEffect }
         while (true) {
             lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
@@ -94,7 +95,8 @@ fun rememberTvLive(state: AppState): List<TvLiveCard> {
         value = runCatching { Sports.load()?.events }.getOrNull().orEmpty()
     }
     val d = data
-    val cards by produceState<List<TvLiveCard>>(emptyList(), d, agenda, state.live, state.liveCats) {
+    val pref = remember(SportsLive.prefRev, com.latmpx.player.data.Profiles.current) { com.latmpx.player.data.Store.liveSport }
+    val cards by produceState<List<TvLiveCard>>(emptyList(), d, agenda, state.live, state.liveCats, pref) {
         if (d == null || !d.enabled || state.live.isEmpty()) { value = emptyList(); return@produceState }
         value = withContext(Dispatchers.Default) {
             val prepared = Sports.prepare(state.live, state.liveCats, d.rules)
@@ -106,7 +108,7 @@ fun rememberTvLive(state: AppState): List<TvLiveCard> {
                 e.id !in ids && !e.postponed && (e.home in teams || e.away in teams) && now < e.start + 3 * 3600_000L &&
                     Calendar.getInstance().apply { timeInMillis = e.start }.get(Calendar.DAY_OF_YEAR) == today
             }.map { it.copy(homeScore = "", awayScore = "", status = "NS", soon = true) }
-            (d.events + extra).mapNotNull { e -> Sports.match(e, prepared, d.rules).takeIf { !it.guess }?.best?.let { TvLiveCard(e, it, d.sports[e.sport]?.label ?: e.sport) } }
+            (d.events + extra).filter { pref.isEmpty() || it.sport.equals(pref, true) }.mapNotNull { e -> Sports.match(e, prepared, d.rules).takeIf { !it.guess }?.best?.let { TvLiveCard(e, it, d.sports[e.sport]?.label ?: e.sport) } }
                 .sortedWith(compareBy({ it.e.soon }, { it.e.start })).take(20)
         }
     }

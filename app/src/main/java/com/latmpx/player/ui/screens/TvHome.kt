@@ -97,9 +97,11 @@ fun TvHomeScreen(state: AppState) {
     val live = rememberTvLive(state)
     val tLive = stringResource(R.string.sl_title)
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val rows = remember(movies, series, platforms, state.movieCats, state.seriesCats, state.refresh, Cloud.rev, com.latmpx.player.data.WeekTop.rev, live) {
+    // Explorar (la lupa) queda armado en segundo plano: abre al momento
+    LaunchedEffect(state.movies, state.series) { kotlinx.coroutines.delay(3000); ExploreCache.warm(state) }
+    val rows = remember(movies, series, platforms, state.movieCats, state.seriesCats, state.refresh, Cloud.rev, com.latmpx.player.data.WeekTop.rev, live, com.latmpx.player.data.SportsLive.hidesPlatforms) {
         val out = ArrayList<BrowseRow>()
-        if (platforms.isNotEmpty() && (live.isEmpty() || com.latmpx.player.data.Store.platformCards)) out += BrowseRow.Plats("plats", tPlats, platforms)
+        if (platforms.isNotEmpty() && !com.latmpx.player.data.SportsLive.hidesPlatforms) out += BrowseRow.Plats("plats", tPlats, platforms)
         continueRow(state, tCont) { state.push(Route.Saved(continueWatching = true)) }?.let { out += it }
         val favs = Cloud.favList().filter { it.kind != Kind.LIVE }
         if (favs.isNotEmpty()) out += BrowseRow.Posters("favs", tMyList, favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) })
