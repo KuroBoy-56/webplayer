@@ -92,22 +92,23 @@ fun TvHomeScreen(state: AppState) {
     val bestOf = stringResource(R.string.best_of, "%s")
     // Top 10 de la semana del panel (cada 12 h); al llegar una lista nueva se rehacen las filas
     LaunchedEffect(Unit) { com.latmpx.player.data.WeekTop.load() }
-    // «En vivo ahora» (solo con perfiles): arriba, en el lugar de las plataformas, que vuelven debajo si se activaron en Cuenta
+    // «En vivo ahora» (solo con perfiles): después del Top 10; con partidos en vivo las plataformas solo van (en su lugar
+    // de siempre, arriba) si se activaron en Cuenta
     val live = rememberTvLive(state)
     val tLive = stringResource(R.string.sl_title)
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val rows = remember(movies, series, platforms, state.movieCats, state.seriesCats, state.refresh, Cloud.rev, com.latmpx.player.data.WeekTop.rev, live) {
         val out = ArrayList<BrowseRow>()
-        if (live.isNotEmpty()) out += BrowseRow.Live("live", tLive, live, onSports = { state.stack.clear(); state.tab = com.latmpx.player.ui.Tab.SPORTS }) { c ->
-            val list = state.live.filter { it.categoryId == c.best.categoryId }.ifEmpty { listOf(c.best) }
-            com.latmpx.player.player.Play.live(ctx, list, list.indexOfFirst { it.id == c.best.id }.coerceAtLeast(0))
-        }
         if (platforms.isNotEmpty() && (live.isEmpty() || com.latmpx.player.data.Store.platformCards)) out += BrowseRow.Plats("plats", tPlats, platforms)
         continueRow(state, tCont) { state.push(Route.Saved(continueWatching = true)) }?.let { out += it }
         val favs = Cloud.favList().filter { it.kind != Kind.LIVE }
         if (favs.isNotEmpty()) out += BrowseRow.Posters("favs", tMyList, favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) })
         val top10 = com.latmpx.player.data.WeekTop.top10Home(movies, series)
         if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10)
+        if (live.isNotEmpty()) out += BrowseRow.Live("live", tLive, live, onSports = { state.stack.clear(); state.tab = com.latmpx.player.ui.Tab.SPORTS }) { c ->
+            val list = state.live.filter { it.categoryId == c.best.categoryId }.ifEmpty { listOf(c.best) }
+            com.latmpx.player.player.Play.live(ctx, list, list.indexOfFirst { it.id == c.best.id }.coerceAtLeast(0))
+        }
         val rm = movies.sortedByDescending { it.added }.take(30)
         if (rm.isNotEmpty()) out += BrowseRow.Posters("rm", tNewMovies, rm, onViewAll = { state.push(Route.Browse(tNewMovies, Kind.MOVIE, emptySet())) })
         val rs = series.sortedByDescending { it.added }.take(30)
