@@ -24,7 +24,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,6 +99,8 @@ fun TvHomeScreen(state: AppState) {
     // «En vivo ahora» (solo con perfiles): después del Top 10; con partidos en vivo las plataformas solo van (en su lugar
     // de siempre, arriba) si se activaron en Cuenta
     val live = rememberTvLive(state)
+    var liveMenu by remember { mutableStateOf<TvLiveCard?>(null) }
+    liveMenu?.let { TvLiveMenu(it) { liveMenu = null } }
     val tLive = stringResource(R.string.sl_title)
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Explorar (la lupa) queda armado en segundo plano: abre al momento
@@ -109,10 +113,8 @@ fun TvHomeScreen(state: AppState) {
         if (favs.isNotEmpty()) out += BrowseRow.Posters("favs", tMyList, favs, onViewAll = { state.push(Route.Saved(continueWatching = false)) })
         val top10 = com.latmpx.player.data.WeekTop.top10Home(movies, series)
         if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10)
-        if (live.isNotEmpty()) out += BrowseRow.Live("live", tLive, live, onSports = { state.stack.clear(); state.tab = com.latmpx.player.ui.Tab.SPORTS }) { c ->
-            val list = state.live.filter { it.categoryId == c.best.categoryId }.ifEmpty { listOf(c.best) }
-            com.latmpx.player.player.Play.live(ctx, list, list.indexOfFirst { it.id == c.best.id }.coerceAtLeast(0))
-        }
+        // un partido: el menú de canales (como en Deportes), no solo la primera coincidencia
+        if (live.isNotEmpty()) out += BrowseRow.Live("live", tLive, live, onSports = { state.stack.clear(); state.tab = com.latmpx.player.ui.Tab.SPORTS }) { c -> liveMenu = c }
         val rm = movies.sortedByDescending { it.added }.take(30)
         if (rm.isNotEmpty()) out += BrowseRow.Posters("rm", tNewMovies, rm, onViewAll = { state.push(Route.Browse(tNewMovies, Kind.MOVIE, emptySet())) })
         val rs = series.sortedByDescending { it.added }.take(30)

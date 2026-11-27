@@ -87,12 +87,12 @@ import java.util.Calendar
 private fun dayKey(t: Long): Int = Calendar.getInstance(Sports.zone).apply { timeInMillis = t }.let { it.get(Calendar.YEAR) * 1000 + it.get(Calendar.DAY_OF_YEAR) }
 
 /** canales del cliente para Deportes: todos (para abrir con su carpeta), los de las carpetas visibles preparados y las carpetas */
-private class SpChans(val all: List<Item>, val prepared: List<Sports.Chan>, val cats: List<Category>) {
+class SpChans(val all: List<Item>, val prepared: List<Sports.Chan>, val cats: List<Category>) {
     val byId: Map<Int, Item> = all.associateBy { it.id }
 }
 
 /** opción del menú del partido; green = es un canal que el cliente tiene */
-private class MenuOpt(val title: String, val sub: String = "", val green: Boolean = false, val onClick: () -> Unit)
+internal class MenuOpt(val title: String, val sub: String = "", val green: Boolean = false, val onClick: () -> Unit)
 
 /**
  * Deportes como Roku y Vega OS: Hoy / Mañana con el canal encontrado automáticamente en cada partido y, si el panel los
@@ -396,7 +396,7 @@ private val SPORT_CAT = Regex("sport|deport|event|ppv|futbol")
 /** Canales de la lista del cliente por nombre (canal, equipo o evento), sin acentos: primero los que tienen todas las
  *  palabras; si ninguno, los que tienen alguna palabra importante (4 letras o más). Dentro de cada grupo, las carpetas
  *  de deportes / eventos primero. Hasta 12 (como Roku y Vega). */
-private fun searchChannels(q: String, c: SpChans): List<Item> {
+internal fun searchChannels(q: String, c: SpChans): List<Item> {
     val words = Sports.norm(q).split(' ').filter { it.length >= 2 }
     if (words.isEmpty()) return emptyList()
     val catName = c.cats.associate { it.id to Platforms.fold(it.name) }
@@ -418,14 +418,14 @@ private fun searchChannels(q: String, c: SpChans): List<Item> {
 }
 
 /** Abre el canal con su categoría como lista, para cambiar de canal con arriba/abajo. */
-private fun playInCategory(ctx: android.content.Context, all: List<Item>, ch: Item) {
+internal fun playInCategory(ctx: android.content.Context, all: List<Item>, ch: Item) {
     val list = all.filter { it.categoryId == ch.categoryId }.ifEmpty { listOf(ch) }
     Play.live(ctx, list, list.indexOfFirst { it.id == ch.id }.coerceAtLeast(0))
 }
 
 /** Menú del partido (o de una búsqueda): las opciones en una lista; en verde los canales que tiene el cliente. */
 @Composable
-private fun SportMenuDialog(title: String, sub: String, opts: List<MenuOpt>, onDismiss: () -> Unit) {
+internal fun SportMenuDialog(title: String, sub: String, opts: List<MenuOpt>, onDismiss: () -> Unit) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(80); runCatching { first.requestFocus() } }
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
@@ -457,7 +457,7 @@ private fun PickRow(title: String, sub: String, green: Boolean, modifier: Modifi
 
 /** «Buscar canal, equipo o evento…»: escribir un nombre y buscarlo en la lista del cliente */
 @Composable
-private fun SportTypeDialog(start: String, onDismiss: () -> Unit, onSearch: (String) -> Unit) {
+internal fun SportTypeDialog(start: String, onDismiss: () -> Unit, onSearch: (String) -> Unit) {
     var q by remember { mutableStateOf(start) }
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Column(
