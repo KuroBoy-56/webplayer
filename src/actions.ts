@@ -1,10 +1,10 @@
 // Abrir fichas, cuadrículas y el reproductor (igual que Play.brs de Roku).
 import { goto } from './lib/goto';
 import type { Episode } from './api/xtream';
-import { GENRES, Item, label, PLATFORMS, Special } from './data/catalog';
+import { catalog, Item, Special } from './data/catalog';
 import { t } from './lib/i18n';
 import { serverDurationSec } from './lib/util';
-import type { Nav } from './nav';
+import type { ExploreInit, Nav } from './nav';
 import { progressMovie } from './state';
 
 export function openItem(nav: Nav, it: Item, channels?: Item[]) {
@@ -17,34 +17,33 @@ export function openItem(nav: Nav, it: Item, channels?: Item[]) {
   nav.push({ name: 'detail', item: it });
 }
 
+// «Ver todo», plataformas y géneros: Explorar con el filtro de esa fila, como browse.php del web player (Top 10 =
+// Mejor valorados, recientes = Agregados recientemente, una carpeta = esa carpeta). Continuar viendo y Mi lista tienen
+// su propia cuadrícula; «Series / Películas para ti», su sección (como seriesondemand.php / moviesondemand.php).
 export function openSpecial(nav: Nav, sp: Special) {
+  const explore = (init: ExploreInit) => nav.push({ name: 'explore', init });
+  const kindOf = (x: string) => (x === 'vod' || x === 'series' ? x : undefined);
   // un partido de «En vivo ahora»: su canal
   if (sp.kind === 'live') {
     if (sp.extra === 'sports') goto('sports');
     else if (sp.live) openItem(nav, sp.live.best);
   } else if (sp.kind === 'platform') {
-    nav.push({ name: 'grid', title: sp.label, mode: 'platform', key: sp.key });
+    explore({ platform: sp.key });
   } else if (sp.kind === 'genre') {
-    const kind = sp.extra === 'vod' || sp.extra === 'series' ? sp.extra : undefined;
-    nav.push({ name: 'grid', title: sp.label, mode: 'genre', key: sp.key, kind });
+    explore({ genre: sp.key, type: kindOf(sp.extra || '') });
   } else {
     const extra = sp.extra || '';
-    if (extra === 'platform') {
-      const p = PLATFORMS.find(x => x.key === sp.key);
-      nav.push({ name: 'grid', title: p ? label(p) : t('Plataforma'), mode: 'platform', key: sp.key });
-    } else if (extra === 'genre') {
-      const g = GENRES.find(x => x.key === sp.key);
-      nav.push({ name: 'grid', title: g ? label(g) : t('Género'), mode: 'genre', key: sp.key });
-    } else if (extra === 'continue') {
-      nav.push({ name: 'grid', title: t('Continuar viendo'), mode: 'continue', key: 'continue' });
-    } else if (extra === 'mylist') {
-      nav.push({ name: 'grid', title: t('Mi lista'), mode: 'mylist', key: 'mylist' });
-    } else if (extra.startsWith('cat:')) {
-      nav.push({ name: 'grid', title: t('Categoría'), mode: 'cat', key: sp.key, kind: extra.slice(4) as 'vod' | 'series' });
-    } else {
-      const kind = extra === 'series' ? 'series' : 'vod';
-      nav.push({ name: 'grid', title: kind === 'series' ? t('Series recientes') : t('Películas recientes'), mode: 'recent', key: 'recent', kind });
-    }
+    if (extra === 'platform') explore({ platform: sp.key });
+    else if (extra === 'genre') explore({ genre: sp.key });
+    else if (extra === 'continue') nav.push({ name: 'grid', title: t('Continuar viendo'), mode: 'continue', key: 'continue' });
+    else if (extra === 'mylist') nav.push({ name: 'grid', title: t('Mi lista'), mode: 'mylist', key: 'mylist' });
+    else if (extra.startsWith('top:')) explore({ type: kindOf(extra.slice(4)) || 'all', sort: 'rating' });
+    else if (extra.startsWith('for:')) goto(extra === 'for:series' ? 'series' : 'movies');
+    else if (extra.startsWith('cat:')) {
+      const kind = extra.slice(4) === 'series' ? 'series' : 'vod';
+      const name = catalog.k[kind]?.cats.find(c => c.id === sp.key)?.name || t('Categoría');
+      explore({ cat: { id: sp.key, name, kind } });
+    } else explore({ type: extra === 'series' ? 'series' : 'vod', sort: 'recent' });
   }
 }
 

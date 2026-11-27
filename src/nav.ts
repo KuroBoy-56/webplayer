@@ -9,6 +9,15 @@ export type PlayParams =
   | { kind: 'movie' | 'episode'; queue: QueueEntry[]; index: number; saveTitle: string; savePoster: string; cat: string; seriesId: string; resume: number }
   | { kind: 'live'; channel: Item; channels: Item[]; index: number };
 
+export type ExploreSort = 'recent' | 'az' | 'rating';
+export type ExploreInit = {
+  type?: 'all' | 'vod' | 'series';
+  sort?: ExploreSort;
+  platform?: string;
+  genre?: string;
+  cat?: { id: string; name: string; kind: 'vod' | 'series' };
+};
+
 export type Route =
   | { name: 'distributor'; message?: string }
   | { name: 'tenant_retry'; message: string }
@@ -19,6 +28,8 @@ export type Route =
   | { name: 'detail'; item: Item }
   | { name: 'actor'; personId: number; actorName: string }
   | { name: 'grid'; title: string; mode: 'cat' | 'platform' | 'genre' | 'recent' | 'continue' | 'mylist'; key: string; kind?: 'vod' | 'series' }
+  // «Ver todo» de una fila (como browse.php del web player): Explorar con el filtro de esa fila
+  | { name: 'explore'; init: ExploreInit }
   | { name: 'player'; params: PlayParams }
   // tema de prueba del panel (Pantalla Falsa, solo con Omitir)
   | { name: 'review'; data: Review };

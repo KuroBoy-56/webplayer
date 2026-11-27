@@ -483,6 +483,7 @@ const pt: Record<Key, string> = {
   "Solo las de {x}.": "Só as de {x}.",
   "El panel todavía no tiene ligas para elegir.": "Ainda não há ligas para escolher.",
   "{n} hoy": "{n} hoje",
+  "Ordenar": "Ordenar",
   "Todos los deportes": "Todos os esportes",
   "En Inicio, «En vivo ahora» muestra solo los partidos y eventos de esta disciplina.": "No Início, «Ao vivo agora» mostra só as partidas e eventos deste esporte.",
   "Destacado: {x}": "Destaque: {x}",
