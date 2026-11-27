@@ -96,29 +96,26 @@ function findChannel(ev: any, chans: Chan[], r: Rules): number {
   return best;
 }
 
-export type SportsData = { events: any[]; sports: Record<string, { label?: string; minutes?: number; icon?: string }>; match: any; tzo?: number };
+export type SportsData = { events: any[]; sports: Record<string, { label?: string; minutes?: number; icon?: string }>; match: any };
 
-// Hora y día en la zona horaria del panel (la del distribuidor o del dueño), no la del equipo:
-// api/sports.php manda "o" por evento (segundos a sumar a la hora UTC) y "tzo" (lo mismo ahora).
-// Un panel viejo sin ellos: la del equipo.
-export function evDay(e: any, start: number): number {
-  return typeof e?.o === 'number' ? Math.floor((start + e.o) / 86400) : localDay(start);
+// Hora y día siempre en la zona horaria del equipo: el panel manda solo "s" (segundos UTC); un panel viejo
+// todavía puede mandar "o" / "tzo" (su zona) y se ignoran, así nadie ve la hora corrida.
+export function evDay(_e: any, start: number): number {
+  return localDay(start);
 }
 
-export function panelToday(data: SportsData | null, now: number): number {
-  return typeof data?.tzo === 'number' ? Math.floor((now + data.tzo) / 86400) : localDay(now);
+export function panelToday(_data: SportsData | null, now: number): number {
+  return localDay(now);
 }
 
-export function evClock(e: any, start: number): string {
-  if (typeof e?.o !== 'number') return clock(start);
-  const d = new Date((start + e.o) * 1000);
-  return hm(d.getUTCHours(), d.getUTCMinutes());
+export function evClock(_e: any, start: number): string {
+  return clock(start);
 }
 
 export async function loadSports(): Promise<SportsData | null> {
   const j = json(await cloud('sports.php', 'GET', null));
   if (!j || !Array.isArray(j.events)) return null;
-  return { events: j.events, sports: j.sports && typeof j.sports === 'object' ? j.sports : {}, match: j.match, tzo: typeof j.tzo === 'number' ? j.tzo : undefined };
+  return { events: j.events, sports: j.sports && typeof j.sports === 'object' ? j.sports : {}, match: j.match };
 }
 
 // ---------- canal que transmite ("ESPN 2" -> los canales ESPN 2 del cliente) ----------

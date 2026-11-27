@@ -16,7 +16,7 @@ import { EpgChan, SportsData } from './sports';
 
 export type Ev = Record<string, any> & { s: number; dy: number; ck: string; dt: string; kh?: string; ka?: string };
 
-/** s = inicio (el panel nuevo ya lo manda), dy = día en la zona del panel, ck = "HH:MM", dt = "26/10"; con alias,
+/** s = inicio (el panel nuevo ya lo manda), dy = día en la zona del equipo, ck = "HH:MM", dt = "26/10"; con alias,
  *  kh / ka = local y visitante comparables (sin acentos, también en español) para el buscador */
 export function prepEvents(list: any[], alias?: Record<string, string>): Ev[] {
   for (const e of list) {
@@ -24,18 +24,11 @@ export function prepEvents(list: any[], alias?: Record<string, string>): Ev[] {
     if (st <= 0) st = parseIso(str(e.ts));
     e.s = st;
     if (st > 0) {
-      let d: Date;
-      if (typeof e.o === 'number') {
-        d = new Date((st + e.o) * 1000);
-        e.dy = Math.floor((st + e.o) / 86400);
-        e.ck = hm(d.getUTCHours(), d.getUTCMinutes());
-        e.dt = lang() === 'en' ? pad2(d.getUTCMonth() + 1) + '/' + pad2(d.getUTCDate()) : pad2(d.getUTCDate()) + '/' + pad2(d.getUTCMonth() + 1);
-      } else {
-        d = new Date(st * 1000);
-        e.dy = localDay(st);
-        e.ck = hm(d.getHours(), d.getMinutes());
-        e.dt = lang() === 'en' ? pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()) : pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1);
-      }
+      // siempre la hora del equipo: un panel viejo o una agenda guardada pueden traer "o" (la zona del panel)
+      const d = new Date(st * 1000);
+      e.dy = localDay(st);
+      e.ck = hm(d.getHours(), d.getMinutes());
+      e.dt = lang() === 'en' ? pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()) : pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1);
     }
     if (alias) {
       e.kh = teamText(str(e.h), alias) + ' ' + norm(str(e.hn));
@@ -74,7 +67,7 @@ export function localSports(): SportsData | null {
 }
 
 function toData(j: any): SportsData {
-  return { ...j, events: prepEvents(j.events), sports: j.sports && typeof j.sports === 'object' ? j.sports : {}, tzo: typeof j.tzo === 'number' ? j.tzo : undefined };
+  return { ...j, events: prepEvents(j.events), sports: j.sports && typeof j.sports === 'object' ? j.sports : {} };
 }
 
 /** agenda del panel (api/sports.php); se guarda para la próxima vez */
