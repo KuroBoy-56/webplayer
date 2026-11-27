@@ -37,6 +37,7 @@ export const LiveTile = memo(function LiveTile({ c, onPress, onFocus }: { c: Liv
   const w = LIVE_W();
   const h = LIVE_H();
   const score = c.soon || !(c.hs || c.as) ? 'vs' : c.hs + ' - ' + c.as;
+  if (c.solo) return <SoloTile c={c} w={w} h={h} onPress={onPress} onFocus={onFocus} />;
   return (
     <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.tile, { width: w, height: h, backgroundColor: fieldColor(c.sp) }, f && s.tileF]}>
       <FieldLines w={w} h={h} />
@@ -63,6 +64,32 @@ export const LiveTile = memo(function LiveTile({ c, onPress, onFocus }: { c: Liv
   );
 });
 
+/**
+ * un evento sin dos equipos (pelea, boxeo, WWE, carrera): la disciplina y el nombre del evento, con su póster en
+ * pequeño si lo tiene; sin escudos ni marcador (al enfocarla el póster va en grande de fondo, LiveBackdrop)
+ */
+function SoloTile({ c, w, h, onPress, onFocus }: { c: LiveCard; w: number; h: number; onPress: () => void; onFocus?: () => void }) {
+  return (
+    <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.tile, { width: w, height: h, backgroundColor: fieldColor(c.sp) }, f && s.tileF]}>
+      <View style={s.shade} />
+      <View style={s.top}>
+        <Text style={s.league} numberOfLines={1}>{c.lg}</Text>
+        <View style={[s.pill, c.soon && s.pillSoon]}>
+          <Text style={s.pillText}>{c.soon ? t('Empieza') + ' ' + liveClock(c, '') : t('EN VIVO') + '  ' + liveClock(c, t('Descanso'))}</Text>
+        </View>
+      </View>
+      <View style={s.soloMid}>
+        {c.th ? <Image source={{ uri: c.th }} style={s.soloPoster} resizeMode="cover" /> : null}
+        <View style={[s.soloText, !c.th && s.soloTextCenter]}>
+          <Text style={[s.soloSport, !c.th && s.center]} numberOfLines={1}>{c.spl}</Text>
+          <Text style={[s.soloEv, !c.th && s.center]} numberOfLines={3}>{c.ev}</Text>
+        </View>
+      </View>
+      <Text style={s.chan} numberOfLines={1}>📺 {c.best.name}</Text>
+    </Focusable>
+  );
+}
+
 const STADIUM = require('../../assets/image/sports_bg.jpg');
 
 /** al final de la fila: toda la agenda en Deportes (el estadio con el color de la app) */
@@ -87,6 +114,15 @@ export const GoSportsTile = memo(function GoSportsTile({ onPress, onFocus }: { o
  */
 export function LiveBackdrop({ c }: { c: LiveCard }) {
   if (c.th) return <Image source={{ uri: c.th }} style={StyleSheet.absoluteFill} resizeMode="cover" />;
+  // sin equipos (pelea, carrera): el estadio solo, sin escudos ni «VS»
+  if (c.solo) {
+    return (
+      <View style={StyleSheet.absoluteFill}>
+        <Image source={STADIUM} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
+      </View>
+    );
+  }
   return (
     <View style={StyleSheet.absoluteFill}>
       <Image source={STADIUM} style={StyleSheet.absoluteFill} resizeMode="cover" />
@@ -128,5 +164,12 @@ const s = themed(() =>
     goTitle: { color: '#fff', fontSize: px(30), fontWeight: '900', marginTop: px(8), textAlign: 'center' },
     goSub: { color: '#fff', fontSize: px(20), opacity: 0.9, marginTop: px(6), textAlign: 'center' },
     bigVs: { color: '#fff', fontSize: px(80), fontWeight: '900', marginHorizontal: px(50), opacity: 0.9 },
+    soloMid: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: px(16) },
+    soloPoster: { width: px(196), height: px(110), borderRadius: px(6), marginRight: px(16), backgroundColor: 'rgba(0,0,0,0.3)' },
+    soloText: { flex: 1, minWidth: 0 },
+    soloTextCenter: { alignItems: 'center' },
+    soloSport: { color: '#fff', fontSize: px(32), fontWeight: '900' },
+    soloEv: { color: '#fff', fontSize: px(21), fontWeight: '600', marginTop: px(4), opacity: 0.92 },
+    center: { textAlign: 'center' },
   }),
 );

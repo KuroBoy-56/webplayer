@@ -18,6 +18,8 @@ import ProfilePin from '../components/ProfilePin';
 import { ProfileEnter } from '../components/ProfileEnter';
 import { Shade } from '../components/Shade';
 import { Button, Focusable, Logo } from '../components/ui';
+import { catalog } from '../data/catalog';
+import { liveTvOn, loadLiveCardsCached } from '../data/liveTv';
 import { t } from '../lib/i18n';
 import { brandName } from '../lib/tenant';
 import { useNav } from '../nav';
@@ -91,7 +93,8 @@ export default function Profiles({ from, manage, active }: { from: 'start' | 'me
   }, [active, open, managing, from]);
 
   // el avatar va al centro con el circulito (ProfileEnter) y, ya dibujado, se arma el perfil (el infantil filtra el
-  // catálogo, lo que más tarda) y se entra a Inicio; nunca se ve la pantalla trabada
+  // catálogo, lo que más tarda). Se queda al menos 5 s (si el catálogo todavía carga, hasta que termine, como mucho
+  // 15 s) mientras se preparan «En vivo ahora» y Explorar: al entrar, Inicio y la lupa salen al momento
   const [entering, setEntering] = useState<Profile | null>(null);
   const enter = useCallback((p: Profile) => {
     busy.current = true;
@@ -99,10 +102,31 @@ export default function Profiles({ from, manage, active }: { from: 'start' | 'me
     const t0 = Date.now();
     setTimeout(() => {
       chooseProfile(p);
-      setTimeout(() => {
+      let liveAsked = false;
+      const go = () => {
+        const ms = Date.now() - t0;
+        const l = getState().loaded;
+        // «En vivo ahora» apenas hay canales (el emparejamiento los necesita)
+        if (!liveAsked && l.live && liveTvOn()) {
+          liveAsked = true;
+          loadLiveCardsCached().catch(() => null);
+        }
+        if (ms < 15000 && !(ms >= 5000 && l.vod && l.series && l.live)) {
+          setTimeout(go, 250);
+          return;
+        }
+        // Explorar ordenado ya (queda en memoria): la lupa abre al momento
+        if (!p.kids) {
+          try {
+            catalog.explore('all', 'recent', '', '', '');
+          } catch {
+            // sin catálogo: se arma al abrirla
+          }
+        }
         busy.current = false;
         nav.reset({ name: 'main' });
-      }, Math.max(150, 900 - (Date.now() - t0)));
+      };
+      setTimeout(go, 250);
     }, 80);
   }, [nav]);
 
