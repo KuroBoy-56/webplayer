@@ -31,10 +31,11 @@ export type Item = {
 };
 
 // live: un partido de «En vivo ahora» (data/liveTv.ts, solo con perfiles)
-export type Special = { kind: 'platform' | 'genre' | 'more' | 'live'; key: string; label: string; image?: number; color: string; extra?: string; live?: import('./liveTv').LiveCard };
+export type Special = { kind: 'platform' | 'genre' | 'more' | 'live'; key: string; label: string; image?: number; color: string; extra?: string; live?: import('./liveTv').LiveCard; art?: number; feat?: Item };
 export type Row = { title: string; type: 'poster' | 'top10' | 'platform' | 'genre' | 'live'; items: (Item | Special)[] };
 
-export type Platform = { key: string; label: string; image?: number; color: string; kw: string[] };
+// art = dibujo de líneas de los géneros (assets/image/genre_*.png, fuentes SVG en tools/genre-art de Roku)
+export type Platform = { key: string; label: string; image?: number; color: string; kw: string[]; art?: number };
 
 export const PLATFORMS: Platform[] = [
   { key: 'netflix', label: 'Netflix', image: require('../../assets/image/plat_netflix.png'), color: '#E50914', kw: ['netflix'] },
@@ -50,20 +51,20 @@ export const PLATFORMS: Platform[] = [
 ];
 
 export const GENRES: Platform[] = [
-  { key: 'accion', label: 'Acción', color: '#B71C1C', kw: ['accion', 'action', 'artes marciales'] },
-  { key: 'suspenso', label: 'Suspenso', color: '#37474F', kw: ['suspenso', 'suspense', 'thriller', 'misterio', 'mystery', 'intriga'] },
-  { key: 'aventura', label: 'Aventura', color: '#2E7D32', kw: ['aventura', 'adventure'] },
-  { key: 'anime', label: 'Anime', color: '#D81B60', kw: ['anime', 'crunchyroll', 'otaku'] },
-  { key: 'drama', label: 'Drama', color: '#6A1B9A', kw: ['drama'] },
-  { key: 'comedia', label: 'Comedia', color: '#F9A825', kw: ['comedia', 'comedy', 'humor'] },
-  { key: 'terror', label: 'Terror', color: '#212121', kw: ['terror', 'horror', 'miedo'] },
-  { key: 'scifi', label: 'Ciencia ficción', color: '#1565C0', kw: ['ciencia ficcion', 'sci-fi', 'scifi', 'science fiction'] },
-  { key: 'fantasia', label: 'Fantasía', color: '#4527A0', kw: ['fantasia', 'fantasy'] },
-  { key: 'romance', label: 'Romance', color: '#C2185B', kw: ['romance', 'romantic', 'romantica', 'amor'] },
-  { key: 'crimen', label: 'Crimen', color: '#424242', kw: ['crimen', 'crime', 'policia', 'mafia'] },
-  { key: 'animacion', label: 'Animación', color: '#00897B', kw: ['animacion', 'animation', 'animada', 'infantil', 'kids', 'cartoon'] },
-  { key: 'documental', label: 'Documental', color: '#5D4037', kw: ['documental', 'documentary', 'docu'] },
-  { key: '4k', label: '4K', color: '#000000', kw: ['4k', 'uhd', '2160'] },
+  { key: 'accion', label: 'Acción', color: '#B71C1C', kw: ['accion', 'action', 'artes marciales'], art: require('../../assets/image/genre_accion.png') },
+  { key: 'suspenso', label: 'Suspenso', color: '#37474F', kw: ['suspenso', 'suspense', 'thriller', 'misterio', 'mystery', 'intriga'], art: require('../../assets/image/genre_suspenso.png') },
+  { key: 'aventura', label: 'Aventura', color: '#2E7D32', kw: ['aventura', 'adventure'], art: require('../../assets/image/genre_aventura.png') },
+  { key: 'anime', label: 'Anime', color: '#D81B60', kw: ['anime', 'crunchyroll', 'otaku'], art: require('../../assets/image/genre_anime.png') },
+  { key: 'drama', label: 'Drama', color: '#6A1B9A', kw: ['drama'], art: require('../../assets/image/genre_drama.png') },
+  { key: 'comedia', label: 'Comedia', color: '#F9A825', kw: ['comedia', 'comedy', 'humor'], art: require('../../assets/image/genre_comedia.png') },
+  { key: 'terror', label: 'Terror', color: '#212121', kw: ['terror', 'horror', 'miedo'], art: require('../../assets/image/genre_terror.png') },
+  { key: 'scifi', label: 'Ciencia ficción', color: '#1565C0', kw: ['ciencia ficcion', 'sci-fi', 'scifi', 'science fiction'], art: require('../../assets/image/genre_scifi.png') },
+  { key: 'fantasia', label: 'Fantasía', color: '#4527A0', kw: ['fantasia', 'fantasy'], art: require('../../assets/image/genre_fantasia.png') },
+  { key: 'romance', label: 'Romance', color: '#C2185B', kw: ['romance', 'romantic', 'romantica', 'amor'], art: require('../../assets/image/genre_romance.png') },
+  { key: 'crimen', label: 'Crimen', color: '#424242', kw: ['crimen', 'crime', 'policia', 'mafia'], art: require('../../assets/image/genre_crimen.png') },
+  { key: 'animacion', label: 'Animación', color: '#00897B', kw: ['animacion', 'animation', 'animada', 'infantil', 'kids', 'cartoon'], art: require('../../assets/image/genre_animacion.png') },
+  { key: 'documental', label: 'Documental', color: '#5D4037', kw: ['documental', 'documentary', 'docu'], art: require('../../assets/image/genre_documental.png') },
+  { key: '4k', label: '4K', color: '#000000', kw: ['4k', 'uhd', '2160'], art: require('../../assets/image/genre_4k.png') },
 ];
 
 const reCache = new Map<string, RegExp>();
@@ -520,8 +521,16 @@ class Catalog {
         items: [...this.items(kind, recent), { kind: 'more', key: 'recent', label: t('Ver todo'), color: '', extra: kind }],
       });
     }
+    // cada género con su dibujo y el póster de su título más destacado: el de la lista de la semana de TMDB
+    // (api/top10.php) que está en esas carpetas; si no hay, el mejor calificado (como las tarjetas de deportes)
     const gen: Row = { title: t('Géneros'), type: 'genre', items: [] };
-    for (const g of GENRES) if (this.idxForKw(kind, g.kw).length) gen.items.push({ kind: 'genre', key: g.key, label: label(g), color: g.color, extra: kind });
+    const wl = (kind === 'series' ? weekTop()?.series : weekTop()?.movies) || [];
+    for (const g of GENRES) {
+      const gi = this.idxForKw(kind, g.kw);
+      if (!gi.length) continue;
+      const f = this.weekMatches(kind, wl, gi, 1)[0] ?? this.top(kind, gi, 'rating', 1)[0];
+      gen.items.push({ kind: 'genre', key: g.key, label: label(g), color: g.color, extra: kind, art: g.art, feat: f !== undefined ? this.items(kind, [f])[0] : undefined });
+    }
     if (gen.items.length) rows.push(gen);
     const top = this.weekTop10(kind, all);
     if (top.length >= 5) rows.push({ title: t('Top 10 de la semana'), type: 'top10', items: this.items(kind, top) });
@@ -565,6 +574,7 @@ class Catalog {
   // como mucho «max» fichas). El orden de cada combinación queda en memoria hasta que cambie el catálogo: la lupa abre
   // al momento (se prepara al entrar al perfil, warmExplore) y cambiar de filtro no vuelve a ordenar todo.
   private exCache = new Map<string, { k: Kind; i: number }[]>();
+  private exRes: { key: string; list: { k: Kind; i: number }[]; r: { items: Item[]; total: number } } | null = null;
 
   explore(type: 'all' | 'vod' | 'series', sort: 'recent' | 'az' | 'rating', platform: string, genre: string, q: string, max = 2000, cat = '', catKind = ''): { items: Item[]; total: number } {
     let kinds: Kind[] = type === 'all' ? ['vod', 'series'] : [type];
@@ -595,8 +605,13 @@ class Catalog {
       if (this.exCache.size > 10) this.exCache.clear();
       this.exCache.set(key, list);
     }
+    // el último resultado armado (las fichas ya convertidas): volver a abrir la lupa no rehace 2000 fichas
+    const rk = key + '|' + needle + '|' + max;
+    if (this.exRes?.key === rk && this.exRes.list === list) return this.exRes.r;
     const hits = needle ? list.filter(x => fold(str(this.k[x.k]!.items[x.i].name)).includes(needle)) : list;
-    return { items: hits.slice(0, max).map(x => toItem(x.k, this.k[x.k]!.items[x.i])), total: hits.length };
+    const r = { items: hits.slice(0, max).map(x => toItem(x.k, this.k[x.k]!.items[x.i])), total: hits.length };
+    this.exRes = { key: rk, list, r };
+    return r;
   }
 
   /** «Categorías» de Explorar: las carpetas visibles del servidor (con «Todo», las de películas y las de series) */

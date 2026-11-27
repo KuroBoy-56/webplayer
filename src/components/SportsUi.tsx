@@ -226,7 +226,8 @@ const s = themed(() =>
     chipOn: { borderColor: C.red },
     chipF: { backgroundColor: C.focus },
     chipText: { color: C.text, fontSize: px(26), fontWeight: '700' },
-    ev: { height: px(140), flexDirection: 'row', alignItems: 'center', backgroundColor: C.bg2, borderRadius: px(8), marginBottom: px(10), paddingHorizontal: px(24) },
+    // un poco translúcida: se ve el estadio de fondo sin perder la lectura (como Roku)
+    ev: { height: px(140), flexDirection: 'row', alignItems: 'center', backgroundColor: alpha(C.bg2, 0.8), borderRadius: px(8), marginBottom: px(10), paddingHorizontal: px(24) },
     evF: { backgroundColor: C.focus, transform: [{ scale: 1.02 }] },
     time: { color: C.text, fontSize: px(26), fontWeight: '800', width: px(190) },
     timeLive: { color: C.red },
