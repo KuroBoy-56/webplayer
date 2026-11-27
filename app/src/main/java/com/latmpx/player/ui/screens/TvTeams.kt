@@ -73,6 +73,10 @@ fun TvTeamsDialog(onDismiss: () -> Unit) {
     val fx by produceState<com.latmpx.player.data.Fixtures?>(null, step > 0) {
         if (step > 0 && value == null) value = withContext(Dispatchers.IO) { SportsPanel.fixtures(0) }.fx
     }
+    // nombres de las disciplinas como en Deportes (el panel las da todas, también las que no están en CHOICES)
+    val labels by produceState<Map<String, String>>(emptyMap(), step > 0) {
+        if (step > 0 && value.isEmpty()) value = runCatching { Sports.load()?.sports?.mapValues { it.value.label } }.getOrNull().orEmpty()
+    }
     val teams = MatchCloud.teamList
     fun save(list: List<MatchCloud.FavTeam>) = scope.launch { err = if (MatchCloud.setTeams(list)) "" else com.latmpx.player.tr(R.string.tb_save_err) }
     val back = { if (step == 0) onDismiss() else { step--; if (step == 1) league = "" } }
@@ -90,7 +94,7 @@ fun TvTeamsDialog(onDismiss: () -> Unit) {
                 1 -> {
                     title = stringResource(R.string.tb_pick_sport)
                     val sports = f?.leagues?.values?.map { it.sport }?.filter { it.isNotBlank() }?.distinct() ?: emptyList()
-                    rows = sports.map { sp -> (SportsLive.CHOICES.firstOrNull { it.first == sp }?.second ?: sp) to { sport = sp; step = 2 } }
+                    rows = sports.map { sp -> (labels[sp] ?: SportsLive.CHOICES.firstOrNull { it.first == sp }?.second ?: sp) to { sport = sp; step = 2 } }.sortedBy { it.first }
                 }
                 2 -> {
                     title = stringResource(R.string.tb_pick_league)
@@ -196,6 +200,48 @@ fun TvBellButton() {
                 }
             }
             LaunchedEffect(Unit) { delay(60); runCatching { first.requestFocus() } }
+        }
+    }
+}
+
+/**
+ * Cuenta › Deporte favorito (solo con perfiles): «Todos los deportes» o una de las disciplinas que da el panel
+ * (api/sports.php: las de la agenda y todas las encendidas). Con una elegida, Inicio › «En vivo ahora» muestra solo esa.
+ */
+@Composable
+fun TvSportPrefDialog(onDismiss: () -> Unit) {
+    val list by produceState<List<Pair<String, String>>?>(null) {
+        value = runCatching { Sports.load()?.sports?.map { (k, v) -> k to "${v.icon} ${v.label}".trim() } }.getOrNull().orEmpty().sortedBy { it.second.substringAfter(' ') }
+    }
+    val cur = remember { com.latmpx.player.data.Store.liveSport }
+    fun pick(sp: String, name: String) {
+        com.latmpx.player.data.Store.liveSport = sp
+        com.latmpx.player.data.Store.liveSportName = name
+        SportsLive.prefRev++
+        onDismiss()
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.width(520.dp).background(NfBg2, RoundedCornerShape(10.dp)).padding(20.dp)) {
+            Text(stringResource(R.string.sl_fav), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            Text(stringResource(R.string.sl_fav_msg), color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))
+            val l = list
+            val first = remember { FocusRequester() }
+            if (l == null) Text(stringResource(R.string.tb_loading), color = NfGray2, fontSize = 14.sp, modifier = Modifier.padding(vertical = 16.dp))
+            else {
+                val rows = listOf("" to stringResource(R.string.sl_all)) + l
+                // el foco empieza en el elegido
+                val at = rows.indexOfFirst { it.first.equals(cur, true) }.coerceAtLeast(0)
+                LazyColumn(Modifier.heightIn(max = 380.dp).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
+                    state = androidx.compose.foundation.lazy.rememberLazyListState(at)) {
+                    itemsIndexed(rows, key = { _, r -> r.first }) { i, (sp, label) ->
+                        FocusBox(onClick = { pick(sp, if (sp.isEmpty()) "" else label) }, modifier = Modifier.fillMaxWidth().then(if (i == at) Modifier.focusRequester(first) else Modifier), focusScale = 1.02f) { fo ->
+                            Text((if (sp.equals(cur, true)) "✓  " else "") + label, color = if (fo) Color.Black else Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth().background(if (fo) Color.White else Color(0x22FFFFFF), RoundedCornerShape(6.dp)).padding(horizontal = 14.dp, vertical = 9.dp))
+                        }
+                    }
+                }
+                LaunchedEffect(Unit) { delay(80); runCatching { first.requestFocus() } }
+            }
         }
     }
 }

@@ -128,6 +128,16 @@ fun AccountTv(
                     com.latmpx.player.data.Store.platformCards = plat
                 }
             }
+            // con perfiles: «En vivo ahora» de Inicio solo con la disciplina elegida (todas las que da el panel)
+            if (com.latmpx.player.data.MatchCloud.on) {
+                var spOpen by remember { mutableStateOf(false) }
+                val spRev = com.latmpx.player.data.SportsLive.prefRev
+                val spName = remember(com.latmpx.player.data.Profiles.current, spRev) {
+                    com.latmpx.player.data.Store.liveSport.takeIf { it.isNotEmpty() }?.let { com.latmpx.player.data.Store.liveSportName.ifEmpty { it } }
+                }
+                Setting(stringResource(R.string.sl_fav), spName ?: stringResource(R.string.sl_all)) { spOpen = true }
+                if (spOpen) TvSportPrefDialog { spOpen = false }
+            }
             // con perfiles: los equipos favoritos se guardan en la nube (avisa el celular; aquí, la campanita)
             if (com.latmpx.player.data.MatchCloud.on) {
                 var teamsOpen by remember { mutableStateOf(false) }

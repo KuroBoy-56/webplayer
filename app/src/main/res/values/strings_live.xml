@@ -5,6 +5,8 @@
     <string name="sl_ht">Descanso</string>
     <string name="sl_live">EN VIVO</string>
     <string name="sl_pref">Deporte preferido</string>
+    <string name="sl_fav">Deporte favorito</string>
+    <string name="sl_fav_msg">En Inicio, «En vivo ahora» muestra solo los partidos y eventos de esta disciplina.</string>
     <string name="sl_all">Todos los deportes</string>
     <string name="sl_plat">Habilitar tarjetas de plataformas</string>
     <string name="sl_plat_on">Activado: las plataformas van después de «En vivo ahora»</string>

@@ -39,7 +39,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 /* mismos colores que .sp de la web */
-val SpCard = Color(0xFF1C1C1C)
+// un poco translúcida: se ve el estadio de fondo sin perder la lectura (como Roku)
+val SpCard = Color(0xCC1C1C1C)
 val SpLine = Color(0x14FFFFFF)
 val SpMute = Color(0xFF9A9A9A)
 
@@ -122,7 +123,7 @@ fun SportCardView(
     FocusBox(onClick = onTv, modifier = modifier, shape = shape, focusScale = 1.03f) { f ->
         Column(
             Modifier.fillMaxWidth()
-                .background(if (live) Brush.verticalGradient(listOf(Color(0x1FE50914), SpCard)) else Brush.linearGradient(listOf(if (f) Color(0xFF232323) else SpCard, if (f) Color(0xFF232323) else SpCard)), shape)
+                .background(if (live) Brush.verticalGradient(listOf(Color(0x1FE50914), SpCard)) else Brush.linearGradient(listOf(if (f) Color(0xE6232323) else SpCard, if (f) Color(0xE6232323) else SpCard)), shape)
                 .border(1.dp, if (live) Color(0x8CE50914) else SpLine, shape)
                 .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (compact) 12.dp else 14.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),

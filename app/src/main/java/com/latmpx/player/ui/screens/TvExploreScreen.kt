@@ -93,14 +93,6 @@ fun TvExploreScreen(state: AppState) {
 
     val mCats = remember(state.movieCats, state.refresh) { Store.visibleCats(state.movieCats) }
     val sCats = remember(state.seriesCats, state.refresh) { Store.visibleCats(state.seriesCats) }
-    val movies = remember(state.movies, mCats) { mCats.map { it.id }.toSet().let { ids -> state.movies.filter { it.categoryId in ids } } }
-    val series = remember(state.series, sCats) { sCats.map { it.id }.toSet().let { ids -> state.series.filter { it.categoryId in ids } } }
-    val pool = when {
-        cat.isNotEmpty() -> (if (catKind == "s") series else movies).filter { it.categoryId == cat }
-        type == 1 -> movies
-        type == 2 -> series
-        else -> movies + series
-    }
     val cats: List<Category> = when (type) { 1 -> mCats; 2 -> sCats; else -> mCats + sCats }
     val catName = (if (catKind == "s") sCats else mCats).firstOrNull { it.id == cat }?.name.orEmpty()
     val genres = remember(cats) { Platforms.genres.filter { (_, kw) -> Platforms.categoriesFor(cats, kw).isNotEmpty() } }
@@ -109,17 +101,14 @@ fun TvExploreScreen(state: AppState) {
     }
     val plat = platforms.find { it.key == platform }
     val gen = Platforms.genres.find { it.first == genre }
-    val shown = remember(pool, cats, cat, genre, plat, query) {
-        var l = pool
-        // con una carpeta elegida no hay géneros ni plataformas (como el web player)
-        if (cat.isEmpty()) for (kw in listOfNotNull(plat?.kw, gen?.second)) {
-            val ids = Platforms.categoriesFor(cats, kw)
-            l = l.filter { it.categoryId in ids }
+    // filtrar y ordenar todo el catálogo en segundo plano (la vista de siempre ya viene armada desde Inicio): la lupa abre al momento
+    val key = ExploreCache.key(state.movies, state.series, mCats, sCats, type, cat, catKind, gen?.first, plat?.key, query)
+    val ready by androidx.compose.runtime.produceState(ExploreCache.peek(key), key) {
+        value = ExploreCache.peek(key) ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            ExploreCache.compute(key, state.movies, state.series, mCats, sCats, type, cat, catKind, cats, plat?.kw, gen?.second, query)
         }
-        val q = Platforms.fold(query.trim())
-        if (q.isNotEmpty()) l = l.filter { Platforms.fold(it.name).contains(q) }
-        l.sortedByDescending { it.added }
     }
+    val shown = ready ?: emptyList()
     val progress = remember(state.refresh, Cloud.rev) { Cloud.progressList().associateBy { it.key.split(":").take(2).joinToString(":") } }
     val pad = sidePad()
     // pósters más chicos que en las filas: más columnas, como la cuadrícula del web player
@@ -205,7 +194,7 @@ fun TvExploreScreen(state: AppState) {
                 }
             }
         }
-        if (shown.isEmpty()) item(key = "none", span = full) { Box(Modifier.fillMaxWidth().height(160.dp)) { Empty(stringResource(R.string.ex_none)) } }
+        if (ready != null && shown.isEmpty()) item(key = "none", span = full) { Box(Modifier.fillMaxWidth().height(160.dp)) { Empty(stringResource(R.string.ex_none)) } }
         items(shown, key = { it.key }) { it ->
             val p = progress[it.key]
             PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, progress = if (p != null && p.duration > 0) p.position.toFloat() / p.duration else 0f)
@@ -290,5 +279,66 @@ private fun ExploreCatsDialog(rows: List<Pair<String, String>>, current: String,
             }
             androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(100); runCatching { first.requestFocus() } }
         }
+    }
+}
+
+/**
+ * Explorar al instante: las carpetas visibles ya filtradas y las últimas listas ordenadas (por fecha) quedan guardadas,
+ * y Inicio arma la vista de siempre (Todo, sin filtros) en segundo plano a los 3 s. Las claves llevan las listas del
+ * catálogo: se comparan por referencia (ArrayList.equals mira primero si es la misma), así que no recorren 20 000 títulos.
+ */
+object ExploreCache {
+    private var baseKey: List<Any?>? = null
+    private var base = Triple<List<Item>, List<Item>, List<Item>>(emptyList(), emptyList(), emptyList())
+    private val shown = ArrayDeque<Pair<List<Any?>, List<Item>>>()
+
+    fun key(vararg v: Any?): List<Any?> = v.toList()
+
+    @Synchronized fun peek(k: List<Any?>): List<Item>? = shown.firstOrNull { it.first == k }?.second
+
+    @Synchronized private fun put(k: List<Any?>, v: List<Item>) {
+        shown.removeAll { it.first == k }
+        shown.addFirst(k to v)
+        while (shown.size > 6) shown.removeLast()
+    }
+
+    @Synchronized private fun base(movies: List<Item>, series: List<Item>, mCats: List<Category>, sCats: List<Category>): Triple<List<Item>, List<Item>, List<Item>> {
+        val k = listOf(movies, series, mCats, sCats)
+        if (k != baseKey) {
+            val m = mCats.map { it.id }.toHashSet().let { ids -> movies.filter { it.categoryId in ids } }
+            val s = sCats.map { it.id }.toHashSet().let { ids -> series.filter { it.categoryId in ids } }
+            base = Triple(m, s, m + s)
+            baseKey = k
+        }
+        return base
+    }
+
+    fun compute(
+        k: List<Any?>, movies: List<Item>, series: List<Item>, mCats: List<Category>, sCats: List<Category>,
+        type: Int, cat: String, catKind: String, cats: List<Category>, platKw: List<String>?, genKw: List<String>?, query: String,
+    ): List<Item> {
+        val b = base(movies, series, mCats, sCats)
+        var l = when {
+            cat.isNotEmpty() -> (if (catKind == "s") b.second else b.first).filter { it.categoryId == cat }
+            type == 1 -> b.first
+            type == 2 -> b.second
+            else -> b.third
+        }
+        // con una carpeta elegida no hay géneros ni plataformas (como el web player)
+        if (cat.isEmpty()) for (kw in listOfNotNull(platKw, genKw)) {
+            val ids = Platforms.categoriesFor(cats, kw)
+            l = l.filter { it.categoryId in ids }
+        }
+        val q = Platforms.fold(query.trim())
+        if (q.isNotEmpty()) l = l.filter { Platforms.fold(it.name).contains(q) }
+        return l.sortedByDescending { it.added }.also { put(k, it) }
+    }
+
+    /** desde Inicio: deja lista la vista por defecto, con las mismas claves que arma la pantalla */
+    suspend fun warm(state: AppState) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        val m = Store.visibleCats(state.movieCats)
+        val s = Store.visibleCats(state.seriesCats)
+        val k = key(state.movies, state.series, m, s, 0, "", "", null, null, "")
+        if ((state.movies.isNotEmpty() || state.series.isNotEmpty()) && peek(k) == null) compute(k, state.movies, state.series, m, s, 0, "", "", m + s, null, null, "")
     }
 }

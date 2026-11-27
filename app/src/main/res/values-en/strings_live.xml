@@ -5,6 +5,8 @@
     <string name="sl_ht">Half-time</string>
     <string name="sl_live">LIVE</string>
     <string name="sl_pref">Favorite sport</string>
+    <string name="sl_fav">Favorite sport</string>
+    <string name="sl_fav_msg">On Home, «Live now» shows only the matches and events of this sport.</string>
     <string name="sl_all">All sports</string>
     <string name="sl_plat">Show platform cards</string>
     <string name="sl_plat_on">On: platforms go after «Live now»</string>
