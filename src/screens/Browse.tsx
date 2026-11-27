@@ -20,7 +20,7 @@ import { isFav, setMenuHidden, toggleFav, useAppState } from '../state';
 import { t } from '../lib/i18n';
 import { brandInitial, features, useBrandRev } from '../lib/tenant';
 import { alpha, C, px, SIDE, themed } from '../theme';
-import { LiveCard, liveClock, liveTvOn, loadLiveCardsCached, platformCards } from '../data/liveTv';
+import { hidesPlatforms, LiveCard, liveClock, liveTvOn, loadLiveCardsCached } from '../data/liveTv';
 import { LiveBackdrop } from '../components/LiveTile';
 
 // última imagen de la portada: queda de fondo mientras carga la siguiente (nunca la pantalla en negro)
@@ -32,7 +32,8 @@ const ROWS_HERO = 818;
 const ROWS_IN = 560;
 
 // live: con el foco en un partido de «En vivo ahora» la portada muestra su cancha con los escudos (o la imagen del evento)
-type Info = { item: Item | null; title?: string; plot?: string; live?: LiveCard };
+// feat = el título destacado de un género: va de fondo (o su carátula a la derecha) sin cambiar el texto
+type Info = { item: Item | null; title?: string; plot?: string; live?: LiveCard; feat?: Item };
 
 // el título con lo que se encontró para la portada (fondo, sinopsis, año y nota si el servidor no los tenía)
 const withArt = (x: Item, a: Art): Item => ({
@@ -45,9 +46,10 @@ const withArt = (x: Item, a: Art): Item => ({
 
 function Billboard({ info, compact }: { info: Info; compact: boolean }) {
   const it = info.item;
-  const art = it?.backdrop || '';
+  const ref = it || info.feat || null;
+  const art = ref?.backdrop || '';
   const artSrc = useMemo(() => (art ? backdropSources(art) : []), [art]);
-  const sideSrc = useMemo(() => (it && !art ? posterSources(it.kind, it.poster, it.name, it.year, it.tm) : []), [it, art]);
+  const sideSrc = useMemo(() => (ref && !art ? posterSources(ref.kind, ref.poster, ref.name, ref.year, ref.tm) : []), [ref, art]);
   // sin fondo propio queda el último (nunca negro) y la carátula va a la derecha
   const [under, setUnder] = useState(lastBanner);
   useEffect(() => {
@@ -62,7 +64,7 @@ function Billboard({ info, compact }: { info: Info; compact: boolean }) {
     <View style={s.hero} pointerEvents="none">
       {/* sin fondo propio: la carátula del mismo título agrandada y oscurecida (antes quedaba el fondo del último título
           enfocado, que no tenía nada que ver); el último fondo solo para plataformas, géneros y «Ver todo» */}
-      {under && under !== art && !it ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
+      {under && under !== art && !ref ? <Image source={{ uri: under }} style={s.heroImg} resizeMode="cover" /> : null}
       {!art && sideSrc.length ? (
         <View style={s.heroDim}>
           <ChainImage sources={sideSrc} style={s.heroImg} resizeMode="cover" blurRadius={18} />
@@ -137,8 +139,9 @@ export default function Browse({ section, active = true }: { section: 'home' | '
       if (f.length) extra.push({ title: t('Mi lista'), type: 'poster', items: [...f, { kind: 'more', key: 'mylist', label: t('Ver todo'), color: '', extra: 'mylist' }] });
     }
     const out = [...base.rows];
-    // con partidos en vivo las plataformas solo van (en su lugar de siempre, arriba) si se activaron en Cuenta
-    if (section === 'home' && live.length && out.length && out[0].type === 'platform' && !platformCards()) out.shift();
+    // con partidos en vivo del panel las plataformas solo van (en su lugar de siempre, arriba) si se activaron en
+    // Cuenta; mientras el panel contesta, lo de la última vez (no aparecen para irse después)
+    if (section === 'home' && out.length && out[0].type === 'platform' && hidesPlatforms()) out.shift();
     const at = out.length && out[0].type === 'platform' ? 1 : 0;
     out.splice(at, 0, ...extra);
     // «En vivo ahora» después del Top 10 (sin Top 10, después de Continuar viendo y Mi lista)
@@ -279,7 +282,16 @@ export default function Browse({ section, active = true }: { section: 'home' | '
           setInfo({ item: null, title: c.solo ? c.ev : c.h && c.a ? c.h + ' vs ' + c.a : c.h, plot: [c.solo ? c.spl : '', c.lg, (c.soon ? t('Empieza') + ' ' : t('EN VIVO') + ' ') + liveClock(c, t('Descanso')) + (c.solo ? '' : score), c.best.name].filter(Boolean).join('  ·  '), live: c });
         }
         else if (x.kind === 'platform') setInfo({ item: null, title: x.label, plot: t('Todo el contenido de {x}: películas y series detectadas en tus categorías.', { x: x.label }) });
-        else if (x.kind === 'genre') setInfo({ item: null, title: x.label, plot: t('Películas y series de {x}.', { x: x.label }) });
+        else if (x.kind === 'genre') {
+          const f = x.feat;
+          const known = f && !f.backdrop ? savedArt(f) : null;
+          const feat = f && known ? withArt(f, known) : f;
+          const plot = t('Películas y series de {x}.', { x: x.label }) + (f ? '   ·   ' + t('Destacado: {x}', { x: f.name }) : '');
+          setInfo({ item: null, title: x.label, plot, feat });
+          // su imagen horizontal (servidor o TMDB), como con las carátulas
+          focused.current = f || null;
+          if (f && !f.backdrop && !known) artTimer.current = setTimeout(() => heroArt(f, a => a && focused.current === f && setInfo({ item: null, title: x.label, plot, feat: withArt(f, a) })), 350);
+        }
         else setInfo({ item: null, title: rows[i]?.title || x.label, plot: t('Ver todo el contenido de esta fila.') });
       }, 120);
     },
