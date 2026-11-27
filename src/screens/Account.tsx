@@ -18,7 +18,7 @@ import { useNav } from '../nav';
 import { deviceId, loadCatalog, loadCloud, logoutByHand, refreshCatalog, reloadCatalog, resetTenant, showNotice, useAppState } from '../state';
 import { C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
-import { liveSport, liveSportName, liveTvOn, platformCards, setLiveSport, setPlatformCards } from '../data/liveTv';
+import { FavLeague, leagueChoices, liveLeagues, liveLeaguesText, liveSport, liveSportName, liveTvOn, platformCards, setLiveLeagues, setLiveSport, setPlatformCards } from '../data/liveTv';
 import { fetchSports, localSports } from '../data/sportsPanel';
 import { features } from '../lib/tenant';
 
@@ -117,6 +117,60 @@ function SportPicker({ onClose }: { onClose: () => void }) {
   );
 }
 
+// Cuenta › Ligas favoritas: varias a la vez (de la agenda y de los próximos 21 días, las que juegan hoy primero);
+// con alguna elegida, «En vivo ahora» de Inicio solo muestra partidos de esas ligas
+function LeaguePicker({ onClose }: { onClose: () => void }) {
+  const [list, setList] = useState<(FavLeague & { today: number })[] | null>(null);
+  const [sel, setSel] = useState<FavLeague[]>(() => liveLeagues());
+  useEffect(() => {
+    leagueChoices().then(setList).catch(() => setList([]));
+  }, []);
+  const save = (next: FavLeague[]) => {
+    setSel(next);
+    setLiveLeagues(next);
+  };
+  const sports = localSports()?.sports || {};
+  const spName = (sp: string) => String(sports[sp]?.label || sp);
+  const on = (id: string) => sel.some(x => x.id === id);
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.pickShade}>
+        <View style={s.pickBox}>
+          <Text style={s.pickTitle}>{t('Ligas favoritas')}</Text>
+          <Text style={s.pickNote}>
+            {t('En Inicio, «En vivo ahora» muestra solo los partidos de las ligas que elijas.')}
+            {liveSport() ? '  ' + t('Solo las de {x}.', { x: liveSportName() || liveSport() }) : ''}
+          </Text>
+          {!list ? <Text style={s.pickNote}>{t('Cargando…')}</Text> : null}
+          {list && !list.length ? <Text style={s.pickNote}>{t('El panel todavía no tiene ligas para elegir.')}</Text> : null}
+          <ScrollView style={{ maxHeight: px(560) }}>
+            <View style={s.set}>
+              <Button label={(sel.length ? '     ' : '✓  ') + t('Todas las ligas')} left last preferred onPress={() => save([])} />
+            </View>
+            {(list || []).map(x => (
+              <View key={x.id} style={s.set}>
+                <Button
+                  label={
+                    (on(x.id) ? '✓  ' : '     ') +
+                    x.n +
+                    (liveSport() ? '' : '  ·  ' + spName(x.sp)) +
+                    (x.today ? '  ·  ' + t('{n} hoy', { n: x.today }) : '')
+                  }
+                  left
+                  last
+                  onPress={() => save(on(x.id) ? sel.filter(y => y.id !== x.id) : [...sel, { id: x.id, n: x.n, b: x.b, sp: x.sp }])}
+                />
+              </View>
+            ))}
+          </ScrollView>
+          <View style={{ height: px(20) }} />
+          <Button label={t('Listo')} primary last onPress={onClose} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function cycle(list: string[][], cur: string): string {
   const i = list.findIndex(x => x[0] === cur);
   return list[(i + 1) % list.length][0];
@@ -135,6 +189,7 @@ export default function Account() {
   const [langOpen, setLangOpen] = useState(false);
   const [teamsOpen, setTeamsOpen] = useState(false);
   const [sportOpen, setSportOpen] = useState(false);
+  const [leagueOpen, setLeagueOpen] = useState(false);
   // recién cambiado el idioma: el foco vuelve a esa fila
   const [langFocus] = useState(takeLangChanged);
   const s0 = st.session;
@@ -233,6 +288,7 @@ export default function Account() {
       ) : null}
       {/* con perfiles: los equipos favoritos se guardan en la nube (avisa el celular; en la TV, la campanita) */}
       {liveTvOn() ? <Setting label={t('Deporte favorito')} value={liveSport() ? liveSportName() || liveSport() : t('Todos los deportes')} onPress={() => setSportOpen(true)} /> : null}
+      {liveTvOn() ? <Setting label={t('Ligas favoritas')} value={liveLeaguesText()} onPress={() => setLeagueOpen(true)} /> : null}
       {liveTvOn() ? <Setting label={t('Equipos favoritos')} value={t('Elegir')} onPress={() => setTeamsOpen(true)} /> : null}
       <Setting
         label={t('Contenido protegido en esta sesión')}
@@ -320,6 +376,7 @@ export default function Account() {
       {langOpen ? <LangPicker onClose={() => setLangOpen(false)} /> : null}
       {teamsOpen ? <TeamsModal onClose={() => setTeamsOpen(false)} /> : null}
       {sportOpen ? <SportPicker onClose={() => setSportOpen(false)} /> : null}
+      {leagueOpen ? <LeaguePicker onClose={() => setLeagueOpen(false)} /> : null}
     </View>
   );
 }

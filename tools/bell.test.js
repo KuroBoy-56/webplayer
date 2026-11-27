@@ -7,6 +7,9 @@ const Module = require('node:module');
 const fs = require('node:fs');
 const ts = require('typescript');
 const originalLoad = Module._load;
+let stored = null; // ligas favoritas guardadas (readJson)
+let agendaMock = null;
+let leaguesMock = {};
 const previousTs = require.extensions['.ts'];
 require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true }, fileName: filename,
@@ -15,7 +18,7 @@ const str = v => (v === undefined || v === null ? '' : String(v));
 const hm = s => { const d = new Date(s * 1000); return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); };
 Module._load = function (request, parent, isMain) {
   if (request === '../api/panel') return { cloud: async () => ({}), lineKey: () => 'k' };
-  if (request === '../lib/storage') return { read: () => '', write: () => {} };
+  if (request === '../lib/storage') return { read: () => '', write: () => {}, readJson: () => stored, writeJson: () => {} };
   if (request === '../lib/http') return { json: () => null };
   if (request === '../lib/tenant') return { brandName: () => 'X', features: () => ({}) };
   if (request === '../lib/util') return {
@@ -31,14 +34,14 @@ Module._load = function (request, parent, isMain) {
     evClock: (e, s) => hm(s + (e?.o || 0)),
     matchSports: () => [],
   };
-  if (request === './sportsPanel') return { fetchSports: async () => null, localSports: () => null };
+  if (request === './sportsPanel') return { fetchSports: async () => agendaMock, localSports: () => null, loadFixtures: async () => ({ leagues: leaguesMock }) };
   return originalLoad.call(this, request, parent, isMain);
 };
 after(() => {
   Module._load = originalLoad;
   if (previousTs) require.extensions['.ts'] = previousTs; else delete require.extensions['.ts'];
 });
-const { bellFrom } = require('../src/data/liveTv.ts');
+const { bellFrom, leagueChoices } = require('../src/data/liveTv.ts');
 
 const now = 20000 * 86400 + 15 * 3600; // 15:00 del día 20000
 const ag = {
@@ -67,4 +70,17 @@ test('en vivo, después los de hoy por hora y al final los terminados', () => {
 test('sin equipos ni marcados no hay avisos', () => {
   assert.deepStrictEqual(bellFrom({ teams: [], events: {} }, ag, [], now), []);
   assert.deepStrictEqual(bellFrom(null, ag, [], now), []);
+});
+
+test('ligas favoritas: primero las que juegan hoy, después las de 21 días y las elegidas aunque ya no estén', async () => {
+  agendaMock = { events: [
+    { li: '1', lg: 'Premier League', sp: 'Soccer', s: 3600 },
+    { li: '1', lg: 'Premier League', sp: 'Soccer', s: 7200 },
+    { li: '2', lg: 'NBA', sp: 'Basketball', s: 2 * 86400 },
+    { li: '', lg: 'Sin id', sp: 'Soccer', s: 3600 },
+  ] };
+  leaguesMock = { 3: { n: 'Liga MX', sp: 'Soccer' }, 1: { n: 'duplicada', sp: 'Soccer' } };
+  stored = [{ id: '9', n: 'Vieja', b: '', sp: 'Soccer' }];
+  const out = await leagueChoices();
+  assert.deepStrictEqual(out.map(x => x.n + ':' + x.today), ['Premier League:2', 'NBA:0', 'Liga MX:0', 'Vieja:0']);
 });
