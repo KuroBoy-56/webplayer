@@ -73,11 +73,11 @@ enum Sports {
         "city", "united", "real", "sporting", "atletico", "deportivo", "union", "women", "femenil", "w", "u20", "u21", "u23", "sub"]
     private static let defaultEventCat = "event|ppv|pay per view|deportes? en vivo|live sport|partidos? (de )?hoy"
 
-    /** Zona horaria del panel (la del distribuidor o del dueño, "tz" de api/sports.php): la hora de los partidos y
-     *  Hoy / Mañana van en esa zona, no en la del equipo. Un panel viejo sin "tz": la del equipo. */
+    /** Siempre la zona horaria del iPhone: el panel manda solo "s" (segundos UTC); el "tz" / "tzo" que todavía puede
+     *  mandar un panel viejo se ignora, así un cliente de otro país nunca ve la hora corrida. */
     static var zone = TimeZone.current
 
-    /** "HH:mm" en la zona del panel */
+    /** "HH:mm" en la zona del iPhone */
     static func time(_ t: Double) -> String {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
@@ -103,9 +103,7 @@ enum Sports {
     }
 
     static func parse(_ j: JObj) -> SportsData {
-        // un nombre de zona que el iPhone no conoce: el desfase del panel ("tzo", segundos sobre UTC, como Vega) y solo si
-        // tampoco viene, la del iPhone (uno mal configurado mostraba otra hora)
-        zone = TimeZone(identifier: j.s("tz")) ?? (j["tzo"] != nil ? TimeZone(secondsFromGMT: j.i("tzo")) : nil) ?? .current
+        zone = .current
         let events = j.objs("events").compactMap(event).sorted { $0.start < $1.start }
         var sports: [String: SportInfo] = [:]
         if let so = j.o("sports") {

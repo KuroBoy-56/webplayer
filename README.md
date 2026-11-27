@@ -4,6 +4,10 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.1.6 (Deportes en la hora del iPhone)
+
+- **Deportes** (`LatMpx/Data/Sports.swift`): la hora de cada partido, Hoy / Mañana, Equipos / Selecciones y los avisos van **siempre en la zona horaria del iPhone**. El panel manda solo `s` (segundos UTC); si un panel viejo todavía manda su zona (`tz` / `tzo`) se ignora, así un cliente de otro país ya no ve el partido de las 10:00 UTC a las «11:00» del panel ni «en vivo» antes de su hora.
+
 ## Novedades de la 1.1.5 (buscador de canales más preciso)
 
 - **Deportes** (`LatMpx/Data/Sports.swift`, ideas de los emparejadores de canales de IPTV como Stream-Mapparr, las mismas reglas que Android, Roku, webOS, Tizen, VIDAA, Vega, Windows y el web player): «+» es «plus» («ESPN+» ya no da el canal «ESPN»; «Movistar+ LaLiga» encuentra «Movistar LaLiga»), números en palabra como cifra («ESPN Two»), más etiquetas que no cuentan (HDR, FD, 2160p, 1080i, Full HD, East/West, ENG, RAW) y, como último recurso, el parecido de Levenshtein entre las palabras ordenadas («TyC Sport» = «TyC Sports») solo con los mismos números («ESPN 2» nunca «ESPN 3») y más estricto con los nombres cortos.
