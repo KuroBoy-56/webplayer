@@ -446,7 +446,7 @@ private fun MainShell(state: AppState, onLogout: () -> Unit, onChangeDistributor
             is Route.ActorPage -> ActorScreen(state, top)
             is Route.Saved -> SavedScreen(state, top.continueWatching)
             is Route.Downloads -> com.latmpx.player.ui.screens.DownloadsScreen { state.pop() }
-            is Route.Explore -> com.latmpx.player.ui.screens.ExploreScreen(state)
+            is Route.Explore -> com.latmpx.player.ui.screens.ExploreScreen(state, top)
             null -> when (state.tab) {
                 Tab.HOME -> HomeScreen(state)
                 Tab.MOVIES -> CatalogScreen(state, Kind.MOVIE)

@@ -80,13 +80,17 @@ private enum class ExSort { RECENT, AZ, RATING }
  * Explorar (solo con perfiles: el botón «Categorías» de arriba), igual que la del web player en el celular (browse.php):
  * arriba Series / Películas / Categorías / Deportes sobre el degradado del color de la app, «Explorar», Todo / Películas /
  * Series, ordenar (recientes, A - Z, mejor valorados) y «Filtrar por título…» lado a lado, el total, géneros, plataformas
- * y la cuadrícula de 3 columnas. Solo las carpetas que el cliente ve (control parental).
+ * y la cuadrícula de 3 columnas. Solo las carpetas que el cliente ve (control parental). «Ver todo» de una fila la abre
+ * con su filtro (init): tipo, orden, género, plataforma o carpeta.
  */
 @Composable
-fun ExploreScreen(state: AppState) {
-    var type by rememberSaveable { mutableStateOf(ExType.ALL) }
-    var sort by rememberSaveable { mutableStateOf(ExSort.RECENT) }
-    var genre by rememberSaveable { mutableStateOf("") }
+fun ExploreScreen(state: AppState, init: Route.Explore = Route.Explore()) {
+    // «Ver todo» de una fila: el filtro de esa fila (como browse.php?type=&sort=&genre=&platform=&cat= del web player)
+    val cat = init.cat
+    val catSeries = init.catKind == "s"
+    var type by rememberSaveable { mutableStateOf(if (cat.isNotEmpty()) (if (catSeries) ExType.SERIES else ExType.MOVIE) else ExType.entries[init.type.coerceIn(0, 2)]) }
+    var sort by rememberSaveable { mutableStateOf(ExSort.entries[init.sort.coerceIn(0, 2)]) }
+    var genre by rememberSaveable { mutableStateOf(init.genre) }
     var query by rememberSaveable { mutableStateOf("") }
 
     val mCats = remember(state.movieCats, state.refresh) { Store.visibleCats(state.movieCats) }
@@ -94,8 +98,17 @@ fun ExploreScreen(state: AppState) {
     // lo que se puede mostrar: solo títulos de carpetas visibles
     val movies = remember(state.movies, mCats) { mCats.map { it.id }.toSet().let { ids -> state.movies.filter { it.categoryId in ids } } }
     val series = remember(state.series, sCats) { sCats.map { it.id }.toSet().let { ids -> state.series.filter { it.categoryId in ids } } }
-    val pool = when (type) { ExType.MOVIE -> movies; ExType.SERIES -> series; ExType.ALL -> movies + series }
     val cats: List<Category> = when (type) { ExType.MOVIE -> mCats; ExType.SERIES -> sCats; ExType.ALL -> mCats + sCats }
+    val plat = remember(init.platform) { Platforms.list.find { it.key == init.platform } }
+    val catName = remember(cat, mCats, sCats) { (if (catSeries) sCats else mCats).firstOrNull { it.id == cat }?.name.orEmpty() }
+    val pool = remember(type, movies, series, cats, plat, cat) {
+        val base = when (type) { ExType.MOVIE -> movies; ExType.SERIES -> series; ExType.ALL -> movies + series }
+        when {
+            cat.isNotEmpty() -> base.filter { it.categoryId == cat }
+            plat != null -> Platforms.categoriesFor(cats, plat.kw).let { ids -> base.filter { it.categoryId in ids } }
+            else -> base
+        }
+    }
     // géneros con al menos una carpeta en lo que se está viendo
     val genres = remember(cats) { Platforms.genres.filter { (_, kw) -> Platforms.categoriesFor(cats, kw).isNotEmpty() } }
     val shown = remember(pool, cats, sort, genre, query) {
@@ -149,12 +162,22 @@ fun ExploreScreen(state: AppState) {
                         ExChip(stringResource(R.string.categories), true, big = true) {}
                         if (Tenant.sportsEnabled && !Profiles.kids) ExChip(stringResource(R.string.sports), false, big = true) { state.stack.clear(); state.tab = Tab.SPORTS }
                     }
-                    Text(stringResource(R.string.explore), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(start = pad, end = pad, top = 26.dp))
-                    Text(stringResource(R.string.explore_sub), color = Color(0xFFB3B3B3), fontSize = 17.sp, modifier = Modifier.padding(start = pad, end = pad, top = 4.dp))
+                    Text(
+                        if (cat.isNotEmpty()) catName else plat?.label ?: stringResource(R.string.explore),
+                        color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Black, maxLines = 2, modifier = Modifier.padding(start = pad, end = pad, top = 26.dp),
+                    )
+                    Text(
+                        when {
+                            cat.isNotEmpty() -> stringResource(if (catSeries) R.string.ex_sub_cat_series else R.string.ex_sub_cat_movies, catName)
+                            plat != null -> stringResource(R.string.ex_sub_platform, plat.label)
+                            else -> stringResource(R.string.explore_sub)
+                        },
+                        color = Color(0xFFB3B3B3), fontSize = 17.sp, modifier = Modifier.padding(start = pad, end = pad, top = 4.dp),
+                    )
                 }
             }
-            // Todo / Películas / Series
-            item(key = "type", span = full) {
+            // Todo / Películas / Series (con una carpeta no: es de un solo tipo, como el web player)
+            if (cat.isEmpty()) item(key = "type", span = full) {
                 Box {
                     Row(Modifier.border(1.dp, Color(0x80FFFFFF), RoundedCornerShape(50)).padding(2.dp)) {
                         listOf(ExType.ALL to R.string.ex_all, ExType.MOVIE to R.string.movies, ExType.SERIES to R.string.series).forEach { (t, label) ->
@@ -178,15 +201,15 @@ fun ExploreScreen(state: AppState) {
             item(key = "count", span = full) {
                 Text(stringResource(R.string.ex_count, shown.size), color = Color(0xFFA0A0A0), fontSize = 15.sp)
             }
-            if (genres.isNotEmpty()) item(key = "genres", span = full) {
+            if (cat.isEmpty() && genres.isNotEmpty()) item(key = "genres", span = full) {
                 LazyRow(Modifier.fullBleed(pad), contentPadding = PaddingValues(horizontal = pad), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     item { ExChip(stringResource(R.string.ex_all_genres), genre.isEmpty()) { genre = "" } }
                     items(genres, key = { it.first }) { (label, _) -> ExChip(label, genre == label) { genre = if (genre == label) "" else label } }
                 }
             }
-            if (platforms.isNotEmpty()) item(key = "plats", span = full) {
+            if (cat.isEmpty() && plat == null && platforms.isNotEmpty()) item(key = "plats", span = full) {
                 LazyRow(Modifier.fullBleed(pad), contentPadding = PaddingValues(horizontal = pad), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(platforms, key = { it.key }) { p -> ExChip(p.label, false) { state.push(Route.PlatformPage(p)) } }
+                    items(platforms, key = { it.key }) { p -> ExChip(p.label, false) { state.push(Route.Explore(platform = p.key)) } }
                 }
             }
             item(key = "line", span = full) { Box(Modifier.fullBleed(pad).padding(top = 4.dp, bottom = 10.dp).height(1.dp).background(Color(0xFF2A2A2A))) }
