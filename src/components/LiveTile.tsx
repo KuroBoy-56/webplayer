@@ -45,7 +45,7 @@ export const LiveTile = memo(function LiveTile({ c, onPress, onFocus }: { c: Liv
       <View style={s.top}>
         <Text style={s.league} numberOfLines={1}>{c.lg}</Text>
         <View style={[s.pill, c.soon && s.pillSoon]}>
-          <Text style={s.pillText}>{c.soon ? t('Empieza') + ' ' + liveClock(c, '') : t('EN VIVO') + '  ' + liveClock(c, t('Descanso'))}</Text>
+          <Text style={s.pillText} numberOfLines={1}>{c.soon ? t('Empieza') + ' ' + liveClock(c, '') : t('EN VIVO') + '  ' + liveClock(c, t('Descanso'))}</Text>
         </View>
       </View>
       <View style={s.mid}>
@@ -75,7 +75,7 @@ function SoloTile({ c, w, h, onPress, onFocus }: { c: LiveCard; w: number; h: nu
       <View style={s.top}>
         <Text style={s.league} numberOfLines={1}>{c.lg}</Text>
         <View style={[s.pill, c.soon && s.pillSoon]}>
-          <Text style={s.pillText}>{c.soon ? t('Empieza') + ' ' + liveClock(c, '') : t('EN VIVO') + '  ' + liveClock(c, t('Descanso'))}</Text>
+          <Text style={s.pillText} numberOfLines={1}>{c.soon ? t('Empieza') + ' ' + liveClock(c, '') : t('EN VIVO') + '  ' + liveClock(c, t('Descanso'))}</Text>
         </View>
       </View>
       <View style={s.soloMid}>
@@ -146,7 +146,8 @@ const s = themed(() =>
     shade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
     top: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: px(16), paddingTop: px(12) },
     league: { flex: 1, color: '#fff', fontSize: px(22), fontWeight: '700', opacity: 0.9 },
-    pill: { backgroundColor: '#e50914', borderRadius: px(6), paddingHorizontal: px(10), paddingVertical: px(3), marginLeft: px(10) },
+    // se ajusta a su texto («EN VIVO  Descanso», «EN VIVO  Alargue · 105'») en una línea y como mucho el 62 % del ancho
+    pill: { backgroundColor: '#e50914', borderRadius: px(6), paddingHorizontal: px(10), paddingVertical: px(3), marginLeft: px(10), maxWidth: '62%', flexShrink: 0 },
     pillSoon: { backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)' },
     pillText: { color: '#fff', fontSize: px(20), fontWeight: '800' },
     mid: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: px(18) },
