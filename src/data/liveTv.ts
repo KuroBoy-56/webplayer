@@ -18,6 +18,9 @@ import { fetchSports, localSports } from './sportsPanel';
 
 export const LIVE_MAX = 20;
 
+/** disciplinas sin equipos ni marcador (peleas, boxeo, WWE, carreras, golf…): la tarjeta va con el evento y su póster */
+const SOLO_SPORTS = new Set(['fighting', 'boxing', 'wrestling', 'mma', 'motorsport', 'golf', 'cycling', 'athletics']);
+
 /** activar el recordatorio solo vale si faltan más de 5 minutos para que empiece (el panel responde 409 too_late) */
 export const tooLate = (e: any) => int(e.s) <= nowSec() + 300;
 
@@ -218,11 +221,12 @@ export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number 
     const mm = m[str(e.id)];
     const best = mm && !mm.guess ? mm.best : null;
     if (!best) continue;
-    const solo = !str(e.h) || !str(e.a);
+    // también con dos nombres: TheSportsDB pone a veces a los dos boxeadores como local y visitante
+    const solo = !str(e.h) || !str(e.a) || SOLO_SPORTS.has(str(e.sp).toLowerCase());
     cards.push({
       id: str(e.id), sp: str(e.sp), lg: str(e.lg), h: str(e.h) || str(e.ev), a: str(e.a), hb: str(e.hb), ab: str(e.ab),
       hs: str(e.hs), as: str(e.as), st: str(e.st), pr: str(e.pr), s: int(e.s), th: str(e.th), soon: e.soon === true, best,
-      solo, spl: t((str(j.sports?.[str(e.sp)]?.label) || str(e.sp)) as any), ev: str(e.ev) || str(e.h) || str(e.a),
+      solo, spl: t((str(j.sports?.[str(e.sp)]?.label) || str(e.sp)) as any), ev: str(e.ev) || [str(e.h), str(e.a)].filter(Boolean).join(' vs ') || str(e.lg),
     });
   }
   // en vivo primero, después los que empiezan antes; como mucho 20 (al final va «Ir a Deportes»)
