@@ -38,6 +38,7 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -78,7 +79,7 @@ fun rememberNotifPermission(): () -> Unit {
     }
 }
 
-private fun sportLabel(sp: String): String = SportsLive.CHOICES.firstOrNull { it.first == sp }?.second ?: sp
+private fun sportLabel(sp: String): String = SportsLive.labels[sp] ?: SportsLive.CHOICES.firstOrNull { it.first == sp }?.second ?: sp
 
 /**
  * Ajustes › Deporte preferido (fila «En vivo ahora» de Inicio: sin elegir, todos) y Equipos favoritos: el deporte, la
@@ -94,7 +95,13 @@ fun SportPrefsSection() {
     val rev = MatchAlerts.rev
     val teams = remember(rev, Profiles.current) { MatchAlerts.teams() }
     val askNotif = rememberNotifPermission()
-    val choices = SportsLive.CHOICES
+    // todas las disciplinas que da el panel (api/sports.php: las de la agenda y todas las encendidas) con sus nombres
+    LaunchedEffect(Unit) {
+        runCatching { com.latmpx.player.data.Sports.load()?.sports }.getOrNull()?.let { m -> SportsLive.labels = m.mapValues { it.value.label } }
+    }
+    val choices = remember(SportsLive.labels) {
+        (SportsLive.labels.keys + SportsLive.CHOICES.map { it.first }).distinct().map { it to sportLabel(it) }.sortedBy { it.second.lowercase() }
+    }
     SettingsItem(Icons.Filled.SportsSoccer, stringResource(R.string.sl_pref), choices.firstOrNull { it.first == pref }?.second ?: stringResource(R.string.sl_all)) { prefOpen = true }
     HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
     // tarjetas de plataformas debajo de «En vivo ahora» (solo si el distribuidor tiene las plataformas)

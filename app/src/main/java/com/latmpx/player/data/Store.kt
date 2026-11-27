@@ -255,6 +255,11 @@ object Store {
         get() = p.getString(tenantKey("pref_sport|" + scope() + "|" + (Profiles.current?.id ?: "")), "") ?: ""
         set(v) = p.edit().putString(tenantKey("pref_sport|" + scope() + "|" + (Profiles.current?.id ?: "")), v).apply()
 
+    /** lo último que dijo api/sports_live.php para esta línea (true hasta saberlo: mejor sin plataformas que con parpadeo) */
+    var liveAvail: Boolean
+        get() = p.getBoolean(tenantKey("live_avail|" + scope()), true)
+        set(v) = p.edit().putBoolean(tenantKey("live_avail|" + scope()), v).apply()
+
     /** Ajustes › Habilitar tarjetas de plataformas: con «En vivo ahora» la fila de plataformas vuelve después de ella (por línea y perfil) */
     var platformCards: Boolean
         get() = p.getBoolean(tenantKey("plat_cards|" + scope() + "|" + (Profiles.current?.id ?: "")), false)
