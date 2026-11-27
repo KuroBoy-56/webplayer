@@ -122,11 +122,13 @@ internal fun rememberLiveSports(state: AppState): LiveSports {
         }
     }
     val pref = remember(Profiles.current, SportsLive.available) { Store.preferredSport }
-    val cards by produceState<List<LiveCard>>(emptyList(), d, chans, epgMap, pref) {
+    // Ajustes › Ligas favoritas: solo esas ligas (vacío = todas)
+    val lgs = remember(Profiles.current, SportsLive.available) { Store.liveLeagues.map { it.id }.toSet() }
+    val cards by produceState<List<LiveCard>>(emptyList(), d, chans, epgMap, pref, lgs) {
         val c = chans
         if (d == null || c == null || !on) { value = emptyList(); return@produceState }
         value = withContext(Dispatchers.Default) {
-            d.events.filter { pref.isEmpty() || it.sport == pref }.mapNotNull { e ->
+            d.events.filter { (pref.isEmpty() || it.sport == pref) && (lgs.isEmpty() || it.leagueId in lgs) }.mapNotNull { e ->
                 val m = Sports.match(e, c.prepared, d.rules)
                 val epg = epgMap[e.id].orEmpty().mapNotNull { id -> id.toIntOrNull()?.let { c.byId[it] } }
                 val full = m.withEpg(epg)

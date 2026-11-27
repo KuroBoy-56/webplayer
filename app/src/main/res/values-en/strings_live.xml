@@ -14,4 +14,11 @@
     <string name="sl_go_sports_sub">The full schedule for today and tomorrow</string>
     <string name="sp_tab_finished">Finished</string>
     <string name="sp_fin_empty">No event has finished today yet. Today’s events show here once they end (cleared at 00:00).</string>
+    <string name="sl_lg">Favorite leagues</string>
+    <string name="sl_lg_all">All leagues</string>
+    <string name="sl_lg_n">%1$d leagues</string>
+    <string name="sl_lg_msg">On Home, «Live now» shows only matches from the leagues you pick.</string>
+    <string name="sl_lg_only">Only %1$s leagues.</string>
+    <string name="sl_lg_none">There are no leagues to pick yet.</string>
+    <string name="sl_lg_today">%1$d today</string>
 </resources>

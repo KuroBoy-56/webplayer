@@ -103,13 +103,9 @@ object Sports {
     }
 
     private fun parse(j: JSONObject): SportsData {
-        val tz = j.s("tz")
-        // getTimeZone() da GMT con un nombre que no conoce: entonces el desfase del panel ("tzo", segundos sobre UTC, como
-        // Vega) y solo si tampoco viene, la del equipo (un teléfono mal configurado mostraba otra hora)
-        val tzo = if (j.has("tzo")) j.optInt("tzo", 0) else null
-        zone = TimeZone.getTimeZone(tz).takeIf { tz.isNotEmpty() && it.id == tz }
-            ?: tzo?.let { java.util.SimpleTimeZone(it * 1000, "panel") }
-            ?: TimeZone.getDefault()
+        // siempre la zona horaria del equipo: el panel manda solo "s" (segundos UTC); un panel viejo todavía puede mandar
+        // "tz" / "tzo" (su zona) y se ignoran, así un cliente de otro país nunca ve la hora corrida
+        zone = TimeZone.getDefault()
         val events = j.optJSONArray("events").mapObj { e -> event(e) }.sortedBy { it.start }
         val sports = LinkedHashMap<String, SportInfo>()
         j.optJSONObject("sports")?.let { so ->
@@ -151,7 +147,7 @@ object Sports {
             postponed = e.optBoolean("pp", false),
             tv = e.optJSONArray("tv").mapObj { t -> t.s("n").takeIf { it.isNotBlank() }?.let { TvChannel(it, t.s("c")) } },
             tvh = e.optJSONArray("tvh").mapObj { t -> t.s("n").takeIf { it.isNotBlank() }?.let { TvChannel(it, t.s("c"), usual = true) } },
-            leagueId = e.s("l"), homeLabel = e.s("hn"), awayLabel = e.s("an"),
+            leagueId = e.s("l").ifEmpty { e.s("li") }, homeLabel = e.s("hn"), awayLabel = e.s("an"),
         )
     }
 

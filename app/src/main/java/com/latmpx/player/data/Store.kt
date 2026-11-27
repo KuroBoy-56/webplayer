@@ -255,6 +255,14 @@ object Store {
         get() = p.getString(tenantKey("pref_sport|" + scope() + "|" + (Profiles.current?.id ?: "")), "") ?: ""
         set(v) = p.edit().putString(tenantKey("pref_sport|" + scope() + "|" + (Profiles.current?.id ?: "")), v).apply()
 
+    /** Ajustes › Ligas favoritas: ninguna = todas; si no, Inicio › «En vivo ahora» solo con esas ligas (por línea y perfil) */
+    var liveLeagues: List<FavLeague>
+        get() = runCatching { org.json.JSONArray(p.getString(tenantKey("live_lg|" + scope() + "|" + (Profiles.current?.id ?: "")), "[]")) }.getOrNull()
+            ?.let { a -> (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o -> FavLeague(o.optString("id"), o.optString("n"), o.optString("sp")).takeIf { it.id.isNotEmpty() } } } }
+            .orEmpty()
+        set(v) = p.edit().putString(tenantKey("live_lg|" + scope() + "|" + (Profiles.current?.id ?: "")),
+            org.json.JSONArray(v.map { JSONObject().put("id", it.id).put("n", it.name).put("sp", it.sport) }).toString()).apply()
+
     /** lo último que dijo api/sports_live.php para esta línea (true hasta saberlo: mejor sin plataformas que con parpadeo) */
     var liveAvail: Boolean
         get() = p.getBoolean(tenantKey("live_avail|" + scope()), true)
