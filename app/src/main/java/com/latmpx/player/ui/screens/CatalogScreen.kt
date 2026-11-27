@@ -74,13 +74,13 @@ fun CatalogScreen(state: AppState, kind: Kind) {
                 }
             }
             
-            item { ShelfRow(stringResource(R.string.recently_added), recent, sp, onViewAll = { state.push(Route.Browse(tr(R.string.recently_added), kind, emptySet())) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
+            item { ShelfRow(stringResource(R.string.recently_added), recent, sp, onViewAll = { state.push(Route.Explore(type = if (kind == Kind.SERIES) 2 else 1)) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
             
-            item { ShelfRow(stringResource(R.string.top10), top10, sp) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) } }
+            item { ShelfRow(stringResource(R.string.top10), top10, sp, onViewAll = { state.push(Route.Explore(type = if (kind == Kind.SERIES) 2 else 1, sort = 2)) }) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) } }
             
             rows.forEach { (c, list) ->
                 item(key = "c_${c.id}") {
-                    ShelfRow(c.name, list, sp, onViewAll = { state.push(Route.Browse(c.name, kind, setOf(c.id))) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) }
+                    ShelfRow(c.name, list, sp, onViewAll = { state.push(Route.Explore(cat = c.id, catKind = if (kind == Kind.SERIES) "s" else "m")) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) }
                 }
             }
             // celular: lo último queda arriba de la barra flotante

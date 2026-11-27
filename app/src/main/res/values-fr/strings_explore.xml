@@ -10,4 +10,7 @@
     <string name="ex_all_genres">Tous les genres</string>
     <string name="ex_filter_title">Filtrer par titre…</string>
     <string name="ex_count">%1$d titres</string>
+    <string name="ex_sub_platform">Tout le contenu de %1$s, filtrez par genre ou type</string>
+    <string name="ex_sub_cat_movies">Films de la catégorie %1$s</string>
+    <string name="ex_sub_cat_series">Séries de la catégorie %1$s</string>
 </resources>

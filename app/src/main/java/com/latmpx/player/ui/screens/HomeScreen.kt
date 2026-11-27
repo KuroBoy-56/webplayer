@@ -132,26 +132,26 @@ fun HomeScreen(state: AppState) {
         }
         item { ShelfRow(stringResource(R.string.my_list), favs, pad, onViewAll = { state.push(Route.Saved(continueWatching = false)) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
         item {
-            ShelfRow(stringResource(R.string.top10_today), top10, pad) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) }
+            ShelfRow(stringResource(R.string.top10_today), top10, pad, onViewAll = { state.push(Route.Explore(sort = 2)) }) { i, it -> Top10Card(i + 1, it, pw * 1.15f, onClick = { state.push(Route.Detail(it)) }) }
         }
         item {
             if (live.enabled) LiveSportsRow(live, pad) { state.stack.clear(); state.tab = Tab.SPORTS }
             // con «En vivo ahora» las plataformas solo vuelven (debajo) si se activaron en Ajustes
             if (!live.hidesPlats) {
-                ShelfRow(stringResource(R.string.platforms), platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.PlatformPage(p)) }) }
+                ShelfRow(stringResource(R.string.platforms), platforms, pad) { _, p -> PlatformCard(p, if (tv) 200.dp else 150.dp, onClick = { state.push(Route.Explore(platform = p.key)) }) }
             }
         }
         item {
-            ShelfRow(stringResource(R.string.new_movies), recentMovies, pad, onViewAll = { state.push(Route.Browse(tr(R.string.new_movies), com.latmpx.player.data.Kind.MOVIE, emptySet())) }) { _, it ->
+            ShelfRow(stringResource(R.string.new_movies), recentMovies, pad, onViewAll = { state.push(Route.Explore(type = 1)) }) { _, it ->
                 PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ userFocusedHero = it }) else null)
             }
         }
-        item { ShelfRow(stringResource(R.string.new_series), recentSeries, pad, onViewAll = { state.push(Route.Browse(tr(R.string.new_series), com.latmpx.player.data.Kind.SERIES, emptySet())) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
+        item { ShelfRow(stringResource(R.string.new_series), recentSeries, pad, onViewAll = { state.push(Route.Explore(type = 2)) }) { _, it -> PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }) } }
         genreRows.forEach { (label, list) ->
             item(key = "g_$label") {
                 val kw = com.latmpx.player.data.Platforms.genres.find { it.first == label }?.second ?: emptyList()
                 val ids = com.latmpx.player.data.Platforms.categoriesFor(com.latmpx.player.data.Store.visibleCats(state.movieCats), kw)
-                ShelfRow(label, list, pad, onViewAll = { state.push(Route.Browse(label, com.latmpx.player.data.Kind.MOVIE, ids)) }) { _, it ->
+                ShelfRow(label, list, pad, onViewAll = { state.push(Route.Explore(genre = label)) }) { _, it ->
                     PosterCard(it, pw, onClick = { state.push(Route.Detail(it)) }, onFocus = if (tv) ({ userFocusedHero = it }) else null)
                 }
             }
@@ -191,7 +191,7 @@ fun PhoneTopBar(state: AppState, pad: androidx.compose.ui.unit.Dp, solid: Boolea
             TopChip(stringResource(R.string.series), current == Tab.SERIES) { state.tab = Tab.SERIES }
             TopChip(stringResource(R.string.movies), current == Tab.MOVIES) { state.tab = Tab.MOVIES }
             // con perfiles (no el infantil): Explorar como la del web player (mismo orden: Series, Películas, Categorías, Deportes)
-            if (com.latmpx.player.data.Profiles.current != null && !com.latmpx.player.data.Profiles.kids) TopChip(stringResource(R.string.categories), false) { state.push(Route.Explore) }
+            if (com.latmpx.player.data.Profiles.current != null && !com.latmpx.player.data.Profiles.kids) TopChip(stringResource(R.string.categories), false) { state.push(Route.Explore()) }
             // el perfil infantil nunca tiene Deportes
             if (com.latmpx.player.data.Tenant.sportsEnabled && !com.latmpx.player.data.Profiles.kids) TopChip(stringResource(R.string.sports), current == Tab.SPORTS) { state.tab = Tab.SPORTS }
             TopChip(stringResource(R.string.my_list), current == Tab.MYLIST) { state.tab = Tab.MYLIST }
