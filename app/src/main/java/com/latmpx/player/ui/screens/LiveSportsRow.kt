@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -256,8 +257,9 @@ private fun LiveSportCard(card: LiveCard, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(e.league, color = Color(0xE6FFFFFF), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(8.dp))
+                    // la píldora se ajusta a su texto («Descanso», «Alargue · 105'») y nunca pasa de 180 dp (60 % de la tarjeta)
                     Row(
-                        Modifier.background(if (e.soon) Color(0x99000000) else Color(0xFFE50914), RoundedCornerShape(50))
+                        Modifier.widthIn(max = 180.dp).background(if (e.soon) Color(0x99000000) else Color(0xFFE50914), RoundedCornerShape(50))
                             .then(if (e.soon) Modifier.border(1.dp, Color(0x8CFFFFFF), RoundedCornerShape(50)) else Modifier)
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -265,7 +267,7 @@ private fun LiveSportCard(card: LiveCard, onClick: () -> Unit) {
                         if (!e.soon) { Box(Modifier.size(6.dp).background(Color.White, CircleShape)); Spacer(Modifier.width(5.dp)) }
                         Text(
                             if (e.soon) stringResource(R.string.sl_starts) + " " + hhmm(e.start) else liveClock(e).ifBlank { stringResource(R.string.sl_live) },
-                            color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                            color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
