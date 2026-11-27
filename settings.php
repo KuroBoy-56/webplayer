@@ -47,6 +47,14 @@ $live_sports = ['Soccer' => 'Fútbol', 'Basketball' => 'Baloncesto', 'American F
     'Ice Hockey' => 'Hockey sobre hielo', 'Tennis' => 'Tenis', 'Motorsport' => 'Automovilismo', 'Fighting' => 'Artes marciales',
     'Boxing' => 'Boxeo', 'Rugby' => 'Rugby', 'Volleyball' => 'Vóleibol', 'Handball' => 'Balonmano', 'Golf' => 'Golf',
     'Cricket' => 'Críquet', 'Esports' => 'Esports'];
+// y todas las disciplinas que da el panel (api/sports.php: las de la agenda y todas las encendidas), con su nombre
+if ($live_on) {
+    $ag = wp_panel_sports();
+    foreach ((array)($ag['sports'] ?? []) as $k => $info) {
+        if (is_string($k) && $k !== '' && !isset($live_sports[$k])) $live_sports[$k] = (string)(is_array($info) ? ($info['label'] ?? $k) : $k);
+    }
+    uasort($live_sports, function ($a, $b) { return strcasecmp(t($a), t($b)); });
+}
 include "header.php";
 
 function opt($name, $value, $label, $desc, $current)

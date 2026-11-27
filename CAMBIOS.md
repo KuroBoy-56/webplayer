@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Todas las disciplinas en «Deporte preferido» — versión 3.0.9 (27 de noviembre)
+- **Ajustes › Deporte preferido** (y **Equipos favoritos**) lista todas las disciplinas que da el panel (las de la agenda y todas las encendidas del distribuidor), con el nombre del panel; antes eran 15 fijas.
+- Las tarjetas de plataformas de Inicio ya no aparecían para irse después (el servidor ya sabía si iba la fila «En vivo ahora»): sin cambios ahí.
+- Archivos: `settings.php`, `includes/core.php`.
+
 ## Más partidos con canal en Deportes — versión 3.0.8 (26 de noviembre, novena parte)
 - **Deportes:** sin los canales de la agenda, el partido usa los **canales habituales** de su equipo de local o de su liga (`tvh`, lo manda el panel; ninguna consulta extra a TheSportsDB) como **último recurso**, después de la guía y de los equipos; en «Ver canales» salen con «suele transmitirlo». «En vivo ahora» de Inicio sigue solo con canales exactos.
 - Un nombre solo es su primer canal: «ESPN» encuentra «ESPN 1», «DAZN» encuentra «DAZN 1» (nunca «ESPN 2» ni «DAZN 2»).
