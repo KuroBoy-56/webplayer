@@ -39,6 +39,18 @@ object Platforms {
         "4K" to listOf("4k", "uhd", "2160"),
     )
 
+    /**
+     * color y dibujo de líneas de cada género, en el orden de [genres] (los mismos de Roku, webOS y el web player;
+     * fuentes SVG en tools/genre-art del repositorio de Roku)
+     */
+    val genreStyles: List<Pair<Long, Int>> = listOf(
+        0xFFB71C1C to R.drawable.genre_accion, 0xFF37474F to R.drawable.genre_suspenso, 0xFF2E7D32 to R.drawable.genre_aventura,
+        0xFFD81B60 to R.drawable.genre_anime, 0xFF6A1B9A to R.drawable.genre_drama, 0xFFF9A825 to R.drawable.genre_comedia,
+        0xFF212121 to R.drawable.genre_terror, 0xFF1565C0 to R.drawable.genre_scifi, 0xFF4527A0 to R.drawable.genre_fantasia,
+        0xFFC2185B to R.drawable.genre_romance, 0xFF424242 to R.drawable.genre_crimen, 0xFF00897B to R.drawable.genre_animacion,
+        0xFF5D4037 to R.drawable.genre_documental, 0xFF222222 to R.drawable.genre_4k,
+    )
+
     // expresiones compiladas una sola vez (antes se compilaban en cada llamada, miles por pantalla)
     private val MARKS = Regex("\\p{M}+")
     private val kwRegex = java.util.concurrent.ConcurrentHashMap<String, Regex>()

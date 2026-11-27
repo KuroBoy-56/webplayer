@@ -336,6 +336,7 @@
     <string name="best_of">Le meilleur de %1$s</string>
     <string name="browse_platform_plot">Tout le contenu de %1$s : films et séries trouvés dans vos catégories.</string>
     <string name="browse_genre_plot">Films et séries : %1$s.</string>
+    <string name="genre_featured">À la une : %1$s</string>
     <string name="browse_row_plot">Voir tout le contenu de cette rangée.</string>
     <string name="browse_platforms">Plateformes</string>
     <string name="browse_genres">Genres</string>
