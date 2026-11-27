@@ -129,6 +129,7 @@ class Catalog {
     this.tIdx = {};
     this.folded = {};
     this.rowsMemo.clear();
+    this.exCache.clear();
   }
 
   // ---------- filas ya armadas (2.6.11) ----------
@@ -176,6 +177,7 @@ class Catalog {
   refreshKids() {
     for (const kind of Object.keys(this.raw) as Kind[]) this.k[kind] = this.kidsOn ? this.kidsView(kind, this.raw[kind]!) : this.raw[kind];
     this.tIdx = {};
+    this.exCache.clear();
   }
 
   // ¿este título se puede abrir? (en el perfil infantil, solo lo que pasa el filtro)
@@ -283,6 +285,7 @@ class Catalog {
     });
     this.raw[kind] = d;
     this.k[kind] = this.kidsOn ? this.kidsView(kind, d) : d;
+    this.exCache.clear();
   }
 
   has(kind: Kind) {
@@ -557,31 +560,51 @@ class Catalog {
   }
 
   // ---------- Explorar (la lupa de la barra, como browse.php del web player) ----------
-  // Películas y/o series de las categorías visibles, por plataforma y/o género, filtradas por título y ordenadas;
-  // total = cuántas hay (se arman como mucho «max» fichas).
-  explore(type: 'all' | 'vod' | 'series', sort: 'recent' | 'az' | 'rating', platform: string, genre: string, q: string, max = 2000): { items: Item[]; total: number } {
-    const kinds: Kind[] = type === 'all' ? ['vod', 'series'] : [type];
-    const p = PLATFORMS.find(x => x.key === platform);
-    const g = GENRES.find(x => x.key === genre);
+  // Películas y/o series de las categorías visibles, por plataforma y/o género o una carpeta del servidor (cat, como
+  // «Categorías» de Películas / Series del web player), filtradas por título y ordenadas; total = cuántas hay (se arman
+  // como mucho «max» fichas). El orden de cada combinación queda en memoria hasta que cambie el catálogo: la lupa abre
+  // al momento (se prepara al entrar al perfil, warmExplore) y cambiar de filtro no vuelve a ordenar todo.
+  private exCache = new Map<string, { k: Kind; i: number }[]>();
+
+  explore(type: 'all' | 'vod' | 'series', sort: 'recent' | 'az' | 'rating', platform: string, genre: string, q: string, max = 2000, cat = '', catKind = ''): { items: Item[]; total: number } {
+    let kinds: Kind[] = type === 'all' ? ['vod', 'series'] : [type];
+    if (cat) kinds = [catKind === 'vod' || catKind === 'series' ? catKind : kinds[0]];
+    const p = cat ? undefined : PLATFORMS.find(x => x.key === platform);
+    const g = cat ? undefined : GENRES.find(x => x.key === genre);
     const needle = fold(q.trim());
-    const all: { k: Kind; i: number; v: number; n: string }[] = [];
-    for (const k of kinds) {
-      const d = this.k[k];
-      if (!d) continue;
-      let idx = p ? this.idxForKw(k, p.kw) : this.allIdx(k);
-      if (g) {
-        const inGenre = new Set(this.idxForKw(k, g.kw));
-        idx = idx.filter(i => inGenre.has(i));
+    const sig = kinds.map(k => k + (this.k[k]?.items.length || 0) + ':' + this.visibleCats(k).length).join(',');
+    const key = [sig, sort, p?.key || '', g?.key || '', cat, this.kidsOn ? 1 : 0, this.unlocked ? 1 : 0].join('|');
+    let list = this.exCache.get(key);
+    if (!list) {
+      const all: { k: Kind; i: number; v: number; n: string }[] = [];
+      for (const k of kinds) {
+        const d = this.k[k];
+        if (!d) continue;
+        let idx = cat ? (this.visibleCats(k).some(c => c.id === cat) ? d.byCat.get(cat) || [] : []) : p ? this.idxForKw(k, p.kw) : this.allIdx(k);
+        if (g) {
+          const inGenre = new Set(this.idxForKw(k, g.kw));
+          idx = idx.filter(i => inGenre.has(i));
+        }
+        for (const i of idx) {
+          const it = d.items[i];
+          all.push({ k, i, n: sort === 'az' ? fold(str(it.name)) : '', v: sort === 'az' ? 0 : this.sortKey(k, it, sort === 'rating' ? 'rating' : 'added') });
+        }
       }
-      for (const i of idx) {
-        const it = d.items[i];
-        const n = sort === 'az' || needle ? fold(str(it.name)) : '';
-        if (needle && !n.includes(needle)) continue;
-        all.push({ k, i, n, v: sort === 'az' ? 0 : this.sortKey(k, it, sort === 'rating' ? 'rating' : 'added') });
-      }
+      all.sort(sort === 'az' ? (a, b) => (a.n < b.n ? -1 : a.n > b.n ? 1 : 0) : (a, b) => b.v - a.v);
+      list = all.map(x => ({ k: x.k, i: x.i }));
+      if (this.exCache.size > 10) this.exCache.clear();
+      this.exCache.set(key, list);
     }
-    all.sort(sort === 'az' ? (a, b) => (a.n < b.n ? -1 : a.n > b.n ? 1 : 0) : (a, b) => b.v - a.v);
-    return { items: all.slice(0, max).map(x => toItem(x.k, this.k[x.k]!.items[x.i])), total: all.length };
+    const hits = needle ? list.filter(x => fold(str(this.k[x.k]!.items[x.i].name)).includes(needle)) : list;
+    return { items: hits.slice(0, max).map(x => toItem(x.k, this.k[x.k]!.items[x.i])), total: hits.length };
+  }
+
+  /** «Categorías» de Explorar: las carpetas visibles del servidor (con «Todo», las de películas y las de series) */
+  exploreCats(type: 'all' | 'vod' | 'series'): { id: string; name: string; kind: 'vod' | 'series' }[] {
+    const kinds: ('vod' | 'series')[] = type === 'all' ? ['vod', 'series'] : [type];
+    const out: { id: string; name: string; kind: 'vod' | 'series' }[] = [];
+    for (const k of kinds) for (const c of this.visibleCats(k)) if ((this.k[k]?.byCat.get(c.id) || []).length) out.push({ id: c.id, name: c.name, kind: k });
+    return out;
   }
 
   // géneros y plataformas que tienen alguna categoría visible (géneros: del tipo elegido)

@@ -37,6 +37,10 @@ export type LiveCard = {
   th: string;
   soon: boolean;
   best: Item;
+  /** sin dos equipos (peleas, boxeo, WWE, carreras): la tarjeta muestra la disciplina (spl), el evento (ev) y su póster */
+  solo: boolean;
+  spl: string;
+  ev: string;
 };
 
 /** ¿existe todo esto? (perfiles activos con un perfil elegido que no es el infantil, y Deportes encendido) */
@@ -157,6 +161,32 @@ async function agenda(): Promise<any | null> {
   return d;
 }
 
+// lo último que se pidió (y el pedido en curso), por perfil: la carga al elegir el perfil lo deja listo y la fila de
+// Inicio lo muestra al momento (antes la primera respuesta llegaba unos segundos después de entrar)
+let lastLive: { key: string; at: number; r: { cards: LiveCard[]; ttl: number } | null } | null = null;
+let liveInFlight: { key: string; p: Promise<{ cards: LiveCard[]; ttl: number } | null> } | null = null;
+const liveKey = () => lineKey() + '|' + (getState().profile?.id || '');
+
+/** «En vivo ahora» ya pedido (menos de 20 s) o uno nuevo; el mismo pedido si ya hay uno en curso */
+export function loadLiveCardsCached(): Promise<{ cards: LiveCard[]; ttl: number } | null> {
+  const k = liveKey();
+  if (lastLive && lastLive.key === k && nowSec() - lastLive.at < 20 && lastLive.r?.cards.length) return Promise.resolve(lastLive.r);
+  if (liveInFlight && liveInFlight.key === k) return liveInFlight.p;
+  const p = loadLiveCards().then(
+    r => {
+      lastLive = { key: k, at: nowSec(), r };
+      liveInFlight = null;
+      return r;
+    },
+    e => {
+      liveInFlight = null;
+      throw e;
+    },
+  );
+  liveInFlight = { key: k, p };
+  return p;
+}
+
 /** los partidos de la fila (en vivo, por empezar y, con equipos favoritos, los de hoy de esos equipos) con su canal */
 export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number } | null> {
   if (!liveTvOn()) return null;
@@ -188,9 +218,11 @@ export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number 
     const mm = m[str(e.id)];
     const best = mm && !mm.guess ? mm.best : null;
     if (!best) continue;
+    const solo = !str(e.h) || !str(e.a);
     cards.push({
       id: str(e.id), sp: str(e.sp), lg: str(e.lg), h: str(e.h) || str(e.ev), a: str(e.a), hb: str(e.hb), ab: str(e.ab),
       hs: str(e.hs), as: str(e.as), st: str(e.st), pr: str(e.pr), s: int(e.s), th: str(e.th), soon: e.soon === true, best,
+      solo, spl: t((str(j.sports?.[str(e.sp)]?.label) || str(e.sp)) as any), ev: str(e.ev) || str(e.h) || str(e.a),
     });
   }
   // en vivo primero, después los que empiezan antes; como mucho 20 (al final va «Ir a Deportes»)

@@ -21,7 +21,7 @@ import { idxWarmList } from '../player/idxwarm';
 import { t } from '../lib/i18n';
 import { brandInitial, features, useBrandRev } from '../lib/tenant';
 import { alpha, C, px, SIDE, themed } from '../theme';
-import { LiveCard, liveClock, liveTvOn, loadLiveCards, platformCards } from '../data/liveTv';
+import { LiveCard, liveClock, liveTvOn, loadLiveCardsCached, platformCards } from '../data/liveTv';
 import { LiveBackdrop } from '../components/LiveTile';
 
 // última imagen de la portada: queda de fondo mientras carga la siguiente (nunca la pantalla en negro)
@@ -134,7 +134,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
     let on = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const tick = async () => {
-      const r = await loadLiveCards().catch(() => null);
+      const r = await loadLiveCardsCached().catch(() => null);
       if (!on) return;
       setLive(r?.cards || []);
       timer = setTimeout(tick, (r?.ttl || 60) * 1000);
@@ -156,18 +156,19 @@ export default function Browse({ section, active = true }: { section: 'home' | '
       if (f.length) extra.push({ title: t('Mi lista'), type: 'poster', items: [...f, { kind: 'more', key: 'mylist', label: t('Ver todo'), color: '', extra: 'mylist' }] });
     }
     const out = [...base.rows];
-    // con partidos en vivo la fila va arriba, en el lugar de las plataformas (que vuelven debajo si se activaron en Cuenta)
+    // con partidos en vivo las plataformas solo van (en su lugar de siempre, arriba) si se activaron en Cuenta
+    if (section === 'home' && live.length && out.length && out[0].type === 'platform' && !platformCards()) out.shift();
+    const at = out.length && out[0].type === 'platform' ? 1 : 0;
+    out.splice(at, 0, ...extra);
+    // «En vivo ahora» después del Top 10 (sin Top 10, después de Continuar viendo y Mi lista)
     if (section === 'home' && live.length) {
-      if (out.length && out[0].type === 'platform' && !platformCards()) out.shift();
-      out.unshift({
+      const top = out.findIndex(r => r.type === 'top10');
+      out.splice(top >= 0 ? top + 1 : at + extra.length, 0, {
         title: t('En vivo ahora'),
         type: 'live',
-        items: [...live.map(c => ({ kind: 'live' as const, key: c.id, label: c.h + ' vs ' + c.a, color: '', live: c })), { kind: 'live' as const, key: 'go-sports', label: t('Ir a Deportes'), color: '', extra: 'sports' }],
+        items: [...live.map(c => ({ kind: 'live' as const, key: c.id, label: c.solo ? c.ev : c.h + ' vs ' + c.a, color: '', live: c })), { kind: 'live' as const, key: 'go-sports', label: t('Ir a Deportes'), color: '', extra: 'sports' }],
       });
     }
-    let at = out.length && out[0].type === 'live' ? 1 : 0;
-    if (out.length > at && out[at].type === 'platform') at++;
-    out.splice(at, 0, ...extra);
     return out;
   }, [base, progress, favorites, section, live]);
 
@@ -360,7 +361,7 @@ export default function Browse({ section, active = true }: { section: 'home' | '
         else if (x.kind === 'live' && x.live) {
           const c = x.live;
           const score = c.soon || !(c.hs || c.as) ? '' : '   ' + c.hs + ' - ' + c.as;
-          setInfo({ item: null, title: c.h && c.a ? c.h + ' vs ' + c.a : c.h, plot: [c.lg, (c.soon ? t('Empieza') + ' ' : t('EN VIVO') + ' ') + liveClock(c, t('Descanso')) + score, c.best.name].filter(Boolean).join('  ·  '), live: c });
+          setInfo({ item: null, title: c.solo ? c.ev : c.h && c.a ? c.h + ' vs ' + c.a : c.h, plot: [c.solo ? c.spl : '', c.lg, (c.soon ? t('Empieza') + ' ' : t('EN VIVO') + ' ') + liveClock(c, t('Descanso')) + (c.solo ? '' : score), c.best.name].filter(Boolean).join('  ·  '), live: c });
         }
         else if (x.kind === 'platform') setInfo({ item: null, title: x.label, plot: t('Todo el contenido de {x}: películas y series detectadas en tus categorías.', { x: x.label }) });
         else if (x.kind === 'genre') setInfo({ item: null, title: x.label, plot: t('Películas y series de {x}.', { x: x.label }) });
