@@ -42,6 +42,8 @@ import com.latmpx.player.data.Platforms
 import com.latmpx.player.data.Store
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.Route
+import com.latmpx.player.ui.components.GenreCard
+import com.latmpx.player.ui.components.TvGenreTile
 import com.latmpx.player.ui.components.TvCard
 import com.latmpx.player.ui.components.TvChipRow
 import com.latmpx.player.ui.components.TvPlatformTile
@@ -156,8 +158,13 @@ fun TvCatalogScreen(state: AppState, kind: Kind) {
         val out = ArrayList<BrowseRow>()
         val recent = all.sortedByDescending { it.added }.take(30)
         if (recent.isNotEmpty()) out += BrowseRow.Posters("recent", tRecent, recent, onViewAll = { state.push(Route.Browse(tRecent, kind, emptySet())) })
-        val genres = Platforms.genres.map { (g, kw) -> g to Platforms.categoriesFor(cats, kw) }.filter { it.second.isNotEmpty() }
-        if (genres.isNotEmpty()) out += BrowseRow.Chips("genres", tGenres, genres.map { it.first }) { i -> genres.getOrNull(i)?.let { (g, ids) -> state.push(Route.Browse(g, kind, ids)) } }
+        // cada género con su dibujo y el póster de su título más destacado: el de la lista de la semana de TMDB del panel
+        // que está en esas carpetas o, si no hay, uno de los mejor calificados (como las tarjetas de deportes)
+        val genres = Platforms.genres.mapIndexed { i, (g, kw) -> Triple(i, g, Platforms.categoriesFor(cats, kw)) }.filter { it.third.isNotEmpty() }
+        if (genres.isNotEmpty()) out += BrowseRow.Genres("genres", tGenres, genres.map { (i, g, ids) ->
+            val st = Platforms.genreStyles.getOrNull(i)
+            GenreCard(g, st?.first ?: 0xFF333333, st?.second ?: 0, com.latmpx.player.data.WeekTop.top10(all.filter { it.categoryId in ids }, kind).firstOrNull())
+        }) { i -> genres.getOrNull(i)?.let { (_, g, ids) -> state.push(Route.Browse(g, kind, ids)) } }
         val top10 = com.latmpx.player.data.WeekTop.top10(all, kind)
         if (top10.isNotEmpty()) out += BrowseRow.Top10("top", tTop, top10)
         val byCat = all.groupBy { it.categoryId }

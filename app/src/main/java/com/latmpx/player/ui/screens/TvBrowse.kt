@@ -59,6 +59,8 @@ import com.latmpx.player.data.Platform
 import com.latmpx.player.player.Play
 import com.latmpx.player.ui.AppState
 import com.latmpx.player.ui.Route
+import com.latmpx.player.ui.components.GenreCard
+import com.latmpx.player.ui.components.TvGenreTile
 import com.latmpx.player.ui.components.TvCard
 import com.latmpx.player.ui.components.TvChipRow
 import com.latmpx.player.ui.components.TvPlatformTile
@@ -75,6 +77,8 @@ sealed class BrowseRow(val key: String, val title: String) {
     class Top10(key: String, title: String, val items: List<Item>) : BrowseRow(key, title)
     class Plats(key: String, title: String, val list: List<Platform>) : BrowseRow(key, title)
     class Chips(key: String, title: String, val chips: List<String>, val onChip: (Int) -> Unit) : BrowseRow(key, title)
+    /** Películas / Series › Géneros: tarjetas con el dibujo del género y el póster de su título destacado */
+    class Genres(key: String, title: String, val cards: List<GenreCard>, val onPick: (Int) -> Unit) : BrowseRow(key, title)
     /** «En vivo ahora» (solo con perfiles): OK abre el canal del partido */
     class Live(key: String, title: String, val cards: List<TvLiveCard>, val onSports: () -> Unit, val onOpen: (TvLiveCard) -> Unit) : BrowseRow(key, title)
 }
@@ -255,6 +259,18 @@ private fun RowSlot(state: AppState, r: BrowseRow, slot: Dp, focusItem: (Item) -
                     val go = stringResource(R.string.sl_go_sports)
                     val goSub = stringResource(R.string.sl_go_sports_sub)
                     TvGoSportsTile(liveW, onFocus = { focusLabel(go, goSub) }) { r.onSports() }
+                }
+            }
+        }
+        is BrowseRow.Genres -> Column(Modifier.padding(top = 10.dp)) {
+            val pad = tvPad()
+            val genrePlot = stringResource(R.string.browse_genre_plot, "%s")
+            val featured = stringResource(R.string.genre_featured, "%s")
+            Text(r.title, color = Color(0xFFE5E5E5), fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = pad))
+            LazyRow(contentPadding = PaddingValues(start = pad, end = pad, top = 14.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                itemsIndexed(r.cards, key = { _, c -> c.label }) { i, c ->
+                    val plot = genrePlot.replace("%s", c.label) + (c.feat?.let { "   ·   " + featured.replace("%s", it.name) } ?: "")
+                    TvGenreTile(c, cardH * 0.86f, onFocus = { focusLabel(c.label, plot) }) { r.onPick(i) }
                 }
             }
         }

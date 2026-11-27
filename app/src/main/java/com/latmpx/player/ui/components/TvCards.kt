@@ -228,3 +228,23 @@ fun TvChipRow(chips: List<String>, modifier: Modifier = Modifier, selected: Stri
         itemsIndexed(chips) { i, c -> TvChip(c, c == selected, onFocus = onFocus?.let { f -> { f(i) } }) { onClick(i) } }
     }
 }
+
+/** un género de Películas / Series: el color, su dibujo de líneas (blanco translúcido) y el póster del destacado */
+data class GenreCard(val label: String, val color: Long, val art: Int, val feat: Item?)
+
+/** tarjeta de género: el póster a la derecha y el nombre abajo a la izquierda (como Roku y webOS) */
+@Composable
+fun TvGenreTile(c: GenreCard, width: Dp, onFocus: (() -> Unit)? = null, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    TvFocusable(onClick = onClick, onFocus = onFocus, shape = shape, scale = 1.08f, border = false, modifier = Modifier.width(width).aspectRatio(1.45f)) { f ->
+        Box(Modifier.fillMaxSize().clip(shape).background(Color(c.color)).border(2.dp, if (f) NfFocus else Color.Transparent, shape)) {
+            if (c.art != 0) Image(painterResource(c.art), null, contentScale = ContentScale.FillBounds, alpha = 0.3f, modifier = Modifier.fillMaxSize())
+            if (c.feat != null) ItemPoster(c.feat, Modifier.align(Alignment.CenterEnd).padding(end = 8.dp).fillMaxHeight(0.78f).aspectRatio(2f / 3f).clip(RoundedCornerShape(5.dp)))
+            Text(
+                c.label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, lineHeight = 20.sp,
+                style = TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color(0x80000000), androidx.compose.ui.geometry.Offset(0f, 2f), 6f)),
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 8.dp, end = if (c.feat != null) width * 0.4f else 10.dp),
+            )
+        }
+    }
+}
