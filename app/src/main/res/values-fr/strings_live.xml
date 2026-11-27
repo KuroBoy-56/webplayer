@@ -5,6 +5,8 @@
     <string name="sl_ht">Mi-temps</string>
     <string name="sl_live">EN DIRECT</string>
     <string name="sl_pref">Sport préféré</string>
+    <string name="sl_fav">Sport favori</string>
+    <string name="sl_fav_msg">Sur l’Accueil, «En direct» affiche seulement les matchs et événements de ce sport.</string>
     <string name="sl_all">Tous les sports</string>
     <string name="sl_plat">Activer les cartes des plateformes</string>
     <string name="sl_plat_on">Activé : les plateformes après « En direct »</string>

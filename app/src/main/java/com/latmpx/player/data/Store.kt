@@ -239,6 +239,19 @@ object Store {
         get() = p.getBoolean(tenantKey("plat_cards|" + scope() + "|" + (Profiles.current?.id ?: "")), false)
         set(v) = p.edit().putBoolean(tenantKey("plat_cards|" + scope() + "|" + (Profiles.current?.id ?: "")), v).apply()
 
+    /** Cuenta › Deporte favorito: "" = todos; si no, Inicio › «En vivo ahora» solo muestra esa disciplina (por línea y perfil) */
+    var liveSport: String
+        get() = p.getString(tenantKey("live_sport|" + scope() + "|" + (Profiles.current?.id ?: "")), "") ?: ""
+        set(v) = p.edit().putString(tenantKey("live_sport|" + scope() + "|" + (Profiles.current?.id ?: "")), v).apply()
+    /** lo último que dijo api/sports_live.php para esta línea (true hasta saberlo: mejor sin plataformas que con parpadeo) */
+    var liveAvail: Boolean
+        get() = p.getBoolean(tenantKey("live_avail|" + scope()), true)
+        set(v) = p.edit().putBoolean(tenantKey("live_avail|" + scope()), v).apply()
+
+    var liveSportName: String
+        get() = p.getString(tenantKey("live_sport_n|" + scope() + "|" + (Profiles.current?.id ?: "")), "") ?: ""
+        set(v) = p.edit().putString(tenantKey("live_sport_n|" + scope() + "|" + (Profiles.current?.id ?: "")), v).apply()
+
     var lastProfile: String
         get() = p.getString(tenantKey("last_prof|" + scope()), "") ?: ""
         set(v) = p.edit().putString(tenantKey("last_prof|" + scope()), v).apply()

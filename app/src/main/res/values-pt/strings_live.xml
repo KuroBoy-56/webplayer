@@ -5,6 +5,8 @@
     <string name="sl_ht">Intervalo</string>
     <string name="sl_live">AO VIVO</string>
     <string name="sl_pref">Esporte preferido</string>
+    <string name="sl_fav">Esporte favorito</string>
+    <string name="sl_fav_msg">No Início, «Ao vivo agora» mostra só as partidas e eventos deste esporte.</string>
     <string name="sl_all">Todos os esportes</string>
     <string name="sl_plat">Ativar cartões de plataformas</string>
     <string name="sl_plat_on">Ativado: as plataformas vêm depois de «Ao vivo agora»</string>

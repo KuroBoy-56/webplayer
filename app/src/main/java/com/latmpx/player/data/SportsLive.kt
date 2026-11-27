@@ -14,9 +14,21 @@ import java.net.URLEncoder
  * enabled = false y la fila no existe. La fila los vuelve a pedir cada "ttl" segundos (30) mientras Inicio está abierto.
  */
 object SportsLive {
-    /** el panel dio partidos en vivo para este cliente (clave de pago): Ajustes muestra «Deporte preferido» */
-    var available by mutableStateOf(false)
+    /** el panel tiene partidos en vivo para este cliente (clave de pago); null = todavía no contestó en esta sesión */
+    var available by mutableStateOf<Boolean?>(null)
         private set
+
+    /** sesión nueva: hasta la respuesta vale lo último que dijo el panel para esta línea (Store.liveAvail) */
+    fun reset() { available = null }
+
+    /**
+     * con perfiles y partidos en vivo, Inicio no muestra las plataformas (salvo Cuenta › Habilitar tarjetas de
+     * plataformas). Mientras el panel no contesta se usa lo de la última vez: así no aparecen y se van al cargar.
+     */
+    val hidesPlatforms: Boolean get() = MatchCloud.on && (available ?: Store.liveAvail) && !Store.platformCards
+
+    /** sube al cambiar Cuenta › Deporte favorito: la fila de Inicio vuelve a filtrar */
+    var prefRev by mutableStateOf(0)
 
     class Data(val enabled: Boolean, val ttl: Int, val events: List<SportEvent>, val sports: Map<String, SportInfo>, val rules: MatchRules, val iptvOnly: Boolean)
 
@@ -24,7 +36,7 @@ object SportsLive {
     suspend fun load(): Data? = withContext(Dispatchers.IO) {
         val j = Cloud.call { t -> Net.get(PanelUrl.api("sports_live.php") + "?soon=1&next=1&token=" + URLEncoder.encode(t, "UTF-8")) }?.json() ?: return@withContext null
         val ttl = j.optInt("ttl", 30).coerceIn(15, 3600)
-        withContext(Dispatchers.Main) { available = j.optBoolean("enabled", false) }
+        withContext(Dispatchers.Main) { available = j.optBoolean("enabled", false); Store.liveAvail = available == true }
         if (!j.optBoolean("enabled", false)) return@withContext Data(false, ttl, emptyList(), emptyMap(), Sports.rulesOf(null), false)
         val now = System.currentTimeMillis()
         val events = j.optJSONArray("events").mapObj { e ->
