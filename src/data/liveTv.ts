@@ -188,6 +188,19 @@ export function bellFrom(fav: Cloud | null, ag: any, liveEvents: any[], now: num
   return out.sort((x, y) => x.order - y.order || (x.order === 2 ? y.s - x.s : x.s - y.s));
 }
 
+// la campanita: lo que ya se vio (OK) en esta sesión, por perfil: el partido y su fase (0 en vivo, 1 hoy, 2 final), así
+// el mismo partido vuelve a avisar cuando empieza y cuando termina
+const bellSeenBy = new Map<string, Set<string>>();
+const bellTag = (m: BellMsg) => m.key + ':' + m.order;
+const bellSeenOf = (profile: string) => {
+  let x = bellSeenBy.get(profile);
+  if (!x) bellSeenBy.set(profile, (x = new Set()));
+  return x;
+};
+/** los avisos que todavía no se vieron (los que hacen bajar el cartel de la campanita) */
+export const bellUnseen = (profile: string, msgs: BellMsg[]) => msgs.filter(m => !bellSeenOf(profile).has(bellTag(m)));
+export const bellMarkSeen = (profile: string, msgs: BellMsg[]) => msgs.forEach(m => bellSeenOf(profile).add(bellTag(m)));
+
 export async function bellMessages(): Promise<BellMsg[]> {
   if (!liveTvOn()) return [];
   const fav = await cloudAlerts(true);

@@ -41,7 +41,7 @@ after(() => {
   Module._load = originalLoad;
   if (previousTs) require.extensions['.ts'] = previousTs; else delete require.extensions['.ts'];
 });
-const { bellFrom, leagueChoices } = require('../src/data/liveTv.ts');
+const { bellFrom, bellMarkSeen, bellUnseen, leagueChoices } = require('../src/data/liveTv.ts');
 
 const now = 20000 * 86400 + 15 * 3600; // 15:00 del día 20000
 const ag = {
@@ -83,4 +83,17 @@ test('ligas favoritas: primero las que juegan hoy, después las de 21 días y la
   stored = [{ id: '9', n: 'Vieja', b: '', sp: 'Soccer' }];
   const out = await leagueChoices();
   assert.deepStrictEqual(out.map(x => x.n + ':' + x.today), ['Premier League:2', 'NBA:0', 'Liga MX:0', 'Vieja:0']);
+});
+
+test('cartel de la campanita: lo no visto; el mismo partido vuelve a avisar al empezar y al terminar; por perfil', () => {
+  const hoy = [{ key: '7', text: 'Hoy 20:00: A vs B', order: 1, s: 1 }, { key: '8', text: '¡En vivo! C 1-0 D', order: 0, s: 2 }];
+  assert.deepStrictEqual(bellUnseen('p1', hoy).map(m => m.key), ['7', '8']);
+  bellMarkSeen('p1', hoy);
+  assert.deepStrictEqual(bellUnseen('p1', hoy), []);
+  // el marcador cambia, la fase no: no vuelve a salir
+  assert.deepStrictEqual(bellUnseen('p1', [{ key: '8', text: '¡En vivo! C 2-0 D', order: 0, s: 2 }]), []);
+  // empezó el de las 20:00: sale otra vez
+  assert.deepStrictEqual(bellUnseen('p1', [{ key: '7', text: '¡En vivo! A 0-0 B', order: 0, s: 1 }]).map(m => m.key), ['7']);
+  // otro perfil empieza de cero
+  assert.strictEqual(bellUnseen('p2', hoy).length, 2);
 });
