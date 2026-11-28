@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -146,46 +147,88 @@ private fun teamsOf(f: com.latmpx.player.data.Fixtures, league: String): List<Ma
     return out.values.sortedBy { it.label.ifBlank { it.name }.lowercase() }
 }
 
-private val shownFor = HashSet<String>()
+/** la campanita vive fuera del botón: el menú se desmonta al bajar por las filas y al pasar a otra sección */
+private object BellHub {
+    var msgs by mutableStateOf<List<TvBell.Msg>>(emptyList())
+    /** los avisos que todavía no se vieron: los que hacen bajar el cartel */
+    var fresh by mutableStateOf<List<TvBell.Msg>>(emptyList())
+    var prof: String? = null
+    var loadedAt = 0L
+    // cada aviso sale una vez por fase (el mismo partido vuelve a avisar al empezar y al terminar), por perfil y mientras la app está abierta
+    private val seen = HashSet<String>()
+    private fun tag(prof: String, m: TvBell.Msg) = prof + "|" + m.key + ":" + m.order
+    fun markSeen(prof: String, l: List<TvBell.Msg>) { l.forEach { seen += tag(prof, it) }; fresh = emptyList() }
+    suspend fun load(prof: String) {
+        loadedAt = System.currentTimeMillis(); this.prof = prof
+        MatchCloud.refresh(force = true)
+        val agenda = runCatching { Sports.load() }.getOrNull()
+        val live = runCatching { SportsLive.load() }.getOrNull()
+        val m = TvBell.messages(agenda, live)
+        if (this.prof != prof) return
+        msgs = m
+        fresh = m.filter { tag(prof, it) !in seen }
+    }
+}
 
 /**
- * La campanita de la barra de la TV (solo con perfiles): al entrar, si hoy juega un equipo favorito o un partido
- * marcado, baja un mensajito unos segundos («¡En vivo! Real Madrid 1-0 Barcelona», «Hoy 20:00: …», «Final: …»); con OK
- * se abre la lista de hoy. Se vuelve a mirar cada 10 minutos.
+ * La campanita de la barra de la TV (solo con perfiles). Al entrar a la app, al volver del reproductor y al pasar de una
+ * página a otra, si hay un aviso nuevo de hoy de un equipo favorito o de un partido marcado («¡En vivo! Real Madrid 1-0
+ * Barcelona», «Hoy 20:00: …», «Final: …») baja desde la campanita un cartelito con el foco en OK; con OK (o Atrás) se va
+ * y el foco sigue donde estaba (el menú o el contenido). Con OK sobre la campanita se abre la lista de hoy, o «No hay
+ * notificaciones.». Se vuelve a mirar cada 10 minutos y al cambiar de página (como mucho cada minuto).
  */
 @Composable
-fun TvBellButton() {
-    var msgs by remember { mutableStateOf<List<TvBell.Msg>>(emptyList()) }
+fun TvBellButton(state: com.latmpx.player.ui.AppState) {
+    val msgs = BellHub.msgs
     var open by remember { mutableStateOf(false) }
-    var toast by remember { mutableStateOf("") }
     val prof = Profiles.current?.id.orEmpty()
-    LaunchedEffect(prof) {
+    LaunchedEffect(prof, state.tab, state.stack.size, state.refresh) {
         while (true) {
-            MatchCloud.refresh(force = true)
-            val agenda = runCatching { Sports.load() }.getOrNull()
-            val live = runCatching { SportsLive.load() }.getOrNull()
-            msgs = TvBell.messages(agenda, live)
-            if (msgs.isNotEmpty() && shownFor.add(prof)) {
-                toast = msgs.first().text + if (msgs.size > 1) "   +${msgs.size - 1}" else ""
-                delay(7000)
-                toast = ""
-            }
+            if (BellHub.prof != prof || System.currentTimeMillis() - BellHub.loadedAt > 60_000) runCatching { BellHub.load(prof) }
             delay(600_000L)
         }
     }
+    val banner = BellHub.fresh.isNotEmpty() && BellHub.prof == prof && !open && state.stack.isEmpty() && !state.immersive && !state.alertOpen && state.entering == null
+    val below = with(androidx.compose.ui.platform.LocalDensity.current) { 50.dp.roundToPx() }
     Box {
-        FocusBox(onClick = { open = true; toast = "" }, shape = CircleShape, focusScale = 1.12f) { f ->
+        FocusBox(onClick = { BellHub.markSeen(prof, msgs); open = true }, shape = CircleShape, focusScale = 1.12f) { f ->
             Box(Modifier.size(40.dp).background(if (f) Color.White else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Notifications, stringResource(R.string.tb_bell), tint = if (f) Color.Black else Color.White, modifier = Modifier.size(24.dp))
                 if (msgs.isNotEmpty()) Box(Modifier.align(Alignment.TopEnd).offset((-6).dp, 6.dp).size(9.dp).background(NfRed, CircleShape))
             }
         }
-        // el mensajito baja de la campanita (no toma el foco)
-        if (toast.isNotEmpty()) Popup(alignment = Alignment.TopEnd, offset = IntOffset(0, 120)) {
-            Text(toast, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2,
-                modifier = Modifier.width(380.dp).background(Color(0xF0181818), RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 12.dp))
+        // el cartel baja de la campanita y toma el foco (OK); al cerrarse, la ventana de la app vuelve a tener el foco
+        // donde lo había dejado el usuario
+        if (banner) {
+            val fresh = BellHub.fresh
+            val close = { BellHub.markSeen(prof, fresh) }
+            Popup(alignment = Alignment.TopEnd, offset = IntOffset(0, below), onDismissRequest = close, properties = PopupProperties(focusable = true)) {
+                val ok = remember { FocusRequester() }
+                Box {
+                    // la puntita que señala la campanita (40 dp: su centro a 20 dp del borde derecho)
+                    Box(Modifier.align(Alignment.TopEnd).padding(end = 13.dp).size(14.dp).rotate(45f).background(BellBg))
+                    Column(Modifier.padding(top = 7.dp).width(400.dp).background(BellBg, RoundedCornerShape(10.dp)).padding(horizontal = 16.dp, vertical = 14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                            Icon(Icons.Filled.Notifications, null, tint = NfRed, modifier = Modifier.size(20.dp))
+                            Text(stringResource(R.string.tb_bell), color = NfGray2, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
+                        }
+                        fresh.take(3).forEach { m ->
+                            Text(m.text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 6.dp))
+                        }
+                        if (fresh.size > 3) Text(stringResource(R.string.tb_more, fresh.size - 3), color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
+                        Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.CenterEnd) {
+                            FocusBox(onClick = close, modifier = Modifier.focusRequester(ok), focusScale = 1.05f) { fo ->
+                                Text("OK", color = if (fo) Color.Black else Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.width(110.dp).background(if (fo) Color.White else NfRed, RoundedCornerShape(6.dp)).padding(vertical = 9.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            }
+                        }
+                    }
+                }
+                LaunchedEffect(Unit) { delay(60); runCatching { ok.requestFocus() } }
+            }
         }
-        if (open) Popup(alignment = Alignment.TopEnd, offset = IntOffset(0, 120), onDismissRequest = { open = false }, properties = PopupProperties(focusable = true)) {
+        if (open) Popup(alignment = Alignment.TopEnd, offset = IntOffset(0, below), onDismissRequest = { open = false }, properties = PopupProperties(focusable = true)) {
             val first = remember { FocusRequester() }
             Column(Modifier.width(420.dp).background(Color(0xF5181818), RoundedCornerShape(10.dp)).padding(14.dp)) {
                 Text(stringResource(R.string.tb_bell), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(bottom = 8.dp))
@@ -204,6 +247,8 @@ fun TvBellButton() {
         }
     }
 }
+
+private val BellBg = Color(0xFF1E1E1E)
 
 /**
  * Cuenta › Deporte favorito (solo con perfiles): «Todos los deportes» o una de las disciplinas que da el panel

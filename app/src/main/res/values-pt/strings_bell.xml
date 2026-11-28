@@ -14,8 +14,9 @@
     <string name="tb_no_data">Não há próximas partidas para escolher times.</string>
     <string name="tb_no_teams">Não há times nesta liga.</string>
     <string name="tb_remove">Remover</string>
-    <string name="tb_bell">Avisos de hoje</string>
-    <string name="tb_bell_empty">Nenhum dos seus times joga hoje.</string>
+    <string name="tb_bell">Notificações</string>
+    <string name="tb_bell_empty">Não há notificações.</string>
+    <string name="tb_more">e mais %1$d</string>
     <string name="tb_live">Ao vivo! %1$s</string>
     <string name="tb_today">Hoje %1$s: %2$s</string>
     <string name="tb_final">Final: %1$s</string>

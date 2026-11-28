@@ -46,6 +46,8 @@ class AppState {
     val stack = mutableStateListOf<Route>()
     /** celular: video a pantalla completa (se ocultan la barra inferior y las del sistema) */
     var immersive by mutableStateOf(false)
+    /** TV: el aviso del panel (bienvenida o vencimiento) está abierto: el cartel de la campanita espera a que se cierre */
+    var alertOpen by mutableStateOf(false)
     var movieCats by mutableStateOf<List<Category>>(emptyList())
     var seriesCats by mutableStateOf<List<Category>>(emptyList())
     var liveCats by mutableStateOf<List<Category>>(emptyList())

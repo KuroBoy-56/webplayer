@@ -215,7 +215,7 @@ private fun TvTopBar(state: AppState, tabFocus: Map<Tab, FocusRequester>, modifi
         // con perfiles: la campanita con los partidos de hoy de los equipos favoritos y los marcados
         if (com.latmpx.player.data.MatchCloud.on) {
             Spacer(Modifier.width(10.dp))
-            com.latmpx.player.ui.screens.TvBellButton()
+            com.latmpx.player.ui.screens.TvBellButton(state)
         }
         // sin perfiles, el ícono de cuenta (con perfiles Cuenta se abre desde el avatar)
         if (prof == null) Spacer(Modifier.width(14.dp))
