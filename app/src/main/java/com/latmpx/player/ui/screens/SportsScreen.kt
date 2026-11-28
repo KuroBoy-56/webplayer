@@ -292,7 +292,12 @@ fun SportsScreen(state: AppState) {
     }
     // Hoy: los de hoy y los que siguen en vivo; Mañana: los de mañana. En vivo, después por hora y al final los terminados.
     // Con perfiles, Finalizados: los de hoy ya terminados (el último primero; a las 00:00 del panel se vacía) y Hoy sin ellos
-    val rows = remember(d, curTab, sport, now, finTab) {
+    // Ajustes › Deporte preferido y Ligas favoritas: los en vivo de esos primero (con perfiles)
+    val favRev = com.latmpx.player.data.SportsLive.prefRev
+    val favOn = com.latmpx.player.data.Profiles.current != null && !com.latmpx.player.data.Profiles.kids
+    val favSport = remember(favRev, com.latmpx.player.data.Profiles.current) { if (favOn) com.latmpx.player.data.Store.preferredSport else "" }
+    val favLeagues = remember(favRev, com.latmpx.player.data.Profiles.current) { if (favOn) com.latmpx.player.data.Store.liveLeagues.map { it.id }.toSet() else emptySet() }
+    val rows = remember(d, curTab, sport, now, finTab, favSport, favLeagues) {
         val liveL = ArrayList<SportEvent>()
         val nextL = ArrayList<SportEvent>()
         val doneL = ArrayList<SportEvent>()
@@ -308,7 +313,7 @@ fun SportsScreen(state: AppState) {
                 else -> doneL += e
             }
         }
-        liveL + nextL + doneL
+        favoritesFirst(liveL, favSport, favLeagues) + nextL + doneL
     }
     val sportKeys = remember(d) { d.events.map { it.sport }.filter { it.isNotEmpty() }.distinct() }
     val liveCount = remember(d, now) { d.events.count { isLive(it) } }
