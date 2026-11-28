@@ -151,6 +151,10 @@ object MatchAlerts {
 
     internal fun pendingFirst(): JSONObject? = arr(prefs.getString("cloud_q", null)).optJSONObject(0)
 
+    /** ¿hay un cambio de este tipo todavía sin mandar? (gana sobre lo que baja de la nube) */
+    internal fun pendingHas(action: String): Boolean =
+        ::prefs.isInitialized && arr(prefs.getString("cloud_q", null)).objs().any { it.optString("action") == action }
+
     internal fun pendingDrop() {
         val q = arr(prefs.getString("cloud_q", null)).objs().drop(1)
         prefs.edit().putString("cloud_q", JSONArray(q).toString()).apply()
@@ -210,11 +214,12 @@ object MatchAlerts {
                 }
             }
         }
-        // con perfiles (o equipos favoritos): cada hora se bajan los avisos de la nube (lo que se marcó en la TV o en la
-        // computadora) y se vuelve a pedir la lista de partidos al panel
+        // con perfiles (o equipos favoritos): cada 15 minutos se bajan los avisos de la nube (lo que se marcó en la TV o en
+        // la computadora) y se vuelve a pedir la lista de partidos al panel. Antes era cada hora: un partido marcado en la
+        // TV media hora antes podía no avisar en el celular
         val r = pi(REFRESH_CODE, Intent(app, MatchAlertReceiver::class.java).setAction(ACTION_REFRESH))
         am.cancel(r)
-        if (refresh) am.setInexactRepeating(AlarmManager.RTC, now + AlarmManager.INTERVAL_HOUR, AlarmManager.INTERVAL_HOUR, r)
+        if (refresh) am.setInexactRepeating(AlarmManager.RTC_WAKEUP, now + AlarmManager.INTERVAL_FIFTEEN_MINUTES, AlarmManager.INTERVAL_FIFTEEN_MINUTES, r)
         prefs.edit().putString("codes", codes.joinToString(",")).putBoolean("refresh", refresh).apply()
     }
 
