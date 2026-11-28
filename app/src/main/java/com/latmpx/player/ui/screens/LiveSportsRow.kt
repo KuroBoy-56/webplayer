@@ -121,9 +121,9 @@ internal fun rememberLiveSports(state: AppState): LiveSports {
             delay(300_000L)
         }
     }
-    val pref = remember(Profiles.current, SportsLive.available) { Store.preferredSport }
+    val pref = remember(Profiles.current, SportsLive.available, SportsLive.prefRev) { Store.preferredSport }
     // Ajustes › Ligas favoritas: solo esas ligas (vacío = todas)
-    val lgs = remember(Profiles.current, SportsLive.available) { Store.liveLeagues.map { it.id }.toSet() }
+    val lgs = remember(Profiles.current, SportsLive.available, SportsLive.prefRev) { Store.liveLeagues.map { it.id }.toSet() }
     val cards by produceState<List<LiveCard>>(emptyList(), d, chans, epgMap, pref, lgs) {
         val c = chans
         if (d == null || c == null || !on) { value = emptyList(); return@produceState }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URLEncoder
 
@@ -44,6 +45,39 @@ object MatchAlertsCloud {
         val j = r.json() ?: return false
         if (!j.optBoolean("success") || !j.optBoolean("enabled")) return false
         MatchAlerts.applyCloud(j.optJSONArray("teams"), j.optJSONObject("events"), suffix)
+        applyPrefs(j.optJSONObject("prefs"), suffix)
         true
+    }
+
+    // ---------- Ajustes › Deporte preferido y Ligas favoritas en la nube («prefs» de api/alerts.php) ----------
+    // Lo que se elige en la TV (Roku, Android TV, webOS…) se ve aquí y al revés. La nube manda; si nunca se guardó
+    // (at = 0) se sube lo que este celular tenía guardado de antes.
+
+    /** solo para el perfil abierto (la actualización de fondo no toca los ajustes) */
+    private suspend fun applyPrefs(p: JSONObject?, suffix: String) {
+        if (p == null || suffix != MatchAlerts.suffix() || MatchAlerts.pendingHas("set_prefs")) return
+        withContext(Dispatchers.Main) {
+            if (p.optLong("at") <= 0L) {
+                if (Store.preferredSport.isNotEmpty() || Store.liveLeagues.isNotEmpty()) pushPrefs()
+                return@withContext
+            }
+            val sp = p.optString("sp")
+            val a = p.optJSONArray("lg")
+            val lg = (0 until (a?.length() ?: 0)).mapNotNull { i ->
+                a?.optJSONObject(i)?.let { o -> FavLeague(o.optString("id"), o.optString("n"), o.optString("sp")).takeIf { it.id.isNotEmpty() } }
+            }
+            if (sp == Store.preferredSport && lg.map { it.id } == Store.liveLeagues.map { it.id }) return@withContext
+            Store.preferredSport = sp
+            Store.liveLeagues = lg
+            SportsLive.prefRev++
+        }
+    }
+
+    /** sube el deporte preferido y las ligas favoritas de este perfil (después de elegirlos en Ajustes) */
+    fun pushPrefs() {
+        if (Profiles.current == null) return
+        val sp = Store.preferredSport
+        val lg = org.json.JSONArray(Store.liveLeagues.map { JSONObject().put("id", it.id).put("n", it.name).put("sp", it.sport) })
+        push(JSONObject().put("action", "set_prefs").put("prefs", JSONObject().put("sp", sp).put("spn", if (sp.isEmpty()) "" else SportsLive.labels[sp] ?: sp).put("lg", lg)))
     }
 }
