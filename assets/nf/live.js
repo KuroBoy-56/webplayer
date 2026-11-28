@@ -190,6 +190,8 @@
             });
     }
     document.addEventListener('visibilitychange', function () { if (document.hidden) clearTimeout(timer); else load(); });
+    // el deporte preferido o los eventos favoritos llegaron de la nube (assets/nf/prefs.js): se vuelve a filtrar
+    window.addEventListener('nf-prefs', function () { if (shown) render(); });
 
     /* ---------- menú del partido: sus canales (todos del cliente, en verde) y buscar ---------- */
     var menu = document.createElement('div');

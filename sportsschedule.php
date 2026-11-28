@@ -395,7 +395,7 @@ body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; p
     // pestaña Finalizados: solo con perfiles (uno elegido)
     var FINTAB = <?php echo json_encode($sp_fin); ?>;
 
-    var FIN = /^(FT|AET|AOT|PEN|Match Finished|Finished|After Over Time|Final)$/i;
+    var FIN = /^(FT|AET|AOT|AP|PEN|FT_PEN|FIN|Final|Final\/OT|Final OT|Ended|Finished|Match Finished|After Over Time|After Extra Time|After Penalties|AWD|WO|CANC|Cancelled|Canceled|ABD|Abandoned)$/i;
     var state = { day: 0, sport: '' };
     var fmtT = new Intl.DateTimeFormat(window.NF_LOCALE, { hour: 'numeric', minute: '2-digit', timeZone: TZ || undefined });
     var fmtD = TZ ? new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }) : null;

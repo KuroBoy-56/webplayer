@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Deporte preferido y Eventos favoritos en la nube y partidos terminados — versión 3.1.6 (28 de noviembre)
+- Ajustes › **Deporte preferido** y **Eventos favoritos** se guardan también en la nube del panel por línea y perfil (`api/alerts.php`, `prefs`): lo elegido en la TV (Roku, Android TV, webOS…), el celular o la computadora aparece aquí, y al revés. Inicio (`homex.php`) y Ajustes lo bajan al abrir (`assets/nf/prefs.js`, `settings.php?ajax=prefs`); el navegador sigue guardando una copia. Solo con perfiles, como los equipos favoritos.
+- Deportes: más estados de partido terminado (después de penales «AP», «Ended», cancelado, abandonado…): ya no se marcan «EN VIVO» mientras dura el tiempo del deporte. El panel además manda el estado de ahora (con su clave de pago).
+- Archivos: `settings.php`, `homex.php`, `sportsschedule.php`, `assets/nf/prefs.js` (nuevo), `assets/nf/live.js`, `includes/core.php`. Necesita el panel del 28 de noviembre (`api/alerts.php`, `includes/match_alerts.php`).
+
 ## Eventos favoritos, Explorar con Z - A e «Ir a Deportes» translúcido — versión 3.1.5 (28 de noviembre)
 - Ajustes › **Ligas favoritas** pasa a **Eventos favoritos** y suma las copas internacionales y de selecciones que manda el panel (`cups` de `api/sports.php`: Champions, Europa League, Libertadores, CONCACAF, Mundial FIFA…) aunque esa semana no jueguen. Sin deporte preferido pide elegirlo primero; con uno, solo sus eventos.
 - Explorar (`browse.php`) suma el orden **Z - A** (`?sort=za`; también en `api.php`).

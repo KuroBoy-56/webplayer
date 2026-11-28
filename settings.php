@@ -30,6 +30,33 @@ if (($_GET['ajax'] ?? '') === 'teams') {
     echo json_encode(['ok' => $on, 'teams' => $on && is_array($j['teams'] ?? null) ? $j['teams'] : []], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
+/* Deporte preferido y Eventos favoritos (con perfiles): también en la nube del panel (api/alerts.php «prefs»), así lo
+   elegido en la TV o el celular se ve aquí y al revés (assets/nf/prefs.js). GET = lo de la nube; POST {sp, spn, lg}. */
+if (($_GET['ajax'] ?? '') === 'prefs') {
+    require_once __DIR__ . '/includes/sports_live.php';
+    wp_session_read_close();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: private, no-store');
+    if (!wp_sports_live_allowed()) { echo json_encode(['ok' => false]); exit; }
+    $prof = (string)(wp_prof_state()['id'] ?? '');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') { http_response_code(403); echo json_encode(['ok' => false]); exit; }
+        $in = json_decode((string)file_get_contents('php://input'), true);
+        $in = is_array($in) ? $in : [];
+        $lg = [];
+        foreach (array_slice(is_array($in['lg'] ?? null) ? $in['lg'] : [], 0, 40) as $l) {
+            if (!is_array($l) || trim((string)($l['id'] ?? '')) === '') continue;
+            $lg[] = ['id' => mb_substr((string)$l['id'], 0, 64), 'n' => mb_substr((string)($l['n'] ?? ''), 0, 120), 'sp' => mb_substr((string)($l['sp'] ?? ''), 0, 40)];
+        }
+        $p = ['sp' => mb_substr((string)($in['sp'] ?? ''), 0, 40), 'spn' => mb_substr((string)($in['spn'] ?? ''), 0, 60), 'lg' => $lg];
+        $j = wp_panel_call('alerts.php', ['action' => 'set_prefs', 'prefs' => $p, 'profile' => $prof], 12);
+    } else {
+        $j = wp_panel_call('alerts.php' . ($prof !== '' ? '?profile=' . rawurlencode($prof) : ''), null, 12);
+    }
+    $on = is_array($j) && !empty($j['success']) && !empty($j['enabled']);
+    echo json_encode(['ok' => $on, 'prefs' => $on && is_array($j['prefs'] ?? null) ? $j['prefs'] : null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 if (isset($_COOKIE["settings_array"])) {
     $SettingArray = json_decode($_COOKIE["settings_array"], true);
     $stream_type = isset($SettingArray["stream_type"]) ? $SettingArray["stream_type"] : "m3u8";
@@ -178,6 +205,7 @@ function opt($name, $value, $label, $desc, $current)
         <?php endif; ?>
     </div>
 </div>
+<?php if ($live_on): ?><script src="assets/nf/prefs.js?v=1"></script><?php endif; ?>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     Array.prototype.forEach.call(document.querySelectorAll('input[name="use_vlc"]'), function (r) {
@@ -197,6 +225,14 @@ document.addEventListener('DOMContentLoaded', function () {
         ls.addEventListener('change', function () {
             try { if (ls.value) localStorage.setItem(ls.getAttribute('data-key'), ls.value); else localStorage.removeItem(ls.getAttribute('data-key')); } catch (x) {}
             if (window.NF && NF.toast) NF.toast(<?php echo tj('Ajustes guardados correctamente.'); ?>);
+            // en la nube, después de quitar las ligas de otro deporte (el otro aviso de cambio, abajo)
+            setTimeout(function () { if (window.NFPrefs) NFPrefs.push(ls.getAttribute('data-key'), ls.value ? ls.options[ls.selectedIndex].text : ''); }, 0);
+        });
+        // lo elegido en la TV, el celular o la computadora (la nube manda)
+        if (window.NFPrefs) NFPrefs.pull(ls.getAttribute('data-key'), function (changed) {
+            if (!changed) return;
+            try { ls.value = localStorage.getItem(ls.getAttribute('data-key')) || ''; } catch (x) {}
+            window.dispatchEvent(new Event('nf-prefs'));
         });
     }
     // Eventos favoritos (ligas y copas internacionales del deporte preferido): varios a la vez (las de la agenda y las de los próximos 21 días, las que juegan hoy primero, con
@@ -250,7 +286,9 @@ document.addEventListener('DOMContentLoaded', function () {
             store(sel);
             draw();
             if (window.NF && NF.toast) NF.toast(<?php echo tj('Ajustes guardados correctamente.'); ?>);
+            if (window.NFPrefs) NFPrefs.push(ls.getAttribute('data-key'), ls.value ? ls.options[ls.selectedIndex].text : '');
         });
+        window.addEventListener('nf-prefs', draw);
         // al elegir un deporte se quitan las ligas de otro
         ls.addEventListener('change', function () { if (ls.value) store(chosen().filter(function (x) { return x.sp === ls.value; })); draw(); });
         draw();

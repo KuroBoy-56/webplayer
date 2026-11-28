@@ -37,7 +37,10 @@ try { if (localStorage.getItem(<?php echo json_encode(wp_sports_live_plat_key())
     inList: <?php echo tj('en tu lista: {c}'); ?>, inGuide: <?php echo tj('en la guía'); ?>, byTeams: <?php echo tj('por equipos'); ?>,
     searchX: <?php echo tj('Buscar canales: «{q}»'); ?>, searchAny: <?php echo tj('Buscar canal, equipo o evento…'); ?>, typeHint: <?php echo tj('Canal, equipo o evento'); ?>,
     go: <?php echo tj('Buscar'); ?>, starts: <?php echo tj('Empieza'); ?>, goSports: <?php echo tj('Ir a Deportes'); ?>, goSportsSub: <?php echo tj('Toda la agenda de hoy y mañana'); ?>, chWith: <?php echo tj('Canales con «{q}»'); ?>, noChWith: <?php echo tj('No hay canales con «{q}» en tu lista'); ?> } };</script>
-<script src="assets/nf/live.js?v=3" defer></script>
+<script src="assets/nf/prefs.js?v=1"></script>
+<script>/* Deporte preferido y Eventos favoritos elegidos en la TV o el celular (nube del panel): la fila filtra con eso */
+if (window.NFPrefs) NFPrefs.pull(window.NF_LIVE.key, function (changed) { if (changed) window.dispatchEvent(new Event('nf-prefs')); });</script>
+<script src="assets/nf/live.js?v=4" defer></script>
 <?php else: ?>
 <?php echo wp_platform_tiles(); ?>
 <?php endif; ?>
