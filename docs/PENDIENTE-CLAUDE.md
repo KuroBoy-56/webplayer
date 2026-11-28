@@ -54,4 +54,5 @@ aw-play-store (celular), aw-android-tv / aw-android-tv-sin-certificado / pstv (T
 - Panel: `sp_cups()` en `includes/sports_engine.php` (commit ec58641, panelweb) — subir `includes/sports_engine.php` y `api/sports.php`.
 - webOS 1.6.4, Tizen 1.5.4, VIDAA 1.1.8, Vega 2.9.5: puntos 1–4 hechos (scripts en scratchpad: rn_events.py, rn_explore.py, rn_tiles.py).
 - Android TV 1.8.2 / sin certificado 1.8.3 / pstv 1.8.2: puntos 1–4 hechos.
-- Falta: Roku (1–5), escritorio ×3, Android celular ×3, web player, iOS (solo Z - A).
+- Roku 2.8.6: puntos 1–5 hechos (refoco defensivo en RowsSection.setContent; ficha: listMode con la fila abajo).
+- Falta: escritorio ×3, Android celular ×3, web player, iOS (solo Z - A).
