@@ -7,6 +7,7 @@ import { tmdbLang } from '../lib/i18n';
 import { read } from '../lib/storage';
 import { APP_ID, scoped, tenantCode } from '../lib/tenant';
 import { buildTitleIndex, catalogYear, lookupTitle, TitleIndex, titleKeys, yearsOk } from '../lib/titles';
+import { tmdbFirstPart, tmdbTitle } from '../lib/tmdbTitle';
 import { str } from '../lib/util';
 
 const BUILTIN_KEY = '0c23c3f0458f0f9e4d0a35048d3a199a';
@@ -58,20 +59,29 @@ async function tmdbIdFor(item: Item, tmdbId: string, year: string): Promise<stri
   const ck = kind + ':' + item.id;
   const hit = idCache.get(ck);
   if (hit !== undefined) return hit;
-  const k = titleKeys(item.name);
   const y = catalogYear(item.name, year || item.year);
-  const q = encodeURIComponent(k.base || item.name);
-  const j = await get('search/' + kind, 'language=es-MX&include_adult=false&query=' + q);
+  // el título como lo entiende TMDB («NETFLIX - Stranger Things S01» -> «Stranger Things»), la misma regla que el panel,
+  // Roku y Android; sin el subtítulo («Título - …») si TMDB no lo conoce entero
+  const { q, y: y0 } = tmdbTitle(item.name);
+  const yy = y || (y0 ? Number(y0) : null);
   let id = '';
-  for (const r of (j && Array.isArray(j.results) ? j.results : []).slice(0, 8)) {
-    const names = [str(r.title), str(r.name), str(r.original_title), str(r.original_name)].filter(Boolean).map(n => titleKeys(n).exact);
-    const ry = Number(str(r.release_date || r.first_air_date).slice(0, 4)) || null;
-    if ((names.includes(k.exact) || names.includes(k.base)) && yearsOk(y, ry)) {
-      id = str(r.id);
-      break;
+  let answered = false;
+  for (const one of [q, tmdbFirstPart(q)].filter((v, i, a) => v && a.indexOf(v) === i)) {
+    const k = titleKeys(one);
+    const j = await get('search/' + kind, 'language=es-MX&include_adult=false&query=' + encodeURIComponent(k.base ? one : item.name));
+    if (j) answered = true;
+    for (const r of (j && Array.isArray(j.results) ? j.results : []).slice(0, 8)) {
+      const names = [str(r.title), str(r.name), str(r.original_title), str(r.original_name)].filter(Boolean).map(n => titleKeys(n).exact);
+      const ry = Number(str(r.release_date || r.first_air_date).slice(0, 4)) || null;
+      if ((names.includes(k.exact) || names.includes(k.base)) && yearsOk(yy, ry)) {
+        id = str(r.id);
+        break;
+      }
     }
+    // la primera parte solo con el año conocido (si no, «Avengers: Endgame» daría «The Avengers»)
+    if (id || !yy) break;
   }
-  if (j) idCache.set(ck, id);
+  if (answered) idCache.set(ck, id);
   return id;
 }
 
@@ -119,9 +129,10 @@ export async function overviewFor(item: Item, tmdbId: string, year: string): Pro
 // portada de Inicio / Series / Películas cuando el servidor no tiene fondo
 export async function searchArt(item: Item, year: string): Promise<{ backdrop: string; plot: string; rating: string } | null> {
   const kind = item.kind === 'series' ? 'tv' : 'movie';
-  const k = titleKeys(item.name);
-  const y = catalogYear(item.name, year || item.year);
-  const j = await get('search/' + kind, 'language=es-MX&include_adult=false&query=' + encodeURIComponent(k.base || item.name));
+  const { q, y: y0 } = tmdbTitle(item.name);
+  const k = titleKeys(q);
+  const y = catalogYear(item.name, year || item.year) || (y0 ? Number(y0) : null);
+  const j = await get('search/' + kind, 'language=es-MX&include_adult=false&query=' + encodeURIComponent(k.base ? q : item.name));
   if (!j) return null;
   for (const r of (Array.isArray(j.results) ? j.results : []).slice(0, 8)) {
     const names = [str(r.title), str(r.name), str(r.original_title), str(r.original_name)].filter(Boolean).map(n => titleKeys(n).exact);
