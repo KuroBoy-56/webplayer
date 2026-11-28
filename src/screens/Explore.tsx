@@ -1,9 +1,7 @@
 // Explorar (la lupa de la barra, solo con perfiles): como browse.php del web player en horizontal. «Explorar» y su
-// subtítulo sobre el degradado del color, la cápsula Todo / Películas / Series, «Categorías» (despliega las carpetas del
-// servidor IPTV, como el selector de Películas / Series del web player; con una elegida la cuadrícula es esa carpeta),
-// «Filtrar por título…» (abre el teclado de la app), el total, los géneros, las plataformas, el divisor y la cuadrícula
-// de carátulas. Todo con el control; una plataforma elegida se quita con «Todas las plataformas». El orden tiene solo los
-// tres del web player (Agregados recientemente / A - Z / Mejor valorados). «Ver todo» de una fila la abre como pantalla
+// subtítulo sobre el degradado del color, la cápsula Todo / Películas / Series, el orden, «Filtrar por título…» (abre el teclado de la app), el total, los géneros, las plataformas, el divisor y la cuadrícula
+// de carátulas. Todo con el control; una plataforma elegida se quita con «Todas las plataformas». El orden: Agregados
+// recientemente / A - Z / Z - A / Mejor valorados. Sin botón de categorías: una carpeta solo llega por su «Ver todo». «Ver todo» de una fila la abre como pantalla
 // (init = el filtro de esa fila: plataforma, género, tipo, categoría y orden); Atrás vuelve a la fila.
 import React, { useMemo, useState } from 'react';
 import { Image, Modal, Platform as RNPlatform, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -24,6 +22,7 @@ type Cat = { id: string; name: string; kind: 'vod' | 'series' };
 const SORTS: [ExploreSort, string][] = [
   ['recent', 'Agregados recientemente'],
   ['az', 'A - Z'],
+  ['za', 'Z - A'],
   ['rating', 'Mejor valorados'],
 ];
 
@@ -31,7 +30,6 @@ export default function Explore({ active, init }: { active: boolean; init?: Expl
   const st = useAppState();
   const [type, setType] = useState<Type>(init?.cat?.kind || init?.type || 'all');
   const [cat, setCat] = useState<Cat | null>(init?.cat || null);
-  const [catsOpen, setCatsOpen] = useState(false);
   const [sort, setSort] = useState<ExploreSort>(init?.sort || 'recent');
   const [sortOpen, setSortOpen] = useState(false);
   const [genre, setGenre] = useState(init?.genre || '');
@@ -51,7 +49,6 @@ export default function Explore({ active, init }: { active: boolean; init?: Expl
     () => catalog.explore(type, sort, cat ? '' : plat?.key || '', cat ? '' : genre, q, 2000, cat?.id || '', cat?.kind || ''),
     [type, sort, cat, plat, genre, q, st.catalogRev],
   );
-  const cats = useMemo(() => (catsOpen ? catalog.exploreCats(type) : []), [catsOpen, type, st.catalogRev]);
   const pickType = (k: Type) => (setType(k), setCat(null), setGenre(''));
 
   const title = cat ? cat.name : plat ? label(plat) : gen ? label(gen) : t('Explorar');
@@ -63,7 +60,6 @@ export default function Explore({ active, init }: { active: boolean; init?: Expl
         ? t('Películas y series de {x}', { x: label(gen).toLowerCase() })
         : t('Todo el catálogo de películas y series');
   const accent = (!cat && plat?.color) || '#E50914';
-  const catLabel = cat ? (cat.name.length > 28 ? cat.name.slice(0, 27) + '…' : cat.name) : t('Categorías');
 
   const header = (
     <View>
@@ -92,9 +88,6 @@ export default function Explore({ active, init }: { active: boolean; init?: Expl
               </Focusable>
             ))}
           </View>
-          <Focusable onPress={() => setCatsOpen(true)} style={f => [s.select, f && s.focus]}>
-            {f => <Text style={[s.selectText, f && s.focusText]} numberOfLines={1}>{catLabel}  ▾</Text>}
-          </Focusable>
           <Focusable onPress={() => setSortOpen(true)} style={f => [s.select, f && s.focus]}>
             {f => <Text style={[s.selectText, f && s.focusText]} numberOfLines={1}>{t(SORTS.find(x => x[0] === sort)![1] as any)}  ▾</Text>}
           </Focusable>
@@ -128,34 +121,6 @@ export default function Explore({ active, init }: { active: boolean; init?: Expl
   return (
     <View style={s.root}>
       <ItemGrid items={res.items} header={header} active={active} focusFirst={typing ? 0 : focusRev} />
-      {catsOpen ? (
-        <Modal visible transparent animationType="fade" onRequestClose={() => (setCatsOpen(false), setFilterRev(n => n + 1))}>
-          <View style={s.shade}>
-            <View style={s.box}>
-              <Text style={s.boxTitle}>{t('Categorías')}</Text>
-              <ScrollView style={s.list}>
-                {[null, ...cats].map((c, i) => (
-                  <View key={c ? c.kind + c.id : 'all'} style={s.listRow}>
-                    <Button
-                      label={c ? c.name + (type === 'all' ? '  ·  ' + t(c.kind === 'series' ? 'Series' : 'Películas') : '') : t('Todas las categorías')}
-                      left
-                      last
-                      width={px(820)}
-                      preferred={c ? cat?.id === c.id && cat?.kind === c.kind : !cat && i === 0}
-                      onPress={() => {
-                        setCatsOpen(false);
-                        setCat(c);
-                        if (c) (setGenre(''), setPlatform(''));
-                        setFilterRev(n => n + 1);
-                      }}
-                    />
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-      ) : null}
       {sortOpen ? (
         <Modal visible transparent animationType="fade" onRequestClose={() => (setSortOpen(false), setFilterRev(n => n + 1))}>
           <View style={s.shade}>

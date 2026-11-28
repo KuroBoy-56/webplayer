@@ -10,6 +10,7 @@ const originalLoad = Module._load;
 let stored = null; // ligas favoritas guardadas (readJson)
 let agendaMock = null;
 let leaguesMock = {};
+let sportMock = ''; // deporte favorito guardado
 const previousTs = require.extensions['.ts'];
 require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true }, fileName: filename,
@@ -18,7 +19,7 @@ const str = v => (v === undefined || v === null ? '' : String(v));
 const hm = s => { const d = new Date(s * 1000); return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); };
 Module._load = function (request, parent, isMain) {
   if (request === '../api/panel') return { cloud: async () => ({}), lineKey: () => 'k' };
-  if (request === '../lib/storage') return { read: () => '', write: () => {}, readJson: () => stored, writeJson: () => {} };
+  if (request === '../lib/storage') return { read: k => (/\|n$/.test(k) ? '' : sportMock), write: () => {}, readJson: () => stored, writeJson: () => {} };
   if (request === '../lib/http') return { json: () => null };
   if (request === '../lib/tenant') return { brandName: () => 'X', features: () => ({}) };
   if (request === '../lib/util') return {
@@ -72,17 +73,21 @@ test('sin equipos ni marcados no hay avisos', () => {
   assert.deepStrictEqual(bellFrom(null, ag, [], now), []);
 });
 
-test('ligas favoritas: primero las que juegan hoy, después las de 21 días y las elegidas aunque ya no estén', async () => {
+test('eventos favoritos: sin deporte favorito ninguno; con él, los de hoy primero, las copas del panel y los elegidos', async () => {
   agendaMock = { events: [
     { li: '1', lg: 'Premier League', sp: 'Soccer', s: 3600 },
     { li: '1', lg: 'Premier League', sp: 'Soccer', s: 7200 },
     { li: '2', lg: 'NBA', sp: 'Basketball', s: 2 * 86400 },
     { li: '', lg: 'Sin id', sp: 'Soccer', s: 3600 },
-  ] };
+  ], cups: [{ id: '4480', n: 'UEFA Champions League', sp: 'Soccer', rg: 'intl' }, { id: '1', n: 'duplicada', sp: 'Soccer' }] };
   leaguesMock = { 3: { n: 'Liga MX', sp: 'Soccer' }, 1: { n: 'duplicada', sp: 'Soccer' } };
   stored = [{ id: '9', n: 'Vieja', b: '', sp: 'Soccer' }];
+  sportMock = '';
+  assert.deepStrictEqual(await leagueChoices(), []);
+  sportMock = 'Soccer';
   const out = await leagueChoices();
-  assert.deepStrictEqual(out.map(x => x.n + ':' + x.today), ['Premier League:2', 'NBA:0', 'Liga MX:0', 'Vieja:0']);
+  assert.deepStrictEqual(out.map(x => x.n + ':' + x.today), ['Premier League:2', 'Liga MX:0', 'UEFA Champions League:0', 'Vieja:0']);
+  sportMock = '';
 });
 
 test('cartel de la campanita: lo no visto; el mismo partido vuelve a avisar al empezar y al terminar; por perfil', () => {

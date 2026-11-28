@@ -84,7 +84,7 @@ export const setLiveSport = (sp: string, name: string) => {
   if (sp) setLiveLeagues(liveLeagues().filter(x => x.sp.toLowerCase() === sp.toLowerCase()));
 };
 
-/** Cuenta › Ligas favoritas: id de TheSportsDB, nombre, escudo y deporte; ninguna = todas (por línea y perfil) */
+/** Cuenta › Eventos favoritos (ligas y copas): id de TheSportsDB, nombre, escudo y deporte; ninguna = todas (por línea y perfil) */
 export type FavLeague = { id: string; n: string; b: string; sp: string };
 const leagueKey = () => 'live_leagues|' + lineKey() + '|' + (getState().profile?.id || '');
 export const liveLeagues = (): FavLeague[] => {
@@ -109,17 +109,21 @@ export async function leagueChoices(): Promise<(FavLeague & { today: number })[]
   for (const [id, v] of Object.entries<any>(fx?.leagues || {})) {
     if (!map.has(id) && str(v?.n)) map.set(id, { id, n: str(v.n), b: str(v.b), sp: str(v.sp), today: 0 });
   }
+  // copas internacionales y de selecciones (Champions, Libertadores, CONCACAF, Mundial FIFA…) aunque esta semana no jueguen
+  for (const c of (ag || localSports())?.cups || []) if (str(c?.id) && !map.has(str(c.id))) map.set(str(c.id), { id: str(c.id), n: str(c.n), b: '', sp: str(c.sp), today: 0 });
   for (const x of liveLeagues()) if (!map.has(x.id)) map.set(x.id, { ...x, today: 0 });
   const sp = liveSport().toLowerCase();
+  // sin deporte favorito no se eligen eventos (la pantalla pide elegirlo primero)
+  if (!sp) return [];
   return [...map.values()]
     .filter(x => !sp || x.sp.toLowerCase() === sp)
     .sort((a, b) => Number(b.today > 0) - Number(a.today > 0) || a.sp.localeCompare(b.sp) || a.n.localeCompare(b.n));
 }
 
-/** «Todas las ligas», el nombre de la única o «3 ligas» */
+/** «Todos los eventos», el nombre del único o «3 eventos» */
 export const liveLeaguesText = () => {
   const l = liveLeagues();
-  return !l.length ? t('Todas las ligas') : l.length === 1 ? l[0].n : t('{n} ligas', { n: l.length });
+  return !l.length ? t('Todos los eventos') : l.length === 1 ? l[0].n : t('{n} eventos', { n: l.length });
 };
 
 // ---------- recordatorios en la nube ----------
