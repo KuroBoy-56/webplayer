@@ -9,7 +9,7 @@ export type PlayParams =
   | { kind: 'movie' | 'episode'; queue: QueueEntry[]; index: number; saveTitle: string; savePoster: string; cat: string; seriesId: string; resume: number }
   | { kind: 'live'; channel: Item; channels: Item[]; index: number };
 
-export type ExploreSort = 'recent' | 'az' | 'rating';
+export type ExploreSort = 'recent' | 'az' | 'za' | 'rating';
 export type ExploreInit = {
   type?: 'all' | 'vod' | 'series';
   sort?: ExploreSort;

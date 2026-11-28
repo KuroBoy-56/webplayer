@@ -505,7 +505,7 @@ class Catalog {
   private exCache = new Map<string, { k: Kind; i: number }[]>();
   private exRes: { key: string; list: { k: Kind; i: number }[]; r: { items: Item[]; total: number } } | null = null;
 
-  explore(type: 'all' | 'vod' | 'series', sort: 'recent' | 'az' | 'rating', platform: string, genre: string, q: string, max = 2000, cat = '', catKind = ''): { items: Item[]; total: number } {
+  explore(type: 'all' | 'vod' | 'series', sort: 'recent' | 'az' | 'za' | 'rating', platform: string, genre: string, q: string, max = 2000, cat = '', catKind = ''): { items: Item[]; total: number } {
     let kinds: Kind[] = type === 'all' ? ['vod', 'series'] : [type];
     if (cat) kinds = [catKind === 'vod' || catKind === 'series' ? catKind : kinds[0]];
     const p = cat ? undefined : PLATFORMS.find(x => x.key === platform);
@@ -526,10 +526,10 @@ class Catalog {
         }
         for (const i of idx) {
           const it = d.items[i];
-          all.push({ k, i, n: sort === 'az' ? fold(str(it.name)) : '', v: sort === 'az' ? 0 : this.sortKey(k, it, sort === 'rating' ? 'rating' : 'added') });
+          all.push({ k, i, n: sort === 'az' || sort === 'za' ? fold(str(it.name)) : '', v: sort === 'az' || sort === 'za' ? 0 : this.sortKey(k, it, sort === 'rating' ? 'rating' : 'added') });
         }
       }
-      all.sort(sort === 'az' ? (a, b) => (a.n < b.n ? -1 : a.n > b.n ? 1 : 0) : (a, b) => b.v - a.v);
+      all.sort(sort === 'az' ? (a, b) => (a.n < b.n ? -1 : a.n > b.n ? 1 : 0) : sort === 'za' ? (a, b) => (a.n > b.n ? -1 : a.n < b.n ? 1 : 0) : (a, b) => b.v - a.v);
       list = all.map(x => ({ k: x.k, i: x.i }));
       if (this.exCache.size > 10) this.exCache.clear();
       this.exCache.set(key, list);
@@ -541,14 +541,6 @@ class Catalog {
     const r = { items: hits.slice(0, max).map(x => toItem(x.k, this.k[x.k]!.items[x.i])), total: hits.length };
     this.exRes = { key: rk, list, r };
     return r;
-  }
-
-  /** «Categorías» de Explorar: las carpetas visibles del servidor (con «Todo», las de películas y las de series) */
-  exploreCats(type: 'all' | 'vod' | 'series'): { id: string; name: string; kind: 'vod' | 'series' }[] {
-    const kinds: ('vod' | 'series')[] = type === 'all' ? ['vod', 'series'] : [type];
-    const out: { id: string; name: string; kind: 'vod' | 'series' }[] = [];
-    for (const k of kinds) for (const c of this.visibleCats(k)) if ((this.k[k]?.byCat.get(c.id) || []).length) out.push({ id: c.id, name: c.name, kind: k });
-    return out;
   }
 
   // géneros y plataformas que tienen alguna categoría visible (géneros: del tipo elegido)

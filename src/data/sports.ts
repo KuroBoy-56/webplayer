@@ -96,7 +96,7 @@ function findChannel(ev: any, chans: Chan[], r: Rules): number {
   return best;
 }
 
-export type SportsData = { events: any[]; sports: Record<string, { label?: string; minutes?: number; icon?: string }>; match: any };
+export type SportsData = { events: any[]; sports: Record<string, { label?: string; minutes?: number; icon?: string }>; match: any; cups?: { id: string; n: string; sp: string; rg?: string }[] };
 
 // Hora y día siempre en la zona horaria del equipo: el panel manda solo "s" (segundos UTC); un panel viejo
 // todavía puede mandar "o" / "tzo" (su zona) y se ignoran, así nadie ve la hora corrida.
