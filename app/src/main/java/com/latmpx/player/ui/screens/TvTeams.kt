@@ -295,7 +295,7 @@ fun TvSportPrefDialog(onDismiss: () -> Unit) {
 }
 
 /**
- * Cuenta › Ligas favoritas (solo con perfiles): varias a la vez, de la agenda y de los próximos 21 días (primero las que
+ * Cuenta › Eventos favoritos (ligas y copas internacionales, solo con perfiles): varios a la vez, de la agenda y de los próximos 21 días (primero las que
  * juegan hoy, con cuántos partidos). Con alguna elegida, Inicio › «En vivo ahora» solo muestra partidos de esas ligas.
  */
 @Composable
@@ -313,6 +313,17 @@ fun TvLeaguePrefDialog(onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Column(Modifier.width(560.dp).background(NfBg2, RoundedCornerShape(10.dp)).padding(20.dp)) {
             Text(stringResource(R.string.sl_lg), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            // sin deporte favorito no hay eventos que elegir: primero el deporte
+            if (sp.isEmpty()) {
+                val ok = remember { FocusRequester() }
+                Text(stringResource(R.string.sl_lg_pick), color = NfGray2, fontSize = 14.sp, modifier = Modifier.padding(vertical = 14.dp))
+                FocusBox(onClick = onDismiss, modifier = Modifier.fillMaxWidth().focusRequester(ok), focusScale = 1.02f) { fo ->
+                    Text(stringResource(R.string.ok), color = if (fo) Color.Black else Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth().background(if (fo) Color.White else NfRed, RoundedCornerShape(6.dp)).padding(horizontal = 14.dp, vertical = 9.dp))
+                }
+                LaunchedEffect(Unit) { delay(80); runCatching { ok.requestFocus() } }
+                return@Column
+            }
             val spName = com.latmpx.player.data.Store.liveSportName.ifEmpty { sp }
             Text(stringResource(R.string.sl_lg_msg) + if (sp.isNotEmpty()) "  " + stringResource(R.string.sl_lg_only, spName) else "",
                 color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))
