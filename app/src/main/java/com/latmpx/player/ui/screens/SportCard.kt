@@ -49,6 +49,14 @@ enum class SpStatus { SOON, LIVE, FIN, POSTPONED }
 
 private val FIN = Regex("^(FT|AET|AOT|AP|PEN|FT_PEN|FIN|Final|Final/OT|Final OT|Ended|Finished|Match Finished|After Over Time|After Extra Time|After Penalties|AWD|WO|CANC|Cancelled|Canceled|ABD|Abandoned)$", RegexOption.IGNORE_CASE)
 
+/**
+ * Deporte favorito y Eventos favoritos (Cuenta / Ajustes) también ordenan Deportes: primero los partidos de los eventos
+ * favoritos, después los demás del deporte favorito y al final todo lo demás, cada grupo en su orden (no se quita nada)
+ */
+fun favoritesFirst(list: List<SportEvent>, sport: String, leagues: Set<String>): List<SportEvent> =
+    if (sport.isEmpty() && leagues.isEmpty()) list
+    else list.sortedBy { e -> if (e.leagueId.isNotEmpty() && e.leagueId in leagues) 0 else if (sport.isNotEmpty() && e.sport.equals(sport, true)) 1 else 2 }
+
 fun spStatus(e: SportEvent, info: SportInfo?, now: Long): SpStatus {
     val dur = (info?.minutes ?: 120) * 60_000L
     return when {
