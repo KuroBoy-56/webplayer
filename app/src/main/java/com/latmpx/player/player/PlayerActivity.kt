@@ -199,7 +199,8 @@ class PlayerActivity : ComponentActivity() {
         setContent {
             Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
                 AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
-                PlayerOverlay(ui2, actions)
+                // los controles en el mismo lienzo de la TV que el resto de la app (480p a 4K)
+                com.latmpx.player.ui.components.TvCanvas(tv) { PlayerOverlay(ui2, actions) }
             }
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {

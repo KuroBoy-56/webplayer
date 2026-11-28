@@ -46,7 +46,7 @@ val SpMute = Color(0xFF9A9A9A)
 
 enum class SpStatus { SOON, LIVE, FIN, POSTPONED }
 
-private val FIN = Regex("^(FT|AET|AOT|PEN|Match Finished|Finished|After Over Time|Final)$", RegexOption.IGNORE_CASE)
+private val FIN = Regex("^(FT|AET|AOT|AP|PEN|FT_PEN|FIN|Final|Final/OT|Final OT|Ended|Finished|Match Finished|After Over Time|After Extra Time|After Penalties|AWD|WO|CANC|Cancelled|Canceled|ABD|Abandoned)$", RegexOption.IGNORE_CASE)
 
 fun spStatus(e: SportEvent, info: SportInfo?, now: Long): SpStatus {
     val dur = (info?.minutes ?: 120) * 60_000L

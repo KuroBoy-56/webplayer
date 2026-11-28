@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
 import com.latmpx.player.ui.components.FocusBox
 import com.latmpx.player.ui.components.LogoHeader
 import com.latmpx.player.ui.theme.NfBg
+import com.latmpx.player.ui.screens.sportsStadium
 import com.latmpx.player.ui.theme.NfGray2
 import com.latmpx.player.ui.theme.NfRed
 
@@ -116,9 +117,14 @@ fun TvShell(state: AppState, base: @Composable () -> Unit, route: @Composable (R
                         TvTopBar(state, tabFocus, Modifier.onFocusChanged { menuFocused = it.hasFocus }, solid = false)
                     }
                 }
-            } else Column(Modifier.fillMaxSize()) {
-                TvTopBar(state, tabFocus, Modifier.onFocusChanged { menuFocused = it.hasFocus }, solid = true)
-                Box(Modifier.weight(1f).fillMaxWidth().onFocusChanged { contentFocused = it.hasFocus }) { base() }
+            } else {
+                // Deportes con el estadio: la imagen va al fondo de todo, detrás del menú (antes empezaba debajo del menú
+                // y se veía «montada» en él); el menú queda transparente encima, como en Inicio
+                val stadium = state.tab == Tab.SPORTS && com.latmpx.player.ui.screens.sportsStadiumOn()
+                Column(Modifier.fillMaxSize().then(if (stadium) Modifier.background(NfBg).sportsStadium() else Modifier)) {
+                    TvTopBar(state, tabFocus, Modifier.onFocusChanged { menuFocused = it.hasFocus }, solid = !stadium)
+                    Box(Modifier.weight(1f).fillMaxWidth().onFocusChanged { contentFocused = it.hasFocus }) { base() }
+                }
             }
         }
         // fichas apiladas (película, actor, "Ver todo"…): a pantalla completa, sin menú; solo la de arriba se ve
