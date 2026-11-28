@@ -4,6 +4,11 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Deportes: los favoritos primero y más canales — versión 3.1.7 (28 de noviembre)
+- En **Deportes**, los partidos **en vivo** de los **Eventos favoritos** (Ajustes) salen primero, después los del **Deporte preferido** y luego todo lo demás, cada grupo en su orden de siempre; con el chip de un deporte, sus eventos favoritos primero. No se quita nada. Solo con perfiles; también toma lo elegido en la TV o el celular (la nube del panel, `assets/nf/prefs.js`).
+- Más partidos en vivo con canal gracias al panel del 28 de noviembre: con la clave de pago de TheSportsDB consulta la API v2 (todo lo televisado del día y de los países de los clientes, y cada partido en vivo sin canales uno por uno).
+- Archivos: `sportsschedule.php`, `includes/core.php`.
+
 ## Deporte preferido y Eventos favoritos en la nube y partidos terminados — versión 3.1.6 (28 de noviembre)
 - Ajustes › **Deporte preferido** y **Eventos favoritos** se guardan también en la nube del panel por línea y perfil (`api/alerts.php`, `prefs`): lo elegido en la TV (Roku, Android TV, webOS…), el celular o la computadora aparece aquí, y al revés. Inicio (`homex.php`) y Ajustes lo bajan al abrir (`assets/nf/prefs.js`, `settings.php?ajax=prefs`); el navegador sigue guardando una copia. Solo con perfiles, como los equipos favoritos.
 - Deportes: más estados de partido terminado (después de penales «AP», «Ended», cancelado, abandonado…): ya no se marcan «EN VIVO» mientras dura el tiempo del deporte. El panel además manda el estado de ahora (con su clave de pago).

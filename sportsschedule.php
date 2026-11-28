@@ -189,6 +189,9 @@ $sp_extra = wp_sports_extra($sp_panel);
 $sp_pf = wp_prof_state();
 $sp_fin = wp_prof_needed($sp_pf) && (string)($sp_pf['id'] ?? '') !== '';
 $sp_alias = is_array($sp_panel['match']['alias'] ?? null) ? $sp_panel['match']['alias'] : [];
+// Ajustes › Deporte preferido y Eventos favoritos (con perfiles): la clave del navegador para ordenar los en vivo
+require_once __DIR__ . '/includes/sports_live.php';
+$sp_favkey = wp_sports_live_allowed() ? wp_sports_live_pref_key() : '';
 
 $page_title = t('Deportes');
 $nav_active = 'sports';
@@ -359,6 +362,7 @@ body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; p
 </main>
 
 <script src="assets/nf/sports.js?v=3"></script>
+<?php if ($sp_favkey !== ''): ?><script src="assets/nf/prefs.js?v=1"></script><?php endif; ?>
 <script>
 (function () {
     var q2 = document.getElementById('spQ2');
@@ -561,6 +565,22 @@ body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; p
         });
         document.getElementById('spChips').innerHTML = h;
     }
+    // Ajustes › Deporte preferido y Eventos favoritos (por línea y perfil; también en la nube): los en vivo de los eventos
+    // favoritos primero, después los del deporte preferido y luego todo lo demás, cada grupo en su orden (no se quita nada)
+    var FAVK = <?php echo json_encode($sp_favkey); ?>;
+    function favFirst(list) {
+        if (!FAVK) return list;
+        var sp = '', lg = {};
+        try {
+            sp = (localStorage.getItem(FAVK) || '').toLowerCase();
+            (JSON.parse(localStorage.getItem(FAVK + '|lg') || '[]') || []).forEach(function (x) { if (x && x.id) lg[String(x.id)] = 1; });
+        } catch (x) {}
+        if (!sp && !Object.keys(lg).length) return list;
+        var rank = function (e) { return e.li && lg[String(e.li)] ? 0 : sp && String(e.sp || '').toLowerCase() === sp ? 1 : 2; };
+        return list.map(function (e, i) { return [rank(e), i, e]; }).sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; }).map(function (x) { return x[2]; });
+    }
+    // lo elegido en la TV, el celular o la computadora (la nube manda): se vuelve a ordenar al llegar
+    if (FAVK && window.NFPrefs) NFPrefs.pull(FAVK, function (changed) { if (changed) render(); });
     function render() {
         if (!AG.length) return;
         var now = Date.now();
@@ -574,7 +594,7 @@ body.sp-stadium::before { content: ''; position: fixed; inset: 0; z-index: -1; p
             if (!((state.day === 0 && (e.dk === keys[0] || st === 'live')) || (state.day === 1 && e.dk === keys[1]))) return;
             (st === 'live' ? live : st === 'soon' ? next : done).push(e);
         });
-        var rows = live.concat(next, done);
+        var rows = favFirst(live).concat(next, done);
         var liveCount = AG.filter(function (e) { return status(e) === 'live'; }).length;
         var lc = document.getElementById('spLiveCount');
         lc.hidden = !liveCount;
