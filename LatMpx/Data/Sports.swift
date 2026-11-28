@@ -158,7 +158,7 @@ enum Sports {
     static func status(_ e: SportEvent, _ info: SportInfo?, _ now: Double) -> SpStatus {
         let dur = Double(info?.minutes ?? 120) * 60
         if e.postponed { return .postponed }
-        if Rx.has(e.status.trimmed, "^(FT|AET|AOT|PEN|Match Finished|Finished|After Over Time|Final)$", ci: true) { return .fin }
+        if Rx.has(e.status.trimmed, "^(FT|AET|AOT|AP|PEN|FT_PEN|FIN|Final|Final/OT|Final OT|Ended|Finished|Match Finished|After Over Time|After Extra Time|After Penalties|AWD|WO|CANC|Cancelled|Canceled|ABD|Abandoned)$", ci: true) { return .fin }
         if now >= e.start && now < e.start + dur { return .live }
         if now >= e.start + dur { return .fin }
         return .soon

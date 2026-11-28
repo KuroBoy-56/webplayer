@@ -137,16 +137,70 @@ enum Tmdb {
         return Array(out.filter { seen.insert($0).inserted }.prefix(48))
     }
 
-    /** "ES - Avengers: Endgame (2019) [4K] LAT" → ("Avengers: Endgame", "2019") */
+    // ---------- título para TMDB: la misma regla que el panel (includes/title_clean.php), Roku y Android ----------
+    private static let tcTag = "^(4k|8k|uhd|fhd|hd|sd|hq|lat|latino|latam|sub|subs|subt|subtitulad[oa]|esp|es|en|eng|spa|mx|us|ar|co|cl|pe|br|pt|fr|de|it|uk|ve|ec|uy|py|bo|cr|pa|gt|hn|sv|do|pr|dual|multi|multi ?audio|dub|dublad[oa]|legendad[oa]|castellano|espa[nñ]ol|ingl[eé]s|vose|vos|vo|cam|ts|hdr|hdr10|dv|hevc|[xh]26[45]|web|web-?dl|webrip|bluray|brrip|dvdrip|hdtv|remux|imax|vip|new|nuevo|nueva|estreno|premiere|netflix|amazon|prime|prime video|disney|disney\\+|hbo|hbo max|max|apple|apple tv\\+?|paramount\\+?|star\\+|\\d{3,4}p|(19|20)\\d\\d|[st]\\d{1,2})$"
+    private static let tcJunk = "(?<![\\p{L}\\p{N}])(4k|8k|uhd|fhd|hd|sd|hdr10|hdr|1080p|720p|2160p|480p|hevc|[xh]26[45]|10bit|web-?dl|webrip|bluray|brrip|dvdrip|hdtv|hdcam|remux|lat|latino|castellano|subtitulad[oa]|sub|esp|dual|multi|dublad[oa]|legendad[oa]|vose)(?![\\p{L}\\p{N}])"
+    private static let tcSeason = "(?<![\\p{L}\\p{N}])s\\d{1,2}\\s*e\\d{1,3}(?![\\p{L}\\p{N}])|\\s+(s\\d{1,2}|t\\d{1,2}|(temporada|season|saison)\\s*\\d{1,2})\\s*$"
+
+    /**
+     * "ES - Avengers: Endgame (2019) [4K] | LAT" → ("Avengers: Endgame", "2019"): lo que TMDB entiende. Quita etiquetas de
+     * idioma, país, calidad y plataforma («NETFLIX - …», «|LAT| …»), temporadas («S01», «T2»), estrellas y emojis; deja un
+     * número que es el título («1917», «2012»). Casos en tools/title_clean_vectors.json del panel.
+     */
     static func clean(_ raw: String) -> (String, String) {
-        var t = raw.trimmed
-        let year = Rx.groups(t, "[\\(\\[]((19|20)\\d{2})[\\)\\]]")?[1] ?? Rx.groups(t, "\\b((19|20)\\d{2})\\s*$")?[1] ?? ""
-        t = Rx.replace(t, "^\\s*[A-Z]{2,4}\\s*[-|:]\\s+", "")
-        t = Rx.replace(t, "[\\(\\[][^\\)\\]]*[\\)\\]]", " ")
-        t = Rx.replace(t, "\\b(4k|uhd|fhd|hd|sd|1080p|720p|2160p|hdr|dual|latino|lat|castellano|subtitulad[oa]|sub|esp|eng|vose|cam|ts|hevc|x265|x264)\\b", " ", ci: true)
-        if !year.isEmpty { t = Rx.replace(t, "\\b\(year)\\s*$", " ") }
-        t = Rx.replace(Rx.replace(Rx.replace(t, "[_.]+", " "), "\\s*[-|]\\s*$", ""), "\\s+", " ").trimmed
+        var s = raw.trimmed
+        var year = Rx.groups(s, "[\\(\\[]\\s*((?:19|20)\\d\\d)\\s*[\\)\\]]")?[1] ?? ""
+        if year.isEmpty, let r = Rx.get("(?<![\\p{L}\\p{N}])((?:19|20)\\d\\d)(?![\\p{L}\\p{N}])"),
+           let m = r.matches(in: s, range: NSRange(s.startIndex..., in: s)).last, let rg = Range(m.range(at: 1), in: s) {
+            year = String(s[rg])
+        }
+        // "The.Matrix.1999.1080p" (sin espacios): los puntos y guiones bajos separan palabras
+        if !s.contains(" ") && (s.contains(".") || s.contains("_")) { s = Rx.replace(s, "[._]+", " ") }
+        var t = Rx.replace(s, "\\([^)]*\\)|\\[[^\\]]*\\]|\\{[^}]*\\}", " ")
+        t = Rx.replace(t, "[^\\p{L}\\p{M}\\p{N}\\s'’&:!?¿¡.,+#\\-–—|/]", " ")
+        t = Rx.replace(t, "^\\s*\\|?\\s*[\\p{Lu}0-9+]{2,5}\\s*\\|\\s*", "")
+        t = Rx.replace(t, "^\\s*\\p{Lu}{2,4}\\s*:\\s+", "")
+        for sep in ["|", " - ", " – ", " — "] where t.contains(sep) {
+            let keep = t.components(separatedBy: sep).map { $0.trimmed }.filter { !$0.isEmpty && !Rx.has($0, tcTag, ci: true) }
+            if !keep.isEmpty { t = keep.joined(separator: sep == "|" ? " " : " - ") }
+        }
+        t = t.replacingOccurrences(of: "|", with: " ")
+        t = Rx.replace(t, tcSeason, " ", ci: true)
+        t = Rx.replace(t, tcJunk, " ", ci: true)
+        if !year.isEmpty {
+            let no = Rx.replace(t, "(?<![\\p{L}\\p{N}])\(year)(?![\\p{L}\\p{N}])", " ").trimmed
+            if Rx.has(no, "[\\p{L}\\p{N}]") { t = no }
+        }
+        t = Rx.replace(Rx.replace(t, "\\s+", " "), "^[\\s\\-–—:·,./]+|[\\s\\-–—:·,/]+$", "")
+        if t.isEmpty { t = Rx.replace(Rx.replace(raw, "\\([^)]*\\)|\\[[^\\]]*\\]", " "), "\\s+", " ").trimmed }
         return (t, year)
+    }
+
+    /** la primera parte de «Título - Subtítulo» (o "") */
+    static func firstPart(_ q: String) -> String {
+        let p = q.components(separatedBy: " - ")
+        return p.count > 1 && p[0].trimmed.count >= 3 ? p[0].trimmed : ""
+    }
+
+    /** título para comparar con TMDB: minúsculas, sin acentos ni signos, «&» = «y», sin artículo al principio (como el panel) */
+    private static func cmp(_ s: String) -> String {
+        let n = Rx.replace(s.replacingOccurrences(of: "&", with: " y ").folded, "[^\\p{L}\\p{N}]+", " ").trimmed
+        return Rx.replace(n, "^(the|el|la|los|las|le|les|o|os|as) ", "")
+    }
+
+    /** ¿el resultado es ese título? mismo nombre (traducido u original) y, si se sabe, el año ±1 */
+    private static func same(_ r: JObj, _ q: String, _ y: String) -> Bool {
+        let want = cmp(q)
+        if want.isEmpty { return false }
+        let hit = ["title", "original_title", "name", "original_name"].contains { f in
+            let v = r.s(f)
+            return !v.isEmpty && cmp(v) == want
+        }
+        if !hit { return false }
+        if y.count != 4 { return true }
+        let d = r.s("release_date").ifEmpty(r.s("first_air_date"))
+        guard let ry = Int(d.prefix(4)), let yy = Int(y) else { return true }
+        return abs(ry - yy) <= 1
     }
 
     /** "" = TMDB no lo tiene; nil = no hubo respuesta */
@@ -188,16 +242,39 @@ enum Tmdb {
         let ck = "\(lang)|\(type)|\(cleanTitle)|\(yr)|\(tmdbId)"
         if let d = lock.locked({ detailCache[ck] }) { return d }
         var id = tmdbId.filter { $0.isNumber }
+        var fetchedType = type
         if id.isEmpty {
-            let q = urlEnc(cleanTitle)
+            // como Roku y el panel: con año, sin año, como el otro tipo (película / serie) y sin el subtítulo; primero un
+            // resultado con el mismo título (y el año ±1). Si ninguno coincide, el primero de la búsqueda (como antes)
             let y = String(yr.filter { $0.isNumber }.prefix(4))
-            var res: JObj?
-            if !y.isEmpty { res = await get("search/\(type)?language=es-MX&query=\(q)" + (type == "tv" ? "&first_air_date_year=\(y)" : "&primary_release_year=\(y)")) }
-            if res == nil || res!.objs("results").isEmpty { res = await get("search/\(type)?language=es-MX&query=\(q)") }
-            if let f = res?.objs("results").first { id = f.s("id") }
+            let other = type == "tv" ? "movie" : "tv"
+            var tries: [(String, String, String)] = []
+            if y.count == 4 { tries.append((type, cleanTitle, y)) }
+            tries.append((type, cleanTitle, ""))
+            tries.append((other, cleanTitle, ""))
+            if y.count == 4 {
+                if let r = cleanTitle.range(of: ":") {
+                    let head = String(cleanTitle[..<r.lowerBound]).trimmed
+                    if head.count >= 3 { tries.append((type, head, "")) }
+                }
+                let fp = firstPart(cleanTitle)
+                if !fp.isEmpty { tries.append((type, fp, y)) }
+            }
+            var firstAny = ""
+            for (t, q, ty) in tries {
+                let yp = ty.count == 4 ? (t == "tv" ? "&first_air_date_year=\(ty)" : "&primary_release_year=\(ty)") : ""
+                guard let res = await get("search/\(t)?language=es-MX&query=\(urlEnc(q))\(yp)") else { continue }
+                var hit = ""
+                for r in res.objs("results") {
+                    if firstAny.isEmpty && t == type { firstAny = r.s("id") }
+                    if same(r, q, y) { hit = r.s("id"); break }
+                }
+                if !hit.isEmpty { id = hit; fetchedType = t; break }
+            }
+            if id.isEmpty { id = firstAny }
         }
         if id.isEmpty { return nil }
-        guard let d = await get("\(type)/\(id)?language=\(lang)&append_to_response=credits,aggregate_credits,videos") else { return nil }
+        guard let d = await get("\(fetchedType)/\(id)?language=\(lang)&append_to_response=credits,aggregate_credits,videos") else { return nil }
         let pp = d.s("poster_path"), bp = d.s("backdrop_path")
         let credits = d.o("credits") ?? d.o("aggregate_credits")
         let cast = (credits?.objs("cast") ?? []).prefix(15).map { c -> CastMember in

@@ -4,6 +4,11 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.1.9 (partidos terminados y títulos limpios para TMDB)
+
+- **Deportes:** los partidos terminados que el servidor marca con otros nombres (después de penales «AP», «FT_PEN», «Ended», cancelado, abandonado…) ya no salen «EN VIVO» mientras dura el tiempo del deporte (`Sports.swift`). El panel además manda el estado de ahora con el livescore.
+- **Pósters y fichas de TMDB** (`Tmdb.clean`): el título se limpia como el panel, Roku y Android (etiquetas de idioma, país, calidad y plataforma como «NETFLIX - …» o «|LAT| …», temporadas «S01» / «T2», estrellas y emojis, «The.Matrix.1999.1080p»; un número que es el título como «1917» se queda). La ficha busca con año, sin año, como el otro tipo (película / serie) y sin el subtítulo, y prefiere el resultado con el mismo título (y el año ±1).
+
 ## Novedades de la 1.1.8 (Z - A en «Ver todo»)
 
 - **«Ver todo»** (`BrowseView`): el menú **Ordenar** suma **Z - A** (Agregados recientemente, A - Z, Z - A, Mejor valorados), como Explorar en las demás apps.
