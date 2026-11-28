@@ -9,9 +9,10 @@ import { Button, Focusable } from './ui';
 
 export const GREEN = '#46D369';
 
-export function Chip({ label, on, onPress, preferred, onFocus }: { label: string; on: boolean; onPress: () => void; preferred?: boolean; onFocus?: () => void }) {
+// box: rectángulo translúcido (los deportes de Deportes, dentro de su recuadro); sin él, la píldora de siempre
+export function Chip({ label, on, onPress, preferred, onFocus, box }: { label: string; on: boolean; onPress: () => void; preferred?: boolean; onFocus?: () => void; box?: boolean }) {
   return (
-    <Focusable onPress={onPress} onFocus={onFocus} preferred={preferred} style={f => [s.chip, on && s.chipOn, f && s.chipF]}>
+    <Focusable onPress={onPress} onFocus={onFocus} preferred={preferred} style={f => [s.chip, box && s.chipBox, on && s.chipOn, f && s.chipF]}>
       {f => <Text style={[s.chipText, f && { color: C.onFocus }]}>{label}</Text>}
     </Focusable>
   );
@@ -221,6 +222,7 @@ export function ReadModal({ title, image, text, onClose }: { title: string; imag
 const s = themed(() =>
   StyleSheet.create({
     chip: { height: px(56), paddingHorizontal: px(28), borderRadius: px(28), justifyContent: 'center', marginRight: px(14), backgroundColor: alpha(C.text, 0.12), borderWidth: px(3), borderColor: 'transparent' },
+    chipBox: { borderRadius: px(8), marginBottom: px(10), backgroundColor: alpha(C.text, 0.1) },
     chipOn: { borderColor: C.red },
     chipF: { backgroundColor: C.focus },
     chipText: { color: C.text, fontSize: px(26), fontWeight: '700' },
