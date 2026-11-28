@@ -215,7 +215,7 @@ export default function Main({ active }: { active: boolean }) {
           ))}
           {withProfiles ? iconBtn(searchIcon) : null}
           {/* con perfiles: la campanita con los partidos de hoy de los equipos favoritos y los marcados */}
-          {withProfiles && profile && liveTvOn() ? <Bell profile={profile.id} iconStyle={s.icon} focusStyle={s.iconF} /> : null}
+          {withProfiles && profile && liveTvOn() ? <Bell profile={profile.id} iconStyle={s.icon} focusStyle={s.iconF} active={active} section={section} /> : null}
         </View>
         {loading ? <Text style={s.loading}>{t(loading === 'vod' ? 'Cargando películas…' : loading === 'series' ? 'Cargando series…' : 'Cargando canales…')}</Text> : null}
         {withProfiles ? null : ICONS.map(iconBtn)}

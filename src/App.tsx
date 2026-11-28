@@ -26,7 +26,7 @@ import { clearTmdbCache } from './api/tmdb';
 import { resetEngine } from './api/media';
 import { onLoginUnreachable, setStreamFlip } from './api/xtream';
 import { bindReportContext, installCrashReporter, reportError } from './api/report';
-import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppSelector, useAppState } from './state';
+import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppSelector, useAppState, setAlertOpen } from './state';
 import { onCacheClear, panelCheckMac, panelLineGone } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
@@ -151,6 +151,8 @@ function App() {
   // aviso del panel: una vez por arranque de la app y otra vez tras iniciar sesión
   const [alert, setAlert] = useState<PanelAlert | null>(null);
   const alertDone = useRef(false);
+  // la campanita no baja su cartel encima del aviso del panel
+  useEffect(() => setAlertOpen(!!alert), [alert]);
   useEffect(() => {
     const ses = getState().session;
     // en «¿Quién está viendo?» el catálogo ya se va cargando; Continuar viendo y Mi lista, con el perfil elegido
