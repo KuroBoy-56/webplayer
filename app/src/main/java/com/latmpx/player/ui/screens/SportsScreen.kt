@@ -324,7 +324,11 @@ fun SportsScreen(state: AppState) {
     }
     // Hoy: los de hoy y los que siguen en vivo; Mañana: los de mañana. En vivo, después por hora y al final los terminados.
     // Con perfiles, Finalizados: los de hoy ya terminados (el último primero; a las 00:00 del panel se vacía) y Hoy sin ellos
-    val rows = remember(d, curTab, sport, now, finTab) {
+    // Cuenta › Deporte favorito y Eventos favoritos: los en vivo de esos primero (con perfiles)
+    val favRev = com.latmpx.player.data.SportsLive.prefRev
+    val favSport = remember(favRev, com.latmpx.player.data.Profiles.current) { if (MatchCloud.on) com.latmpx.player.data.Store.liveSport else "" }
+    val favLeagues = remember(favRev, com.latmpx.player.data.Profiles.current) { if (MatchCloud.on) com.latmpx.player.data.Store.liveLeagues.map { it.id }.toSet() else emptySet() }
+    val rows = remember(d, curTab, sport, now, finTab, favSport, favLeagues) {
         val liveL = ArrayList<SportEvent>()
         val nextL = ArrayList<SportEvent>()
         val doneL = ArrayList<SportEvent>()
@@ -340,7 +344,7 @@ fun SportsScreen(state: AppState) {
                 else -> doneL += e
             }
         }
-        liveL + nextL + doneL
+        favoritesFirst(liveL, favSport, favLeagues) + nextL + doneL
     }
     // todas las disciplinas que encendió el dueño o el distribuidor («sports» de api/sports.php), aunque hoy no tengan
     // partidos (antes solo las de la agenda); primero las que tienen partidos, en el orden del panel
