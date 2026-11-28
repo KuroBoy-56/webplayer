@@ -56,6 +56,8 @@ fun FocusBox(
     focusScale: Float = 1.08f,
     onFocus: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    /** false = sin el borde de foco (lo dibuja el contenido: el avatar de Perfiles, como Roku) */
+    ring: Boolean = true,
     content: @Composable BoxScope.(focused: Boolean) -> Unit,
 ) {
     val src = remember { MutableInteractionSource() }
@@ -66,7 +68,7 @@ fun FocusBox(
         modifier
             .scale(sc)
             .clip(shape)
-            .then(if (focused) Modifier.border(3.dp, com.latmpx.player.ui.theme.NfFocus, shape) else Modifier)
+            .then(if (focused && ring) Modifier.border(3.dp, com.latmpx.player.ui.theme.NfFocus, shape) else Modifier)
             .combinedClickable(interactionSource = src, indication = null, onLongClick = onLongClick, onClick = onClick),
     ) { content(focused) }
 }
