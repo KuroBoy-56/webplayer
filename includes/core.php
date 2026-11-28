@@ -16,7 +16,7 @@ define('WP_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 define('WP_NOIMG', 'assets/nf/noposter.svg');
 define('WP_LOGO', 'assets/img/Logo.png');
 // versión de la web player (abajo a la izquierda en la pantalla de perfiles): subirla con cada cambio de la web
-define('WP_VERSION', '3.1.4');
+define('WP_VERSION', '3.1.5');
 // dominio propio por un Worker de Cloudflare (opcional, antes de todo lo que usa el dominio o la IP)
 require_once __DIR__ . '/edge.php';
 require_once __DIR__ . '/i18n.php';
@@ -1184,8 +1184,9 @@ function wp_filter($type, $platform = '', $genre = '', $cat = '', $q = '', $sort
     }
 
     // el mismo orden que usort, mucho más rápido (includes/catalog_fast.php)
-    if ($sort === 'az') {
+    if ($sort === 'az' || $sort === 'za') {
         wp_sort_items($result, 'name');
+        if ($sort === 'za') $result = array_reverse($result);
     } elseif ($sort === 'rating') {
         wp_sort_items($result, 'rating');
     } elseif ($sort === 'recent') {

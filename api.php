@@ -15,7 +15,7 @@ if (!in_array($type, ['movie', 'series', 'all'], true)) $type = 'movie';
 $platform = preg_replace('/[^a-z0-9_]/', '', (string)($_GET['platform'] ?? ''));
 $genre = preg_replace('/[^a-z0-9_]/', '', (string)($_GET['genre'] ?? ''));
 $cat = preg_replace('/[^0-9a-zA-Z_\-]/', '', (string)($_GET['cat'] ?? ''));
-$sort = in_array($_GET['sort'] ?? '', ['recent', 'az', 'rating', 'default'], true) ? $_GET['sort'] : 'recent';
+$sort = in_array($_GET['sort'] ?? '', ['recent', 'az', 'za', 'rating', 'default'], true) ? $_GET['sort'] : 'recent';
 $q = trim((string)($_GET['q'] ?? ''));
 
 /**

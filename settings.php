@@ -62,6 +62,12 @@ if ($live_on) {
         if (!isset($lg_agenda[$id])) $lg_agenda[$id] = ['id' => $id, 'n' => (string)$ev['lg'], 'b' => (string)($ev['lb'] ?? ''), 'sp' => (string)($ev['sp'] ?? ''), 's' => []];
         $lg_agenda[$id]['s'][] = (int)($ev['s'] ?? 0);
     }
+    // copas internacionales y de selecciones del panel (Champions, Libertadores, CONCACAF, Mundial FIFA…) aunque esta
+    // semana no jueguen (api/sports.php "cups")
+    foreach ((array)($ag['cups'] ?? []) as $c) {
+        $id = (string)($c['id'] ?? '');
+        if ($id !== '' && (string)($c['n'] ?? '') !== '' && !isset($lg_agenda[$id])) $lg_agenda[$id] = ['id' => $id, 'n' => (string)$c['n'], 'b' => '', 'sp' => (string)($c['sp'] ?? ''), 's' => []];
+    }
 }
 include "header.php";
 
@@ -145,8 +151,8 @@ function opt($name, $value, $label, $desc, $current)
                         <option value="<?php echo e($k); ?>"><?php echo e(t($label)); ?></option>
                     <?php endforeach; ?>
                 </select>
-                <h3 style="margin-top:20px;"><i class="fa fa-trophy"></i> <?php echo t('Ligas favoritas'); ?></h3>
-                <p><?php echo t('«En vivo ahora» de Inicio muestra solo los partidos de las ligas que elijas.'); ?> <b id="lgSum"></b></p>
+                <h3 style="margin-top:20px;"><i class="fa fa-trophy"></i> <?php echo t('Eventos favoritos'); ?></h3>
+                <p><?php echo t('«En vivo ahora» de Inicio muestra solo los partidos de los eventos que elijas (ligas y copas internacionales).'); ?> <b id="lgSum"></b></p>
                 <div id="lgList" class="lg-list" style="max-height:320px;overflow-y:auto;padding-right:6px;"></div>
                 <?php if (wp_available_platforms()): ?>
                     <label class="st-plat" style="display:flex;align-items:center;gap:10px;margin-top:16px;cursor:pointer;">
@@ -193,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (window.NF && NF.toast) NF.toast(<?php echo tj('Ajustes guardados correctamente.'); ?>);
         });
     }
-    // Ligas favoritas: varias a la vez (las de la agenda y las de los próximos 21 días, las que juegan hoy primero, con
+    // Eventos favoritos (ligas y copas internacionales del deporte preferido): varios a la vez (las de la agenda y las de los próximos 21 días, las que juegan hoy primero, con
     // su escudo); assets/nf/live.js deja en «En vivo ahora» solo los partidos de esas ligas. Por línea y perfil.
     (function () {
         var box = document.getElementById('lgList'), sum = document.getElementById('lgSum');
@@ -201,7 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var KEY = ls.getAttribute('data-key') + '|lg';
         var AG = <?php echo json_encode(array_values($lg_agenda), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG); ?>;
         var SPN = <?php echo json_encode(array_map('t', $live_sports), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG); ?>;
-        var T = { all: <?php echo tj('Todas las ligas'); ?>, n: <?php echo tj('{n} ligas'); ?>, today: <?php echo tj('{n} hoy'); ?>, none: <?php echo tj('El panel todavía no tiene ligas para elegir.'); ?> };
+        var T = { all: <?php echo tj('Todos los eventos'); ?>, n: <?php echo tj('{n} eventos'); ?>, today: <?php echo tj('{n} hoy'); ?>, none: <?php echo tj('El panel todavía no tiene eventos para elegir.'); ?>, pick: <?php echo tj('Primero elige tu deporte favorito para elegir tus eventos.'); ?> };
         var FX = {}, known = {};
         var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
         function chosen() {
@@ -224,9 +230,11 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             Object.keys(FX).forEach(function (id) { var l = FX[id]; if (!known[id] && l && l.n) known[id] = { id: id, n: l.n, b: l.b || '', sp: l.sp || '', today: 0 }; });
             sel.forEach(function (l) { if (!known[l.id]) known[l.id] = { id: l.id, n: l.n, b: l.b || '', sp: l.sp || '', today: 0 }; });
-            Object.keys(known).forEach(function (k) { if (!sp || known[k].sp === sp) out.push(known[k]); });
+            Object.keys(known).forEach(function (k) { if (known[k].sp === sp) out.push(known[k]); });
             out.sort(function (a, b) { return (b.today > 0) - (a.today > 0) || a.sp.localeCompare(b.sp) || a.n.localeCompare(b.n); });
             sum.textContent = !sel.length ? T.all : sel.length === 1 ? sel[0].n : T.n.replace('{n}', sel.length);
+            // sin deporte preferido no hay eventos que elegir
+            if (!sp) { box.innerHTML = '<p style="opacity:.7;">' + esc(T.pick) + '</p>'; return; }
             box.innerHTML = row('', T.all, '', '', !sel.length) + (out.length ? out.map(function (l) {
                 var sub = [sp ? '' : (SPN[l.sp] || l.sp), l.today ? T.today.replace('{n}', l.today) : ''].filter(Boolean).join(' · ');
                 return row(l.id, l.n, l.b, sub, !!ids[l.id]);

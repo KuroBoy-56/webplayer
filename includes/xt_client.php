@@ -90,7 +90,10 @@ function wp_cat_list_quick($type, $cat, $sort)
     $raw = xt_get($act, ['category_id' => $cat], 1800, 20);
     $list = is_array($raw) ? wp_catalog_slim($type, $raw) : [];
     if ($sort === 'recent') wp_sort_items($list, 'added');
-    elseif ($sort === 'az') wp_sort_items($list, 'name', false);
+    elseif ($sort === 'az' || $sort === 'za') {
+        wp_sort_items($list, 'name', false);
+        if ($sort === 'za') $list = array_reverse($list);
+    }
     elseif ($sort === 'rating') wp_sort_items($list, 'rating');
     return $list;
 }

@@ -4,6 +4,12 @@ Desde la actualización del 4 de octubre **todo se administra desde el panel** (
 
 **Requisitos:** PHP 7.1 o superior con las extensiones `curl` y `openssl` (ffmpeg ya no se usa en el hosting: la conversión la hace el motor del panel en la VPS / VDS). La carpeta `includes/cache/` debe tener permisos de escritura. Hace falta `includes/panel_secret.php` (ver abajo).
 
+## Eventos favoritos, Explorar con Z - A e «Ir a Deportes» translúcido — versión 3.1.5 (28 de noviembre)
+- Ajustes › **Ligas favoritas** pasa a **Eventos favoritos** y suma las copas internacionales y de selecciones que manda el panel (`cups` de `api/sports.php`: Champions, Europa League, Libertadores, CONCACAF, Mundial FIFA…) aunque esa semana no jueguen. Sin deporte preferido pide elegirlo primero; con uno, solo sus eventos.
+- Explorar (`browse.php`) suma el orden **Z - A** (`?sort=za`; también en `api.php`).
+- La tarjeta «Ir a Deportes» del final de «En vivo ahora» es el estadio de Deportes en miniatura, translúcido, con el texto encima.
+- Archivos: `settings.php`, `browse.php`, `api.php`, `includes/core.php`, `includes/xt_client.php`, `assets/nf/live.css`, `assets/nf/live.js`, `includes/lang/en.php`, `includes/lang/pt.php`, `includes/lang/fr.php`. Necesita el panel con `cups` (`includes/sports_engine.php`, `api/sports.php`).
+
 ## «Ver todo» de Continuar viendo y Mi lista ya no sale en blanco — versión 3.1.4 (27 de noviembre)
 - En la 3.1.3, «Ver todo» de **Continuar viendo** y de **Mi lista** abría una página en blanco: `mylist.php` armaba las tarjetas antes del encabezado, que es quien carga `includes/ui.php` (donde se dibuja cada tarjeta), y PHP se detenía. Ahora carga `ui.php` primero, como la página del actor y las fichas.
 - Prueba: `php tools/home_lists_test.php` revisa también ese orden (falla con la 3.1.3, pasa con la 3.1.4).

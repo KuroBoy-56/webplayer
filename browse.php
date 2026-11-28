@@ -14,7 +14,7 @@ $platform = preg_replace('/[^a-z0-9_]/', '', (string)($_GET['platform'] ?? ''));
 $genre = preg_replace('/[^a-z0-9_]/', '', (string)($_GET['genre'] ?? ''));
 $cat = preg_replace('/[^0-9a-zA-Z_\-]/', '', (string)($_GET['cat'] ?? ''));
 $q = trim((string)($_GET['q'] ?? ''));
-$sort = in_array($_GET['sort'] ?? '', ['recent', 'az', 'rating'], true) ? $_GET['sort'] : 'recent';
+$sort = in_array($_GET['sort'] ?? '', ['recent', 'az', 'za', 'rating'], true) ? $_GET['sort'] : 'recent';
 
 $platforms = wp_platforms();
 $genres = wp_genres();
@@ -77,6 +77,7 @@ if ($genre && !isset($availGenres[$genre])) $availGenres[$genre] = $genres[$genr
         <select class="nf-select" id="fSort" aria-label="<?php echo e(t('Ordenar')); ?>">
             <option value="recent" <?php echo $sort === 'recent' ? 'selected' : ''; ?>><?php echo t('Agregados recientemente'); ?></option>
             <option value="az" <?php echo $sort === 'az' ? 'selected' : ''; ?>>A - Z</option>
+            <option value="za" <?php echo $sort === 'za' ? 'selected' : ''; ?>>Z - A</option>
             <option value="rating" <?php echo $sort === 'rating' ? 'selected' : ''; ?>><?php echo t('Mejor valorados'); ?></option>
         </select>
         <?php if (!$platform): ?>

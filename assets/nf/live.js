@@ -3,7 +3,7 @@
  * partidos (los que se juegan con marcador y minuto, después los próximos con su hora) y al final «Ir a Deportes»; la cancha del deporte de fondo (y el color del torneo si es uno grande) y el
  * canal exacto de la lista del cliente. Se pregunta cada ttl (30 s) solo con la pestaña visible. Al pulsar, el menú de
  * canales (solo los del cliente, y buscar); Atrás desde el reproductor vuelve con el foco en el mismo partido.
- * Configuración: window.NF_LIVE = {key: clave de «Deporte preferido» (+ '|lg' = Ligas favoritas), T: textos}.
+ * Configuración: window.NF_LIVE = {key: clave de «Deporte preferido» (+ '|lg' = Eventos favoritos), T: textos}.
  */
 (function () {
     'use strict';
@@ -18,7 +18,7 @@
     var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var fill = function (s, p) { for (var k in p) s = s.split('{' + k + '}').join(p[k]); return s; };
     function pref() { try { return localStorage.getItem(C.key) || ''; } catch (x) { return ''; } }
-    // Ajustes › Ligas favoritas (por línea y perfil): ninguna = todas
+    // Ajustes › Eventos favoritos (por línea y perfil): ninguno = todos
     function leagues() {
         try {
             var j = JSON.parse(localStorage.getItem(C.key + '|lg') || '[]'), o = {};

@@ -51,7 +51,7 @@ $ok($ids === ['1', '3'], 'solo partidos con un canal exacto de la lista (sin can
 $c1 = $r["cards"][0];
 $ok($c1['best'] === '10' && $c1['opts'][0] === ['10', 'tv', 'ESPN 2'], 'primero el canal que lo transmite (ESPN 2 -> MX: ESPN 2 HD)');
 $ok(in_array(['20', 'teams', ''], $c1['opts'], true), 'después el de los equipos');
-$ok($c1['li'] === '4480', 'la tarjeta lleva la liga (Ajustes › Ligas favoritas la filtra en el navegador)');
+$ok($c1['li'] === '4480', 'la tarjeta lleva la liga (Ajustes › Eventos favoritos la filtra en el navegador)');
 $ok($r['cards'][1]['best'] === '30' && $r['cards'][1]['opts'][0][1] === 'guide', 'sin canal que lo transmita: el de la guía del panel');
 $ok(isset($r['ch']->{'10'}) && $r['ch']->{'10'}[0] === 'MX: ESPN 2 HD' && !isset($r['ch']->{'40'}), 'solo los canales que se usan, con su nombre y carpeta');
 
