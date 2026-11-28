@@ -4,7 +4,7 @@ import type { ListRenderItem } from 'react-native';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { isItem, Item, Row, Special } from '../data/catalog';
 import { t } from '../lib/i18n';
-import { C, px, SIDE, themed } from '../theme';
+import { alpha, C, px, SIDE, themed } from '../theme';
 import { Focusable } from './ui';
 import { ChainImage } from './ChainImage';
 import { posterSources } from '../lib/images';
@@ -230,7 +230,8 @@ const s = themed(() =>
     genrePoster: { width: px(96), height: px(144) },
     genreText: { position: 'absolute', left: px(14), right: px(14), bottom: px(10), color: '#fff', fontSize: px(30), fontWeight: '800', lineHeight: px(34), textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: px(6), textShadowOffset: { width: 0, height: px(2) } },
     genreTextNarrow: { right: px(118) },
-    more: { width: posterW(), height: posterH(), justifyContent: 'center', alignItems: 'center', backgroundColor: C.card },
+    // «Ver todo» al final de la fila: del tamaño de las carátulas, translúcido (no un bloque sólido) con borde fino
+    more: { width: posterW(), height: posterH(), justifyContent: 'center', alignItems: 'center', backgroundColor: alpha(C.text, 0.1), borderColor: alpha(C.text, 0.18) },
     moreText: { color: C.text, fontSize: px(30), fontWeight: '700' },
     row: { marginBottom: px(18) },
     rowTitle: { color: C.text, fontSize: px(34), fontWeight: '700', marginLeft: SIDE, marginBottom: px(4) },
