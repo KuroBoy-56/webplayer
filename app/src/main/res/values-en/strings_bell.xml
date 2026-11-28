@@ -14,8 +14,9 @@
     <string name="tb_no_data">No upcoming matches to choose teams from.</string>
     <string name="tb_no_teams">No teams in this league.</string>
     <string name="tb_remove">Remove</string>
-    <string name="tb_bell">Today\'s alerts</string>
-    <string name="tb_bell_empty">None of your teams plays today.</string>
+    <string name="tb_bell">Notifications</string>
+    <string name="tb_bell_empty">There are no notifications.</string>
+    <string name="tb_more">and %1$d more</string>
     <string name="tb_live">Live! %1$s</string>
     <string name="tb_today">Today %1$s: %2$s</string>
     <string name="tb_final">Final: %1$s</string>

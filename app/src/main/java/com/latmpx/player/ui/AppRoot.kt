@@ -373,6 +373,8 @@ fun AppRoot() {
         }
         state.entering?.let { com.latmpx.player.ui.screens.ProfileEnterOverlay(it) }
         alert.value?.takeIf { state.session != null }?.let { a -> PanelAlertDialog(a) { alert.value = null } }
+        val alertShown = alert.value != null && state.session != null
+        LaunchedEffect(alertShown) { state.alertOpen = alertShown }
         // el panel pidió borrar la caché: aviso de 3 s, se borra y la app se reinicia sola
         if (com.latmpx.player.data.CacheClear.pending) {
             Box(Modifier.fillMaxSize().background(Color(0xE6000000)).padding(32.dp), contentAlignment = Alignment.Center) {
