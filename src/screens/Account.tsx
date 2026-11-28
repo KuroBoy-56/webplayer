@@ -117,7 +117,7 @@ function SportPicker({ onClose }: { onClose: () => void }) {
   );
 }
 
-// Cuenta › Ligas favoritas: varias a la vez (de la agenda y de los próximos 21 días, las que juegan hoy primero);
+// Cuenta › Eventos favoritos (ligas y copas internacionales del deporte favorito): varios a la vez (de la agenda y de los próximos 21 días, las que juegan hoy primero);
 // con alguna elegida, «En vivo ahora» de Inicio solo muestra partidos de esas ligas
 function LeaguePicker({ onClose }: { onClose: () => void }) {
   const [list, setList] = useState<(FavLeague & { today: number })[] | null>(null);
@@ -136,16 +136,20 @@ function LeaguePicker({ onClose }: { onClose: () => void }) {
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.pickShade}>
         <View style={s.pickBox}>
-          <Text style={s.pickTitle}>{t('Ligas favoritas')}</Text>
+          <Text style={s.pickTitle}>{t('Eventos favoritos')}</Text>
+          {!liveSport() ? (
+            <Text style={s.pickNote}>{t('Primero elige tu deporte favorito para elegir tus eventos.')}</Text>
+          ) : (
+          <>
           <Text style={s.pickNote}>
-            {t('En Inicio, «En vivo ahora» muestra solo los partidos de las ligas que elijas.')}
-            {liveSport() ? '  ' + t('Solo las de {x}.', { x: liveSportName() || liveSport() }) : ''}
+            {t('En Inicio, «En vivo ahora» muestra solo los partidos de los eventos que elijas.')}
+            {'  ' + t('Solo los de {x}.', { x: liveSportName() || liveSport() })}
           </Text>
           {!list ? <Text style={s.pickNote}>{t('Cargando…')}</Text> : null}
-          {list && !list.length ? <Text style={s.pickNote}>{t('El panel todavía no tiene ligas para elegir.')}</Text> : null}
+          {list && !list.length ? <Text style={s.pickNote}>{t('El panel todavía no tiene eventos para elegir.')}</Text> : null}
           <ScrollView style={{ maxHeight: px(560) }}>
             <View style={s.set}>
-              <Button label={(sel.length ? '     ' : '✓  ') + t('Todas las ligas')} left last preferred onPress={() => save([])} />
+              <Button label={(sel.length ? '     ' : '✓  ') + t('Todos los eventos')} left last preferred onPress={() => save([])} />
             </View>
             {(list || []).map(x => (
               <View key={x.id} style={s.set}>
@@ -163,8 +167,10 @@ function LeaguePicker({ onClose }: { onClose: () => void }) {
               </View>
             ))}
           </ScrollView>
+          </>
+          )}
           <View style={{ height: px(20) }} />
-          <Button label={t('Listo')} primary last onPress={onClose} />
+          <Button label={t('Listo')} primary last preferred={!liveSport()} onPress={onClose} />
         </View>
       </View>
     </Modal>
@@ -288,7 +294,7 @@ export default function Account() {
       ) : null}
       {/* con perfiles: los equipos favoritos se guardan en la nube (avisa el celular; en la TV, la campanita) */}
       {liveTvOn() ? <Setting label={t('Deporte favorito')} value={liveSport() ? liveSportName() || liveSport() : t('Todos los deportes')} onPress={() => setSportOpen(true)} /> : null}
-      {liveTvOn() ? <Setting label={t('Ligas favoritas')} value={liveLeaguesText()} onPress={() => setLeagueOpen(true)} /> : null}
+      {liveTvOn() ? <Setting label={t('Eventos favoritos')} value={liveLeaguesText()} onPress={() => setLeagueOpen(true)} /> : null}
       {liveTvOn() ? <Setting label={t('Equipos favoritos')} value={t('Elegir')} onPress={() => setTeamsOpen(true)} /> : null}
       <Setting
         label={t('Contenido protegido en esta sesión')}

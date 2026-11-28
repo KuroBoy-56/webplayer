@@ -96,9 +96,9 @@ const STADIUM = require('../../assets/image/sports_bg.jpg');
 export const GoSportsTile = memo(function GoSportsTile({ onPress, onFocus }: { onPress: () => void; onFocus?: () => void }) {
   return (
     <Focusable onPress={onPress} onFocus={onFocus} style={f => [s.tile, { width: px(300), height: LIVE_H() }, f && s.tileF]}>
-      <Image source={STADIUM} style={StyleSheet.absoluteFill} resizeMode="cover" />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: C.red, opacity: 0.55 }]} />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
+      {/* el estadio de Deportes en miniatura, translúcido; el texto se lee encima */}
+      <Image source={STADIUM} style={[StyleSheet.absoluteFill, { opacity: 0.5 }]} resizeMode="cover" />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
       <View style={s.goBody}>
         <Text style={s.goIcon}>🏟️</Text>
         <Text style={s.goTitle} numberOfLines={2}>{t('Ir a Deportes')}</Text>
@@ -162,7 +162,7 @@ const s = themed(() =>
     bigTeams: { position: 'absolute', right: px(120), top: px(250), flexDirection: 'row', alignItems: 'center' },
     goBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: px(16) },
     goIcon: { fontSize: px(54) },
-    goTitle: { color: '#fff', fontSize: px(30), fontWeight: '900', marginTop: px(8), textAlign: 'center' },
+    goTitle: { color: '#fff', fontSize: px(30), fontWeight: '900', marginTop: px(8), textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: px(6) },
     goSub: { color: '#fff', fontSize: px(20), opacity: 0.9, marginTop: px(6), textAlign: 'center' },
     bigVs: { color: '#fff', fontSize: px(80), fontWeight: '900', marginHorizontal: px(50), opacity: 0.9 },
     soloMid: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: px(16) },
