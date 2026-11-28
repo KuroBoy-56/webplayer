@@ -55,4 +55,5 @@ aw-play-store (celular), aw-android-tv / aw-android-tv-sin-certificado / pstv (T
 - webOS 1.6.4, Tizen 1.5.4, VIDAA 1.1.8, Vega 2.9.5: puntos 1–4 hechos (scripts en scratchpad: rn_events.py, rn_explore.py, rn_tiles.py).
 - Android TV 1.8.2 / sin certificado 1.8.3 / pstv 1.8.2: puntos 1–4 hechos.
 - Roku 2.8.6: puntos 1–5 hechos (refoco defensivo en RowsSection.setContent; ficha: listMode con la fila abajo).
-- Falta: escritorio ×3, Android celular ×3, web player, iOS (solo Z - A).
+- Escritorio Windows/macOS/Linux 1.8.1 y Android celular 1.7.6 / sin certificado 1.7.8 / Play Store 1.7.7: hechos (celular no tiene selector de categorías; solo Z - A).
+- Falta: web player (Eventos favoritos en Ajustes, Z - A en browse.php, Ir a Deportes translúcido) e iOS (Z - A).
