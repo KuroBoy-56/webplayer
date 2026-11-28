@@ -98,7 +98,7 @@ struct PosterGrid: View {
 
 /**
  * "Ver todo", plataformas y géneros. Arriba a la derecha «Ordenar» con solo los tres órdenes del web player (Agregados
- * recientemente / A - Z / Mejor valorados); el Top 10 la abre con Mejor valorados (all = películas y series si kind es nil).
+ * recientemente / A - Z / Z - A / Mejor valorados; Z - A es el 3); el Top 10 la abre con Mejor valorados (all = películas y series si kind es nil).
  */
 struct BrowseView: View {
     @EnvironmentObject var state: AppState
@@ -134,6 +134,7 @@ struct BrowseView: View {
             let list: [Item] = {
                 switch sort {
                 case 1: return base.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+                case 3: return base.sorted { $0.name.localizedStandardCompare($1.name) == .orderedDescending }
                 case 2: return base.sorted { $0.rating != $1.rating ? $0.rating > $1.rating : $0.added > $1.added }
                 default: return base
                 }
@@ -149,6 +150,7 @@ struct BrowseView: View {
                     Picker(tr("Ordenar"), selection: $sort) {
                         Text(tr("Agregados recientemente")).tag(0)
                         Text("A - Z").tag(1)
+                        Text("Z - A").tag(3)
                         Text(tr("Mejor valorados")).tag(2)
                     }
                 } label: {

@@ -4,6 +4,10 @@
 
 La misma app de Android para celular, hecha para iOS (SwiftUI + VLCKit). Funciona en iPhone y iPad (iOS 16 o superior).
 
+## Novedades de la 1.1.8 (Z - A en «Ver todo»)
+
+- **«Ver todo»** (`BrowseView`): el menú **Ordenar** suma **Z - A** (Agregados recientemente, A - Z, Z - A, Mejor valorados), como Explorar en las demás apps.
+
 ## Novedades de la 1.1.7 («Ver todo» con los órdenes del web player)
 
 - **«Ver todo»** (`BrowseView` en `LatMpx/UI/CatalogView.swift`): arriba a la derecha el menú **Ordenar** con solo las tres opciones del web player (Agregados recientemente, A - Z, Mejor valorados), también en las plataformas.
