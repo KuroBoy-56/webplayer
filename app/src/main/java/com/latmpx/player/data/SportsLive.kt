@@ -24,6 +24,8 @@ object SportsLive {
 
     /** nombres de las disciplinas del panel (api/sports.php, en el idioma de la app): Deporte preferido y Equipos favoritos */
     var labels by mutableStateOf<Map<String, String>>(emptyMap())
+    /** sube cuando el deporte preferido o las ligas favoritas cambian (también al llegar de la nube) */
+    var prefRev by mutableStateOf(0)
 
     class Data(val enabled: Boolean, val ttl: Int, val events: List<SportEvent>, val sports: Map<String, SportInfo>, val rules: MatchRules, val iptvOnly: Boolean)
 

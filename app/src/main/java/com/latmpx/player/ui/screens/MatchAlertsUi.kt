@@ -92,13 +92,19 @@ fun SportPrefsSection() {
     val ctx = LocalContext.current
     var prefOpen by remember { mutableStateOf(false) }
     var pickOpen by remember { mutableStateOf(false) }
-    var pref by remember(Profiles.current) { mutableStateOf(Store.preferredSport) }
+    var pref by remember(Profiles.current, SportsLive.prefRev) { mutableStateOf(Store.preferredSport) }
     val rev = MatchAlerts.rev
     val teams = remember(rev, Profiles.current) { MatchAlerts.teams() }
     val askNotif = rememberNotifPermission()
     // todas las disciplinas que da el panel (api/sports.php: las de la agenda y todas las encendidas) con sus nombres
     LaunchedEffect(Unit) {
         runCatching { com.latmpx.player.data.Sports.load()?.sports }.getOrNull()?.let { m -> SportsLive.labels = m.mapValues { it.value.label } }
+        // lo último de la nube (el deporte y las ligas que se eligieron en la TV o la computadora)
+        runCatching {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.latmpx.player.data.MatchAlertsCloud.sync(Profiles.param(), MatchAlerts.suffix())
+            }
+        }
     }
     val choices = remember(SportsLive.labels) {
         (SportsLive.labels.keys + SportsLive.CHOICES.map { it.first }).distinct().map { it to sportLabel(it) }.sortedBy { it.second.lowercase() }
@@ -107,14 +113,14 @@ fun SportPrefsSection() {
     HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
     // Ligas favoritas: varias a la vez; «En vivo ahora» solo con esas
     var lgOpen by remember { mutableStateOf(false) }
-    var lgs by remember(Profiles.current) { mutableStateOf(Store.liveLeagues) }
+    var lgs by remember(Profiles.current, SportsLive.prefRev) { mutableStateOf(Store.liveLeagues) }
     SettingsItem(Icons.Filled.EmojiEvents, stringResource(R.string.sl_lg), when (lgs.size) {
         0 -> stringResource(R.string.sl_lg_all)
         1 -> lgs[0].name
         else -> stringResource(R.string.sl_lg_n, lgs.size)
     }) { lgOpen = true }
     HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp))
-    if (lgOpen) LeagueDialog(pref, { lgOpen = false; lgs = Store.liveLeagues }) { lgs = it; Store.liveLeagues = it }
+    if (lgOpen) LeagueDialog(pref, { lgOpen = false; lgs = Store.liveLeagues }) { lgs = it; Store.liveLeagues = it; com.latmpx.player.data.MatchAlertsCloud.pushPrefs() }
     // tarjetas de plataformas debajo de «En vivo ahora» (solo si el distribuidor tiene las plataformas)
     if (com.latmpx.player.data.Tenant.platformsEnabled) {
         var plat by remember(Profiles.current) { mutableStateOf(Store.platformCards) }
@@ -154,6 +160,8 @@ fun SportPrefsSection() {
         pref = it; Store.preferredSport = it; prefOpen = false
         // las ligas favoritas de otra disciplina ya no tienen sentido
         if (it.isNotEmpty()) { Store.liveLeagues = Store.liveLeagues.filter { l -> l.sport.equals(it, true) }; lgs = Store.liveLeagues }
+        // en la nube: las TV y la computadora de la línea y el perfil lo ven
+        com.latmpx.player.data.MatchAlertsCloud.pushPrefs()
     }
     if (pickOpen) TeamPicker(pref, { pickOpen = false }) { t ->
         pickOpen = false
