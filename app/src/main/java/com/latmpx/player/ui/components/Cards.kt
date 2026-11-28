@@ -188,11 +188,13 @@ fun PlatformCard(p: Platform, width: Dp, onClick: () -> Unit) {
 }
 
 @Composable
-fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, shape = RoundedCornerShape(50), focusScale = 1.05f) {
+fun Chip(text: String, selected: Boolean, box: Boolean = false, onClick: () -> Unit) {
+    // box: rectángulo translúcido (los deportes de Deportes, dentro de su recuadro); sin él, la píldora de siempre
+    val shape = if (box) RoundedCornerShape(8.dp) else RoundedCornerShape(50)
+    FocusBox(onClick = onClick, shape = shape, focusScale = 1.05f) {
         Text(
             text, color = if (selected) Color.Black else Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-            modifier = Modifier.background(if (selected) Color.White else Color(0x33FFFFFF), RoundedCornerShape(50)).padding(horizontal = 14.dp, vertical = 7.dp),
+            modifier = Modifier.background(if (selected) Color.White else if (box) Color(0x29FFFFFF) else Color(0x33FFFFFF), shape).padding(horizontal = 14.dp, vertical = 7.dp),
         )
     }
 }

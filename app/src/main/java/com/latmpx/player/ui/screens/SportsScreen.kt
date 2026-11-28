@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.latmpx.player.ui.screens
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
@@ -6,6 +8,8 @@ import com.latmpx.player.R
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -338,7 +342,13 @@ fun SportsScreen(state: AppState) {
         }
         liveL + nextL + doneL
     }
-    val sportKeys = remember(d) { d.events.map { it.sport }.filter { it.isNotEmpty() }.distinct() }
+    // todas las disciplinas que encendió el dueño o el distribuidor («sports» de api/sports.php), aunque hoy no tengan
+    // partidos (antes solo las de la agenda); primero las que tienen partidos, en el orden del panel
+    val sportKeys = remember(d) {
+        val withEv = d.events.map { it.sport }.filter { it.isNotEmpty() }.distinct()
+        val all = d.sports.keys.filter { it.isNotEmpty() }
+        all.filter { it in withEv } + withEv.filter { it !in all } + all.filter { it !in withEv }
+    }
     val liveCount = remember(d, now) { d.events.count { isLive(it) } }
     LazyVerticalGrid(
         columns = if (compact) GridCells.Fixed(1) else GridCells.Adaptive(330.dp),
@@ -361,13 +371,20 @@ fun SportsScreen(state: AppState) {
             }
         }
         item(span = { GridItemSpan(maxLineSpan) }) { SportsTabs(d, curTab) { tab = it; sport = "" } }
-        // disciplinas: Todos y las de la agenda
+        // disciplinas: Todos y las que encendió el panel, en un recuadro translúcido en varias líneas (como el escritorio),
+        // no una fila larga; el foco pasa de una línea a otra con arriba / abajo
         item(span = { GridItemSpan(maxLineSpan) }) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-                item(key = "all") { Chip(stringResource(R.string.all), sport.isEmpty()) { sport = "" } }
-                items(sportKeys, key = { "c$it" }) { k ->
+            val box = RoundedCornerShape(12.dp)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    .background(Color(0x8C141414), box).border(1.dp, Color(0x24FFFFFF), box).padding(12.dp),
+            ) {
+                Chip(stringResource(R.string.all), sport.isEmpty(), box = true) { sport = "" }
+                sportKeys.forEach { k ->
                     val info = d.sports[k]
-                    Chip("${info?.icon.orEmpty()} ${info?.label ?: k}".trim(), sport == k) { sport = k }
+                    Chip("${info?.icon.orEmpty()} ${info?.label ?: k}".trim(), sport == k, box = true) { sport = k }
                 }
             }
         }
