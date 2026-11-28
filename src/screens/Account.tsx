@@ -20,7 +20,7 @@ import { deviceId, loadCatalog, loadCloud, logoutByHand, refreshCatalog, reloadC
 import { C, px, SIDE, themed } from '../theme';
 import { APP_VERSION } from '../version';
 import { osVersion } from '../lib/osversion';
-import { FavLeague, leagueChoices, liveLeagues, liveLeaguesText, liveSport, liveSportName, liveTvOn, platformCards, setLiveLeagues, setLiveSport, setPlatformCards } from '../data/liveTv';
+import { cloudAlerts, FavLeague, leagueChoices, liveLeagues, liveLeaguesText, liveSport, liveSportName, liveTvOn, platformCards, savePrefs, setLiveLeagues, setLiveSport, setPlatformCards } from '../data/liveTv';
 import { fetchSports, localSports } from '../data/sportsPanel';
 import { features } from '../lib/tenant';
 
@@ -107,6 +107,8 @@ function SportPicker({ onClose }: { onClose: () => void }) {
                   preferred={k.toLowerCase() === cur.toLowerCase()}
                   onPress={() => {
                     setLiveSport(k, k ? label : '');
+                    // en la nube: el celular, la computadora y las otras TV de la línea y el perfil lo ven
+                    savePrefs();
                     onClose();
                   }}
                 />
@@ -130,6 +132,7 @@ function LeaguePicker({ onClose }: { onClose: () => void }) {
   const save = (next: FavLeague[]) => {
     setSel(next);
     setLiveLeagues(next);
+    savePrefs();
   };
   const sports = localSports()?.sports || {};
   const spName = (sp: string) => String(sports[sp]?.label || sp);
@@ -188,6 +191,10 @@ export default function Account() {
   const nav = useNav();
   const st = useAppState();
   const [, force] = useState(0);
+  // lo último de la nube (el deporte y los eventos favoritos elegidos en otro equipo de la línea y el perfil)
+  useEffect(() => {
+    if (liveTvOn()) cloudAlerts(true).then(() => force(x => x + 1)).catch(() => {});
+  }, []);
   // para qué se pidió el PIN (como Roku): mostrar adultos, bloquear categorías o desbloquear lo protegido en la sesión
   const [pinFor, setPinFor] = useState<'' | 'adult' | 'blocked' | 'unlock'>('');
   const [catLock, setCatLock] = useState(false);
