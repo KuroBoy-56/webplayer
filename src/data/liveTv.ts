@@ -120,6 +120,26 @@ export async function leagueChoices(): Promise<(FavLeague & { today: number })[]
     .sort((a, b) => Number(b.today > 0) - Number(a.today > 0) || a.sp.localeCompare(b.sp) || a.n.localeCompare(b.n));
 }
 
+/**
+ * Cuenta › Deporte favorito y Eventos favoritos también ordenan Deportes: primero los de los eventos favoritos, después
+ * los demás del deporte favorito y al final todo lo demás, cada grupo en su orden (no se quita nada). Solo con perfiles.
+ */
+export function favoritesFirst<T>(list: T[], ev: (x: T) => Record<string, any>): T[] {
+  if (!liveTvOn()) return list;
+  const sp = liveSport().toLowerCase();
+  const lg = new Set(liveLeagues().map(x => x.id));
+  if (!sp && !lg.size) return list;
+  const rank = (x: T) => {
+    const e = ev(x);
+    return str(e.li) && lg.has(str(e.li)) ? 0 : sp && str(e.sp).toLowerCase() === sp ? 1 : 2;
+  };
+  // con el índice: el orden de cada grupo queda igual también en los televisores viejos (sort no estable)
+  return list
+    .map((x, i) => ({ x, i, r: rank(x) }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map(o => o.x);
+}
+
 /** «Todos los eventos», el nombre del único o «3 eventos» */
 export const liveLeaguesText = () => {
   const l = liveLeagues();

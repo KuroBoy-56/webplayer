@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { openItem } from '../actions';
 import { Chip, EventRow, EvRow, InputModal, MenuModal, MenuOpt, ReadModal } from '../components/SportsUi';
-import { alertsBrand, cloudAlerts, isReminded, liveTvOn, setReminder, tooLate } from '../data/liveTv';
+import { alertsBrand, cloudAlerts, favoritesFirst, isReminded, liveTvOn, setReminder, tooLate } from '../data/liveTv';
 import { alpha, C } from '../theme';
 import { Shade } from '../components/Shade';
 
@@ -415,7 +415,7 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
     if (!data || (tab > 1 && tab !== 5)) return [];
     const now = nowSec();
     const today = panelToday(data, now);
-    const liveL: EvRow[] = [];
+    const liveL: { r: EvRow; e: Ev }[] = [];
     const nextL: EvRow[] = [];
     const doneL: EvRow[] = [];
     const evs = (data.events as Ev[]).filter(e => e.s > 0 && (!sport || str(e.sp) === sport)).sort((a, b) => a.s - b.s);
@@ -432,11 +432,12 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
       if (stadium && tab === 0 && over) continue;
       if (!((tab === 0 && (dayIdx === 0 || live)) || (tab === 1 && dayIdx === 1))) continue;
       const r = rowOf(e, false);
-      if (live) liveL.push(r);
+      if (live) liveL.push({ r, e });
       else if (isFinal(str(e.st)) || e.pp === true || now >= ending) doneL.push(r);
       else nextL.push(r);
     }
-    return [...liveL, ...nextL, ...doneL];
+    // los en vivo de los eventos favoritos primero, después los del deporte favorito y luego lo demás
+    return [...favoritesFirst(liveL, x => x.e).map(x => x.r), ...nextL, ...doneL];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, tab, sport, rowOf, stadium]);
 
