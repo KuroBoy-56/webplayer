@@ -15,7 +15,7 @@ aw-play-store (celular), aw-android-tv / aw-android-tv-sin-certificado / pstv (T
 (rama de KuroBoy-56/webplayer), roku.
 
 ## 1. «Ligas favoritas» → «Eventos favoritos» (todas las apps con Ajustes › Deporte favorito)
-- [ ] Panel `includes/sports_engine.php` `sp_payload()`: agregar `cups` = las competiciones de `ST_LEAGUES`
+- [x] Panel `includes/sports_engine.php` `sp_payload()`: agregar `cups` = las competiciones de `ST_LEAGUES`
       (`includes/sports_tables.php`) con región `intl` o `nat` → `[{id, n, sp, rg}]` (Champions, Europa, Conference,
       Libertadores, Sudamericana, CONCACAF Champions Cup, Mundial FIFA, Eliminatorias, Copa Oro, Copa América, Eurocopa…).
       Hoy la lista solo sale de la agenda de hoy/mañana + las ligas que eligió el distribuidor, por eso no aparecen.
@@ -51,4 +51,7 @@ aw-play-store (celular), aw-android-tv / aw-android-tv-sin-certificado / pstv (T
       desplazamiento de `DetailView.brs`.
 
 ## Hecho
-(nada todavía)
+- Panel: `sp_cups()` en `includes/sports_engine.php` (commit ec58641, panelweb) — subir `includes/sports_engine.php` y `api/sports.php`.
+- webOS 1.6.4, Tizen 1.5.4, VIDAA 1.1.8, Vega 2.9.5: puntos 1–4 hechos (scripts en scratchpad: rn_events.py, rn_explore.py, rn_tiles.py).
+- Android TV 1.8.2 / sin certificado 1.8.3 / pstv 1.8.2: puntos 1–4 hechos.
+- Falta: Roku (1–5), escritorio ×3, Android celular ×3, web player, iOS (solo Z - A).
