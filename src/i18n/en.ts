@@ -529,6 +529,10 @@ const en = {
   "No hay partidos próximos para elegir equipos.": "No upcoming matches to choose teams from.",
   "No se pudo guardar. Inténtalo de nuevo.": "Could not save. Try again.",
   "Las notificaciones solo están disponibles en la app de celular (Android o iOS). Aquí se guardan en la nube y en la TV los ves con la campanita.": "Notifications are only available in the phone app (Android or iOS). Your teams are saved in the cloud, and on the TV you see them with the bell.",
+  "Notificaciones": "Notifications",
+  "No hay notificaciones.": "There are no notifications.",
+  "y {n} más": "and {n} more",
+  "OK": "OK",
   "Avisos de hoy": "Today's alerts",
   "Hoy no juega ninguno de tus equipos.": "None of your teams plays today.",
 };

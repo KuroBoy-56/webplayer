@@ -35,7 +35,7 @@ import { bbClose, bbPending, bbStep } from './lib/blackbox';
 import { ImagesOff } from './components/ChainImage';
 import { notePressure } from './player/membudget';
 import { freeMp4Memory } from './player/mp4mse';
-import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppSelector } from './state';
+import { checkTenant, deviceId, getState, Guard, loadCatalog, loadCloud, logout, restoreSession, showNotice, tenantCheckDue, useAppSelector, setAlertOpen } from './state';
 import { deviceBlocked, deviceSync, onCacheClear, panelAnswered, panelCheckMac, panelLineGone, registerPending, sessionVerdict } from './api/panel';
 
 // errores al panel (Errores de las apps): cierres de JavaScript y fallos de reproducción
@@ -166,6 +166,8 @@ function App() {
   // aviso del panel: una vez por arranque de la app y otra vez tras iniciar sesión
   const [alert, setAlert] = useState<PanelAlert | null>(null);
   const alertDone = useRef(false);
+  // la campanita no baja su cartel encima del aviso del panel
+  useEffect(() => setAlertOpen(!!alert), [alert]);
   useEffect(() => {
     const ses = getState().session;
     // en «¿Quién está viendo?» el catálogo ya se va cargando; Continuar viendo y Mi lista, con el perfil elegido

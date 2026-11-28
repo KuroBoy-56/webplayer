@@ -59,6 +59,8 @@ type State = {
   profileGone: number;
   // el menú de arriba se esconde mientras se recorren las filas de Inicio, Series y Películas (como Android)
   menuHidden: boolean;
+  // el aviso del panel (AlertDialog) está abierto: la campanita espera a que se cierre para bajar su cartel
+  alertOpen: boolean;
   rev: number;
 };
 
@@ -78,6 +80,7 @@ let state: State = {
   profile: null,
   profileGone: 0,
   menuHidden: false,
+  alertOpen: false,
   rev: 0,
 };
 
@@ -90,6 +93,10 @@ function set(patch: Partial<State>) {
   state = { ...state, ...patch, rev: state.rev + 1 };
   listeners.forEach(l => l());
 }
+
+export const setAlertOpen = (on: boolean) => {
+  if (state.alertOpen !== on) set({ alertOpen: on });
+};
 
 export function getState(): State {
   return state;
