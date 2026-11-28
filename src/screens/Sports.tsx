@@ -390,10 +390,14 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
     setMenu({ title: evTitle(e), sub: t('¿Dónde quieres verlo?'), opts });
   };
 
+  // todas las disciplinas que encendió el dueño o el distribuidor («sports» de api/sports.php), aunque hoy no tengan
+  // partidos (antes solo las de la agenda: fútbol, béisbol y básquetbol casi siempre). Primero las que tienen partidos,
+  // en el orden del panel; después el resto.
   const sportKeys = useMemo(() => {
-    const keys: string[] = [];
-    for (const e of data?.events || []) if (str(e.sp) && !keys.includes(str(e.sp))) keys.push(str(e.sp));
-    return keys;
+    const withEv: string[] = [];
+    for (const e of data?.events || []) if (str(e.sp) && !withEv.includes(str(e.sp))) withEv.push(str(e.sp));
+    const all = Object.keys(data?.sports || {}).filter(k => k !== '');
+    return [...all.filter(k => withEv.includes(k)), ...withEv.filter(k => !all.includes(k)), ...all.filter(k => !withEv.includes(k))];
   }, [data]);
 
   // orden: en vivo, después los que vienen por hora y al final los terminados (y aplazados)
@@ -469,14 +473,12 @@ export default function Sports({ active = true, back = 0 }: { active?: boolean; 
         />
       ) : (
         <>
-          <FlatList
-            horizontal
-            style={s.sports}
-            data={['', ...sportKeys]}
-            keyExtractor={k => k || 'all'}
-            contentContainerStyle={{ paddingHorizontal: SIDE, paddingVertical: px(6), alignItems: 'center' }}
-            renderItem={({ item: k }) => <Chip label={k ? label(k) : t('Todos')} on={sport === k} onFocus={chipFocus} onPress={() => (forget(), setSport(k))} />}
-          />
+          {/* un recuadro translúcido con todos los deportes en varias líneas (como el escritorio), no una fila larga */}
+          <View style={s.sportBox}>
+            {['', ...sportKeys].map(k => (
+              <Chip key={k || 'all'} box label={k ? label(k) : t('Todos')} on={sport === k} onFocus={chipFocus} onPress={() => (forget(), setSport(k))} />
+            ))}
+          </View>
           {rows.length ? (
             <FlatList
               // otro día u otra disciplina: la lista empieza arriba; si solo se actualizó, queda donde estaba
@@ -510,7 +512,20 @@ const s = themed(() =>
     bgImg: { position: 'absolute', left: 0, top: 0, width: px(1920), height: px(1080) },
     bgShade: { position: 'absolute', left: 0, top: px(420), width: px(1920), height: px(660) },
     chips: { flexDirection: 'row', paddingHorizontal: SIDE, marginBottom: px(22) },
-    sports: { flexGrow: 0, height: px(76), minHeight: px(76), marginBottom: px(20) },
+    sportBox: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      marginHorizontal: SIDE,
+      marginBottom: px(20),
+      paddingTop: px(14),
+      paddingHorizontal: px(14),
+      paddingBottom: px(4),
+      borderRadius: px(12),
+      backgroundColor: alpha(C.bg2, 0.55),
+      borderWidth: px(1),
+      borderColor: alpha(C.text, 0.14),
+    },
     toast: { color: '#e87c03', fontSize: px(26), marginLeft: SIDE, marginBottom: px(10) },
   }),
 );
