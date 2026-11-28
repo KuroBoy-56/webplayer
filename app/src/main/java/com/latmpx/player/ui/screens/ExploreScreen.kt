@@ -74,7 +74,8 @@ import com.latmpx.player.ui.Tab
 import com.latmpx.player.ui.theme.NfRed
 
 private enum class ExType { ALL, MOVIE, SERIES }
-private enum class ExSort { RECENT, AZ, RATING }
+// el número es el de siempre (2 = Mejor valorados del «Ver todo» del Top 10); Z - A es el 3
+private enum class ExSort { RECENT, AZ, RATING, ZA }
 
 /**
  * Explorar (solo con perfiles: el botón «Categorías» de arriba), igual que la del web player en el celular (browse.php):
@@ -89,7 +90,7 @@ fun ExploreScreen(state: AppState, init: Route.Explore = Route.Explore()) {
     val cat = init.cat
     val catSeries = init.catKind == "s"
     var type by rememberSaveable { mutableStateOf(if (cat.isNotEmpty()) (if (catSeries) ExType.SERIES else ExType.MOVIE) else ExType.entries[init.type.coerceIn(0, 2)]) }
-    var sort by rememberSaveable { mutableStateOf(ExSort.entries[init.sort.coerceIn(0, 2)]) }
+    var sort by rememberSaveable { mutableStateOf(ExSort.entries[init.sort.coerceIn(0, 3)]) }
     var genre by rememberSaveable { mutableStateOf(init.genre) }
     var query by rememberSaveable { mutableStateOf("") }
 
@@ -122,6 +123,7 @@ fun ExploreScreen(state: AppState, init: Route.Explore = Route.Explore()) {
         when (sort) {
             ExSort.RECENT -> l.sortedByDescending { it.added }
             ExSort.AZ -> l.sortedBy { Platforms.fold(it.name) }
+            ExSort.ZA -> l.sortedByDescending { Platforms.fold(it.name) }
             ExSort.RATING -> l.sortedWith(compareByDescending<Item> { it.rating }.thenByDescending { it.added })
         }
     }
@@ -133,7 +135,7 @@ fun ExploreScreen(state: AppState, init: Route.Explore = Route.Explore()) {
     val pad = sidePad()
     val gap = 10.dp
     val full: (androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope) -> GridItemSpan = { GridItemSpan(it.maxLineSpan) }
-    val sorts = listOf(ExSort.RECENT to stringResource(R.string.ex_sort_recent), ExSort.AZ to "A - Z", ExSort.RATING to stringResource(R.string.ex_sort_rating))
+    val sorts = listOf(ExSort.RECENT to stringResource(R.string.ex_sort_recent), ExSort.AZ to "A - Z", ExSort.ZA to "Z - A", ExSort.RATING to stringResource(R.string.ex_sort_rating))
     val accent = NfRed
     val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     // ya no se ve el principio del degradado: la barra de notificaciones toma el color de la app

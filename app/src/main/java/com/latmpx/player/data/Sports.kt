@@ -68,6 +68,8 @@ data class SportsData(
     val tablesOn: Boolean = false, val tablesRev: Long = 0, val fixturesOn: Boolean = false, val nationsOn: Boolean = false, val fixturesRev: Long = 0,
     /** «Solo los canales del servidor IPTV» del panel ("chan": "iptv"): en cada partido solo se nombran los que el cliente tiene */
     val iptvOnly: Boolean = false,
+    /** "cups": copas internacionales y de selecciones del panel (Champions, Libertadores, Mundial FIFA…) para «Eventos favoritos» */
+    val cups: List<FavLeague> = emptyList(),
 )
 
 /** canales de un partido en la lista del cliente: el automático, cada canal que lo transmite (ch = el del cliente),
@@ -119,6 +121,7 @@ object Sports {
             tablesOn = tb?.optBoolean("on", false) == true, tablesRev = tb?.optLong("t", 0L) ?: 0L,
             fixturesOn = fx?.optBoolean("on", false) == true, nationsOn = fx?.optBoolean("on", false) == true && fx.optBoolean("nat", true),
             fixturesRev = fx?.optLong("t", 0L) ?: 0L, iptvOnly = j.s("chan") == "iptv",
+            cups = j.optJSONArray("cups")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.s("id").isNotEmpty() }.map { FavLeague(it.s("id"), it.s("n"), it.s("sp")) } }.orEmpty(),
         )
     }
 

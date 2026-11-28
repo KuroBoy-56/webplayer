@@ -173,10 +173,12 @@ private fun LeagueDialog(sport: String, onDismiss: () -> Unit, onChange: (List<c
         title = { Text(stringResource(R.string.sl_lg), color = Color.White) },
         text = {
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
-                Text(stringResource(R.string.sl_lg_msg) + if (sport.isNotEmpty()) "  " + stringResource(R.string.sl_lg_only, sportLabel(sport)) else "",
+                Text(if (sport.isEmpty()) stringResource(R.string.sl_lg_pick) else stringResource(R.string.sl_lg_msg) + "  " + stringResource(R.string.sl_lg_only, sportLabel(sport)),
                     color = NfGray2, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp))
                 val l = list
-                if (l == null) Text(stringResource(R.string.ma_loading), color = NfGray2, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
+                // sin deporte favorito no hay eventos que elegir: solo el aviso de arriba
+                if (sport.isEmpty()) Unit
+                else if (l == null) Text(stringResource(R.string.ma_loading), color = NfGray2, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
                 else {
                     if (l.isEmpty()) Text(stringResource(R.string.sl_lg_none), color = NfGray2, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
                     LeagueCheck(stringResource(R.string.sl_lg_all), null, ids.isEmpty()) { save(emptyList()) }

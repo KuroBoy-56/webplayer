@@ -14,11 +14,12 @@
     <string name="sl_go_sports_sub">Toda la agenda de hoy y mañana</string>
     <string name="sp_tab_finished">Finalizados</string>
     <string name="sp_fin_empty">Todavía no terminó ningún evento hoy. Aquí aparecen los de hoy cuando terminan (se vacía a las 00:00).</string>
-    <string name="sl_lg">Ligas favoritas</string>
-    <string name="sl_lg_all">Todas las ligas</string>
-    <string name="sl_lg_n">%1$d ligas</string>
-    <string name="sl_lg_msg">En Inicio, «En vivo ahora» muestra solo los partidos de las ligas que elijas.</string>
-    <string name="sl_lg_only">Solo las de %1$s.</string>
-    <string name="sl_lg_none">El panel todavía no tiene ligas para elegir.</string>
+    <string name="sl_lg">Eventos favoritos</string>
+    <string name="sl_lg_all">Todos los eventos</string>
+    <string name="sl_lg_n">%1$d eventos</string>
+    <string name="sl_lg_msg">En Inicio, «En vivo ahora» muestra solo los partidos de los eventos que elijas.</string>
+    <string name="sl_lg_only">Solo los de %1$s.</string>
+    <string name="sl_lg_pick">Primero elige tu deporte favorito para elegir tus eventos.</string>
+    <string name="sl_lg_none">El panel todavía no tiene eventos para elegir.</string>
     <string name="sl_lg_today">%1$d hoy</string>
 </resources>

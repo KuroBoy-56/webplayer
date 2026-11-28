@@ -80,9 +80,13 @@ object SportsLive {
             map[e.leagueId] = if (day(e.start) == today) x.copy(today = x.today + 1) else x
         }
         fx?.leagues?.forEach { (id, v) -> if (id !in map && v.name.isNotEmpty()) map[id] = FavLeague(id, v.name, v.sport) }
+        // copas internacionales y de selecciones (Champions, CONCACAF, Mundial FIFA…) aunque esta semana no jueguen
+        ag?.cups?.forEach { if (it.id !in map && it.name.isNotEmpty()) map[it.id] = it }
         Store.liveLeagues.forEach { if (it.id !in map) map[it.id] = it }
         val sp = Store.preferredSport
-        map.values.filter { sp.isEmpty() || it.sport.equals(sp, true) }
+        // sin deporte favorito no se eligen eventos (Ajustes pide elegirlo primero)
+        if (sp.isEmpty()) return@withContext emptyList()
+        map.values.filter { it.sport.equals(sp, true) }
             .map { it.copy(sportLabel = ag?.sports?.get(it.sport)?.label ?: it.sport) }
             .sortedWith(compareBy<FavLeague>({ it.today == 0 }, { it.sport.lowercase() }, { it.name.lowercase() }))
     }

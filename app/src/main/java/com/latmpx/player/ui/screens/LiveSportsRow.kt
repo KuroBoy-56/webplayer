@@ -205,19 +205,21 @@ internal fun LiveSportsRow(live: LiveSports, pad: Dp, onSports: () -> Unit) {
 /** hora de inicio de un próximo, en la zona del panel (como Deportes) */
 private fun hhmm(t: Long): String = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).apply { timeZone = Sports.zone }.format(t)
 
-/** al final de la fila: toda la agenda en Deportes, con el color de la app */
+/** al final de la fila: toda la agenda en Deportes (el estadio de Deportes en miniatura, translúcido, con el texto encima) */
 @Composable
 private fun GoSportsCard(onClick: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
     FocusBox(onClick = onClick, shape = shape, focusScale = 1.04f) {
+        Box(Modifier.width(200.dp).height(172.dp).clip(shape).border(1.dp, Color(0x26FFFFFF), shape).background(Color(0x4D000000))) {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.sports_bg_h), null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, alpha = 0.5f, modifier = Modifier.matchParentSize())
         Column(
-            Modifier.width(200.dp).height(172.dp).clip(shape).border(1.dp, Color(0x26FFFFFF), shape)
-                .background(Brush.linearGradient(listOf(NfRed, NfBg))).padding(12.dp),
+            Modifier.matchParentSize().padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
         ) {
             Text("🏟️", fontSize = 34.sp)
             Text(stringResource(R.string.sl_go_sports), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
             Text(stringResource(R.string.sl_go_sports_sub), color = Color(0xD9FFFFFF), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+        }
         }
     }
 }
