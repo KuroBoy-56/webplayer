@@ -266,6 +266,8 @@ fun TvSportPrefDialog(onDismiss: () -> Unit) {
         // las ligas favoritas de otra disciplina ya no tienen sentido
         if (sp.isNotEmpty()) com.latmpx.player.data.Store.liveLeagues = com.latmpx.player.data.Store.liveLeagues.filter { it.sport.equals(sp, true) }
         SportsLive.prefRev++
+        // en la nube: el celular, la computadora y las otras TV de la línea y el perfil lo ven
+        MatchCloud.savePrefs()
         onDismiss()
     }
     Dialog(onDismissRequest = onDismiss) {
@@ -309,6 +311,7 @@ fun TvLeaguePrefDialog(onDismiss: () -> Unit) {
         sel = v
         com.latmpx.player.data.Store.liveLeagues = v
         SportsLive.prefRev++
+        MatchCloud.savePrefs()
     }
     Dialog(onDismissRequest = onDismiss) {
         Column(Modifier.width(560.dp).background(NfBg2, RoundedCornerShape(10.dp)).padding(20.dp)) {

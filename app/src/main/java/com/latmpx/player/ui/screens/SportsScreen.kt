@@ -306,7 +306,7 @@ fun SportsScreen(state: AppState) {
         Text(stringResource(R.string.sports), color = Color.White, fontSize = if (tv) 40.sp else 28.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(bottom = 8.dp))
     }
     if ((tab == SpTab.TABLES && d.tablesOn) || (tab == SpTab.NATIONS && d.nationsOn) || (tab == SpTab.TEAMS && d.fixturesOn)) {
-        Column(Modifier.fillMaxSize().background(NfBg).sportsStadium().padding(start = pad, end = pad, top = 16.dp)) {
+        Column(Modifier.fillMaxSize().sportsScreenBg(tv).padding(start = pad, end = pad, top = 16.dp)) {
             title()
             SportsTabs(d, tab) { tab = it; sport = "" }
             when (tab) {
@@ -354,7 +354,7 @@ fun SportsScreen(state: AppState) {
         columns = if (compact) GridCells.Fixed(1) else GridCells.Adaptive(330.dp),
         contentPadding = PaddingValues(start = pad, end = pad, top = 16.dp, bottom = 48.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
-        modifier = Modifier.fillMaxSize().background(NfBg).sportsStadium(),
+        modifier = Modifier.fillMaxSize().sportsScreenBg(tv),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(bottom = 6.dp)) {

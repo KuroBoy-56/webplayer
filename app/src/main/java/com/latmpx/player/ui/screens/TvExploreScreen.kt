@@ -1,5 +1,7 @@
 package com.latmpx.player.ui.screens
 
+import kotlinx.coroutines.launch
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -127,10 +129,13 @@ fun TvExploreScreen(state: AppState, init: Route.ExploreAt? = null) {
     // en ese orden en la lista; el número es el de siempre (2 = Mejor valorados del «Ver todo» del Top 10) y Z - A es el 3
     val sortLabels = linkedMapOf(0 to stringResource(R.string.ex_sort_recent), 1 to "A - Z", 3 to "Z - A", 2 to stringResource(R.string.ex_sort_rating))
 
+    // con el foco en los filtros la cuadrícula vuelve arriba del todo: el título nunca queda escondido bajo el menú
+    val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     LazyVerticalGrid(
         columns = GridCells.Adaptive(pw), contentPadding = PaddingValues(start = pad, end = pad, bottom = 60.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
-        modifier = Modifier.fillMaxSize().background(NfBg),
+        modifier = Modifier.fillMaxSize().background(NfBg), state = grid,
     ) {
         item(key = "head", span = full) {
             Column(
@@ -139,7 +144,8 @@ fun TvExploreScreen(state: AppState, init: Route.ExploreAt? = null) {
                     scale(4f, 1f, pivot = Offset.Zero) {
                         drawRect(Brush.radialGradient(listOf(accent.copy(alpha = 0.33f), Color.Transparent), center = Offset.Zero, radius = size.height), size = Size(size.width / 4f, size.height))
                     }
-                }.padding(start = pad, end = pad, top = 76.dp, bottom = 4.dp),
+                // la lupa (Tab.SEARCH) ya tiene el menú arriba; abierta desde Inicio («Ver todo», una plataforma) va sola
+                }.padding(start = pad, end = pad, top = if (init == null) 18.dp else 40.dp, bottom = 4.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (plat != null) {
@@ -160,7 +166,9 @@ fun TvExploreScreen(state: AppState, init: Route.ExploreAt? = null) {
             }
         }
         item(key = "bar", span = full) {
-            Column(Modifier.bleed(pad).fillMaxWidth().drawBehind {
+            Column(Modifier.bleed(pad).fillMaxWidth().onFocusChanged { f ->
+                if (f.hasFocus && grid.firstVisibleItemIndex + grid.firstVisibleItemScrollOffset > 0) scope.launch { runCatching { grid.animateScrollToItem(0) } }
+            }.drawBehind {
                 drawLine(Color(0xFF222222), Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), 2f)
             }.padding(start = pad, end = pad, top = 8.dp, bottom = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

@@ -51,6 +51,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         checkSignature()
+        // la app se abre de nuevo (no es un giro de pantalla): el aviso de bienvenida o de vencimiento vuelve a salir,
+        // como en Roku. Al salir con Atrás Android deja vivo el proceso y antes no aparecía al volver a entrar
+        if (savedInstanceState == null) com.latmpx.player.data.Alerts.reset()
         val tv = Device.isTv(this)
         // teléfono: siempre vertical; tablet: libre; TV: horizontal
         requestedOrientation = when {
@@ -60,7 +63,8 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             LatMpxTheme {
-                CompositionLocalProvider(LocalIsTv provides tv) { AppRoot() }
+                // TV: el mismo lienzo de 960 × 540 dp en 480p, 1080p y 4K (ui/components/TvCanvas.kt)
+                com.latmpx.player.ui.components.TvCanvas(tv) { CompositionLocalProvider(LocalIsTv provides tv) { AppRoot() } }
             }
         }
     }

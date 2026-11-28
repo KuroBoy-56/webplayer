@@ -143,14 +143,21 @@ fun tvLiveClock(e: SportEvent): String {
 fun TvLiveTile(card: TvLiveCard, width: Dp, onFocus: () -> Unit, onClick: () -> Unit) {
     val e = card.e
     val shape = RoundedCornerShape(14.dp)
+    // todo a la medida de la tarjeta (alto = 56 % del ancho): con tarjetas chicas los escudos y los textos se achican y el
+    // nombre del canal nunca queda cortado abajo
+    val h = width * 0.5625f
+    val small = (h.value * 0.088f).coerceIn(10f, 13f).sp
+    val badge = (h * 0.29f).coerceIn(26.dp, 48.dp)
+    val score = (h.value * 0.17f).coerceIn(16f, 26f).sp
+    val padV = (h * 0.065f).coerceIn(5.dp, 10.dp)
     FocusBox(onClick = onClick, onFocus = onFocus, shape = shape, focusScale = 1.06f) {
-        Box(Modifier.width(width).height(width * 0.5625f).clip(shape).border(1.dp, Color(0x26FFFFFF), shape)) {
+        Box(Modifier.width(width).height(h).clip(shape).border(1.dp, Color(0x26FFFFFF), shape)) {
             SportField(e.sport, Modifier.fillMaxSize())
             competitionTheme(e.league)?.let { Box(Modifier.fillMaxSize().background(Brush.linearGradient(it))) }
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x8C000000), Color(0x33000000), Color(0xB3000000)))))
-            Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = padV)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(e.league, color = Color(0xE6FFFFFF), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(e.league, color = Color(0xE6FFFFFF), fontSize = small, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(8.dp))
                     // la píldora se ajusta a su texto («Descanso», «Alargue · 105'») y nunca pasa del 60 % de la tarjeta
                     Row(
@@ -158,7 +165,7 @@ fun TvLiveTile(card: TvLiveCard, width: Dp, onFocus: () -> Unit, onClick: () -> 
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (!e.soon) { Box(Modifier.size(6.dp).background(Color.White, CircleShape)); Spacer(Modifier.width(5.dp)) }
-                        Text(tvLiveClock(e).ifBlank { stringResource(R.string.sl_live) }, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                        Text(tvLiveClock(e).ifBlank { stringResource(R.string.sl_live) }, color = Color.White, fontSize = small, fontWeight = FontWeight.Bold, maxLines = 1,
                             softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -173,22 +180,22 @@ fun TvLiveTile(card: TvLiveCard, width: Dp, onFocus: () -> Unit, onClick: () -> 
                         }
                         val al = if (e.thumb.isNotBlank()) TextAlign.Start else TextAlign.Center
                         Column(Modifier.weight(1f)) {
-                            Text(card.sport, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
+                            Text(card.sport, color = Color.White, fontSize = (h.value * 0.13f).coerceIn(14f, 20f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis, textAlign = al, modifier = Modifier.fillMaxWidth())
-                            Text(card.eventName, color = Color(0xEBFFFFFF), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 3,
+                            Text(card.eventName, color = Color(0xEBFFFFFF), fontSize = small, fontWeight = FontWeight.SemiBold, maxLines = if (h < 130.dp) 2 else 3,
                                 overflow = TextOverflow.Ellipsis, textAlign = al, modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
                         }
                     }
                 } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TvTeam(e.home, e.homeBadge, 48.dp, Modifier.weight(1f))
+                    TvTeam(e.home, e.homeBadge, badge, Modifier.weight(1f), small)
                     Text(
                         if (e.soon) "vs" else "${e.homeScore.ifBlank { "0" }} - ${e.awayScore.ifBlank { "0" }}", color = Color.White,
-                        fontSize = 26.sp, fontWeight = FontWeight.Black, maxLines = 1, modifier = Modifier.padding(horizontal = 6.dp),
+                        fontSize = score, fontWeight = FontWeight.Black, maxLines = 1, modifier = Modifier.padding(horizontal = 6.dp),
                     )
-                    TvTeam(e.away, e.awayBadge, 48.dp, Modifier.weight(1f))
+                    TvTeam(e.away, e.awayBadge, badge, Modifier.weight(1f), small)
                 }
                 Spacer(Modifier.weight(1f))
-                Text("▶ " + card.best.name, color = Color(0xFF46D369), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                Text("▶ " + card.best.name, color = Color(0xFF46D369), fontSize = small, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             }
         }
@@ -196,14 +203,14 @@ fun TvLiveTile(card: TvLiveCard, width: Dp, onFocus: () -> Unit, onClick: () -> 
 }
 
 @Composable
-private fun TvTeam(name: String, badge: String, size: Dp, modifier: Modifier) {
+private fun TvTeam(name: String, badge: String, size: Dp, modifier: Modifier, text: androidx.compose.ui.unit.TextUnit = 13.sp) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(size), contentAlignment = Alignment.Center) {
             if (badge.isNotBlank()) AsyncImage(model = badge, contentDescription = name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             else Text(name.take(1).uppercase(), color = Color.White, fontSize = (size.value * 0.45f).sp, fontWeight = FontWeight.Black)
         }
-        Text(name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+        Text(name, color = Color.White, fontSize = text, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center, modifier = Modifier.padding(top = 3.dp))
     }
 }
 
@@ -216,11 +223,14 @@ fun TvGoSportsTile(width: Dp, onFocus: () -> Unit, onClick: () -> Unit) {
             // el estadio de Deportes en miniatura, translúcido; el texto se lee encima
             androidx.compose.foundation.Image(painterResource(R.drawable.sports_bg), null, contentScale = ContentScale.Crop, alpha = 0.5f, modifier = Modifier.fillMaxSize())
             Box(Modifier.fillMaxSize().background(Color(0x4D000000)))
-            Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text("🏟️", fontSize = 40.sp)
-                Text(stringResource(R.string.sl_go_sports), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp),
+            val h = (width * 0.5625f).value
+            Column(Modifier.fillMaxSize().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text("🏟️", fontSize = (h * 0.22f).coerceIn(22f, 40f).sp)
+                Text(stringResource(R.string.sl_go_sports), color = Color.White, fontSize = (h * 0.12f).coerceIn(14f, 20f).sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color(0xCC000000), blurRadius = 8f)))
-                Text(stringResource(R.string.sl_go_sports_sub), color = Color(0xD9FFFFFF), fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+                Text(stringResource(R.string.sl_go_sports_sub), color = Color(0xD9FFFFFF), fontSize = (h * 0.085f).coerceIn(10f, 13f).sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 3.dp),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -258,6 +268,16 @@ private fun TvBigBadge(name: String, badge: String) {
         }
     }
 }
+
+/** ¿Deportes lleva el estadio de fondo? (con perfiles) */
+fun sportsStadiumOn(): Boolean = MatchCloud.on
+
+/**
+ * fondo de la pantalla de Deportes: en la TV con el estadio lo pinta TvShell detrás de todo (también del menú) y la
+ * pantalla queda transparente; en el celular y sin perfiles, como siempre
+ */
+@Composable
+fun Modifier.sportsScreenBg(tv: Boolean): Modifier = if (tv && sportsStadiumOn()) this else this.background(NfBg).sportsStadium()
 
 /** fondo de Deportes con perfiles: estadio de noche sin personas (drawable sports_bg) bajo el color de la app */
 @Composable

@@ -2,6 +2,7 @@ package com.latmpx.player.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -302,9 +303,10 @@ fun ProfileAvatar(p: Profiles.Profile, size: Dp) {
 
 /** avatar con el lápiz (administrar) y el candado (bloqueado con PIN) */
 @Composable
-private fun AvatarBox(p: Profiles.Profile, size: Dp, manage: Boolean) {
-    // su lugar en pantalla: al elegirlo sale desde aquí al centro (ProfileEnter.kt)
-    Box(Modifier.size(size).onGloballyPositioned { profileBounds[p.id] = it.boundsInRoot() }) {
+private fun AvatarBox(p: Profiles.Profile, size: Dp, manage: Boolean, focused: Boolean = false) {
+    // su lugar en pantalla: al elegirlo sale desde aquí al centro (ProfileEnter.kt). El foco es solo el borde del avatar
+    // (como Roku), no el nombre
+    Box(Modifier.size(size).onGloballyPositioned { profileBounds[p.id] = it.boundsInRoot() }.avatarRing(focused, size)) {
         ProfileAvatar(p, size)
         if (manage) Box(Modifier.size(size).background(Color(0x99000000), RoundedCornerShape(avatarCorner(size))), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Edit, stringResource(R.string.prof_edit), tint = Color.White, modifier = Modifier.size(size * 0.32f))
@@ -315,12 +317,16 @@ private fun AvatarBox(p: Profiles.Profile, size: Dp, manage: Boolean) {
     }
 }
 
+/** el borde de foco alrededor del avatar solo (el nombre queda afuera, como Roku) */
+private fun Modifier.avatarRing(focused: Boolean, size: Dp): Modifier =
+    if (!focused) this else this.border(3.dp, com.latmpx.player.ui.theme.NfFocus, RoundedCornerShape(avatarCorner(size)))
+
 /** horizontal: avatar y nombre en una fila */
 @Composable
 private fun ProfileRow(p: Profiles.Profile, size: Dp, manage: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(10.dp), focusScale = 1.05f) { f ->
+    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(10.dp), focusScale = 1.05f, ring = false) { f ->
         Row(Modifier.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            AvatarBox(p, size, manage)
+            AvatarBox(p, size, manage, f)
             Text(
                 p.name, color = if (f) Color.White else Color(0xFFB3B3B3), fontSize = (size.value * 0.2f).coerceIn(16f, 26f).sp,
                 fontWeight = if (f) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -332,9 +338,9 @@ private fun ProfileRow(p: Profiles.Profile, size: Dp, manage: Boolean, modifier:
 
 @Composable
 private fun AddRow(size: Dp, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, shape = RoundedCornerShape(10.dp), focusScale = 1.05f) { f ->
+    FocusBox(onClick = onClick, shape = RoundedCornerShape(10.dp), focusScale = 1.05f, ring = false) { f ->
         Row(Modifier.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(size).background(Color(0xFF2A2A2A), RoundedCornerShape(avatarCorner(size))), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(size).avatarRing(f, size).background(Color(0xFF2A2A2A), RoundedCornerShape(avatarCorner(size))), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Add, null, tint = Color.White, modifier = Modifier.size(size * 0.4f))
             }
             Text(stringResource(R.string.prof_add), color = if (f) Color.White else Color(0xFFB3B3B3), fontSize = (size.value * 0.2f).coerceIn(16f, 26f).sp, fontWeight = if (f) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 18.dp))
@@ -345,9 +351,9 @@ private fun AddRow(size: Dp, onClick: () -> Unit) {
 /** vertical: avatar grande con el nombre debajo */
 @Composable
 private fun ProfileTile(p: Profiles.Profile, size: Dp, manage: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(10.dp)) { f ->
+    FocusBox(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(10.dp), ring = false) { f ->
         Column(Modifier.width(size + 8.dp).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            AvatarBox(p, size, manage)
+            AvatarBox(p, size, manage, f)
             Text(p.name, color = if (f) Color.White else Color(0xFFB3B3B3), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
         }
     }
@@ -355,9 +361,9 @@ private fun ProfileTile(p: Profiles.Profile, size: Dp, manage: Boolean, modifier
 
 @Composable
 private fun AddTile(size: Dp, onClick: () -> Unit) {
-    FocusBox(onClick = onClick, shape = RoundedCornerShape(10.dp)) { f ->
+    FocusBox(onClick = onClick, shape = RoundedCornerShape(10.dp), ring = false) { f ->
         Column(Modifier.width(size + 8.dp).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(size).background(Color(0xFF2A2A2A), RoundedCornerShape(avatarCorner(size))), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(size).avatarRing(f, size).background(Color(0xFF2A2A2A), RoundedCornerShape(avatarCorner(size))), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Add, null, tint = Color.White, modifier = Modifier.size(size * 0.4f))
             }
             Text(stringResource(R.string.prof_add), color = if (f) Color.White else Color(0xFFB3B3B3), fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
