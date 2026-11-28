@@ -526,6 +526,10 @@ const pt: Record<Key, string> = {
   "No hay partidos próximos para elegir equipos.": "Não há próximas partidas para escolher times.",
   "No se pudo guardar. Inténtalo de nuevo.": "Não foi possível salvar. Tente de novo.",
   "Las notificaciones solo están disponibles en la app de celular (Android o iOS). Aquí se guardan en la nube y en la TV los ves con la campanita.": "As notificações só estão disponíveis no app de celular (Android ou iOS). Aqui ficam salvos na nuvem e na TV você os vê com o sininho.",
+  "Notificaciones": "Notificações",
+  "No hay notificaciones.": "Não há notificações.",
+  "y {n} más": "e mais {n}",
+  "OK": "OK",
   "Avisos de hoy": "Avisos de hoje",
   "Hoy no juega ninguno de tus equipos.": "Nenhum dos seus times joga hoje.",
 };
