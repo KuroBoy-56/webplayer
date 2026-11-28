@@ -72,6 +72,8 @@ object AmazonLicense {
             }
             val body = JSONObject().put("step", "amazon").put("package", ctx.packageName).put("device", Store.deviceIdOrEmpty()).put("status", status)
                 .put("installer", installer(ctx))
+                // la versión de la app: el panel la muestra en Play Integrity (así se sabe si el equipo ya tiene la corregida)
+                .put("version", com.latmpx.player.BuildConfig.VERSION_NAME)
             val v = Cloud.call { t -> Net.postJson(PanelUrl.api("integrity.php"), JSONObject(body.toString()).put("token", t)) }?.json() ?: return
             // modo «Apagado» o un panel viejo: nada que hacer
             if (!v.optBoolean("active", false)) return
