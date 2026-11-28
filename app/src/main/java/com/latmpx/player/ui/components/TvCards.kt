@@ -189,8 +189,10 @@ fun <T> TvRow(
             itemsIndexed(items) { i, it -> content(i, it) }
             if (onViewAll != null) item {
                 TvFocusable(onClick = onViewAll, onFocus = onViewAllFocus, scale = 1.06f, modifier = Modifier.width(seeAllW).aspectRatio(2f / 3f)) { f ->
+                    // del tamaño de las carátulas de la fila, translúcido (no un bloque sólido) con borde fino
                     Column(
-                        Modifier.fillMaxSize().background(if (f) Color(0xFF333333) else Color(0xFF1C1C1C)),
+                        Modifier.fillMaxSize().background(if (f) Color(0x3DFFFFFF) else Color(0x1AFFFFFF), RoundedCornerShape(6.dp))
+                            .border(1.dp, Color(0x2EFFFFFF), RoundedCornerShape(6.dp)),
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                     ) {
                         Icon(

@@ -213,11 +213,13 @@ fun TvGoSportsTile(width: Dp, onFocus: () -> Unit, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     FocusBox(onClick = onClick, onFocus = onFocus, shape = shape, focusScale = 1.06f) {
         Box(Modifier.width(width * 0.62f).height(width * 0.5625f).clip(shape).border(1.dp, Color(0x26FFFFFF), shape)) {
-            androidx.compose.foundation.Image(painterResource(R.drawable.sports_bg), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(com.latmpx.player.ui.theme.NfRed.copy(alpha = 0.75f), NfBg.copy(alpha = 0.9f)))))
+            // el estadio de Deportes en miniatura, translúcido; el texto se lee encima
+            androidx.compose.foundation.Image(painterResource(R.drawable.sports_bg), null, contentScale = ContentScale.Crop, alpha = 0.5f, modifier = Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Color(0x4D000000)))
             Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text("🏟️", fontSize = 40.sp)
-                Text(stringResource(R.string.sl_go_sports), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                Text(stringResource(R.string.sl_go_sports), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp),
+                    style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color(0xCC000000), blurRadius = 8f)))
                 Text(stringResource(R.string.sl_go_sports_sub), color = Color(0xD9FFFFFF), fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
             }
         }

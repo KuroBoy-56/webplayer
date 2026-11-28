@@ -15,11 +15,12 @@
     <string name="sl_go_sports_sub">Tout le programme d’aujourd’hui et de demain</string>
     <string name="sp_tab_finished">Terminés</string>
     <string name="sp_fin_empty">Aucun événement n’est encore terminé aujourd’hui. Ceux du jour apparaissent ici une fois finis (vidé à 00:00).</string>
-    <string name="sl_lg">Ligues favorites</string>
-    <string name="sl_lg_all">Toutes les ligues</string>
-    <string name="sl_lg_n">%1$d ligues</string>
-    <string name="sl_lg_msg">Sur l’Accueil, «En direct» affiche seulement les matchs des ligues choisies.</string>
-    <string name="sl_lg_only">Seulement %1$s.</string>
-    <string name="sl_lg_none">Aucune ligue à choisir pour l’instant.</string>
+    <string name="sl_lg">Événements favoris</string>
+    <string name="sl_lg_all">Tous les événements</string>
+    <string name="sl_lg_n">%1$d événements</string>
+    <string name="sl_lg_msg">Dans Accueil, « En direct » ne montre que les matchs des événements choisis.</string>
+    <string name="sl_lg_only">Seulement ceux de %1$s.</string>
+    <string name="sl_lg_pick">Choisissez d’abord votre sport favori pour choisir vos événements.</string>
+    <string name="sl_lg_none">Aucun événement à choisir pour le moment.</string>
     <string name="sl_lg_today">%1$d aujourd’hui</string>
 </resources>

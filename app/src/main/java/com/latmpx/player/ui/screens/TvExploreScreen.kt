@@ -87,7 +87,6 @@ fun TvExploreScreen(state: AppState, init: Route.ExploreAt? = null) {
     // «Categorías»: una carpeta del servidor IPTV ("" = todas), como el selector de Películas / Series del web player
     var cat by rememberSaveable { mutableStateOf(init?.cat ?: "") }
     var catKind by rememberSaveable { mutableStateOf(init?.catKind ?: "") } // "m" películas, "s" series
-    var catsOpen by remember { mutableStateOf(false) }
     var sort by rememberSaveable { mutableStateOf(init?.sort ?: 0) } // 0 recientes, 1 A - Z, 2 mejor valorados
     var sortOpen by remember { mutableStateOf(false) }
     var genre by rememberSaveable { mutableStateOf(init?.genre ?: "") }
@@ -125,8 +124,8 @@ fun TvExploreScreen(state: AppState, init: Route.ExploreAt? = null) {
         kotlinx.coroutines.delay(120)
         runCatching { field.box.requestFocus() }
     }
-    val sortLabels = listOf(stringResource(R.string.ex_sort_recent), "A - Z", stringResource(R.string.ex_sort_rating))
-    val catLabel = if (cat.isEmpty()) stringResource(R.string.categories) else catName.let { if (it.length > 28) it.take(27) + "…" else it }
+    // en ese orden en la lista; el número es el de siempre (2 = Mejor valorados del «Ver todo» del Top 10) y Z - A es el 3
+    val sortLabels = linkedMapOf(0 to stringResource(R.string.ex_sort_recent), 1 to "A - Z", 3 to "Z - A", 2 to stringResource(R.string.ex_sort_rating))
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(pw), contentPadding = PaddingValues(start = pad, end = pad, bottom = 60.dp),
@@ -176,16 +175,9 @@ fun TvExploreScreen(state: AppState, init: Route.ExploreAt? = null) {
                         }
                     }
                     Spacer(Modifier.width(10.dp))
-                    FocusBox(onClick = { catsOpen = true }, shape = RoundedCornerShape(4.dp), focusScale = 1.05f) { f ->
-                        Text(
-                            "$catLabel  ▾", color = Color.White, fontSize = 13.sp, maxLines = 1,
-                            modifier = Modifier.background(Color.Black).border(1.dp, if (f) Color.White else Color(0xFF555555), RoundedCornerShape(4.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
-                        )
-                    }
-                    Spacer(Modifier.width(10.dp))
                     FocusBox(onClick = { sortOpen = true }, shape = RoundedCornerShape(4.dp), focusScale = 1.05f) { f ->
                         Text(
-                            sortLabels[sort] + "  ▾", color = Color.White, fontSize = 13.sp, maxLines = 1,
+                            sortLabels[sort].orEmpty() + "  ▾", color = Color.White, fontSize = 13.sp, maxLines = 1,
                             modifier = Modifier.background(Color.Black).border(1.dp, if (f) Color.White else Color(0xFF555555), RoundedCornerShape(4.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
                         )
                     }
@@ -212,23 +204,9 @@ fun TvExploreScreen(state: AppState, init: Route.ExploreAt? = null) {
         }
     }
     if (sortOpen) {
-        ExploreCatsDialog(sortLabels.mapIndexed { i, l -> l to i.toString() }, sort.toString(), onDismiss = { sortOpen = false }, title = stringResource(R.string.ex_sort)) { v ->
+        ExploreCatsDialog(sortLabels.map { (i, l) -> l to i.toString() }, sort.toString(), onDismiss = { sortOpen = false }, title = stringResource(R.string.ex_sort)) { v ->
             sortOpen = false
             sort = v.toIntOrNull() ?: 0
-        }
-    }
-    if (catsOpen) {
-        // las carpetas visibles del tipo elegido (con «Todo», las de películas y las de series)
-        val list = when (type) { 1 -> mCats.map { "m" to it }; 2 -> sCats.map { "s" to it }; else -> mCats.map { "m" to it } + sCats.map { "s" to it } }
-        val tMovies = stringResource(R.string.movies)
-        val tSeries = stringResource(R.string.series)
-        ExploreCatsDialog(
-            listOf(stringResource(R.string.ex_all_categories) to "") + list.map { (k, c) -> (c.name + if (type == 0) "  ·  " + (if (k == "s") tSeries else tMovies) else "") to "$k|${c.id}" },
-            if (cat.isEmpty()) "" else "$catKind|$cat",
-            onDismiss = { catsOpen = false },
-        ) { v ->
-            catsOpen = false
-            if (v.isEmpty()) cat = "" else { catKind = v.substringBefore('|'); cat = v.substringAfter('|'); genre = ""; platform = "" }
         }
     }
 }
@@ -349,9 +327,10 @@ object ExploreCache {
         }
         val q = Platforms.fold(query.trim())
         if (q.isNotEmpty()) l = l.filter { Platforms.fold(it.name).contains(q) }
-        // los tres órdenes del web player (browse.php)
+        // los órdenes del web player (browse.php) más Z - A
         val out = when (sort) {
             1 -> java.text.Collator.getInstance(java.util.Locale("es")).let { c -> l.sortedWith { a, b -> c.compare(a.name, b.name) } }
+            3 -> java.text.Collator.getInstance(java.util.Locale("es")).let { c -> l.sortedWith { a, b -> c.compare(b.name, a.name) } }
             2 -> l.sortedByDescending { it.rating }
             else -> l.sortedByDescending { it.added }
         }
