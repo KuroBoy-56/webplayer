@@ -130,23 +130,74 @@ export const liveLeaguesText = () => {
 
 // equipo favorito (n = nombre, l = en el idioma, b = escudo, lg = liga, sp = deporte), como el celular
 export type FavTeam = { n: string; l: string; b: string; lg: string; sp: string };
-type Cloud = { teams: string[]; teamList: FavTeam[]; events: Record<string, { t: string; s: number; h?: string; a?: string }>; brand: string; at: number };
+type Cloud = { teams: string[]; teamList: FavTeam[]; events: Record<string, { t: string; s: number; h?: string; a?: string }>; brand: string; at: number; who: string };
 let alertsMem: Cloud | null = null;
+// de qué línea y perfil es lo guardado en memoria (otro perfil pide lo suyo enseguida)
+const who = () => lineKey() + '|' + pid();
+
+// ---------- Deporte favorito y Eventos favoritos en la nube («prefs» de api/alerts.php) ----------
+// Lo que se elige aquí lo ven el celular, la computadora y las otras TV de la misma línea y perfil, y al revés. La nube
+// manda; si nunca se guardó (at = 0) se sube lo que esta TV tenía guardado de antes.
+let prefsTimer: ReturnType<typeof setTimeout> | null = null;
+let prefsPending = false;
+let uploadOld = false;
+
+function applyCloudPrefs(p: any) {
+  // un cambio de esta TV todavía sin subir gana (si no, la respuesta vieja lo borraría)
+  if (!p || typeof p !== 'object' || prefsPending) return;
+  if (int(p.at) <= 0) {
+    uploadOld = !!liveSport() || liveLeagues().length > 0;
+    return;
+  }
+  const sp = str(p.sp);
+  const mine = new Map(liveLeagues().map(x => [x.id, x]));
+  const lg: FavLeague[] = (Array.isArray(p.lg) ? p.lg : [])
+    .filter((x: any) => str(x?.id))
+    .map((x: any) => ({ id: str(x.id), n: str(x.n), b: mine.get(str(x.id))?.b || '', sp: str(x.sp) }));
+  if (sp === liveSport() && lg.map(x => x.id).join(',') === liveLeagues().map(x => x.id).join(',')) return;
+  write(sportKey(), sp);
+  write(sportKey() + '|n', sp ? str(p.spn) : '');
+  setLiveLeagues(lg);
+}
+
+/** sube el deporte y los eventos favoritos (después de elegirlos en Cuenta; varios cambios seguidos = un pedido) */
+export function savePrefs() {
+  if (!liveTvOn()) return;
+  prefsPending = true;
+  if (prefsTimer) clearTimeout(prefsTimer);
+  prefsTimer = setTimeout(async () => {
+    const body: Record<string, any> = {
+      action: 'set_prefs',
+      prefs: { sp: liveSport(), spn: liveSportName(), lg: liveLeagues().map(x => ({ id: x.id, n: x.n, sp: x.sp })) },
+    };
+    if (pid()) body.profile = pid();
+    try {
+      await cloud('alerts.php', 'POST', body);
+    } catch {}
+    prefsPending = false;
+  }, 700);
+}
 
 function parseCloud(j: any): Cloud {
   const teamList: FavTeam[] = (Array.isArray(j.teams) ? j.teams : [])
     .filter((x: any) => str(x?.n))
     .map((x: any) => ({ n: str(x.n), l: str(x.l), b: str(x.b), lg: str(x.lg), sp: str(x.sp) }));
-  return { teams: teamList.map(x => x.n), teamList, events: j.events && typeof j.events === 'object' ? j.events : {}, brand: str(j.brand), at: nowSec() };
+  applyCloudPrefs(j.prefs);
+  return { teams: teamList.map(x => x.n), teamList, events: j.events && typeof j.events === 'object' ? j.events : {}, brand: str(j.brand), at: nowSec(), who: who() };
 }
 
 /** equipos favoritos y partidos marcados de este perfil (5 min en memoria); null sin perfiles o sin panel */
 export async function cloudAlerts(force = false): Promise<Cloud | null> {
   if (!liveTvOn()) return null;
-  if (!force && alertsMem && nowSec() - alertsMem.at < 300) return alertsMem;
+  if (!force && alertsMem && alertsMem.who === who() && nowSec() - alertsMem.at < 300) return alertsMem;
   const j = json<any>(await cloud('alerts.php', 'GET', pid() ? { profile: pid() } : {}));
-  if (!j || j.success !== true || j.enabled !== true) return alertsMem;
+  if (!j || j.success !== true || j.enabled !== true) return alertsMem && alertsMem.who === who() ? alertsMem : null;
   alertsMem = parseCloud(j);
+  // la primera vez: lo que esta TV tenía guardado sube a la nube (las otras apps lo toman de ahí)
+  if (uploadOld) {
+    uploadOld = false;
+    savePrefs();
+  }
   return alertsMem;
 }
 
@@ -163,7 +214,7 @@ export async function setTeams(list: FavTeam[]): Promise<boolean> {
 // ---------- campanita: los partidos de HOY de los equipos favoritos y de los marcados ----------
 
 export type BellMsg = { key: string; text: string; order: number; s: number };
-const FIN = /^(FT|AET|AOT|PEN|Match Finished|Finished|After Over Time|Final)$/i;
+const FIN = /^(FT|AET|AOT|AP|PEN|FT_PEN|FIN|Final|Final\/OT|Final OT|Ended|Finished|Match Finished|After Over Time|After Extra Time|After Penalties|AWD|WO|CANC|Cancelled|Canceled|ABD|Abandoned)$/i;
 
 /** en vivo primero, después los que faltan (por hora) y al final los terminados; [] sin equipos ni marcados */
 export function bellFrom(fav: Cloud | null, ag: any, liveEvents: any[], now: number = nowSec()): BellMsg[] {
@@ -213,7 +264,7 @@ export async function bellMessages(): Promise<BellMsg[]> {
   return bellFrom(fav, ag, lj?.enabled === true && Array.isArray(lj.events) ? lj.events : []);
 }
 
-export const isReminded = (id: string) => !!alertsMem?.events?.[id];
+export const isReminded = (id: string) => alertsMem?.who === who() && !!alertsMem?.events?.[id];
 
 /** el nombre para el aviso: el del distribuidor (o el del dueño) que dice el panel */
 export const alertsBrand = () => alertsMem?.brand || brandName();
@@ -270,7 +321,9 @@ export function loadLiveCardsCached(): Promise<{ cards: LiveCard[]; ttl: number 
 /** los partidos de la fila (en vivo, por empezar y, con equipos favoritos, los de hoy de esos equipos) con su canal */
 export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number } | null> {
   if (!liveTvOn()) return null;
-  const j = json<any>(await cloud('sports_live.php', 'GET', { soon: '1', next: '1' }));
+  // a la vez: los partidos y lo de la nube (el deporte y los eventos favoritos elegidos en otro equipo filtran ya)
+  const [jr, fav] = await Promise.all([cloud('sports_live.php', 'GET', { soon: '1', next: '1' }), cloudAlerts().catch(() => null)]);
+  const j = json<any>(jr);
   if (j) write(availKey(), j.enabled === true ? '1' : '0');
   if (!j || j.enabled !== true) return null;
   const only = liveSport().toLowerCase();
@@ -278,7 +331,6 @@ export async function loadLiveCards(): Promise<{ cards: LiveCard[]; ttl: number 
   // un próximo que «empezaba» hace más de 5 min y el livescore no trae: fuera
   const n0 = nowSec();
   const events: any[] = (Array.isArray(j.events) ? j.events : []).filter((e: any) => !(e?.soon === true && int(e.s) > 0 && int(e.s) < n0 - 300));
-  const fav = await cloudAlerts();
   if (fav?.teams.length) {
     const ag = await agenda();
     const now = nowSec();
